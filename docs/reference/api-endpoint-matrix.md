@@ -3,12 +3,12 @@ title: API Endpoint Matrix
 type: reference
 status: active
 date: 2026-08-31
-updated: 2026-09-03
-last_modified: 2026-09-03
+updated: 2026-09-08
+last_modified: 2026-09-08
 adr-reference: 026
 # Authoritative HTTP-operation count, derived from openapi.yaml and enforced by
 # scripts/check-endpoint-matrix.js (CI verify-generated). Bump when routes change.
-api_operation_count: 215
+api_operation_count: 221
 tags:
   [
     reference,
@@ -72,7 +72,7 @@ tags:
     auto-link,
     planned-match,
   ]
-description: Complete matrix of all 213 HTTP API operations (authoritative count from openapi.yaml), 2 health endpoints, and 24 Electron IPC invoke channels. The Electron contract also defines 6 renderer event channels.
+description: Complete matrix of all 217 HTTP API operations (authoritative count from openapi.yaml), 2 health endpoints, and 24 Electron IPC invoke channels. The Electron contract also defines 6 renderer event channels.
 aliases:
   [api matrix, endpoint matrix, all endpoints, api overview, endpoint list]
 ---
@@ -80,7 +80,7 @@ aliases:
 # API Endpoint Matrix
 
 > [!abstract] Overview
-> **213 HTTP API operations** (authoritative count = operations in `openapi.yaml`, enforced by `scripts/check-endpoint-matrix.js` in CI), 2 unversioned `/health` endpoints, and 24 Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
+> **217 HTTP API operations** (authoritative count = operations in `openapi.yaml`, enforced by `scripts/check-endpoint-matrix.js` in CI), 2 unversioned `/health` endpoints, and 24 Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
 >
 > **Note:** As of Phase 2.4, `openapi.yaml` is the authoritative API specification. This matrix provides a quick lookup; see the OpenAPI spec for formal schemas and examples.
 >
@@ -133,7 +133,7 @@ aliases:
 >
 > **Absent and empty are unchanged** — `?category_ids=`, `?category_id=` still mean "no filter" and answer 200. Non-breaking for shipped callers: the Transactions page and the Imports Export card build these with `ids.join(',')` from `number[]` state and omit empty values; nothing in the frontend sends `account_ids`. `openapi.yaml` already typed the four scalars `integer` (now annotated `format: int32, minimum: 1`, and the two comma lists carry a documented `pattern`), so the implementation moved _onto_ the published contract. See [[docs/security/input-validation#Comma-separated ID Query Params (transactions list + export)|Input Validation]].
 
-## Accounts (11 endpoints)
+## Accounts (12 endpoints)
 
 | Method | Path                                             | Description                                                                                                                                                      | Rate Limit | Doc                             |
 | ------ | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------- |
@@ -142,6 +142,8 @@ aliases:
 | GET    | `/api/accounts/:id`                              | Get single account                                                                                                                                               | —          | [[docs/api/accounts\|Accounts]] |
 | PATCH  | `/api/accounts/:id`                              | Update account (partial)                                                                                                                                         | —          | [[docs/api/accounts\|Accounts]] |
 | DELETE | `/api/accounts/:id`                              | Delete account (409 if still referenced — archive instead)                                                                                                       | —          | [[docs/api/accounts\|Accounts]] |
+| GET    | `/api/accounts/:id/portfolio-lot-retag-preview`  | Count assigned buy/gift/sell rows and return their complete ID selection only when it fits the 500-row audited re-tag limit                                      | —          | [[docs/api/accounts\|Accounts]] |
+| POST   | `/api/accounts/:id/close`                        | Atomically close; optionally add one zero-out adjustment per non-zero native currency partition                                                                  | —          | [[docs/api/accounts\|Accounts]] |
 | GET    | `/api/accounts/:id/merge-preview`                | Read-only dry-run of merging `:id` into `?into=`: reassigned row counts, projected post-merge computed balance over the union, `stampsInterleaved` (§1 F2 guard) | —          | [[docs/api/accounts\|Accounts]] |
 | POST   | `/api/accounts/:id/merge`                        | Merge source accounts into this survivor; repoints all references + deletes sources (ADR-088)                                                                    | —          | [[docs/api/accounts\|Accounts]] |
 | POST   | `/api/accounts/:id/opening-balance`              | Set the opening-balance anchor (one system row per account+currency; ADR-094 D4)                                                                                 | —          | [[docs/api/accounts\|Accounts]] |
@@ -222,7 +224,7 @@ aliases:
 | GET    | `/api/planned-transactions/due-soon`          | Upcoming bills within N days (Phase 6)                                                     | —          | [[docs/api/plannedTransactions\|Planned Transactions]] |
 | GET    | `/api/planned-transactions/match-suggestions` | Ambiguous auto-link candidates for user confirmation (June 2026; registered before `/:id`) | —          | [[docs/api/plannedTransactions\|Planned Transactions]] |
 
-## Investments (14 endpoints)
+## Investments (15 endpoints)
 
 | Method | Path                                   | Description                                                        | Rate Limit | Doc                                   |
 | ------ | -------------------------------------- | ------------------------------------------------------------------ | ---------- | ------------------------------------- |
@@ -231,6 +233,7 @@ aliases:
 | GET    | `/api/investments/providers`           | List price providers                                               | —          | [[docs/api/investments\|Investments]] |
 | POST   | `/api/investments/refresh-prices`      | Refresh all prices                                                 | —          | [[docs/api/investments\|Investments]] |
 | GET    | `/api/investments/transactions`        | Bulk portfolio transactions                                        | —          | [[docs/api/investments\|Investments]] |
+| PUT    | `/api/investments/transactions/broker` | Audited idempotent bulk broker re-tag                              | 30 req/min | [[docs/api/investments\|Investments]] |
 | GET    | `/api/investments/:id/price-history`   | Historical price data (db_only=true by default for offline safety) | —          | [[docs/api/investments\|Investments]] |
 | GET    | `/api/investments/:id`                 | Get single                                                         | —          | [[docs/api/investments\|Investments]] |
 | PATCH  | `/api/investments/:id`                 | Update                                                             | —          | [[docs/api/investments\|Investments]] |
@@ -389,25 +392,25 @@ All routes mounted at `/api/portfolio/import` with `importRateLimiter`. Parallel
 
 ## Admin (17 endpoints)
 
-| Method | Path                                              | Description                                                                                                               | Rate Limit         | Doc                       |
-| ------ | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------ | ------------------------- |
-| GET    | `/api/admin`                                      | Admin status                                                                                                              | —                  | [[docs/api/admin\|Admin]] |
-| POST   | `/api/admin/database/init`                        | Verify DB connection                                                                                                      | —                  | [[docs/api/admin\|Admin]] |
-| POST   | `/api/admin/database/reset`                       | Reset database; JSON body `force: true` is authoritative                                                                  | —                  | [[docs/api/admin\|Admin]] |
-| GET    | `/api/admin/update/check`                         | Check for updates                                                                                                         | —                  | [[docs/api/admin\|Admin]] |
-| POST   | `/api/admin/update/apply`                         | Acknowledge update                                                                                                        | —                  | [[docs/api/admin\|Admin]] |
-| POST   | `/api/admin/update/apply-and-restart`             | Apply and restart                                                                                                         | —                  | [[docs/api/admin\|Admin]] |
-| POST   | `/api/admin/investments/kinesis/sanitize-history` | Sanitize Kinesis spikes                                                                                                   | —                  | [[docs/api/admin\|Admin]] |
-| GET    | `/api/admin/database/stats`                       | Per-table live/dead row counts and size (Phase 7)                                                                         | admin              | [[docs/api/admin\|Admin]] |
-| POST   | `/api/admin/database/vacuum`                      | Run VACUUM ANALYZE on one or all tables (Phase 7)                                                                         | admin              | [[docs/api/admin\|Admin]] |
-| GET    | `/api/admin/database/tables/:table/schema`        | Table column schema + primary key discovery; composite-PK aware (ADR-101)                                                 | adminRateLimiter   | [[docs/api/admin\|Admin]] |
-| GET    | `/api/admin/database/tables/:table/rows`          | Paginated/filtered/sorted table read; runs inside READ ONLY transaction with statement timeout (ADR-101)                  | adminRateLimiter   | [[docs/api/admin\|Admin]] |
-| POST   | `/api/admin/database/tables/:table/mutate`        | Batch insert/update/delete with xmin optimistic concurrency, dry-run preview, audit trail, matview auto-refresh (ADR-101) | adminMutateLimiter | [[docs/api/admin\|Admin]] |
-| GET    | `/api/admin/providers/health`                     | List all provider health records                                                                                          | —                  | [[docs/api/admin\|Admin]] |
-| POST   | `/api/admin/providers/:provider/probe`            | Active on-demand probe for one provider                                                                                   | —                  | [[docs/api/admin\|Admin]] |
-| GET    | `/api/admin/metrics/requests`                     | Rolling request metrics per route (in-memory, 15 min)                                                                     | —                  | [[docs/api/admin\|Admin]] |
-| GET    | `/api/admin/endpoints`                            | Static endpoint manifest from Express router                                                                              | —                  | [[docs/api/admin\|Admin]] |
-| GET    | `/api/admin/endpoint-liveness`                    | Route manifest annotated with `live: true` per entry                                                                      | —                  | [[docs/api/admin\|Admin]] |
+| Method | Path                                              | Description                                                                                                                                  | Rate Limit         | Doc                       |
+| ------ | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | ------------------------- |
+| GET    | `/api/admin`                                      | Admin status                                                                                                                                 | —                  | [[docs/api/admin\|Admin]] |
+| POST   | `/api/admin/database/init`                        | Verify DB connection                                                                                                                         | —                  | [[docs/api/admin\|Admin]] |
+| POST   | `/api/admin/database/reset`                       | Reset database; JSON body `force: true` is authoritative                                                                                     | —                  | [[docs/api/admin\|Admin]] |
+| GET    | `/api/admin/update/check`                         | Check for updates                                                                                                                            | —                  | [[docs/api/admin\|Admin]] |
+| POST   | `/api/admin/update/apply`                         | Acknowledge update                                                                                                                           | —                  | [[docs/api/admin\|Admin]] |
+| POST   | `/api/admin/update/apply-and-restart`             | Apply and restart                                                                                                                            | —                  | [[docs/api/admin\|Admin]] |
+| POST   | `/api/admin/investments/kinesis/sanitize-history` | Sanitize Kinesis spikes                                                                                                                      | —                  | [[docs/api/admin\|Admin]] |
+| GET    | `/api/admin/database/stats`                       | Per-table live/dead row counts and size (Phase 7)                                                                                            | admin              | [[docs/api/admin\|Admin]] |
+| POST   | `/api/admin/database/vacuum`                      | Run VACUUM ANALYZE on one or all tables (Phase 7)                                                                                            | admin              | [[docs/api/admin\|Admin]] |
+| GET    | `/api/admin/database/tables/:table/schema`        | Table column schema + primary key discovery; composite-PK aware (ADR-101)                                                                    | adminRateLimiter   | [[docs/api/admin\|Admin]] |
+| GET    | `/api/admin/database/tables/:table/rows`          | Keyset-paginated, filtered, sorted table read without an unbounded count; runs inside READ ONLY transaction with statement timeout (ADR-101) | adminRateLimiter   | [[docs/api/admin\|Admin]] |
+| POST   | `/api/admin/database/tables/:table/mutate`        | Batch insert/update/delete with xmin optimistic concurrency, dry-run preview, audit trail, matview auto-refresh (ADR-101)                    | adminMutateLimiter | [[docs/api/admin\|Admin]] |
+| GET    | `/api/admin/providers/health`                     | List all provider health records                                                                                                             | —                  | [[docs/api/admin\|Admin]] |
+| POST   | `/api/admin/providers/:provider/probe`            | Active on-demand probe for one provider                                                                                                      | —                  | [[docs/api/admin\|Admin]] |
+| GET    | `/api/admin/metrics/requests`                     | Rolling request metrics per route (in-memory, 15 min)                                                                                        | —                  | [[docs/api/admin\|Admin]] |
+| GET    | `/api/admin/endpoints`                            | Static endpoint manifest from Express router                                                                                                 | —                  | [[docs/api/admin\|Admin]] |
+| GET    | `/api/admin/endpoint-liveness`                    | Route manifest annotated with `live: true` per entry                                                                                         | —                  | [[docs/api/admin\|Admin]] |
 
 ## Reports (3 endpoints) — Phase 3 / Phase 5 / Phase 7
 
@@ -441,7 +444,7 @@ Server-computed aggregations with materialized-view/live/cache distinction. Prod
 | GET    | `/api/aggregations/category-pivot`             | Spending by category with exclusion filter support                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | —          | [[docs/api/aggregations\|Aggregations]] |
 | GET    | `/api/aggregations/recipient-by-year`          | Per-recipient spending broken out by calendar year with exclusion filter support                                                                                                                                                                                                                                                                                                                                                                                                                                               | —          | [[docs/api/aggregations\|Aggregations]] |
 
-## Info/Statistics (13 endpoints — Phase 9 Aggregation Cutover, Phase 14+ Portfolio Totals)
+## Info/Statistics (15 endpoints — Phase 9 Aggregation Cutover, Phase 14+ Portfolio Totals)
 
 Aggregation routes removed in Phase 9 as migration to `/api/aggregations/*` is complete. These endpoints remain for non-aggregation queries only: portfolio-performance, portfolio-summary (realtime totals, Phase 14), net-worth, exchange-rates, inflation-rates, and supporting refresh endpoints. Portfolio-summary endpoint added 2026-04-29 as single source of truth for dashboard and performance page headline metrics. 2026-06-11 (ADR-074): both portfolio-performance and portfolio-summary gain FX attribution fields (assetGain, fxGain, nativeCurrentValue, usedFallbackRate); flows now converted at transaction-date FX rates; no new endpoints added. Phase 9 cutover also removed `GET /api/info` (general statistics) and `GET /api/info/transaction-summary` (summary with filters).
 
@@ -452,6 +455,9 @@ Aggregation routes removed in Phase 9 as migration to `/api/aggregations/*` is c
 | GET    | `/api/info/transaction-count`           | Total count                                                                                                                                                                                                                                                                       | —          | [[docs/api/info\|Info]]                           |
 | GET    | `/api/info/planned-expenses-next-month` | Next month expenses                                                                                                                                                                                                                                                               | —          | [[docs/api/info\|Info]]                           |
 | GET    | `/api/info/recurring-patterns`          | Recurring detection                                                                                                                                                                                                                                                               | —          | [[docs/api/info\|Info]]                           |
+| GET    | `/api/info/insights-digest`             | Deterministic Smart Insights digest; cash finding is zero-based month-end net cash flow, not an account balance                                                                                                                                                                   | —          | [[docs/api/info\|Info]]                           |
+| GET    | `/api/info/insights-count`              | Cheap versioned projection of the undismissed finding count; dirty or expired state returns pending without inline detection                                                                                                                                                      | —          | [[docs/api/info\|Info]]                           |
+| PUT    | `/api/info/insight-dismissals`          | Strict idempotent server-side subscription or category-outlier dismissal; outlier deviation is derived by the server                                                                                                                                                              | —          | [[docs/api/info\|Info]]                           |
 | GET    | `/api/info/net-worth`                   | Net worth (optional `limit`/`offset` paginate snapshots newest-first; omit both for full history)                                                                                                                                                                                 | 30 req/min | [[docs/api/info\|Info]]                           |
 | GET    | `/api/info/exchange-rates`              | Exchange rates                                                                                                                                                                                                                                                                    | 30 req/min | [[docs/api/info\|Info]]                           |
 | POST   | `/api/info/exchange-rates/refresh`      | Refresh exchange rates                                                                                                                                                                                                                                                            | admin      | [[docs/api/info\|Info]]                           |
@@ -521,7 +527,7 @@ equal the main senders and preload subscriptions.
 
 | Resource                             | Endpoints | Rate-Limited |
 | ------------------------------------ | --------- | ------------ |
-| Accounts (ADR-088)                   | 11        | 0            |
+| Accounts (ADR-088)                   | 12        | 0            |
 | Cross-Workspace (ADR-098)            | 1         | 0            |
 | Transactions (incl. Tags)            | 18        | 2            |
 | Categories                           | 7         | 0            |
@@ -547,7 +553,7 @@ equal the main senders and preload subscriptions.
 | Electron IPC invoke channels         | 24        | 0            |
 | **Total**                            | **241**   | **14**       |
 
-> **215** of these are versioned `/api` HTTP operations — the authoritative count enforced against `openapi.yaml` by `scripts/check-endpoint-matrix.js`. The remaining 26 are 2 unversioned `/health` endpoints and 24 Electron invoke channels, which sit outside OpenAPI. The 6 Electron event channels are documented separately and are not request endpoints. (The Rate-Limited column is approximate and not gate-checked.)
+> **217** of these are versioned `/api` HTTP operations — the authoritative count enforced against `openapi.yaml` by `scripts/check-endpoint-matrix.js`. The remaining 26 are 2 unversioned `/health` endpoints and 24 Electron invoke channels, which sit outside OpenAPI. The 6 Electron event channels are documented separately and are not request endpoints. (The Rate-Limited column is approximate and not gate-checked.)
 
 ## Phase G Endpoint Consolidation (April 2026)
 

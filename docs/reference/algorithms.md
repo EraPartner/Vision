@@ -199,10 +199,10 @@ The algorithm uses **temporal pattern analysis** on transaction sequences.
 #### Input
 
 - List of transactions for a given recipient
-- Configurable parameters:
+- Detection parameters:
   - `minOccurrences`: Minimum number of transactions to detect a pattern (default: 3)
-  - `toleranceDays`: Allowed day variance (default: 2)
-  - `amountTolerance`: Allowed amount variance percentage (default: 5%)
+  - Interval matching uses the service's named-pattern ranges and coefficient-of-variation limit
+  - Recent amount changes use a fixed threshold greater than 5%
 
 #### Steps
 
@@ -224,8 +224,10 @@ The algorithm uses **temporal pattern analysis** on transaction sequences.
       - 30 ± toleranceDays → monthly
       - 90 ± toleranceDays → quarterly
       - 365 ± toleranceDays → yearly
-   f. Verify amount consistency:
-      - If all amounts within amountTolerance%, mark as amount-stable
+   f. Inspect the three most recent charges:
+      - Compare each charge with its immediately preceding chronological charge
+      - Emit an amount change when the absolute percentage difference is greater than 5%
+      - Report that predecessor as previousAmount
 ```
 
 #### Pattern Classification
@@ -246,7 +248,8 @@ The algorithm uses **temporal pattern analysis** on transaction sequences.
 #### Edge Cases Handled
 
 1. **Missing months:** A monthly subscription skipped one month — the algorithm detects the 60-day gap and still classifies as monthly if the overall pattern is consistent
-2. **Amount drift:** Subscriptions with annual price increases — handled by `amountTolerance`
+2. **Amount drift:** Recent subscription price changes are measured against the immediately
+   preceding charge, so a step change is not diluted by older history
 3. **Multiple patterns:** A recipient with both weekly and monthly payments — detected as separate patterns
 
 ### Related

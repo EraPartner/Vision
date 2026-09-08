@@ -3,7 +3,7 @@ title: React Query Keys Reference
 type: reference
 status: active
 date: 2026-03-31
-updated: 2026-09-03
+updated: 2026-09-08
 tags: [reference, react-query, caching, frontend]
 description: Complete reference of all React Query keys used in the Vision frontend
 aliases: [react query keys, query keys, cache keys, queryKey, invalidation]
@@ -13,6 +13,11 @@ aliases: [react query keys, query keys, cache keys, queryKey, invalidation]
 
 > [!abstract] Overview
 > All React Query keys used in the Vision frontend. Use this reference for cache invalidation, debugging, and writing new data-fetching hooks.
+
+Query hooks use the named freshness policies in `apps/frontend/src/lib/queryPolicies.ts` rather
+than repeating millisecond literals. `DEFAULT` and `FREQUENT` preserve the established 30-second
+cadence; `STANDARD` preserves the one-minute cadence. Longer feature-specific policies remain
+named beside their owning feature when they express a distinct backend or prefetch contract.
 
 ## Query Keys by Feature
 
@@ -64,12 +69,14 @@ aliases: [react query keys, query keys, cache keys, queryKey, invalidation]
 
 ### Portfolio / Investments
 
-| Query Key                                   | Variables                                 | Used By          | Description                                     |
-| ------------------------------------------- | ----------------------------------------- | ---------------- | ----------------------------------------------- |
-| `['investments']`                           | —                                         | `usePortfolio()` | All investment holdings                         |
-| `['portfolio-transactions', investmentIds]` | `investmentIds: string` (comma-separated) | `usePortfolio()` | Portfolio transactions for specific investments |
+| Query Key                                   | Variables                                 | Used By          | Description                                  |
+| ------------------------------------------- | ----------------------------------------- | ---------------- | -------------------------------------------- |
+| `['investments']`                           | —                                         | `usePortfolio()` | All holdings, including archived investments |
+| `['portfolio-transactions', investmentIds]` | `investmentIds: string` (comma-separated) | `usePortfolio()` | History for active and archived investments  |
 
-**Invalidation:** Mutations invalidate `['investments']` and `['portfolio-transactions']`.
+`usePortfolio()` derives active current-view data and an inactive discovery list from the shared
+cache. **Invalidation:** create, edit, archive, restore, and delete mutations invalidate
+`['investments']` and `['portfolio-transactions']`.
 
 ### Portfolio Performance
 
@@ -128,15 +135,41 @@ aliases: [react query keys, query keys, cache keys, queryKey, invalidation]
 | `['aggregations', 'recipient-insights', 'filtered', targetCurrency, excludedCategoryIds, excludedRecipientIds]` | currency and exclusion ID arrays | `useStatistics`                      | Filtered Statistics recipient analytics   |
 | `['aggregations', 'recipient-insights', targetCurrency, excludedCategoryIds, excludedRecipientIds]`             | currency and exclusion ID arrays | `RecipientInsightsTab` in Statistics | Recipient spending analytics              |
 
+### AI Insights Digest
+
+| Query Key            | Variables | Used By             | Description                                       |
+| -------------------- | --------- | ------------------- | ------------------------------------------------- |
+| `['insightsDigest']` | —         | Statistics panel    | Server-filtered, non-LLM insights digest          |
+| `['insightsCount']`  | —         | Insights navigation | Persisted undismissed count and projection status |
+
+**Invalidation:** Every transaction mutation invalidates this digest through
+`invalidateTransactionData()` so create, update, bulk update, delete, import, and reconciliation
+cannot leave stale insights in the interface. A successful dismissal invalidates both keys.
+
+### Planned Transactions
+
+| Query Key                                     | Variables           | Used By                         | Description                                       |
+| --------------------------------------------- | ------------------- | ------------------------------- | ------------------------------------------------- |
+| `['plannedTransactions', showInactive]`       | `showInactive`      | `usePlannedPayments()`          | Planned-payment management list                   |
+| `['upcomingPlannedPayments', ...]`            | Forecast parameters | Dashboard cash-flow forecast    | Upcoming planned payments                         |
+| `['account-planned-transactions', accountId]` | `accountId: number` | `useAccountPlannedTransactions` | Active, unexecuted plans for one account forecast |
+
+**Invalidation:** Planned-payment mutations invalidate the management, upcoming, and
+account-scoped trees. Transaction mutations also invalidate all three because execution,
+auto-linking, imports, and reconciliation can change whether a plan remains upcoming.
+
 ## Invalidation Patterns
 
 ### After Transaction Mutation
 
 ```ts
-queryClient.invalidateQueries({ queryKey: ["transactions"] });
-queryClient.invalidateQueries({ queryKey: ["transactions-virtual"] });
-queryClient.invalidateQueries({ queryKey: ["monthlySummary"] });
+invalidateTransactionData(queryClient);
 ```
+
+The helper invalidates transaction lists, virtualized transaction lists, monthly summaries,
+filtered dashboard statistics, aggregations, recent dashboard transactions, and the Insights
+digest, plus upcoming and account-scoped planned transactions, as one transaction-derived fan-out
+contract.
 
 ### After Category Mutation
 

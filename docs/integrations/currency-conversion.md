@@ -284,7 +284,11 @@ When `useHistoricalRatesByDate: true` and the exact (or nearest) historical rate
 
 A `WARN`-level log entry is also emitted: `Historical FX missing, falling back to current rate` with `{ currency, date }` metadata.
 
-These two fields are an internal service diagnostic, not part of any repository view model, HTTP response, OpenAPI schema, or frontend contract. Current repositories intentionally project them away. When a current fallback rate exists, operators can observe the matching `Historical FX missing...` warning; if no rate exists, the service emits the corresponding unsupported-source or unsupported-target warning instead. The application-level FX status banner is provider-wide and does not observe these per-row historical diagnostics. Current recipient and money views therefore do not badge individual fallback-converted rows. A future per-row badge must first add an explicit API contract instead of depending on these internal fields. Rows where the rate resolved normally carry neither field.
+These fields remain internal row diagnostics. The recipient-pivot repository now summarizes them into
+the response's root-level `conversion` object: `usedHistoricalFallback` plus sorted
+`affectedCurrencies`. It does not expose or badge individual rows. Saved recipient charts render an
+accessible warning from this explicit aggregate contract. Other repositories still project the row
+diagnostics away. Rows where the rate resolved normally carry neither internal field.
 
 **Cache invalidation after backfill:** `backfillPortfolioHistoricalRates()` calls `clearHistoricalCache()` after inserting new rates, ensuring the in-memory historical index reflects the newly stored rows on the next conversion.
 

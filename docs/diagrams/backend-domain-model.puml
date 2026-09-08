@@ -15,11 +15,22 @@ package "Core Entities" {
     +balance: numeric(15,2)
     +memo: text
     +comment: text
-    +bank_account: text
+    +account_id: integer <<FK>>
     +recipient_id: integer <<FK>>
     +recipient_bank_account_id: integer <<FK>>
     +category_id: integer <<FK>>
     +is_active: boolean
+    +created_at: timestamptz
+    +updated_at: timestamptz
+  }
+
+  class Account {
+    +id: integer
+    +name: text
+    +display_name: text
+    +currency: varchar(3)
+    +is_active: boolean
+    +closed_at: timestamptz
     +created_at: timestamptz
     +updated_at: timestamptz
   }
@@ -67,7 +78,7 @@ package "Core Entities" {
     +memo: text
     +comment: text
     +url: text
-    +bank_account: text
+    +account_id: integer <<FK>>
     +recipient_id: integer <<FK>>
     +category_id: integer <<FK>>
     +is_recurring: boolean
@@ -339,6 +350,8 @@ PlannedTransaction "*" --> "1" Category : belongs to
 Category "1" <-- "*" Recipient : default_category
 
 Transaction "1" --> "0..1" RecipientBankAccount : uses
+Transaction "*" --> "0..1" Account : owned by
+PlannedTransaction "*" --> "0..1" Account : owned by
 
 Transaction "*" o-- "*" Tag : has (via TransactionTag)
 PlannedTransaction "*" o-- "*" Tag : has (via PlannedTransactionTag)

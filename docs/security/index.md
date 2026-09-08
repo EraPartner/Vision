@@ -4,9 +4,28 @@ type: security-index
 status: active
 date: 2026-04-10
 updated: 2026-08-23
-tags: [security, index, validation, rate-limiting, ci-cd, supply-chain, gitleaks, secrets-scanning, ssrf, electron]
+tags:
+  [
+    security,
+    index,
+    validation,
+    rate-limiting,
+    ci-cd,
+    supply-chain,
+    gitleaks,
+    secrets-scanning,
+    ssrf,
+    electron,
+  ]
 description: Security practices and policies for the Vision application including input validation, rate limiting, SSRF guard for outbound URLs, and supply chain security (secrets scanning, dependency audit, container scanning, Electron --ignore-scripts)
-aliases: [security, security docs, input validation, rate limiting, supply chain security]
+aliases:
+  [
+    security,
+    security docs,
+    input validation,
+    rate limiting,
+    supply chain security,
+  ]
 ---
 
 # Security Documentation
@@ -28,13 +47,13 @@ SORT title ASC
 - [[docs/security/rate-limiting|Rate Limiting]] - Request rate controls
 - [[docs/security/data-protection|Data Protection & CSP]] - Content Security Policy, path traversal prevention, data protection, privacy, backup encryption, Phase 7 restore safety, Electron permission hardening, error-page strict CSP
 - [[docs/security/ai-data-access|AI Data Access Policy]] - Tool allowlist, rate limits, no-external-calls guarantee, audit logging
-- [[docs/security/container-hardening|Container Hardening]] - Docker defense-in-depth: non-root user, dropped capabilities, read-only filesystem, resource limits, healthcheck, CI image scanning
+- [[docs/security/container-hardening|Retired Product Container Hardening]] - Historical product boundary and current native replacements
 - [[docs/security/dependency-security-remediation-2026-04|Dependency Security Remediation (2026-04)]] - Workspace dependency hardening and validation outcomes
 - Admin auth model (token-or-open + CSRF guard) is documented in [[docs/adr/063-admin-auth-csrf-guard|ADR-063]] and [[docs/security/data-protection|Data Protection]]. The superseded RFC1918 fallback is [[docs/adr/037-admin-auth-localhost-fallback|ADR-037]].
 
 ## Supply Chain Security (2026-05-07)
 
-- **[[docs/adr/050-ci-supply-chain-security-tooling|ADR-050: CI Supply Chain Security Tooling]]** - Secrets scanning (gitleaks in CI + pre-commit hook), dependency vulnerability audit (`bun audit`), container image scanning (Trivy), Electron permission handler hardening, strict CSP on error page
+- **[[docs/adr/050-ci-supply-chain-security-tooling|ADR-050: CI Supply Chain Security Tooling]]** - Historical decision; current CI uses secrets scanning, dependency audits, and Trivy filesystem scanning
 - **[[docs/guides/cicd-pipelines|CI/CD Pipelines Guide]]** - Full documentation of security scanning jobs (`secrets-scan`, `deps-audit`, `trivy-scan`) and setup instructions
 - **[[docs/guides/contributing|Contributing Guide]]** - Developer setup including pre-commit hook installation (`git config core.hooksPath .githooks`, `brew install gitleaks`)
 

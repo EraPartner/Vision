@@ -3,7 +3,7 @@ title: Accounts
 type: feature
 status: active
 date: 2026-07-22
-updated: 2026-09-05
+updated: 2026-09-08
 tags:
   [
     feature,
@@ -16,6 +16,8 @@ tags:
     reconciliation,
     ledger,
     running-balance,
+    portfolio-accounts,
+    broker-holdings,
     provenance,
     wp-b2,
     wp-b3,
@@ -38,6 +40,29 @@ related_code:
 
 # Accounts
 
+> [!note] ADR-088 contract phase
+> Transaction and planned-transaction account identity is now `account_id` only. The API still
+> accepts and returns `bank_account` as a compatibility label resolved through `accounts.name`.
+> The out-of-band column removal was applied to the maintained live database on 2026-09-08; fresh
+> Alembic-only installations still require the approved stopped-writer operation in the ADR-088
+> manual contract runbook.
+
+> [!note] Dormant compatibility field
+> `has_cash_sleeve` remains stored and exposed by the Accounts API. Account-type defaults derive
+> it, and forms continue to serialize and hydrate it for compatibility, but it has no active UI
+> control or business-rule consumer. ADR-108 retains it indefinitely to avoid an otherwise
+> unnecessary breaking contract change. A future removal requires a separately versioned API and
+> schema decision.
+
+> [!note] ADR-088 contract boundary
+> Transaction and planned-payment APIs still accept and return the
+> `bank_account` compatibility label. Contract-phase persistence resolves
+> request labels to `account_id` and derives response labels from
+> `accounts.name`; the canonical transaction tables no longer need their
+> legacy string columns. The maintained live database completed the out-of-band drop on
+> 2026-09-08; the reusable maintenance workflow remains documented in
+> `alembic/manual/contract_drop_bank_account/README.md`.
+
 The budgeting accounts surface: every bank/cash/liability entity ([[docs/adr/088-accounts-entity|ADR-088]]), its computed balance, and the workflows for keeping those balances trustworthy. Rebuilt under [[docs/adr/107-accounts-budgeting-ux-remake|ADR-107]] around three questions — _what do I have_ (hub), _is it right_ (ledger + provenance), _how do I fix it_ (reconcile).
 
 ## Architecture: Glance → Overview → Ledger
@@ -58,8 +83,8 @@ or currency with only future rows remains visible with a zero current balance.
 ## The hub (`/accounts`)
 
 - **Groups** (WP-B3, fixed order): _Cash & Savings_ (checking · savings · pension) → _Portfolio accounts_ (brokerage · crypto_exchange · wallet) → _Liabilities_ → _Archived_ (collapsed; any `is_active=false` account regardless of type). Cards sort by display label within a group (`groupAccounts.ts`, unit-tested).
-- **Per-group subtotals** convert each account's computed balance to the display currency; the grand **Net cash** line sums active, `in_net_worth` non-portfolio accounts — the same population as the net-worth Liquid + Liabilities figures.
-- **Portfolio-type cards** show "Tracked in Portfolio →" instead of a misleading €0,00 ledger balance (real holdings values arrive with the portfolio-accounts-v2 work, [[docs/adr/108-portfolio-accounts-v2-broker-tags|ADR-108]]).
+- **Per-group subtotals** convert each cash-bearing account's computed balance to the display currency. The Portfolio subtotal adds the already partitioned current holdings from the portfolio summary; holdings-only wallet and crypto-exchange accounts contribute no stale ledger cash. The grand **Net cash** line sums active, `in_net_worth` non-portfolio accounts — the same population as the net-worth Liquid + Liabilities figures.
+- **Portfolio-type cards** use the portfolio summary's account partition to show current holdings value and broker profit/loss. Brokerage cards compose that with their real ledger cash and balance provenance; wallet and crypto-exchange accounts are holdings-only and omit transaction, cash-drift, and Reconcile affordances. An account with no assigned position says **No assigned holdings** instead of displaying a misleading ledger zero.
 - **Card interactions** (WP-B4): the account name and the menu's **View details** item are real links to `/accounts/:id`. The card stays a passive container so its independent Reconcile control and menu do not create nested interaction. The menu also keeps **View transactions** (account-filtered Transactions page) and **Reconcile balance** (only while drift is non-zero). Everything lifecycle-shaped moved to the detail route's header menu.
 - The **drift badge** on a card (statement vs computed disagreement, ADR-094) opens the Reconcile dialog directly.
 - **Add account** stays in the page header.
@@ -69,9 +94,9 @@ or currency with only future rows remains visible with a zero current balance.
 
 Lazy-loaded like every page (`routePreload.ts` → `App.tsx`). Content:
 
-- **Header**: display name; type · currency · institution subline; archived badge when inactive; a header **actions menu** with _Edit_, _Set opening balance_, _View transactions_, _Merge into…_, _Close account_, _Archive/Restore_, _Delete_ (moved here from the hub cards). Delete on a still-referenced account (409) routes into the close flow, same as the hub used to.
+- **Header**: display name; type · currency · institution subline; archived badge when inactive; a header **actions menu** with _Edit_, _Set opening balance_, _View transactions_, _Merge into…_, _Transfer portfolio lots_, _Close account_, _Archive/Restore_, _Delete_ (moved here from the hub cards). Transfer is available only for active portfolio accounts. Holdings-only wallet and crypto-exchange accounts omit _Set opening balance_ and _View transactions_. Delete on a still-referenced account (409) routes into the close flow, same as the hub used to.
 - **Balance card**: the computed balance with its provenance subline (below), the **drift chip** (click → Reconcile dialog), and a **sparkline** of the running-balance series drawn from the ledger rows themselves (most recent ≤100 rows, chronological; green/red/neutral by trend) — no extra endpoint.
-- **Holdings placeholder** (portfolio-type accounts only): a muted locked section above the ledger; it is fed with real per-broker holdings later (ADR-108). Portfolio-type accounts also show "Tracked in Portfolio →" instead of a cash balance.
+- **Holdings section** (portfolio-type accounts only): the portfolio summary's account partition supplies current holdings value, broker profit/loss, and oversold state above the ledger. Brokerage accounts keep their separate cash balance and provenance. Wallet and crypto-exchange accounts stop at holdings and details: they do not query or render a running cash ledger, sparkline, drift, or Reconcile control.
 - **Running-balance ledger**: the account's full transaction list, newest first, in a table with Date · Description (recipient + memo) · Category · Amount · **Balance**. Loads 100 rows at a time ("Load more" grows the window).
 - **Details card**: type, currency, owner, liquidity, tax wrapper, institution, spendable, in-net-worth.
 - Accounts with `has_transactions=false` (portfolio shells) explain that their activity lives in the portfolio, not the ledger.
@@ -147,7 +172,10 @@ All from the detail route's header menu (WP-B4):
 - **Edit** — the account form in edit mode (PATCH; emptied fields sent as explicit null to clear).
 - **Set opening balance** — seeds/updates the statement anchor so manual/cash accounts get meaningful balances and drift.
 - **Merge into…** — repoints transactions/planned/holdings/funding onto a surviving account and deletes the source (irreversible; per-tree cache invalidation via `invalidateAccountRepoint`). The merge is rejected before any write when the projected funding links would make the survivor self-funding or close a longer cycle. Create, edit, hard delete, and merge serialize funding-edge validation and mutation with one transaction-scoped graph lock, so a concurrent edit cannot invalidate that decision before the repoint commits. Hard delete participates because its `ON DELETE SET NULL` action removes dependent funding edges.
-- **Close account** — warns when cash remains, then archives (`is_active=false`; closed accounts also leave net worth per WP-A3 semantics). Holdings and ledger history are preserved. Broker lot reassignment and a final cash-transfer step remain planned lifecycle work. **Archive/Restore** toggles listing without the residual-balance flow.
+
+The account detail page shows active, unexecuted planned transactions in a separate **Upcoming planned transactions** forecast section above the posted ledger. These rows are filtered by the account's canonical `name`. They never enter the posted ledger, running balance, sparkline, load-more count, reconciliation drift, or `?since=` reconciliation view.
+
+- **Close account** — archives the account (`is_active=false`; closed accounts also leave net worth per WP-A3 semantics). For a portfolio account, an exact server preview counts every assigned `buy`, `gift`, and `sell` row. The dialog can keep those rows on the closed account, move the complete set to another active portfolio account, or move it to Unassigned through the audited broker re-tag endpoint. It never splits a selection above the 500-row atomic limit. Under the configured weighted-average, FIFO, or LIFO method, the server compares the production partitioned totals before and after and rejects a move that would change global units, invested basis, or realized profit/loss. Re-tag runs before close; a re-tag failure leaves the account open, while a later close failure is reported as a partial state and retries reuse the same receipt key. The cash choice remains separate: the dialog defaults to requesting that the server zero the canonical account balance with one visible, dated adjustment per non-zero currency partition before closing. The server recalculates those partitions, so a stale or zero cached UI balance cannot suppress the adjustment request. When a residual is shown, the user may opt out and preserve it instead. The close and adjustments are atomic and retry-safe; adjustments do not count as income or spending. Holdings-only wallet and crypto-exchange accounts send `preserve` and never show the cash option. Ledger history is preserved. **Archive/Restore** toggles listing without the close workflow.
 - **Delete** — hard delete; a 409 (still referenced) routes to the close flow instead of dead-ending.
 
 ## Transactions-page account filter
@@ -156,8 +184,9 @@ The Transactions page's actions bar has an **Account** combobox (`AccountFilterC
 
 ## Testing
 
-- `apps/frontend/src/pages/__tests__/AccountDetailPage.integration.test.tsx` — header/balance/provenance, running-balance column, header menu verbs, drift chip → Reconcile, Holdings placeholder, `?since=` narrowing + clear, not-found state.
-- `apps/frontend/src/pages/__tests__/AccountsPage.integration.test.tsx` — grouped hub, card→route navigation, reduced hub menu, `?account=` forwarding.
+- `apps/frontend/src/pages/__tests__/AccountDetailPage.integration.test.tsx` — header/balance/provenance, running-balance column, header menu verbs, drift chip → Reconcile, live broker holdings/P&L states, holdings-only suppression, `?since=` narrowing + clear, not-found state.
+- `apps/frontend/src/pages/__tests__/AccountsPage.integration.test.tsx` — grouped hub, current broker holdings/P&L/cash composition and subtotal states, card→route navigation, reduced hub menu, `?account=` forwarding.
 - `apps/frontend/src/pages/__tests__/TransactionsPage.integration.test.tsx` — Account filter sets/clears `account_id`.
 - `apps/node-backend/tests/routes/transactions.test.js` — `include_balance` threading + `running_balance` on/off the wire.
 - `apps/frontend/src/features/accounts/__tests__/groupAccounts.test.ts` — grouping/subtotal/Net-cash math.
+- `apps/frontend/src/features/accounts/__tests__/brokerAccountMetrics.test.ts` — position-only holdings value, complete broker P&L, and oversold aggregation from the portfolio-summary partition.

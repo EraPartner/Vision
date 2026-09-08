@@ -442,7 +442,9 @@ Admin endpoints (`/api/admin/*`) are protected by two co-operating guards. See [
 **`adminAuth.js` — Token-or-Open**
 
 - When `ADMIN_AUTH_TOKEN` is set: every admin request must carry `Authorization: Bearer <token>`. Comparison uses `crypto.timingSafeEqual()` on equal-length buffers to prevent timing side-channels.
-- When `ADMIN_AUTH_TOKEN` is unset: the middleware calls `next()` immediately. No IP check is performed. Protection is then provided entirely by (a) the docker-compose loopback binding (`127.0.0.1:PORT`) and (b) the CSRF guard below.
+- When `ADMIN_AUTH_TOKEN` is unset: the middleware calls `next()` immediately. No IP check is
+  performed. Native Electron's loopback binding supplies the network boundary and the CSRF guard
+  below supplies the browser-origin boundary.
 - A startup warning is logged when the token is absent, instructing operators to set it if the port is published on `0.0.0.0`.
 
 > [!warning] This supersedes the RFC1918 IP-allowlist fallback from ADR-037. The middleware no longer trusts the entire private address space — `10.x`, `172.16.x`, `192.168.x`, IPv6 ULA are no longer implicitly trusted.
@@ -584,14 +586,13 @@ See [[docs/adr/049-phase-6-7-bug-hunt-recovery-hardening|ADR-049]] for full cont
 ## Source-build Installer Security
 
 The repository's `install.sh` builds the native macOS application from a local
-checkout. It does not download or install Homebrew, Docker Desktop, PostgreSQL,
-Python, or Node.js. It fails closed when the required build tools or exact
+checkout. It does not download or install host package managers or build toolchains. It fails
+closed when the required build tools or exact
 migration-package versions are unavailable. Locked Bun dependencies, the pinned
 Chrome Headless Shell version, PostgreSQL 18.6 validation, payload hashing, and
 post-build code-signature checks protect the generated application resources.
 
 The installed application starts only its private loopback PostgreSQL cluster.
-Docker remains a separate, explicit deployment option.
 
 ---
 
@@ -610,7 +611,7 @@ Docker remains a separate, explicit deployment option.
 
 - [[docs/adr/063-admin-auth-csrf-guard|ADR-063: Admin Auth Token-or-Open + CSRF Guard]] — Current admin auth model (supersedes ADR-037)
 - [[docs/adr/037-admin-auth-localhost-fallback|ADR-037: Admin Auth Localhost Fallback]] — Superseded RFC1918 IP-allowlist model
-- [[docs/adr/050-ci-supply-chain-security-tooling|ADR-050: CI Supply Chain Security Tooling]] — Secrets scanning, dependency audit, container image scanning, Electron permission handler, error-page strict CSP
+- [[docs/adr/050-ci-supply-chain-security-tooling|ADR-050: CI Supply Chain Security Tooling]] — Historical decision; current filesystem scanning is described in the CI/CD guide
 - [[docs/adr/049-phase-6-7-bug-hunt-recovery-hardening|ADR-049: Phase 6.1–7 Bug Hunt Recovery Hardening]] — Database schema fixes, Electron backup/restore safety
 - [[docs/adr/040-backup-format-v2-aead-encryption|ADR-040: Backup Format v2 AEAD Encryption]] — Backup encryption scheme (v1 legacy, v2 current)
 - [[docs/adr/042-codeql-dependabot-remediation-2026-04|ADR-042: CodeQL + Dependabot Remediation]] — CORS fix, rate limiters, input validation improvements

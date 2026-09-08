@@ -7,7 +7,12 @@ updated: 2026-08-26
 tags: [guide, api, how-to, backend, tutorial]
 description: Step-by-step guide for adding a new REST API endpoint to the Vision backend
 aliases: [add api, new endpoint, create endpoint, api tutorial]
-related_code: ["apps/node-backend/src/routes/", "apps/node-backend/src/repositories/", "apps/node-backend/src/main.js"]
+related_code:
+  [
+    "apps/node-backend/src/routes/",
+    "apps/node-backend/src/repositories/",
+    "apps/node-backend/src/main.js",
+  ]
 ---
 
 # How to Add a New API Endpoint
@@ -26,6 +31,7 @@ related_code: ["apps/node-backend/src/routes/", "apps/node-backend/src/repositor
 ### 1. Plan the Endpoint
 
 Decide on:
+
 - **Resource name** (e.g., `tags`, `notifications`)
 - **HTTP methods** (GET, POST, PATCH, DELETE)
 - **URL path** (e.g., `/api/tags`)
@@ -37,6 +43,10 @@ Decide on:
 ### 2. Create the Route File
 
 Create `apps/node-backend/src/routes/<resource>.js`. Routes are thin: they parse/validate the request, delegate to the **service** (never the repository — the `vision-local/no-repo-direct-from-route` ESLint gate enforces this, [[docs/adr/067-enforce-route-service-boundary|ADR-067]]), and reply with the `res.ok()` envelope ([[docs/adr/026-unified-api-response-envelope|ADR-026]]). Use `validateIdParam` for `/:id` routes and throw the typed errors from `middleware/errorHandler.js` instead of hand-rolling `res.status(...).json(...)` — the central error handler turns them into the `{ ok:false, error:{ code, message } }` envelope. See `routes/tags.js` for a live reference.
+
+`validateIdParam` is validation-only and leaves Express path strings unchanged. Read the numeric id
+through `assertIdParam(req)` inside the handler; for a named sub-resource parameter, pair
+`validateIntParam(name)` with `assertIdParam(req, name)`.
 
 ```javascript
 import { Router } from 'express';
@@ -206,23 +216,23 @@ def downgrade():
 Create `apps/node-backend/tests/<resource>.test.js`:
 
 ```javascript
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import request from 'supertest';
-import app from '../src/main.js';
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import request from "supertest";
+import app from "../src/main.js";
 
-describe('<resource> API', () => {
-  it('GET /api/<resource> returns empty list', async () => {
-    const res = await request(app).get('/api/<resource>');
+describe("<resource> API", () => {
+  it("GET /api/<resource> returns empty list", async () => {
+    const res = await request(app).get("/api/<resource>");
     expect(res.status).toBe(200);
     expect(res.body.items).toEqual([]);
   });
 
-  it('POST /api/<resource> creates item', async () => {
+  it("POST /api/<resource> creates item", async () => {
     const res = await request(app)
-      .post('/api/<resource>')
-      .send({ name: 'Test' });
+      .post("/api/<resource>")
+      .send({ name: "Test" });
     expect(res.status).toBe(201);
-    expect(res.body.name).toBe('Test');
+    expect(res.body.name).toBe("Test");
   });
 });
 ```

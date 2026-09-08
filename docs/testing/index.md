@@ -355,7 +355,8 @@ dispatch. Visual regression does not run in CI.
 
 ## Frontend Phase B: E2E Testing with Playwright (2026-04-30)
 
-Introduced Playwright E2E layer to test critical user flows against a real backend (local dev server or CI Docker Compose stack).
+Introduced Playwright E2E layer to test critical user flows against a real backend (local native
+development or the scheduled native CI stack).
 
 **What's new:**
 
@@ -365,7 +366,9 @@ Introduced Playwright E2E layer to test critical user flows against a real backe
 
 3. **NPM Scripts** — `apps/frontend/package.json` adds `"test:e2e": "playwright test"`, root `package.json` adds `"test:e2e": "bun run --filter 'vision-frontend' test:e2e"`.
 
-4. **CI/CD Job** — `.github/workflows/ci.yml` new `test-e2e` job: builds Docker image, starts Compose stack, waits for `/health`, installs Playwright, runs tests with `CI=true` and `PLAYWRIGHT_BASE_URL=http://localhost:3002`, uploads artifact, tears down. Skipped for draft PRs.
+4. **CI/CD Job** — `.github/workflows/e2e.yml` provisions PostgreSQL 18, builds the production
+   frontend, starts the native backend, runs Playwright, and uploads its report on the scheduled or
+   manually dispatched workflow.
 
 **Running locally:**
 

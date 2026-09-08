@@ -175,6 +175,10 @@ Bulk import recipients from CSV.
 | separator | string | No       | CSV separator |
 | encoding  | string | No       | File encoding |
 
+For compatibility, `separator` and `encoding` may also be supplied as query parameters. A present
+multipart body field is authoritative when both are supplied; the query value is only a fallback.
+This is the shared rule for every non-GET import parameter that accepts both locations.
+
 **CSV Format:**
 
 ```csv
@@ -210,6 +214,8 @@ name,default_category
 ### POST /api/import/categories
 
 Bulk import categories from CSV.
+
+`separator` and `encoding` follow the same body-first, query-fallback rule as the recipient import.
 
 **Response:** `201 Created` (2026-08-09: `openapi.yaml` corrected — it had documented this route as 200)
 

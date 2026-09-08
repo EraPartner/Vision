@@ -3,7 +3,7 @@ title: Statistics Components
 type: component
 status: active
 date: 2026-04-24
-updated: 2026-08-27
+updated: 2026-09-08
 tags:
   [
     components,
@@ -36,11 +36,11 @@ Vision's Statistics page is composed of 11 specialized sub-components plus share
 
 The page acts as a thin orchestrator with lazy-loading and memoization:
 
-CategoryPivotTable intentionally defaults to all years and keeps automatic
-browser column sizing. This preserves complete-history visibility and the
-current width/scroll geometry; period-column windowing would change those
-dimensions because body values participate in table layout. The accepted scale
-boundary and measurable revisit threshold are documented in
+The Statistics page defaults to a rolling 24-month range; `?window=all` exposes
+full history. CategoryPivotTable mounts at most 12 period columns at once. It
+starts on the newest window and renders periods chronologically within that
+window. Keyboard-operable Previous and Next controls expose every period in the
+selected range. Totals and export input still cover every filtered period. The accepted scale boundary is documented in
 [[docs/performance/index#Accepted Scale Boundaries|Performance Documentation]].
 
 ```tsx
@@ -335,11 +335,12 @@ interface CategoryPivotTableProps {
 2. **Collapse/Expand:** Per-row chevron buttons on parent groups with real children. CardHeader hosts a master "Expand all / Collapse all" button (hidden when no group is expandable). State is session-scoped.
 3. **Value modes:** Absolute (default), Net, Income-only, Expense-only (via dropdown)
 4. **Year filtering:** "All Periods" or specific year (via dropdown)
-5. **Sorting:** By total descending
-6. **Sticky columns:** Category name stays visible during horizontal scroll
-7. **Column totals:** Footer row with per-period and grand totals
-8. **Accessibility:** Chevron buttons expose `aria-expanded` and a space-separated `aria-controls` list whose unique child-row ids remain mounted while hidden. Non-zero drill cells contain native links. Compact totals place their exact-value disclosure beside, never inside, the link.
-9. **Drillthrough (Phase 13):** Non-zero group/detail cells and footer totals navigate to `/transactions` with pre-populated filters; zero cells remain plain table cells.
+5. **Period windowing:** At most 12 period columns mount at once. Previous and Next traverse every period while preserving full-history totals and export input.
+6. **Sorting:** By total descending
+7. **Sticky columns:** Category name stays visible during horizontal scroll
+8. **Column totals:** Footer row with per-period and grand totals
+9. **Accessibility:** Chevron and period-window buttons expose their state through native controls; the visible date range uses a polite live region. Group buttons retain a space-separated `aria-controls` list whose unique child-row ids remain mounted while hidden. Non-zero drill cells contain native links. Compact totals place their exact-value disclosure beside, never inside, the link.
+10. **Drillthrough (Phase 13):** Non-zero group/detail cells and footer totals navigate to `/transactions` with pre-populated filters; zero cells remain plain table cells.
 
 **Drillthrough Behavior (Phase 13):**
 
@@ -362,7 +363,7 @@ Non-zero group/detail cells and footer totals drill through to the TransactionsP
 - Flat categories (no `:` in name, `detailName === general`) do not receive a chevron.
 - Controlled child rows stay mounted with `hidden` while collapsed, so every `aria-controls` id remains valid without exposing collapsed content.
 
-Accessibility coverage lives in `[[apps/frontend/src/features/statistics/__tests__/CategoryPivotTable.a11y.test.tsx]]` and pins href-backed keyboard drill-through, non-interactive zero cells, modifier-click behavior, and unique controlled row ids.
+Accessibility coverage lives in `[[apps/frontend/src/features/statistics/__tests__/CategoryPivotTable.a11y.test.tsx]]` and pins href-backed keyboard drill-through, non-interactive zero cells, modifier-click behavior, and unique controlled row ids. `[[apps/frontend/src/features/statistics/__tests__/CategoryPivotTable.windowing.test.tsx]]` uses 120 periods to pin the 12-column mount bound, keyboard traversal, full-history totals, sticky labels, and drill links.
 
 **URL Construction:**
 

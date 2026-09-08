@@ -73,7 +73,8 @@ replace these rules.
   `open "/Applications/Vision Demo.app"` and rebuild it with `./install-demo.sh` after relevant
   code changes. Discover its persisted random backend port from `appPort` in the Demo settings,
   then check `/health`. Its PostgreSQL cluster is isolated below
-  `~/Library/Application Support/Vision Demo/native/vision_demo`; Docker is not involved.
+  `~/Library/Application Support/Vision Demo/native/vision_demo`; it uses only the bundled native
+  runtime.
 - Do not wipe or mutate the Demo database merely to make it boot. Inspect the native Demo logs and
   seed activation state first. When a canonical synthetic reset is intended, use
   `bun run demo:reset-native` and reopen the Demo app. Never apply that workflow to real Vision.

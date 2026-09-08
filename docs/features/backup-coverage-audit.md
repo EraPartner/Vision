@@ -3,8 +3,8 @@ title: Backup Coverage Audit
 type: feature
 status: active
 date: 2026-08-30
-updated: 2026-09-04
-last_modified: 2026-09-04
+updated: 2026-09-08
+last_modified: 2026-09-08
 tags: [feature, backup, restore, database, filesystem, localStorage, bundle, encryption, schema-migration, phase-1, phase-2, phase-7, passphrase-modal, ux, aead, aes-256-gcm, rolling-cache, concurrent-backup-guard, pre-restore-confirmation, watchdog-pause, safe-storage, keychain, lazy-safeStorage, settings-dialog-fix, backup-path-revert-fix]
 description: Authoritative audit of every persistence surface in Vision and its backup/restore coverage status. Phase 1+2 implements .visionbak bundle format with optional AES-256-CBC encryption (v1) or AES-256-GCM (v2, 2026-04-28), schema-safe restore, and localStorage hydration. Phase 7 (May 2026) hardens restore with user confirmation, concurrent-backup guard, and health watchdog pause. safeStorage is now accessed lazily to avoid macOS Keychain prompts for users without a stored passphrase. 2026-06-11: fixes "backup path keeps reverting to default" — settings dialog now loads backup settings on open; Electron IPC handlers correctly unwrap the response envelope.
 aliases: [backup audit, coverage audit, backup coverage, visionbak, bundle format]
@@ -77,6 +77,9 @@ All user-data tables are included in the `pg_dump` SQL artifact inside every `.v
 | `exchange_rates`               | FX             | ✅ Included | Rate cache                       |
 | `import_batches`               | Import         | ✅ Included | Import batch records             |
 | `import_staging_rows`          | Import         | ✅ Included | Staging rows before commit       |
+| `insight_cash_projections`     | Insights       | ✅ Included | Significant-move baseline        |
+| `insight_digest_state`         | Insights       | ✅ Included | Versioned navigation badge count |
+| `insight_dismissals`           | Insights       | ✅ Included | Server-visible user preferences  |
 | `investments`                  | Portfolio      | ✅ Included | Holdings                         |
 | `kbc_raw_transactions`         | Import         | ✅ Included |                                  |
 | `manual_raw_transactions`      | Import         | ✅ Included |                                  |
@@ -137,9 +140,8 @@ All user-data tables are included in the `pg_dump` SQL artifact inside every `.v
 | Receipt files | `$ATTACHMENTS_DIR/{transaction_id}/{uuid}.{ext}` | ✅ Bundled as `attachments/` tree | Extracted to `$ATTACHMENTS_DIR` after DB load |
 
 **Attachment root:** native mode uses the absolute
-`~/Library/Application Support/Vision/native/vision/attachments/` directory. Docker mode keeps
-its named attachment volume mounted at `/app/data/attachments`. Both reach the backend through the
-same `ATTACHMENTS_DIR` contract.
+`~/Library/Application Support/Vision/native/vision/attachments/` directory and passes it to the
+backend through `ATTACHMENTS_DIR`.
 
 **Restore safety:** Files extracted to a staging directory (`$ATTACHMENTS_DIR.staging/`) and atomically swapped on success. Rolled back on failure — original files preserved until swap completes.
 
@@ -225,8 +227,8 @@ vision_backup_{deviceId}_{timestamp}.visionbak.enc ← Encrypted archive (v1 or 
 
 **v1 (Legacy, April 2026):** AES-256-CBC with static salt
 
-- **Magic:** `VISIONENC1` (9 bytes)
-- **Salt:** Static 12 bytes (hardcoded, same across all v1 backups)
+- **Magic:** `VISIONENC1` for raw SQL backups or `VISIONBAK1` for bundles (10 bytes)
+- **Salt:** Static `vision-backup-v1` value (hardcoded, same across all v1 backups)
 - **KDF:** Scrypt(passphrase, salt, N=2^14, r=8, p=1)
 - **Mode:** CBC (confidentiality only; no authentication)
 - **Confidentiality:** ✅ Provided | **Authenticity:** ❌ Not provided | **Per-backup Entropy:** ❌ No
@@ -234,7 +236,7 @@ vision_backup_{deviceId}_{timestamp}.visionbak.enc ← Encrypted archive (v1 or 
 
 **v2 (AEAD, April 2026):** AES-256-GCM with per-backup random salt and IV
 
-- **Magic:** `VISIONENC2` (9 bytes)
+- **Magic:** `VISIONENC2` for raw SQL backups or `VISIONBAK2` for bundles (10 bytes)
 - **Salt:** Random 16 bytes per backup (generated at encryption time)
 - **IV:** Random 12 bytes per backup (GCM standard)
 - **KDF:** Scrypt(passphrase, salt, N=2^15, r=8, p=1) — doubled iteration count vs v1
@@ -246,7 +248,12 @@ vision_backup_{deviceId}_{timestamp}.visionbak.enc ← Encrypted archive (v1 or 
 
 **Backward Compatibility:** Auto-detection via magic header; v1 backups decrypt correctly; old passphrases work unchanged. No user action required. Restore process transparently dispatches to correct decoder.
 
-**Module:** `packaging/electron/backup/bundle.js` provides:
+**Modules:** `packaging/electron/backup/encrypted-file.js` owns the parameterized v1/v2 byte
+formats, key derivation, stream cleanup, and authentication-error handling. The adapters preserve
+their public interfaces and supply format-specific magic values and messages:
+
+- `packaging/electron/backup/crypto.js` — raw SQL backup adapter
+- `packaging/electron/backup/bundle.js` — `.visionbak` bundle adapter, which provides:
 
 - `createBundle()` — Create zip from db.sql, attachments/, frontend-state.json, metadata.json
 - `encryptBundle(bundlePath, passphrase)` — Wrap bundle in AES-256-GCM (v2); takes plaintext passphrase, not pre-derived key
@@ -292,13 +299,13 @@ vision_backup_{deviceId}_{timestamp}.visionbak.enc ← Encrypted archive (v1 or 
    - **v2:** Extract salt + IV from header; derive key via Scrypt KDF with per-backup salt; decrypt GCM ciphertext; verify auth tag; throw `Error('INVALID_PASSPHRASE')` on tag failure (tampering detected)
    - Frontend catches invalid-passphrase error and re-prompts modal (up to 3 attempts typical)
 4. **Schema Validation** — Extract metadata.json from bundle; compare `metadata.schemaHead` against current `getSchemaHead()`. If bundle schema > current, throw `BUNDLE_SCHEMA_NEWER` error (user must upgrade Vision first).
-5. **Provider Database Stage** — The active runtime provider restores into a fresh staged database.
-   Native mode creates it from `template0`, uses version-matched PostgreSQL 18 tools, stops on the
+5. **Native Database Stage** — The runtime restores into a fresh staged database created from
+   `template0`, uses version-matched PostgreSQL 18 tools, stops on the
    first error, and restores in one transaction. A no-owner restore leaves schema tables with the
    owner/migration role, then hands only the runtime-managed materialized views to the application
    role so their create, index, refresh, and analyze lifecycle remains least-privilege. Runtime
    bootstrap grants restored ordinary tables and views individually and skips those app-owned
-   materialized views. Docker mode uses the equivalent provider transport.
+   materialized views.
 6. **Database Validation** — Confirm the exact Alembic head and required table inventory before the
    live database name can change.
 7. **Attachment Stage** — Extract `attachments/` to a sibling staging directory, reject symbolic
@@ -337,6 +344,26 @@ vision_backup_{deviceId}_{timestamp}.visionbak.enc ← Encrypted archive (v1 or 
 2. **localStorage coverage** — asserts all keys in `LOCAL_STORAGE_KEYS` are referenced in the bundle snapshot logic.
 
 Adding a table or localStorage key without updating the registries causes a CI failure.
+
+### Native macOS end-to-end journey
+
+`bun run native:isolated-smoke` is the destructive backup/restore acceptance journey for the
+supported native macOS application. It creates its own temporary application-data directory and
+PostgreSQL 18 cluster, writes a synthetic account, recipient, transaction, setting, and attachment,
+creates a current AES-256-GCM `.visionbak.enc` bundle with frontend state, mutates the temporary
+database and attachment, and restores the bundle. It then verifies exact account, transaction,
+setting, and attachment values plus the schema revision, database statistics, frontend-state
+payload, API readiness, and packaged frontend assets. The entire temporary instance is removed
+after success; it cannot address the user's real Vision data.
+
+`apps/node-backend/tests/backup-release-compat.test.js` also opens the immutable, sanitized
+`packaging/electron/backup/fixtures/vision-1.0.2-sanitized.visionbak.enc` artifact. The artifact was
+written and encrypted by the bundle implementation from Git tag `v1.0.2` and includes synthetic
+SQL, an attachment, metadata, and frontend state. This checks the current reader against encrypted
+bytes from the older producer rather than a bundle created by the current writer. Vision 1.0.2
+already wrote the authenticated `VISIONBAK2` envelope; legacy AES-256-CBC decoding remains covered
+separately by the fixed encrypted-byte compatibility tests. Newer-schema rejection and restore
+rollback remain covered by the focused Electron backup tests.
 
 ---
 

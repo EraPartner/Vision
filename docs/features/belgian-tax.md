@@ -3,7 +3,7 @@ title: Feature - Belgian Tax
 type: feature
 status: active
 date: 2026-05-11
-updated: 2026-09-04
+updated: 2026-09-05
 tags: [feature, tax, belgian, cadastral-income, deductions, phase-8, pdf-export, regional-own-home-credit, exemption-brackets, taxable-income-sources, audit-2026-05-11, disabled-dependents, regional-autonomy-factor, property-tax-centimes, etf-tob, reynders-routing, portfolio-tax-pure-module, decimal-migration, point-in-time-fx, url-state, filing-masthead, computation-flow, adr-105]
 description: Belgian tax profile management with PIT calculator using exemption-bracket method (CIR-92 art. 134 §3), regional own-home credits (Flemish woonbonus, Walloon chèque habitat), taxable income source filtering, cadastral income tracking, deduction management, PDF tax report export, and May 2026 PwC audit fixes (disabled-dependent doubling, child-under-3 forfeiture, regional autonomy factor, property-tax centimes calibration). May 2026: Portfolio-tax estimators extracted to a pure, tested module with Decimal.js accumulation.
 aliases: [belgian-tax, tax-feature, cadastral, deductions, belgium]
@@ -11,6 +11,7 @@ related_code:
   - apps/frontend/src/pages/TaxOverviewPage.tsx
   - apps/frontend/src/features/tax/TaxProfileDialog.tsx
   - apps/frontend/src/features/tax/SuggestedDeductionsCard.tsx
+  - apps/frontend/src/features/tax/DeductionCandidatesCard.tsx
   - apps/frontend/src/features/tax/TaxYearStatusIcon.tsx
   - apps/frontend/src/contexts/BelgianTaxProfileContext.tsx
   - apps/frontend/src/lib/belgianTax/pit.ts
@@ -34,6 +35,12 @@ Vision includes Belgian-specific tax features to support local tax filing requir
 - Cadastral income tracking and a regional property tax (`précompte immobilier` / `onroerende voorheffing`) estimate.
 - Deduction & credit suggestions matched to the user's profile.
 - Inflation-adjusted portfolio returns using Statbel / Eurostat HICP data.
+
+Transaction-derived deduction candidates use replacement semantics: applying a candidate sets the
+matching annual profile field to the detected total; it does not add to the existing value. For the
+current calendar year, every application first requires an explicit acknowledgement that the year
+is incomplete and the candidate may cover only part of it. The confirmation shows both the current
+annual profile value and its replacement. Completed tax years retain direct confirmation.
 
 ## Module layout
 

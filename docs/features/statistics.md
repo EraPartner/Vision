@@ -3,10 +3,31 @@ title: Statistics Feature
 type: feature
 status: active
 date: 2026-04-24
-updated: 2026-08-27
-last_modified: 2026-08-27
-tags: [feature, statistics, analytics, charts, frontend, backend, refactor, phase-7, phase-13, sankey-flow, rolling-averages, pdf-export, year-selector, useMemo, drillthrough, exclusion-filters, recipient-insights]
-description: Complete analytics and statistics system with per-graph exclusions, pivot tables with clickable drillthrough, year-over-year comparisons, saved custom charts, Sankey flow visualization, rolling average overlays, and PDF export. Phase 7 adds flow diagram, moving averages, and financial report export. Phase 13 adds pivot table drillthrough to filtered transaction list and multi-select export filters. June 2026: all-years Top Recipients chart now honours exclusion filters (bug fix).
+updated: 2026-09-08
+last_modified: 2026-09-08
+tags:
+  [
+    feature,
+    statistics,
+    analytics,
+    charts,
+    frontend,
+    backend,
+    refactor,
+    phase-7,
+    phase-13,
+    sankey-flow,
+    rolling-averages,
+    pdf-export,
+    year-selector,
+    useMemo,
+    drillthrough,
+    exclusion-filters,
+    recipient-insights,
+    smart-insights,
+    rolling-window,
+  ]
+description: Complete analytics and statistics system with per-graph exclusions, pivot tables with clickable drillthrough, Smart Insights, year-over-year comparisons, saved custom charts, Sankey flow visualization, rolling average overlays, and PDF export. Category overspend findings disclose their exact partial-month comparison window.
 aliases: [stats, analytics, charts, pivot table, yearly comparison]
 related_code:
   - apps/frontend/src/pages/StatisticsPage.tsx
@@ -14,7 +35,10 @@ related_code:
   - apps/frontend/src/hooks/useStatistics.ts
   - apps/frontend/src/hooks/useChartCurrencyFormatter.ts
   - apps/frontend/src/features/statistics/statisticsUtils.ts
+  - apps/frontend/src/features/statistics/InsightsDigestPanel.tsx
   - apps/frontend/src/hooks/useSavedCharts.ts
+  - apps/node-backend/src/services/categoryOutlierService.js
+  - apps/node-backend/src/services/cashForecastInsightService.js
   - apps/node-backend/src/routes/info.js
   - apps/node-backend/src/repositories/infoRepository.js
 ---
@@ -31,13 +55,59 @@ The Statistics page (`/statistics`) is the primary analytics dashboard for trans
 
 **Performance Optimization (April 25):** All 8 chart components are now lazy-loaded via `React.lazy()` and `Suspense` per tab. The `chartCardProps` is memoized with `useMemo()` to prevent unnecessary child re-renders. The 6 statistics chart components (MonthlyChart, NetTrendChart, YearlyComparisonChart, TopRecipientsChart, CategoryPieChart, CategoryTrendChart) are wrapped with `React.memo()`, along with the 5 settings tab components (GeneralTab, AppearanceTab, AppTab, DashboardTab, BackupTab). This reduces bundle size for initial page load and improves rendering performance when switching tabs.
 
-## Current Status (Phase 2, April 2026)
+## Current Status
 
-> [!warning] Dashboard Stat Cards vs. Statistics Page
-> **Phase 2 (April 2026) updated only the Dashboard stat cards** to use `/api/aggregations/monthly-summary`. The full **Statistics page remains on client-side computation** (blocked on MV history extension). See [[docs/api/aggregations|Aggregations API]] for dashboard details.
+The Statistics page uses server-side aggregation endpoints. Its default date range is the latest
+24 calendar months, including the current partial month. The page header shows the active range and
+offers an explicit **All time** option. The choice is encoded as `?window=all`; the default omits the
+parameter so shared links remain compact.
+
+The same inclusive `start_date` and `end_date` bounds are applied to monthly summary, category
+pivot, recipient insights, and recipient-by-year requests. All-time monthly requests use
+`all_time=true`; the other endpoints omit date bounds. Both modes preserve per-date historical
+foreign-exchange conversion.
 
 > [!info] Component Refactoring Complete
 > **April 2026 refactored StatisticsPage** into a thin orchestrator + 11 composable sub-components. See [[#component-architecture|Component Architecture]] below.
+
+### Smart Insights partial-month labels
+
+Insight dismissals are authoritative server records. They are applied before subscription lists
+are capped at five and before the shared digest reaches either the panel or AI narration. The
+navigation badge reads only a versioned persisted count. Database statement triggers dirty that
+projection for transaction, category, recipient, planned-transaction, and dismissal changes; a
+dirty badge request starts a coalesced background refresh and does not show a stale number.
+
+Category overspend detection compares like-for-like calendar windows: day 1 through the current
+comparison day for both the current month and every baseline month. Each category finding includes
+`comparisonEndDay`, and `InsightsDigestPanel` shows that exact boundary in both the current amount
+and typical baseline labels. The UI therefore does not imply that a partial month was compared with
+complete prior months.
+
+The calculation remains owned by
+`[[apps/node-backend/src/services/categoryOutlierService.js|categoryOutlierService]]`; the frontend
+only presents the returned boundary. See [[docs/features/ai-chat|AI Chat]] for the separate narration
+surface that can consume the same digest.
+
+### Category-outlier calibration
+
+The threshold contract was backtested on 8 September 2026 against the only supported user's live
+history through the loopback API. The calibration discarded category labels, recipients, accounts,
+memos, and comments before analysis and did not write to the database. It covered 3,615 categorized
+expenses, 50 category histories, 111 source months, and 330 evaluation snapshots across days 8, 15,
+and 28.
+
+The current policy (modified-z threshold 3.5 and EUR 50 flat-baseline floor) produced 118 historical
+signals. A more sensitive 3.0/EUR 25 policy produced 18 additional signals, which are potential
+false negatives under the current policy. A more conservative 4.0/EUR 75 policy removed 17 current
+signals, which are potential false positives. Twelve day-8 signals were absent by day 28, confirming
+that early-month timing can add noise even with like-for-like windows. These are tradeoff proxies,
+not labelled ground truth.
+
+No threshold was changed from one user's data. The current middle policy remains in place: it avoids
+the extra noise of the sensitive policy without hiding as many signals as the conservative policy.
+Repeat the aggregate-only backtest with `bun run calibrate:category-outliers` when a genuinely
+independent sanitized history becomes available.
 
 ## Architecture
 
@@ -69,6 +139,7 @@ The Statistics page (`StatisticsPage.tsx`, 232 lines) is a thin orchestrator tha
 | `CustomChart.tsx`             | —     | Pure read-only chart display merging category + recipient pivot data                                                                                                                                                                                      | Custom Charts  |
 | `CustomChartBuilderModal.tsx` | —     | Two-column dialog (form left, live preview right) for creating/editing charts                                                                                                                                                                             | Custom Charts  |
 | `RecipientInsightsTab.tsx`    | 311   | Merchant spending insights (MoM alerts, filters)                                                                                                                                                                                                          | Recipients     |
+| `InsightsDigestPanel.tsx`     | —     | Dismissible subscription, category-overspend, and cash-forecast findings; category rows label the exact day 1 through N comparison window                                                                                                                 | Above the tabs |
 | `SankeyTab.tsx`               | 88    | Sankey flow diagram with year selector and exclusion toggle                                                                                                                                                                                               | Flow           |
 
 **Shared utilities:**
@@ -91,20 +162,24 @@ See [[docs/components/statistics|Statistics Components]] for detailed component 
 ### Data Flow (Statistics Page)
 
 ```
-StatisticsPage → useStatistics() → processTransactions() → StatisticsData
-                                    ↓
-                    Fetches ALL transactions (paginated, 1000/page)
-                    Fetches ALL categories (limit 500)
-                    Computes stats client-side via useMemo
+StatisticsPage → useStatistics(window) → aggregation endpoints → mapToStatisticsData()
+                          ↓                         ↓
+             24 months or All time       monthly/category/recipient data
 ```
 
-The Statistics page **is still computed entirely on the frontend**. The `useStatistics` hook fetches all transactions (with currency normalization) and categories, then `processTransactions()` performs client-side aggregation.
+The backend performs the expensive scans and exact historical currency conversion. The frontend
+maps the endpoint payloads into the shared `StatisticsData` view model. When exclusions are active,
+the hook fetches matching filtered and unfiltered payloads so each graph can toggle exclusions
+without changing the selected date window.
 
 ### Key Design Decisions
 
-1. **Client-side computation**: All statistics are computed in the browser, not on the server. This enables instant per-graph exclusion toggles without additional API calls.
-2. **Dual computation**: Both filtered (with exclusions) and unfiltered stats are computed simultaneously, enabling per-graph toggle between the two views.
-3. **Per-graph exclusions**: Each chart independently decides whether to apply category/recipient exclusions via `GraphExclusions` state.
+1. **Bounded default**: Cold page loads request 24 calendar months. All-time history is explicit.
+2. **Server-side aggregation**: PostgreSQL groups the data and conversion uses each transaction
+   date's foreign-exchange rate.
+3. **Dual payloads**: Filtered and unfiltered results are kept separately when exclusions apply.
+4. **Per-graph exclusions**: Each chart independently chooses the filtered or unfiltered payload
+   through `GraphExclusions` state.
 
 ## Data Processing Pipeline
 
@@ -326,10 +401,25 @@ The statistics feature relies on these backend endpoints:
 | `GET /api/transactions`                    | Fetch all transactions (paginated, with currency conversion)                                                       | [[apps/node-backend/src/routes/transactions.js]] |
 | `GET /api/categories`                      | Fetch all categories                                                                                               | [[apps/node-backend/src/routes/categories.js]]   |
 | `GET /api/info/recurring-patterns`         | Recurring pattern detection (used in Planned Payments)                                                             | [[apps/node-backend/src/routes/info.js]]         |
+| `GET /api/info/insights-digest`            | Server-filtered Smart Insights findings, including zero-based month-end net cash flow                              | [[apps/node-backend/src/routes/info.js]]         |
+| `GET /api/info/insights-count`             | Cheap versioned undismissed-count projection for navigation                                                        | [[apps/node-backend/src/routes/info.js]]         |
+| `PUT /api/info/insight-dismissals`         | Persist a strict subscription or category-outlier dismissal                                                        | [[apps/node-backend/src/routes/info.js]]         |
 | `GET /api/aggregations/recipient-insights` | Merchant spending insights; now accepts `excluded_category_ids[]` / `excluded_recipient_ids[]` (June 2026 bug fix) | [[apps/node-backend/src/routes/aggregations.js]] |
 | `GET /api/info/exchange-rates`             | Exchange rates for currency normalization                                                                          | [[apps/node-backend/src/routes/info.js]]         |
 
 **Phase G Migration (April 2026):** Recipient insights now use the aggregations endpoint. The apiClient method `getRecipientInsights()` transparently unwraps the aggregation envelope to maintain compatibility.
+
+### Smart Insights cash forecast semantics
+
+The cash finding reports expected month-end **net cash flow**: income minus outflows accumulated
+from zero across the forecast month. Positive means forecast inflows exceed outflows; negative means
+forecast outflows exceed inflows. It is not an account balance, available cash, runway, or an
+overdraft prediction. A negative value alone remains a standing finding. It becomes an alert only
+when the expected net cash flow moved significantly from the prior observation for the same
+month, currency, and forecast method. Vision retains the current and previous two calendar months
+of these derived observations. The first observation is standing; later moves require both a 15%
+change and an absolute EUR 100 floor, which prevents routine small recalculation noise from
+becoming an alert.
 
 **June 2026 — All-Years Exclusion Fix:** `useStatistics.ts` now issues a `recipientInsightsFilteredQuery` (keyed on `effectiveExcludedCategoryIds` and `settingsExcludedRecIds`) alongside the baseline unfiltered query. When `filteredEnabled` is true, the filtered payload is used for `topRecipients` in `mapToStatisticsData` so the "all years" bar chart reacts to exclusion toggles in the same way the per-year view does.
 
@@ -354,13 +444,13 @@ Two new query parameters added to `GET /api/transactions`:
 
 **Component:** `[[apps/frontend/src/features/statistics/CategoryPivotTable.tsx]]`
 
-The pivot intentionally opens on all years and keeps browser auto-sized period
-columns. This preserves complete-history visibility and the current width and
-scroll geometry. The all-time backend pivots are protected by the shared
-five-minute statistics cache; a rolling date default is not applied because it
-would silently omit history. The measurable reopen thresholds for cold queries
-and table rendering are recorded in [[docs/performance/index#Accepted Scale
-Boundaries|Performance Documentation]].
+The page defaults to a rolling 24-month range; `?window=all` exposes full
+history. The pivot mounts at most 12 period columns at once. It starts on the
+newest period window, renders that window chronologically, and exposes every
+older or newer window through keyboard-operable Previous and Next controls.
+Totals and export input still cover the complete selected range. Backend pivots
+are protected by the shared five-minute statistics cache. The current scale boundary is recorded in
+[[docs/performance/index#Accepted Scale Boundaries|Performance Documentation]].
 
 **Helpers:**
 
@@ -370,6 +460,7 @@ Boundaries|Performance Documentation]].
 **Interaction:**
 
 - All non-zero pivot cells contain an href-backed link padded to cover the numeric cell. Keyboard activation, href preview, and modified or middle click use native link behavior.
+- At most 12 period columns are mounted. Previous and Next traverse the complete period history, and the visible range is announced through a polite live region.
 - Group expanders expose every owned child row through a space-separated `aria-controls` list. Each child row has one unique id.
 - Detail rows drill to single category or multiple categories (for group headers)
 - Period column drills include start/end date filters
@@ -380,6 +471,7 @@ Boundaries|Performance Documentation]].
 
 - `[[apps/frontend/src/lib/__tests__/transactionDrillUrl.test.ts]]` covers leap-month bounds, transaction modes, one/many categories, uncategorised rows, and the plain fallback.
 - `[[apps/frontend/src/features/statistics/__tests__/CategoryPivotTable.a11y.test.tsx]]` covers exact drill hrefs, focusable-cell boundaries, and unique controlled child-row ids.
+- `[[apps/frontend/src/features/statistics/__tests__/CategoryPivotTable.windowing.test.tsx]]` covers the 12-period mount bound, full-history totals, oldest-window keyboard traversal, sticky labels, and drill links over a 120-period fixture.
 
 > [!warning] General-category group drills previously wedged TransactionsPage
 > Drillthrough URLs with `?category_ids=1,2,3` (produced by GENERAL group header clicks) triggered an infinite render loop in `TransactionsPage` — the multi-value array was rebuilt on every render, causing cascading memo + effect re-runs. Fixed in June 2026 by memoizing `categoryIdsFilter` on the raw param string. Detail-cell (scalar `?category_id=…`) drills were not affected. See [[docs/features/transactions#multi-value-filter-memoization-june-2026|Multi-Value Filter Memoization]] for details.
@@ -440,3 +532,4 @@ is separate from the server-generated PDF export above.
 - [[docs/features/sankey-flow|Sankey Flow]] — Phase 7 income flow visualization
 - [[docs/features/rolling-averages|Rolling Averages]] — Phase 7 trend overlays
 - [[docs/features/pdf-report-export|PDF Report Export]] — Phase 7 financial report download
+- [[docs/features/ai-chat|AI Chat]] — local narration surface for the Insights digest

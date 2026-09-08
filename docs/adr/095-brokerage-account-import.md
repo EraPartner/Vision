@@ -15,11 +15,18 @@ tags:
     adr-090,
     adr-091,
   ]
-description: A unified importer that splits one brokerage statement into cash transactions and portfolio trades, links each trade to its auto-created cash leg, and dedups both sides — building on the ADR-078 portfolio import pipeline and the ADR-090 cash-sleeve plumbing.
-aliases: [brokerage import, unified statement import, trade + cash import]
+description: Historical design for unified brokerage-statement routing; ADR-108 later retired synthetic trade cash legs while preserving real cash-row and portfolio-trade imports.
+aliases: [brokerage import, unified statement import]
 ---
 
 # ADR-095: Brokerage Account Import
+
+> [!update] Cash-leg design retired by ADR-108
+> The portfolio/cash row routing remains implemented, but imported and manually entered trades no
+> longer create synthetic transaction cash legs. Real brokerage cash statement rows are the cash
+> ledger source. Migration `0102_retire_adr090_transaction_schema` removes the unused
+> `transactions.portfolio_transaction_id` link and the `trade` transfer-source value. The sections
+> below describe the original ADR-090-era design and are retained as decision history.
 
 ## Status
 

@@ -3,7 +3,7 @@ title: UI Components
 type: component
 status: active
 date: 2026-04-17
-updated: 2026-09-04
+updated: 2026-09-08
 tags:
   [
     components,
@@ -69,8 +69,8 @@ The UI primitives use a shared surface system defined in [[apps/frontend/src/ind
 
 | Class             | Blur | Usage                                                                                                                                                                                                        |
 | ----------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `.glass-thin`     | 12px | Subtle standalone controls and top chrome; nested table/composer chrome stays opaque                                                                                                                         |
-| `.glass-regular`  | 20px | **All content / chart / stat / state cards** (role-based glass, June 2026 — see note below); also AI-chat panes                                                                                              |
+| `.glass-thin`     | 12px | Default material for ordinary content, chart, form, and state Cards; also subtle standalone controls                                                                                                         |
+| `.glass-regular`  | 20px | Explicit stronger content material and non-Card glass panes                                                                                                                                                  |
 | `.glass-chrome`   | 24px | Sidebar, AppLayout topbar — background alpha 0.55→0.72 (light) / 0.55→0.74 (dark) so aurora and Electron vibrancy glow through the blur                                                                      |
 | `.glass-thick`    | 28px | All floating overlays: Modal dialogs (Dialog, AlertDialog, Sheet), Sonner toasts **and** the full popover family (Popover, DropdownMenu/SubContent, SelectContent, ContextMenu, MenuBar, HoverCard, Tooltip) |
 | `.glass-elevated` | 32px | Dashboard hero cards (StatCard, NetSummaryCard)                                                                                                                                                              |
@@ -82,6 +82,12 @@ All glass tiers include `saturate(var(--glass-saturate))` — 180% in light mode
 
 > [!info] June 2026 — Role-based glass broadening (no ADR yet; a future ADR may formalize this)
 > ADR-070 (Liquid Glass v2) established a selective rule: "glass only on ~6 KPI/hero/chart surfaces per viewport; default Card stays opaque." In practice that produced inconsistency — content cards, chart wrappers, and stat cards on the same page were visibly mixed (some glass, some opaque) in the enhanced/vibrancy visual tier. The rule was broadened to a **role-based** model: the base `Card` now carries `glass-regular` so content/chart/stat/state peers shine consistently. Dense tables, forms, placeholders, callouts, and nested cards opt out with their own opaque surface classes. GPU trade-off: card-dense pages can exceed the old ~6-surface-per-viewport budget in standard/enhanced tier; mitigated by ADR-075 tier auto-adapt. Profile the packaged Electron app on Apple Silicon before each release.
+
+> [!info] September 2026 — cheaper Card baseline
+> [[docs/adr/132-thin-default-card-material|ADR-132]] keeps the role-based glass model but changes
+> the base Card from `glass-regular` to `glass-thin`. Ordinary Cards retain blur, saturation, and
+> the premium frame at 12px blur. Explicit `glass-elevated` hero cards and `glass-chrome`
+> administrative surfaces keep their stronger materials.
 
 **`.glass-chrome` sidebar transparency (June 2026):** Background alphas were lowered from 0.72→0.88 (light) / 0.82→0.96 (dark) to 0.55→0.72 / 0.55→0.74, making the sidebar visibly liquid: the aurora blobs and Electron vibrancy glow through the blur. The blur + saturate veil keeps text legibility even at the lowest alpha. Browsers that lack `backdrop-filter` support fall back to a near-opaque ramp (0.92→0.98) via an `@supports not` rule. `prefers-reduced-transparency` fallback is unchanged.
 
@@ -454,7 +460,7 @@ Content container with header, content, and footer sections.
 - `CardContent` - Main content
 - `CardFooter` - Footer/actions
 
-`Card` now has `glass-regular` and the resting `premium-frame` baked into its base class. Static cards do not lift or glow on hover. Use `variant="interactive"` only for activatable cards and deliberately promoted KPI/hero surfaces; that variant adds `premium-frame-interactive`, hover lift, press feedback, and reduced-motion handling. Dense tables, forms, and other opaque exceptions override the base material through their surface class. Do not add `premium-frame` or `micro-lift` manually to a Card.
+`Card` has `card-material`, `glass-thin`, and the resting `premium-frame` baked into its base class. The semantic marker lets macOS native vibrancy suppress persistent Card blur without suppressing small transient thin controls. Static cards do not lift or glow on hover. Use `variant="interactive"` only for activatable cards; that variant adds `premium-frame-interactive`, hover lift, press feedback, and reduced-motion handling without changing material depth. Deliberately promoted hero/summary cards use explicit `glass-elevated`, while administrative chrome cards may use `glass-chrome`. Dense tables and other opaque exceptions use a plain opaque container. Do not add `card-material`, `glass-thin`, `glass-regular`, `premium-frame`, or `micro-lift` manually to a Card.
 
 `CardContent` owns repeated padding shapes through named roles. Use `default` after a header or when nested content owns its vertical inset, `headerless` for ordinary first-child content needing the full 24px inset, `flush` for edge-to-edge tables or media, `compact` for dense controls, `row` for vertically compact rows and summaries, and `state` for short centered empty/error states. Keep `className` for layout and one-off spacing only; do not restate a named role's padding classes at the call site. Component-owned exceptions are the compact `p-1` search result shell, the one-off `py-3` match banner, the investment dialog's asymmetric `pt-4` sections, large empty canvases, and `StatCard`'s size-coupled padding.
 

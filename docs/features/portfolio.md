@@ -3,8 +3,8 @@ title: Feature - Portfolio & Investments
 type: feature
 status: active
 date: 2026-09-04
-last_modified: 2026-09-04
-updated: 2026-09-04
+last_modified: 2026-09-08
+updated: 2026-09-08
 tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding, fx-attribution, asset-gain, fx-gain, purchase-date-rates, value-fx-neutral, adr-074, adr-091, adr-100, per-account, move-holding, close-account, brokerage-fanout, rebalancing, saved-plans, cash-aware, cross-workspace, adr-098, portfolio-ticker, marquee, live-quotes, ticker-manager, show-in-ticker, migration-0061, fx-aware-pnl, unified-detail-dialog, useFxAwarePnl]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections. 2026-05-29 adds historical FX in snapshots and loading/error states on all asset pages. June 2026 adds snapshotBuilder split/return_of_capital events, APP_TIMEZONE day-boundary fix, shared portfolioUnitMath.ts, and FX attribution UI (ADR-074): asset gain / FX effect decomposition on overview, performance, asset pages, and investment detail.
@@ -107,6 +107,20 @@ Constraints:
 - Edit history is timestamp-only via `updated_at` (no full value history).
 
 Code links: [[apps/frontend/src/features/portfolio/EditInvestmentDialog.tsx]], [[apps/frontend/src/features/portfolio/InvestmentDetailDialog.tsx]], [[apps/node-backend/src/repositories/investmentRepository.js]]
+
+### Archiving and Restoring Investments
+
+Archive is the reversible lifecycle action for a holding that should no longer appear in the
+current portfolio. It sets `is_active=false`; it does not delete the investment or its transaction
+history. Active portfolio pages, current totals, ticker choices, and manual trade broker defaults
+exclude archived holdings.
+
+Portfolio Overview provides an **Archived investments** section. Archived rows are clearly marked,
+retain a read-only detail and transaction-history view, and can be restored. Restoring sets
+`is_active=true` and returns the holding to current views and totals. Archive, restore, and other
+investment mutations invalidate both the investment and portfolio-transaction query families.
+
+Code links: [[apps/frontend/src/features/portfolio/ArchivedInvestmentsCard.tsx]], [[apps/frontend/src/features/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/hooks/usePortfolio.ts]], [[apps/frontend/src/hooks/portfolio/usePortfolioSummaries.ts]]
 
 ### Price Refresh
 
@@ -804,6 +818,7 @@ Code links: [[apps/frontend/src/features/portfolio/PortfolioTicker.tsx]], [[apps
 {
   account_id: number | null,
   assignment: "account" | "unassigned",
+  contribution_kind: "position" | "non_position",
   oversold: boolean,
   currentValue: number,
   totalInvested: number,   // gross buy cost, same grain as totals.totalInvested
@@ -813,7 +828,7 @@ Code links: [[apps/frontend/src/features/portfolio/PortfolioTicker.tsx]], [[apps
 }
 ```
 
-For an instrument whose lots are fully broker-assigned, its per-investment summary **is** the sum of its partitions, so `Σ byAccount ≡ totals` holds field-by-field by construction (locked by the real-Postgres parity suite `tests/portfolioSummaryPartitionParity.db.test.js` under all three cost-basis methods). Each summary carries `fullyAssigned` and `oversold` booleans. While an instrument still has unassigned lot rows (transition rule), its **entire** value/P&L sits on the `account_id: null` row and its global figures stay the exact flat-replay values. The row also carries `assignment: "unassigned"`, which is the stable identity clients localize as Unassigned. Non-unit-based investments (savings/bond/real estate — no lot machinery, non-linear interest accrual) are attributed whole to their single account, or to the null row when their rows span accounts.
+For an instrument whose lots are fully broker-assigned, its per-investment summary **is** the sum of its partitions, so `Σ byAccount ≡ totals` holds field-by-field by construction (locked by the real-Postgres parity suite `tests/portfolioSummaryPartitionParity.db.test.js` under all three cost-basis methods). Each summary carries `fullyAssigned` and `oversold` booleans. While an instrument still has unassigned lot rows (transition rule), its **entire** value/P&L sits on the `account_id: null` row and its global figures stay the exact flat-replay values. The row also carries `assignment: "unassigned"`, which is the stable identity clients localize as Unassigned. `contribution_kind` separates lot-bearing `position` rows from `non_position` rows containing only income or adjustments. Thus an unassigned dividend does not make an otherwise assigned instrument incomplete, and it does not merge with a null-account position row from another instrument. Non-unit-based investments (savings/bond/real estate — no lot machinery, non-linear interest accrual) are attributed whole to their single account, or to the null row when their rows span accounts.
 
 Sell validation is account-scoped on fully-assigned instruments: a sell exceeding the broker-local units is rejected with an error naming the broker (display name), even if investment-wide units would cover it; unassigned sells and instruments in transition validate globally, as before. Create and update also replay the complete ordered unit-event history and reject any newly introduced or worsened broker deficit, including a later oversell caused by reassigning or redating an earlier lot. Existing invalid data remains editable when the deficit is unchanged or improved. Assignment state, availability, and projected deficits come from one database read.
 
@@ -821,11 +836,41 @@ Two ADR-108 semantic edges on fully-assigned multi-broker instruments matter: un
 
 Callers resolve names from the accounts list. See [[docs/api/portfolio-summary|Portfolio Summary API]] for the response shape and [[docs/adr/108-portfolio-accounts-v2-broker-tags|ADR-108]] for the model.
 
+The Portfolio Overview **All Investments** card exposes an All brokers, named-account, and
+Unassigned filter. Named and Unassigned views select investments from each summary's nested
+`byAccount` rows and show that selection's holdings, gross invested cost, profit/loss, and subtotal
+directly from the server partitions. Units and global income labels are hidden in a filtered view
+because the current response does not claim per-broker units or a separate income subtotal. While
+the summary is loading or unavailable, the filter is disabled and no zero subtotal is presented.
+
 The frontend fallback summaries (`usePortfolioSummaries.ts`) use the same partitioned shared core as the API, so holding-level values do not drift while the API query is loading. The portfolio table, overview, and `InvestmentDetailDialog` all render the shared oversold warning. Historical snapshot replay likewise tracks units and foreign-exchange-neutral basis per partition, so an account-local sell does not reduce an unrelated broker's holding.
 
-### Edit-trade account picker
+### Unassigned-lot nudge
 
-`EditPortfolioTxnDialog` has an account selector. `PATCH /api/investments/transactions/:id` accepts `account_id` (integer to reassign a lot to a different account, or `null` to unassign it). No other transaction fields are required alongside it.
+The Portfolio Overview All Investments row shows one assignment nudge when an instrument has
+unassigned lot-bearing rows (`buy`, `gift`, or `sell`). Unassigned dividends, fees, taxes, and
+adjustments do not trigger it because they do not affect `fullyAssigned`.
+
+The nudge first pages the instrument's complete transaction history, then selects an active
+portfolio account and reviews the instrument name, broker, and exact lot count before calling the
+audited bulk re-tag endpoint. It never treats the overview's bounded shared cache as complete. One
+request moves the complete selected set; the success toast reports the server receipt's changed count. An ambiguous retry reuses the
+same UUID while the transaction-ID and destination fingerprint is unchanged. A successful request
+clears it. The UI refuses more than 500 selected rows instead of silently truncating or partially
+batching an atomic whole-instrument action.
+
+### Manual-trade broker picker
+
+Manual trade dialogs keep broker selection optional. They default to the instrument's most recent
+active portfolio account, then the most recent manually entered trade's active portfolio account,
+then **Unassigned**. The default appears as a muted `→ broker · Change` affordance; selecting
+Change opens the full picker. Initial purchases and trades started from market lookup use the same
+rule. Imported rows can supply the instrument-specific default, but only rows without an import
+batch supply the global manual-trade fallback.
+
+`EditPortfolioTxnDialog` labels the assignment field **Broker**. `PATCH
+/api/investments/transactions/:id` accepts `account_id` (integer to reassign a lot to a different
+account, or `null` to unassign it). No other transaction fields are required alongside it.
 
 ### Account reassignment and closing after ADR-108
 
@@ -834,10 +879,20 @@ clear the assignment with `null`. ADR-108 deleted partial lot moves, the move en
 `MoveHoldingDialog`, and `moveHoldingService`; account reassignment no longer performs cost-basis
 surgery.
 
-`CloseAccountDialog` archives the account with `is_active: false` and warns when a computed cash
-balance remains. It preserves history and holdings and does not transfer lots to another account.
+`CloseAccountDialog` first loads an exact server-side count of assigned `buy`, `gift`, and `sell`
+rows. The user can keep them on the closed account, move the complete set to another active
+portfolio account, or move them to Unassigned. The audited re-tag runs before close and carries
+whole transaction histories without cost-basis surgery. Before updating, the server compares the
+production partitioned totals under the configured weighted-average, FIFO, or LIFO method. It
+rejects any move that would change global units, invested basis, or realized profit/loss. Selections
+above 500 are never split; the keep option remains available. The cash residual choice is independent.
 
-Code links: [[apps/frontend/src/features/accounts/CloseAccountDialog.tsx]], [[apps/frontend/src/features/portfolio/EditPortfolioTxnDialog.tsx]]
+The active portfolio account detail menu also exposes **Transfer portfolio lots** without closing
+the source account. It uses the same exact preview and destination selector, submits one audited
+re-tag, and then shows the immutable receipt ID and changed-row count. The operation changes only
+`account_id`; the same transactional economics guard rejects unsafe broker-history merges.
+
+Code links: [[apps/frontend/src/features/accounts/CloseAccountDialog.tsx]], [[apps/frontend/src/features/portfolio/BrokerTransferDialog.tsx]], [[apps/frontend/src/features/portfolio/PortfolioLotRetagChoice.tsx]], [[apps/frontend/src/features/portfolio/EditPortfolioTxnDialog.tsx]]
 
 ### Brokerage batch routing after ADR-108
 
@@ -878,7 +933,7 @@ Before ADR-074, `totalInvested` was restated at today's FX on every request. Aft
 - **`gainLoss`** includes the FX component. A USD holding that gained 0% in USD terms but whose currency strengthened 5% vs EUR will show a positive `gainLoss` driven entirely by `fxGain`.
 - The live portfolio totals and the snapshot series now agree on semantics (both use purchase-date rates for invested capital), closing the contradiction that existed before.
 
-Code links: [[apps/node-backend/src/services/portfolio/portfolioSummaryService.js]], [[apps/node-backend/src/routes/info/_performanceHelpers.js]], [[apps/node-backend/src/controllers/investmentController.js]], [[packages/shared-utils/src/portfolio.js]], [[docs/adr/074-fx-attribution-historical-rates|ADR-074]]
+Code links: [[apps/node-backend/src/services/portfolio/portfolioSummaryService.js]], [[apps/node-backend/src/routes/info/_performanceHelpers.js]], [[apps/node-backend/src/services/investmentService.js]], [[packages/shared-utils/src/portfolio.js]], [[docs/adr/074-fx-attribution-historical-rates|ADR-074]]
 
 ### Unified FX-Aware P&L in InvestmentDetailDialog (2026-06-28)
 

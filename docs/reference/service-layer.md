@@ -3,7 +3,7 @@ title: Service Layer Reference
 type: reference
 status: active
 date: 2026-08-30
-last_modified: 2026-09-04
+last_modified: 2026-09-05
 tags: [backend, services, reference, business-logic, phase-1, phase-c, import-pipeline, graceful-shutdown, bug-hunt-2026-05-05, error-handling, robustness, route-service-boundary, repo-service-boundary, layering, thin-seams, adr-067]
 description: Complete reference for backend service modules. June 2026 — all 15 route files now go through thin `services/<domain>Service.js` seams; the lint rule `vision-local/no-repo-direct-from-route` is enforced as ERROR. 14 new thin seam modules added. August 2026 — the inverse edge is enforced too: `vision-local/no-service-import-from-repo` is an ERROR on `src/repositories/**`, with a closed allowlist for the seven sanctioned currency-conversion importers.
 aliases: [services, service layer, business logic, backend services]
@@ -942,24 +942,25 @@ All 15 Express route files now import **only** from `services/<domain>Service.js
 
 14 new thin service files were added to complete the boundary. Each is a pass-through delegation layer that owns orchestration, validation helpers, and future expansion points:
 
-| Service Module                             | Route it covers                                     | Scope                                                                                                           |
-| ------------------------------------------ | --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `categoryService.js`                       | `categories.js`                                     | CRUD + merge delegation                                                                                         |
-| `transactionService.js`                    | `transactions.js`                                   | Create/update/delete orchestration, PATCH name resolution, transfer marking, and reconciliation scheduling      |
-| `recipientService.js`                      | `recipients.js`                                     | CRUD + cluster/merge delegation                                                                                 |
-| `recipientBankAccountService.js`           | `recipientBankAccounts.js`                          | Bank account CRUD                                                                                               |
-| `savedChartsService.js`                    | `savedCharts.js`                                    | Chart config persistence                                                                                        |
-| `infoService.js`                           | `info/` route group                                 | Summary/net-worth/monthly delegation                                                                            |
-| `plannedTransactionService.js`             | `plannedTransactions.js`                            | Planned CRUD delegation plus atomic parent/tag/loan-schedule update orchestration                               |
-| `settingsService.js`                       | `settings.js`                                       | Settings read/write                                                                                             |
-| `splitService.js`                          | `splits.js`                                         | Split allocation/payment validation, owed projections, lifecycle transactions, and atomic audit orchestration   |
-| `watchlistService.js`                      | `watchlist.js`                                      | Watchlist CRUD                                                                                                  |
-| `attachmentRecordService.js`               | `attachments.js`                                    | Attachment metadata (complements `attachmentService.js`)                                                        |
-| `importBatchService.js`                    | `importRoutes.js`                                   | Batch management plus transaction-preview grouping and totals                                                   |
-| `portfolioImportBatchService.js`           | `portfolioImportRoutes.js`                          | Portfolio batch coordination plus investment/raw/cash preview grouping and totals                               |
-| `routes/importBatchRoutes.js`              | Both import routers                                 | Shared batch list/detail/status-guard/rollback route registration; each router supplies its own rollback policy |
-| `customParserConfigService.js`             | `importRoutes.js`                                   | Named parser CRUD                                                                                               |
-| `portfolio/portfolioTransactionService.js` | Investment controller and portfolio import pipeline | Portfolio transaction create/update orchestration; delegates normalized persistence to the repository           |
+| Service Module                             | Route it covers                                  | Scope                                                                                                           |
+| ------------------------------------------ | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| `categoryService.js`                       | `categories.js`                                  | CRUD + merge delegation                                                                                         |
+| `transactionService.js`                    | `transactions.js`                                | Create/update/delete orchestration, PATCH name resolution, transfer marking, and reconciliation scheduling      |
+| `recipientService.js`                      | `recipients.js`                                  | CRUD + cluster/merge delegation                                                                                 |
+| `recipientBankAccountService.js`           | `recipientBankAccounts.js`                       | Bank account CRUD                                                                                               |
+| `savedChartsService.js`                    | `savedCharts.js`                                 | Chart config persistence                                                                                        |
+| `infoService.js`                           | `info/` route group                              | Summary/net-worth/monthly delegation                                                                            |
+| `plannedTransactionService.js`             | `plannedTransactions.js`                         | Planned CRUD delegation plus atomic parent/tag/loan-schedule update orchestration                               |
+| `settingsService.js`                       | `settings.js`                                    | Settings read/write                                                                                             |
+| `splitService.js`                          | `splits.js`                                      | Split allocation/payment validation, owed projections, lifecycle transactions, and atomic audit orchestration   |
+| `watchlistService.js`                      | `watchlist.js`                                   | Watchlist CRUD                                                                                                  |
+| `attachmentRecordService.js`               | `attachments.js`                                 | Attachment metadata (complements `attachmentService.js`)                                                        |
+| `importBatchService.js`                    | `importRoutes.js`                                | Batch management plus transaction-preview grouping and totals                                                   |
+| `portfolioImportBatchService.js`           | `portfolioImportRoutes.js`                       | Portfolio batch coordination plus investment/raw/cash preview grouping and totals                               |
+| `routes/importBatchRoutes.js`              | Both import routers                              | Shared batch list/detail/status-guard/rollback route registration; each router supplies its own rollback policy |
+| `customParserConfigService.js`             | `importRoutes.js`                                | Named parser CRUD                                                                                               |
+| `investmentService.js`                     | `investments.js` route                           | Investment endpoint validation, response shaping, caching, and repository coordination                          |
+| `portfolio/portfolioTransactionService.js` | Investment service and portfolio import pipeline | Portfolio transaction create/update orchestration; delegates normalized persistence to the repository           |
 
 **Pre-existing substantial services** (not newly added) remain unchanged: `portfolioPerformanceSnapshotService`, `recipientMergeService`, `aiChatService`, `importPipeline`, `bankAdapters`, `priceProviderService`, `quoteBackfillService`, `currencyConversionService`, `aggregationRefresh`, `attachmentService`, `transactionExport`, `bulkSelection`, etc.
 

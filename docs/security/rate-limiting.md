@@ -47,13 +47,13 @@ A new `globalRateLimiter` is now mounted on `/api` **before all routers** as a s
 ```javascript
 // Env-configurable: default 1000 req/min per IP
 export const globalRateLimiter = rateLimiter({
-  windowMs: env.RATE_LIMIT_GLOBAL_WINDOW_MS,  // default 60_000
-  maxRequests: env.RATE_LIMIT_GLOBAL_MAX,       // default 1000
-  keyPrefix: 'global-api',
+  windowMs: env.RATE_LIMIT_GLOBAL_WINDOW_MS, // default 60_000
+  maxRequests: env.RATE_LIMIT_GLOBAL_MAX, // default 1000
+  keyPrefix: "global-api",
 });
 
 // Mounted in main.js before all domain routers:
-app.use('/api', globalRateLimiter, ...routers);
+app.use("/api", globalRateLimiter, ...routers);
 ```
 
 **Per-route limiters stack on top** — a request to `POST /api/import/csv` is counted against both `globalRateLimiter` (1000/min) and `importRateLimiter` (20/min). The per-route limit is always tighter.
@@ -68,12 +68,16 @@ Used only for serving `index.html` fallback in production (unchanged):
 
 ```javascript
 // 600 requests per minute per IP
-const spaLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 600, keyPrefix: 'spa' });
+const spaLimiter = rateLimiter({
+  windowMs: 60_000,
+  maxRequests: 600,
+  keyPrefix: "spa",
+});
 
 // Applied only to the SPA fallback route
 app.get(/^(?!\/api)/, spaLimiter, (req, res) => {
-  res.setHeader('Cache-Control', 'no-cache');
-  res.sendFile(resolve(distPath, 'index.html'));
+  res.setHeader("Cache-Control", "no-cache");
+  res.sendFile(resolve(distPath, "index.html"));
 });
 ```
 
@@ -85,7 +89,11 @@ Permissive limits for read-heavy admin observability operations. The admin obser
 
 ```javascript
 // 500 requests per minute per IP
-export const adminRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 500, keyPrefix: 'admin' });
+export const adminRateLimiter = rateLimiter({
+  windowMs: 60_000,
+  maxRequests: 500,
+  keyPrefix: "admin",
+});
 ```
 
 Applied to `GET /api/admin/*` endpoints (observability hub reads).
@@ -96,7 +104,11 @@ Stricter limits for destructive admin operations:
 
 ```javascript
 // 30 requests per minute per IP
-export const adminMutateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'admin-mutate' });
+export const adminMutateLimiter = rateLimiter({
+  windowMs: 60_000,
+  maxRequests: 30,
+  keyPrefix: "admin-mutate",
+});
 ```
 
 Applied to `POST /api/admin/*` endpoints (database reset, VACUUM, provider probes, Kinesis sanitization).
@@ -107,7 +119,11 @@ Restrictive for expensive import operations:
 
 ```javascript
 // 20 requests per minute per IP
-export const importRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 20, keyPrefix: 'import' });
+export const importRateLimiter = rateLimiter({
+  windowMs: 60_000,
+  maxRequests: 20,
+  keyPrefix: "import",
+});
 ```
 
 Applied to `POST /api/import/*` endpoints.
@@ -118,7 +134,11 @@ Restrictive for Puppeteer/Chromium PDF render, which forks a headless Chrome pro
 
 ```javascript
 // 30 requests per minute per IP
-export const reportRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'reports' });
+export const reportRateLimiter = rateLimiter({
+  windowMs: 60_000,
+  maxRequests: 30,
+  keyPrefix: "reports",
+});
 ```
 
 Applied to all `/api/reports/*` endpoints (financial, portfolio, tax POST and legacy GET).
@@ -129,7 +149,11 @@ Bounds upstream Yahoo Finance API hammering:
 
 ```javascript
 // 90 requests per minute per IP
-export const marketRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 90, keyPrefix: 'market' });
+export const marketRateLimiter = rateLimiter({
+  windowMs: 60_000,
+  maxRequests: 90,
+  keyPrefix: "market",
+});
 ```
 
 Applied to `/api/market/*` endpoints (search, quote, chart, news).
@@ -140,7 +164,11 @@ Allows active portfolio workflows; `refresh-prices` reaches external providers:
 
 ```javascript
 // 300 requests per minute per IP
-export const investmentRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 300, keyPrefix: 'investments' });
+export const investmentRateLimiter = rateLimiter({
+  windowMs: 60_000,
+  maxRequests: 300,
+  keyPrefix: "investments",
+});
 ```
 
 Applied to `/api/investments/*` endpoints.
@@ -151,7 +179,11 @@ Permissive for GET-heavy dashboard/statistics endpoints; Monte-Carlo forecast en
 
 ```javascript
 // 600 requests per minute per IP
-export const aggregationRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 600, keyPrefix: 'aggregations' });
+export const aggregationRateLimiter = rateLimiter({
+  windowMs: 60_000,
+  maxRequests: 600,
+  keyPrefix: "aggregations",
+});
 ```
 
 Applied to `/api/aggregations/*` endpoints.
@@ -162,7 +194,11 @@ Restrictive for file upload and download operations:
 
 ```javascript
 // 60 requests per minute per IP
-export const attachmentRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 60, keyPrefix: 'attachment' });
+export const attachmentRateLimiter = rateLimiter({
+  windowMs: 60_000,
+  maxRequests: 60,
+  keyPrefix: "attachment",
+});
 ```
 
 Applied to `POST /api/attachments/*` (uploads) and `GET /api/attachments/*/download` endpoints. Prevents attachment spam and abuse while allowing typical user workflows (multiple file operations).
@@ -173,7 +209,11 @@ Permissive limit for static file serving (SPA fallback):
 
 ```javascript
 // 600 requests per minute per IP
-export const spaRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 600, keyPrefix: 'spa' });
+export const spaRateLimiter = rateLimiter({
+  windowMs: 60_000,
+  maxRequests: 600,
+  keyPrefix: "spa",
+});
 ```
 
 Applied only to `GET /^(?!\/api)/` fallback route in production (serving `index.html` for non-API paths). High limit intentional — protects against filesystem abuse rather than API logic; legitimate SPA page reloads and prefetching should never hit this limit.
@@ -184,26 +224,26 @@ Applied only to `GET /^(?!\/api)/` fallback route in production (serving `index.
 
 Certain routes have additional custom rate limits beyond the global presets:
 
-| Route group | Limit | Limiter | Reason |
-|-------------|-------|---------|--------|
-| `/api/reports/*` | 30/min | `reportRateLimiter` | Puppeteer forks headless Chrome; prevents fork-bomb |
-| `/api/market/*` | 90/min | `marketRateLimiter` | Proxies Yahoo Finance; bounds upstream hammering |
-| `/api/investments/*` | 300/min | `investmentRateLimiter` | refresh-prices hits external providers |
+| Route group           | Limit   | Limiter                  | Reason                                                   |
+| --------------------- | ------- | ------------------------ | -------------------------------------------------------- |
+| `/api/reports/*`      | 30/min  | `reportRateLimiter`      | Puppeteer forks headless Chrome; prevents fork-bomb      |
+| `/api/market/*`       | 90/min  | `marketRateLimiter`      | Proxies Yahoo Finance; bounds upstream hammering         |
+| `/api/investments/*`  | 300/min | `investmentRateLimiter`  | refresh-prices hits external providers                   |
 | `/api/aggregations/*` | 600/min | `aggregationRateLimiter` | GET-heavy dashboard; Monte-Carlo endpoints are CPU-bound |
 
 **Per-endpoint overrides (applied in addition to route-group limiters):**
 
-| Endpoint | Limit | Reason |
-|----------|-------|--------|
-| `POST /api/attachments/transaction/:id` | 60/min | File uploads; attachmentRateLimiter |
-| `GET /api/attachments/transaction/:id` | 60/min | List attachments; attachmentRateLimiter |
-| `GET /api/attachments/:id/download` | 60/min | File downloads; attachmentRateLimiter |
-| `DELETE /api/attachments/:id` | 60/min | Delete attachments; attachmentRateLimiter |
-| `PATCH /api/transactions/:id` | 30/min | Database-heavy operation |
-| `GET /api/transactions/export/csv` | 30/min | Export is resource-intensive |
-| `PATCH /api/planned-transactions/:id` | 30/min | Database-heavy operation |
-| `GET /api/info/exchange-rates` | 30/min | External API calls |
-| `POST /api/info/refresh-views` | 10/min | Administrative, expensive materialized-view refresh |
+| Endpoint                                | Limit  | Reason                                              |
+| --------------------------------------- | ------ | --------------------------------------------------- |
+| `POST /api/attachments/transaction/:id` | 60/min | File uploads; attachmentRateLimiter                 |
+| `GET /api/attachments/transaction/:id`  | 60/min | List attachments; attachmentRateLimiter             |
+| `GET /api/attachments/:id/download`     | 60/min | File downloads; attachmentRateLimiter               |
+| `DELETE /api/attachments/:id`           | 60/min | Delete attachments; attachmentRateLimiter           |
+| `PATCH /api/transactions/:id`           | 30/min | Database-heavy operation                            |
+| `GET /api/transactions/export/csv`      | 30/min | Export is resource-intensive                        |
+| `PATCH /api/planned-transactions/:id`   | 30/min | Database-heavy operation                            |
+| `GET /api/info/exchange-rates`          | 30/min | External API calls                                  |
+| `POST /api/info/refresh-views`          | 10/min | Administrative, expensive materialized-view refresh |
 
 ## Response Headers
 
@@ -249,6 +289,7 @@ For production deployments:
 ## Test Coverage Notes (2026-04-10, Updated 2026-05-29)
 
 Rate-limiter middleware behavior is covered by [[apps/node-backend/tests/rateLimiter.test.js]], including:
+
 - allow-under-limit and `429 Too Many Requests` over-limit behavior,
 - rolling window reset behavior,
 - client IP key fallback order (`req.ip` → `remoteAddress` → `unknown`),
@@ -264,25 +305,25 @@ The `rateLimiter.js` module now exports an `ipMatchesRule(ip, rule)` helper and 
 
 ```javascript
 // config.js
-trustedProxies: (process.env.TRUSTED_PROXIES ?? '')
-  .split(',')
-  .map(s => s.trim())
+trustedProxies: ((process.env.TRUSTED_PROXIES ?? "")
+  .split(",")
+  .map((s) => s.trim())
   .filter(Boolean),
-
-// rateLimiter.js
-function resolveClientIp(req) {
-  const socketIp = req.socket?.remoteAddress ?? 'unknown';
-  const xff = req.headers['x-forwarded-for'];
-  if (!xff || trustedProxies.length === 0) return socketIp;
-  // Only trust XFF when the request came through a known proxy
-  if (trustedProxies.some(rule => ipMatchesRule(socketIp, rule))) {
-    return xff.split(',')[0].trim();
-  }
-  return socketIp;
-}
+  // rateLimiter.js
+  function resolveClientIp(req) {
+    const socketIp = req.socket?.remoteAddress ?? "unknown";
+    const xff = req.headers["x-forwarded-for"];
+    if (!xff || trustedProxies.length === 0) return socketIp;
+    // Only trust XFF when the request came through a known proxy
+    if (trustedProxies.some((rule) => ipMatchesRule(socketIp, rule))) {
+      return xff.split(",")[0].trim();
+    }
+    return socketIp;
+  });
 ```
 
-**Default behavior (no `TRUSTED_PROXIES` set):** Client IP is always the raw socket address. XFF headers are ignored. Correct for direct-to-container deployments (standard Docker self-hosting).
+**Default behavior (no `TRUSTED_PROXIES` set):** Client IP is always the raw socket address. XFF
+headers are ignored. This is correct for direct native access without a reverse proxy.
 
 **Behind a reverse proxy:** Set `TRUSTED_PROXIES` to your proxy's IP or CIDR (e.g. `192.168.1.1` or `10.0.0.0/8`). See [[docs/reference/environment-variables|environment variables]].
 

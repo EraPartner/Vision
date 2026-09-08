@@ -101,6 +101,7 @@ The legacy `apiClient` singleton (`[[apps/frontend/src/lib/api.ts]]`, 1243 lines
 | `getInvestmentPriceHistory(id, params?)`  | GET /api/investments/:id/price-history      | `{ investment_id, provider, points }`      |
 | `getPortfolioTransactions(id, params?)`   | GET /api/investments/:id/transactions       | `PortfolioTransactionsListResponse`        |
 | `getPortfolioTransactionsBulk(params)`    | GET /api/investments/transactions           | `PortfolioTransactionsListResponse`        |
+| `bulkRetagPortfolioTransactions(data)`    | PUT /api/investments/transactions/broker    | `PortfolioBrokerRetagReceipt`              |
 | `createPortfolioTransaction(id, data)`    | POST /api/investments/:id/transactions      | `PortfolioTransaction`                     |
 | `updatePortfolioTransaction(txnId, data)` | PATCH /api/investments/transactions/:txnId  | `PortfolioTransaction`                     |
 | `deletePortfolioTransaction(txnId)`       | DELETE /api/investments/transactions/:txnId | `void`                                     |
@@ -195,10 +196,9 @@ All Electron methods return `null` when called from a browser context.
 | Method                                   | Purpose                                                 |
 | ---------------------------------------- | ------------------------------------------------------- |
 | `checkForUpdates()`                      | Check for app updates                                   |
-| `triggerDockerUpdate()`                  | Update only the explicitly selected Docker provider     |
 | `installShellUpdate()`                   | Install a verified native app or source-launcher update |
 | `isElectron()`                           | Check if running in Electron                            |
-| `runBackup(destDir, frontendStateJson?)` | Create a provider-neutral `.visionbak` bundle           |
+| `runBackup(destDir, frontendStateJson?)` | Create a native `.visionbak` bundle                     |
 | `selectBackupFile()`                     | Open file picker for backup restore                     |
 | `restoreBackup(filePath, opts?)`         | Transactionally restore a supported backup bundle       |
 | `selectBackupDir()`                      | Open folder picker for backup directory                 |

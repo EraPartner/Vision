@@ -1,20 +1,42 @@
 ---
 title: Docker Compose Named Volumes Sync Policy
 type: adr
-status: accepted
+status: superseded
 date: 2026-05-07
-tags: [adr, docker-compose, named-volumes, ci-cd, electron, release, data-loss, v1.0.2-bug]
+tags:
+  [
+    adr,
+    docker-compose,
+    named-volumes,
+    ci-cd,
+    electron,
+    release,
+    data-loss,
+    v1.0.2-bug,
+  ]
 description: Enforces synchronization of named volumes between root and embedded Docker Compose files via CI gate to prevent data loss on updates
 aliases: [compose-sync, volume-sync, named-volumes-policy]
-related_code: [".github/workflows/ci.yml", ".github/workflows/release.yml", "docker-compose.yml", "packaging/electron/resources/docker-compose.yml"]
+related_code:
+  [
+    ".github/workflows/ci.yml",
+    ".github/workflows/release.yml",
+    "docker-compose.yml",
+    "packaging/electron/resources/docker-compose.yml",
+  ]
 ---
 
 # ADR-051: Docker Compose Named Volumes Sync Policy
 
+> [!warning] Superseded
+> [[docs/adr/133-native-only-runtime-and-delivery|ADR-133]] retired active Compose packaging and
+> deployment on 2026-09-08. This record remains as historical context.
+
 ## Status
+
 Accepted (May 2026)
 
 ## Date
+
 2026-05-07
 
 ## Context
@@ -36,10 +58,12 @@ This was a **critical data loss bug** that should have been caught before releas
 ### Synchronization Challenge
 
 Both compose files serve different purposes:
+
 - **Root `docker-compose.yml`:** Source of truth for production/development deployments
 - **Embedded `packaging/electron/resources/docker-compose.yml`:** Packaged into the Electron `.app`; must be manually synced at release
 
 The sync is manual and easy to forget because:
+
 - The embedded file is in a subdirectory (`packaging/electron/resources/`)
 - There is no automated check that they match
 - Developers might add a volume to root and forget to propagate it
@@ -88,7 +112,7 @@ Parses the YAML `volumes:` section, extracts named volume keys, compares.
    - If volumes don't match: fails, blocks merge until both files are in sync
 5. Once merged to main, pre-release checks and release.yml verify job confirm sync before packaging
 
-**Key constraint:** *Every new named volume must be added to both files, or the PR will be blocked.*
+**Key constraint:** _Every new named volume must be added to both files, or the PR will be blocked._
 
 ## Consequences
 

@@ -3,7 +3,7 @@ title: Net Worth Feature
 type: feature
 status: active
 date: 2026-06-20
-updated: 2026-08-27
+updated: 2026-09-08
 tags:
   [
     feature,
@@ -23,6 +23,8 @@ tags:
     gap-fill,
     price-history,
     per-account,
+    current-point,
+    parity-footer,
     period-selector,
     scrub,
     shared-chart-card,
@@ -34,6 +36,8 @@ aliases: [net worth, networth, wealth tracking, financial health]
 related_code:
   - apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx
   - apps/frontend/src/pages/portfolio/net-worth/NetWorthChart.tsx
+  - apps/frontend/src/pages/portfolio/net-worth/NetWorthByAccountTable.tsx
+  - apps/frontend/src/pages/portfolio/net-worth/netWorthByAccount.ts
   - apps/frontend/src/components/charts/ChartCard.tsx
   - apps/frontend/src/components/charts/ChartPeriodSelector.tsx
   - apps/frontend/src/components/charts/chartPeriods.ts
@@ -257,6 +261,18 @@ The right side is a vertical component breakdown:
 The hero is not stretched to match the component stack. On smaller viewports,
 the hero and breakdown stack in reading order.
 
+### Current By Account table
+
+The **By Account** table is a current-point view, not historical per-broker reporting. It composes
+today's converted `in_net_worth` ledger cash with the live portfolio summary's `byAccount`
+partitions. Brokerage rows can therefore contain cash and holdings; wallet and crypto-exchange
+rows contain holdings only. The null-account partition is shown as localized **Unassigned**.
+
+The footer sums the amounts that are actually displayed and compares that total with the current
+Net Worth headline. A mismatch remains visible as a warning. This preserves the backend contract:
+current Net Worth equals current cash plus the same live portfolio total used by Dashboard and
+Performance.
+
 ### Chart Controls
 
 - **Period selector**: 1M/3M/6M/1Y/3Y/All segmented control (`ChartPeriodSelector`) in the card
@@ -302,10 +318,12 @@ this route and do not affect the normal screen layout.
 
 ## Retired Per-Account Net-Worth Path (2026-08-10, ADR-108)
 
-ADR-108 and WP-C1 removed the experimental per-account net-worth path. The build flag, per-account
-grid and chart, frontend hook, endpoint, and the snapshot `splitByAccount` / `value_by_account`
-payloads no longer exist. Net Worth remains an aggregate historical series backed by
-`portfolio_performance_snapshots`.
+ADR-108 and WP-C1 removed the experimental **historical** per-account net-worth path. The build
+flag, per-account history grid and chart, frontend hook, endpoint, and the snapshot
+`splitByAccount` / `value_by_account` payloads no longer exist. Net Worth history remains an
+aggregate series backed by `portfolio_performance_snapshots`. The current By Account table above
+uses live account balances and live portfolio partitions; it does not synthesize per-account
+history.
 
 Migration 0074's `portfolio_snapshot_accounts` table is intentionally dormant and remains covered
 by the backup manifest. It is not populated or read by the application. The still-open WP-C7 owns

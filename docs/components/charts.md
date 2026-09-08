@@ -3,12 +3,13 @@ title: Chart Primitives
 type: component
 status: active
 date: 2026-04-24
-updated: 2026-08-27
+updated: 2026-09-08
 tags: [components, charts, visx, d3, visualization, phase-9, phase-h, accessibility, aria-label, screen-reader, i18n, localization, premium-v3, chart-scrub, chart-sync, chart-skeleton, sweep-reveal, sparkline-scrub, keyboard-navigation, june-2026]
 description: Low-level chart primitives built on visx + d3, replacing Recharts with design-token-aware styling. 2026-05-29: chartAria.ts generators now accept t()/kindKey for fully localized chart screen-reader summaries across all 7 chart types and both supported languages. June 2026 Premium v3 (ADR-071): scrubbable prop + useChartScrub (scrub-to-compare), syncId prop + ChartSyncContext (synced crosshairs), sweep reveal on AreaChart, ChartSkeleton ghost waveform. V9: Sparkline activeIndex prop (hairline + dot indicator for stat-card scrub). 2026-08-27: keyboardNav.ts provides shared keyboard access to per-point values across all interactive visx primitives and the NetSummaryCard sparkline scrub. 2026-08-23: ChartPeriodSelector uses native toggle-button semantics with aria-pressed instead of incomplete ARIA tab semantics.
 aliases: [charts, chart-components, visx-charts, charting, visualization]
 related_code:
   - apps/frontend/src/components/charts
+  - apps/frontend/src/components/charts/CartesianChartFrame.tsx
   - apps/frontend/src/components/charts/chartAria.ts
   - apps/frontend/src/components/charts/__tests__/chartAria.test.ts
   - apps/frontend/src/components/charts/scrub.tsx
@@ -70,11 +71,12 @@ See [[docs/adr/018-visx-d3-chart-migration|ADR-018: visx/d3 Chart Migration]] fo
 
 ### Interaction Modules (Premium v3)
 
-| Module                 | Exports                             | Purpose                                                                                       |
-| ---------------------- | ----------------------------------- | --------------------------------------------------------------------------------------------- |
-| `scrub.tsx`            | `useChartScrub`, `formatScrubDelta` | Scrub-to-compare: pointer-drag range, glass Δ pill                                            |
-| `ChartSyncContext.tsx` | `ChartSyncProvider`, `useChartSync` | Synced crosshairs across charts sharing a `syncId`                                            |
-| `keyboardNav.ts`       | `useChartKeyboardNav`               | Keyboard access to per-point values: shared ←/→ · Home/End · Shift+←/→ · Escape map (2026-08) |
+| Module                    | Exports                             | Purpose                                                                                                                            |
+| ------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `scrub.tsx`               | `useChartScrub`, `formatScrubDelta` | Scrub-to-compare: pointer-drag range, glass Δ pill                                                                                 |
+| `ChartSyncContext.tsx`    | `ChartSyncProvider`, `useChartSync` | Synced crosshairs across charts sharing a `syncId`                                                                                 |
+| `keyboardNav.ts`          | `useChartKeyboardNav`               | Keyboard access to per-point values: shared ←/→ · Home/End · Shift+←/→ · Escape map (2026-08)                                      |
+| `CartesianChartFrame.tsx` | frame components and bounds hook    | Shared responsive sizing, x-scale construction, bounds, and accessible SVG shell for `AreaChart`, `LineChart`, and `ComposedChart` |
 
 ## Usage Patterns
 
@@ -109,8 +111,11 @@ function MonthlyTrendsPage() {
 
 ### Sparkline in StatCard
 
-> [!note] Surface class update (June 2026)
-> The example below uses `surface-elevated premium-frame` (pre-ADR-070 style). Current canonical recipe for KPI/stat cards is `glass-regular premium-frame micro-lift` or use the `<Card>` component with `className="glass-regular micro-lift"` (`premium-frame` is now baked into `Card`).
+> [!note] Surface class update
+> The example below uses the pre-ADR-070 surface recipe. New ordinary chart cards use `<Card>` and
+> inherit `glass-thin` plus `premium-frame`; interactive behavior comes from
+> `variant="interactive"`. Hero statistics cards choose explicit `glass-elevated`. See
+> [[docs/adr/132-thin-default-card-material|ADR-132]].
 
 ```tsx
 import { Sparkline } from "@/components/charts/Sparkline";

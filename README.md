@@ -23,7 +23,7 @@
 Most finance apps trade your privacy for convenience. Vision gives you both:
 
 - **Privacy-first** — your financial data never leaves your environment
-- **Self-hosted** — run on Docker Compose or as a native Electron desktop app
+- **Self-hosted** — run the native Electron desktop app or the source stack with PostgreSQL 18
 - **Complete** — transactions, budgeting, portfolio analytics, Belgian tax, AI chat, and net worth in one place
 - **Developer-friendly** — TypeScript/React + Node.js/Express in a clean Bun monorepo with an OpenAPI spec
 
@@ -78,8 +78,7 @@ Most finance apps trade your privacy for convenience. Vision gives you both:
 
 Install the release DMG. The application contains PostgreSQL 18, the migration
 runner, the Bun backend, the production frontend, and the browser used for PDF
-reports. Neither Docker Desktop nor a running Homebrew PostgreSQL service is
-required.
+reports. A running Homebrew PostgreSQL service is not required.
 
 To build the same application from source, first provide Bun, Node.js, a
 PostgreSQL 18.6 distribution from Postgres.app or Homebrew, and a Python build
@@ -112,34 +111,15 @@ open "/Applications/Vision Demo.app"
 ```
 
 Vision Demo uses its own bundled native PostgreSQL runtime below
-`~/Library/Application Support/Vision Demo/native/vision_demo`. It does not require Docker and
-cannot access the real Vision database. Restore its canonical dataset with
+`~/Library/Application Support/Vision Demo/native/vision_demo`. It cannot access the real Vision
+database. Restore its canonical dataset with
 `bun run demo:reset-native`, then quit and reopen the Demo app.
 
 Both macOS installers build the production frontend in a private temporary directory and remove
 that staging directory on exit. They do not depend on, reuse, or clear the repository's shared
 `dist` directory.
 
-### Option B — Docker Compose (any platform)
-
-```bash
-git clone https://github.com/EraPartner/Vision.git
-cd Vision
-cp .env.example .env
-
-# Generate a secure password and set it in both fields in .env
-openssl rand -hex 32
-
-docker compose up -d
-```
-
-Open `http://localhost:3002` in your browser.
-
-```bash
-docker compose down        # stop without deleting data volumes
-```
-
-### Option C — Development mode
+### Option B — Development mode
 
 ```bash
 git clone https://github.com/EraPartner/Vision.git
@@ -150,8 +130,7 @@ bun run dev                # start private PostgreSQL, backend, and frontend
 ```
 
 `native:prepare` needs PostgreSQL 18.6 build files and the pinned Python build
-dependencies, but it never starts the external PostgreSQL service. Docker
-development remains available explicitly through `bun run docker:dev`.
+dependencies, but it never starts the external PostgreSQL service.
 
 | Service     | URL                                                         |
 | ----------- | ----------------------------------------------------------- |
@@ -235,20 +214,9 @@ bun run db:index-stats       # report index usage stats
 bun run db:precision-drift   # check for numeric precision drift
 bun run quotes:densify       # backfill/densify asset price history
 
-# Docker
-bun run docker:dev           # start Compose dev stack
-bun run docker:dev:down      # stop dev stack
-bun run docker:dev:rebuild   # rebuild and restart dev stack
-bun run docker:clean         # start clean Compose stack (fresh build)
-bun run docker:clean:down    # stop clean stack
-bun run docker:clean:reset   # DESTROYS the synthetic clean volume; never real data
-bun run docker:logs          # tail app logs
-
 # Electron
 bun run electron:dev         # native desktop with isolated development data
 bun run electron:prod        # native desktop production shell
-bun run electron:docker      # explicit optional Docker provider
-bun run electron:clean       # destructive synthetic Docker clean provider only
 
 # i18n
 bun run generate-locales     # compile i18n source → locale files
@@ -267,11 +235,11 @@ bun run check-endpoint-matrix # verify docs endpoint matrix matches openapi.yaml
 | --------- | --------------------------------------------------------------------------------------------- |
 | Frontend  | React 19, TypeScript, Vite, Tailwind CSS, Radix UI, shadcn/ui, TanStack Query, TanStack Table |
 | Backend   | Node.js (Bun runtime), Express                                                                |
-| Database  | PostgreSQL 18.6 native bundle or optional PostgreSQL 18 Compose service; Alembic migrations   |
+| Database  | PostgreSQL 18.6; bundled for Electron and externally supplied for source development          |
 | Desktop   | Electron                                                                                      |
 | AI        | Ollama (local LLM)                                                                            |
 | Testing   | Vitest (frontend + backend)                                                                   |
-| Packaging | Native Electron DMG/ZIP, optional Docker Compose, GitHub Actions release workflow             |
+| Packaging | Native Electron DMG/ZIP and GitHub Actions release workflow                                   |
 | API spec  | OpenAPI 3.x (`openapi.yaml`)                                                                  |
 
 ### Bank Import Adapters
@@ -302,19 +270,17 @@ bun run check-endpoint-matrix # verify docs endpoint matrix matches openapi.yaml
 ## Configuration
 
 Native Vision generates database credentials in its restricted application-data directory. Do not
-create a database URL for the packaged app. Copy `.env.example` to `.env` only for Docker Compose
-or source-development provider keys and overrides.
+create a database URL for the packaged app. Copy `.env.example` to `.env` only for source
+development provider keys and overrides.
 
-| Variable            | Required       | Description                                           |
-| ------------------- | -------------- | ----------------------------------------------------- |
-| `DATABASE_URL`      | Docker/custom  | PostgreSQL connection string                          |
-| `POSTGRES_PASSWORD` | Docker Compose | Database bootstrap password                           |
-| `LOG_LEVEL`         | No             | `debug` / `info` / `warn` / `error` (default: `warn`) |
-| `ENABLE_LOGGING`    | No             | Toggle logging output (`true` / `false`)              |
+| Variable         | Required    | Description                                           |
+| ---------------- | ----------- | ----------------------------------------------------- |
+| `DATABASE_URL`   | Source only | PostgreSQL connection string                          |
+| `LOG_LEVEL`      | No          | `debug` / `info` / `warn` / `error` (default: `warn`) |
+| `ENABLE_LOGGING` | No          | Toggle logging output (`true` / `false`)              |
 
-> The native Electron provider writes `runtime.env` with restrictive permissions and separate
-> administrator, migration-owner, and application credentials. The optional Docker provider keeps
-> its existing `.env` contract.
+> The native Electron runtime writes `runtime.env` with restrictive permissions and separate
+> administrator, migration-owner, and application credentials.
 
 ---
 

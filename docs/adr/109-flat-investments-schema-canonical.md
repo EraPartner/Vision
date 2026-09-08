@@ -120,6 +120,26 @@ logical restore from that backup; no empty-table reconstruction is presented as 
 rollback copies are outside the head-schema backup coverage registry, but the required full
 `pg_dump` captures them before removal.
 
+### Retention decision (2026-09-08)
+
+Do not use one repository-wide calendar date. Self-hosted installations convert when each operator
+upgrades, so a fixed date could erase a recent installation's only rename-based rollback copy. An
+operator may run the out-of-band cleanup only after all of these conditions are true for that exact
+installation:
+
+1. migration 0087's upgrade, parity checks, and downgrade have passed on the supported PostgreSQL 18
+   legacy fixture;
+2. the converted installation has run the stable release containing migration 0087 for at least 30
+   consecutive days without a conversion-related repair, rollback, or portfolio-integrity incident;
+3. a fresh full logical backup taken after that soak has been listed and restored into a disposable
+   PostgreSQL 18 database; and
+4. portfolio reads and one disposable write/rollback smoke pass against the restored database.
+
+The cleanup remains a manual operation with an explicit `backup_verified=yes` acknowledgement. It will
+not become an auto-applied contraction migration. Keep the verified backup until the post-cleanup
+portfolio and backup/restore checks pass. Fresh installations and converted installations with no
+legacy residue remain no-ops.
+
 **Neutral**
 
 - Fresh installs are untouched (guard no-ops).

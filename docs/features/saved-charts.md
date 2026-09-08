@@ -148,7 +148,7 @@ See [[docs/api/savedCharts]] for full contracts.
 
 ### GET /api/aggregations/recipient-pivot
 
-Per-recipient spending keyed by period, used by `useRecipientPivot` to power recipient series in custom charts. Accepts `?bucket=monthly|yearly&start=YYYY-MM-DD&end=YYYY-MM-DD&excluded_recipient_ids=…`. Selecting either a primary recipient or one of its aliases includes the full primary-recipient cluster; overlapping selections are deduplicated and the series is labeled with the primary recipient.
+Per-recipient spending keyed by period, used by `useRecipientPivot` to power recipient series in custom charts. Accepts `?bucket=monthly|yearly&start=YYYY-MM-DD&end=YYYY-MM-DD&excluded_recipient_ids=…`. Selecting either a primary recipient or one of its aliases includes the full primary-recipient cluster; overlapping selections are deduplicated and the series is labeled with the primary recipient. The response also carries root-level historical-FX fallback metadata. When a fallback was used, the chart renders an accessible warning naming the affected currencies while preserving the existing totals.
 
 ### GET /api/aggregations/tag-pivot
 

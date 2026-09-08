@@ -32,6 +32,17 @@ entity "recipients" as recipients {
   updated_at : timestamptz
 }
 
+entity "accounts" as accounts {
+  * id : serial <<PK>>
+  * name : text <<UQ normalized>>
+  display_name : text
+  currency : varchar(3)
+  * is_active : boolean
+  closed_at : timestamptz
+  created_at : timestamptz
+  updated_at : timestamptz
+}
+
 entity "recipient_bank_accounts" as recipient_bank_accounts {
   * id : serial <<PK>>
   * recipient_id : integer
@@ -53,7 +64,7 @@ entity "transactions" as transactions {
   balance : numeric(15,2)
   memo : text
   comment : text
-  bank_account : text
+  account_id : integer <<FK>>
   * recipient_id : integer <<FK>>
   recipient_bank_account_id : integer <<FK>>
   category_id : integer <<FK>>
@@ -70,7 +81,7 @@ entity "planned_transactions" as planned_transactions {
   memo : text
   comment : text
   url : text
-  bank_account : text
+  account_id : integer <<FK>>
   recipient_id : integer <<FK>>
   category_id : integer <<FK>>
   is_recurring : boolean
@@ -359,9 +370,11 @@ recipient_bank_accounts }o--|| recipients
 transactions }o--|| recipients
 transactions }o--|| recipient_bank_accounts
 transactions }o--|| categories
+transactions }o--o| accounts : account_id
 
 planned_transactions }o--|| recipients
 planned_transactions }o--|| categories
+planned_transactions }o--o| accounts : account_id
 
 pte }o--|| planned_transactions
 pte }o--|| transactions

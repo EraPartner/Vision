@@ -3,8 +3,8 @@ title: Vision Project Knowledge Base
 type: index
 status: active
 date: 2026-08-31
-updated: 2026-08-31
-last_modified: 2026-08-31
+updated: 2026-09-08
+last_modified: 2026-09-08
 tags:
   [
     knowledge-base,
@@ -166,7 +166,7 @@ LIMIT 20
 **View all diagrams:** [[docs/diagrams/index|Diagrams Index]] | [[docs/architecture/index|Architecture Overview]] | [Interactive Flow Visualizer](flow-visualizer.html)
 
 > [!tip] Interactive Flow Visualizer
-> `docs/flow-visualizer.html` is a single-page, interactive map of all packages (57 components) + 27 end-to-end flows (create-transaction, CSV import, AI chat, AES-256-GCM backup, native cutover, native Demo seed activation, app update, macro-series-fetch, close-account, db-data-edit, …). Open it directly in any browser — click a flow on the left, watch the path light up, and read the payload at each hop. Add new flows by editing the JSON block at the bottom of the file.
+> `docs/flow-visualizer.html` is a single-page, interactive map of all packages (57 components) + 26 end-to-end flows (create-transaction, CSV import, AI chat, AES-256-GCM backup, native Demo seed activation, app update, macro-series-fetch, close-account, db-data-edit, …). Open it directly in any browser — click a flow on the left, watch the path light up, and read the payload at each hop. Add new flows by editing the JSON block at the bottom of the file.
 
 | Resource                                 | Description                           |
 | ---------------------------------------- | ------------------------------------- |
@@ -217,18 +217,17 @@ The macOS shell now allocates the native `under-window` material only while the 
 Vision Demo now packages the same native PostgreSQL, migration, backend, frontend, and report
 runtime as production with a separate `vision_demo` data root. Its deterministic synthetic seed
 is built against the current migration head, checksummed, restored transactionally, verified by
-exact table counts, and activated only after detailed readiness. Docker remains optional for
-normal Vision deployments but is no longer part of Demo build or startup. See
+exact table counts, and activated only after detailed readiness. This entry predates ADR-133;
+current Vision is native-only. See
 [[docs/adr/114-native-deterministic-demo-runtime|ADR-114]].
 
 ### 2026-08-30 — Native macOS Runtime (ADR-113)
 
 Vision's normal macOS and packaged Electron runtime now ships PostgreSQL 18.6, a standalone
 migration executable, a native Bun backend, and Chrome Headless Shell. Electron manages the private
-database cluster below Vision's durable application-data directory. Docker Compose remains an
-explicit provider. Existing Docker data moves only through the opt-in importer, which verifies
-schema, row counts, attachment hashes, readiness, settings, and reports before writing the native
-runtime marker. See [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]] and
+database cluster below Vision's durable application-data directory. ADR-133 later retired the
+second runtime and its importer. A saved legacy marker now fails closed and directs the user to
+Vision 1.0.2 for migration. See [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]] and
 [[docs/architecture/electron|Electron Desktop Architecture]].
 
 ### 2026-06-10 V12 — Electron-Native Desktop Integration (ADR-072)

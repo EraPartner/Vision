@@ -19,6 +19,7 @@ tags:
   ]
 description: Replace the flag-hidden ADR-091/100 per-account holdings machinery with whole-lot broker tagging — every lot belongs to exactly one broker account, sells consume same-broker lots, transfers are re-tags that carry basis — giving per-broker positions AND per-broker P&L as partitions of the global engine, while deleting trade cash legs, FIFO move surgery, and the snapshot value_by_account walk. Supersedes the UI scope of ADR-090/091/095/100 and retires ADR-103's flag.
 aliases: [portfolio accounts v2, broker tags, whole-lot tagging, per-broker P&L]
+updated: 2026-09-08
 ---
 
 # ADR-108: Portfolio accounts v2 — whole-lot broker tagging with partitioned P&L
@@ -85,9 +86,31 @@ unchanged or improved legacy-invalid history so it can be repaired incrementally
 loads the investment's unit-event history once; it derives assignment state, sell availability,
 and projected partition deficits from that same ordered result.
 
+### 2026-09-07 bulk re-tag addendum
+
+WP-C3 uses one audited compare-and-set endpoint for every multi-row re-tag. A client supplies the
+reviewed transaction ID set, its expected source account, its destination account, and a UUID
+idempotency key. The server validates the entire projected partition history, changes the rows with
+one SQL update, and writes an immutable receipt in the same transaction. Replays with the same UUID
+and semantic body return that receipt; UUID reuse with different content conflicts.
+
+The transaction locks and validates the destination account row first, matching account close and
+merge lock order, then briefly takes a table-level `SHARE ROW EXCLUSIVE` lock. The account lock
+prevents a close or type change from invalidating eligibility. Row locks alone would not prevent a
+concurrent portfolio insert from becoming a history phantom between validation and update. This
+exceptional table lock keeps the invariant complete without imposing a new advisory-lock protocol
+on every existing portfolio writer. Requests are capped at 500 rows and separately rate limited to
+keep the lock interval bounded. Audit account IDs have no foreign keys because receipts must survive
+later account deletion.
+
 The `byAccount` response uses `assignment: "account" | "unassigned"` as a stable machine-readable
 identity. `account_id: null` remains the storage representation, while clients localize the
 Unassigned label instead of treating a missing account name as identity.
+
+`fullyAssigned` remains a lot-position completeness flag. Income-only or adjustment-only
+partitions do not change it. `byAccount` identifies rows by `(account_id, contribution_kind)`,
+where `contribution_kind` is `position` or `non_position`; this prevents unassigned standalone
+income from merging into an unassigned position row while preserving portfolio-total parity.
 
 **Cash: real rows only.** The broker cash sleeve is an ordinary budgeting ledger — fed by real
 transfers and by imported brokerage cash statements (Q5), anchored by the ADR-107 reconcile
@@ -100,6 +123,10 @@ flow with its provenance line. `tradeCashLegService` and all ADR-090 leg synthes
 `NetWorthByAccountChart` (per-broker history returns later via a persisted side table written
 forward-only by the snapshot builder) · `VITE_ENABLE_PER_ACCOUNT_HOLDINGS` and every branch on
 it.
+
+The remaining ADR-090 transaction schema is retired by migration
+`0102_retire_adr090_transaction_schema`. Its upgrade refuses to run if any legacy trade-source row
+or portfolio-transaction link remains; downgrade restores only the empty compatibility shape.
 
 **Kept and fixed:** brokerage cash-row import path (sign handling, rollback, instrument-less
 rows, ledger routing) · portfolio-import dedup gains `account_id` + currency · file-level
@@ -123,6 +150,16 @@ per-broker subtotal and P&L.
 - Neutral: `has_cash_sleeve`/`multi_currency_cash`/`route`/`is_brokerage` columns stay dormant
   until a later contraction migration; ADR-103 remains historically accurate but its flag is
   gone.
+
+### 2026-09-08 compatibility decision
+
+`has_cash_sleeve` remains a dormant persisted and public API field. Account-type defaults still
+derive it, forms still serialize and hydrate it, and the backend still validates and stores it for
+wire compatibility. It has no active UI control or business-rule consumer. Removing it would
+require a breaking schema and API contraction without a current operational benefit, so Vision
+retains it indefinitely. Any future removal must be proposed as a versioned contract change;
+portfolio UI soak alone is not a removal trigger. `route`, `is_brokerage`, and
+`portfolio_snapshot_accounts` remain outside this decision.
 
 Implementation plan with work packages: `TODO.md` § _Accounts feature research 2026-07-10_ →
 _5️⃣ Implementation plan_.

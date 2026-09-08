@@ -1,7 +1,7 @@
 # REVIEW.md — pre-change checklist for Vision
 
 Run before proposing, committing, or pushing a change. Encodes the review knowledge that
-otherwise lives in the maintainer's head so review catches issues automatically — the *why*
+otherwise lives in the maintainer's head so review catches issues automatically — the _why_
 behind each item is in `AGENTS.md` (Conventions, Verification, Security) and `docs/`.
 
 ## Secrets & safety
@@ -16,7 +16,7 @@ behind each item is in `AGENTS.md` (Conventions, Verification, Security) and `do
 ## Correctness & invariants
 
 - [ ] Backend: **no `null` — use `undefined`**; ES2022+ ESM `async/await`; functions over classes.
-- [ ] All inputs validated with **Zod** (frontend *and* server-side).
+- [ ] All inputs validated with **Zod** (frontend _and_ server-side).
 - [ ] ADRs in `docs/adr/` are **append-only** — supersede with a new ADR, never rewrite.
 - [ ] DB schema change → Alembic migration is **reversible** (CI round-trips `downgrade -1` →
       `upgrade head`); ship a rollback plan; migrations are user-applied, not auto-run.
@@ -24,8 +24,8 @@ behind each item is in `AGENTS.md` (Conventions, Verification, Security) and `do
       count matches `openapi.yaml` (`bun run check-endpoint-matrix`), and `generated.ts`
       regenerated (`bun run generate:types`). Note breaking vs non-breaking.
 - [ ] i18n change → `bun run generate-locales`; en/nl key parity holds; committed locale TS is in sync.
-- [ ] Compose edit → named volumes in `docker-compose.yml` match
-      `packaging/electron/resources/docker-compose.yml` (the v1.0.2 data-loss guard).
+- [ ] Packaging or persistence edit → native PostgreSQL and attachment paths stay inside the
+      application data directory, and backup/restore coverage passes.
 
 ## Tests & validation
 

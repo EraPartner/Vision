@@ -22,6 +22,11 @@ aliases: [native macOS runtime, Docker to native cutover, runtime provider]
 
 # ADR-113: Native macOS runtime with optional Docker provider
 
+> [!warning] Partially superseded
+> [[docs/adr/133-native-only-runtime-and-delivery|ADR-133]] retired the optional Docker provider,
+> importer, and rollback tooling on 2026-09-08. The native runtime, isolation, backup, and payload
+> decisions below remain active.
+
 ## Status
 
 Accepted — 2026-08-30. This replaces the Docker-specific desktop-runtime assumptions in

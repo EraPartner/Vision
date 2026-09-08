@@ -5,11 +5,11 @@ method: GET, POST, PATCH, DELETE
 path: /api/accounts
 description: Account entity management (ADR-088) — the user's own accounts spanning budgeting cash, portfolio holdings, and liabilities
 date: 2026-06-21
-updated: 2026-09-05
+updated: 2026-09-08
 tags: [api, accounts, account-entity, adr-088, net-worth, cash-sleeve, rename-propagation, lifecycle, normalized-identity]
 status: active
 aliases: [accounts-api, account-management, account-entity]
-related_code: [[apps/node-backend/src/routes/accounts.js]], [[apps/node-backend/src/services/accountService.js]], [[apps/node-backend/src/services/accountMergeService.js]], [[apps/node-backend/src/repositories/accountRepository.js]]
+related_code: [[apps/node-backend/src/routes/accounts.js]], [[apps/node-backend/src/services/accountService.js]], [[apps/node-backend/src/services/accountCloseService.js]], [[apps/node-backend/src/services/accountMergeService.js]], [[apps/node-backend/src/repositories/accountRepository.js]]
 ---
 
 # Accounts API
@@ -148,6 +148,40 @@ decision (`PATCH { in_net_worth: true }`).
 > dual-write trigger lookup consistent with `accounts.name`. The propagation is part of the same
 > database transaction as the accounts row update. See [[docs/adr/088-account-entity|ADR-088 addendum]].
 
+### GET /api/accounts/:id/portfolio-lot-retag-preview
+
+Returns the exact count of `buy`, `gift`, and `sell` rows assigned to the account. When the whole
+selection fits the audited 500-row broker re-tag limit, `transaction_ids` contains every ID in
+ascending order. Above that limit the array is empty, never truncated. The close and standalone
+broker-transfer dialogs use this read-only contract so investment-list pagination cannot hide
+assigned lots.
+
+### POST /api/accounts/:id/close
+
+`CloseAccountDialog` sends an explicit balance outcome:
+
+```json
+{ "balance_handling": "adjustment" }
+```
+
+`adjustment` (the UI default when cash remains) atomically writes one dated, visible
+`transfer_source='adjustment'` row per non-zero currency partition and then closes the account.
+These rows do not count as income or spending. `preserve` closes without changing the ledger.
+Repeating a completed close is safe and does not create duplicate adjustments. Before closing a
+portfolio account, the dialog can submit the complete previewed lot selection to the audited bulk
+broker re-tag endpoint, moving it to another active portfolio account or Unassigned. It never
+chunks an over-limit selection. The re-tag transaction rejects a move that would change global
+units, invested basis, or realized profit/loss under the configured cost-basis method. A failed
+re-tag prevents close; if close fails after a successful
+re-tag, the UI reports that partial state and reuses the idempotency key on retry. Choosing to keep
+the lots preserves them on the closed account. Planned transactions and ledger history are always
+preserved.
+
+The adjustment is based on the native currency partitions as of the close date, not the
+FX-converted headline total, so offsetting or temporarily unconvertible currencies are still
+zeroed. Existing statement readings and future-dated ledger rows are not rewritten. Reopening can
+therefore surface a stale-statement drift or later future-dated activity for explicit review.
+
 ### DELETE /api/accounts/:id
 
 Returns `204 No Content` with an empty body on success. Delete is only possible with zero referencing rows (the `account_id` FKs are
@@ -155,12 +189,6 @@ Returns `204 No Content` with an empty body on success. Delete is only possible 
 lots returns `409` with a message routing the caller to **close** the account instead (lifecycle
 D5: active → closed → only-if-empty deleted). The UI opens `CloseAccountDialog` on that 409.
 `404` if not found.
-
-> [!tip] Close-account workflow
-> `CloseAccountDialog` currently warns about residual cash and archives with
-> `PATCH /api/accounts/:id` `{ is_active: false }`. It preserves portfolio lots and ledger history.
-> Broker lot reassignment and a final cash-transfer step remain planned lifecycle work; the removed
-> `POST /api/investments/:id/move` endpoint is not part of the current workflow.
 
 ### POST /api/accounts/:id/merge
 
@@ -174,7 +202,8 @@ became the integer 12 and **merged and deleted account 12** — an irreversible 
 caller never named.) In one transaction (`accountMergeService`), every reference to a
 source is repointed to the survivor — `transactions.account_id` + `bank_account` (set to the
 survivor's name so the dual-write trigger keeps it merged), `planned_transactions`, portfolio lots
-(`portfolio_transactions.account_id`), and any
+(`portfolio_transactions.account_id`), pending or retryable `portfolio_import_batches` (so their
+reviewed broker destination survives), and any
 `accounts.funding_account_id` — then the sources are deleted. Returns
 `{ into, merged, reassigned: { transactions, planned, portfolio, funding }, stampsInterleaved }`.
 `404` if the survivor or any source is missing. Irreversible (the source rows are gone; identity

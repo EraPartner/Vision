@@ -17,69 +17,69 @@ aliases: [tag guide, tagging, categories, labels]
 
 ### Content Type (use exactly one)
 
-| Tag | Use For |
-|-----|---------|
-| `index` | Index/overview pages (e.g., `features-index`) |
-| `endpoint` | API endpoint documentation |
-| `feature` | Feature documentation |
-| `integration` | External service integration docs |
-| `performance` | Performance optimization docs |
-| `testing` | Testing documentation |
-| `guide` | How-to guides |
-| `adr` | Architecture Decision Records |
-| `component` | Frontend component documentation |
-| `architecture` | Architecture documentation |
-| `i18n` | Localization documentation |
-| `security` | Security documentation |
-| `reference` | Reference docs (code patterns, algorithms, env vars) |
-| `map-of-content` | Maps of Content (MOCs) |
-| `template` | Documentation templates |
+| Tag              | Use For                                              |
+| ---------------- | ---------------------------------------------------- |
+| `index`          | Index/overview pages (e.g., `features-index`)        |
+| `endpoint`       | API endpoint documentation                           |
+| `feature`        | Feature documentation                                |
+| `integration`    | External service integration docs                    |
+| `performance`    | Performance optimization docs                        |
+| `testing`        | Testing documentation                                |
+| `guide`          | How-to guides                                        |
+| `adr`            | Architecture Decision Records                        |
+| `component`      | Frontend component documentation                     |
+| `architecture`   | Architecture documentation                           |
+| `i18n`           | Localization documentation                           |
+| `security`       | Security documentation                               |
+| `reference`      | Reference docs (code patterns, algorithms, env vars) |
+| `map-of-content` | Maps of Content (MOCs)                               |
+| `template`       | Documentation templates                              |
 
 ### Domain (use 1-3)
 
-| Tag | Use For |
-|-----|---------|
-| `api` | Anything API-related |
-| `frontend` | Frontend React code |
-| `backend` | Backend Node.js code |
-| `database` | Database schema, migrations, queries |
-| `portfolio` | Investment/portfolio features |
-| `transactions` | Transaction management |
-| `import` | CSV import functionality |
-| `charts` | Chart/visualization components |
-| `hooks` | React custom hooks |
-| `ui` | UI components |
-| `security` | Security-related content |
-| `i18n` | Internationalization |
-| `tax` | Belgian tax features |
-| `splits` | Transaction splitting |
-| `planned` | Planned/recurring transactions |
-| `settings` | User settings |
-| `analytics` | Statistics and reporting |
+| Tag            | Use For                              |
+| -------------- | ------------------------------------ |
+| `api`          | Anything API-related                 |
+| `frontend`     | Frontend React code                  |
+| `backend`      | Backend Node.js code                 |
+| `database`     | Database schema, migrations, queries |
+| `portfolio`    | Investment/portfolio features        |
+| `transactions` | Transaction management               |
+| `import`       | CSV import functionality             |
+| `charts`       | Chart/visualization components       |
+| `hooks`        | React custom hooks                   |
+| `ui`           | UI components                        |
+| `security`     | Security-related content             |
+| `i18n`         | Internationalization                 |
+| `tax`          | Belgian tax features                 |
+| `splits`       | Transaction splitting                |
+| `planned`      | Planned/recurring transactions       |
+| `settings`     | User settings                        |
+| `analytics`    | Statistics and reporting             |
 
 ### Technology (use 0-3)
 
-| Tag | Use For |
-|-----|---------|
-| `react` | React-specific content |
-| `typescript` | TypeScript-specific content |
-| `postgresql` | PostgreSQL-specific content |
-| `plantuml` | PlantUML diagrams |
-| `alembic` | Alembic migrations |
-| `vitest` | Vitest testing |
-| `react-query` | React Query data fetching |
-| `tailwind` | Tailwind CSS styling |
-| `electron` | Electron desktop |
-| `docker` | Docker deployment |
+| Tag               | Use For                                                      |
+| ----------------- | ------------------------------------------------------------ |
+| `react`           | React-specific content                                       |
+| `typescript`      | TypeScript-specific content                                  |
+| `postgresql`      | PostgreSQL-specific content                                  |
+| `plantuml`        | PlantUML diagrams                                            |
+| `alembic`         | Alembic migrations                                           |
+| `vitest`          | Vitest testing                                               |
+| `react-query`     | React Query data fetching                                    |
+| `tailwind`        | Tailwind CSS styling                                         |
+| `electron`        | Electron desktop                                             |
+| `retired-runtime` | Historical material about a removed runtime or delivery path |
 
 ### Status (use exactly one, from frontmatter)
 
-| Status | Meaning |
-|--------|---------|
-| `active` | Current and maintained |
-| `draft` | Work in progress |
+| Status       | Meaning                  |
+| ------------ | ------------------------ |
+| `active`     | Current and maintained   |
+| `draft`      | Work in progress         |
 | `deprecated` | Outdated, being replaced |
-| `template` | Template for new docs |
+| `template`   | Template for new docs    |
 
 ## Tagging Rules
 
@@ -92,40 +92,45 @@ aliases: [tag guide, tagging, categories, labels]
 ## Examples
 
 ### API Endpoint Doc
+
 ```yaml
 tags: [endpoint, api, transactions, backend]
 ```
 
 ### Feature Doc
+
 ```yaml
 tags: [feature, portfolio, investments, frontend, backend]
 ```
 
 ### Component Doc
+
 ```yaml
 tags: [component, frontend, ui, hooks]
 ```
 
 ### Guide
+
 ```yaml
 tags: [guide, setup, development, database]
 ```
 
 ### ADR
+
 ```yaml
 tags: [adr, architecture, database, postgresql]
 ```
 
 ## Deprecated Tags (Do Not Use)
 
-| Old Tag | Replacement | Reason |
-|---------|-------------|--------|
-| `jest` | `vitest` | Project uses Vitest exclusively |
-| `features` | `feature` | Singular convention |
-| `guides` | `guide` | Singular convention |
-| `integrations` | `integration` | Singular convention |
-| `coingecko` | `binance` | Provider replaced |
-| `kraken` | `binance` | Provider replaced |
+| Old Tag        | Replacement   | Reason                          |
+| -------------- | ------------- | ------------------------------- |
+| `jest`         | `vitest`      | Project uses Vitest exclusively |
+| `features`     | `feature`     | Singular convention             |
+| `guides`       | `guide`       | Singular convention             |
+| `integrations` | `integration` | Singular convention             |
+| `coingecko`    | `binance`     | Provider replaced               |
+| `kraken`       | `binance`     | Provider replaced               |
 
 ## Related
 

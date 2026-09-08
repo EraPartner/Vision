@@ -3,7 +3,7 @@ title: Research Feature
 type: feature
 status: active
 date: 2026-06-16
-updated: 2026-09-03
+updated: 2026-09-08
 tags:
   - url-state
   - feature
@@ -309,7 +309,9 @@ Each page owns its own query logic and passes result rows as `children` to `Symb
 
 ### Research Workspace Card Material
 
-All content `<Card>` elements on the four Research detail pages use `glass-regular` (added in the June 2026 glass-consistency pass that completed the ADR-070 card-glass rollout for the Research workspace):
+All content `<Card>` elements on the four Research detail pages inherit the `glass-thin` baseline
+from [[docs/adr/132-thin-default-card-material|ADR-132]]. They retain saturation and the premium
+frame while avoiding a 20px blur region for every panel:
 
 | Page                    | Cards                                                                                                                                                                                                       |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -318,7 +320,9 @@ All content `<Card>` elements on the four Research detail pages use `glass-regul
 | `ChartBuilderPage`      | 5 content cards                                                                                                                                                                                             |
 | `PortfolioForecastPage` | 6 content cards                                                                                                                                                                                             |
 
-`WatchlistPage` deliberately stays opaque — it is a dense data grid and is the explicit table exception documented in ADR-070.
+`WatchlistPage` keeps its dense watchlist grid opaque. Its supporting empty and item Cards inherit
+the thin baseline, so the data cells do not create backdrop-filter regions while the surrounding
+surfaces remain consistent with the workspace.
 
 ## Related
 

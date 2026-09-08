@@ -3,8 +3,8 @@ title: Feature - AI Chat
 type: feature
 status: active
 date: 2026-05-03
-updated: 2026-09-04
-last_modified: 2026-08-31
+updated: 2026-09-05
+last_modified: 2026-09-05
 tags:
   [
     feature,
@@ -122,7 +122,7 @@ Shared contract
 | `ChatMessageList`             | Frontend Component    | Renders ordered messages; shows thinking indicator when streaming w/no content yet; retains and labels stopped/interrupted/timed-out drafts with Retry; handles autoscroll — the view follows the stream only while it is pinned to the bottom, so scrolling up mid-answer is not overridden; re-pins on conversation switch and on send |
 | `ChatBubble`                  | Frontend Component    | User vs assistant styling                                                                                                                                                                                                                                                                                                                |
 | `ChatComposer`                | Frontend Component    | Textarea, send, model selector, tools toggle (wrench icon)                                                                                                                                                                                                                                                                               |
-| `ToolResultCard`              | Frontend Component    | Renders table, JSON, and error payloads directly; lazy-loads `ToolResultChart` only for line/bar/pie results                                                                                                                                                                                                                             |
+| `ToolResultCard`              | Frontend Component    | Renders table and JSON payloads; maps tool failures to localized validation, unavailable-action, or generic copy while logging the structured diagnostic; lazy-loads `ToolResultChart` only for line/bar/pie results                                                                                                                     |
 | `ToolResultChart`             | Frontend Component    | Recharts-backed line/bar/pie renderer behind a nested lazy boundary, so ordinary chat and non-chart tool results do not download Recharts                                                                                                                                                                                                |
 | `OllamaStatusBanner`          | Frontend Component    | Unreachable warning + setup guide link                                                                                                                                                                                                                                                                                                   |
 | `aiChatStreamStore`           | Frontend Store        | Module-level singleton holding in-flight streams keyed by conversation ID; survives component unmount                                                                                                                                                                                                                                    |
@@ -281,7 +281,10 @@ Tools are declared with JSON Schema params. Backend validates args before dispat
 - **Context window overflow** — the service first applies the message-count ceiling, then admits history newest-first under an approximate character budget after reserving the system prompt and current user request. The newest history item is shortened instead of dropped when only part fits. Ollama receives the configured `num_ctx` for both streaming and non-streaming calls.
 - **LLM picks an unknown tool name** — dispatcher returns a structured error back to the LLM as a `tool` message; LLM retries or apologizes.
 - **LLM emits invalid args** — `ToolValidationError` returned as a `tool` error `{code: 'VALIDATION_ERROR', field, message}` naming the field and the received value; LLM retries with corrected args (up to 2 retries before giving up).
-- **Tool failure without detail** — `ToolResultCard` uses the localized `aiChat.toolFailed` fallback instead of hardcoded English.
+- **Tool failure shown in the transcript** — `ToolResultCard` never renders the backend's raw
+  string, field, message, code, or serialized error object. Known validation and unknown-tool
+  codes map to localized user guidance; every other failure uses `aiChat.toolFailed`. The original
+  diagnostic remains in the frontend error log with the tool name for troubleshooting.
 - **User aborts mid-stream** — clicking "Stop" calls `cancel()` on the store, which aborts the fetch via stored controller; server-side `res.on('close')` stops provider work and does not persist an incomplete assistant row. The client retains any partial preview, labels the turn stopped, and offers Retry. Cancellation does not produce an error toast.
 - **Connection drops mid-stream** — the store retains the partial preview, labels it interrupted, shows the normal localized error toast, and offers Retry with the original request body.
 - **Hung-open connection** — a client watchdog aborts after 120 seconds without a data-bearing Server-Sent Events (SSE) frame. Every parsed data frame, including an unrecognized forward-compatible event, resets the inactivity window. The draft is labeled timed out and can be retried.
@@ -307,6 +310,8 @@ Tools are declared with JSON Schema params. Backend validates args before dispat
 - `[ai] streamChat start` — sent when beginning SSE fetch.
 - `[ai] streamChat response` — logged on stream open with event target details.
 - `[ai] streamChat event` — per normalized SSE event (user_message, token, tool_call, tool_result, done, error); wire `complete` and compatibility `done` appear once here as semantic `done`.
+- `AI tool returned an error` — records the tool name and original tool-result diagnostic that the
+  transcript intentionally replaces with localized safe copy.
 
 Enable via browser DevTools (Console tab) or server-side log aggregation.
 

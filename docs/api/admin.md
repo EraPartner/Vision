@@ -372,7 +372,7 @@ Retrieve the column schema and primary key for a single table. Used by the data 
 
 ### GET /api/admin/database/tables/:table/rows (ADR-101)
 
-Paginated, filterable, sortable read of table rows. Runs inside a `BEGIN; SET TRANSACTION READ ONLY; SET LOCAL statement_timeout = '10s'` block so it can neither mutate nor hang the database. Each row includes a hidden `__xmin` field (PostgreSQL row version) used by the mutate endpoint for optimistic concurrency.
+Paginated, filterable, sortable read of table rows. Runs inside a `BEGIN; SET TRANSACTION READ ONLY; SET LOCAL statement_timeout = '15s'` block so it can neither mutate nor run beyond the bounded timeout. Each row includes a hidden `__xmin` field (PostgreSQL row version) used by the mutate endpoint for optimistic concurrency.
 
 **Auth:** admin Bearer + CSRF guard. **Rate limit:** `adminRateLimiter`.
 
@@ -384,14 +384,13 @@ Paginated, filterable, sortable read of table rows. Runs inside a `BEGIN; SET TR
 
 **Query Parameters:**
 
-| Parameter | Type            | Default     | Description                                                                           |
-| --------- | --------------- | ----------- | ------------------------------------------------------------------------------------- |
-| `limit`   | integer         | 100         | Rows per page (max 500)                                                               |
-| `offset`  | integer         | 0           | Row offset for pagination                                                             |
-| `orderBy` | string          | primary key | Column to sort by (validated against `information_schema.columns`)                    |
-| `dir`     | `asc` \| `desc` | `asc`       | Sort direction                                                                        |
-| `where`   | string          | —           | Raw WHERE clause appended to the query; `;` is rejected to prevent statement chaining |
-| `filters` | JSON string     | —           | JSON array of `{column, op, value}` filter objects (see ops below)                    |
+| Parameter | Type            | Default     | Description                                                                                      |
+| --------- | --------------- | ----------- | ------------------------------------------------------------------------------------------------ |
+| `limit`   | integer         | 100         | Rows per page (max 500)                                                                          |
+| `cursor`  | string          | —           | Opaque continuation cursor from the preceding page; bound to the table, sort, direction, filters |
+| `orderBy` | string          | primary key | Column to sort by (validated against `information_schema.columns`)                               |
+| `dir`     | `asc` \| `desc` | `asc`       | Sort direction                                                                                   |
+| `filters` | JSON string     | —           | JSON array of `{column, op, value}` filter objects (see ops below)                               |
 
 **Supported filter `op` values:** `eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `contains` (ILIKE `%value%`), `startsWith` (ILIKE `value%`), `isnull`, `notnull`.
 
@@ -414,15 +413,16 @@ Paginated, filterable, sortable read of table rows. Runs inside a `BEGIN; SET TR
         "__xmin": "7421836"
       }
     ],
-    "total": 2453,
     "limit": 100,
-    "offset": 0
+    "hasMore": true,
+    "nextCursor": "eyJ2IjoxLCJ0YWJsZSI6InRyYW5zYWN0aW9ucyJ9"
   }
 }
 ```
 
-> [!warning] Raw WHERE clause
-> The `where` parameter is appended directly to the SQL (after parameterized filter conditions). Semicolons are rejected, and the query runs inside a READ ONLY transaction, so mutation is structurally impossible. However, a crafted `where` clause can still trigger expensive seq-scans. The `statement_timeout` of 10 s caps the blast radius.
+The service fetches `limit + 1` rows to derive `hasMore`. It does not run `COUNT(*)`, so large tables do not pay an unbounded count scan on every page. Hidden PostgreSQL text projections preserve exact cursor boundaries, including timestamp microseconds; those fields are removed before the response. `total` is present only when a short first page proves the exact total. The UI keeps prior cursors locally to support Previous. Changing the sort or filters starts again at page one.
+
+The raw `where` parameter was removed. Use only the structured, parameterized `filters` array. A malformed cursor or one reused with different sort or filter state returns `400 Bad Request`.
 
 ---
 
@@ -552,7 +552,7 @@ Check for application updates via GitHub Releases API.
   "published_at": "2025-03-15T12:00:00Z",
   "release_notes": "Bug fixes and improvements...",
   "html_url": "https://github.com/EraPartner/Vision/releases/tag/v1.2.3",
-  "update_mode": "docker-compose"
+  "update_mode": "native"
 }
 ```
 
@@ -564,7 +564,7 @@ Check for application updates via GitHub Releases API.
   "current_version": "1.2.3",
   "error": "No published releases found",
   "latest_version": null,
-  "update_mode": "docker-compose"
+  "update_mode": "native"
 }
 ```
 
@@ -804,7 +804,6 @@ Return the static route manifest annotated with a `live: true` flag for each ent
 | Variable           | Description                                                       |
 | ------------------ | ----------------------------------------------------------------- |
 | `APP_VERSION`      | Current application version                                       |
-| `APP_IMAGE_TAG`    | Docker image tag (fallback for version)                           |
 | `ADMIN_AUTH_TOKEN` | Optional Bearer token required for `/api/admin/*` routes when set |
 
 ## Security and Rate Limiting
@@ -817,18 +816,11 @@ Return the static route manifest annotated with a `live: true` flag for each ent
   - **CSRF guard (all `/api/admin` state-changing requests):** cross-site requests are rejected via `Sec-Fetch-Site` (allow `same-origin`/`none`, reject `cross-site`/`same-site`) with an `Origin`-allowlist fallback for older/non-browser clients. This blocks a malicious page from POSTing to destructive routes (e.g. `database/reset`) — which the loopback binding alone cannot stop.
 - Error responses for admin operations are sanitized to generic `Administrative operation failed` to avoid leaking internals.
 
-### Docker Deployment — LAN Isolation and Admin Access
+### Network boundary and admin access
 
-The `docker-compose.yml` binds the host port to `127.0.0.1` only:
-
-```yaml
-ports:
-  - "127.0.0.1:${PORT:-3002}:3002"
-```
-
-This means only the host machine can reach the backend — devices on the same Wi-Fi or LAN cannot. Because admin auth no longer relies on an IP allowlist, the docker-proxy bridge source IP (e.g. `172.17.0.1`) is irrelevant: with no token set, admin routes are reachable from any client that can hit the loopback-bound port, and the CSRF guard blocks cross-site browser requests.
-
-> **Warning:** If you change the port mapping back to `"${PORT:-3002}:3002"` (binding `0.0.0.0`), the loopback isolation is gone — **set `ADMIN_AUTH_TOKEN`** so admin routes require a Bearer token, and consider adding auth/CSRF protection to non-admin routes too.
+Native Electron binds the backend to loopback. A custom source deployment must preserve that
+boundary or set `ADMIN_AUTH_TOKEN` behind an authenticated reverse proxy. The CSRF guard remains
+required because network binding is not a browser-origin control.
 
 ### Rate Limits
 

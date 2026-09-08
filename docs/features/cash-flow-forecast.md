@@ -3,8 +3,8 @@ title: Cash Flow Forecast
 type: feature
 status: active
 date: 2026-04-25
-updated: 2026-08-26
-last_modified: 2026-08-26
+updated: 2026-09-05
+last_modified: 2026-09-05
 tags: [feature, cash-flow, forecast, planning, aggregations, phase-6, phase-10, phase-c, phase-d, phase-e, phase-g, planned-transactions, statistical-forecasting, ensemble-methods, ensemble-v2, empirical-bayes, frontend-visualization, multi-method-forecast, diagnostics-sheet, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience]
 aliases: [cashflow-forecast, forward-projections, cash-flow-planning, income-expense-forecast, budget-projection, multi-method-forecast, ensemble-forecast, category-breakdown]
 description: Project income and expenses forward based on planned transactions (Phase 6) or using 8 statistical methods including 7 base methods + Ensemble (v2) (Phase 10, F). Phase C adds frontend dashboard visualization with controls, MC confidence bands, and diagnostics panel. Phase E adds nightly cache materialization. Phase G adds per-category breakdown with hierarchical reconciliation. June 2026: ensemble weighting upgraded from plain inverse-MSE to sample-size-shrunk RMSE + uniform-blend floor (empirical Bayes).
@@ -42,7 +42,7 @@ Vision offers two complementary forecasting approaches with rich dashboard visua
 
 ### Phase 6: Planned Projection
 
-Takes all active planned transactions and expands them into future occurrences based on their recurrence pattern (if recurring) or their planned date (if one-time). Groups these by month to show projected monthly cash position.
+Takes all active planned transactions and expands them into future occurrences based on their recurrence pattern (if recurring) or their planned date (if one-time). Groups these by month to show projected monthly net cash flow.
 
 **Key characteristics:**
 
@@ -71,7 +71,7 @@ Dashboard widget (`CashFlowForecastChart`) displays the 8-method forecast (7 bas
 
 **Features:**
 
-- **Multi-method chart** — Tabs to toggle between cumulative balance and daily net views
+- **Multi-method chart** — Tabs to toggle between cumulative net cash flow and daily net views
 - **Method toggles** — Per-method pill controls to show/hide individual forecasts on the chart
 - **Default visibility** — Displays 5 point methods + Ensemble (v2) by default; Monte Carlo methods hidden by default but toggleable
 - **MC confidence bands** — Dashed LineSeries rendering P10/P90 bands for parametric and block bootstrap methods (visible when those methods are toggled on)
@@ -147,15 +147,15 @@ Each Monte Carlo method uses a seeded PRNG (`fnv1a_hash(userId | yyyymm | filter
 
 ### Decimal Precision & Accumulation (May 2026 Audit)
 
-All cash flow forecast calculations now route through Decimal.js to eliminate IEEE 754 floating-point drift in running balance aggregation:
+All cash flow forecast calculations now route through Decimal.js to eliminate IEEE 754 floating-point drift in running net-flow aggregation:
 
 **Implementation:**
 
 - `cashflowForecast.js`: All date bucketing via APP_TIMEZONE helpers; cumulative net flows accumulated via Decimal `addAll()`
-- `calculations/aggregation/cashflowForecast.js`: Running-balance stream maintained as Decimal throughout; `divide()` used for per-day allocation when splitting multi-day transactions
+- `calculations/aggregation/cashflowForecast.js`: Running net-flow stream maintained as Decimal throughout; `divide()` used for per-day allocation when splitting multi-day transactions
 - Frontend `forecastMerge.ts`: Reuses `buildBandMaps()` and `buildSeries()` helpers to avoid redundant accumulation passes
 
-**Benefit:** Forecasts with many categories or long histories no longer accumulate ±0.01 rounding errors. Cumulative balance matches database NUMERIC precision exactly.
+**Benefit:** Forecasts with many categories or long histories no longer accumulate ±0.01 rounding errors. Cumulative net cash flow matches database NUMERIC precision exactly.
 
 ## Endpoints
 
@@ -318,12 +318,13 @@ See [[docs/api/aggregations#multi-method-cash-flow-forecast-phase-10|Aggregation
 - `currency` — Target currency
 - `actual[]` — Realized daily net (past dates only; future dates are null)
 - `planned[]` — Pending planned transaction dates (if `include_planned=true`)
-- `methods[]` — Array of 7 forecasting methods with `id`, `label`, `daily`, `cumulative`, `bands` (MC only), `error`
+- `methods[]` — Forecast methods with `id`, `label`, `daily`, `cumulative`, daily `bands`, path-wise `cumulative_bands` (both MC only), and `error`
 - `diagnostics` — Walk-forward backtest results: MAE, RMSE, MAPE per method; per-month breakdown (if `include_backtest=true`)
 
 **Using Monte Carlo Confidence Bands:**
 
-The two Monte Carlo methods return confidence bands in `bands` object:
+The two Monte Carlo methods return daily confidence bands in `bands` and
+path-wise cumulative percentiles in `cumulative_bands`:
 
 ```json
 {
@@ -336,11 +337,22 @@ The two Monte Carlo methods return confidence bands in `bands` object:
     "p50": [{ "date": "2026-04-25", "value": 42.8 }],
     "p90": [{ "date": "2026-04-25", "value": 55.1 }]
   },
+  "cumulative_bands": {
+    "p10": [{ "date": "2026-04-25", "value": 1275.2 }],
+    "p50": [{ "date": "2026-04-25", "value": 1288.5 }],
+    "p90": [{ "date": "2026-04-25", "value": 1301.4 }]
+  },
   "error": null
 }
 ```
 
-Bands show the range of outcomes at different confidence levels:
+`bands` describe each day's marginal net-cash distribution. `cumulative_bands`
+preserve each simulation path before taking percentiles, so month-end P10/P90
+are quantiles of total future cash rather than sums of daily quantiles. The
+cumulative values include the actual anchor, scheduled ledger rows, and enabled
+planned transactions exactly once.
+
+Both band objects use the same confidence levels:
 
 - `p10` = 10th percentile (10% probability of lower outcome)
 - `p50` = median (50th percentile; best-guess center)
@@ -452,15 +464,18 @@ GET /api/aggregations/cashflow-forecast?months=12
 → Compare cumulative net against savings balance
 ```
 
-### 3. Cash Shortfall Detection
+### 3. Negative Net-Flow Periods
 
-"Which months will I run out of money?"
+"Which months have more planned outflows than inflows?"
 
 ```
 GET /api/aggregations/cashflow-forecast?months=6
 → Check for negative net months
-→ Identify which planned transactions are causing shortfall
+→ Identify which planned transactions are causing the negative net flow
 ```
+
+This forecast starts at zero. It does not include an account-balance or savings anchor, so a
+negative result does not mean the user will run out of money.
 
 ### 4. Income Stability Check
 
@@ -474,9 +489,9 @@ GET /api/aggregations/cashflow-forecast?months=12
 
 ### Phase 10: Multi-Method Statistical Forecast Use Cases
 
-#### 1. Rest-of-Month Cash Position
+#### 1. Rest-of-Month Net Cash Flow
 
-"What will my cash balance be at month-end?"
+"What will my net cash flow be at month-end?"
 
 ```
 GET /api/aggregations/cashflow-forecast-methods?include_backtest=false
@@ -484,6 +499,9 @@ GET /api/aggregations/cashflow-forecast-methods?include_backtest=false
 → Multiple methods give range of plausible outcomes
 → Use median (p50) as best-guess; p10/p90 as uncertainty bounds
 ```
+
+The cumulative series is zero-based income minus outflows. It is not an account balance,
+available cash, runway, or an overdraft prediction.
 
 #### 2. Method Comparison & Selection
 
@@ -877,7 +895,7 @@ only, the rolling view shows a continuous date timeline centred on today.
 - Top-level `Tabs` segmented control on the card: `[Current month | Rolling window]`. Local state, default `month`.
 - When `Rolling window` is active, a preset chip row appears: `30 / 60 / 90 / 180` days. Default `90`. Same N applied symmetrically to past actuals and future forecast.
 - Chart X axis switches from day-of-month integer to a date scale, with a vertical dashed reference line at today.
-- Cumulative balance, daily net, MC P25/P75 confidence band, and planned-transaction overlay all work in both views.
+- Cumulative net cash flow, daily net, MC P25/P75 confidence band, and planned-transaction overlay all work in both views.
 - Diagnostics button now available in rolling mode (lazy-loaded: walk-forward backtest runs only when diagnostics sheet opens, avoiding on-load cost).
 
 ### Endpoint

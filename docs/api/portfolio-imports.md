@@ -5,8 +5,8 @@ method: POST, GET, PATCH, DELETE
 path: /api/portfolio/import
 description: CSV import of brokerage/exchange trades into portfolio_transactions; instrument matching with review step; CRUD for saved portfolio parser configs (kind=portfolio)
 date: 2026-06-18
-updated: 2026-08-26
-last_modified: 2026-08-26
+updated: 2026-09-05
+last_modified: 2026-09-05
 tags:
   [
     api,
@@ -62,6 +62,10 @@ All routes are mounted at `/api/portfolio/import` with `importRateLimiter`.
 ### POST /api/portfolio/import/csv/custom
 
 One-shot portfolio CSV import. Runs the full pipeline synchronously. Returns 201 if all rows committed, 202 if review is required.
+
+Every mapping field may also be supplied as a compatibility query parameter. When the same field
+is present in both locations, the multipart body value is authoritative. The streaming upload uses
+the same body-first rule.
 
 **Content-Type:** multipart/form-data
 
@@ -165,6 +169,10 @@ Progress percent mapping:
 
 Portfolio parser configs reuse the `custom_parser_configs` table with `kind = 'portfolio'`. The uniqueness constraint is `(name, kind)`, so a transaction parser and a portfolio parser may share the same name.
 
+The camelCase `config` object may include optional `accountId`, a positive integer naming the
+file-level broker destination. It is stored in the existing JSONB payload. Upload validates that it
+still references an active brokerage, wallet, or crypto-exchange account before staging.
+
 > [!warning] Parser `:id` contract (2026-08-11 — breaking for malformed ids)
 > `PATCH` and `DELETE /api/portfolio/import/parsers/:id` accept **only** a plain base-10 integer in 1..2,147,483,647; anything else is `400 VALIDATION_ERROR` (`"Invalid parser config id"`) before any repository call. Both operations share `registerParserRoutes` with the [[docs/api/imports|transaction parser routes]], which had the same defect: no `validateIdParam`, and a `parseInt` guarded only by `Number.isNaN`, so `DELETE /parsers/22abc` answered **`204` having deleted parser 22**. Full accept set: [[docs/security/input-validation#validateIntParam|Input Validation]].
 
@@ -185,21 +193,20 @@ row count.
         "id": 5,
         "name": "Degiro Trades",
         "config": {
-          "date_format": "%d-%m-%Y",
+          "accountId": 7,
+          "dateFormat": "%d-%m-%Y",
           "separator": ",",
           "encoding": "utf-8",
-          "skip_rows": 0,
-          "default_asset_class": "stock",
-          "default_type": "buy",
-          "type_mapping": {},
-          "column_mapping": {
-            "date": "Date",
-            "symbol": "Symbol",
-            "units": "Quantity",
-            "price": "Price",
-            "amount": "Value",
-            "fees": "Transaction and/or third party costs"
-          }
+          "skipRows": 0,
+          "defaultAssetClass": "stock",
+          "defaultType": "buy",
+          "typeMapping": {},
+          "dateColumn": "Date",
+          "symbolColumn": "Symbol",
+          "unitsColumn": "Quantity",
+          "priceColumn": "Price",
+          "amountColumn": "Value",
+          "feesColumn": "Transaction and/or third party costs"
         },
         "created_at": "2026-06-15T10:00:00Z",
         "updated_at": "2026-06-15T10:00:00Z"
@@ -222,17 +229,21 @@ Create a new saved portfolio parser configuration.
 {
   "name": "Degiro Trades",
   "config": {
-    "date_format": "%d-%m-%Y",
+    "accountId": 7,
+    "dateFormat": "%d-%m-%Y",
     "separator": ",",
-    "default_asset_class": "stock",
-    "column_mapping": {
-      "date": "Date",
-      "symbol": "Symbol",
-      "units": "Quantity"
-    }
+    "defaultAssetClass": "stock",
+    "dateColumn": "Date",
+    "symbolColumn": "Symbol",
+    "unitsColumn": "Quantity"
   }
 }
 ```
+
+The batch preview response includes `account_id`, `account_name`, and `account_valid` alongside the
+existing groups and totals. Clients disclose the destination before commit. When `account_valid` is
+false, the reviewed batch must be repointed to an active portfolio account rather than silently
+committed as Unassigned.
 
 **Responses:**
 

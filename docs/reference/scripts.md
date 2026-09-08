@@ -1,275 +1,128 @@
 ---
-title: Package.json Scripts Reference
+title: Scripts Reference
 type: reference
-status: active
-date: 2026-08-31
-updated: 2026-09-03
-tags:
-  [
-    reference,
-    scripts,
-    npm,
-    bun,
-    build,
-    commands,
-    phase-1,
-    testing,
-    e2e,
-    mutation-testing,
-    quote-backfill,
-    gap-fill,
-    migrations,
-    destructive-ddl,
-    todo-stamps,
-    todo-hygiene,
-  ]
-description: Complete reference of all npm/bun scripts available in the Vision project — root, frontend workspace, and backend workspace.
-aliases:
-  [scripts, npm scripts, bun scripts, commands, build commands, run commands]
+date: 2026-09-08
+tags: [reference, scripts, bun, testing, database, electron, native-runtime]
+description: Authoritative guide to Vision package scripts and their intended use.
+aliases: [scripts reference, package scripts]
+related_code: [[package.json]]
 ---
 
-# Package.json Scripts Reference
+# Scripts Reference
 
-> [!abstract] Overview
-> Vision is a Bun workspace with scripts at three levels: the repo root (`package.json`), the frontend (`apps/frontend/package.json`), and the backend (`apps/node-backend/package.json`). The tables below mirror those three files verbatim. The separate Electron build workspace (`packaging/electron/package.json`) is intentionally out of scope here — its scripts are release-tooling internals invoked only via the root `dist`/`electron:*` wrappers; see [[packaging/release/README.md]].
+Run root scripts with `bun run <name>`. Run workspace scripts with
+`bun run --filter '<workspace>' <name>`.
 
-> [!info] Workspace conventions
->
-> - Root scripts dispatch into workspaces via `bun run --filter '<pkg-name>' <script>`.
-> - Frontend workspace name: `vision-frontend`. Backend: `financial-transaction-manager-node`.
-> - Run a workspace script from anywhere with `bun --cwd apps/frontend run <script>` or the root proxy if present.
+## Install and development
 
-## Root scripts (`package.json`)
+| Script             | Purpose                                                      |
+| ------------------ | ------------------------------------------------------------ |
+| `install:all`      | Install root workspaces                                      |
+| `install:electron` | Install the Electron workspace with its frozen lockfile      |
+| `dev`              | Launch native Electron development                           |
+| `backend`          | Start the backend against the configured database            |
+| `preview`          | Preview the frontend production build                        |
+| `electron:dev`     | Launch Electron with the isolated native development profile |
+| `electron:prod`    | Launch the Electron package entry point                      |
 
-### Install / development
+## Build and release inputs
 
-| Script              | Command                                                              | Description                                                                                                                                                                                                               |
-| ------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `install:all`       | `bun install`                                                        | Install workspace dependencies; the root `prepare` hook also installs the separate Electron package outside CI.                                                                                                           |
-| `prepare`           | hooks setup + conditional frozen Electron install                    | Lifecycle hook — installs Git hooks, then installs `packaging/electron` dependencies outside CI when that directory and Bun are available. The Electron package's own `postinstall` materializes its pinned local binary. |
-| `hooks:setup`       | `node scripts/setup-git-hooks.js`                                    | Manually (re)install the git hooks (same script as `prepare`).                                                                                                                                                            |
-| `install:electron`  | `bun install --frozen-lockfile --cwd packaging/electron`             | Install the separate Electron dependency tree and run its local binary installer. CI and release use their explicit `--ignore-scripts` variants instead.                                                                  |
-| `dev`               | `node packaging/electron/scripts/native-development.js`              | Start Vision's private PostgreSQL cluster, watched Bun backend, and Vite on loopback. Requires the prepared native payload and uses the separate `Vision Development` application-data directory.                         |
-| `demo:reset-native` | `node packaging/electron/scripts/native-demo-cli.js reset --execute` | Write an isolated reset request for Vision Demo. The next Demo launch verifies and atomically activates the canonical synthetic seed; real Vision data is never addressed.                                                |
-| `backend`           | `bun run --filter '…-node' start`                                    | Start the backend in production mode (no watcher).                                                                                                                                                                        |
-| `update`            | `bun update`                                                         | Refresh dependency graph to the latest allowed versions.                                                                                                                                                                  |
-| `version:bump`      | `node scripts/version-bump.js <x.y.z>`                               | Validate a canonical release version and atomically update the root, frontend, and Electron manifests with rollback on failure. Refuses prefixes, prereleases, leading zeros, and pre-existing manifest drift.            |
+| Script           | Purpose                                                                   |
+| ---------------- | ------------------------------------------------------------------------- |
+| `build`          | Generate locales and build the production frontend                        |
+| `build:dev`      | Build the development frontend                                            |
+| `dist`           | Build the frontend and Electron distribution                              |
+| `version:bump`   | Update versioned manifests atomically                                     |
+| `native:prepare` | Prepare the pinned PostgreSQL, migration, Bun, and report-browser payload |
 
-### Build
+## Static and generated checks
 
-| Script           | Command                                                                   | Description                                                                                                                                                                                                                                                                       |
-| ---------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `build`          | `bun run --filter 'vision-frontend' build`                                | Production frontend build; the frontend workspace script generates locales exactly once before Vite.                                                                                                                                                                              |
-| `build:dev`      | `bun run --filter 'vision-frontend' build:dev`                            | Frontend build in development mode (no minification).                                                                                                                                                                                                                             |
-| `dist`           | `npm run build && cd packaging/electron && npm run dist`                  | Full Electron desktop build. Output is **unsigned / ad-hoc; no notarization** (`packaging/electron/package.json` sets `identity: null`, `hardenedRuntime: false`, and CI sets `CSC_IDENTITY_AUTO_DISCOVERY=false`) — see [[packaging/release/README.md]] for the release posture. |
-| `preview`        | `bun run --filter 'vision-frontend' preview`                              | Serve the built frontend bundle locally for smoke-testing.                                                                                                                                                                                                                        |
-| `generate:types` | `openapi-typescript openapi.yaml -o apps/frontend/src/types/generated.ts` | Regenerate the TypeScript types from `openapi.yaml` (ADR-031).                                                                                                                                                                                                                    |
+| Script                    | Purpose                                            |
+| ------------------------- | -------------------------------------------------- |
+| `lint`                    | Lint the frontend                                  |
+| `lint:backend`            | Lint the backend                                   |
+| `typecheck`               | Type-check the frontend                            |
+| `validate-locales`        | Validate source/generated locale parity            |
+| `generate-locales`        | Generate frontend and Electron locale outputs      |
+| `generate:types`          | Generate frontend OpenAPI types                    |
+| `check-endpoint-matrix`   | Verify the documented operation count              |
+| `check-test-only-exports` | Reject production imports of test-only helpers     |
+| `todo:list`               | Print the current TODO ledger                      |
+| `todo:check`              | Verify TODO counts and ledger integrity            |
+| `db:check-destructive`    | Reject unmarked destructive migration operations   |
+| `db:check-heads`          | Require one Alembic head                           |
+| `check`                   | Run the repository aggregate static and test gates |
 
-### Locales
+## Tests
 
-| Script                       | Command                                            | Description                                                                                                                                                                                                                                                                                                        |
-| ---------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `generate-locales`           | `node scripts/generate-locales.js`                 | Build typed `en.ts` / `nl.ts` from `i18n/source/*.json`.                                                                                                                                                                                                                                                           |
-| `generate-locales-if-not-ci` | conditional `node scripts/generate-locales.js`     | Skipped automatically inside CI (`$CI` set).                                                                                                                                                                                                                                                                       |
-| `sanitize-locales`           | `node scripts/generate-locales.js --sanitize-only` | Normalise quotes / whitespace in existing locale bundles.                                                                                                                                                                                                                                                          |
-| `sync-nl`                    | `node scripts/sync-nl-with-en.js`                  | Add any keys present in `en.json` but missing in `nl.json` (placeholder Dutch).                                                                                                                                                                                                                                    |
-| `validate-locales`           | `node scripts/validate-locales.js`                 | Parity, placeholder, type, source key-usage, unused-key, and generated-output drift checks across `en.json` ↔ `nl.json` and application sources; fails CI on any error. Use `--list-unused` to print only dead keys. See [[docs/i18n/translations#validation--validate-locales-checks\|i18n — Validation checks]]. |
+| Script                        | Purpose                                                          |
+| ----------------------------- | ---------------------------------------------------------------- |
+| `test`                        | Backend Vitest suite                                             |
+| `test:frontend`               | Frontend Vitest suite                                            |
+| `test:electron`               | Electron, backup, runtime, and packaging Node tests              |
+| `test:scripts`                | Repository script tests                                          |
+| `test:e2e`                    | Playwright end-to-end suite                                      |
+| `test:e2e:visual`             | Manual visual snapshot suite                                     |
+| `test:db`                     | Backend suite against a disposable native PostgreSQL 18 cluster  |
+| `native:db-smoke`             | Native migration, dump/restore, and attachment smoke             |
+| `native:isolated-smoke`       | Full smoke with a disposable native cluster                      |
+| `native:smoke`                | Native backend and health smoke                                  |
+| `calibrate:category-outliers` | Privacy-preserving threshold backtest against a local Vision API |
 
-### Linting & type-checking
+`scripts/with-test-db.sh` uses caller-supplied `TEST_DATABASE_URL` when present. Otherwise it
+creates a private native PostgreSQL 18 cluster, enables required extensions, migrates it, runs the
+requested test task, and removes it on exit. It never uses the user's Vision database.
 
-| Script                    | Command                                        | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| ------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `lint`                    | `bun run --filter 'vision-frontend' lint`      | ESLint on the frontend workspace.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `lint:backend`            | `bun run --filter '…-node' lint`               | ESLint on the backend workspace.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `typecheck`               | `bun run --filter 'vision-frontend' typecheck` | TypeScript type-check of the frontend (runs: `tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit`). No emit; fails on type errors only.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `check-endpoint-matrix`   | `node scripts/check-endpoint-matrix.js`        | Guards `docs/reference/api-endpoint-matrix.md` against drift from `openapi.yaml`: counts HTTP operations in the spec and compares to the `api_operation_count` frontmatter value; exits 1 on mismatch (caught in CI).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `check-compose-sync`      | `node scripts/check-compose-sync.js`           | Guards `packaging/electron/resources/docker-compose.yml` against drifting from the root `docker-compose.yml` on the compose project `name:`, the database image and platform, and the top-level named `volumes:`. It also treats `config/stack-identity.json` as the canonical port/database identity and checks both Compose files, Electron's Docker and native port consumers, generated database URLs, the root first-init application role, and backend development defaults against it. The two database roles must remain distinct. These values decide which PostgreSQL runtime starts against which user-data volume; mismatched volumes caused the v1.0.2 data-loss bug, while a platform mismatch can select the broken ARM64 PostgreSQL entrypoint. The packaged Compose file stays static for compatibility with older Compose versions; parity is enforced mechanically in CI, release verification, and `.githooks/pre-push`. Node stdlib only, so it runs with nothing but a checkout. Add `--self-test` to exercise the parser and drift fixtures. See [[docs/adr/051-docker-compose-sync-named-volumes\|ADR-051]]. |
-| `check-test-only-exports` | `node scripts/check-test-only-exports.js`      | Parses backend source and test modules, including namespace and dynamic imports, and rejects named exports consumed only by tests unless their exported name starts with `__`. A closed allowlist preserves intentional public and default-object APIs; a default-object property alone does not exempt a separate test-only named export.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `todo:list`               | `python3 scripts/todo-report.py`               | Lists only unchecked items in `TODO.md`'s authoritative `## Findings` queue. The concise output includes domain, priority, derived work state, source line, and stable title. Use `--json` for coordinators and `--state` or `--priority` to filter without parsing the full backlog.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `todo:check`              | `python3 scripts/todo-report.py --check`       | Enforces actionable-queue hygiene: stable checkbox headings, priority and source metadata, unique open titles, and no open findings stranded outside `## Findings`. Python standard library only; included in `bun run check`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `check-todo-stamps`       | `python3 scripts/check-todo-stamps.py`         | Optional legacy audit for the inline commit stamps already present in `TODO.md`. New completions use the checked box and merged pull-request history without a stamp, so this command is no longer part of `bun run check`, CI, or `.githooks/pre-push`. Python stdlib only and fully offline unless `--verify-open` is requested.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+## Database
 
-#### How the legacy `check-todo-stamps` audit classifies a stamp
+| Script               | Purpose                                                             |
+| -------------------- | ------------------------------------------------------------------- |
+| `db:migrate`         | Run the guarded migration command                                   |
+| `db:upgrade`         | Upgrade to the current Alembic head                                 |
+| `db:downgrade`       | Explicit downgrade through the guarded runner                       |
+| `db:current`         | Show current revision                                               |
+| `db:history`         | Show revision history                                               |
+| `db:stamp`           | Stamp through the guarded runner                                    |
+| `db:revision`        | Create an autogenerated revision                                    |
+| `db:index-stats`     | Inspect index statistics                                            |
+| `db:precision-drift` | Check stored precision drift                                        |
+| `db:check`           | Check Alembic heads and migration fidelity in a disposable database |
 
-Historical entries often contain a SHA copied from a feature branch. That SHA can become unreachable
-when the branch squash-merges. This manual checker remains available when maintaining those legacy
-annotations, but normal TODO batches neither create nor validate stamp tokens.
+## Locales and maintenance
 
-| Verdict   | Meaning                                                                                                                            | Effect                                                            |
-| --------- | ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `OK`      | The SHA is reachable from the base branch.                                                                                         | —                                                                 |
-| `ROT`     | Not on the base branch, but its `(#NN)` **has** a squash-merge commit there — the branch SHA died in that squash.                  | **exit 1**; the error names the exact merge commit to re-point at |
-| `OPEN`    | Not on the base branch and its `(#NN)` has **no** merge commit there, so the historical annotation points at an open pull request. | reported, never fails                                             |
-| `PENDING` | Not yet on the base branch, no `(#NN)`, but reachable from `HEAD`.                                                                 | warning; fatal under `--strict`                                   |
-| `ORPHAN`  | On neither the base branch nor `HEAD`, and no `(#NN)` to recover it from.                                                          | **exit 1**                                                        |
+`sync-nl` copies missing English source keys into Dutch source as an explicit starting point;
+translations still require review. `sanitize-locales` repairs generated-compatible locale shape.
+`quotes:densify` runs the asset-history densification maintenance task.
 
-> [!info] No network, no token
-> "Has PR #NN landed?" is answered from the base branch itself — a landed PR leaves a squash commit whose **subject line** ends in `(#NN)` (matching the subject matters: commit _bodies_ cite PR numbers too, so `git log --grep` over-matches). That offline proxy is what separates `ROT` from `OPEN` without a token or API call. `--verify-open` optionally upgrades the proxy to a GitHub API confirmation and **degrades gracefully** — with no network, no token, or any API error it prints a notice, keeps the offline verdicts, and leaves the exit code unchanged.
+`calibrate:category-outliers` requires `VISION_CALIBRATION_API_BASE_URL` pointing to a loopback-only
+running Vision instance. It discards category labels, recipients, accounts, memos, and comments,
+then reports only aggregate sensitivity and timing counts. It never writes to the database.
 
-> [!warning] Shallow clones
-> Ancestry answers on a shallow clone are _false_, not merely incomplete (see the ⚠️ at the top of `TODO.md`: the 2026-08-05 sweep was corrupted by exactly this). On a shallow repository the checker prints a loud warning and **exits 0** rather than emit invented verdicts. `--require-full-history` turns that into a hard failure for an intentional full-history legacy audit.
-
-Flags: `--list` (inventory every token, always exit 0) · `--strict` (`PENDING` becomes fatal) · `--self-test` (fixture suite over a fake git resolver) · `--require-full-history` · `--verify-open` · `--file <path>` · `--base <ref>`.
-
-### Testing
-
-| Script            | Command                                              | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| ----------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `test`            | `bun run --filter '…-node' test`                     | Backend unit + integration tests (Vitest). Without `TEST_DATABASE_URL` the DB-backed suites self-skip and the run prints a loud INCOMPLETE RUN banner after the summary — see [[docs/testing/testing#the-skip-banner\|the skip banner]].                                                                                                                                                                                                                                                               |
-| `test:scripts`    | `node --test scripts/tests/*.test.js`                | Repository-script unit and workflow-wiring contract tests. The required `verify-generated` CI job runs this command, including the fail-closed PR-cancellation policy contract.                                                                                                                                                                                                                                                                                                                        |
-| `test:db`         | `scripts/with-test-db.sh`                            | Backend suite against a private temporary PostgreSQL 18 cluster that is migrated to head and removed on exit. Installed native tools are preferred and do not require a running host service; Docker is the optional fallback and matches CI. Arguments are forwarded to Vitest. Requires the Alembic toolchain unless `TEST_DATABASE_URL` points to an already-migrated scratch database. Provider, binary path, port, and retention can be controlled with the documented `VISION_TEST_*` variables. |
-| `test:frontend`   | `bun run --filter 'vision-frontend' test`            | Frontend unit + integration tests (Vitest + RTL + MSW).                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `test:electron`   | `node --test packaging/electron/**/*.test.js`        | Electron shell, runtime-provider, native PostgreSQL, backup/restore, updater, packaging, and deterministic Demo seed contracts. The committed script expands explicit directories rather than relying on recursive shell glob support.                                                                                                                                                                                                                                                                 |
-| `test:all`        | `concurrently … backend test … frontend test`        | Run both test suites in parallel.                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `test:watch`      | `bun run --filter '…-node' test:watch`               | Backend tests in watch mode.                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `test:coverage`   | `bun run --filter 'vision-frontend' test:coverage`   | Frontend test coverage (V8).                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `test:e2e`        | `bun run --filter 'vision-frontend' test:e2e`        | Discover and run every non-visual Playwright E2E spec through the `chromium` project.                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `test:e2e:visual` | `bun run --filter 'vision-frontend' test:e2e:visual` | Run the manual `visual-chromium` project and add visual regression baselines that are missing.                                                                                                                                                                                                                                                                                                                                                                                                         |
-
-### Database (Alembic)
-
-Alembic is the single source of schema DDL ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]). The node-backend shells out to `alembic upgrade head` on startup via `src/database/migrate.js`.
-
-Every script that _writes_ the alembic version table (`db:migrate`/`db:upgrade`/`db:downgrade`/`db:stamp`, and the backend workspace's `db:migrate`/`db:migrate:down`/`db:reset`) routes through `apps/node-backend/scripts/db-migrate.js`, which runs the boot-path `stampBaselineIfLegacy()` preflight first. A bare `alembic` invocation auto-creates `alembic_version.version_num` as `VARCHAR(32)` — too narrow for this chain's revision ids — so a fresh database dies on revision 3 with `value too long for type character varying(32)`; the preflight creates/widens the column at `VARCHAR(64)`. The wrapper reads `DATABASE_URL` (falling back to `config/.env.local`, like `alembic/env.py`) and resolves a runnable migration tool from `ALEMBIC_BIN`, a tool beside `VISION_PYTHON_BIN`, `.venv-native-build`, the prepared standalone native runtime, a usable repository `venv`, or `PATH`, in that order. It probes candidates so a stale container-created virtual environment is ignored. An optional trailing target is supported, for example `bun run db:downgrade base` or `bun run db:stamp <revision>`. Read-only and authoring scripts (`db:current`, `db:history`, `db:revision`, and the backend workspace's `db:new-migration`) use the same runtime-discovery wrapper without running the boot-time database preflight.
-
-| Script                 | Command                                                      | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| ---------------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `db:migrate`           | `bun run apps/node-backend/scripts/db-migrate.js`            | Apply all pending migrations via the boot-path runner (same as `db:upgrade`). Used by CI and `scripts/with-test-db.sh`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `db:upgrade`           | `bun run … db-migrate.js upgrade`                            | Apply pending migrations (default target `head`; optional trailing target revision).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `db:downgrade`         | `bun run … db-migrate.js downgrade`                          | Destructive rollback for disposable migration tests only. Never use it as a live-data rollback procedure.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `db:current`           | Alembic runtime-discovery wrapper `current`                  | Show the current migration version.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `db:history`           | Alembic runtime-discovery wrapper `history`                  | Show migration history.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `db:stamp`             | `bun run … db-migrate.js stamp`                              | Expert recovery command that changes version metadata without applying migrations. Never use it to bypass a live failure.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `db:revision`          | Alembic runtime-discovery wrapper `revision --autogenerate`  | Create a new migration.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `db:check-heads`       | `python3 scripts/check-alembic-heads.py`                     | Parse the migration graph without a database and require exactly one known head.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `db:check`             | graph check + disposable migration-fidelity database         | Upgrade a disposable database, downgrade one revision, and upgrade back to head.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `db:index-stats`       | `bun run apps/node-backend/scripts/index-stats.js`           | Dump per-index usage stats from `pg_stat_user_indexes`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `db:check-destructive` | `python3 scripts/check-destructive-migrations.py`            | Static scan of `alembic/versions/` (does **not** touch the database): fails on destructive DDL in `upgrade()` — `DROP TABLE`/`DROP COLUMN`, an unreplaced view/trigger/function/type drop, or any `ALTER COLUMN … TYPE` — that carries no `# destructive-ok: <reason>` marker. Migrations auto-apply on every boot, so this is the guard against repeating the 0055 premature-drop crash. Add `--self-test` to exercise the checker's own fixtures, `--list` to inventory findings without failing. Enforced in CI by `verify-destructive-migrations`. See [[docs/guides/migrations#destructive-ddl-and-the-destructive-ok-marker\|Migration Guide]]. |
-| `db:precision-drift`   | `bun run apps/node-backend/scripts/check-precision-drift.js` | Static source scan (does **not** touch the database): flags `transactions ↔ *_raw_transactions` joins doing rounding-sensitive `amount` arithmetic, so a future NUMERIC widening has evidence. Prints nothing today.                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `quotes:densify`       | `bun run apps/node-backend/scripts/densify-asset-history.js` | One-time gap-fill: runs `backfillHoldingGaps` across all investments to heal sparse `asset_price_history`, then recomputes portfolio snapshots if new rows were written. Safe to re-run (idempotent). Run once after upgrading from a version where Binance history was capped at 365 days. See [[docs/adr/065-daily-gap-fill-dense-asset-history\|ADR-065]].                                                                                                                                                                                                                                                                                         |
-
-### Docker
-
-| Script               | Command                                                                                                                                                             | Description                                                                                                                                                                                                                                                                                                                                                                                                          |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `docker:dev`         | `npm run generate-locales-if-not-ci && docker compose -f docker-compose.yml -f docker-compose.dev.yml up`                                                           | Start the dev stack (Postgres + app).                                                                                                                                                                                                                                                                                                                                                                                |
-| `docker:dev:down`    | `docker compose … down`                                                                                                                                             | Stop the dev stack.                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `docker:dev:rebuild` | `npm run generate-locales-if-not-ci && docker pull --platform linux/amd64 postgres:18-alpine@sha256:… && docker run … postgres --version && … down && … up --build` | Pull and verify the reviewed amd64 Postgres digest in a disposable container, then rebuild the Docker app image and start the dev stack. Source and packaged Compose use the same multi-platform digest; PostgreSQL minor/security updates therefore arrive through a reviewed source release instead of a mutable tag. The command stops before shutdown if the image test fails; named data volumes are preserved. |
-| `docker:clean`       | `npm run generate-locales-if-not-ci && docker compose -f docker-compose.yml -f docker-compose.clean.yml up --build`                                                 | Start a first-run / onboarding stack.                                                                                                                                                                                                                                                                                                                                                                                |
-| `docker:clean:down`  | `docker compose … down`                                                                                                                                             | Stop the clean stack.                                                                                                                                                                                                                                                                                                                                                                                                |
-| `docker:clean:reset` | `npm run generate-locales-if-not-ci && … down -v && … up --build`                                                                                                   | Destroy and recreate only the dedicated synthetic clean volume. Never use it for a real or shared project.                                                                                                                                                                                                                                                                                                           |
-| `docker:logs`        | `docker compose … logs -f app`                                                                                                                                      | Tail backend logs.                                                                                                                                                                                                                                                                                                                                                                                                   |
-
-### Electron
-
-The wrappers spawn Electron from `packaging/electron/`. Native is the normal macOS provider; Docker
-is explicit. A normal root `bun install` prepares this separate package and its pinned Electron
-binary; run `bun run install:electron` to repair or refresh it explicitly. Run
-`bun run native:prepare` once before native source development and after a pinned runtime changes.
-
-| Script                         | Description                                                                                                                                                                                                                                                                                                                                 |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `electron:dev`                 | Run Electron with native PostgreSQL 18 and the Bun backend.                                                                                                                                                                                                                                                                                 |
-| `electron:prod`                | Run Electron using the persisted runtime marker, defaulting to native.                                                                                                                                                                                                                                                                      |
-| `electron:docker`              | Run Electron against the optional development Compose stack.                                                                                                                                                                                                                                                                                |
-| `electron:clean`               | Run Electron against the destructive synthetic clean Compose stack. Never use with real data.                                                                                                                                                                                                                                               |
-| `native:prepare`               | Assemble the PostgreSQL 18.6, standalone migration, and Chrome Headless Shell services used by native source development. The package builder assembles the complete backend/frontend payload.                                                                                                                                              |
-| `native:preflight`             | Validate the cutover backup path, bundled PostgreSQL, private native cluster, and Docker source without switching writers.                                                                                                                                                                                                                  |
-| `native:cutover`               | Run the explicit, verified Docker-to-native importer; requires `--execute`.                                                                                                                                                                                                                                                                 |
-| `native:handoff`               | Stop an ownership-verified source-checkout validation backend after a completed cutover while keeping native PostgreSQL ready for the packaged application. Current cutovers perform this automatically.                                                                                                                                    |
-| `native:rollback-stale-docker` | Select the preserved stale Docker source only with explicit data-loss acceptance.                                                                                                                                                                                                                                                           |
-| `native:db-smoke`              | Run listener-free native database, dump/restore, and attachment checks.                                                                                                                                                                                                                                                                     |
-| `native:isolated-smoke`        | Run the full native smoke against a disposable PostgreSQL 18 cluster on random loopback ports, including a gzip decode of the packaged frontend entry. Set `VISION_NATIVE_PAYLOAD_ROOT` to an absolute packaged `native-runtime` path to require its manifest and verify its compiled backend, frontend, database, migrations, and browser. |
-| `native:smoke`                 | Run the full native backend, frontend-asset, and loopback health smoke test. Set `VISION_NATIVE_PAYLOAD_ROOT` to an absolute packaged `native-runtime` path when verifying a packaged app.                                                                                                                                                  |
-
-The Electron workspace also exposes `dist:demo`. It prepares the normal native payload, creates a
-disposable migrated PostgreSQL database, applies and verifies the deterministic data-only Demo
-generator, packages its custom-format dump and manifest, and builds
-`dist-demo/mac-arm64/Vision Demo.app`. `./install-demo.sh` runs that path and installs the result.
-Both `install.sh` and `install-demo.sh` build the frontend in a fresh private temporary directory,
-export that path as `VISION_FRONTEND_DIST`, and remove the exact staging directory on exit. This
-keeps application packages independent of the repository's shared `dist` directory.
-
-## Frontend workspace scripts (`apps/frontend/package.json`)
-
-| Script                      | Command                                                                | Description                                                                                                                                             |
-| --------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `dev`                       | `vite`                                                                 | Vite dev server with HMR (port 5174).                                                                                                                   |
-| `build`                     | `node ../../scripts/generate-locales.js && vite build`                 | Locale codegen + Vite production build. The root `build` delegates here instead of generating locales a second time.                                    |
-| `build:dev`                 | `vite build --mode development`                                        | Build without minification, useful for debugging.                                                                                                       |
-| `preview`                   | `vite preview`                                                         | Serve the production build at a local port.                                                                                                             |
-| `lint`                      | `eslint .`                                                             | Frontend ESLint.                                                                                                                                        |
-| `test`                      | `vitest run`                                                           | Vitest one-shot.                                                                                                                                        |
-| `test:coverage`             | `vitest run --coverage`                                                | Vitest with V8 coverage.                                                                                                                                |
-| `test:e2e`                  | `playwright test --project=chromium`                                   | Discover and run every non-visual Playwright real-browser spec.                                                                                         |
-| `test:e2e:visual`           | `playwright test --project=visual-chromium --update-snapshots=missing` | Run `visual.spec.ts` and add missing local baselines (does not overwrite existing). This platform-sensitive suite is manual, not scheduled in Linux CI. |
-| `test:e2e:update-snapshots` | `playwright test --project=visual-chromium --update-snapshots`         | Overwrite all local visual snapshots after an intentional UI change.                                                                                    |
-| `test:mutation`             | `stryker run`                                                          | Stryker mutation testing on scoped modules (currency + API client). Opt-in; not in CI.                                                                  |
-
-## Backend workspace scripts (`apps/node-backend/package.json`)
-
-| Script             | Command                                   | Description                                                                                       |
-| ------------------ | ----------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `start`            | `bun run src/main.js`                     | Production-mode backend (no watcher).                                                             |
-| `dev`              | `VISION_DEV=true bun --watch src/main.js` | Backend dev server with watch reload (port 3002).                                                 |
-| `test`             | `bun vitest run`                          | Vitest one-shot.                                                                                  |
-| `test:watch`       | `bun vitest`                              | Vitest watch mode.                                                                                |
-| `lint`             | `eslint src/`                             | Backend ESLint.                                                                                   |
-| `lint:fix`         | `eslint src/ --fix`                       | Backend ESLint with auto-fix.                                                                     |
-| `db:migrate`       | `bun run scripts/db-migrate.js`           | Apply all pending migrations — same wrapper (and behavior) as the root `db:migrate`/`db:upgrade`. |
-| `db:migrate:down`  | `bun run scripts/db-migrate.js downgrade` | Roll back the latest migration — same wrapper as the root `db:downgrade`.                         |
-| `db:new-migration` | runtime-discovery wrapper `revision -m`   | Create a new empty revision without autogeneration.                                               |
-| `db:reset`         | `bun run scripts/db-migrate.js reset`     | Wipe (`downgrade base`) and reapply the full chain to `head`.                                     |
-
-## Quick reference by task
-
-### Daily development
+## Common sequences
 
 ```bash
-bun run docker:dev    # Postgres + backend in containers
-bun run dev           # Optional: frontend + backend dev servers without docker
+# Daily native development
+bun run install:electron
+bun run native:prepare
+bun run dev
+
+# Focused verification
+bun run lint
+bun run lint:backend
+bun run typecheck
+bun run test
+bun run test:frontend
+bun run test:electron
+
+# Desktop release candidate
+bun run check
+bun run native:isolated-smoke
+bun run dist
 ```
-
-### Before committing
-
-```bash
-bun run lint && bun run lint:backend
-bun run test:all
-bun run validate-locales
-```
-
-Run `bun run check-todo-stamps` only when intentionally maintaining legacy inline SHA annotations.
-Use `bun run todo:list -- --json` when selecting or delegating backlog findings, and run
-`bun run todo:check` after editing the actionable queue.
-
-### Adding a migration
-
-```bash
-bun run db:revision -- "describe_change"
-# edit alembic/versions/<n>_describe_change.py
-bun run db:check-destructive   # CI gate: any DROP / retype needs a `destructive-ok:` marker
-bun run db:upgrade
-```
-
-### Building a desktop release
-
-```bash
-bun run dist          # Builds frontend + packs Electron app via packaging/electron
-./install-demo.sh     # Builds and installs native Vision Demo with synthetic data
-```
-
-### Security & dependency hygiene
-
-```bash
-bun audit             # Vulnerability scan
-bun update            # Refresh dependency graph
-```
-
-For transitive vulnerability remediation patterns, see [[docs/security/dependency-security-remediation-2026-04|Dependency Security Remediation (2026-04)]].
 
 ## Related
 
-- [[docs/guides/setup\|Setup Guide]] - Full setup instructions
-- [[docs/guides/migrations\|Migration Guide]] - Database migration management
-- [[docs/guides/deployment\|Deployment Guide]] - Production deployment
-- [[AGENTS.md]] - Coding standards and build commands
+- [[docs/guides/setup|Setup Guide]]
+- [[docs/guides/cicd-pipelines|CI/CD Pipelines]]
+- [[docs/guides/migrations|Database Migrations]]
+- [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]]

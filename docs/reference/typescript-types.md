@@ -251,7 +251,7 @@ type PortfolioTxnType =
 
 ```typescript
 type RecurrenceInterval =
-  "daily" | "weekly" | "bi-weekly" | "monthly" | "quarterly" | "yearly";
+  "daily" | "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly";
 ```
 
 ### InvestmentSummary

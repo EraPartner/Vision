@@ -55,13 +55,12 @@ cloud "External Services" as External {
 
 cloud "Build & Distribution" as DevToolsCloud {
   node "Native runtime provider\n(PostgreSQL 18 + Bun lifecycle)" as NativeRuntime
-  node "Optional Docker Compose\n(postgres + app)" as Docker
   node "Bun (runtime + workspaces)" as Bun
   node "Electron (packaging/electron)" as Electron
   node "electron-builder + notarisation" as Builder
   node "ToDesktop CDN" as ToDesktop
   node "Vitest 4 + property tests" as Vitest
-  node "Trivy CI image scan" as Trivy
+  node "Trivy filesystem scan" as Trivy
   node "ESLint / openapi-typescript" as Lint
 }
 
@@ -75,8 +74,6 @@ package "Desktop Runtime" {
   Electron --> NativeRuntime : packaged default
   NativeRuntime --> Express : loopback backend
   NativeRuntime --> DB : owner/app role connections
-  Docker --> Express : explicit provider
-  Docker --> DB : explicit provider
 }
 
 package "Server Components" {
@@ -131,19 +128,13 @@ note right of DevTools
   (dist/ has zero devtools references).
 end note
 
-note right of Docker
-  Hardened (ADR-039): non-root, cap_drop ALL,
-  read-only rootfs, no-new-privileges,
-  mem_limit 4g / cpus 4.0, Trivy on every push.
-end note
-
 note right of NativeRuntime
   Vision ships PostgreSQL 18.6, a migration executable,
   and Chrome Headless Shell. Electron manages the private,
   loopback-only PostgreSQL cluster and Bun backend lifecycle,
   logs, readiness, updates, and durable runtime marker.
-  Existing Docker data uses verified custom-dump and
-  attachment staging before native activation (ADR-113).
+  A saved legacy runtime marker fails closed and directs
+  the user to the last migration-capable release (ADR-133).
   Vision Demo reuses this provider with an isolated runtime,
   port, and deterministic seed activated atomically (ADR-114).
 end note

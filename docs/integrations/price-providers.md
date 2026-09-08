@@ -3,8 +3,8 @@ title: Integration - Price Providers
 type: integration
 description: Live and historical price feeds for stocks, crypto, and other investments. Startup price refresh is skipped when the host is offline (2026-05-03).
 date: 2026-04-21
-last_modified: 2026-08-27
-updated: 2026-08-27
+last_modified: 2026-09-05
+updated: 2026-09-05
 tags:
   [
     integration,
@@ -123,7 +123,7 @@ Price providers fetch live and historical market prices for investments, support
 
 Custom provider URLs (`price_provider_url`, `price_provider_latest_url`, `price_provider_history_url`) are validated at two points to prevent SSRF:
 
-1. **Write time** (`investmentController.js`): scheme and IP-literal check (no DNS resolution) — rejects non-http(s) schemes and IP-literal private/loopback/link-local addresses with a 400 before the row is stored.
+1. **Write time** (`investmentService.js`): scheme and IP-literal check (no DNS resolution) — rejects non-http(s) schemes and IP-literal private/loopback/link-local addresses with a 400 before the row is stored.
 2. **Fetch time** (`priceProviderRegistry.js`): full DNS resolution via `assertPublicHttpUrl` (with `resolveDns: true`), repeated for every redirect hop. Responses are capped at 5 MB.
 
 URLs that target private networks (RFC 1918, loopback, CGNAT `100.64/10`, cloud metadata `169.254.169.254`, IPv6 ULA/link-local) are blocked at both boundaries. See [[docs/security/input-validation#outbound-request-guard-ssrf-2026-05-29|Input Validation — SSRF guard]] for the full range list and module reference.

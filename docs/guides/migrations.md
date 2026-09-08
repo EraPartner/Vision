@@ -25,7 +25,7 @@ related_code:
     "alembic/manual/",
     "alembic/script.py.mako",
     "config/alembic.ini",
-    "docker-entrypoint.sh",
+    "packaging/electron/runtime/native.js",
     "scripts/check-destructive-migrations.py",
     "apps/node-backend/src/database/migrate.js",
   ]
@@ -102,7 +102,7 @@ repository's `db-migrations` skill for schema work.
 
 1. **Always provide a downgrade** — Every migration should be reversible
 2. **Test both directions** — Run `upgrade` and `downgrade` locally before committing
-3. **Assume it runs unattended** — native and Docker startup call the guarded migration runner, so
+3. **Assume it runs unattended** — native startup calls the guarded migration runner, so
    anything in `alembic/versions/` applies on the next application start. Never write a migration
    whose safety depends on an operator choosing a separate time to run it.
 4. **Use idempotent operations** — Where possible, check if changes already exist before applying
@@ -113,7 +113,7 @@ repository's `db-migrations` skill for schema work.
 ## Destructive DDL and the `destructive-ok` marker
 
 > [!danger] Migrations in `alembic/versions/` auto-apply on boot
-> Native and Docker startup run `apps/node-backend/scripts/db-migrate.js`, which performs the
+> Native startup runs `apps/node-backend/scripts/db-migrate.js`, which performs the
 > `VARCHAR(64)` preflight and then upgrades to head. A migration therefore reaches every
 > installation on its next start. There is no separate operator-controlled soak window.
 
@@ -151,7 +151,8 @@ A destructive change whose safety depends on code being deployed first goes in `
 
 ### What is flagged
 
-The checker is `scripts/check-destructive-migrations.py`, enforced by the `verify-destructive-migrations` CI job (parallel to `verify-compose-sync`) and runnable locally with `bun run db:check-destructive`.
+The checker is `scripts/check-destructive-migrations.py`, enforced by the
+`verify-destructive-migrations` CI job and runnable locally with `bun run db:check-destructive`.
 
 | Flagged                                                                                                                                                                                 | Not flagged                                                                     |
 | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
@@ -246,21 +247,15 @@ with op.get_context().autocommit_block():
 bun run db:upgrade
 ```
 
-### Production (Docker)
+### Production
 
-Migrations run automatically on container startup:
-
-1. `docker-entrypoint.sh` starts the Bun backend.
-2. The backend waits for PostgreSQL.
-3. `apps/node-backend/scripts/db-migrate.js` performs the version-table preflight and upgrades to
-   head before the application accepts requests.
+Native Electron runs migrations automatically before the backend accepts requests. A custom source
+deployment must run the same guarded command before starting the backend:
 
 **Note:** As of Phase 1 (2026-04-21), `schemaInit.js` has been removed. Alembic is now the single source of schema DDL ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]).
 
-To run manually in production:
-
 ```bash
-docker compose exec app bun run apps/node-backend/scripts/db-migrate.js upgrade
+bun run db:upgrade
 ```
 
 ### Checking Status

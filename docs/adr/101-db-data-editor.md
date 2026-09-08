@@ -11,6 +11,7 @@ aliases: [db data editor, raw table editor, admin sql data grid]
 # ADR-101: Admin DB data editor (raw table view/edit)
 
 ## Status
+
 Accepted — 2026-06-18.
 
 ## Context
@@ -24,7 +25,7 @@ a table, then browse/filter/sort/edit with commits going back to the DB — remo
 The hazard is that a raw data editor **bypasses the app's domain logic by design**. Vision has no central
 server-side validation layer (no Zod/Joi on the backend); invariants live partly in PostgreSQL DDL
 (~445 FK / CHECK / NOT NULL / UNIQUE constraints) and partly in scattered repository/service code. A raw
-write therefore still honors every *structural* constraint Postgres enforces, but skips app-level rules,
+write therefore still honors every _structural_ constraint Postgres enforces, but skips app-level rules,
 computed/derived values, cascade side-effects, and materialized-view refreshes.
 
 ## Decision
@@ -43,18 +44,19 @@ CSRF guard, rate limiter; see [[docs/adr/026-unified-api-response-envelope|ADR-0
   against `information_schema.columns`. Identifiers are double-quoted, never interpolated raw. Values are
   always parameterized — reusing the pattern already proven by the VACUUM endpoint.
 - **Read-only reads.** Browse/filter/sort run inside a `BEGIN; SET TRANSACTION READ ONLY; SET LOCAL
-  statement_timeout` block. Filtering is done exclusively through the structured, parameterized
+statement_timeout` block. Filtering is done exclusively through the structured, parameterized
   `filters[]` path (column allowlisted, operator whitelisted, value bound as a parameter).
 
   > **Addendum (2026-07-10): raw-WHERE escape hatch removed.** The original design offered a raw
   > `where` string, guarded only by rejecting `;`. That guard was insufficient and the field was a
   > blind-SQLi timing oracle: because the read is a **GET** (exempt from the CSRF guard's safe-method
-  > check), a cross-site page could issue it, and `pg_sleep()` inside the WHERE made response *timing*
+  > check), a cross-site page could issue it, and `pg_sleep()` inside the WHERE made response _timing_
   > a boolean channel over the whole schema — CORS does not stop a timing side-channel. A bare `--`
-  > also silently truncated the ORDER BY/LIMIT/OFFSET past the `;` check. The raw `where` param is
+  > also silently truncated the ORDER BY/LIMIT past the `;` check. The raw `where` param is
   > gone; `readRows` now returns 400 for any `where`, and the UI exposes only the per-column
   > structured filters. The earlier claim that "a hostile WHERE clause can neither mutate nor hang the
   > database" was true only for those two vectors and missed the read/timing exfiltration entirely.
+
 - **Optimistic concurrency via `xmin`.** Each row carries its PostgreSQL `xmin` (row version) as a hidden
   token. On commit, the row is locked `FOR UPDATE` and its current `xmin` compared to the token the client
   loaded; a mismatch (or a vanished row) is a `409 Conflict`, never a silent overwrite. This implements the
@@ -69,8 +71,19 @@ CSRF guard, rate limiter; see [[docs/adr/026-unified-api-response-envelope|ADR-0
   and also emitted on the structured logger.
 - **Tables without a primary key** are read-only for writes.
 
+  > **Addendum (2026-09-08): keyset pagination without full counts.** Row browsing no longer runs
+  > `COUNT(*)` followed by `LIMIT/OFFSET`. It fetches `limit + 1` rows and returns `hasMore` plus an
+  > opaque cursor bound to the table, filters, sort column, and direction. The primary key is appended
+  > as a deterministic tie-breaker; read-only tables without a primary key use `ctid` as the final
+  > page-local tie-breaker. Cursor boundaries come from hidden PostgreSQL `::text` projections so
+  > timestamp microseconds and other database-native values survive the round trip exactly. The UI
+  > retains visited cursors for Previous navigation. An exact `total` is
+  > returned only when a short first page proves it without another scan. This keeps browse cost bounded
+  > as tables grow and avoids offset drift during concurrent inserts or deletes. Updates to a selected
+  > sort key can still move a row across the cursor boundary, which is normal keyset-pagination behavior.
+
 **Frontend.** `pages/admin/TableDataEditorPage.tsx` is a controlled grid on the existing `ui/table`
-primitives (no new dependency): click-to-sort headers, per-column filters + a raw WHERE box, click-to-edit
+primitives (no new dependency): click-to-sort headers, structured per-column filters, click-to-edit
 cells with a NULL toggle and boolean checkboxes, add-row / mark-delete affordances. Edits accumulate as
 highlighted dirty state; a **Preview** dialog shows the exact SQL (server-rendered dry-run) before
 **Commit**. Filtering/sorting/paging are paused while uncommitted changes exist, so edits are never
@@ -94,7 +107,7 @@ the dashboard stale. Edits to other tables don't touch the views and skip the re
 
 **Domain-constraint enforcement (explored; partially implemented).** Full app-level validation on raw
 edits is **not** implemented because there is no single backend schema to apply — invariants are spread
-across PostgreSQL DDL and ad-hoc repository/service code. What *is* enforced today: every structural
+across PostgreSQL DDL and ad-hoc repository/service code. What _is_ enforced today: every structural
 constraint Postgres owns (FK/CHECK/NOT NULL/UNIQUE), surfaced as friendly errors. Closing the remaining
 gap would mean one of: (a) routing edits for known domain tables through their existing repository/service
 write paths instead of generic SQL (highest fidelity, large surface, only covers tables with such paths);
@@ -103,6 +116,7 @@ artifact to build and keep in sync); or (c) a post-commit invariant-check pass t
 Each is a sizeable follow-up tracked separately rather than folded into this change.
 
 ## Related
+
 - [[docs/adr/026-unified-api-response-envelope|ADR-026: Unified API response envelope]]
 - [[docs/reference/api-endpoint-matrix|API endpoint matrix]]
 - [[docs/adr/index|All ADRs]]

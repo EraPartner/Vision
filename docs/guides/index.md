@@ -3,7 +3,7 @@ title: Guides Index
 type: guides-index
 status: active
 date: 2026-08-30
-updated: 2026-08-30
+updated: 2026-09-08
 tags: [guides, index, how-to]
 description: Setup, development, deployment, and contribution guides for the Vision project
 aliases: [guides, how-to, getting started]
@@ -28,7 +28,7 @@ SORT title ASC
 ### Getting Started
 
 - [[docs/guides/setup\|Setup Guide]] - Local development environment setup
-- [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]] - Docker-free PostgreSQL 18, Electron lifecycle, cutover, and rollback
+- [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]] - Bundled PostgreSQL 18, Electron lifecycle, diagnostics, backup, and restore
 - [[docs/guides/devcontainer\|Devcontainer Guide]] - Isolated dev environment for Claude Code `--dangerously-skip-permissions`
 - [[docs/guides/backend-configuration\|Backend Configuration]] - Config, logging, and database utilities
 
@@ -43,7 +43,7 @@ SORT title ASC
 
 ### Deployment & Release
 
-- [[docs/guides/deployment\|Deployment Guide]] - Production deployment (native macOS, Docker, Electron)
+- [[docs/guides/deployment\|Deployment Guide]] - Native macOS and custom source deployment
 - [[docs/guides/cicd-pipelines\|CI/CD Pipelines]] - GitHub Actions workflows for testing, building, and releasing (April 2026)
 
 ## Troubleshooting

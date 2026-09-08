@@ -2,9 +2,9 @@
 title: Backend Architecture
 type: architecture
 status: active
-description: Node.js backend architecture and diagrams. Phase 3: infoRepository split into 7 domain-specific sub-modules. Phase 9: Decimal.js enforcement on all monetary paths. Phase E: Forecast cache materialization with 6-hour TTL and nightly job. May 2026: Transaction tags as orthogonal dimension (ADR-052). June 2026: Route→service boundary enforced (ADR-067, 14 new thin seams); global API rate limiter + trusted-proxy XFF + VISION_DEV fail-safe (ADR security); mv_recipient_monthly dropped (ADR-068); @vision/shared-utils package + banker's rounding canonical (ADR-069).
+description: Node.js backend architecture and diagrams. Phase 3: infoRepository split into 7 domain-specific sub-modules. Phase 9: Decimal.js enforcement on all monetary paths. Phase E: Forecast cache materialization with 6-hour TTL and nightly job. May 2026: Transaction tags as orthogonal dimension (ADR-052). June 2026: Route→service boundary enforced (ADR-067, 14 new thin seams); global API rate limiter + trusted-proxy XFF + VISION_DEV fail-safe (ADR security); mv_recipient_monthly dropped (ADR-068); @vision/shared-utils package + banker's rounding canonical (ADR-069). September 2026: transaction ownership uses the ADR-088 Account entity and canonical account_id foreign keys.
 date: 2026-04-23
-last_modified: 2026-09-04
+last_modified: 2026-09-08
 tags: [architecture, backend, uml, plantuml, phase-3, phase-6, phase-9, phase-e, decimal, money, precision, caching, materialization, nightly-job, startup, dependency-ordering, db-polling, graceful-shutdown, signal-handling, offline-resilience, network-reachability, tags, tagging, orthogonal-dimension, route-service-boundary, thin-seams, global-rate-limiter, trusted-proxies, vision-dev, mv-recipient-monthly-drop, shared-utils, banker-rounding]
 aliases: [backend architecture, node architecture, server design]
 ---
@@ -87,7 +87,9 @@ Users see no errors; data is simply older.
 
 ## Process Crash Handlers (2026-05-29)
 
-`apps/node-backend/src/main.js` now registers process-level handlers for unhandled async and synchronous errors. Previously only `SIGINT`/`SIGTERM` were caught; unhandled rejections and thrown exceptions caused silent Docker container restarts with no log trace.
+`apps/node-backend/src/main.js` registers process-level handlers for unhandled async and synchronous
+errors. Previously only `SIGINT` and `SIGTERM` were caught, so failures could exit without a useful
+structured trace.
 
 ```javascript
 process.on("unhandledRejection", (reason, promise) => {
@@ -104,8 +106,8 @@ process.on("uncaughtException", (err) => {
 **Behavior:**
 
 - Both handlers log via the structured logger (message + stack + `requestId` when attached to the error object) before exiting non-zero.
-- Non-zero exit triggers Docker's restart policy, so the container recovers automatically.
-- The structured log entry is captured by the container log collector, making the crash traceable from `docker logs` or the admin observability hub.
+- Non-zero exit lets the owning Electron runtime or process supervisor apply its restart policy.
+- The structured entry is captured in native backend logs and the admin observability hub.
 
 ## Graceful Shutdown (2026-04-29)
 
@@ -146,11 +148,20 @@ package "Core Entities" {
     +balance: numeric(15,2)
     +memo: text
     +comment: text
-    +bank_account: text
+    +account_id: integer <<FK>>
     +recipient_id: integer <<FK>>
     +recipient_bank_account_id: integer <<FK>>
     +category_id: integer <<FK>>
     +is_active: boolean
+  }
+
+  class Account {
+    +id: integer
+    +name: text
+    +display_name: text
+    +currency: varchar(3)
+    +is_active: boolean
+    +closed_at: timestamptz
   }
 
   class Recipient {
@@ -184,6 +195,7 @@ package "Core Entities" {
     +id: integer
     +planned_date: date
     +amount: numeric(15,2)
+    +account_id: integer <<FK>>
     +recipient_id: integer <<FK>>
     +category_id: integer <<FK>>
     +is_recurring: boolean
@@ -275,9 +287,11 @@ Category "1" <-- "*" PlannedTransaction
 Category "1" <-- "*" Recipient
 
 Transaction "1" --> "0..1" RecipientBankAccount
+Transaction "*" --> "0..1" Account : account_id
 
 PlannedTransaction "1" --> "0..1" Recipient
 PlannedTransaction "1" --> "0..1" Category
+PlannedTransaction "*" --> "0..1" Account : account_id
 PlannedTransaction "1" *-- "*" PlannedTransactionExecution
 PlannedTransaction "1" *-- "*" PlannedTransactionLoanSchedule
 PlannedTransactionExecution "1" --> "0..1" Transaction : executed_transaction_id
@@ -937,7 +951,7 @@ Services --> External : API Calls
 
 ## Deployment Architecture
 
-Development, production (Docker), and desktop deployment models.
+Native development, custom source hosting, and desktop deployment models.
 
 ```plantuml
 @startuml
@@ -954,15 +968,10 @@ package "Development" {
   }
 }
 
-package "Production (Docker)" {
-  node "Docker Host" as DockerHost {
-    container "app" as AppContainer {
-      node "Node.js Server"
-      node "Static Files"
-    }
-    container "db" as DBContainer {
-      node "PostgreSQL 18"
-    }
+package "Source Hosting" {
+  node "Application Host" as SourceHost {
+    component "Bun backend + static frontend" as HostedApp
+    database "Operator-managed PostgreSQL 18" as HostedDb
   }
 }
 
@@ -974,12 +983,12 @@ package "Desktop (Electron)" as Desktop {
 actor "User" as User
 
 User --> Dev : Dev Access
-User --> DockerHost : HTTPS
+User --> SourceHost : HTTPS
 User --> Desktop : Desktop App
 
 Dev --> PostgresDev
-AppContainer --> DBContainer
-Desktop --> AppContainer
+HostedApp --> HostedDb
+Desktop --> PostgresDev
 
 @enduml
 ```

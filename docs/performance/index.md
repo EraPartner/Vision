@@ -3,7 +3,7 @@ title: Performance Documentation Index
 type: performance-index
 status: active
 date: 2026-04-25
-last_modified: 2026-09-04
+last_modified: 2026-09-08
 tags: [performance, index, optimization, startup, offline-resilience]
 description: Performance optimization strategies including caching, materialized views, chart downsampling, and offline-aware startup optimization.
 aliases: [performance, optimization, speed]
@@ -24,6 +24,15 @@ SORT title ASC
 ```
 
 ## Recent Optimizations
+
+**2026-09-08: PostgreSQL transaction-list and stamped-balance measurements** — A repeatable,
+opt-in PostgreSQL 18 harness now exercises the production transaction-list projection and sort
+expressions over 120,000 synthetic transactions. All four non-date sorts crossed the 250 ms p95
+decision boundary on the measured host, so a separate indexed-key design benchmark is justified;
+this measurement does not itself add an index. The same corpus confirmed that the existing
+`idx_transactions_account_stamped` partial index is effective: the latest-stamp probe used two
+shared-buffer hits and completed in 0.028 ms, compared with 102 hits and 1.377 ms after the index
+was dropped inside the rollback-only test transaction. See [[#PostgreSQL measurement evidence]].
 
 **2026-09-04: WOFF2-only faces and nested AI tool charts** — Vision now declares its eight static
 Inter/Fraunces faces in one WOFF2-only stylesheet, so production builds no longer emit unused
@@ -68,32 +77,86 @@ boot graph by explicit product decision.
 | **Database Indexes**          | [[docs/adr/002-database-schema                           | Schema Indexes]]     | Optimized query performance                            |
 | **Virtual Scrolling**         | [[docs/components/shared-components                      | VirtualDataTable]]   | Efficient rendering of large tables                    |
 
+## PostgreSQL measurement evidence
+
+The opt-in
+[[apps/node-backend/tests/transactionPerformanceMeasurements.db.test.js|measurement harness]]
+creates a disposable corpus and runs the exact production query shapes with
+`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)`, and rolls back both the data and the temporary index
+drop. It is intentionally excluded from ordinary test runs because it inserts 120,000 rows and is
+a measurement rather than a stable wall-clock gate.
+
+```bash
+VISION_RUN_PERFORMANCE_PROBES=1 bun run test:db \
+  tests/transactionPerformanceMeasurements.db.test.js --reporter=verbose
+```
+
+The 2026-09-08 run used PostgreSQL 18.6 on an Apple M1 host. The corpus contained 120,000
+transactions across 20 accounts, 1,000 recipients, and 100 categories. Each sort received one
+warm-up followed by 20 measured executions. All buffers were warm, and the 50-row page used a
+top-N heapsort without temporary-file input or output.
+
+| Production sort key |     Median |        p95 |    Maximum | Shared hits |
+| ------------------- | ---------: | ---------: | ---------: | ----------: |
+| Memo                | 284.644 ms | 351.600 ms | 382.515 ms |       1,933 |
+| Effective recipient | 291.043 ms | 393.240 ms | 411.119 ms |       1,933 |
+| Effective category  | 264.163 ms | 325.530 ms | 490.861 ms |       1,933 |
+| Currency            | 234.665 ms | 293.965 ms | 318.527 ms |       1,933 |
+
+The retained plan shape for every sort is `Limit → Gather Merge → top-N heapsort → hash LEFT
+JOIN chain → parallel sequential scan of transactions`. The scan evaluates 117,600 active rows
+before returning the first 50. The result crosses the existing 250 ms p95 decision threshold for
+all four keys. Any follow-up should benchmark partial ordered keys for the row-local memo and
+currency cases, specifically `(memo, date DESC, id DESC)` and
+`(currency, date DESC, id DESC) WHERE is_active = true`. Effective recipient and category depend
+on joined fallback values, so PostgreSQL cannot index those current expressions directly; their
+follow-up must compare a semantics-preserving stored sort key or an equivalent query redesign.
+Call-frequency telemetry is still needed before accepting the write and storage cost of any new
+index.
+
+The latest stamped-balance probe used the exact predicate and ordering from
+[[apps/node-backend/src/repositories/accountBalanceSql.js|accountBalanceSql.js]]. Its target
+account held 6,000 rows, including 30 balance-stamped rows.
+
+| Stamped-balance plan              | Execution | Shared hits | Retained plan shape                                                       |
+| --------------------------------- | --------: | ----------: | ------------------------------------------------------------------------- |
+| Existing partial index            |  0.028 ms |           2 | `Limit → Index Only Scan using idx_transactions_account_stamped`          |
+| Index dropped in test transaction |  1.377 ms |         102 | `Limit → top-N heapsort → Bitmap Heap Scan → idx_transactions_account_id` |
+
+Without the partial index, PostgreSQL read all 6,000 account rows, filtered 5,970 non-stamped rows,
+and sorted the 30 survivors. The existing partial index avoided that work and was about 49 times
+faster in this warm-buffer run. The evidence supports retaining
+`idx_transactions_account_stamped`; it does not authorize another index. Set
+`VISION_LOG_FULL_EXPLAIN=1` on the command above when the complete JSON plan trees are needed for
+a later comparison.
+
 ## Accepted Scale Boundaries
 
 Some low-frequency paths deliberately preserve simpler or more complete
 semantics until production measurements justify extra complexity:
 
-- Statistics category/recipient/tag pivots remain all-time by default. A
+- Statistics category/recipient/tag pivots use the page's rolling 24-month
+  default; `?window=all` requests full history. A
   five-minute, inflight-deduplicated statistics cache absorbs repeat visits and
   is synchronously invalidated by transaction reconciliation/refresh and
   category or recipient mutation funnels; tag-only changes fall back to the
-  five-minute time-to-live. A rolling default would silently hide older history,
-  so revisit the cold-query shape only if a representative dataset shows p95
+  five-minute time-to-live. Revisit the cold-query shape only if a representative dataset shows p95
   above 500 ms, more than 50,000 intermediate aggregate rows, or more than 25
   MiB of process-memory growth per miss. Exact per-date foreign-exchange
   conversion remains binding.
-- CategoryPivotTable retains the all-years default and browser auto-sized
-  columns. Windowing its period columns would change widths and scroll geometry
-  because body values participate in automatic table layout. Revisit with a
-  user-visible fixed-width or latest-year design only if an instrumented
-  supported dataset exceeds 5,000 mounted cells or a 100 ms React commit p95.
+- CategoryPivotTable covers every period in the selected page window while mounting at most 12
+  period columns at once. It starts on the newest window and renders that window chronologically;
+  Previous and Next expose
+  every older or newer period without changing the selected-range totals or export
+  input. A 120-period regression fixture bounds the mounted period cells and
+  preserves sticky labels, keyboard controls, and exact drill-through links.
 - Transaction sorts by memo, currency, effective recipient name, or effective
-  category label retain their expression sort over the filtered result. A
-  semantics-preserving stored-key or equivalent indexed redesign is deferred
-  until sort-aware application telemetry or a representative PostgreSQL
-  benchmark shows a 250 ms p95 for one of those sorts, or non-date ordering
-  exceeds 5% of transaction-list calls. Date/id ordering remains the indexed
-  default.
+  category label retain their expression sort over the filtered result for now.
+  The 2026-09-08 PostgreSQL measurement crossed the 250 ms p95 design threshold,
+  so the exact indexed-key comparisons described above are now justified. Do
+  not deploy them until their plan improvement and write/storage cost are
+  measured and sort-aware application telemetry establishes how often these
+  non-default orders are used. Date/id ordering remains the indexed default.
 - The cold Electron splash starts loading immediately after settings, runtime
   selection, and localized strings are ready. Native application-menu, dock-menu,
   and accent subscription setup follows the splash request, so platform integration

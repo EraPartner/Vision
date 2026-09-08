@@ -4,7 +4,7 @@ type: architecture
 status: active
 description: React frontend architecture, design system, and diagrams with liquid-glass aesthetic, visx charts, Framer Motion, and Zustand store. May 2026 Tailwind v4 migration with unified CSS architecture. June 2026 Liquid Glass v2 — atmosphere layer, saturated blur tiers, CommandPalette, optimistic mutations, route preload. June 2026 Premium v3 — RollingNumber/Money/DeltaPill, chart scrub+sync, ChartSkeleton, PageTitleContext, palette v2, ShortcutsOverlay + go-to sequences, animated tabs, workspace aurora, ShaderAurora behind visual-effects tier model (ADR-075), per-widget dashboard hydration, optimistic create. 2026-06-24: --gain/--loss CSS semantic tokens unified app-wide (tokens.css baseline, skin-v2.css Okabe-Ito overrides); gain/loss Tailwind color utilities added; colorblindGainLoss default OFF/classic.
 date: 2026-04-23
-updated: 2026-09-04
+updated: 2026-09-08
 tags: [architecture, frontend, uml, plantuml, react, phase-4, phase-6, phase-9, liquid-glass, liquid-glass-v2, premium-v3, visx, framer-motion, statistics-refactoring, zustand, state-management, tailwind-v4, css-architecture, command-palette, optimistic-updates, route-preload, chart-scrub, chart-sync, shader-aurora, visual-effects-tiers, auto-adapt-display, fx-reduced, role-based-glass, glass-by-default, june-2026, gain-loss, css-tokens, skin-v2, tailwind-colors]
 aliases: [frontend architecture, react architecture, frontend design, design system]
 ---
@@ -476,20 +476,28 @@ With real background content behind glass surfaces, `backdrop-filter` now produc
 
 Five saturated blur tiers (blur + `saturate(var(--glass-saturate))`):
 
-| Class            | Blur | Saturate  | Usage                                                                                                                                                                                                                                                                       |
-| ---------------- | ---- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `glass-thin`     | 12px | 180%/150% | Subtle interactive elements                                                                                                                                                                                                                                                 |
-| `glass-regular`  | 20px | 180%/150% | **All content / chart / stat / state cards** (loading, empty, error skeletons) — role-based glass applied June 2026 (see note below); also AI-chat panes; Research workspace content cards (MarketLookupPage, ResearchComparePage, ChartBuilderPage, PortfolioForecastPage) |
-| `glass-chrome`   | 24px | 180%/150% | Sidebar, AppLayout topbar                                                                                                                                                                                                                                                   |
-| `glass-thick`    | 28px | 180%/150% | All floating overlays: Modal dialogs (Dialog, AlertDialog, Sheet), Sonner toasts, **and** the full popover family (Popover, DropdownMenu/SubContent, SelectContent, ContextMenu, MenuBar content, HoverCard, Tooltip)                                                       |
-| `glass-elevated` | 32px | 180%/150% | Dashboard hero cards (StatCard, NetSummaryCard)                                                                                                                                                                                                                             |
+| Class            | Blur | Saturate  | Usage                                                                                                                                                                                                                 |
+| ---------------- | ---- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `glass-thin`     | 12px | 180%/150% | Default ordinary Card material and subtle interactive elements                                                                                                                                                        |
+| `glass-regular`  | 20px | 180%/150% | Explicit stronger content material and non-Card glass panes                                                                                                                                                           |
+| `glass-chrome`   | 24px | 180%/150% | Sidebar, AppLayout topbar                                                                                                                                                                                             |
+| `glass-thick`    | 28px | 180%/150% | All floating overlays: Modal dialogs (Dialog, AlertDialog, Sheet), Sonner toasts, **and** the full popover family (Popover, DropdownMenu/SubContent, SelectContent, ContextMenu, MenuBar content, HoverCard, Tooltip) |
+| `glass-elevated` | 32px | 180%/150% | Dashboard hero cards (StatCard, NetSummaryCard)                                                                                                                                                                       |
 
 Saturate: 180% in light mode, 150% in dark (tokens `--glass-saturate`).
 
 Thick and elevated materials gain lensing edges (inset top specular + bottom concave shade + long soft drop shadow).
 
-> [!info] June 2026 — Role-based glass (no ADR yet; a future ADR may formalize this)
-> ADR-070 rolled out glass selectively ("only ~6 KPI/hero/chart surfaces per viewport"). In practice that left many content/chart/stat cards opaque while their siblings were glass, causing visible inconsistency in the enhanced/vibrancy tier. The rule was broadened in June 2026 to **role-based**: glass is now applied to ALL content / chart / stat / state cards so peer cards shine consistently. The base `Card` component was NOT changed — glass remains opt-in via `className`. GPU trade-off: card-dense pages now exceed the old 6-surface budget in standard/enhanced; mitigated by ADR-075 tier auto-adapt (auto-degrades to near-opaque on large displays and under `fx-reduced`); profiling the packaged Electron app on Apple Silicon before each release is the watchpoint.
+> [!info] June 2026 — Role-based glass
+> ADR-070 rolled out glass selectively ("only ~6 KPI/hero/chart surfaces per viewport"). The June
+> 2026 role-based broadening later put `glass-regular` on the base Card so peer content surfaces
+> stayed visually consistent. That made card-dense pages exceed the old blur-region budget.
+
+> [!info] September 2026 — ADR-132 default material
+> [[docs/adr/132-thin-default-card-material|ADR-132]] moves the base Card to `glass-thin` so every
+> ordinary Card keeps the rich material system at a lower 12px blur cost. Explicit elevated hero
+> cards and chrome surfaces remain unchanged. A semantic `card-material` marker keeps these Cards
+> in the native-vibrancy blur substitution without disabling local blur on transient thin controls.
 
 **Opaque surfaces (deliberate — role-based exceptions):**
 
@@ -613,12 +621,16 @@ component owns presentation and navigation only:
 
 ### Route Preload (Liquid Glass v2)
 
-`lib/routePreload.ts` — route → `import()` loader map shared by `App.tsx` `lazy()` calls and `AppSidebar` hover handlers:
+`lib/routePreload.ts` owns one ordered page-route metadata manifest with each path, literal
+`import()` loader, and admin-gate flag. It derives the hover-preload lookup from that manifest;
+`App.tsx` derives stable module-scope `React.lazy()` components and route elements from the same
+records:
 
 - `src/build-support/defaultRoutePreload.ts` computes the default Dashboard route's complete static chunk closure at build time and removes chunks already reachable from the HTML entry. Its Vite plugin emits the remaining `modulepreload` links plus hashed WOFF2 preloads for critical Inter 400 and Fraunces 600 assets into production HTML, removing serial discovery round trips on a cold web load.
 - The build-time traversal follows only Rollup `imports`. Dynamic locale, AI chat, and motion-feature chunks remain lazy. A missing entry or Dashboard chunk fails the build instead of silently dropping the optimization.
 - Sidebar item `onMouseEnter` triggers `routePreload(path)`, warming the chunk before click.
-- `App.tsx` reuses the same loaders for `React.lazy()` so there is no separate dynamic import per call site.
+- `App.tsx` creates each lazy component once at module scope and applies `RequireAdmin` only to the
+  manifest's six admin routes. Redirects and the catch-all remain explicit routing behavior.
 - Errors fall through to the normal lazy path (no UI impact on failure).
 - De-duplicated via a `Set` — repeated hover events do not fire multiple fetches.
 
@@ -749,12 +761,17 @@ one-shot bypass immediately before that navigation.
 
 ### 1. Code Splitting with Route Preload
 
-All pages are lazy-loaded using the shared route loader map:
+All pages are lazy-loaded using the shared route metadata manifest:
 
 ```typescript
-// lib/routePreload.ts — shared map; used by App.tsx lazy() AND AppSidebar hover
-const routeLoaders = { '/': () => import('./pages/DashboardPage'), ... };
-const DashboardPage = lazy(routeLoaders['/']);
+// lib/routePreload.ts — one record owns path, loader, and admin gating
+const appRouteManifest = [
+  { path: "/", loader: () => import("./pages/DashboardPage"), admin: false },
+];
+const routeLoaders = Object.fromEntries(
+  appRouteManifest.map(({ path, loader }) => [path, loader]),
+);
+// App.tsx maps the manifest to module-scope lazy components and <Route> elements.
 // AppSidebar onMouseEnter: routePreload('/') — warms chunk before click
 ```
 

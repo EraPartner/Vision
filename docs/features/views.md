@@ -3,7 +3,7 @@ title: Views & Pages
 type: feature
 status: active
 date: 2026-04-10
-updated: 2026-09-03
+updated: 2026-09-05
 tags:
   [
     feature,
@@ -565,7 +565,8 @@ Track symbols without owning them.
 - View current prices
 - Price alerts (future)
 - Performance tracking
-- Long watchlist company names truncate before the asset-class badge and retain the full name in the native title tooltip.
+- Long watchlist company names truncate before the asset-class badge and expose the full name in an
+  accessible tooltip on pointer hover or keyboard focus.
 - Date axis labels in chart dialog follow app date format
 - Target/current price and currency displays follow app number format + decimal settings
 - Net Worth and Performance chart axes share the same app-language-aware date roles: day/month for short periods and month/two-digit-year for longer periods; detailed tooltips use a four-digit year

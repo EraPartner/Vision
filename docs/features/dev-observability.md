@@ -190,7 +190,7 @@ request omit the field. A call that supplies an explicit `requestId` keeps that
 value, which supports process-level error handlers without duplicate fields.
 
 This makes the request ID shown by the API Inspector usable to filter backend
-container logs without passing the Express request object through domain code.
+backend logs without passing the Express request object through domain code.
 
 ## Activation
 
@@ -200,11 +200,10 @@ The devtools are always built as a lazily-loaded chunk and gated at render time.
 They appear when **any** of these is true:
 
 - `import.meta.env.DEV` — local Vite dev server
-- `import.meta.env.VITE_DEVTOOLS === 'true'` — Docker dev build (build arg from
-  `docker-compose.dev.yml`)
+- `import.meta.env.VITE_DEVTOOLS === 'true'` — explicit development build
 - `appSettings.adminMode` — the user's **Admin Mode** toggle (Settings → About),
   evaluated at runtime. This is the only path that works in the packaged Electron
-  app and the public release image, which run a normally-built bundle with no
+  app and public release, which run a normally-built bundle with no
   `VITE_DEVTOOLS` build arg.
 
 ```tsx
@@ -234,7 +233,7 @@ function DevtoolsGate() {
   that is only fetched the first time the gate renders it — so users who never
   enable Admin Mode pay no load cost.
 - The build-flag paths (`import.meta.env.DEV` / `VITE_DEVTOOLS`) keep the
-  inspector always-on for local and Docker dev work.
+  inspector always on for local development work.
 
 ## Design Decisions
 

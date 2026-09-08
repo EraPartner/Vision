@@ -3,14 +3,37 @@ title: ADR-110 Detection-layer / narration-layer split for local-LLM insights
 type: adr
 status: accepted
 date: 2026-07-11
-tags: [adr, ai, llm, ollama, insights, anomaly-detection, privacy, no-external-calls, detection-layer, narration-layer, statistics, adr-024]
+updated: 2026-09-08
+tags:
+  [
+    adr,
+    ai,
+    llm,
+    ollama,
+    insights,
+    anomaly-detection,
+    privacy,
+    no-external-calls,
+    detection-layer,
+    narration-layer,
+    statistics,
+    adr-024,
+  ]
 description: Splits the AI insight / anomaly agent into a deterministic detection layer that runs automatically on page load (plain code, no LLM) and a local-LLM narration layer gated behind an explicit user click. Records why a scheduled background narration job was rejected, why that rejection is scoped to narration only, the Statistics-panel + button-badge surfacing decision, the server-side pre-call approach for the narration tool, and the extension of ADR-024's no-external-calls guarantee (and its CI fetch-spy test) to the new narration tool.
-aliases: [insight agent, anomaly agent, detection narration split, insightsDigest, adr-110]
+aliases:
+  [
+    insight agent,
+    anomaly agent,
+    detection narration split,
+    insightsDigest,
+    adr-110,
+  ]
 ---
 
 # ADR-110: Detection-layer / narration-layer split for local-LLM insights
 
 ## Status
+
 Accepted — 2026-07-11 (decision record for the AI insight / anomaly agent feature; the detection
 service, insights tool, surfacing UI, and narration button are built in follow-up steps). Builds on
 and does not weaken [[docs/adr/024-local-llm-chat|ADR-024]].
@@ -43,7 +66,7 @@ half behind a click too.
 
 ### 1. Two independent layers, split by cost — not one feature behind one switch
 
-**Detection layer (deterministic, runs automatically on page load).** Every *finding* — new
+**Detection layer (deterministic, runs automatically on page load).** Every _finding_ — new
 subscription, price change, category outlier, cash-forecast figure — is computed by plain code: the
 recurring-pattern diff (`recurringDetectionService`), a modified-z-score category outlier detector,
 and the cached Monte-Carlo cash-flow forecast. No LLM is involved, the output is fully reproducible,
@@ -51,6 +74,9 @@ and there is **zero hallucination risk**. This is the same cost class as any oth
 (`recurringDetectionService` already runs synchronously on page views today), so there is no privacy
 or hardware concern in running it automatically. It surfaces directly in the UI with no model
 involvement whatsoever.
+
+For subscription price changes, `previousAmount` means the immediately preceding chronological
+charge. It is not the median or another all-history baseline.
 
 **Narration layer (local LLM, on-demand only).** A local model explains, prioritizes, and phrases the
 already-computed findings. This is the **only** part that spends inference, and it is therefore the
@@ -61,7 +87,7 @@ The two layers meet at exactly one interface: the detection layer is also expose
 read-only tool (working name `insightsDigest`) in
 `apps/node-backend/src/services/aiChat/tools/insights.js`, alongside the existing
 `getRecurringDetected` / `getSpendingPace` / `getRecipientInsights` tools, so the narration layer
-reads the *same* precomputed findings rather than recomputing (and possibly diverging from) them. The
+reads the _same_ precomputed findings rather than recomputing (and possibly diverging from) them. The
 tool's return contract is the sole cross-layer interface:
 
 ```
@@ -86,20 +112,21 @@ explicit user click.
 **This reasoning does not extend to the detection layer.** A future reader must not assume the whole
 feature is gated behind a click. Detection is plain code with the same cost profile as rendering any
 other page, so running it automatically on relevant page views (and a lightweight badge check
-elsewhere) is fine and is in fact the design. The "no unprompted work" rule is about *inference cost*,
-not about *the feature*.
+elsewhere) is fine and is in fact the design. The "no unprompted work" rule is about _inference cost_,
+not about _the feature_.
 
 ### 3. Surfacing: Statistics-page panel + button badge — no new dashboard banner or card
 
 Findings surface as a panel on the **Statistics page** (reusing the Card / expand-collapse / X-button
 UI pattern of `RecurringDetectionPanel.tsx`, with new per-finding dismiss tracking underneath) plus a
-**badge on the entry button** that reflects the count of *undismissed* findings — the exact predicate
+**badge on the entry button** that reflects the count of _undismissed_ findings — the exact predicate
 the panel filters on, cleared when a finding is dismissed, not merely when the page is opened. The
 badge reads a persisted count from the same cached detection results the panel renders, so checking it
 from elsewhere (e.g. the AI-chat page) never re-runs detection just to draw a dot.
 
 A new **dashboard banner or card was explicitly rejected**, for two reasons found by direct
 inspection:
+
 1. `FxStatusBanner` and `UpcomingPaymentsNotification` already render on every page via
    `AppLayout.tsx` and simply stack with no priority/arbiter mechanism. A third always-on notice
    repeats that problem app-wide, not just on the dashboard.
@@ -110,9 +137,9 @@ inspection:
 ### 4. Narration tool-call reliability: server-side pre-call (the model only narrates)
 
 Forcing the model to call one specific tool for one specific prompt is genuinely unsolved in this
-codebase — `prompts.js` only does soft, generic steering. Rather than rely on the model *deciding* to
+codebase — `prompts.js` only does soft, generic steering. Rather than rely on the model _deciding_ to
 fetch, the narration button uses a **server-side pre-call**: the `insightsDigest` tool is executed
-server-side *before* the model turn and its result is fed into the model's context, so the model only
+server-side _before_ the model turn and its result is fed into the model's context, so the model only
 ever **narrates** the already-fetched findings — it never decides whether to fetch. This is the most
 reliable of the three options considered (soft prompt hint / Ollama forced `tool_choice` / server-side
 pre-call) because it removes the model's discretion from the critical path entirely, which matches the
@@ -138,6 +165,7 @@ it is outside this guarantee's scope by construction.
 ## Consequences
 
 ### Positive
+
 - **No unprompted inference.** Local inference happens only as the direct result of a click; the
   timer-driven design that could peg an arbitrary user's machine is off the table and documented as
   such.
@@ -152,12 +180,14 @@ it is outside this guarantee's scope by construction.
   un-arbitrated always-on banner stack the codebase already suffers from.
 
 ### Neutral
+
 - **Detection now runs on every Statistics-page view**, not just behind a click — see the dependency
   below.
 - **Narration quality depends on the user's local model** (same hardware-dependency caveat as
   ADR-024). The server-side pre-call removes fetch-decision unreliability but not phrasing quality.
 
 ### Negative
+
 - **Detection frequency promotes an existing perf finding to a prerequisite.** Because detection now
   runs on every Statistics-page view rather than on demand, the existing
   "`GET /api/info/recurring-patterns` does uncached synchronous recomputation" finding moves from
@@ -185,11 +215,38 @@ it is outside this guarantee's scope by construction.
 **Addendum (2026-07-23) — §4 implemented.** The server-side pre-call from §4 is now implemented:
 the narration button sends `insightsPreCall: true`; the backend executes `insightsDigest` before
 the model turn and injects the result into context, so the model only narrates. A soft prompt hint
-is ALSO present in `prompts.js` as a complementary aid for when a user *types* an insights question
+is ALSO present in `prompts.js` as a complementary aid for when a user _types_ an insights question
 in normal chat (the pre-call covers the button path); it is not the reliability mechanism §4
 rejected.
 
+## Addendum (2026-09-05): cash finding semantics
+
+The cash finding is explicitly a zero-based month-end net-cashflow forecast. Its cumulative series
+starts at zero and represents income minus outflows; it has no account-balance or savings anchor.
+The earlier "cash shortfall" wording in this ADR is historical and must not be interpreted as an
+overdraft or liquidity prediction. The UI and AI tool therefore label the value as net cash flow,
+make no overdraft claim, and treat a negative value as a standing finding. Only a significant move
+from a supplied prior projection can promote it to an alert.
+
+## Addendum (2026-09-08): server-owned dismissals and count projection
+
+Dismissal state now lives in PostgreSQL rather than in one browser. The shared digest loads those
+records and filters both subscription and category findings before returning data to REST or the
+AI tool. Subscription filtering precedes the top-five cap, so a dismissed high-confidence result
+is replaced by the next eligible result.
+
+The navigation badge no longer calls the full digest. It reads a singleton, versioned count
+projection. Statement triggers dirty the projection for every relevant database mutation. A badge
+request never waits for detection and never presents a stale count as current; one coalesced
+background refresh writes only when the captured dirty version still matches, closing the
+transaction-during-refresh race. Legacy browser dismissals are uploaded before the application
+surfaces digest consumers. Successful records and definitively stale or invalid `400`/`404`
+records are removed locally. Network, authentication, rate-limit, and server failures retain only
+the affected records and retry after a bounded delay; the digest surfaces remain gated until the
+server-visible state is complete.
+
 ## Related
+
 - [[docs/adr/024-local-llm-chat|ADR-024: Local LLM Chat Integration]] — tool-calling architecture,
   privacy constraint, and no-external-calls guarantee this ADR builds on
 - [[docs/adr/083-internal-transfer-detection|ADR-083: Internal Transfer Detection]] — precedent for a

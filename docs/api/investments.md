@@ -1,12 +1,12 @@
 ---
 title: API - Investments
 type: endpoint
-method: GET, POST, PATCH, DELETE
+method: GET, POST, PUT, PATCH, DELETE
 path: /api/investments
 description: Investment portfolio management (stocks, crypto, real estate, savings)
 date: 2026-06-18
-last_modified: 2026-09-04
-updated: 2026-09-04
+last_modified: 2026-09-07
+updated: 2026-09-07
 tags: [api, investments, portfolio, stocks, crypto, metals, phase-9, decimal, money, offline-fallback, per-account, adr-091, show-in-ticker, portfolio-ticker]
 status: active
 aliases: [investments-api, portfolio-api, holdings, stocks, crypto, real-estate, savings, bonds, metals]
@@ -25,6 +25,11 @@ The Investments API manages investment holdings across various asset classes: st
 The storage layer uses the canonical flat `investments` and `portfolio_transactions` tables.
 Migration 0087 converted former PostgreSQL-inheritance installations before the runtime starts;
 the old base/child/view shape is historical only (ADR-109).
+
+Portfolio recurrence values now use the canonical `biweekly` spelling (ADR-130). During one
+compatibility release, writes using legacy `bi-weekly` are normalized; every response emits
+`biweekly`. This narrows the published enum and is breaking only for clients that validate
+responses against the legacy spelling instead of treating the cadence semantically.
 
 > [!info] Monetary Precision (Phase 9)
 > All monetary values in responses (amounts, valuations, costs, prices) use **Decimal.js** for precision. Values are serialized as JSON `number` type, safe to 2 decimal places (cents). See [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] for details.
@@ -336,6 +341,41 @@ This endpoint is intended for portfolio pages that need to load many holdings at
 - `total` is computed with the same `investment_ids` + `type` filter (before global `limit/offset`).
 - Route cache key for bulk transactions now includes `limit` to prevent collisions between requests that differ only by limit value.
 
+### PUT /api/investments/transactions/broker
+
+Atomically re-tag 1–500 reviewed portfolio transactions from one broker partition to another, or
+to Unassigned (`null`). The request is a strict object:
+
+```json
+{
+  "transaction_ids": [101, 102],
+  "from_account_id": 4,
+  "to_account_id": 7,
+  "idempotency_key": "75557a9d-4dee-453a-9ef6-3b1b56a54b86"
+}
+```
+
+All IDs must be distinct positive int32 values. The destination must be an active `brokerage`,
+`crypto_exchange`, or `wallet` account; `null` means Unassigned. The source may be archived so
+account-close recovery remains possible.
+
+The source is a compare-and-set precondition. If any row is missing or no longer has exactly that
+source assignment, the endpoint returns `409 CONFLICT` without changing any row. Before the one
+set-based update, the service projects the complete affected investment histories and rejects a
+move that creates or worsens a broker-partition oversell.
+
+The UUID is durable idempotency state. Repeating the same semantic request returns the original
+receipt with `replayed: true`; reusing its UUID for another request returns `409`. Receipts retain
+the sorted transaction IDs, prior assignments, selected and changed counts, and both account IDs.
+They deliberately do not foreign-key account rows, so later account deletion cannot erase audit
+meaning. Migration 0100 adds `portfolio_retag_audit`, which is included in backup coverage.
+
+This route has a separate 30 requests/minute limiter in addition to the investments group limiter.
+The operation first locks the destination account row, matching account close and merge lock order,
+then briefly takes a `SHARE ROW EXCLUSIVE` lock on `portfolio_transactions`. This prevents a
+concurrent close from invalidating eligibility, avoids reversed-order deadlocks, and blocks insert
+phantoms while the full-history invariant and compare-and-set update run in one transaction.
+
 > [!warning] `investment_ids` contract (2026-08-11 — breaking for malformed ids)
 > A malformed element is now a `400 VALIDATION_ERROR` (`"investment_ids contains invalid value: <value>"`). It used to be `parseInt` + `filter(Number.isInteger)`, which took the leading digits of anything: `?investment_ids=12abc` returned **investment 12**'s transactions, `5,12abc` returned 5 **and** 12, and `1e3` returned investment 1 — a `200` describing a holding the caller never named. The identical parse ran again inside `portfolioTxRepo.reads.js`; that layer now delegates to `validateId` too, but keeps dropping rather than throwing. Absent or empty is unchanged: this param is required, so it is still `400 investment_ids is required`.
 >
@@ -409,23 +449,23 @@ notation, remain accepted and are normalized to numbers for compatibility. Creat
 
 **Request Body Fields:**
 
-| Field                      | Type                    | Required | Description                                                                                                                                     |
-| -------------------------- | ----------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| type                       | string                  | Yes      | Canonical transaction type: buy, sell, dividend, fee, tax, interest, rent_income, appreciation, gift, split, merger, spinoff, return_of_capital |
-| date                       | string                  | Yes      | Transaction date (YYYY-MM-DD)                                                                                                                   |
-| amount                     | number                  | No       | Total amount (auto-computed if missing for unit-based types)                                                                                    |
-| units                      | number                  | No       | Number of units (required for buy/sell/gift on unit-based assets)                                                                               |
-| price_per_unit             | number                  | No       | Price per unit (auto-computed if missing for unit-based types)                                                                                  |
-| fees                       | number                  | No       | Transaction fees                                                                                                                                |
-| taxes                      | number                  | No       | Transaction taxes (supported for dividend transactions)                                                                                         |
-| dividend_amount_convention | gross \| net \| unknown | No       | Whether a dividend amount is before or after withholding tax; defaults to `unknown` (ADR-126)                                                   |
-| currency                   | string                  | No       | Currency code (defaults to investment currency)                                                                                                 |
-| fx_rate_to_eur             | number                  | No       | FX rate to EUR at transaction date                                                                                                              |
-| note                       | string                  | No       | Transaction note                                                                                                                                |
-| is_recurring               | boolean                 | No       | Whether this transaction is recurring                                                                                                           |
-| recurrence_interval        | string                  | No       | Recurrence pattern: daily, weekly, bi-weekly, monthly, quarterly, yearly                                                                        |
-| account_id                 | integer \| null         | No       | Owning account for the lot (ADR-091). Absent or `null` leaves it unassigned. Accepted here all along — undocumented until 2026-08-11            |
-| recurrence_end_date        | string                  | No       | End date for recurring transactions (YYYY-MM-DD)                                                                                                |
+| Field                      | Type                    | Required | Description                                                                                                                                         |
+| -------------------------- | ----------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| type                       | string                  | Yes      | Canonical transaction type: buy, sell, dividend, fee, tax, interest, rent_income, appreciation, gift, split, merger, spinoff, return_of_capital     |
+| date                       | string                  | Yes      | Transaction date (YYYY-MM-DD)                                                                                                                       |
+| amount                     | number                  | No       | Total amount (auto-computed if missing for unit-based types)                                                                                        |
+| units                      | number                  | No       | Number of units (required for buy/sell/gift on unit-based assets)                                                                                   |
+| price_per_unit             | number                  | No       | Price per unit (auto-computed if missing for unit-based types)                                                                                      |
+| fees                       | number                  | No       | Transaction fees                                                                                                                                    |
+| taxes                      | number                  | No       | Transaction taxes (supported for dividend transactions)                                                                                             |
+| dividend_amount_convention | gross \| net \| unknown | No       | Whether a dividend amount is before or after withholding tax; defaults to `unknown` (ADR-126)                                                       |
+| currency                   | string                  | No       | Currency code (defaults to investment currency)                                                                                                     |
+| fx_rate_to_eur             | number                  | No       | FX rate to EUR at transaction date                                                                                                                  |
+| note                       | string                  | No       | Transaction note                                                                                                                                    |
+| is_recurring               | boolean                 | No       | Whether this transaction is recurring                                                                                                               |
+| recurrence_interval        | string                  | No       | Recurrence pattern: daily, weekly, biweekly, monthly, quarterly, yearly. Legacy `bi-weekly` writes are normalized during one compatibility release. |
+| account_id                 | integer \| null         | No       | Owning account for the lot (ADR-091). Absent or `null` leaves it unassigned. Accepted here all along — undocumented until 2026-08-11                |
+| recurrence_end_date        | string                  | No       | End date for recurring transactions (YYYY-MM-DD)                                                                                                    |
 
 **Required Fields:** type, date (additional type-specific validation below)
 
@@ -452,9 +492,9 @@ Gift behavior (unit-based assets):
 Create-path compatibility:
 
 - `portfolio_transactions` is one flat table on every supported install. Migration 0087 converts the former inheritance layout before the backend starts accepting requests ([[docs/adr/109-flat-investments-schema-canonical|ADR-109]]).
-- The controller validates request field shapes. `portfolioTransactionService.create` and `portfolioTransactionRules` own type-specific normalization, unit math, recurrence hygiene, and sell-availability policy before the repository performs a parameterized insert ([[apps/node-backend/src/controllers/investmentController.js]], [[apps/node-backend/src/services/portfolio/portfolioTransactionService.js]], [[apps/node-backend/src/services/portfolio/portfolioTransactionRules.js]]).
-- Optional `fx_rate_to_eur` is accepted and persisted for portfolio transactions, enabling transaction-level FX locking for later P&L calculations ([[apps/node-backend/src/controllers/investmentController.js]], [[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]], [[apps/frontend/src/types/api.ts]]).
-- `POST /api/investments/:id/transactions` forwards the investment lookup's `asset_class` into `portfolioTransactionService.create` as `preloaded_asset_class`, so the service can skip a duplicate metadata query while preserving validation and response behavior ([[apps/node-backend/src/controllers/investmentController.js]], [[apps/node-backend/src/services/portfolio/portfolioTransactionService.js]]).
+- `investmentService` validates request field shapes. `portfolioTransactionService.create` and `portfolioTransactionRules` own type-specific normalization, unit math, recurrence hygiene, and sell-availability policy before the repository performs a parameterized insert ([[apps/node-backend/src/services/investmentService.js]], [[apps/node-backend/src/services/portfolio/portfolioTransactionService.js]], [[apps/node-backend/src/services/portfolio/portfolioTransactionRules.js]]).
+- Optional `fx_rate_to_eur` is accepted and persisted for portfolio transactions, enabling transaction-level FX locking for later P&L calculations ([[apps/node-backend/src/services/investmentService.js]], [[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]], [[apps/frontend/src/types/api.ts]]).
+- `POST /api/investments/:id/transactions` forwards the investment lookup's `asset_class` into `portfolioTransactionService.create` as `preloaded_asset_class`, so the service can skip a duplicate metadata query while preserving validation and response behavior ([[apps/node-backend/src/services/investmentService.js]], [[apps/node-backend/src/services/portfolio/portfolioTransactionService.js]]).
 - `POST /api/investments/refresh-prices` now performs update writes in bounded batches (instead of one unbounded `Promise.all`) to reduce DB/pool contention spikes while preserving response payload semantics (`updated`, `total`, `prices`, `priceSources`) and per-investment update behavior ([[apps/node-backend/src/routes/investments.js]]).
 - Migration safety note: in inherited-schema deployments where `portfolio_transactions` is a compatibility view, migration `0016_add_fx_rate_to_portfolio_transactions` now checks relation kind before running `ALTER TABLE` (`r`/`p` only) and keeps the view recreation path for `relkind='v'`, so migration does not fail on view-backed schemas ([[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]], [[docs/features/portfolio|Feature: Portfolio & Investments]]).
 - Add/Edit portfolio transaction dialogs expose an optional `fx_rate_to_eur` field and pass it through to create payloads when set ([[apps/frontend/src/features/portfolio/AddPortfolioTxnDialog.tsx]], [[apps/frontend/src/features/portfolio/EditPortfolioTxnDialog.tsx]], [[apps/frontend/src/hooks/usePortfolio.ts]]).
@@ -465,7 +505,7 @@ Create-path compatibility:
 > **Removed.** The in-specie move endpoint (ADR-091 FIFO/proportional lot surgery,
 > `moveHoldingService`) was deleted; under ADR-108 an in-specie transfer becomes a whole-lot
 > **re-tag** (`UPDATE … SET account_id`) with basis travelling with the lot — the bulk re-tag
-> endpoint arrives in WP-C3. Reassigning a single lot is still possible via
+> endpoint is `PUT /api/investments/transactions/broker`. Reassigning a single lot is still possible via
 > `PATCH /api/investments/transactions/:txnId` with `account_id`.
 
 ### PATCH /api/investments/transactions/:txnId
@@ -484,7 +524,7 @@ Update a portfolio transaction by transaction ID.
 Update endpoint notes:
 
 - Route is available at `PATCH /api/investments/transactions/:txnId` ([[apps/node-backend/src/routes/investments.js]]).
-- The shared POST/PATCH body parser validates common field shapes at the controller boundary;
+- The shared POST/PATCH body parser validates common field shapes at the service boundary;
   `portfolioTransactionService.update` and `portfolioTransactionRules` enforce type-specific unit
   math, oversell checks, and recurrence-window rules before a parameterized repository update.
 - Transaction `type` is immutable on edit; attempts to change it return `400` with `VALIDATION_ERROR`.
@@ -496,7 +536,7 @@ Update endpoint notes:
 - Optional `fx_rate_to_eur` is supported on update payloads as well; `null` clears a stored rate,
   while an absent key leaves it unchanged. This includes the UI edit flow
   ([[apps/frontend/src/features/portfolio/EditPortfolioTxnDialog.tsx]],
-  [[apps/node-backend/src/controllers/investmentController.js]],
+  [[apps/node-backend/src/services/investmentService.js]],
   [[apps/node-backend/src/services/portfolio/portfolioTransactionService.js]]).
 - `null` clears `recurrence_interval` and `recurrence_end_date`; absent keys leave them unchanged.
 - Oversell protection also applies on update: edited `sell` rows are rejected when resulting sold units exceed holdings for the effective transaction date.

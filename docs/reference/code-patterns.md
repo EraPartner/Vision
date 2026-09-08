@@ -3,7 +3,7 @@ title: Code Patterns Reference
 type: reference
 status: active
 date: 2026-04-26
-updated: 2026-09-04
+updated: 2026-09-08
 tags: [reference, patterns, conventions, code-style, backend, frontend, delete-responses, http-204, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number, settings-backed-hook, portfolio-tax-classifications, audit-2026-05-11, belgian-tax, freeze-display-pattern, adr-059, dev-observability, devtools, api-inspector, observability, postgres-locking, for-update-group-by, accessibility, a11y, keyboard-operability, aria, onActivateKeyDown, shared-utils, monorepo, workspace, banker-rounding, plural, tc, portfolio-unit-math, premium-v3, optimistic-create, chart-scrub, chart-sync, context-menu, dialog-interplay, radix, role-based-glass, june-2026, skin-v2, feature-flag, css-scoping, unlayered-css, visual-skin, theming, inline-token-constraint, adr-104, wire-casing, snake-case, api-casing, database-naming, enum-discipline, check-constraints, chk-uq-idx]
 description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via an indexable semi-join (Phase Q; rewritten from the original scalar-subquery OR shape), portfolio totals single-source-of-truth pattern (Phase 14), Belgian Tax freeze/display pattern for engine-drift protection (ADR-059, May 2026), dev-only observability integration pattern (May 2026 devtools: module-level pub-sub event bus with zero-cost tree-shaking in production). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix. May 2026 a11y pass adds onActivateKeyDown keyboard-activation helper pattern. June 2026: shared-utils cross-workspace package (@vision/shared-utils) consolidates money, slugify, and shared portfolio calculations; banker's rounding is now the canonical roundMoney mode; tc() plural pattern documented. June 2026 (ADR-070): optimistic mutation pattern (snapshot/patch/rollback via setQueriesData); surface shell updated with glass-regular/glass-elevated/opaque-table canonical rules; motion consumer updated for PageTransition re-addition and dialog keyframe animation. June 2026 Premium v3 (ADR-071): optimistic-create pattern (temp negative-id row, server swap, rollback, onSettled invalidate); chart scrub pattern (useChartScrub, pointer capture, glass Δ pill); chart sync pattern (ChartSyncProvider, syncId prop, domain guard). June 2026 Premium v3 V5 (ADR-071): Radix ContextMenu + Dialog interplay pattern — modal={false} prevents body pointer-events race when menu items spawn Dialogs. June 2026 (role-based glass): surface shell canonical rule broadened — glass-regular now applied to ALL content/chart/stat/state cards, including current table/form/callout/dialog-nested Card instances; old ~6-surface-per-viewport limit superseded; an explicit opaque exception uses a plain bordered bg-card container instead of Card. June 2026 (ADR-104): scoped-skin-behind-a-flag pattern — alternative visual skin shipped as UNLAYERED CSS under :root.skin-v2 toggled by VITE_SKIN_V2 booleanEnv flag (default OFF); localStorage runtime override + window.__setSkinV2 dev helper; critical inline-token constraint: applyThemePalette() writes color tokens as inline styles which beat any stylesheet rule. July 2026: wire casing convention — snake_case is the request/response body contract, translated to camelCase at the route edge; ai/savedCharts/crossWorkspace/admin-dbEditor requests plus marketLookup and import-rollback responses are grandfathered camelCase; dual-accept (`x_y ?? xY`) is banned.
 aliases: [code patterns, coding patterns, conventions, patterns, delete response pattern, 204 no content, delete convention, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236, date utilities, immutability, aggregation optimization, Map pattern, recipient group filter, recipientGroupId, portfolio totals, single source of truth, parseLocaleNumber, number parsing, locale-aware number parsing, thousands separator, decimal separator, belgian-tax-pattern, freeze-display-pattern, as-filed-calculation, engine-drift-protection, shared-utils, workspace, plural, tc, scoped-skin-behind-a-flag-pattern-adr-104, skin-v2 pattern, visual skin flag, unlayered css pattern, inline token constraint, wire casing convention, snake_case bodies, api casing, camelCase grandfathered routers, database naming, enum discipline, text plus check, constraint naming, index naming, chk prefix, uq prefix, idx prefix]
@@ -178,26 +178,26 @@ As of 2026-05-14, decimal enforcement is **mandatory** for all monetary API outp
 
 **Source:** [[apps/frontend/src/lib/decimal.ts|decimal.ts]]
 
-Frontend monetary display and form parsing use `parseDecimal()` for safe handling of comma-formatted input and edge cases:
+Frontend monetary form parsing uses `parseDecimal()` with the user's explicit number-format setting:
 
 ```typescript
 import { parseDecimal } from "@/lib/decimal";
 
 // Parse user input (form field)
-const amount = parseDecimal("1.234,56"); // → 1234.56
-const amount2 = parseDecimal("100"); // → 100
-const amount3 = parseDecimal(null); // → 0 (fallback)
+const amount = parseDecimal("1.234,56", "eu"); // → 1234.56
+const amount2 = parseDecimal("1,234.56", "us"); // → 1234.56
+const amount3 = parseDecimal(null, "eu"); // → 0 (fallback)
 
 // Safe fallback
-const value = parseDecimal(userInput, 0); // Use 0 if parsing fails
+const value = parseDecimal(userInput, numberFormat, 0);
 ```
 
 ### Key Rules
 
 | Rule                  | Rationale                                                  |
 | --------------------- | ---------------------------------------------------------- |
-| User form input       | Always wrap in `parseDecimal()`                            |
-| Comma handling        | Automatically strips commas (locale-aware parsing)         |
+| User form input       | Pass the active `numberFormat` to `parseDecimal()`         |
+| Separator handling    | Reject separators that do not match the selected format    |
 | Null/undefined/empty  | Returns `fallback` (default 0)                             |
 | Non-finite results    | Returns `fallback` (NaN, Infinity handled)                 |
 | API responses         | Already precise (server sends 2 DP numbers), display as-is |
@@ -205,9 +205,8 @@ const value = parseDecimal(userInput, 0); // Use 0 if parsing fails
 
 ### When to Use
 
-- **Form field parsing** — user enters "1.234,56", parse to 1234.56
-- **CSV import preview** — preview user-provided amounts
-- **Legacy number input** — handle both comma and decimal separators
+- **Form field parsing** — user enters the separators selected in Settings
+- **Editable API values** — use `formatEditableNumber` before putting a stored number back in a draft
 - **Fallback safety** — never show NaN in UI
 
 ### When NOT to Use
@@ -3041,22 +3040,25 @@ Page headers and identity empty states may show that destination icon. Chart hea
 
 Standard card and surface shell for consistent material hierarchy and visual cohesion.
 
-> [!info] Updated June 2026 — ADR-070 + role-based glass broadening (June 2026, no ADR yet)
-> The canonical card material rule changed in two steps. Step 1 (ADR-070): `surface-elevated … bg-card backdrop-blur-sm` replaced by the glass vocabulary below; `premium-frame` baked into base `Card`. Step 2 (June 2026): the narrow "only ~6 KPI/hero/chart surfaces" rule was broadened to role-based glass — ALL content/chart/stat/state cards now carry `glass-regular`. See the note in [[docs/components/ui-components#surface-styling-liquid-glass-v2-june-2026|UI Components — Surface Styling]] for full rationale. A future ADR may formalize this.
+> [!info] Updated September 2026 — ADR-132 thin Card baseline
+> ADR-070 introduced the glass vocabulary and baked `premium-frame` into the base Card. The June
+> role-based broadening then made every Card `glass-regular`. [[docs/adr/132-thin-default-card-material|ADR-132]]
+> keeps glass as the baseline but reduces ordinary Cards from 20px `glass-regular` to 12px
+> `glass-thin`. Explicit elevated heroes and chrome cards keep their stronger tiers.
 
-### Canonical Card Material Rule (June 2026, role-based)
+### Canonical Card Material Rule (September 2026)
 
-| Surface type                                                                | Class                                   | Notes                                                                                                                                                            |
-| --------------------------------------------------------------------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Content / chart / stat / state card                                         | Base `<Card>`                           | `Card` owns `glass-regular` and `premium-frame`; call sites do not restate either class                                                                          |
-| Dashboard hero card                                                         | `glass-elevated`                        | 32px blur + saturate; trend tint in overlay child                                                                                                                |
-| Table container implemented with `<Card>` (including `VirtualDataTable`)    | Base `<Card>`                           | Current implementation inherits `glass-regular`; use a plain bordered `bg-card` section when a new dense surface explicitly needs an opaque GPU-budget exception |
-| Dense form/import card implemented with `<Card>`                            | Base `<Card>`                           | Current implementation inherits the base material                                                                                                                |
-| Dashed "add" placeholder or accent/danger callout implemented with `<Card>` | Base `<Card>` plus semantic tint/border | The tint is additive; it does not disable the base backdrop filter                                                                                               |
-| Card nested inside a glass dialog                                           | Base `<Card>`                           | Current implementation still inherits `glass-regular`; avoid adding another explicit glass tier                                                                  |
-| Modal dialog                                                                | `glass-thick`                           | Handled by the base Dialog component                                                                                                                             |
-| Toast                                                                       | `glass-thick`                           | Handled by Sonner                                                                                                                                                |
-| Navigation chrome                                                           | `glass-chrome`                          | Handled by AppLayout/AppSidebar                                                                                                                                  |
+| Surface type                                                                | Class                                   | Notes                                                                                                                        |
+| --------------------------------------------------------------------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Content / chart / stat / state card                                         | Base `<Card>`                           | `Card` owns `glass-thin` and `premium-frame`; call sites do not restate either class                                         |
+| Dashboard hero card                                                         | `glass-elevated`                        | 32px blur + saturate; trend tint in overlay child                                                                            |
+| Table container implemented with `<Card>`                                   | Base `<Card>`                           | Inherits `glass-thin`; use a plain bordered `bg-card` section when a dense surface needs a fully opaque GPU-budget exception |
+| Dense form/import card implemented with `<Card>`                            | Base `<Card>`                           | Inherits `glass-thin`; use an opaque container only for an explicit dense-surface exception                                  |
+| Dashed "add" placeholder or accent/danger callout implemented with `<Card>` | Base `<Card>` plus semantic tint/border | The tint is additive; it does not disable the base backdrop filter                                                           |
+| Card nested inside a glass dialog                                           | Base `<Card>`                           | Inherits `glass-thin`; use an opaque container if the remaining nested blur is too costly                                    |
+| Modal dialog                                                                | `glass-thick`                           | Handled by the base Dialog component                                                                                         |
+| Toast                                                                       | `glass-thick`                           | Handled by Sonner                                                                                                            |
+| Navigation chrome                                                           | `glass-chrome`                          | Handled by AppLayout/AppSidebar                                                                                              |
 
 Warning and neutral-information UI use the semantic `warning` and `info` tokens; raw amber, yellow, blue, or sky utilities are not allowed. Material shadows use `hsl(var(--glass-shadow) / alpha)` so every theme variant retains its own depth hue. Gain/loss signals remain exclusively on `--gain` and `--loss`.
 
@@ -3068,12 +3070,12 @@ Warning and neutral-information UI use the semantic `warning` and `info` tokens;
 ### Pattern
 
 ```tsx
-// Content / chart / stat card (most common — role-based glass)
+// Content / chart / stat card (most common — thin glass baseline)
 <Card>
   {/* Content — resting premium frame and glass material come from Card base */}
 </Card>
 
-// State cards (loading/empty/error) also get glass-regular for peer consistency
+// State cards (loading/empty/error) also get glass-thin for peer consistency
 <Card>
   <EmptyState ... />
 </Card>
@@ -3104,11 +3106,12 @@ Warning and neutral-information UI use the semantic `warning` and `info` tokens;
 
 | Utility                     | Purpose                                                                                                     |
 | --------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `glass-regular`             | Content/chart/stat/state cards — 20px blur + saturate                                                       |
+| `glass-regular`             | Explicit stronger content material and non-Card panes — 20px blur + saturate                                |
 | `glass-elevated`            | Hero cards — 32px blur + saturate + lensing edges                                                           |
 | `glass-thick`               | Modal dialogs, toasts — 28px blur + saturate                                                                |
 | `glass-chrome`              | Sidebar/topbar navigation — 24px blur + saturate                                                            |
-| `glass-thin`                | Subtle elements — 12px blur + saturate                                                                      |
+| `glass-thin`                | Base Card and subtle elements — 12px blur + saturate                                                        |
+| `card-material`             | Persistent Card marker used by native vibrancy to suppress duplicate web blur                               |
 | `premium-frame`             | Resting frame baked into the Card base                                                                      |
 | `premium-frame-interactive` | Interactive Card hover outline and pre-rendered elevated-shadow crossfade; added by `variant="interactive"` |
 | `micro-lift`                | Hover transform for non-Card interactive surfaces                                                           |
@@ -3124,7 +3127,7 @@ Do not hardcode the primary token in an icon-tile shadow.
 
 **Source:** [[apps/frontend/src/pages/DashboardPage.tsx|DashboardPage.tsx]], [[apps/frontend/src/components/shared/StatCard.tsx|StatCard.tsx]]
 
-Summary cards and stat tiles use a glass-elevated or glass-regular card with a tint overlay child for hero emphasis. The gradient lives in an overlay child (not on the card background) so it survives the `backdrop-filter` cascade.
+Summary cards and stat tiles use explicit `glass-elevated` when they need hero emphasis; ordinary cards inherit `glass-thin`. The gradient lives in an overlay child (not on the card background) so it survives the `backdrop-filter` cascade.
 
 #### Canonical approach: `<TrendHue>` (2026-06-24)
 
@@ -3178,7 +3181,7 @@ import { TrendHue } from "@/components/shared/TrendHue";
 | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | Always use `overflow-hidden` with rounded corners                                                                      | Prevents gradient overflow; clips grain texture properly                                         |
 | Do NOT put `premium-frame` or `micro-lift` on `<Card>` manually                                                        | The base owns the resting frame; `variant="interactive"` owns Card hover and press behavior      |
-| Base `<Card>` supplies `glass-regular` for content/chart/stat/state cards                                              | Role-based glass (June 2026) — do not re-add the base material at call sites                     |
+| Base `<Card>` supplies `glass-thin` for content/chart/stat/state cards                                                 | ADR-132 — do not re-add the base material at call sites                                          |
 | Use `glass-elevated` for hero/summary cards                                                                            | Max-tier material for dashboard emphasis                                                         |
 | Tables, forms, placeholders, and callouts that must stay opaque use a plain bordered `bg-card` container, not `<Card>` | Avoids accidentally inheriting the base glass material                                           |
 | Cards nested in glass dialogs use only the base material                                                               | Do not add an explicit second glass tier                                                         |
@@ -3567,43 +3570,36 @@ function AmountCell({ value }: { value: number }) {
 
 **Source:** `[[apps/frontend/src/utils/currency.ts]]`
 
-`parseLocaleNumber` intelligently parses user-entered numeric strings that may use either comma-as-decimal (EU format) or period-as-decimal (US format), plus handles currency symbols, whitespace, and negative numbers. Returns `NaN` for unparseable input.
+`parseLocaleNumber` strictly parses user-entered numeric strings using an explicit `NumberFormat`. It returns `NaN` when grouping is malformed or separators belong to another configured format. This prevents ambiguous inputs from silently changing magnitude.
 
-### Heuristic Rules
+### Format Rules
 
-The function disambiguates locale formats by examining the position of commas and dots:
+| Setting | Decimal | Grouping                | Valid grouped example |
+| ------- | ------- | ----------------------- | --------------------- |
+| `eu`    | comma   | period                  | `1.234,56`            |
+| `us`    | period  | comma                   | `1,234.56`            |
+| `ch`    | period  | apostrophe (`'` or `’`) | `1'234.56`            |
+| `in`    | period  | Indian comma grouping   | `1,23,456.78`         |
 
-1. **Both comma and dot present:** rightmost wins as decimal separator
-   - `"1,234.56"` → `1234.56` (dot is rightmost → decimal)
-   - `"1.234,56"` → `1234.56` (comma is rightmost → decimal)
-
-2. **Only comma, non-3-digit tail:** comma is decimal
-   - `"1,5"` → `1.5` (2 digits after comma → EU format)
-   - `"1,99"` → `1.99` (2 digits after comma → EU format)
-
-3. **Only comma, exactly 3-digit tail:** comma is thousands separator (US format)
-   - `"1,000"` → `1000` (3 digits after comma → US thousands)
-   - `"5,000"` → `5000`
-   - `"999,000"` → `999000`
-   - `"12,345,500"` → `12345500` (multiple commas with 3-digit tail → all commas are thousands)
-
-4. **No comma or dot:** direct parse
-   - `"42"` → `42`
+Grouping is optional, so `1234,56` is valid for EU and `1234.56` is valid for US, Swiss, and Indian formats. When grouping is used, every group must be valid for that format.
 
 ### Pre-Processing
 
 Before heuristic evaluation:
 
 - Strip leading/trailing whitespace
-- Remove internal whitespace
-- Strip currency symbols (`$`, `€`, `£`, `¥`)
+- Reject internal whitespace inside the numeric token
+- Accept one currency symbol (`$`, `€`, `£`, `¥`, `₹`) at either edge
 - Handle negative indicators: prefix `-` or parentheses `(value)` = negative
 - A leading `+` is stripped but does not flip sign
 
 ### API
 
 ```typescript
-parseLocaleNumber(input: string | number | null | undefined): number
+parseLocaleNumber(
+  input: string | number | null | undefined,
+  numberFormat: NumberFormat,
+): number
 ```
 
 **Returns:** Parsed number or `NaN` if unparseable.
@@ -3612,45 +3608,34 @@ parseLocaleNumber(input: string | number | null | undefined): number
 
 ```typescript
 // US formats
-parseLocaleNumber("1,234.56"); // → 1234.56
-parseLocaleNumber("1,000"); // → 1000 (single-comma thousands)
-parseLocaleNumber("12,345,500"); // → 12345500
+parseLocaleNumber("1,234.56", "us"); // → 1234.56
+parseLocaleNumber("1,000", "us"); // → 1000
 
 // EU formats
-parseLocaleNumber("1.234,56"); // → 1234.56
-parseLocaleNumber("1,50"); // → 1.5
+parseLocaleNumber("1.234,56", "eu"); // → 1234.56
+parseLocaleNumber("1000,005", "eu"); // → 1000.005
+parseLocaleNumber("1.234", "eu"); // → 1234
 
 // With currency symbols and whitespace
-parseLocaleNumber("$ 1,234.56 "); // → 1234.56
-parseLocaleNumber("€1,50"); // → 1.5
+parseLocaleNumber("$ 1,234.56 ", "us"); // → 1234.56
+parseLocaleNumber("€1,50", "eu"); // → 1.5
 
 // Negatives
-parseLocaleNumber("-42.50"); // → -42.5
-parseLocaleNumber("(42.50)"); // → -42.5
+parseLocaleNumber("-42.50", "us"); // → -42.5
+parseLocaleNumber("(42.50)", "us"); // → -42.5
 
 // Invalid
-parseLocaleNumber(""); // → NaN
-parseLocaleNumber("abc"); // → NaN
-parseLocaleNumber(null); // → NaN
-parseLocaleNumber(undefined); // → NaN
+parseLocaleNumber("1,234.56", "eu"); // → NaN (foreign separators)
+parseLocaleNumber("12,34", "us"); // → NaN (bad grouping)
+parseLocaleNumber("abc", "eu"); // → NaN
 
 // Numbers pass through unchanged
-parseLocaleNumber(42.5); // → 42.5
-parseLocaleNumber(-7); // → -7
-parseLocaleNumber(0); // → 0
+parseLocaleNumber(42.5, "eu"); // → 42.5
 ```
-
-### Bug Fix (2026-05-08)
-
-**Issue:** Single-comma values with exactly 3 digits after the comma (e.g., `"1,000"`) were incorrectly treated as decimal instead of thousands separator, returning `1` instead of `1000`.
-
-**Root Cause:** The condition was `if (tail === 3 && s.indexOf(',') !== lastComma)` — the second clause excluded single-comma cases by requiring at least two commas.
-
-**Fix:** Simplified to `if (tail === 3)` — any comma with exactly 3 digits after it is now treated as a US thousands separator, regardless of whether there are other commas. Test coverage added: `parseLocaleNumber("1,000")`, `parseLocaleNumber("5,000")`, `parseLocaleNumber("999,000")`.
 
 ### Usage Sites
 
-Primary usage: transaction amount input dialogs and CSV import amount parsing where users may be in any locale.
+All interactive money and decimal forms pass `appSettings.numberFormat`. Pure helpers receive the format as an argument. CSV import adapters keep their own parser because the input file's format is independent of the app display setting.
 
 ---
 
@@ -4559,11 +4544,18 @@ CREATE TYPE thing_kind AS ENUM ('alpha', 'beta');
 
 Why: PG enums require `ALTER TYPE ... ADD VALUE` ceremony (non-transactional before PG 12, still awkward in migrations), **cannot drop values**, and this schema already carries dead enum values as permanent residue (`revolut_state`: 3 of its 5 values are unreachable because the Revolut adapter drops non-COMPLETED rows before insert). A named CHECK is changed with a two-statement `DROP CONSTRAINT` / `ADD CONSTRAINT` — see 0053/0068/0073/0075/0081 for the idiom.
 
-The nine existing PG enums (`asset_class`, `portfolio_txn_type`, `recurrence_interval`, `price_provider`, `revolut_state`, `account_type`, `account_liquidity_class`, `account_tax_wrapper`, `account_owner`) stay as they are — the rule governs new work, not a retrofit.
+Eight active PostgreSQL enums (`asset_class`, `portfolio_txn_type`, `price_provider`,
+`revolut_state`, `account_type`, `account_liquidity_class`, `account_tax_wrapper`, `account_owner`)
+remain. Migration 0099 is the deliberate exception that retires `recurrence_interval` from the
+active table while leaving the type itself available for legacy relations and downgrade.
 
 **Adding a CHECK to an existing table** (retrofitting a vocabulary): add it `NOT VALID`, then `VALIDATE CONSTRAINT` tolerantly inside a `DO` block that catches `check_violation` and logs a WARNING with the audit/cleanup recipe instead of bricking boot (migrations run fail-fast on app start). Precedent: 0046 → 0049, and 0089.
 
-**Recurrence vocabulary:** the app-side vocabulary for `planned_transactions.recurrence_pattern` is `'biweekly'` (no hyphen; enforced by `chk_planned_transactions_recurrence_pattern` since 0089, matching `SUPPORTED_PATTERNS` plus the `every N days` grammar). The `recurrence_interval` PG enum used by `portfolio_transactions` keeps its historical `'bi-weekly'` spelling — do not introduce `'bi-weekly'` into any new column, and keep the frontend mapper's compat shim until the enum is retired.
+**Recurrence vocabulary:** both `planned_transactions.recurrence_pattern` and active
+`portfolio_transactions.recurrence_interval` use `'biweekly'` (no hyphen). Migration 0099 rewrites
+the legacy portfolio spelling and replaces the active enum column with checked text. Portfolio API
+writes normalize legacy `'bi-weekly'` input for one compatibility release, but reads and generated
+contracts emit only the canonical spelling. See [[docs/adr/130-canonical-biweekly-recurrence|ADR-130]].
 
 ### Constraint & index naming
 

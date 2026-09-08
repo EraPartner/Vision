@@ -3,8 +3,8 @@ title: Aggregations API
 type: endpoint
 status: active
 date: 2026-04-25
-updated: 2026-08-26
-last_modified: 2026-08-26
+updated: 2026-09-07
+last_modified: 2026-09-07
 recipient_pivot_added: 2026-04-28
 tag_pivot_added: 2026-06-26
 tags: [endpoint, api, aggregations, backend, phase-2, phase-6, phase-9, phase-10, phase-d, phase-e, phase-f, phase-g, phase-h, phase-h-v2, decimal, money, cashflow-forecast, multi-method-forecast, statistical-forecasting, ensemble-methods, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience, rolling-window, url-persistence, rolling-cache, rolling-diagnostics, recipient-pivot, tag-pivot, saved-charts, exclusion-filters, ensemble-v2, tags]
@@ -126,6 +126,8 @@ Summary of financial totals per month.
 | `currency`                 | string    | EUR     | Target currency (3-letter code, case-insensitive)                                                                                                        |
 | `excluded_category_ids[]`  | integer[] | []      | Categories to exclude from totals                                                                                                                        |
 | `excluded_recipient_ids[]` | integer[] | []      | Recipients to exclude from totals                                                                                                                        |
+| `start_date`               | date      | —       | Inclusive lower transaction-date bound; ignored when `all_time=true`                                                                                     |
+| `end_date`                 | date      | —       | Inclusive upper transaction-date bound; ignored when `all_time=true`                                                                                     |
 | `all_time`                 | boolean   | false   | When `true`, return full all-time history; when `false`, return recent months only. Always bypasses MV fast-path and uses live SQL for complete accuracy |
 
 **Response (data field):**
@@ -169,7 +171,7 @@ const envelope = await apiClient.getAggregationMonthlySummary({
 
 **Implementation Notes:**
 
-- **MV Fast-Path Optimization**: When `all_time=false` and no category/recipient exclusions are present, the backend reads from `mv_monthly_summary` (recent months only, ~5–10ms response). Otherwise, live SQL executes against full transaction history.
+- **MV Fast-Path Optimization**: When `all_time=false`, no explicit date bounds, and no category/recipient exclusions are present, the backend can read from `mv_monthly_summary` (recent months only). Explicit ranges use live SQL.
 - **All-Time Bypass**: When `all_time=true`, the fast path is unconditionally bypassed—live SQL always executes to guarantee complete all-time history. MVs retain only the last 12 months, insufficient for full history queries. See [[docs/performance/materialized-views#mv-monthly-summary]] for details.
 - **Historical FX Conversion**: Each month's transactions are converted using date-specific FX rates (not latest rates), preserving month-over-month stability across restarts and rate cache refreshes.
 
@@ -224,6 +226,8 @@ Top merchants and month-over-month spending changes. Supports the same exclusion
 | Parameter                  | Type      | Default | Description                                                                          |
 | -------------------------- | --------- | ------- | ------------------------------------------------------------------------------------ |
 | `currency`                 | string    | EUR     | Target currency                                                                      |
+| `start_date`               | date      | —       | Inclusive lower transaction-date bound                                               |
+| `end_date`                 | date      | —       | Inclusive upper transaction-date bound                                               |
 | `excluded_category_ids[]`  | integer[] | []      | Categories to exclude (applied via `COALESCE(t.category_id, r.default_category_id)`) |
 | `excluded_recipient_ids[]` | integer[] | []      | Recipients to exclude (applied via `COALESCE(pr.id, r.id)` to resolve cluster roots) |
 
@@ -397,60 +401,38 @@ The deprecated `start` and `end` aliases remain accepted for existing clients. I
 
 ```json
 {
-  "recipients": [
-    {
-      "recipient_id": 10,
-      "recipient_name": "SuperMart",
-      "periods": [
-        {
-          "period": "2026-01",
-          "total": 425.5,
-          "count": 8
-        },
-        {
-          "period": "2026-02",
-          "total": 382.75,
-          "count": 7
-        }
-      ],
-      "total": 808.25,
-      "count": 15
-    },
-    {
-      "recipient_id": 11,
-      "recipient_name": "Gas Station",
-      "periods": [
-        {
-          "period": "2026-01",
-          "total": 85.0,
-          "count": 2
-        },
-        {
-          "period": "2026-02",
-          "total": 92.5,
-          "count": 2
-        }
-      ],
-      "total": 177.5,
-      "count": 4
-    }
-  ]
+  "recipientPivot": {
+    "2026-01": [
+      {
+        "recipientId": 10,
+        "name": "SuperMart",
+        "total": 425.5,
+        "transactionCount": 8
+      }
+    ]
+  },
+  "conversion": {
+    "usedHistoricalFallback": true,
+    "affectedCurrencies": ["USD"]
+  }
 }
 ```
 
+`conversion.usedHistoricalFallback` is true when any requested historical rate was unavailable and
+the conversion service used a current rate or identity fallback. Totals keep their existing values
+for compatibility. `affectedCurrencies` identifies the source currencies involved so the client can
+warn that those totals may be incomplete.
+
 **Field Descriptions:**
 
-| Field            | Type   | Meaning                                           |
-| ---------------- | ------ | ------------------------------------------------- |
-| `recipients[]`   | array  | Per-recipient aggregated series                   |
-| `recipient_id`   | number | Recipient ID                                      |
-| `recipient_name` | string | Recipient display name                            |
-| `periods[]`      | array  | Time-bucketed spending (monthly/yearly)           |
-| `period`         | string | Period key (YYYY-MM for monthly, YYYY for yearly) |
-| `total`          | number | Recipient spending in this period                 |
-| `count`          | number | Transaction count in this period                  |
-| `total`          | number | Total recipient spending across all periods       |
-| `count`          | number | Total transaction count                           |
+| Field              | Type   | Meaning                                |
+| ------------------ | ------ | -------------------------------------- |
+| `recipientPivot`   | object | Period keys mapped to recipient series |
+| `recipientId`      | number | Recipient ID                           |
+| `name`             | string | Recipient display name                 |
+| `total`            | number | Recipient spending in this period      |
+| `transactionCount` | number | Transaction count in this period       |
+| `conversion`       | object | Historical-rate completeness metadata  |
 
 **Frontend Usage:**
 
@@ -595,6 +577,8 @@ Aggregated spending data pivoted by category with support for exclusion filters.
 | Parameter                  | Type      | Default | Description                                       |
 | -------------------------- | --------- | ------- | ------------------------------------------------- |
 | `currency`                 | string    | EUR     | Target currency (3-letter code, case-insensitive) |
+| `start_date`               | date      | —       | Inclusive lower transaction-date bound            |
+| `end_date`                 | date      | —       | Inclusive upper transaction-date bound            |
 | `excluded_category_ids[]`  | integer[] | []      | Categories to exclude                             |
 | `excluded_recipient_ids[]` | integer[] | []      | Recipients to exclude                             |
 
@@ -636,6 +620,8 @@ Aggregated per-recipient spending broken out by calendar year, with support for 
 | Parameter                  | Type      | Default | Description                                       |
 | -------------------------- | --------- | ------- | ------------------------------------------------- |
 | `currency`                 | string    | EUR     | Target currency (3-letter code, case-insensitive) |
+| `start_date`               | date      | —       | Inclusive lower transaction-date bound            |
+| `end_date`                 | date      | —       | Inclusive upper transaction-date bound            |
 | `excluded_recipient_ids[]` | integer[] | []      | Recipients to exclude                             |
 | `excluded_category_ids[]`  | integer[] | []      | Categories to exclude                             |
 
@@ -804,6 +790,11 @@ Monte Carlo rolling cache.
         "p50": [{ "date": "2026-04-29", "value": 42.15 }],
         "p90": [{ "date": "2026-04-29", "value": 49.1 }]
       },
+      "cumulative_bands": {
+        "p10": [{ "date": "2026-04-29", "value": 3428.1 }],
+        "p50": [{ "date": "2026-04-29", "value": 3450.75 }],
+        "p90": [{ "date": "2026-04-29", "value": 3472.4 }]
+      },
       "error": null
     }
   ],
@@ -851,6 +842,7 @@ Monte Carlo rolling cache.
 | `methods[].daily[]`                | array          | Daily forecast values (future dates only)                                                                                                          |
 | `methods[].cumulative[]`           | array          | Cumulative sum including actual-to-date and forecast                                                                                               |
 | `methods[].bands`                  | object \| null | Confidence bands for MC methods; `{ p10: [], p50: [], p90: [], ... }` per requested percentile                                                     |
+| `methods[].cumulative_bands`       | object \| null | Path-wise cumulative MC percentiles with actual, scheduled, and enabled planned cash included once                                                 |
 | `methods[].error`                  | string \| null | Error code if method failed                                                                                                                        |
 | `planned[]`                        | array          | Pending planned transaction dates (if `include_planned=true`)                                                                                      |
 | `planned[].date`                   | string         | Planned date                                                                                                                                       |
@@ -887,7 +879,7 @@ const envelope = await apiClient.getCashflowForecastRolling({
 **Implementation Notes:**
 
 - **Reuses forecast engine:** Leverages the same 8-method statistical engine as `/api/aggregations/cashflow-forecast-methods` (5 point + 2 MC + 1 ensemble)
-- **Cumulative anchor:** Cumulative balance is computed relative to window start (not absolute account balance), allowing visualization of trend within the rolling window independently
+- **Cumulative anchor:** Cumulative net cash flow is computed relative to window start (not absolute account balance), allowing visualization of trend within the rolling window independently
 - **Planned overlay:** When `include_planned=true`, pending planned transactions are interpolated into the response; cumulative includes planned amounts
 - **MC seed:** Uses seeded PRNG derived from `hash(userId | todayIso | daysBack | daysForward | filterHash)` for deterministic samples across identical requests; seed changes daily as `today` shifts
 - **Rolling MC defaults:** Backend defaults to 500 paths and [25,75] percentiles (distinct from month view 1000 paths and [10,50,90]). Frontend requests use these defaults; `include_backtest: false` in main chart query allows lighter load
@@ -1058,6 +1050,11 @@ Real-time cash flow forecast for the current month using eight forecasting metho
           { "date": "2026-04-26", "value": 49.0 }
         ]
       },
+      "cumulative_bands": {
+        "p10": [{ "date": "2026-04-25", "value": 1275.2 }],
+        "p50": [{ "date": "2026-04-25", "value": 1288.5 }],
+        "p90": [{ "date": "2026-04-25", "value": 1301.4 }]
+      },
       "error": null
     }
   ],
@@ -1127,6 +1124,7 @@ Real-time cash flow forecast for the current month using eight forecasting metho
 | `methods[].daily[]`                  | array          | Daily forecast values (null for past, forecast for future)                                                                                       |
 | `methods[].cumulative[]`             | array          | Cumulative sum including actual-to-date and method's forecast                                                                                    |
 | `methods[].bands`                    | object \| null | Confidence bands (only for MC methods); `{ p10: [], p50: [], p90: [], ... }` per requested percentile                                            |
+| `methods[].cumulative_bands`         | object \| null | Percentiles computed from cumulative simulated paths; includes the actual anchor and deterministic overlays once                                 |
 | `methods[].error`                    | string \| null | Error code if method failed (e.g., `"forecast_failed"`)                                                                                          |
 | `diagnostics`                        | object \| null | Walk-forward backtest results (null if `include_backtest=false`)                                                                                 |
 | `diagnostics.backtest[].mae`         | number         | Mean Absolute Error (EUR) across all historical months                                                                                           |
@@ -1317,7 +1315,7 @@ Dashboard visualization via `CashFlowForecastChart` component:
 
 - Multi-method chart with all 8 forecasting methods available (5 point + 2 MC + 1 ensemble)
 - **Default visibility:** Displays 6 methods by default — 5 point methods (Simple Average, Weighted Average, EWMA, Holt-Winters, Prophet Lite) + Ensemble inv-MSE. Monte Carlo methods are hidden by default but can be toggled on via pill controls to reduce clutter in the default view.
-- View toggle (cumulative balance vs. daily net) via Tabs
+- View toggle (cumulative net cash flow vs. daily net) via Tabs
 - Per-method visibility toggles via pill buttons
 - Monte Carlo confidence bands (P10/P90) as dashed LineSeries (visible when MC methods are toggled on)
 - Planned transaction overlay switch (refetches with `include_planned=true`)

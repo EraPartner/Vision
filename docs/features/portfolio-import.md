@@ -3,8 +3,8 @@ title: Feature - Portfolio CSV Import
 type: feature
 status: active
 date: 2026-06-20
-updated: 2026-08-27
-last_modified: 2026-08-27
+updated: 2026-09-05
+last_modified: 2026-09-05
 tags:
   [
     feature,
@@ -66,7 +66,7 @@ Key design points:
 - **Conservative auto-commit**: only when every row matched exactly and there are zero errors/unresolved.
 - **Review step for mismatches**: unresolved rows go to `awaiting_review`; the user links each symbol/name to an existing investment or creates a new one.
 - **Reuses `portfolioTransactionService.create`**: 2-of-3 unit math, oversell prevention, and asset-class routing shared with manual entry.
-- **Saved parser configs**: reuses `custom_parser_configs` table with `kind = 'portfolio'` discriminator (ADR-041 migration 0041).
+- **Saved parser configs**: reuses `custom_parser_configs` table with `kind = 'portfolio'` discriminator (ADR-041 migration 0041) and remembers one optional file-level broker account in the existing JSON config.
 
 ---
 
@@ -234,6 +234,11 @@ The `kind` discriminator (`'transaction'` | `'portfolio'`) means:
 - Uniqueness is per-kind: a parser named "My Bank" can exist as both a transaction parser and a portfolio parser simultaneously.
 - `GET /api/portfolio/import/parsers` filters `WHERE kind = 'portfolio'`.
 - `GET /api/import/parsers` filters `WHERE kind = 'transaction'` (or `kind` IS NULL for rows predating migration 0041, handled by the DEFAULT).
+- A portfolio parser may store `accountId`. Selecting that parser restores the broker choice and
+  stages the whole file with that account. The upload edge rejects missing, archived, or
+  non-portfolio accounts before staging.
+- Review always discloses the routing as “N trades to Broker” or “N trades to Unassigned”. If a
+  saved account became unavailable, commit stays disabled until the user selects a replacement.
 
 **Frontend:** `usePortfolioParserConfigs` hook, `PortfolioCsvColumnMapper` component, `portfolioImports` API client module.
 

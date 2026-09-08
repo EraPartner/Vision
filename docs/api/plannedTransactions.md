@@ -29,19 +29,20 @@ Retrieve planned transactions.
 
 **Query Parameters:**
 
-| Parameter    | Type    | Default | Description            |
-| ------------ | ------- | ------- | ---------------------- |
-| limit        | integer | 50      | Max items (max 5000)   |
-| offset       | integer | 0       | Items to skip          |
-| start_date   | string  | null    | Filter start date      |
-| end_date     | string  | null    | Filter end date        |
-| bank_account | string  | null    | Filter by bank account |
-| category_id  | integer | null    | Filter by category     |
-| recipient_id | integer | null    | Filter by recipient    |
-| is_recurring | boolean | null    | Filter recurring       |
-| is_executed  | boolean | null    | Filter executed        |
-| active       | boolean | true    | Filter active          |
-| search       | string  | null    | Search in memo         |
+| Parameter    | Type    | Default | Description                                                   |
+| ------------ | ------- | ------- | ------------------------------------------------------------- |
+| limit        | integer | 50      | Max items (max 5000)                                          |
+| offset       | integer | 0       | Items to skip                                                 |
+| start_date   | string  | null    | Filter start date                                             |
+| end_date     | string  | null    | Filter end date                                               |
+| bank_account | string  | null    | Filter by bank account                                        |
+| account_id   | integer | null    | Exact account ID filter; takes precedence over `bank_account` |
+| category_id  | integer | null    | Filter by category                                            |
+| recipient_id | integer | null    | Filter by recipient                                           |
+| is_recurring | boolean | null    | Filter recurring                                              |
+| is_executed  | boolean | null    | Filter executed                                               |
+| active       | boolean | true    | Filter active                                                 |
+| search       | string  | null    | Search in memo                                                |
 
 > [!warning] `category_id` / `recipient_id` are strict ids (changed 2026-08-11, breaking for malformed ids)
 > Both accept only a plain base-10 integer in 1..2,147,483,647; anything else — `12abc`, `12.5`,
@@ -153,7 +154,7 @@ Create a planned transaction.
 - `loan_start_date`: Start date
 - `loan_payment_day`: Day of month for payment
 
-**Recurrence Patterns:** daily, weekly, bi-weekly, monthly, quarterly, yearly
+**Recurrence Patterns:** daily, weekly, biweekly, monthly, quarterly, yearly
 
 ### GET /api/planned-transactions/:id
 

@@ -3,9 +3,38 @@ title: Dashboard Components
 type: component
 status: active
 date: 2026-04-17
-updated: 2026-08-31
-tags: [components, dashboard, charts, widgets, liquid-glass, liquid-glass-v2, premium-v3, design-system, phase-9, phase-d, phase-f, phase-h, phase-h-v2, ensemble, visx, url-persistence, rolling-cache, rolling-diagnostics, chart-scrub, chart-sync, per-widget-hydration, stat-scrub, june-2026, trend-hue, gain-loss, accessibility, screen-reader]
-description: Dashboard-specific components for financial overview and visualization with liquid-glass aesthetic and visx charts, including dual-mode cash flow forecast with URL state persistence and rolling window diagnostics. June 2026 Liquid Glass v2 — StatCard/NetSummaryCard upgraded to glass-elevated; KPI/chart cards migrated from surface-elevated to glass-regular. June 2026 Premium v3 (ADR-071) — per-widget hydration (no global loading gate), synced dashboard-timeline charts, ChartSkeleton, RollingNumber/DeltaPill adoption. V9: NetSummaryCard sparkline scrub surface. 2026-08-22: its income/spending proportion bar announces localized full values and percentages as one screen-reader image. 2026-08-27: its gain/loss card wash is the shared TrendHue motif.
+updated: 2026-09-08
+tags:
+  [
+    components,
+    dashboard,
+    charts,
+    widgets,
+    liquid-glass,
+    liquid-glass-v2,
+    premium-v3,
+    design-system,
+    phase-9,
+    phase-d,
+    phase-f,
+    phase-h,
+    phase-h-v2,
+    ensemble,
+    visx,
+    url-persistence,
+    rolling-cache,
+    rolling-diagnostics,
+    chart-scrub,
+    chart-sync,
+    per-widget-hydration,
+    stat-scrub,
+    june-2026,
+    trend-hue,
+    gain-loss,
+    accessibility,
+    screen-reader,
+  ]
+description: Dashboard-specific components for financial overview and visualization with liquid-glass aesthetic and visx charts, including dual-mode cash flow forecast with URL state persistence and rolling window diagnostics. Hero StatCard and NetSummaryCard surfaces use glass-elevated; ordinary KPI and chart Cards inherit the cheaper glass-thin baseline from ADR-132. June 2026 Premium v3 (ADR-071) added per-widget hydration, synced charts, ChartSkeleton, RollingNumber, and DeltaPill. V9 added NetSummaryCard sparkline scrub. The income/spending proportion bar has a localized screen-reader summary and gain/loss card wash uses TrendHue.
 aliases: [dashboard-widgets, dashboard-charts, overview-components, stat-cards]
 related_code: ["apps/frontend/src/features/dashboard/"]
 ---
@@ -24,7 +53,10 @@ Components for the main Dashboard page (`/`), providing financial overview and v
 Dashboard statistics, transactions, both monthly-summary variants, and the filtered recent-transactions query all contribute to the page error state. If at least one query has usable data, the dashboard keeps that data visible and shows the partial-data warning. If no query has usable data, the page renders the shared `PageError` recovery surface with a Retry action. Retry refetches the active dashboard queries; exclusion-specific queries are retried only when exclusions apply.
 
 > [!info] June 2026 — Liquid Glass v2 (ADR-070)
-> Dashboard stat cards and hero summary cards were migrated to `glass-elevated` (StatCard, NetSummaryCard) with tint overlays as child elements. KPI/chart card wrappers use `glass-regular`. Tables stay opaque. References to `surface-elevated premium-frame` in this document reflect the pre-June 2026 state; the current canonical recipe is documented in [[docs/reference/code-patterns#surface-shell-pattern-phase-9|Surface Shell Pattern]].
+> Dashboard stat cards and hero summary cards use `glass-elevated` (StatCard, NetSummaryCard) with
+> tint overlays as child elements. Ordinary KPI/chart wrappers inherit the base `glass-thin`
+> material from [[docs/adr/132-thin-default-card-material|ADR-132]]. Tables stay opaque. The current
+> recipe is documented in [[docs/reference/code-patterns#surface-shell-pattern-phase-9|Surface Shell Pattern]].
 
 ## Visual Design
 
@@ -303,7 +335,7 @@ interface CashFlowForecastChartProps {
 - **View modes** — Tabs toggle between cumulative balance and daily net views
 - **Planned transaction overlay** — Switch to include pending planned transactions in cumulative forecast; triggers API refetch
 - **Per-method toggles** — Pill-button controls to show/hide individual methods on chart
-- **Monte Carlo confidence bands** — Dashed LineSeries rendering P10/P90 percentiles for MC methods (visible when MC methods are toggled on)
+- **Monte Carlo confidence bands** — Daily view renders marginal P10/P90; cumulative view renders path-wise cumulative P10/P90 supplied by the backend (visible when MC methods are toggled on)
 - **Diagnostics panel** — Right-side sheet with backtest accuracy table, method rank badges, MAE sparklines, ensemble weights visualization
 - **Diagnostics button** — Icon button to open/close sheet
 

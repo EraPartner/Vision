@@ -2,6 +2,7 @@
 title: ADR-094 Balance Reconciliation & Drift Detection
 type: adr
 date: 2026-09-04
+updated: 2026-09-05
 tags: [adr, accounts, reconciliation, drift, statement-balance, adr-088, balance-write-protection, import-pipeline-only]
 description: Store an authoritative statement balance per account and diff it against the computed ledger balance to surface drift ("drifted €12.40 — missing a transaction"), now that accounts have identity. 2026-06-25 addendum: transactions.balance is now write-protected — only the import pipeline may stamp it.
 aliases: [reconciliation, drift detection, statement balance]
@@ -67,6 +68,23 @@ often a missing or duplicated transaction since the last import.
 - [[docs/adr/index|All ADRs]]
 - [[docs/adr/088-account-entity|ADR-088: Account Entity]]
 - [[docs/adr/010-phase1-aggregation-strategy|ADR-010]] (computed balance source)
+
+## Addendum (2026-09-05): fixed statement-staleness policy
+
+The statement-staleness threshold is a fixed Vision policy, not a per-user or per-account
+preference. A statement becomes stale only when it is more than 45 calendar days old. Day 45 is
+still fresh; day 46 is stale.
+
+All drift surfaces use `STALE_STATEMENT_DAYS` and `isStatementStale()` from
+`apps/frontend/src/features/accounts/driftBadge.ts`. Stale readings use the warning tone because
+age is the likely explanation for the difference. Fresh readings retain the destructive tone
+because they more strongly indicate missing or incorrect ledger activity. Keeping one fixed value
+also prevents the account hub, account detail, and dashboard from disagreeing about the same
+statement.
+
+No settings field or persistence migration is introduced. If the threshold later changes, that is
+a product-policy change and must update the shared constant, boundary tests, localized tooltip,
+and account documentation together.
 
 ---
 

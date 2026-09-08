@@ -1226,14 +1226,6 @@
             "y": 944
           },
           {
-            "id": "build.docker",
-            "label": "Docker Compose",
-            "sub": "postgres + app container",
-            "kind": "build",
-            "x": 40,
-            "y": 852
-          },
-          {
             "id": "build.electron",
             "label": "Electron main + IPC",
             "sub": "packaging/electron/main.js",
@@ -1366,7 +1358,6 @@
           ["sv.forecast", "be.repos"],
           ["sv.bulkselection", "be.repos"],
           ["sv.update", "build.electron"],
-          ["sv.update", "build.docker"],
           ["be.routes", "sv.attachments"],
           ["be.routes", "sv.forecast"],
           ["be.routes", "sv.update"],
@@ -1377,13 +1368,11 @@
           ["sv.backup", "db.attachments"],
           ["be.jobs", "sv.recurring"],
           ["sv.recurring", "be.repos"],
-          ["build.docker", "db.postgres"],
           ["build.electron", "build.todesktop"],
           ["build.electron", "build.native"],
           ["build.native", "db.postgres"],
           ["build.native", "db.attachments"],
           ["build.release", "build.todesktop"],
-          ["build.release", "build.docker"],
           ["fe.hooks", "pkg.shared-utils"],
           ["be.routes", "pkg.shared-utils"],
           ["be.repos", "pkg.shared-utils"],
@@ -2170,14 +2159,8 @@
             "id": "todesktop-release",
             "name": "Build & ship a desktop release",
             "category": "Build",
-            "summary": "GitHub Actions builds the Docker image, signs the Electron bundle, and publishes via ToDesktop.",
+            "summary": "GitHub Actions verifies the native runtime, builds the Electron bundle, and publishes the macOS release.",
             "steps": [
-              {
-                "from": "build.release",
-                "to": "build.docker",
-                "payload": "docker build  \u00b7  pinned base",
-                "annotation": "Trivy scan blocks CRITICAL/HIGH CVEs (ADR-039)."
-              },
               {
                 "from": "build.release",
                 "to": "build.electron",
@@ -2400,7 +2383,7 @@
             "id": "app-update",
             "name": "Apply an in-app update",
             "category": "Updates",
-            "summary": "User accepts the update prompt; Electron creates a provider backup and installs either the verified native app ZIP or the explicit Docker update.",
+            "summary": "User accepts the update prompt; Electron creates a native backup and installs the verified native app or source update.",
             "steps": [
               {
                 "from": "electron",
@@ -2412,25 +2395,19 @@
                 "from": "fe.pages",
                 "to": "build.electron",
                 "payload": "IPC update:pre-update-backup then update:install-shell",
-                "annotation": "The main process selects native, source, dev, or Docker from the active runtime."
+                "annotation": "The main process selects the native packaged, source, or development update path."
               },
               {
                 "from": "build.electron",
                 "to": "sv.backup",
                 "payload": "runBundleBackup(pre-update-backups)",
-                "annotation": "Creates the normal database, attachment, and frontend-state bundle through the active provider."
+                "annotation": "Creates the normal database, attachment, and frontend-state bundle through the native transport."
               },
               {
                 "from": "build.electron",
                 "to": "build.native",
                 "payload": "Vision-<version>-arm64-mac.zip + required SHA-256",
                 "annotation": "Native mode rejects a missing checksum or unsafe archive path, stages Vision.app, and keeps an application rollback copy."
-              },
-              {
-                "from": "build.electron",
-                "to": "build.docker",
-                "payload": "verified release image digest + compose pull/up",
-                "annotation": "Explicit Docker mode only. Native mode never pulls an application image."
               },
               {
                 "from": "build.native",
@@ -2442,7 +2419,7 @@
                 "from": "build.electron",
                 "to": "fe.pages",
                 "payload": "reloaded production frontend after /health/detailed",
-                "annotation": "The renderer returns only after the selected runtime is ready."
+                "annotation": "The renderer returns only after the native runtime is ready."
               }
             ]
           },
@@ -2485,58 +2462,14 @@
               {
                 "from": "build.native",
                 "to": "db.postgres",
-                "payload": "transactional staging restore · exact table verification · atomic database rename",
-                "annotation": "The previous Demo database remains available until the native backend passes detailed readiness and stable important-row counts."
+                "payload": "admin extension bootstrap · restricted transactional restore · exact table verification · atomic database rename",
+                "annotation": "native.js installs required extensions in the template0-based staging database with the private cluster administrator, then restores application objects as the migration owner. The previous Demo database remains available until the native backend passes detailed readiness and stable important-row counts."
               },
               {
                 "from": "build.electron",
                 "to": "fe.pages",
                 "payload": "/health/detailed ready · finalize seed marker or rollback",
                 "annotation": "Successful readiness finalizes the switch and reset request; any start or verification failure restores the previous Demo database before Electron exits."
-              }
-            ]
-          },
-          {
-            "id": "native-cutover",
-            "name": "Cut over Docker data to native macOS",
-            "category": "Deployment",
-            "summary": "An explicit importer stops the Docker writer, creates final logical and attachment exports, validates a staged native restore, then records one active writer.",
-            "steps": [
-              {
-                "from": "electron",
-                "to": "build.electron",
-                "payload": "runtime marker lookup",
-                "annotation": "Existing Docker-era state without a completed marker fails closed with NATIVE_CUTOVER_REQUIRED."
-              },
-              {
-                "from": "build.docker",
-                "to": "build.native",
-                "payload": "stop app writer; final custom-format dump; attachment export",
-                "annotation": "The Docker database remains available for pg_dump and its volumes are never removed or modified."
-              },
-              {
-                "from": "build.native",
-                "to": "db.postgres",
-                "payload": "restore fresh template0 database in one transaction",
-                "annotation": "Bundled PostgreSQL 18.6 tools validate the custom dump, exact Alembic head, full public-table set, every exact table count, and the important-table subset before activation."
-              },
-              {
-                "from": "build.native",
-                "to": "db.attachments",
-                "payload": "staged tree + count and aggregate SHA-256 fingerprint",
-                "annotation": "The attachment directory is switched by rename and retains rollback state until readiness passes."
-              },
-              {
-                "from": "build.native",
-                "to": "be.middleware",
-                "payload": "spawn Bun backend on loopback and poll /health/detailed",
-                "annotation": "Failure rolls back database and attachments and restarts the Docker writer."
-              },
-              {
-                "from": "build.native",
-                "to": "build.electron",
-                "payload": "activeRuntime=native; cutoverPhase=complete",
-                "annotation": "Only after validation does Electron select native; Docker is stopped and retained as a stale rollback source."
               }
             ]
           },
@@ -2846,67 +2779,43 @@
             "id": "close-account",
             "name": "Close a brokerage account",
             "category": "Portfolio",
-            "summary": "Transfer all holdings in-specie to another account then archive the source account via CloseAccountDialog.",
+            "summary": "Choose whether to zero native cash partitions, then atomically archive the account while preserving holdings and ledger history.",
             "steps": [
               {
                 "from": "browser",
                 "to": "fe.pages",
                 "payload": "AccountsPage -> CloseAccountDialog open",
-                "annotation": "User selects 'Close account' from the account context menu; CloseAccountDialog lists the account's current holdings from useAccountPositions."
-              },
-              {
-                "from": "fe.pages",
-                "to": "fe.hooks",
-                "payload": "useAccountPositions(accountId)",
-                "annotation": "apps/frontend/src/hooks/portfolio/useAccountPositions.ts \u2014 reads byAccount from the portfolio-summary response."
-              },
-              {
-                "from": "fe.hooks",
-                "to": "fe.apiclient",
-                "payload": "GET /api/info/portfolio-summary",
-                "annotation": "byAccount array provides per-account holdings list for the dialog."
+                "annotation": "The dialog checks native balance_parts. Residual cash defaults to a visible zero-out adjustment; the user can preserve it instead. Holdings-only accounts skip this choice."
               },
               {
                 "from": "fe.pages",
                 "to": "fe.apiclient",
-                "payload": "POST /api/investments/:id/move { from_account_id, to_account_id, strategy }",
-                "annotation": "One call per holding; strategy defaults to 'fifo'. apps/node-backend/src/services/portfolio/moveHoldingService.js."
+                "payload": "POST /api/accounts/:id/close { balance_handling }",
+                "annotation": "CloseAccountDialog explicitly sends adjustment or preserve. Cancel leaves the account unchanged."
               },
               {
                 "from": "fe.apiclient",
                 "to": "be.routes",
-                "payload": "POST /api/investments/:id/move body",
-                "annotation": "routes/investments.js dispatches to moveHoldingService."
+                "payload": "POST /api/accounts/:id/close body",
+                "annotation": "routes/accounts.js -> accountCloseService.closeAccount."
               },
               {
                 "from": "be.routes",
                 "to": "be.repos",
-                "payload": "UPDATE portfolio_transactions_base SET account_id = to WHERE account_id = from",
-                "annotation": "Whole move: one UPDATE. Partial (fifo/proportional): split boundary lot then UPDATE selected lots. Inheritance-aware."
+                "payload": "Lock account; optionally insert inverse adjustment rows; close",
+                "annotation": "One database transaction reads canonical native balance partitions, inserts balance-free system adjustments, and closes the row. An already-closed retry creates nothing."
               },
               {
                 "from": "be.repos",
                 "to": "db.postgres",
-                "payload": "UPDATE / INSERT portfolio_transactions_base + child table",
-                "annotation": "Lot split writes new row for the fraction moving; updates source row units in-place. ON DELETE RESTRICT FK means account with lots cannot be hard-deleted."
+                "payload": "INSERT adjustments; UPDATE accounts SET is_active=false, closed_at=?, in_net_worth=false",
+                "annotation": "Each non-zero currency reaches zero as of the close date. Existing statement readings, planned rows, future-dated activity, holdings, and history remain linked for audit."
               },
               {
                 "from": "fe.pages",
-                "to": "fe.apiclient",
-                "payload": "PATCH /api/accounts/:id { is_active: false }",
-                "annotation": "Archive step \u2014 marks the source account inactive after all lots are transferred."
-              },
-              {
-                "from": "fe.apiclient",
-                "to": "be.routes",
-                "payload": "PATCH /api/accounts/:id body",
-                "annotation": "routes/accounts.js -> accountService -> accountRepository.update."
-              },
-              {
-                "from": "be.routes",
-                "to": "db.postgres",
-                "payload": "UPDATE accounts SET is_active=false WHERE id=?",
-                "annotation": "Account is soft-deleted; retained for FK integrity. portfolioSummaryCache is invalidated so byAccount reflects the emptied account on next read."
+                "to": "fe.hooks",
+                "payload": "invalidateAccountRepoint(queryClient)",
+                "annotation": "After success, account, transaction, planned-payment, portfolio, bank-balance, cash-forecast, and net-worth query trees are invalidated before the dialog closes."
               }
             ]
           },

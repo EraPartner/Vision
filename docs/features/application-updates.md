@@ -2,198 +2,95 @@
 title: Application Updates
 type: feature
 status: active
-date: 2026-08-30
-updated: 2026-09-03
-tags:
-  [
-    feature,
-    updates,
-    electron,
-    deployment,
-    native-runtime,
-    docker,
-    source-update,
-    backup,
-    rollback,
-    checksums,
-    supply-chain-security,
-  ]
-description: Native, development, source, and optional Docker update paths with provider-aware backup, verified artifacts, and rollback
-aliases: [auto-update, update flow, native update, update lifecycle]
+date: 2026-09-08
+tags: [feature, updates, electron, native-runtime, backup, checksum, release]
+description: Native packaged and source-launcher update paths with backup, checksum verification, and rollback boundaries.
+aliases: [update system, application updater]
 related_code:
-  - packaging/electron/updater.js
-  - packaging/electron/native-update-installer.js
-  - packaging/electron/main.js
-  - packaging/electron/preload.js
-  - packaging/electron/electron-api.d.ts
-  - packages/types/src/electron.d.ts
-  - apps/frontend/src/lib/api/electron.ts
-  - apps/frontend/src/components/notifications/UpdateNotification.tsx
-  - apps/frontend/src/features/settings/sections/AboutSection.tsx
-  - .github/workflows/release.yml
+  [
+    "packaging/electron/updater.js",
+    "packaging/electron/main.js",
+    ".github/workflows/release.yml",
+  ]
 ---
 
 # Application Updates
 
-## Overview
+Vision exposes update information from `/api/admin/update/check`. Electron selects one of two
+install paths:
 
-The selected runtime provider and package shape determine the update path:
+| Mode             | Use                        | Installer                                                    |
+| ---------------- | -------------------------- | ------------------------------------------------------------ |
+| `native`         | Packaged macOS application | Verified release ZIP/app replacement                         |
+| `source` / `dev` | Source checkout            | Generated source-launcher bundle or operator-managed restart |
 
-| Mode     | Environment                                        | Update method                                       |
-| -------- | -------------------------------------------------- | --------------------------------------------------- |
-| `native` | Packaged macOS app with native provider            | Verified application ZIP and atomic app replacement |
-| `dev`    | Unpackaged local Electron/source development       | Source checkout; no in-app installer                |
-| `source` | Packaged shell using an explicitly linked checkout | Verified source-launcher ZIP and guarded helper     |
-| `docker` | Explicit Electron Docker provider                  | Compose image pull and provider restart             |
-| browser  | Non-Electron Docker/server deployment              | Operator-managed command-line update                |
-
-Normal packaged macOS updates do not pull a Docker image. The PostgreSQL cluster, attachments,
-runtime marker, and logs live outside `Vision.app` and are not replaced with the application.
-
-## Mode resolution
-
-Electron resolves the durable runtime marker before it configures the updater. An activated marker
-is authoritative, so an environment variable cannot make later launches alternate between native
-and Docker databases. An in-progress cutover blocks startup and update work.
-
-`packaging/electron/updater.js` returns:
-
-- `dev` for an unpackaged Electron process;
-- `native` when the active provider is native;
-- `source` for the explicit repository-backed packaged mode; and
-- `docker` only for the explicit Compose provider.
-
-The browser API reports `docker-compose`; it offers release information but no in-app installer.
+Browser deployments receive release information but no in-app installer. The operator updates the
+source deployment and database in its own maintenance window.
 
 ## Backup before update
 
-Every installable Electron update first calls `update:pre-update-backup`. This creates a normal
-`.visionbak` through the active provider transport. The bundle contains:
+The Electron main process creates a native backup before it replaces application files. A failed
+backup blocks installation. The updater pauses the runtime watchdog, stops the native backend and
+database in order, performs the install, and keeps rollback state until the updated app opens.
 
-- a PostgreSQL logical dump;
-- attachment files;
-- schema and bundle metadata;
-- supported frontend/localStorage state when supplied by the renderer; and
-- optional AES-256-GCM encryption with legacy encrypted-bundle read compatibility.
+Backup and restore use the same native transport as manual `.visionbak` operations. An in-progress
+database switch blocks update work.
 
-A failed backup aborts the update. The updater never treats a copy of the whole Electron
-`userData` directory as a database backup.
+## Packaged native update
 
-## Native packaged update
+The updater:
 
-The native update path is `update:install-shell`, despite the historical IPC name. It:
+1. fetches release metadata from the configured GitHub release source;
+2. selects the macOS artifact for the running architecture;
+3. downloads the artifact and checksum;
+4. verifies the SHA-256 digest before extraction;
+5. creates a backup and stops the native runtime;
+6. stages and installs the replacement; and
+7. restarts Vision and retains recovery state until startup succeeds.
 
-1. selects the release `Vision-<version>-arm64-mac.zip` and its sibling checksum;
-2. rejects a missing or malformed checksum, digest mismatch, unsafe archive path, or an archive
-   without exactly one acceptable `Vision.app` payload;
-3. extracts into a private temporary directory;
-4. stops the native Bun backend but leaves durable PostgreSQL and attachments in application data;
-5. copies the fixed installer helper beside the staged application and launches it with argument
-   arrays;
-6. waits for Electron to exit, stages the new application beside the installed application, and
-   atomically renames the installed and rollback bundles; and
-7. reopens Vision, restoring and reopening the previous application if installation or relaunch
-   fails.
-
-If the helper cannot be launched, the old native backend is restarted and the current application
-remains open. An update never changes the runtime marker.
+Paths are validated before extraction or replacement. A checksum mismatch, unsupported platform,
+or failed backup stops the operation without activating the staged application.
 
 ## Source update
 
-Source mode downloads `vision-source-launcher-<version>-arm64.zip`. The archive must contain the
-expected `unsigned/Vision/package.json` layout and only relative non-traversing entries. The helper
-backs up the checkout before replacement and preserves the generated
-`packaging/electron/native-runtime` payload so a source update does not force a database/runtime
-redownload.
-
-New releases publish a sibling SHA-256 checksum. The older source updater retains its documented
-compatibility behavior for releases that predate checksum publication; native packaged updates do
-not have that exception.
-
-## Optional Docker update
-
-Docker mode uses the existing Compose provider methods to pull the configured application image,
-restart the app service, and wait for health. It does not run in native mode. The previous image and
-all named volumes remain available if the new container fails.
-
-A registry pull verifies content addressing and transfer integrity, but it is not a substitute for
-image signing or provenance verification. Release CI retains the Docker build, scan, and publish
-path as a separate optional deployment artifact.
+Source mode downloads the generated source-launcher bundle and checksum from the release. The
+launcher validates the target checkout and performs the repository-specific update outside the
+running Electron process. Development mode reports update availability without treating a working
+tree as a packaged application.
 
 ## Renderer behavior
 
-`UpdateNotification.tsx` and `AboutSection.tsx` share the same sequence:
+`UpdateNotification` displays availability, download, install, success, and failure states. It calls
+the Electron updater bridge only when that bridge exists. Web clients display operator guidance
+instead of an install control.
 
-1. check the latest release;
-2. create the provider-aware pre-update backup;
-3. show `downloading` for native/source or `pulling` for Docker;
-4. call `installShellUpdate()` for native/source or `triggerDockerUpdate()` for Docker; and
-5. show restart/completion state or a mapped recovery error.
-
-Outside Electron the UI shows the operator command path instead of presenting a non-functional
-install button.
-
-## IPC surface
-
-| Handler                    | Purpose                                                 |
-| -------------------------- | ------------------------------------------------------- |
-| `update:get-mode`          | Return `native`, `dev`, `source`, or `docker`           |
-| `update:check-github`      | Return release metadata and resolved update mode        |
-| `update:pre-update-backup` | Create a `.visionbak` with the active runtime transport |
-| `update:install-shell`     | Install a verified native application or source update  |
-| `update:pull-image`        | Update only the explicit Docker provider                |
-
-The preload exposes only these fixed operations. Renderer input cannot supply an executable or a
-shell command.
-
-The channel argument and result types come from `@vision/types/electron`. The same shared contract
-types all five preload bridges, including startup recovery, and a contract test requires the main
-handler list and preload invocation list to match its 24-channel map exactly.
+The Electron inter-process communication surface includes mode lookup, update check, native/source
+installation, progress, and restart events. It does not expose an image-pull operation.
 
 ## Release pipeline
 
-`.github/workflows/release.yml` is authoritative. The macOS package job:
-
-1. installs the locked Bun, Node.js, and Python build toolchains;
-2. installs the exact Alembic and PyInstaller build dependencies;
-3. downloads the pinned Chrome Headless Shell;
-4. downloads and SHA-256-verifies the pinned Postgres.app release artifact, then uses only its
-   PostgreSQL 18.6 build files;
-5. builds the production frontend and complete native payload;
-6. packages the arm64 DMG and ZIP;
-7. stages the source-launcher ZIP; and
-8. publishes SHA-256 files for every release artifact.
-
-The Docker image job remains independent and optional. Verify/version gates run before either
-publication path. See [[docs/guides/cicd-pipelines|CI/CD Pipelines Guide]].
+`.github/workflows/release.yml` verifies code and generated artifacts, runs native runtime checks,
+builds the macOS app and disk image plus source-launcher bundle, computes checksums, attests the
+artifacts, and creates the GitHub release. No application image is built or published.
 
 ## Rollback boundaries
 
-There are two separate rollback concerns:
-
-- **Application rollback:** the native installer automatically retains and restores the previous
-  `Vision.app` when replacement or relaunch fails. Durable data is not part of this swap.
-- **Data rollback:** use the verified `.visionbak` restore path. It stages a fresh database and
-  attachment tree and activates them only after schema and readiness validation. Do not copy files
-  into the live PostgreSQL data directory.
-
-Docker-to-native provider rollback is different again. After native writes begin, the stopped
-Docker copy is stale and preserving those writes requires a reverse logical migration. See
-[[docs/guides/native-macos-runtime#rollback|Native macOS Runtime Guide — Rollback]].
+Application rollback and database rollback are separate. Replacing the app does not downgrade the
+database. Alembic downgrades require explicit review and a backup. A failed native database switch
+keeps the previous database until validation succeeds.
 
 ## Security properties
 
-- Native package checksum is mandatory and fail-closed.
-- Archive extraction rejects path traversal and unexpected application layout.
-- Installer processes receive fixed executable paths and argument arrays.
-- Native backend stop/restart is bounded; durable PostgreSQL is not replaced during app updates.
-- Backup failure prevents installation.
-- Admin authentication, loopback binding, and the active-runtime marker are unchanged by updates.
+- Release downloads use HTTPS and are pinned by an expected checksum.
+- Archive extraction rejects traversal and unsupported entries.
+- Installation is gated on a successful backup.
+- The renderer cannot pass arbitrary commands to the main process.
+- Secrets and database credentials are not included in release metadata or logs.
 
-## Related documentation
+## Related
 
 - [[docs/architecture/electron|Electron Desktop Architecture]]
 - [[docs/features/backup-coverage-audit|Backup Coverage Audit]]
+- [[docs/guides/cicd-pipelines|CI/CD Pipelines]]
 - [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]]
-- [[docs/adr/023-update-installer-checksum-verification|ADR-023]]
-- [[docs/adr/113-native-macos-runtime|ADR-113]]
+- [[docs/adr/133-native-only-runtime-and-delivery|ADR-133]]

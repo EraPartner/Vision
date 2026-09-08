@@ -6,15 +6,23 @@ date: 2026-04-21
 tags: [adr, backend, frontend, api-design, phase-1, envelope, error-handling]
 description: Standardize every HTTP API response as a discriminated union envelope with ok/data on success and ok/error on failure; extends ADR-011 aggregation envelope to all routes
 aliases: [adr-026, api-envelope, response-envelope, unified-envelope]
-related_code: ["apps/node-backend/src/middleware/errorHandler.js", "apps/node-backend/src/routes/", "apps/frontend/src/lib/api.ts", "packages/types/"]
+related_code:
+  [
+    "apps/node-backend/src/middleware/errorHandler.js",
+    "apps/node-backend/src/routes/",
+    "apps/frontend/src/lib/api.ts",
+    "packages/types/",
+  ]
 ---
 
 # ADR-026: Unified API Response Envelope
 
 ## Status
+
 Accepted
 
 ## Date
+
 2026-04-20
 
 ## Context
@@ -44,13 +52,12 @@ Every API response is a discriminated union keyed on `ok`:
 ```ts
 // packages/types/api.ts
 export type ApiResponse<T> =
-  | { ok: true; data: T; meta?: ResponseMeta }
-  | { ok: false; error: ApiError };
+  { ok: true; data: T; meta?: ResponseMeta } | { ok: false; error: ApiError };
 
 export interface ResponseMeta {
   requestId?: string;
   computedAt?: string;
-  source?: 'mv' | 'live';
+  source?: "mv" | "live";
   pagination?: { total: number; page: number; limit: number };
 }
 
@@ -61,15 +68,15 @@ export interface ApiError {
 }
 
 export type ApiErrorCode =
-  | 'VALIDATION_ERROR'
-  | 'NOT_FOUND'
-  | 'CONFLICT'
-  | 'UNAUTHORIZED'
-  | 'FORBIDDEN'
-  | 'RATE_LIMITED'
-  | 'INTERNAL_SERVER_ERROR'
-  | 'BAD_GATEWAY'
-  | 'APP_ERROR';
+  | "VALIDATION_ERROR"
+  | "NOT_FOUND"
+  | "CONFLICT"
+  | "UNAUTHORIZED"
+  | "FORBIDDEN"
+  | "RATE_LIMITED"
+  | "INTERNAL_SERVER_ERROR"
+  | "BAD_GATEWAY"
+  | "APP_ERROR";
 ```
 
 ### HTTP Semantics
@@ -131,6 +138,7 @@ res.ok(rows, { pagination: { total, page, limit } });
 One PR per route file. Mechanical. Tests migrate in lockstep. Legacy consumers broken intentionally — there is no backwards-compat period. The node-backend is internal and the frontend ships in the same repo.
 
 Order:
+
 1. Add `packages/types/api.ts` + middleware `wrapResponse`.
 2. Rewrite `createErrorHandler` output.
 3. Convert routes in dependency order: leaf routes first (`categories`, `recipients`, `splits`), then compound (`info`, `transactions`, `importRoutes`), then aggregations (already close — just rename `{ data, meta }` → `{ ok, data, meta }`).
@@ -157,6 +165,7 @@ Order:
 ### Rollback
 
 If envelope adoption destabilizes production:
+
 1. Revert PRs for envelope middleware + route rewrites (atomic per phase).
 2. Frontend `api/client.ts` reverts to direct JSON consumption.
 3. Error classes unchanged — only the serializer is reverted.

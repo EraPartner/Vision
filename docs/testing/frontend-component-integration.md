@@ -28,19 +28,20 @@ description: Render full pages with the real provider stack and HTTP mocked at t
 > Render an actual page (or feature surface) with Vision's full provider stack, mock the **network**, drive the UI with `userEvent`, then assert on the DOM. This is the automated equivalent of a developer manually clicking through a flow — fast enough to run in the Vitest fast lane (<60s) and the cheapest layer that can catch broken hooks, broken data flow, and broken render paths.
 >
 > It complements:
+>
 > - **Unit tests** — pure functions / hooks (existing pattern, keep using).
 > - **E2E tests** — Playwright + real backend (Phase B); includes smoke tests with a11y checks and visual regression (Phase C; see [[docs/testing/frontend/e2e|E2E Test Guide]]).
 
 ## Building Blocks
 
-| Concern | File |
-|---|---|
-| Provider stack helper | `apps/frontend/src/test/renderWithApp.tsx` |
-| MSW server | `apps/frontend/src/test/msw/server.ts` |
-| Default HTTP handlers + envelope helpers | `apps/frontend/src/test/msw/handlers.ts` |
-| Shared MSW/live Zod resource schemas | `apps/frontend/src/test/contracts/schemas.ts` |
-| Lifecycle wiring (MSW + jsdom polyfills) | `apps/frontend/src/test-setup.ts` |
-| Coverage gate | `apps/frontend/vite.config.ts` (`test.coverage`) |
+| Concern                                  | File                                             |
+| ---------------------------------------- | ------------------------------------------------ |
+| Provider stack helper                    | `apps/frontend/src/test/renderWithApp.tsx`       |
+| MSW server                               | `apps/frontend/src/test/msw/server.ts`           |
+| Default HTTP handlers + envelope helpers | `apps/frontend/src/test/msw/handlers.ts`         |
+| Shared MSW/live Zod resource schemas     | `apps/frontend/src/test/contracts/schemas.ts`    |
+| Lifecycle wiring (MSW + jsdom polyfills) | `apps/frontend/src/test-setup.ts`                |
+| Coverage gate                            | `apps/frontend/vite.config.ts` (`test.coverage`) |
 
 `renderWithApp` mirrors the provider tree in `apps/frontend/src/App.tsx`:
 `QueryClientProvider` → `SettingsPreloadProvider` → `ThemeProvider` → `SettingsProvider` → `AppSettingsProvider` → `BelgianTaxProfileProvider` → `LanguageHydration` → `TooltipProvider` → `MemoryRouter`. The QueryClient is a fresh per-test instance with `retry: false` and `staleTime: 0`.
@@ -60,11 +61,11 @@ description: Render full pages with the real provider stack and HTTP mocked at t
 ```typescript
 // Polyfills for Radix UI in jsdom (jsdom tests only — node-env tests have no window).
 if (typeof window !== "undefined") {
-    window.PointerEvent = MouseEvent as unknown as typeof PointerEvent;
-    Element.prototype.hasPointerCapture = () => false;
-    Element.prototype.setPointerCapture = () => {};
-    Element.prototype.releasePointerCapture = () => {};
-    window.HTMLElement.prototype.scrollIntoView = () => {};
+  window.PointerEvent = MouseEvent as unknown as typeof PointerEvent;
+  Element.prototype.hasPointerCapture = () => false;
+  Element.prototype.setPointerCapture = () => {};
+  Element.prototype.releasePointerCapture = () => {};
+  window.HTMLElement.prototype.scrollIntoView = () => {};
 }
 ```
 
@@ -86,13 +87,15 @@ import { renderWithApp } from "@/test/renderWithApp";
 import TransactionsPage from "@/pages/TransactionsPage";
 
 describe("TransactionsPage", () => {
-    it("renders with empty data from default handler", async () => {
-        // Default handlers return { ok: true, data: { items: [], total: 0, ... } }
-        renderWithApp(<TransactionsPage />);
+  it("renders with empty data from default handler", async () => {
+    // Default handlers return { ok: true, data: { items: [], total: 0, ... } }
+    renderWithApp(<TransactionsPage />);
 
-        const heading = await screen.findByRole("heading", { name: /transactions/i });
-        expect(heading).toBeInTheDocument();
+    const heading = await screen.findByRole("heading", {
+      name: /transactions/i,
     });
+    expect(heading).toBeInTheDocument();
+  });
 });
 ```
 
@@ -104,14 +107,14 @@ import { server } from "@/test/msw/server";
 import { ok, err } from "@/test/msw/handlers";
 
 it("shows error UI when endpoint returns 500", async () => {
-    server.use(
-        http.get("http://localhost:3002/api/transactions", () =>
-            err(500, "Database connection failed"),
-        ),
-    );
-    // Default handlers are reset after each test, so this override lasts for this test only
-    renderWithApp(<TransactionsPage />);
-    // assertions...
+  server.use(
+    http.get("http://localhost:3002/api/transactions", () =>
+      err(500, "Database connection failed"),
+    ),
+  );
+  // Default handlers are reset after each test, so this override lasts for this test only
+  renderWithApp(<TransactionsPage />);
+  // assertions...
 });
 ```
 
@@ -123,19 +126,22 @@ Use `{ timeout: 5000 }` in `findByText` / `findByRole` assertions to outlast the
 
 ```tsx
 it("shows error alert when API returns 500", async () => {
-    server.use(
-        http.get("http://localhost:3002/api/planned-transactions", () =>
-            err(500, "Database unavailable"),
-        ),
-    );
-    renderWithApp(<PlannedPaymentsPage />);
-    
-    // Must use timeout: 5000 to account for ~1500ms apiRequest retries + render time
-    expect(await screen.findByText(/database unavailable/i, {}, { timeout: 5000 })).toBeInTheDocument();
+  server.use(
+    http.get("http://localhost:3002/api/planned-transactions", () =>
+      err(500, "Database unavailable"),
+    ),
+  );
+  renderWithApp(<PlannedPaymentsPage />);
+
+  // Must use timeout: 5000 to account for ~1500ms apiRequest retries + render time
+  expect(
+    await screen.findByText(/database unavailable/i, {}, { timeout: 5000 }),
+  ).toBeInTheDocument();
 });
 ```
 
 This pattern is used in error-state tests across:
+
 - `apps/frontend/src/pages/__tests__/CategoriesPage.integration.test.tsx`
 - `apps/frontend/src/pages/__tests__/RecipientsPage.integration.test.tsx`
 - `apps/frontend/src/pages/__tests__/StatisticsPage.integration.test.tsx`
@@ -145,48 +151,53 @@ This pattern is used in error-state tests across:
 
 ```tsx
 describe("AddTransactionDialog", () => {
-    it("submits POST /api/transactions and closes on success", async () => {
-        const user = userEvent.setup();
-        let capturedBody: unknown;
+  it("submits POST /api/transactions and closes on success", async () => {
+    const user = userEvent.setup();
+    let capturedBody: unknown;
 
-        server.use(
-            http.post("http://localhost:3002/api/transactions", async ({ request }) => {
-                capturedBody = await request.json();
-                return ok({ id: 42, amount: 12.5, recipient_id: 7 });
-            }),
-        );
+    server.use(
+      http.post(
+        "http://localhost:3002/api/transactions",
+        async ({ request }) => {
+          capturedBody = await request.json();
+          return ok({ id: 42, amount: 12.5, recipient_id: 7 });
+        },
+      ),
+    );
 
-        renderWithApp(<AddTransactionDialog />);
-        
-        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
-        await user.type(screen.getByLabelText(/amount/i), "12.50");
-        await user.click(screen.getByRole("button", { name: /submit/i }));
-        
-        await waitFor(() =>
-            expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
-        );
-        expect((capturedBody as Record<string, unknown>).amount).toBe("12.50");
-    });
+    renderWithApp(<AddTransactionDialog />);
 
-    it("shows error toast on duplicate detection (409)", async () => {
-        const user = userEvent.setup();
-        const toastSpy = vi.spyOn(toast, "error");
+    await user.click(
+      await screen.findByRole("button", { name: /add transaction/i }),
+    );
+    await user.type(screen.getByLabelText(/amount/i), "12.50");
+    await user.click(screen.getByRole("button", { name: /submit/i }));
 
-        server.use(
-            http.post("http://localhost:3002/api/transactions", () =>
-                err(409, "Duplicate transaction detected"),
-            ),
-        );
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    expect((capturedBody as Record<string, unknown>).amount).toBe("12.50");
+  });
 
-        renderWithApp(<AddTransactionDialog />);
-        // ... fill form and submit ...
-        
-        await waitFor(() =>
-            expect(toastSpy).toHaveBeenCalledWith(
-                expect.stringMatching(/duplicate transaction detected/i),
-            ),
-        );
-    });
+  it("shows error toast on duplicate detection (409)", async () => {
+    const user = userEvent.setup();
+    const toastSpy = vi.spyOn(toast, "error");
+
+    server.use(
+      http.post("http://localhost:3002/api/transactions", () =>
+        err(409, "Duplicate transaction detected"),
+      ),
+    );
+
+    renderWithApp(<AddTransactionDialog />);
+    // ... fill form and submit ...
+
+    await waitFor(() =>
+      expect(toastSpy).toHaveBeenCalledWith(
+        expect.stringMatching(/duplicate transaction detected/i),
+      ),
+    );
+  });
 });
 ```
 
@@ -209,9 +220,9 @@ Returns a success envelope: `{ ok: true, data, meta? }`
 
 ```typescript
 server.use(
-    http.get("http://localhost:3002/api/transactions", () =>
-        ok({ items: [], total: 0, limit: 50, offset: 0, links: [] }),
-    ),
+  http.get("http://localhost:3002/api/transactions", () =>
+    ok({ items: [], total: 0, limit: 50, offset: 0, links: [] }),
+  ),
 );
 ```
 
@@ -221,9 +232,9 @@ Returns an error envelope with the given HTTP status: `{ ok: false, error: { mes
 
 ```typescript
 server.use(
-    http.post("http://localhost:3002/api/transactions", () =>
-        err(409, "Duplicate transaction detected", "DUPLICATE"),
-    ),
+  http.post("http://localhost:3002/api/transactions", () =>
+    err(409, "Duplicate transaction detected", "DUPLICATE"),
+  ),
 );
 ```
 
@@ -231,14 +242,14 @@ server.use(
 
 Covered boot-time endpoints return minimal valid shapes so any page can render:
 
-| Endpoint | Response Shape |
-|----------|---|
-| `GET /api/settings`, `PUT /api/settings/:key` | `ok({})` or `ok(null)` |
-| `GET /api/info`, `GET /api/info/health` | `ok({ version, commit, buildDate })` |
+| Endpoint                                                              | Response Shape                                          |
+| --------------------------------------------------------------------- | ------------------------------------------------------- |
+| `GET /api/settings`, `PUT /api/settings/:key`                         | `ok({})` or `ok(null)`                                  |
+| `GET /api/info`, `GET /api/info/health`                               | `ok({ version, commit, buildDate })`                    |
 | `GET /api/categories`, `GET /api/recipients`, `GET /api/transactions` | `ok({ items: [], total: 0, limit, offset, links: [] })` |
-| `GET /api/planned` | `ok([])` |
-| `GET /api/portfolio/summary` | `ok({})` |
-| `GET /api/admin/endpoint-liveness` | `ok([])` |
+| `GET /api/planned`                                                    | `ok([])`                                                |
+| `GET /api/portfolio/summary`                                          | `ok({})`                                                |
+| `GET /api/admin/endpoint-liveness`                                    | `ok([])`                                                |
 
 Add new defaults sparingly — most flows belong in per-test overrides via `server.use(...)`.
 
@@ -246,12 +257,12 @@ Add new defaults sparingly — most flows belong in per-test overrides via `serv
 
 `bun run test:coverage` runs all Vitest suites with V8 coverage and fails if any of these drop below the configured threshold:
 
-| Metric | Ratchet (2026-08-25) |
-|---|---|
-| Statements | 62% |
-| Branches | 51% |
-| Functions | 54% |
-| Lines | 64% |
+| Metric     | Ratchet (2026-08-25) |
+| ---------- | -------------------- |
+| Statements | 62%                  |
+| Branches   | 51%                  |
+| Functions  | 54%                  |
+| Lines      | 64%                  |
 
 The measured scope includes components, hooks, libraries, pages, utilities, features, contexts, stores, and `App.tsx`. `main.tsx` and `theme-flash.ts` are explicitly excluded because importing either immediately performs boot-time document side effects; their dependencies remain measured, while their execution belongs to end-to-end coverage. Thresholds follow the config's `floor(measured) - 2` convention, so they act as a regression ratchet rather than an aspirational target.
 
@@ -259,11 +270,11 @@ The measured scope includes components, hooks, libraries, pages, utilities, feat
 
 Three new dialog component integration test files test isolated modal interactions with full provider stack:
 
-| Test File | Scope | Tests |
-|---|---|---|
-| `apps/frontend/src/features/categories/__tests__/AddCategoryDialog.test.tsx` | Add/Edit Category modal | 10 |
-| `apps/frontend/src/features/recipients/__tests__/AddRecipientDialog.test.tsx` | Add Recipient modal (create-only) | 7 |
-| `apps/frontend/src/components/shared/__tests__/WidgetVisibilityDialog.test.tsx` | Widget visibility toggles | 8 |
+| Test File                                                                       | Scope                             | Tests |
+| ------------------------------------------------------------------------------- | --------------------------------- | ----- |
+| `apps/frontend/src/features/categories/__tests__/AddCategoryDialog.test.tsx`    | Add/Edit Category modal           | 10    |
+| `apps/frontend/src/features/recipients/__tests__/AddRecipientDialog.test.tsx`   | Add Recipient modal (create-only) | 7     |
+| `apps/frontend/src/components/shared/__tests__/WidgetVisibilityDialog.test.tsx` | Widget visibility toggles         | 8     |
 
 **Coverage Summary:** 3 dialog test files, 25 tests, all passing (Phase A — 2026-05-01)
 
@@ -272,6 +283,7 @@ Three new dialog component integration test files test isolated modal interactio
 ### AddCategoryDialog (10 tests)
 
 **Create Mode:**
+
 - Trigger button renders with "Add Category" label
 - Dialog opens on trigger click
 - Form shows general, detail, and optional description fields
@@ -280,6 +292,7 @@ Three new dialog component integration test files test isolated modal interactio
 - Validation: general field is required (empty blocks submit, dialog stays open)
 
 **Edit Mode:**
+
 - Opens immediately when `open={true}` prop passed with `mode="edit"`
 - Form pre-populates from `initialValues` prop (general, detail, description)
 - Submit calls `onSave(values)` with uppercase, trimmed values
@@ -287,6 +300,7 @@ Three new dialog component integration test files test isolated modal interactio
 - Demonstrates callback-driven control vs. trigger-button-driven create mode
 
 **Key learnings:**
+
 - Dialog can operate in two modes: trigger-driven (create) or prop-driven (edit)
 - Uppercase normalization happens at submit time (not input time)
 - Both form modes use same underlying `<AddCategoryDialog>` component
@@ -295,6 +309,7 @@ Three new dialog component integration test files test isolated modal interactio
 ### AddRecipientDialog (7 tests)
 
 **Create-Only Pattern:**
+
 - Trigger button renders with "Add Recipient" label
 - Dialog opens on trigger click
 - Form shows name (required) and notes (optional) fields
@@ -304,6 +319,7 @@ Three new dialog component integration test files test isolated modal interactio
 - Submit includes notes even when empty (optional field behavior)
 
 **Key learnings:**
+
 - Simpler than category dialog (single mode, fewer fields)
 - Notes field is optional; submission should include it regardless of content
 - Similar open/close/validate pattern but simpler form structure
@@ -311,6 +327,7 @@ Three new dialog component integration test files test isolated modal interactio
 ### WidgetVisibilityDialog (8 tests)
 
 **Fully Prop-Driven Pattern:**
+
 - No internal state; all behavior driven by props passed from parent
 - Trigger button shows visible count badge (e.g., "2/3" for 2 of 3 widgets visible)
 - Dialog opens on trigger click
@@ -319,6 +336,7 @@ Three new dialog component integration test files test isolated modal interactio
 - Three action buttons call corresponding callbacks: `setAllVisible(true)`, `setAllVisible(false)`, `resetToDefaults()`
 
 **Key learnings:**
+
 - Fully controlled component: all state lives in parent, dialog is presentational
 - Badge in trigger (visible count) updates reactively as parent state changes
 - Multiple callback types (single toggle vs. bulk actions) in same dialog
@@ -340,27 +358,27 @@ This table records the original Phase A page-test set plus later edits to the li
 not a complete current test manifest. Use the filesystem and Vitest collection for current file
 and test totals; per-file counts here are updated only when that row is touched.
 
-| Test File | Scope | Tests |
-|---|---|---|
-| `apps/frontend/src/pages/__tests__/TransactionsPage.integration.test.tsx` | Transactions list page (with export JSON tests + multi-value filter render-loop regression) | 26 |
-| `apps/frontend/src/pages/__tests__/ImportPage.integration.test.tsx` | CSV Import page | 23 |
-| `apps/frontend/src/pages/__tests__/LanguageSwitch.integration.test.tsx` | Language switching across pages | 32 |
-| `apps/frontend/src/pages/__tests__/TaxOverviewPage.integration.test.tsx` | Tax Overview page | 16 |
-| `apps/frontend/src/pages/__tests__/AddTransactionDialog.integration.test.tsx` | Add Transaction form | 10 |
-| `apps/frontend/src/pages/__tests__/PlannedPaymentsPage.integration.test.tsx` | Planned Payments page | 16 |
-| `apps/frontend/src/pages/__tests__/PortfolioOverviewPage.integration.test.tsx` | Portfolio Overview page | 14 |
-| `apps/frontend/src/pages/__tests__/OwesPage.integration.test.tsx` | Owes/Splits page (with export CSV tests) | 17 |
-| `apps/frontend/src/pages/__tests__/AdminPages.integration.test.tsx` | Admin pages (dashboard, provider health, endpoint liveness) | 25 |
-| `apps/frontend/src/pages/__tests__/CategoriesPage.integration.test.tsx` | Categories management | 18 |
-| `apps/frontend/src/pages/__tests__/RecipientsPage.integration.test.tsx` | Recipients management | 18 |
-| `apps/frontend/src/pages/__tests__/StatisticsPage.integration.test.tsx` | Statistics and embedded recipient insights | 18 |
-| `apps/frontend/src/pages/__tests__/portfolio/PortfolioPages.integration.test.tsx` | Portfolio (investments, performance, net worth) | 69 |
-| `apps/frontend/src/pages/__tests__/DashboardPage.integration.test.tsx` | Dashboard landing page with error-state coverage | 18 |
-| `apps/frontend/src/pages/__tests__/AIChatPage.integration.test.tsx` | AI Chat feature | 15 |
-| `apps/frontend/src/pages/__tests__/MarketLookupPage.integration.test.tsx` | Market lookup/quotes | 12 |
-| `apps/frontend/src/pages/__tests__/ImportReviewPage.integration.test.tsx` | Import review/staging | 14 |
-| `apps/frontend/src/pages/__tests__/DbMaintenancePage.integration.test.tsx` | Database maintenance | 12 |
-| `apps/frontend/src/pages/__tests__/NotFound.integration.test.tsx` | 404 page | 5 |
+| Test File                                                                         | Scope                                                                                       | Tests |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ----- |
+| `apps/frontend/src/pages/__tests__/TransactionsPage.integration.test.tsx`         | Transactions list page (with export JSON tests + multi-value filter render-loop regression) | 26    |
+| `apps/frontend/src/pages/__tests__/ImportPage.integration.test.tsx`               | CSV Import page                                                                             | 23    |
+| `apps/frontend/src/pages/__tests__/LanguageSwitch.integration.test.tsx`           | Language switching across pages                                                             | 32    |
+| `apps/frontend/src/pages/__tests__/TaxOverviewPage.integration.test.tsx`          | Tax Overview page                                                                           | 16    |
+| `apps/frontend/src/pages/__tests__/AddTransactionDialog.integration.test.tsx`     | Add Transaction form                                                                        | 10    |
+| `apps/frontend/src/pages/__tests__/PlannedPaymentsPage.integration.test.tsx`      | Planned Payments page                                                                       | 16    |
+| `apps/frontend/src/pages/__tests__/PortfolioOverviewPage.integration.test.tsx`    | Portfolio Overview page                                                                     | 14    |
+| `apps/frontend/src/pages/__tests__/OwesPage.integration.test.tsx`                 | Owes/Splits page (with export CSV tests)                                                    | 17    |
+| `apps/frontend/src/pages/__tests__/AdminPages.integration.test.tsx`               | Admin pages (dashboard, provider health, endpoint liveness)                                 | 25    |
+| `apps/frontend/src/pages/__tests__/CategoriesPage.integration.test.tsx`           | Categories management                                                                       | 18    |
+| `apps/frontend/src/pages/__tests__/RecipientsPage.integration.test.tsx`           | Recipients management                                                                       | 18    |
+| `apps/frontend/src/pages/__tests__/StatisticsPage.integration.test.tsx`           | Statistics and embedded recipient insights                                                  | 18    |
+| `apps/frontend/src/pages/__tests__/portfolio/PortfolioPages.integration.test.tsx` | Portfolio (investments, performance, net worth)                                             | 69    |
+| `apps/frontend/src/pages/__tests__/DashboardPage.integration.test.tsx`            | Dashboard landing page with error-state coverage                                            | 18    |
+| `apps/frontend/src/pages/__tests__/AIChatPage.integration.test.tsx`               | AI Chat feature                                                                             | 15    |
+| `apps/frontend/src/pages/__tests__/MarketLookupPage.integration.test.tsx`         | Market lookup/quotes                                                                        | 12    |
+| `apps/frontend/src/pages/__tests__/ImportReviewPage.integration.test.tsx`         | Import review/staging                                                                       | 14    |
+| `apps/frontend/src/pages/__tests__/DbMaintenancePage.integration.test.tsx`        | Database maintenance                                                                        | 12    |
+| `apps/frontend/src/pages/__tests__/NotFound.integration.test.tsx`                 | 404 page                                                                                    | 5     |
 
 **Coverage note:** Recipient insights are covered through the live Recipients tab in `StatisticsPage.integration.test.tsx`; the deleted standalone page and its test are not part of the route inventory.
 
@@ -378,12 +396,12 @@ During Phase A completion, four key gotchas were documented for future test auth
 
 ## Phasing
 
-| Phase | Focus | Status |
-|---|---|---|
+| Phase | Focus                                                                                                                                                                                                                                                                                                                                                                 | Status                |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
 | **A** | MSW + `renderWithApp` infrastructure + jsdom Radix polyfills + envelope helpers (`ok`, `err`). 31 page-level component-integration tests covering Transactions, Import, Language Switch, Tax Overview, Add Transaction Dialog, Planned Payments, Portfolio Overview. All tests passing. Infrastructure: Vitest + RTL + MSW v2 with `server.use()` per-test overrides. | COMPLETE (2026-04-30) |
-| **B** | Playwright E2E: `playwright.config.ts` + `apps/frontend/e2e/` with five smoke tests (route walk: dashboard, transactions, import, planned, portfolio). Auto-boot dev server locally, Docker Compose in CI. New `test-e2e` CI job with artifact upload. | COMPLETE (2026-04-30) |
-| **C** | Visual regression via Playwright screenshots + axe-core accessibility checks. Baselines in `apps/frontend/e2e/__screenshots__/`. CI auto-updates on main branch. | COMPLETE (2026-04-30) |
-| **D** | Coverage threshold ratchet + contract tests (zod-validate every MSW fixture against backend's real responses in CI). Thresholds: 17/11/10/18 (statements/branches/functions/lines). 16 contract tests, all passing. | COMPLETE (2026-04-30) |
+| **B** | Playwright E2E: `playwright.config.ts` + `apps/frontend/e2e/` with five smoke tests (route walk: dashboard, transactions, import, planned, portfolio). Auto-boot dev server locally; scheduled CI uses native PostgreSQL and backend processes.                                                                                                                       | COMPLETE (2026-04-30) |
+| **C** | Visual regression via Playwright screenshots + axe-core accessibility checks. Baselines in `apps/frontend/e2e/__screenshots__/`. CI auto-updates on main branch.                                                                                                                                                                                                      | COMPLETE (2026-04-30) |
+| **D** | Coverage threshold ratchet + contract tests (zod-validate every MSW fixture against backend's real responses in CI). Thresholds: 17/11/10/18 (statements/branches/functions/lines). 16 contract tests, all passing.                                                                                                                                                   | COMPLETE (2026-04-30) |
 
 ## MSW & RTL Advanced Patterns (2026-04-30)
 
@@ -474,9 +492,11 @@ await screen.findByRole("alert");
 Two new integration tests added to `DashboardPage.integration.test.tsx` to verify error handling when stats APIs return 500:
 
 ### Full Error State Test
+
 **"shows full error state when stats API fails and no cached data exists"**
 
 Tests the scenario where the dashboard stats APIs fail and no fallback data is available:
+
 - Mocks `GET /api/aggregations/monthly-summary` → HTTP 500
 - Mocks `GET /api/info/transaction-count` → HTTP 500
 - No cached stats data (both APIs fail before returning)
@@ -488,9 +508,11 @@ Tests the scenario where the dashboard stats APIs fail and no fallback data is a
 **Pattern:** Per-test `server.use()` overrides returning ADR-026 error envelopes via `err(500, "db unavailable")`
 
 ### Partial Data Warning Test
+
 **"shows partial data warning when stats fail but transactions are available"**
 
 Tests graceful degradation when stats APIs fail but core data (transactions) is available:
+
 - Mocks `GET /api/aggregations/monthly-summary` → HTTP 500
 - Mocks `GET /api/info/transaction-count` → HTTP 500
 - Overrides `GET /api/transactions` to return one item (`TRANSACTION_STUB`)
@@ -510,6 +532,7 @@ Completed final integration test gaps by adding export endpoint coverage:
 ### TransactionsPage Export JSON Tests
 
 Two new tests in `TransactionsPage.integration.test.tsx`:
+
 - **Export JSON shows success toast when download succeeds** — Stubs `URL.createObjectURL` / `URL.revokeObjectURL` (jsdom compatibility), MSW intercepts `GET /api/transactions/export/json`, spies on `toast.success()`, asserts success message fires
 - **Export JSON shows error toast when download fails** — MSW returns HTTP 500, spies on `toast.error()`, asserts error message fires
 
@@ -518,12 +541,14 @@ Covers: `TransactionsExportButtons` component integrating with `GET /api/transac
 ### OwesPage Export CSV Tests
 
 Two new tests in `OwesPage.integration.test.tsx`:
+
 - **Export CSV shows success toast when download succeeds** — Stubs blob URL helpers, MSW intercepts `GET /api/splits/owed/:id/export/csv`, verifies success toast in recipient detail view
 - **Export CSV shows error toast when download fails** — MSW returns HTTP 500, verifies error toast in recipient detail view
 
 Covers: Export button in recipient detail view integrating with `GET /api/splits/owed/:id/export/csv` endpoint.
 
 **Historical Phase A coverage included:**
+
 - Full CRUD flows for core entities (Transactions, Recipients, Categories, Planned Payments, Portfolio)
 - Export/download endpoints (JSON, CSV)
 - Analytics pages (Statistics, Dashboard, Insights)

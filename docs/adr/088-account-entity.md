@@ -2,8 +2,9 @@
 title: ADR-088 Account Entity (replace the bank_account string)
 type: adr
 date: 2026-06-18
+updated: 2026-09-08
 tags: [adr, accounts, account-entity, data-model, migration, expand-contract, running-balance, transfers, import, net-worth, portfolio, trigger-lookup-only, phantom-account, split-guard, rename-propagation, migration-0062]
-description: Replace the implicit free-text bank_account column with a real accounts table via an expand/contract migration, giving accounts a stable identity that cash, holdings, liabilities, reconciliation, and owner/tax allocation can all hang off. 2026-06-25 addendum: migration 0062 hardens the dual-write trigger (lookup-only on UPDATE), adds a split-total guard trigger, and wires account rename propagation.
+description: Replace the implicit free-text bank_account column with a real accounts table via an expand/contract migration, giving accounts a stable identity that cash, holdings, liabilities, reconciliation, and owner/tax allocation can all hang off. 2026-06-25 addendum: migration 0062 hardens the dual-write trigger (lookup-only on UPDATE), adds a split-total guard trigger, and wires account rename propagation. 2026-09-08 addendum: the guarded contract drop was activated on the maintained live database.
 aliases: [account entity, accounts table, account_id, bank_account replacement]
 ---
 
@@ -348,6 +349,46 @@ The backup round-trip dependency concern is resolved by workspace installation p
 backend suite can resolve the Electron packaging workspace's `archiver` and `yauzl` dependencies
 and exercises all archive round-trip cases. Missing optional workspace installation is treated as
 an environment setup failure, not as a reason for those tests to self-skip.
+
+### Addendum (2026-09-08): contract build ready for maintenance activation
+
+The final write-side decouple is complete in the prepared contract build. Transaction and planned
+transaction creates resolve the compatibility account label inside their transaction and persist
+only `account_id`. Updates translate the `bank_account` request field to `account_id` before
+building SQL. Import commit, account rename, and account merge no longer write either canonical
+table's legacy string. Staging and manual-raw tables retain their distinct source-label fields.
+
+The public API contract is unchanged: callers may still send `bank_account`, and reads project
+that label from `accounts.name`. Only the persistence implementation changes.
+
+The out-of-band operation remains unapplied to the real database. Its `up.sql` now takes
+`ACCESS EXCLUSIVE` locks before the parity guard, closing the check-to-drop race. A disposable
+PostgreSQL 18 lifecycle applies the drop, runs create, update, blank-detach, import, rename, and
+repoint paths with both columns absent, then rolls back and verifies both restored columns, three
+indexes, two triggers, and zero identity mismatches.
+
+Activation must be lockstep: prepare the contract application artifact, stop all writers, create
+and verify a fresh encrypted backup, re-check parity, apply `up.sql`, activate the build, and run
+the smoke checks before reopening Vision. Rollback likewise keeps writers stopped until both
+`down.sql` and the legacy dual-write build are restored.
+
+### Addendum (2026-09-08): contract activated on the maintained live database
+
+The approved stopped-writer operation is complete on the maintained `vision` database at revision
+`0102_retire_adr090_transaction_schema`. The parity guard was zero across 5,399 transactions and
+11 planned transactions, and a fresh encrypted `VISIONBAK2` backup was verified before the drop.
+
+The first activation found one direct legacy-column read in the manual deduplication fallback.
+The operation rolled back with `down.sql`, restored service on the compatibility schema, replaced
+that predicate with an `account_id` to `accounts.name` join, and added the path to the disposable
+dropped-schema test. The rebuilt artifact passed the isolated native smoke before a second cutover.
+
+The retry passed health, transaction and planned-transaction create/edit, account rename and
+merge, custom CSV import, and net-worth checks. Cleanup left no synthetic smoke records or import
+batch receipts. The final live schema contains neither canonical-table `bank_account` column, the
+dual-write triggers, nor the three legacy transaction indexes. Fresh installations still require
+the explicit out-of-band operation because the automatic Alembic chain intentionally retains the
+compatibility schema.
 
 **Related:** the multi-currency decision that re-grains `mv_bank_balances` lives in
 [[docs/adr/089-account-typed-model|ADR-089 addendum]]; the enable decision for the holdings half

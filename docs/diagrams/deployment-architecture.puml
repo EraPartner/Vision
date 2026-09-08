@@ -1,5 +1,5 @@
 @startuml Deployment Architecture
-title Deployment Architecture — Native macOS, Native Demo, and Optional Docker
+title Deployment Architecture — Native macOS, Native Demo, and Source Hosting
 
 !theme plain
 skinparam linetype ortho
@@ -46,19 +46,6 @@ package "Source Development" as SourceDev {
   database "Managed development PostgreSQL 18.6\nVision Development data" as DevelopmentPostgres
 }
 
-package "Optional Docker Compose" as DockerDeployment {
-  node "Docker host" as DockerHost {
-    rectangle "app" as AppContainer {
-      component "Bun backend + production frontend" as DockerApp
-    }
-    rectangle "db" as DBContainer {
-      database "PostgreSQL 18" as DockerPostgres
-      folder "postgres_data volume" as DockerData
-    }
-    folder "attachments volume" as DockerAttachments
-  }
-}
-
 package "Browser Production" as BrowserProduction {
   node "TLS reverse proxy" as Proxy
   component "Vision backend + frontend" as HostedApp
@@ -91,24 +78,15 @@ ElectronDev --> BackendDev : native provider
 FrontendDev --> BackendDev : loopback HTTP
 BackendDev --> DevelopmentPostgres : isolated development database
 
-User --> AppContainer : explicit Docker provider
-DockerApp --> DockerPostgres
-DockerPostgres --> DockerData
-DockerApp --> DockerAttachments
-DockerApp --> External : HTTPS
-
 User --> Proxy : HTTPS
 Proxy --> HostedApp
 HostedApp --> HostedPostgres
 HostedApp --> External : HTTPS
 
-NativeProvider ..> AppContainer : opt-in cutover source
-AppContainer ..> NativeProvider : custom dump + attachment export
-
 note right of NativeProvider
-  Runtime marker prevents split-brain.
-  Existing Docker data requires a verified,
-  explicit import before native activation.
+  Runtime marker prevents database switching.
+  A legacy marker fails closed and requires
+  migration with Vision 1.0.2 (ADR-133).
 end note
 
 note right of NativePostgres
@@ -122,12 +100,6 @@ note right of NativeDemo
   First launch, reset, or seed change activates a
   deterministic custom dump with rollback until detailed
   readiness succeeds (ADR-114).
-end note
-
-note right of DockerDeployment
-  Compose remains supported and shares
-  application, migration, and backup logic.
-  Cutover stops but never removes this source.
 end note
 
 @enduml

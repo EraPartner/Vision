@@ -77,7 +77,11 @@ bun vitest run --test-name-pattern="testName"
 
 #### Against a real Postgres
 
-Suites gated on `TEST_DATABASE_URL` (see [Database Fixture Helper](#database-fixture-helper-phase-0)) **skip** in a plain `bun test` run. To execute them, use the disposable-database wrapper. It prefers installed PostgreSQL 18 tools, initializes a private cluster under the system temporary directory, binds it only to loopback, migrates it to head, runs Vitest, and removes the cluster on exit. It does not start or require the Homebrew service. Docker remains an automatic fallback and can also be selected explicitly:
+Suites gated on `TEST_DATABASE_URL` (see [Database Fixture Helper](#database-fixture-helper-phase-0))
+**skip** in a plain `bun test` run. To execute them, use the disposable-database wrapper. It
+requires native PostgreSQL 18 tools, initializes a private cluster under the system temporary
+directory, binds it only to loopback, migrates it to head, runs Vitest, and removes the cluster on
+exit. It does not start or require the Homebrew service:
 
 ```bash
 # Whole backend suite, DB-backed cases included
@@ -86,18 +90,21 @@ bun run test:db
 # A single DB-backed suite (arguments are forwarded to vitest)
 bun run test:db tests/services/transferReconciliation.db.test.js
 
-# Force the optional Docker provider
-VISION_TEST_DB_PROVIDER=docker bun run test:db
-
-# Keep the generated cluster or container after the run to inspect diagnostics
+# Keep the generated cluster after the run to inspect diagnostics
 VISION_TEST_DB_KEEP=1 bun run test:db
 ```
 
 Requires the Python Alembic toolchain (`pip install -r config/requirements.txt`) because migrations are Alembic even though the backend is Node. `config/requirements.txt` is an exact, hash-verified lock compiled from `config/requirements.in`. The migration runner uses an explicit `ALEMBIC_BIN` first, then a tool beside `VISION_PYTHON_BIN`, `.venv-native-build`, the prepared standalone native runtime, a runnable repository `venv`, and finally `alembic` on `PATH`. It probes a candidate before selecting it, so a stale container-created virtual environment cannot cause an `ENOENT` failure.
 
-PostgreSQL discovery checks `VISION_TEST_POSTGRES_BIN`, `VISION_POSTGRES_BIN`, `postgres` on `PATH`, the Homebrew PostgreSQL 18 keg paths, and Postgres.app. Set `VISION_TEST_DB_PROVIDER=native` or `docker` to require one provider; the default is `auto`. `VISION_TEST_DB_PORT` selects the loopback port and fails closed on a collision.
+PostgreSQL discovery checks `VISION_TEST_POSTGRES_BIN`, `VISION_POSTGRES_BIN`, `postgres` on
+`PATH`, the Homebrew PostgreSQL 18 keg paths, and Postgres.app. `VISION_TEST_DB_PORT` selects the
+loopback port and fails closed on a collision.
 
-If `TEST_DATABASE_URL` is already exported, the script normally uses that database as-is and starts no provider. The Codex cloud setup uses this mode with a fixed native PostgreSQL 18 database when its container has no usable pre-existing Docker daemon; see [[.codex/cloud/README|Codex cloud environment]]. That one managed database is reset and migrated before each `bun run test:db`, and cloud maintenance resets it after a cached branch resume. Other pre-set URLs remain caller-managed and are never reset.
+If `TEST_DATABASE_URL` is already exported, the script normally uses that database as-is and starts
+no provider. The Codex cloud setup uses this mode with a fixed native PostgreSQL 18 database; see
+[[.codex/cloud/README|Codex cloud environment]]. That managed database is reset and migrated before
+each `bun run test:db`, and cloud maintenance resets it after a cached branch resume. Other pre-set
+URLs remain caller-managed and are never reset.
 
 #### The skip banner
 
@@ -116,7 +123,9 @@ A plain `bun run test` exits 0 while omitting several hundred DB-backed cases, a
 - Silent when `TEST_DATABASE_URL` is set, so `bun run test:db` and CI stay clean.
 - Attached in `vitest.config.js` through a `configureVitest` plugin hook that _appends_ to the resolved reporter list rather than declaring `test.reporters` — declaring that key would replace vitest's own default choice (`default` / `agent`, plus `github-actions` under Actions). It therefore fires for every entry point that uses the config: `bun run test`, a bare `bun vitest run`, and the pre-push hook.
 
-The pre-push gate also runs `bun run test:db` when the push touches a `*.db.test.js` file, `tests/setup/db.js`, or `alembic/versions/**` — and degrades to a loud warning (never a failed push) when neither PostgreSQL 18 nor Docker is available, or when Alembic is unavailable. Skip it with `SKIP_DB_TESTS=1`.
+The pre-push gate also runs `bun run test:db` when the push touches a `*.db.test.js` file,
+`tests/setup/db.js`, or `alembic/versions/**`. It degrades to a loud warning when PostgreSQL 18 or
+Alembic is unavailable. Skip it with `SKIP_DB_TESTS=1`.
 
 ### Frontend Tests
 
@@ -154,7 +163,7 @@ Vitest summary:
 - Counts come from the current run; the reporter does not hardcode the example's 36 tests.
 - Other skipped frontend tests do not trigger this banner.
 - The reporter is silent when `LIVE_API_BASE` is set. CI runs the suite against its disposable
-  Compose stack; local macOS validation may use the Vision Demo app and its synthetic data.
+  native stack; local macOS validation may use the Vision Demo app and its synthetic data.
 - `vite.config.ts` appends the reporter in `configureVitest`. It does not replace Vitest's default
   reporter or GitHub Actions annotations.
 
@@ -167,8 +176,8 @@ LIVE_API_BASE=http://localhost:<port> bun run --filter 'vision-frontend' test \
 ```
 
 The installed Vision Demo is a native-runtime test target. It uses deterministic synthetic data
-under `~/Library/Application Support/Vision Demo/native/vision_demo` and never connects to Docker
-or the real Vision database. `./install-demo.sh` rebuilds the native payload and seed against the
+under `~/Library/Application Support/Vision Demo/native/vision_demo` and never connects to the real
+Vision database. `./install-demo.sh` rebuilds the native payload and seed against the
 current migration head. `bun run demo:reset-native` requests an atomic seed restore for the next
 Demo launch. Seed build tests verify data-only SQL, fixed-reference-date
 repeatability, date freshness and future planned rows, invalid reference-date
@@ -795,11 +804,11 @@ The helper returns `null` when `TEST_DATABASE_URL` is unset, so tests skip grace
 
 **Where the database comes from:**
 
-| Context                             | Provider                                                                                                                            | Migrated by                              |
-| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| CI — `Test (Backend)` job           | `services.postgres` (`postgres:18-alpine`) in `.github/workflows/ci.yml`                                                            | "Migrate the test database to head" step |
-| Local                               | private native PostgreSQL 18 cluster, with Docker as an optional fallback, started by `scripts/with-test-db.sh` (`bun run test:db`) | the same script                          |
-| Codex cloud without a Docker daemon | native PostgreSQL 18 provisioned by `.codex/cloud/provision-test-db.sh`                                                             | cloud setup and maintenance scripts      |
+| Context                   | Provider                                                            | Migrated by                         |
+| ------------------------- | ------------------------------------------------------------------- | ----------------------------------- |
+| CI — `Test (Backend)` job | private native PostgreSQL 18 cluster from `scripts/with-test-db.sh` | the same script                     |
+| Local                     | private native PostgreSQL 18 cluster from `scripts/with-test-db.sh` | the same script                     |
+| Codex cloud               | native PostgreSQL 18 from `.codex/cloud/provision-test-db.sh`       | cloud setup and maintenance scripts |
 
 Backend vitest runs in exactly one CI job, so the service is wired only there. `quality-gate` runs no tests — it only aggregates results.
 
@@ -912,7 +921,7 @@ Code links: [[apps/node-backend/tests/priceProviderService.test.js]], [[apps/nod
 
 - Settings and middleware validation coverage additions for this branch:
   - [[apps/node-backend/tests/routes/settings.test.js]] covers settings route validation and error semantics: key-length guardrails, missing `value`, `dashboard_settings` `exclusionScope` and `excludedCategoryIds` validation, bulk upsert payload-type rejection, and DELETE not-found behavior.
-  - [[apps/node-backend/tests/validation.test.js]] extends middleware coverage for `validateIdParam` in [[apps/node-backend/src/middleware/validation.js]] (missing-id pass-through, invalid-id 400 detail response, valid-id numeric coercion + `next()`).
+  - [[apps/node-backend/tests/validation.test.js]] covers validation-only `validateIdParam` and `validateIntParam` behavior in [[apps/node-backend/src/middleware/validation.js]]: missing-id handling, strict invalid-id errors, no mutation of valid Express path strings, repeated validation, and explicit numeric return through `assertIdParam`.
 - Database connection module coverage additions for this branch:
   - [[apps/node-backend/tests/connection.test.js]] covers [[apps/node-backend/src/database/connection.js]] pool idle-client error logging, transient retry behavior (`ECONNRESET`, `08006`), non-transient no-retry behavior, max-retry exhaustion, utility/helper methods (`checkConnection`, `getTableCount`, `getPoolStats`, `closePool`, `queryPrepared`, `getClient`), and nested transactions that reuse one ambient client under unique savepoints on success and failure.
   - [[apps/node-backend/tests/helpers/repoMocks.test.js]] keeps the shared `mockTxConnection` contract aligned with production ambient routing, including nested savepoints and post-transaction invalidation.
@@ -1046,9 +1055,9 @@ Four key testing gotchas discovered during Phase A completion:
 
 ### Phase B: E2E Testing (2026-04-30) — COMPLETE
 
-- Playwright configuration with auto-boot dev server (local) or Docker Compose (CI)
+- Playwright configuration with auto-boot dev server locally and a native scheduled CI stack
 - 5 smoke E2E tests covering critical routes: dashboard, transactions, import, planned, portfolio
-- CI job in GitHub Actions: build Docker image, start Compose, run tests, upload artifact
+- Scheduled CI job provisions PostgreSQL 18, starts the backend, runs tests, and uploads artifacts
 - See [[docs/testing/frontend/e2e|E2E Test Guide]] for running locally and adding new tests
 
 ### Phase C: Accessibility & Visual Regression (2026-04-30) — COMPLETE
@@ -1753,7 +1762,7 @@ Six new frontend test files covering multi-step wizards, platform-specific updat
 
 2. **UpdateNotification** (8 tests)
    - Version check via `GET /api/admin/update/check`
-   - Platform-aware install paths: web (reload hint), Electron (shell update), Docker (pull instructions)
+   - Platform-aware install paths: web (operator hint) and Electron (native/source update)
    - Electron branch requires `window.electronUpdater` global stub
    - Platform detection via `apiClient.isElectron()` check
 

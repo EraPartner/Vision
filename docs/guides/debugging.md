@@ -156,14 +156,12 @@ bun vitest run src/tests/deduplication.test.js
 #### 4. Check PostgreSQL Connection
 
 ```bash
-# From project root
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db
-# Verify connection
-psql -h localhost -p 5432 -U ftm_user -d financial_transactions
+# Create an isolated migrated database and run the focused database task
+VISION_TEST_DB_TASK=migration-fidelity bun run test:db
 ```
 
-Managed Docker and native PostgreSQL runtimes preload and install
-`pg_stat_statements`. For a query-level performance sample, run this as a
+Managed native PostgreSQL runtimes preload and install `pg_stat_statements`. For a query-level
+performance sample, run this as a
 database owner or another role allowed to inspect the statistics view:
 
 ```sql
@@ -250,8 +248,7 @@ ipcMain.on("channel-name", (event, data) => {
 **Resolution:**
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db
-# Verify: psql -h localhost -p 5432 -U ftm_user -d financial_transactions
+bun run test:db
 ```
 
 ### 2. Import Failures
@@ -370,8 +367,7 @@ curl http://localhost:3002/api/info/transaction-count
 ### Database Health
 
 ```bash
-# Check PostgreSQL container and migration status
-docker compose -f docker-compose.yml -f docker-compose.dev.yml ps db
+# Check configured database migration status
 bun run db:current
 ```
 

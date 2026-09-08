@@ -130,8 +130,7 @@ See [[docs/security/ai-data-access|AI Data Access]] for the allowlist policy and
 | `OLLAMA_HEALTH_TIMEOUT_MS`      | `3000`                   | `healthCheck()` connection timeout                                                         |
 
 Native macOS mode fixes the default to `http://127.0.0.1:11434` in the backend child environment.
-It does not use `host.docker.internal`. The optional Docker provider may use its existing host
-bridge when Ollama runs outside the container.
+Custom source deployments set `OLLAMA_URL` explicitly when Ollama is not on the same host.
 
 ## Offline Handling
 

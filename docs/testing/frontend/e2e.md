@@ -3,7 +3,7 @@ title: Frontend E2E Tests (Playwright)
 type: testing
 status: active
 date: 2026-04-30
-updated: 2026-09-03
+updated: 2026-09-08
 tags:
   - testing
   - frontend
@@ -19,7 +19,10 @@ description: Current Playwright E2E discovery, scheduled CI, accessibility, and 
 # Frontend E2E Tests (Playwright)
 
 > [!abstract] What this layer is for
-> Run Playwright against a real backend (local dev server or the scheduled CI Docker Compose stack). The automatically discovered non-visual specs cover page loads, dialog behavior, selected mutations, accessibility scans, and network drift. The separate manual visual project captures and compares full-page screenshots. Together they catch browser and integration failures that component tests (MSW + jsdom) cannot.
+> Run Playwright against a real backend: a local native development server or the scheduled CI
+> native stack with disposable PostgreSQL 18. The automatically discovered non-visual specs cover
+> page loads, dialog behavior, selected mutations, accessibility scans, and network drift. The
+> separate manual visual project captures and compares full-page screenshots.
 >
 > Complements:
 >
@@ -45,7 +48,7 @@ browser and remains available in the devcontainer.
 The non-visual package script selects the project rather than naming spec files. A new non-visual
 `e2e/*.spec.ts` file therefore joins the scheduled suite automatically. The scheduled workflow is
 `.github/workflows/e2e.yml`; it is deliberately outside pull-request CI and runs nightly or on
-manual dispatch against the Docker Compose stack.
+manual dispatch against the native CI stack.
 
 The non-visual suite includes two high-risk write journeys in
 `high-risk-journeys.spec.ts`: a synthetic Vision-format CSV is uploaded, reviewed, committed, and
@@ -217,7 +220,7 @@ export default defineConfig({
 
 **Timeout Rationale:**
 
-- **Global timeout (90s):** Accounts for slow Docker environments and network I/O in CI
+- **Global timeout (90s):** Accounts for slower CI runners and network I/O
 - **Navigation timeout (60s):** Page.goto() waits up to 60s for DOM to be ready
 - **Action timeout (30s):** User actions (click, fill, etc.) timeout after 30s if element is unresponsive
 
@@ -290,7 +293,7 @@ This runs `visual.spec.ts` with `--update-snapshots`. Use this when:
 
 ### Alternative: Use Running Backend
 
-If you have a backend server already running (e.g., Docker Compose, local dev):
+If you have a native or custom source backend already running:
 
 ```bash
 PLAYWRIGHT_BASE_URL=http://localhost:3002 bun run test:e2e
@@ -312,45 +315,18 @@ Playwright will re-run tests on file changes. Note: screenshot comparisons will 
 
 ## Running Tests in CI
 
-### Test-E2E Job (Smoke + A11y — All Pushes/PRs)
+### Scheduled E2E + accessibility job
 
-The GitHub Actions `test-e2e` job handles smoke tests with a11y checks on every push and PR:
+`.github/workflows/e2e.yml` runs nightly or on manual dispatch:
 
-1. Builds the Docker image from `Dockerfile`
-2. Starts the full stack with `docker compose up` (backend + frontend services)
-3. Waits for `/health` endpoint to confirm readiness
-4. Installs Playwright chromium: `bun exec playwright install chromium`
-5. Sets `CI=true` and `PLAYWRIGHT_BASE_URL=http://localhost:3002`
-6. Runs `bun run test:e2e` (smoke + a11y checks) against the Compose stack
-7. Uploads Playwright test report as an artifact (always)
-8. Tears down with `docker compose down`
+1. installs Bun, Python, PostgreSQL 18, and the pinned migration dependencies;
+2. generates locales and builds the production frontend;
+3. installs Playwright Chromium and required system libraries;
+4. starts the native backend against a private, migrated PostgreSQL cluster;
+5. runs `bun run test:e2e` with `PLAYWRIGHT_BASE_URL` pointing at that backend; and
+6. uploads the Playwright report and maintains the nightly failure issue.
 
-**Job config:** `.github/workflows/ci.yml` (`test-e2e` job)
-
-**Skipped for:** Draft PRs
-
-**Timeouts:** Global 90s, navigation 60s, action 30s (from `playwright.config.ts`)
-
-### Test-E2E-Visual Job (Visual Regression — Main Pushes Only)
-
-GitHub Actions `test-e2e-visual` job runs visual regression tests **only on push to main**:
-
-1. Builds the Docker image from `Dockerfile`
-2. Starts the full stack with `docker compose up`
-3. Waits for `/health` endpoint to confirm readiness
-4. Installs Playwright chromium
-5. Sets `CI=true` and `PLAYWRIGHT_BASE_URL=http://localhost:3002`
-6. Runs `bun run test:e2e:visual` (visual regression with `--update-snapshots`) with **`continue-on-error: true`**
-7. Uploads visual snapshots as a 30-day artifact
-8. Tears down with `docker compose down`
-
-**Job config:** `.github/workflows/ci.yml` (`test-e2e-visual` job)
-
-**Runs on:** Push to main branch only (`if: github.event_name == 'push'`)
-
-**Continue-on-error:** Marked as `continue-on-error: true` because visual regression tests are environment-sensitive (rendering timing, OS-specific font rasterization) and failures often reflect transient factors rather than actual bugs. This allows the baseline snapshots to be captured and uploaded for human review without blocking the merge.
-
-**Rationale:** Visual baselines are updated automatically on main to avoid manual approval and drift. PRs compare against the current main baseline instead of updating it.
+The visual project remains manual because Linux and macOS rendering require different baselines.
 
 ## Test Files
 
@@ -548,42 +524,9 @@ bun exec playwright show-report
 
 ## CI/CD Integration
 
-**GitHub Actions job:** `.github/workflows/ci.yml`
-
-```yaml
-test-e2e:
-  name: E2E Tests (Playwright)
-  runs-on: ubuntu-latest
-  if: github.event.pull_request.draft == false
-  steps:
-    - uses: actions/checkout@v4
-    - uses: oven-sh/setup-bun@v2
-    - name: Build Docker image
-      run: docker build -t vision:latest .
-    - name: Start Docker Compose stack
-      run: docker compose up -d
-    - name: Wait for health
-      run: |
-        until curl -f http://localhost:3002/health; do
-          sleep 1
-        done
-    - name: Install Playwright
-      run: bun exec playwright install chromium
-    - name: Run E2E tests
-      run: bun run test:e2e
-      env:
-        CI: true
-        PLAYWRIGHT_BASE_URL: http://localhost:3002
-    - name: Upload report
-      if: always()
-      uses: actions/upload-artifact@v3
-      with:
-        name: playwright-report
-        path: apps/frontend/playwright-report/
-    - name: Teardown
-      if: always()
-      run: docker compose down
-```
+The scheduled job is `.github/workflows/e2e.yml`. It provisions PostgreSQL 18 and runs the native
+stack through `scripts/with-test-db.sh`; see [[docs/guides/cicd-pipelines|CI/CD Pipelines]] for the
+current steps. Pull-request CI separately runs native live API contracts.
 
 ## Debugging
 

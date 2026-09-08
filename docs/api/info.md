@@ -3,7 +3,7 @@ title: Info & Analytics API
 type: endpoint
 status: active
 date: 2026-04-25
-updated: 2026-08-26
+updated: 2026-09-08
 tags: [api, analytics, statistics, dashboard, phase-g-deprecation, ing, bnp, supported-adapters]
 description: API endpoints for statistics, analytics, and dashboard data. Phase G removed 6 overlapping endpoints; see aggregations API for their replacements. May 2026: Added ING and BNP Paribas Fortis adapters (8 total banks supported).
 aliases: [info-api, analytics-api, statistics-api, dashboard-api]
@@ -325,6 +325,53 @@ Detect recurring transaction patterns.
   "total": 1
 }
 ```
+
+---
+
+### GET /api/info/insights-digest
+
+Return deterministic Smart Insights findings for subscriptions, category overspend, and expected
+month-end net cash flow. The cash values accumulate income minus outflows from zero; they are not
+an account balance or overdraft prediction. A negative value alone is a standing finding.
+`monthEndNetCashflowLow` and `monthEndNetCashflowHigh` are nullable when the selected forecast
+method does not provide uncertainty bands. Subscription price changes compare each recent charge
+with the immediately preceding chronological charge; `previousAmount` is that prior charge, not an
+all-history typical amount. Subscription and category dismissals are loaded on the server and
+filtered before this response is shared with the Statistics panel or AI narration.
+
+**Response:** `200 OK`
+
+```json
+{
+  "subscriptionCreep": { "new": [], "priceChanges": [] },
+  "categoryOutliers": [],
+  "cashForecast": {
+    "month": "2026-09",
+    "currency": "EUR",
+    "monthEndNetCashflow": -150.0,
+    "monthEndNetCashflowLow": -400.0,
+    "monthEndNetCashflowHigh": 100.0,
+    "movedSignificantly": false,
+    "prominence": "standing",
+    "methodId": "monte_carlo_parametric"
+  }
+}
+```
+
+---
+
+### GET /api/info/insights-count
+
+Read the persisted undismissed count without running the detectors inline. `status: "ready"`
+includes the authoritative count. A dirty, expired, or missing projection returns `count: null`
+with `pending` or `unavailable` and starts one coalesced background refresh.
+
+### PUT /api/info/insight-dismissals
+
+Persist a subscription dismissal with `{ "kind": "subscription_new", "recipient_id": 12 }` (or
+`subscription_price_change`), or a category dismissal with
+`{ "kind": "category_outlier", "category_id": 5, "month_key": "2026-09" }`. Bodies are strict.
+The server resolves an outlier's current deviation; clients cannot supply that threshold.
 
 ---
 

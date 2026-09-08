@@ -3,11 +3,54 @@ title: Input Validation
 type: security
 status: active
 date: 2026-04-26
-updated: 2026-08-26
-tags: [security, validation, sanitization, csv, formula-injection, cwe-1236, path-injection, redos, ssrf, outbound-request, url-safety]
+updated: 2026-09-05
+tags:
+  [
+    security,
+    validation,
+    sanitization,
+    csv,
+    formula-injection,
+    cwe-1236,
+    path-injection,
+    redos,
+    ssrf,
+    outbound-request,
+    url-safety,
+  ]
 description: Input validation and sanitization mechanisms to prevent SQL injection, XSS, formula injection in CSV exports, path injection, ReDoS, malformed data, and SSRF via user-controlled outbound URLs
-aliases: [input validation, sanitization, sql injection, xss, validation middleware, csv formula injection, cwe-1236, ssrf, url safety]
-related_code: ["apps/node-backend/src/lib/validation.js", "apps/node-backend/src/middleware/validation.js", "apps/node-backend/src/lib/importBatchIds.js", "apps/node-backend/src/routes/parserConfigRoutes.js", "apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/routes/portfolioImportRoutes.js", "apps/node-backend/src/routes/investments.js", "apps/node-backend/src/services/accountService.js", "apps/node-backend/src/lib/filterBuilder.js", "apps/node-backend/src/routes/aggregations.js", "apps/node-backend/src/routes/transactions.js", "apps/node-backend/src/services/aiChat/tools/_validate.js", "apps/node-backend/src/lib/csv.js", "apps/node-backend/src/lib/urlSafety.js", "apps/node-backend/src/controllers/investmentController.js", "apps/node-backend/src/repositories/portfolioTxRepo.reads.js", "apps/node-backend/src/services/prices/priceProviderRegistry.js"]
+aliases:
+  [
+    input validation,
+    sanitization,
+    sql injection,
+    xss,
+    validation middleware,
+    csv formula injection,
+    cwe-1236,
+    ssrf,
+    url safety,
+  ]
+related_code:
+  [
+    "apps/node-backend/src/lib/validation.js",
+    "apps/node-backend/src/middleware/validation.js",
+    "apps/node-backend/src/lib/importBatchIds.js",
+    "apps/node-backend/src/routes/parserConfigRoutes.js",
+    "apps/node-backend/src/routes/importRoutes.js",
+    "apps/node-backend/src/routes/portfolioImportRoutes.js",
+    "apps/node-backend/src/routes/investments.js",
+    "apps/node-backend/src/services/accountService.js",
+    "apps/node-backend/src/lib/filterBuilder.js",
+    "apps/node-backend/src/routes/aggregations.js",
+    "apps/node-backend/src/routes/transactions.js",
+    "apps/node-backend/src/services/aiChat/tools/_validate.js",
+    "apps/node-backend/src/lib/csv.js",
+    "apps/node-backend/src/lib/urlSafety.js",
+    "apps/node-backend/src/services/investmentService.js",
+    "apps/node-backend/src/repositories/portfolioTxRepo.reads.js",
+    "apps/node-backend/src/services/prices/priceProviderRegistry.js",
+  ]
 ---
 
 # Input Validation
@@ -30,18 +73,19 @@ do not depend on `middleware/validation.js`; typed application errors remain own
 Validates that an ID parameter is a positive integer. **The single definition of a valid id** — `validateIntArray`, `assertOptionalId`, `assertIdParam`, `validateIdParam`/`validateIntParam`, `splits.js`'s `validatedIdField`, `importBatchIds.js`'s `coercedIdSchema`, `aggregations.js`'s `parseIdArrayQueryParam` and the AI-chat tools' `parsePositiveInt` all delegate to it rather than re-deriving a shape rule. If you need an id check, add a call — not another parser.
 
 ```javascript
-validateId(value, fieldName = 'id', max = MAX_INT32_ID)
+validateId(value, (fieldName = "id"), (max = MAX_INT32_ID));
 ```
 
 **Rules — the accept set is exhaustive and deliberately strict:**
-- A plain base-10 digit string (`"42"`; leading zeros allowed, `"00005"` → `5`), **or** an actual integer `number` (route middleware re-stamps `req.params` with the parsed integer, and JSON bodies send real numbers)
-- Range 1 to `max`, which defaults to `MAX_INT32_ID` = 2,147,483,647 (`int4` — the width of every `SERIAL` PK these routes address). `max` is not a general knob: it exists only so the `BIGSERIAL`-backed import batch/row ids can share this one definition of *shape* without inheriting an `int4` ceiling their column does not have (see [[docs/security/input-validation#coercedIdSchema (import batch/row ids)|coercedIdSchema]])
+
+- A plain base-10 digit string (`"42"`; leading zeros allowed, `"00005"` → `5`), **or** an actual integer `number` (JSON bodies and internal callers may supply real numbers)
+- Range 1 to `max`, which defaults to `MAX_INT32_ID` = 2,147,483,647 (`int4` — the width of every `SERIAL` PK these routes address). `max` is not a general knob: it exists only so the `BIGSERIAL`-backed import batch/row ids can share this one definition of _shape_ without inheriting an `int4` ceiling their column does not have (see [[docs/security/input-validation#coercedIdSchema (import batch/row ids)|coercedIdSchema]])
 - **Everything else is rejected**: trailing garbage (`"12abc"`, `"5px"`), decimals (`"12.5"`), exponent/hex/octal/binary literals (`"1e3"`, `"0x10"`, `"0o17"`, `"0b11"`), signs (`"+5"`, `"-5"`), separators (`"12,5"`, `"1_0"`), whitespace-padded values (`" 5 "`), the empty string, `"Infinity"`/`"NaN"`, non-ASCII digits, booleans, arrays and objects
 
 > [!warning] Breaking change (2026-08-11) — `"12abc"` no longer resolves to id 12
-> `validateId` was `parseInt`-based, so it took the *leading digits of anything*: `DELETE /api/research/mappings/12abc` deleted mapping **12**, `"12.5"` resolved to 12 and `"1e3"` to 1. A malformed id silently addressed a record the client never named, instead of failing. It is now a strict digit-string parse, and all such inputs return **400 `VALIDATION_ERROR`**.
+> `validateId` was `parseInt`-based, so it took the _leading digits of anything_: `DELETE /api/research/mappings/12abc` deleted mapping **12**, `"12.5"` resolved to 12 and `"1e3"` to 1. A malformed id silently addressed a record the client never named, instead of failing. It is now a strict digit-string parse, and all such inputs return **400 `VALIDATION_ERROR`**.
 >
-> Note that a bare `Number()` would *not* have been a correct fix: it accepts `"0x10"` as 16, turns `"1e3"` into 1000 (a *different* wrong record) and leaves `"12.5"` a non-integer that reaches Postgres.
+> Note that a bare `Number()` would _not_ have been a correct fix: it accepts `"0x10"` as 16, turns `"1e3"` into 1000 (a _different_ wrong record) and leaves `"12.5"` a non-integer that reaches Postgres.
 >
 > This tightens **every** route behind `validateIdParam` / `validateIntParam` / `assertOptionalId` and the `validatedIdField` zod adapter in `splits.js`. It only narrows what is accepted: every id that a well-behaved client sends (a plain integer) behaves exactly as before, and `openapi.yaml` already typed these params `integer` — the implementation now conforms to the published contract rather than deviating from it.
 
@@ -52,6 +96,7 @@ functions running first. Do not reintroduce `parseInt(req.params...)`, `Number(r
 a raw cast: a future route mounted without middleware would then be able to retarget a malformed id.
 
 **Returns:**
+
 ```javascript
 { valid: true, value: 123 }  // Success
 { valid: false, error: "id must be a positive integer" }  // Failure
@@ -68,6 +113,7 @@ validateNumber(value, { min = -Infinity, max = Infinity, fieldName = 'value' })
 ```
 
 **Rules:**
+
 - Must be a valid number
 - Must be within specified range (inclusive)
 
@@ -78,10 +124,11 @@ validateNumber(value, { min = -Infinity, max = Infinity, fieldName = 'value' })
 Optional query parameters that reference IDs (e.g. `?account_id=`) go through `assertOptionalId`, the throwing wrapper around `validateId` — so they share the strict accept set documented above rather than a hand-rolled `parseInt` check.
 
 ```javascript
-const accountId = assertOptionalId(req.query.account_id, 'account_id');
+const accountId = assertOptionalId(req.query.account_id, "account_id");
 ```
 
 **Rules:**
+
 - Absent or empty (`undefined` / `null` / `''`) returns `null`, so the caller can treat the filter as unset
 - Anything else must satisfy `validateId`; otherwise a `ValidationError` (400) is raised **before** the value reaches the database layer
 - This is what keeps `?account_id=abc` a 400 rather than a `NaN` parameter that Postgres rejects with `22P02` as a 500
@@ -95,10 +142,11 @@ const accountId = assertOptionalId(req.query.account_id, 'account_id');
 Validates date strings in ISO format (YYYY-MM-DD).
 
 ```javascript
-validateDateString(value, fieldName = 'date')
+validateDateString(value, (fieldName = "date"));
 ```
 
 **Rules:**
+
 - Must match `^\d{4}-\d{2}-\d{2}$` pattern
 - Must be a valid date
 
@@ -109,10 +157,11 @@ validateDateString(value, fieldName = 'date')
 Validates arrays of integer IDs (chart filter lists, dashboard exclusion lists).
 
 ```javascript
-validateIntArray(values, fieldName = 'ids')
+validateIntArray(values, (fieldName = "ids"));
 ```
 
 **Rules:**
+
 - A scalar is wrapped into a one-element array; an empty array is valid
 - **Every element goes through `validateId`**, so the per-element accept set is exactly the one documented above (plain base-10 digit string or integer `number`, 1..2,147,483,647)
 - One bad element rejects the **whole** array — `ValidationError` with `"<field> contains invalid value: <value>"`. No partial or filtered set ever reaches the query
@@ -141,10 +190,14 @@ regression test. Route handlers must not use this helper.
 The aggregation endpoints take their id lists in the query string, one occurrence per id (`?excluded_category_ids=5&excluded_category_ids=9`). They go through `parseIdArrayQueryParam` in `routes/aggregations.js`, a thin throwing wrapper around `validateIntArray` — so the per-element accept set is the same one documented under [[docs/security/input-validation#ID Validation|ID Validation]], not a second rule.
 
 ```javascript
-parseIdArrayQueryParam(req.query.excluded_category_ids, 'excluded_category_ids')
+parseIdArrayQueryParam(
+  req.query.excluded_category_ids,
+  "excluded_category_ids",
+);
 ```
 
 **Rules:**
+
 - Absent, or present-but-empty (`?excluded_category_ids=`), returns `[]` — "no filter", answered `200`. This is the same unset convention `assertOptionalId` uses, and it is what every shipped caller sends when its list is empty (the frontend query builders skip the param entirely rather than emitting an empty one)
 - Any other value must satisfy `validateIntArray`; one bad element raises `ValidationError` → **400 `VALIDATION_ERROR`** (`"<field> contains invalid value: <value>"`) before any aggregation is computed
 - An empty list and a list containing a bad element are deliberately **different** cases with different answers
@@ -154,7 +207,7 @@ parseIdArrayQueryParam(req.query.excluded_category_ids, 'excluded_category_ids')
 `mc_percentiles` deliberately keeps the older lenient numeric parser: percentiles are distribution parameters in 0..100, not record ids, so fractional values are legitimate and a bad one costs a chart band rather than a wrong row set.
 
 > [!warning] Breaking change (2026-08-11) — a malformed id is now a 400 instead of a silently different answer
-> This parser was `.map(Number).filter(Number.isFinite)`, which **dropped** bad elements instead of rejecting them. `?excluded_category_ids=12abc` yielded `[]`, so the exclusion was switched off entirely and the endpoint answered with a *different dataset than the user asked for* — no error, no log line, a plausible-looking number on the dashboard. Meanwhile `"0x10"` decoded to 16 and `"1e3"` to 1000, excluding a category nobody named, and `"1.5"`/`"-1"` reached the SQL builder to be dropped a second time by `validateInt4Ids`.
+> This parser was `.map(Number).filter(Number.isFinite)`, which **dropped** bad elements instead of rejecting them. `?excluded_category_ids=12abc` yielded `[]`, so the exclusion was switched off entirely and the endpoint answered with a _different dataset than the user asked for_ — no error, no log line, a plausible-looking number on the dashboard. Meanwhile `"0x10"` decoded to 16 and `"1e3"` to 1000, excluding a category nobody named, and `"1.5"`/`"-1"` reached the SQL builder to be dropped a second time by `validateInt4Ids`.
 >
 > Worse than the body-array case above, which at least refused the request. Both paths now behave identically. Non-breaking for every shipped caller: the frontend builds these params from `number[]` state with `String(id)` and omits the param when the list is empty, so no legitimate request shape changes.
 
@@ -171,10 +224,11 @@ not a third rule. Repeated occurrences work too: Express hands back an array and
 re-joins it with commas.
 
 ```javascript
-parseIdListQueryParam(req.query.account_ids, 'account_ids')   // → number[] | null
+parseIdListQueryParam(req.query.account_ids, "account_ids"); // → number[] | null
 ```
 
 **Rules:**
+
 - Absent, or present-but-empty (`?category_ids=`), returns `null` — "no filter", answered `200`
 - Any other value is split on `,` and every element must satisfy `validateId`; one bad element
   raises `ValidationError` → **400 `VALIDATION_ERROR`** (`"<field> contains invalid value: <value>"`)
@@ -189,7 +243,7 @@ The four scalar id filters on the same endpoints — `transaction_id`, `category
 **Params:** `category_ids` (`GET /api/transactions`, `GET /api/transactions/export/csv|json`),
 `account_ids` (both export endpoints), `investment_ids` (`GET /api/investments/transactions`).
 
-`investment_ids` uses the same wrapper shape in `investmentController.js`, with one deliberate
+`investment_ids` uses the same wrapper shape in `investmentService.js`, with one deliberate
 difference: it is **required**, not optional, so absent/empty is the endpoint's pre-existing
 `400 investment_ids is required` rather than "no filter". Its repository-side twin in
 `portfolioTxRepo.reads.js` (`normalizeInvestmentIds`, feeding both `= ANY($1::int[])` predicates)
@@ -200,7 +254,7 @@ always been a silent filter, and the throwing guard belongs where a 400 can reac
 > These sat **upstream** of `validateInt4Ids`, so the SQL-build convergence did not close them: by
 > the time the builder saw the value it was already a clean integer.
 >
-> The list parse was `.split(',').map(parseInt).filter(isFinite && > 0)` and had *both* failure
+> The list parse was `.split(',').map(parseInt).filter(isFinite && > 0)` and had _both_ failure
 > modes. **Retarget:** `?category_ids=5,12abc` filtered by categories 5 **and 12**, and
 > `?account_ids=12abc` exported account 12 — a record nobody named. **Widen:** an all-bad list
 > parsed to `[]`, which the caller mapped back to "no filter", so `?account_ids=abc` emitted no
@@ -216,7 +270,7 @@ always been a silent filter, and the throwing guard belongs where a 400 can reac
 >
 > `POST /api/transactions/transfers` is converged in the same pass. Its `aId`/`bId` were bare
 > `parseInt` guarded only by `Number.isInteger`, so `"12abc"` stamped transaction **12** as one leg
-> of a transfer pair — a wrong-record *write*, not a wrong-record read — and an id past int4 passed
+> of a transfer pair — a wrong-record _write_, not a wrong-record read — and an id past int4 passed
 > the guard and 500'd at the column.
 >
 > Non-breaking for shipped callers: the Transactions page and the Imports Export card build these
@@ -226,7 +280,7 @@ always been a silent filter, and the throwing guard belongs where a 400 can reac
 > implementation moves **onto** the published contract rather than away from it.
 
 > [!warning] Breaking change (2026-08-11) — `investment_ids` joins them
-> Missed by the pass above because it lives in `investmentController.js`, not `routes/`. Same
+> Missed by the pass above because it lived in `investmentController.js`, not `routes/`. Same
 > `parseInt` + `filter(Number.isInteger)` shape and the same retarget: `?investment_ids=12abc`
 > returned investment **12**'s transactions, `5,12abc` returned 5 **and** 12, and `1e3` returned
 > investment 1 — all `200`. Read-only, hence the lowest severity in the set. The identical parse ran
@@ -249,10 +303,11 @@ placeholder. Used by `buildTransactionWhere` (`accountIds`, `categoryIds`),
 `resolveBulkSelection`, `bulkTagTransactions`, and the price-history batch loader.
 
 ```javascript
-validateInt4Ids(ids, fieldName)   // → number[], throws ValidationError
+validateInt4Ids(ids, fieldName); // → number[], throws ValidationError
 ```
 
 **Rules:**
+
 - Delegates to `validateIntArray` → `validateId`, so the accepted element shapes are identical to
   the `:id` params', the body arrays' and the aggregation query params': a plain base-10 digit
   string or an integer number, `1..2147483647` **inclusive**
@@ -264,7 +319,7 @@ validateInt4Ids(ids, fieldName)   // → number[], throws ValidationError
 > A dropped id does not 404 here — it changes **which rows the query covers**. An exclusion list
 > that lost one element quietly stopped excluding that category; one that lost every element
 > emitted no predicate at all and answered with the full dataset while the caller believed its
-> exclusions applied. This is also what dropped `1.5`/`-1` a *second* time on the aggregation
+> exclusions applied. This is also what dropped `1.5`/`-1` a _second_ time on the aggregation
 > path, masking the query-param bug above.
 >
 > Two callers additionally ran `.map(Number)` **before** the filter, which did not drop bad
@@ -292,10 +347,11 @@ selector shared by `POST /api/transactions/bulk-delete`, `/bulk-update` and `/bu
 `ids` half was made strict earlier the same day (see `validateInt4Ids` above); this is its sibling.
 
 ```javascript
-normalizeBulkFilter(filter)   // → builder opts, throws ValidationError
+normalizeBulkFilter(filter); // → builder opts, throws ValidationError
 ```
 
 **Rules:**
+
 - The accepted key set is closed. An unrecognised key rejects the request —
   `` `filter` contains unknown field(s): <keys>`` — rather than being ignored
 - Each field is accepted in snake_case or camelCase, but **not both at once**: one field spelled
@@ -351,7 +407,7 @@ normalizeBulkFilter(filter)   // → builder opts, throws ValidationError
 > the SQL builder, and `bank_accounts`/`tagSlugs` are sliced to the builder's 50-element cap (the
 > same pre-existing narrowing `EXPORT_MAX_LIST_SIZE` carries on the export path). The one place this
 > section diverges from the list endpoint is `search` length: the list truncates to 200 characters,
-> which for a substring match matches *more* rows, so here it rejects instead.
+> which for a substring match matches _more_ rows, so here it rejects instead.
 
 ---
 
@@ -360,13 +416,13 @@ normalizeBulkFilter(filter)   // → builder opts, throws ValidationError
 The last `parseInt`-based id parsers outside the transactions routes, converged onto
 `assertOptionalId` / `validateId` in the same pass:
 
-| Site | Param | Was |
-|---|---|---|
-| `routes/plannedTransactions.js` (`GET /`) | `category_id`, `recipient_id` | `x ? parseInt(x) : null` |
-| `routes/recipients.js` (`GET /`) | `default_category_id` | `x ? parseInt(x) : null` |
-| `routes/research.js` (`POST /mappings/resolve`) | `investment_id` | `Number.parseInt`, `undefined` on failure |
-| `routes/accounts.js` (`POST /:id/merge`) | `source_ids[]` | `parseInt` + `Number.isInteger` |
-| `routes/accounts.js` (`GET /:id/merge-preview`) | `?into=` | `Number(...)` |
+| Site                                            | Param                         | Was                                       |
+| ----------------------------------------------- | ----------------------------- | ----------------------------------------- |
+| `routes/plannedTransactions.js` (`GET /`)       | `category_id`, `recipient_id` | `x ? parseInt(x) : null`                  |
+| `routes/recipients.js` (`GET /`)                | `default_category_id`         | `x ? parseInt(x) : null`                  |
+| `routes/research.js` (`POST /mappings/resolve`) | `investment_id`               | `Number.parseInt`, `undefined` on failure |
+| `routes/accounts.js` (`POST /:id/merge`)        | `source_ids[]`                | `parseInt` + `Number.isInteger`           |
+| `routes/accounts.js` (`GET /:id/merge-preview`) | `?into=`                      | `Number(...)`                             |
 
 > [!warning] Breaking change (2026-08-11) — malformed ids on these five sites
 > Same two failure modes as everywhere else in this family. **Retarget:**
@@ -396,6 +452,7 @@ parseOptionalPagination(query, { defaultLimit, maxLimit })
 ```
 
 **Rules:**
+
 - `parseIntClamped`: parses `raw`, falls back to `fallback` if not finite or below `min`, clamps to `max` if given
 - `parsePagination`: builds `{ limit, offset }` from `query.limit`/`query.offset` via `parseIntClamped` — `limit` falls back to `defaultLimit` and clamps to `maxLimit`; `offset` falls back to `0` with `min: 0`
 - `parseOptionalPagination`: returns `null` when neither `limit` nor `offset` is supplied (serve the full collection); otherwise delegates to `parsePagination`, with the limit fallback defaulting to `maxLimit` instead of a small page size
@@ -425,12 +482,13 @@ if (colCheck.rows.length > 0) {
     `UPDATE planned_transactions
         SET recipient_id = $1
       WHERE recipient_id = ANY($2::int[])`,
-    [primaryId, ids],  // Fully parameterized — no string interpolation
+    [primaryId, ids], // Fully parameterized — no string interpolation
   );
 }
 ```
 
 **Rationale:**
+
 - Avoids string interpolation or dynamic SQL construction
 - Safely handles missing columns in older schema versions without error
 - All ID values passed as parameters, not interpolated into SQL string
@@ -444,15 +502,20 @@ To prevent SQL injection through dynamic column names, Vision uses a whitelist a
 ```javascript
 const ALLOWED_COLUMNS = {
   transactions: new Set([
-    'date', 'transaction_date', 'bank_account', 'recipient_id', 'amount',
-    'memo', 'currency', 'balance', 'category_id', 'comment', 'is_active',
+    "date",
+    "transaction_date",
+    "bank_account",
+    "recipient_id",
+    "amount",
+    "memo",
+    "currency",
+    "balance",
+    "category_id",
+    "comment",
+    "is_active",
   ]),
-  categories: new Set([
-    'general', 'detail', 'description', 'is_active',
-  ]),
-  recipients: new Set([
-    'name', 'default_category_id', 'notes', 'is_active',
-  ]),
+  categories: new Set(["general", "detail", "description", "is_active"]),
+  recipients: new Set(["name", "default_category_id", "notes", "is_active"]),
   // ... other resources
 };
 ```
@@ -462,7 +525,7 @@ const ALLOWED_COLUMNS = {
 This library function filters update requests to only include allowed columns:
 
 ```javascript
-sanitizeUpdateFields('transactions', { amount: 100, unknown_field: 'bad' })
+sanitizeUpdateFields("transactions", { amount: 100, unknown_field: "bad" });
 // Returns: { amount: 100 }
 // unknown_field is silently dropped
 ```
@@ -476,8 +539,9 @@ sanitizeUpdateFields('transactions', { amount: 100, unknown_field: 'bad' })
 Express middleware for validating `:id` route parameters:
 
 ```javascript
-router.get('/:id', validateIdParam, async (req, res) => {
-  // req.params.id is now a validated integer
+router.get("/:id", validateIdParam, async (req, res) => {
+  // Middleware validates only; the handler obtains the number explicitly.
+  const id = assertIdParam(req);
 });
 ```
 
@@ -485,10 +549,17 @@ Applied in 14 routers: `accounts`, `attachments`, `categories`, `investments`, `
 
 ### validateIntParam
 
-Factory for sub-resource id params that the fixed-`:id` middleware cannot reach. Same accept set, same parsed-value re-stamp:
+Factory for sub-resource id params that the fixed-`:id` middleware cannot reach. It has the same
+accept set and, like `validateIdParam`, validates without mutating `req.params`; handlers call
+`assertIdParam(req, name)` to obtain the numeric value:
 
 ```javascript
-router.delete('/:id/patterns/:patternId', validateIdParam, validateIntParam('patternId'), handler);
+router.delete(
+  "/:id/patterns/:patternId",
+  validateIdParam,
+  validateIntParam("patternId"),
+  handler,
+);
 ```
 
 Used for `:patternId` (`recipients.js`), `:accountId` (`recipientBankAccounts.js`) and `:txnId` (`investments.js`). Unlike `validateIdParam` — which no-ops when there is no `:id` on the route — `validateIntParam` rejects a missing param, since a route that declares it always has it.
@@ -496,10 +567,10 @@ Used for `:patternId` (`recipients.js`), `:accountId` (`recipientBankAccounts.js
 > [!warning] Breaking change (2026-08-11) — the last six operations with no `:id` middleware
 > Six operations reached a repository with a hand-parsed id and no router-edge guard. All six now carry `validateIdParam`/`validateIntParam` **and** parse through `validateId`, so the guard runs twice and cannot disagree with itself.
 >
-> | Operations | Old parser | What a malformed id did |
-> |---|---|---|
+> | Operations                                                                       | Old parser                                    | What a malformed id did                                                                                                                     |
+> | -------------------------------------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 > | `PATCH`/`DELETE /api/import/parsers/:id` and `/api/portfolio/import/parsers/:id` | `parseParserId` — `parseInt` + `Number.isNaN` | `DELETE /parsers/12abc` → **204, parser 12 deleted**; `12.5` → 12; `1e3` → 1; `-1` and `0` cleared the NaN check and reached the repository |
-> | `PATCH`/`DELETE /api/investments/transactions/:txnId` | `requireTxnId` — `parseInt` + `isNaN`/`<= 0` | `DELETE /transactions/12abc` → **204, transaction 12 hard-deleted**; `1e3` → transaction 1; PATCH retargeted identically |
+> | `PATCH`/`DELETE /api/investments/transactions/:txnId`                            | `requireTxnId` — `parseInt` + `isNaN`/`<= 0`  | `DELETE /transactions/12abc` → **204, transaction 12 hard-deleted**; `1e3` → transaction 1; PATCH retargeted identically                    |
 >
 > Both delete paths are irreversible writes against a record the caller never named, reported as success — the reason this pair was rated highest in the family. Everything listed now returns **400 `VALIDATION_ERROR`** before any repository call.
 >
@@ -510,16 +581,16 @@ Used for `:patternId` (`recipients.js`), `:accountId` (`recipientBankAccounts.js
 The import pipelines' batch and row ids (`/api/import/batches/*`, `/api/portfolio/import/batches/*`) are parsed by the zod adapter `coercedIdSchema` in `lib/importBatchIds.js`, via `parseBatchIdParam(req)` and `parseBatchRowIdParams(req)`. It **delegates to `validateId`**, so there is one definition of a valid id rather than two kept in step by hand.
 
 ```javascript
-const id = parseBatchIdParam(req);                  // req.params.id
+const id = parseBatchIdParam(req); // req.params.id
 const { batchId, rowId } = parseBatchRowIdParams(req); // req.params.id + req.params.rowId
 ```
 
 The one intended difference from a plain `validateId` call is the **upper bound**:
 
-| Validator | Bound | Why |
-|---|---|---|
-| `validateId` (default) | `MAX_INT32_ID` = 2,147,483,647 | every id it guards is an `int4` `SERIAL` PK (`categories`, `recipients`, `tags`, `transactions`, …) |
-| `coercedIdSchema` | `MAX_SAFE_ID` = `Number.MAX_SAFE_INTEGER` | `import_batches.id`, `import_staging_rows.id` and the portfolio pair are **`BIGSERIAL`** — an `int4` ceiling would be narrower than the column. `2^53` is the real limit because the id crosses the wire as a JSON number, and above it the digit string and the parsed number stop being the same value (`"9007199254740993"` would address record …992) |
+| Validator              | Bound                                     | Why                                                                                                                                                                                                                                                                                                                                                       |
+| ---------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `validateId` (default) | `MAX_INT32_ID` = 2,147,483,647            | every id it guards is an `int4` `SERIAL` PK (`categories`, `recipients`, `tags`, `transactions`, …)                                                                                                                                                                                                                                                       |
+| `coercedIdSchema`      | `MAX_SAFE_ID` = `Number.MAX_SAFE_INTEGER` | `import_batches.id`, `import_staging_rows.id` and the portfolio pair are **`BIGSERIAL`** — an `int4` ceiling would be narrower than the column. `2^53` is the real limit because the id crosses the wire as a JSON number, and above it the digit string and the parsed number stop being the same value (`"9007199254740993"` would address record …992) |
 
 > [!warning] Breaking change (2026-08-11) — the two validators converged
 > `coercedIdSchema` was a bare `Number()` coercion. It already agreed with `validateId` on the obvious cases (`"12abc"`, `"12.5"`, `0`, negatives, `""` all rejected), but it silently addressed a **different batch** on `"1e3"` → 1000, `"0x10"` → 16, `"0o17"` → 15, `"0b11"` → 3 and `"9007199254740993"` → …992, and additionally accepted `"+5"`, `" 12 "`, `"\n7\n"` and `"12.0"`. All of these now return **400 `VALIDATION_ERROR`**.
@@ -534,22 +605,22 @@ The one intended difference from a plain `validateId` call is the **upper bound*
 
 `POST /api/investments/:id/transactions` and
 `PATCH /api/investments/transactions/:txnId` use one loose Zod body schema in
-`controllers/investmentController.js`. POST adds its `type` and `date` requiredness after the shared
+`services/investmentService.js`. POST adds its `type` and `date` requiredness after the shared
 parse; every PATCH field remains optional. The repository normalizer still owns type-specific unit
 math, oversell checks, and recurrence-window validation.
 
 The shared boundary validates these common shapes before any repository write:
 
-| Fields | Rule |
-|---|---|
-| `type` | Canonical `PORTFOLIO_TXN_TYPES` value |
-| `date`, `recurrence_end_date` | `YYYY-MM-DD`; transaction `date` cannot be cleared, while recurrence end date can |
+| Fields                                                                 | Rule                                                                                                                                                                                                   |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `type`                                                                 | Canonical `PORTFOLIO_TXN_TYPES` value                                                                                                                                                                  |
+| `date`, `recurrence_end_date`                                          | `YYYY-MM-DD`; transaction `date` cannot be cleared, while recurrence end date can                                                                                                                      |
 | `amount`, `units`, `price_per_unit`, `fees`, `taxes`, `fx_rate_to_eur` | Finite JSON number or decimal numeric string (including exponent notation) within the field's PostgreSQL-safe range; strings normalize to numbers, while booleans, arrays, hex and padded forms reject |
-| `currency` | Three-letter ISO shape, normalized to uppercase; create may fall back when empty, PATCH cannot clear it |
-| `note` | String or `null` |
-| `is_recurring` | Boolean, without string or number coercion |
-| `recurrence_interval` | Canonical `PORTFOLIO_RECURRENCE_INTERVALS` value or a clear value |
-| `account_id` | Existing `validateId` path described below; `null` retains its unassign meaning on PATCH |
+| `currency`                                                             | Three-letter ISO shape, normalized to uppercase; create may fall back when empty, PATCH cannot clear it                                                                                                |
+| `note`                                                                 | String or `null`                                                                                                                                                                                       |
+| `is_recurring`                                                         | Boolean, without string or number coercion                                                                                                                                                             |
+| `recurrence_interval`                                                  | Canonical `PORTFOLIO_RECURRENCE_INTERVALS` value or a clear value                                                                                                                                      |
+| `account_id`                                                           | Existing `validateId` path described below; `null` retains its unassign meaning on PATCH                                                                                                               |
 
 Malformed values now return **400 `VALIDATION_ERROR`** instead of reaching PostgreSQL as a cast,
 enum, NOT NULL, or numeric-range failure. The schema is loose so unknown fields retain the existing
@@ -562,24 +633,24 @@ field vocabulary.
 
 The id **route params** above are only half of what a write addresses. The other half is the FK id carried in the request **body** — the recipient/category an import row is re-attributed to, the investment a portfolio row is linked to, the brokerage account a batch lands on, the recipient/category a transaction is booked against, and an account's `funding_account_id`. All of these are now parsed with **`validateId`**, so the body and the URL agree on what an id is.
 
-| Site | Field | Parser |
-|---|---|---|
-| `POST /api/import/batches/:id/rows/:rowId/override` | `recipient_id` | `parseOverrideId` (`lib/importBatchIds.js`) |
-| `POST /api/import/batches/:id/rows/:rowId/category-override` | `category_id` | `parseOverrideId` |
-| `POST /api/portfolio/import/batches/:id/rows/:rowId/investment-override` | `investment_id` | `parseOverrideId` |
-| `POST /api/portfolio/import/batches/:id/rows/investment-override` | `row_ids[]`, `investment_id` | `validateId`, inline; safe-integer row ids and int32 investment id |
-| `POST /api/portfolio/import/batches/:id/commit` | `account_id` | `validateId`, inline |
-| `POST /api/portfolio/import/csv/custom` (+ `/csv/custom/stream`) | `account_id` | `validateId`, in `brokerageParamsSchema` |
-| `POST /api/transactions`, `PATCH /api/transactions/:id` | `recipient_id`, `category_id` | `validateId`, in the zod body schemas |
-| `POST /api/accounts`, `PATCH /api/accounts/:id` | `funding_account_id` | `validateId`, in `accountService`'s zod schema |
-| `POST /api/investments/:id/transactions`, `PATCH /api/investments/transactions/:txnId` | `account_id` | `validateId`, via `parseAccountId` (`investmentController.js`) |
+| Site                                                                                   | Field                         | Parser                                                             |
+| -------------------------------------------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------ |
+| `POST /api/import/batches/:id/rows/:rowId/override`                                    | `recipient_id`                | `parseOverrideId` (`lib/importBatchIds.js`)                        |
+| `POST /api/import/batches/:id/rows/:rowId/category-override`                           | `category_id`                 | `parseOverrideId`                                                  |
+| `POST /api/portfolio/import/batches/:id/rows/:rowId/investment-override`               | `investment_id`               | `parseOverrideId`                                                  |
+| `POST /api/portfolio/import/batches/:id/rows/investment-override`                      | `row_ids[]`, `investment_id`  | `validateId`, inline; safe-integer row ids and int32 investment id |
+| `POST /api/portfolio/import/batches/:id/commit`                                        | `account_id`                  | `validateId`, inline                                               |
+| `POST /api/portfolio/import/csv/custom` (+ `/csv/custom/stream`)                       | `account_id`                  | `validateId`, in `brokerageParamsSchema`                           |
+| `POST /api/transactions`, `PATCH /api/transactions/:id`                                | `recipient_id`, `category_id` | `validateId`, in the zod body schemas                              |
+| `POST /api/accounts`, `PATCH /api/accounts/:id`                                        | `funding_account_id`          | `validateId`, in `accountService`'s zod schema                     |
+| `POST /api/investments/:id/transactions`, `PATCH /api/investments/transactions/:txnId` | `account_id`                  | `validateId`, via `parseAccountId` (`investmentService.js`)        |
 
-**Absent and `null` keep their meaning.** On the three override endpoints and the two nullable transaction FKs, `null` — and, on the override endpoints, an absent field — means *clear the override / clear the FK* and answers **200**, unchanged. Only a **present but malformed** value rejects. On the commit and upload `account_id`, absent/`null` still means *no account for this batch*.
+**Absent and `null` keep their meaning.** On the three override endpoints and the two nullable transaction FKs, `null` — and, on the override endpoints, an absent field — means _clear the override / clear the FK_ and answers **200**, unchanged. Only a **present but malformed** value rejects. On the commit and upload `account_id`, absent/`null` still means _no account for this batch_.
 
 > [!warning] Breaking change (2026-08-11) — the seventh id-parser set converged
 > These sites validated with `Number.isInteger(Number(value))`. That is a different sub-shape from the `parseInt` sites above and it looked sound, because it correctly rejects `"12abc"`. What it **accepts** is the problem: `Number("1e3")` is 1000, `Number("0x10")` is 16, `Number("0o17")` is 15, `Number(true)` is 1 and `Number([7])` is 7. A malformed value therefore did not fail validation — it named a **different, perfectly real record**, and every one of these sites is a **write**.
 >
-> The consequence is worse than on a read. An import staging row committed a transaction attributed to a recipient or category the user never picked; a portfolio row committed a lot against another instrument; the commit-time `account_id` is stamped on the batch, so *every* lot it commits inherited an account nobody named; and `PATCH /api/transactions/:id` re-attributed an existing ledger entry. The existence checks these sites run (`categoryExists`, `accountService.get`, `assertFundingAccountValid`) offered no protection, because they only ever saw the value **after** coercion — a retargeted id is a real id and passes them.
+> The consequence is worse than on a read. An import staging row committed a transaction attributed to a recipient or category the user never picked; a portfolio row committed a lot against another instrument; the commit-time `account_id` is stamped on the batch, so _every_ lot it commits inherited an account nobody named; and `PATCH /api/transactions/:id` re-attributed an existing ledger entry. The existence checks these sites run (`categoryExists`, `accountService.get`, `assertFundingAccountValid`) offered no protection, because they only ever saw the value **after** coercion — a retargeted id is a real id and passes them.
 >
 > Also newly rejected: `0` and negatives, which used to satisfy `Number.isInteger` and reached Postgres as an FK violation (a 500), and `""`, which coerced to `0` the same way.
 >
@@ -592,7 +663,7 @@ The id **route params** above are only half of what a write addresses. The other
 >
 > **`category_id` on `POST /api/transactions`** had no guard whatsoever: the create schema validated `recipient_id` and `amount` and forwarded the rest raw, so `'12abc'`, `'1e3'`, `true`, `[7]` and `''` all reached Postgres as 22P02 and `0`/negatives as an FK violation — 500s on the create path for the app's core entity, and `'0x10'` a silent write to category 16 wherever that row exists. It now uses the same `nullableFkField` as the PATCH body.
 >
-> Absent/`null` semantics are unchanged and pinned: on transaction create both mean *uncategorized*; on portfolio-transaction create both mean *no brokerage account*; on the portfolio PATCH absent means *leave alone* and `null` means *unassign*.
+> Absent/`null` semantics are unchanged and pinned: on transaction create both mean _uncategorized_; on portfolio-transaction create both mean _no brokerage account_; on the portfolio PATCH absent means _leave alone_ and `null` means _unassign_.
 
 ---
 
@@ -605,6 +676,7 @@ parsePositiveInt(value, field, { min = 1, max = 1000, defaultValue = null })
 ```
 
 **Rules:**
+
 - `null`/`undefined` returns `defaultValue` (the tools' optional knobs)
 - Shape is **`validateId`'s** — a plain base-10 digit string or an integer `number`, nothing else — so an id the model emits is parsed exactly like one arriving on a route
 - `min`/`max` are the caller's own bounds and are checked separately from the shape: `limit` 1..500, `topN` 1..20, `year` 2000..2100, `minOccurrences` 2..20, and the id arguments (`categoryId`, `recipientId`, `plannedId`) 1..`Number.MAX_SAFE_INTEGER`
@@ -646,10 +718,12 @@ Example: "  =formula" → trimmed to "=formula" → prefixed to "'=formula" (ren
 
 ```js
 export function escapeCsvValue(value) {
-  if (value == null) return '';
+  if (value == null) return "";
   const stringValue = neutralizeCsvFormula(String(value));
   // Escape quotes and wrap if needed
-  return stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')
+  return stringValue.includes(",") ||
+    stringValue.includes('"') ||
+    stringValue.includes("\n")
     ? `"${stringValue.replace(/"/g, '""')}"`
     : stringValue;
 }
@@ -660,15 +734,15 @@ export function escapeCsvValue(value) {
 Every CSV export route **must** pass all user-controllable fields through `escapeCsvValue()`:
 
 ```js
-import { escapeCsvValue } from '../lib/csv.js';
+import { escapeCsvValue } from "../lib/csv.js";
 
 // Transaction export
 const cols = [row.date, row.recipient_name, row.memo, row.comment];
-const csv = cols.map(escapeCsvValue).join(',');
+const csv = cols.map(escapeCsvValue).join(",");
 
 // Splits/owed transactions export
 const cols = [row.recipient_name, row.memo, row.amount];
-const csv = cols.map(escapeCsvValue).join(',');
+const csv = cols.map(escapeCsvValue).join(",");
 ```
 
 ### Compliance
@@ -686,13 +760,13 @@ Custom price-provider investments may carry user-supplied URLs (`price_provider_
 
 **[[apps/node-backend/src/lib/urlSafety.js]]** exports:
 
-| Export | Description |
-|--------|-------------|
+| Export                           | Description                                                                                                                                                                        |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `assertPublicHttpUrl(url, opts)` | Validates a URL is safe to fetch. Throws `BlockedUrlError` on violation; returns parsed `URL` on success. Accepts `resolveDns` (default `true`) and injectable `lookup` for tests. |
-| `isBlockedIpv4(ip)` | Returns `true` for private/loopback/link-local/CGNAT/unspecified IPv4 ranges |
-| `isBlockedIpv6(ip)` | Returns `true` for loopback (`::1`, `::`), IPv4-mapped (`::ffff:`), ULA (`fc00::/7`), and link-local (`fe80::/10`) |
-| `isBlockedAddress(ip)` | Dispatch to the above by address family; fails closed on unrecognized format |
-| `BlockedUrlError` | Error subclass thrown on any violation |
+| `isBlockedIpv4(ip)`              | Returns `true` for private/loopback/link-local/CGNAT/unspecified IPv4 ranges                                                                                                       |
+| `isBlockedIpv6(ip)`              | Returns `true` for loopback (`::1`, `::`), IPv4-mapped (`::ffff:`), ULA (`fc00::/7`), and link-local (`fe80::/10`)                                                                 |
+| `isBlockedAddress(ip)`           | Dispatch to the above by address family; fails closed on unrecognized format                                                                                                       |
+| `BlockedUrlError`                | Error subclass thrown on any violation                                                                                                                                             |
 
 **Blocked ranges (IPv4):** `0.0.0.0/8`, `10.0.0.0/8`, `127.0.0.0/8`, `169.254.0.0/16`, `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10` (CGNAT)
 
@@ -702,12 +776,14 @@ Non-`http`/`https` schemes (e.g. `file:`, `gopher:`, `data:`) are always rejecte
 
 ### Application Points
 
-**Write boundary** (`investmentController.js` — `createInvestment` / `updateInvestment`):
+**Write boundary** (`investmentService.js` — `createInvestment` / `updateInvestment`):
+
 - All three URL fields validated via `assertPublicHttpUrl(value, { resolveDns: false })` before the row is persisted.
 - DNS is deliberately _not_ resolved at write time — that would couple investment writes to DNS availability. The scheme + IP-literal check is sufficient at the boundary.
 - A failed check throws `ValidationError` → 400 response.
 
 **Fetch boundary** (`priceProviderRegistry.js` — custom provider `_fetchJson`):
+
 - `assertPublicHttpUrl` is called with full DNS resolution (`resolveDns: true`) before each fetch and again for every redirect hop (`redirect: 'manual'`).
 - Response bodies are capped at **5 MB** to prevent memory exhaustion from a malicious server.
 - This is the defense-in-depth layer that catches DNS-rebinding attacks and redirect chains to private hosts.

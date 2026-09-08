@@ -3,6 +3,7 @@ title: How to Add a New Page
 type: guide
 status: active
 date: 2026-03-31
+updated: 2026-09-05
 tags: [guide, frontend, react, page, how-to, tutorial, routing]
 description: Step-by-step guide for adding a new page to the Vision frontend
 aliases:
@@ -53,14 +54,19 @@ export function <Feature>Page() {
 
 ### 2. Add the Route
 
-Add the route to `apps/frontend/src/App.tsx`:
+Add one record to `appRouteManifest` in `apps/frontend/src/lib/routePreload.ts`:
 
 ```tsx
-import { <Feature>Page } from './pages/<Feature>Page';
-
-// Inside the <Routes> component:
-<Route path="/<feature>" element={<AppLayout><<Feature>Page /></AppLayout>} />
+{
+  path: '/<feature>',
+  loader: () => import('@/pages/<Feature>Page'),
+  admin: false,
+}
 ```
+
+The literal import keeps the page in its own analyzable lazy chunk. `App.tsx` derives the route and
+lazy component from this manifest. Set `admin: true` only when the whole route requires
+`RequireAdmin`. Redirect-only routes remain explicit in `App.tsx`.
 
 ### 3. Add Sidebar Navigation
 
@@ -142,7 +148,7 @@ describe('<Feature>Page', () => {
 ## Checklist
 
 - [ ] Page component created with TypeScript types
-- [ ] Route added to `App.tsx`
+- [ ] Page route and admin flag added to `appRouteManifest`
 - [ ] Sidebar item added to `AppSidebar.tsx`
 - [ ] i18n keys added to `en.json` and `nl.json`
 - [ ] Locale bundles regenerated (`bun run build`)

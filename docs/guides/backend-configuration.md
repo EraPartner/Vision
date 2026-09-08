@@ -149,9 +149,9 @@ Several services have been optimized to use `debug` level for high-frequency or 
 
 **Files:** [[apps/node-backend/src/main.js]], [[apps/node-backend/src/database/migrate.js]]
 
-The backend process connects to `DATABASE_URL` and waits for readiness. In native mode the Electron
-runtime provider manages the private PostgreSQL process and supplies that URL; in Docker or custom
-deployments the database lifecycle remains external to the backend.
+The backend process connects to `DATABASE_URL` and waits for readiness. Native Electron manages its
+private PostgreSQL process and supplies that URL. In a custom source deployment the database
+lifecycle remains external to the backend.
 
 ### Startup Sequence
 
@@ -163,9 +163,8 @@ deployments the database lifecycle remains external to the backend.
 
 ### Operational Model
 
-- Database lifecycle is managed by the active runtime provider: native Electron or optional Docker
-  Compose.
-- Backend process lifecycle is managed by Node/Bun and container restart policy
+- Database lifecycle is managed by native Electron or by the source-deployment operator.
+- Backend process lifecycle is managed by Electron or the operator's process supervisor.
 - **Schema is managed exclusively by Alembic** ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]) — the legacy `schemaInit.js` was deleted in Phase 1 (2026-04-21)
 - Alembic migrations are available via `bun run db:*` commands
 

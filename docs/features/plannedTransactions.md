@@ -12,6 +12,8 @@ related_code: ["apps/node-backend/src/routes/plannedTransactions.js", "apps/node
 
 # Planned Transactions
 
+Account detail pages expose active, unexecuted plans in a separate forecast section. The section is informational: planned amounts do not affect the account's current balance, posted ledger, running-balance calculation, or reconciliation until execution creates a real transaction.
+
 ## List URL state
 
 The page stores the non-default `show_all=true` list toggle in the URL. Missing or invalid values use the active-only default. Updates preserve unrelated query parameters and replace the current history entry.
@@ -436,7 +438,8 @@ Analyzes transaction history to detect recurring payment patterns and suggests p
 3. Computes interval statistics: mean, **median (true median, averaging two middle values for even-length arrays)**, standard deviation
 4. Matches against known patterns (weekly, biweekly, monthly, quarterly, yearly) with tolerance
 5. Detects custom regular intervals using coefficient of variation (< 25%)
-6. Flags amount changes (> 5% from median)
+6. For each of the three most recent charges, compares it with the immediately preceding
+   chronological charge and flags an absolute amount change greater than 5%
 7. Computes confidence score (0-100) based on consistency, occurrence count, and amount stability
 
 **Minimum Requirements:** 3 occurrences to consider a pattern.
