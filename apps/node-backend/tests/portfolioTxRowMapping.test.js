@@ -49,4 +49,17 @@ describe("mapPortfolioTxRow — wire shape", () => {
     });
     expect(row.import_batch_id).toBe("7");
   });
+
+  it("does not expose internal import identity metadata", () => {
+    const row = mapPortfolioTxRow({
+      id: 4,
+      date: "2026-07-01",
+      source_record_hash: "source",
+      dedup_fingerprint: "fingerprint",
+      dedup_fingerprint_version: 1,
+    });
+    expect(row).not.toHaveProperty("source_record_hash");
+    expect(row).not.toHaveProperty("dedup_fingerprint");
+    expect(row).not.toHaveProperty("dedup_fingerprint_version");
+  });
 });

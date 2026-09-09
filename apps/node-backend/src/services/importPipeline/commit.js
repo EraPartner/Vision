@@ -216,6 +216,8 @@ function currencyKeyOf(currency) {
  *   bankAccount: string|null, accountId: number|null,
  *   amountKey: string|null, currencyKey: string,
  *   txHash: string|null,
+ *   sourceRecordHash: string|null, dedupFingerprint: string|null,
+ *   fingerprintVersion: number|null, dedupOccurrence: number|null,
  *   idStr: string, idValid: boolean, categoryId: number|null, patternId: number|null,
  *   conflictPredicted: boolean,
  * }}
@@ -253,6 +255,10 @@ function deriveRow(row) {
     amountKey: normalizeAmountKey(row.amount),
     currencyKey: currencyKeyOf(row.currency),
     txHash: row.tx_hash || null,
+    sourceRecordHash: row.source_record_hash || null,
+    dedupFingerprint: row.dedup_fingerprint || null,
+    fingerprintVersion: row.dedup_fingerprint_version ?? null,
+    dedupOccurrence: row.dedup_occurrence ?? null,
     idStr,
     idValid: /^\d+$/.test(idStr),
     // ADR-046: per-row override beats recipient default. Both may be null
@@ -269,6 +275,101 @@ function deriveRow(row) {
     // tuple constraints) but ON CONFLICT is expected to drop it.
     conflictPredicted: false,
   };
+}
+
+/**
+ * Commit rows carrying the versioned identity contract. Legacy canonical rows
+ * remain a field-count fallback; modern rows use the stored fingerprint and
+ * the database unique index as the concurrent-import arbiter.
+ *
+ * @param {{ chunk: any[], batchId: ImportBatchId, committedHashes: Set<string> }} args
+ * @returns {Promise<ChunkResult>}
+ */
+async function commitChunkWithFingerprints({
+  chunk,
+  batchId,
+  committedHashes,
+}) {
+  let imported = 0;
+  let duplicates = 0;
+  let errors = 0;
+  /** @type {InsertedRow[]} */
+  const inserted = [];
+
+  for (const row of chunk) {
+    const d = deriveRow(row);
+    if (!d.idValid) {
+      errors++;
+      continue;
+    }
+    const modernDuplicate = await transactionRepository.findImportFingerprint(
+      d.fingerprintVersion,
+      d.dedupFingerprint,
+    );
+    const legacyCount =
+      modernDuplicate !== undefined
+        ? 0
+        : await transactionRepository.countLegacyImportDuplicates({
+            date: d.dateStr,
+            amount: row.amount,
+            recipientId: d.recipientId,
+            memo: d.memoNorm,
+            accountId: d.accountId,
+            currency: d.currencyKey,
+            sourceRecordHash: d.sourceRecordHash,
+          });
+    if (
+      modernDuplicate !== undefined ||
+      (d.dedupOccurrence != null && d.dedupOccurrence <= legacyCount)
+    ) {
+      duplicates++;
+      await markStagingRowDuplicate(row.id);
+      continue;
+    }
+
+    try {
+      const insertedId = await withSavepointIfInTransaction(ROW_SAVEPOINT, () =>
+        transactionRepository.insertImportedRow({
+          date: d.dateStr,
+          accountId: d.accountId,
+          recipientId: d.recipientId,
+          categoryId: d.categoryId,
+          amount: row.amount,
+          memo: row.memo || "",
+          currency: d.currencyKey,
+          balance: row.balance != null ? row.balance : null,
+          comment: row.comment || null,
+          importBatchId: batchId,
+          matchedPatternId: d.patternId,
+          txHash: d.txHash,
+          sourceRecordHash: d.sourceRecordHash,
+          dedupFingerprint: d.dedupFingerprint,
+          fingerprintVersion: d.fingerprintVersion,
+        }),
+      );
+      if (insertedId === undefined) {
+        duplicates++;
+        await markStagingRowDuplicate(row.id);
+        continue;
+      }
+      imported++;
+      inserted.push({
+        id: insertedId,
+        recipient_id: d.recipientId,
+        amount: row.amount,
+        transaction_date: d.dateStr,
+      });
+      if (d.txHash) committedHashes.add(d.txHash);
+      await markStagingRowCommitted(row.id);
+    } catch (err) {
+      errors++;
+      await markStagingRowError(
+        row.id,
+        err?.message?.slice(0, 500) || "insert failed",
+      );
+    }
+  }
+  return { imported, duplicates, errors, inserted };
 }
 
 /**
@@ -816,6 +917,9 @@ async function commitChunk({ chunk, batchId, committedHashes, capabilities }) {
   // back with a failed chunk but survive the savepoint rollback that hands a
   // chunk to the per-row replay (see resolveChunkAccounts).
   await resolveChunkAccounts(chunk, capabilities);
+  if (chunk.some((row) => row.dedup_fingerprint)) {
+    return commitChunkWithFingerprints({ chunk, batchId, committedHashes });
+  }
   const plan = await planChunk({ chunk, batchId, committedHashes });
 
   /** @type {InsertedRow[]} */
@@ -899,6 +1003,10 @@ export async function commitBatch({ batchId, onProgress }) {
             isr.balance,
             isr.comment,
             isr.tx_hash,
+            isr.source_record_hash,
+            isr.dedup_fingerprint,
+            isr.dedup_fingerprint_version,
+            isr.dedup_occurrence,
             isr.resolved_recipient_id,
             isr.user_override_recipient_id,
             isr.matched_pattern_id,

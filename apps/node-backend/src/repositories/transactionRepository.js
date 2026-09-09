@@ -277,7 +277,15 @@ async function attachTagsToRows(rows) {
     });
     tagMap.set(row.transaction_id, list);
   }
-  return rows.map((r) => ({ ...r, tags: tagMap.get(r.id) ?? [] }));
+  return rows.map(
+    ({
+      tx_hash: _txHash,
+      source_record_hash: _sourceRecordHash,
+      dedup_fingerprint: _dedupFingerprint,
+      dedup_fingerprint_version: _dedupFingerprintVersion,
+      ...r
+    }) => ({ ...r, tags: tagMap.get(r.id) ?? [] }),
+  );
 }
 
 /**
@@ -1362,6 +1370,53 @@ export const transactionRepository = {
     return result.rows[0]?.id ?? undefined;
   },
 
+  /** @returns {Promise<number|undefined>} */
+  async findImportFingerprint(version, fingerprint) {
+    if (version == null || !fingerprint) return undefined;
+    const result = await query(
+      `SELECT id FROM transactions
+        WHERE dedup_fingerprint_version = $1 AND dedup_fingerprint = $2
+        LIMIT 1`,
+      [version, fingerprint],
+    );
+    return result.rows[0]?.id ?? undefined;
+  },
+
+  /**
+   * Compatibility count for canonical rows written before versioned import
+   * identity existed. Modern rows are excluded so the legacy heuristic can no
+   * longer suppress an occurrence whose fingerprint is genuinely new.
+   */
+  async countLegacyImportDuplicates({
+    date,
+    amount,
+    recipientId,
+    memo,
+    accountId,
+    currency,
+    sourceRecordHash,
+  }) {
+    const result = await query(
+      `SELECT COUNT(*)::int AS n
+         FROM transactions t
+        WHERE t.dedup_fingerprint IS NULL
+          AND t.is_active = true
+          AND (
+            ($7::text IS NOT NULL AND t.tx_hash = $7)
+            OR (
+              t.date = $1
+              AND t.amount = $2
+              AND t.recipient_id IS NOT DISTINCT FROM $3::integer
+              AND COALESCE(BTRIM(t.memo, E' \\t\\n\\r\\f\\013'), '') = $4
+              AND t.account_id IS NOT DISTINCT FROM $5::integer
+              AND t.currency = $6
+            )
+          )`,
+      [date, amount, recipientId, memo, accountId, currency, sourceRecordHash],
+    );
+    return Number(result.rows[0]?.n) || 0;
+  },
+
   /**
    * Insert a committed import row. Distinct from create(): the import writes
    * `balance` (bank-stamped, anchors ADR-094), `import_batch_id`,
@@ -1385,6 +1440,9 @@ export const transactionRepository = {
    * @param {number|string|null} row.importBatchId
    * @param {number|null} row.matchedPatternId
    * @param {string|null} row.txHash
+   * @param {string|null} [row.sourceRecordHash]
+   * @param {string|null} [row.dedupFingerprint]
+   * @param {number|null} [row.fingerprintVersion]
    * @returns {Promise<number|undefined>} inserted id, or undefined on conflict
    */
   async insertImportedRow({
@@ -1400,13 +1458,17 @@ export const transactionRepository = {
     importBatchId,
     matchedPatternId,
     txHash,
+    sourceRecordHash,
+    dedupFingerprint,
+    fingerprintVersion,
   }) {
     const result = await query(
       `INSERT INTO transactions
                 (date, account_id, recipient_id, category_id, amount, memo, currency, balance, comment,
-                 import_batch_id, matched_pattern_id, tx_hash, is_active)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, true)
-             ON CONFLICT (tx_hash) WHERE tx_hash IS NOT NULL DO NOTHING
+                 import_batch_id, matched_pattern_id, tx_hash, source_record_hash,
+                 dedup_fingerprint, dedup_fingerprint_version, is_active)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, true)
+             ON CONFLICT DO NOTHING
              RETURNING id`,
       [
         date,
@@ -1421,6 +1483,9 @@ export const transactionRepository = {
         importBatchId,
         matchedPatternId,
         txHash,
+        sourceRecordHash ?? null,
+        dedupFingerprint ?? null,
+        fingerprintVersion ?? null,
       ],
     );
     return result.rows[0]?.id ?? undefined;

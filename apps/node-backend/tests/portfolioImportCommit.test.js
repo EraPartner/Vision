@@ -56,6 +56,7 @@ let isBrokerage;
 let cashDuplicate;
 let accountInstitution;
 let accountName;
+let fingerprintDuplicate;
 
 function dispatch(sql, params) {
   if (/SELECT b\.account_id, b\.is_brokerage/.test(sql)) {
@@ -72,6 +73,12 @@ function dispatch(sql, params) {
   }
   if (/FROM portfolio_import_staging_rows isr/.test(sql))
     return { rows: matchedRows };
+  if (
+    /WHERE dedup_fingerprint_version = \$1 AND dedup_fingerprint = \$2/.test(
+      sql,
+    )
+  )
+    return { rows: fingerprintDuplicate ? [{ "?column?": 1 }] : [] };
   if (/FROM portfolio_transactions\s+WHERE investment_id/.test(sql)) {
     return { rows: [{ n: Number(fieldDuplicate) || 0 }] };
   }
@@ -117,6 +124,7 @@ beforeEach(() => {
   cashDuplicate = false;
   accountInstitution = "IBKR";
   accountName = "IBKR SLEEVE";
+  fingerprintDuplicate = false;
   query.mockClear();
   poolQuery.mockReset();
   poolQuery.mockImplementation((sql, params) =>
@@ -167,6 +175,59 @@ describe("commitBatch (portfolio)", () => {
       /SET rows_imported = COALESCE/.test(sql),
     );
     expect(checkpoint[1]).toEqual([5, 1, 0, 0]);
+  });
+
+  it("persists versioned identity metadata on a portfolio trade", async () => {
+    matchedRows = [
+      row({
+        source_record_hash: "source-hash",
+        dedup_fingerprint: "fingerprint-1",
+        dedup_fingerprint_version: 1,
+        dedup_occurrence: 1,
+      }),
+    ];
+
+    const res = await commitBatch({ batchId: 5 });
+
+    expect(res).toMatchObject({ imported: 1, duplicates: 0, errors: 0 });
+    expect(portfolioTransactionRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source_record_hash: "source-hash",
+        dedup_fingerprint: "fingerprint-1",
+        dedup_fingerprint_version: 1,
+      }),
+    );
+  });
+
+  it("skips an existing portfolio fingerprint before field matching", async () => {
+    fingerprintDuplicate = true;
+    matchedRows = [
+      row({
+        dedup_fingerprint: "fingerprint-1",
+        dedup_fingerprint_version: 1,
+        dedup_occurrence: 1,
+      }),
+    ];
+
+    const res = await commitBatch({ batchId: 5 });
+
+    expect(res).toMatchObject({ imported: 0, duplicates: 1, errors: 0 });
+    expect(portfolioTransactionRepository.create).not.toHaveBeenCalled();
+  });
+
+  it("treats a lost unique-index race as a duplicate", async () => {
+    matchedRows = [
+      row({
+        dedup_fingerprint: "fingerprint-1",
+        dedup_fingerprint_version: 1,
+        dedup_occurrence: 1,
+      }),
+    ];
+    portfolioTransactionRepository.create.mockResolvedValue(null);
+
+    const res = await commitBatch({ batchId: 5 });
+
+    expect(res).toMatchObject({ imported: 0, duplicates: 1, errors: 0 });
   });
 
   it("records a per-row error on oversell without aborting the batch", async () => {

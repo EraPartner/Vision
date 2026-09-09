@@ -86,6 +86,8 @@ describe("validateBatch", () => {
     return {
       statuses: call[1][1],
       hashes: call[1][2],
+      sourceHashes: call[1][3],
+      occurrences: call[1][5],
     };
   }
 
@@ -125,18 +127,36 @@ describe("validateBatch", () => {
     });
   });
 
-  it("marks a second identical row in the same batch as a duplicate", async () => {
+  it("keeps identical occurrences and assigns distinct fingerprints", async () => {
     const dupRow = { ...baseRow, id: 2, row_index: 1, raw_data: null };
     poolQuery
       .mockResolvedValueOnce({ rows: [] }) // UPDATE status='validating'
       .mockResolvedValueOnce({ rows: [baseRow, dupRow] }); // SELECT pending — two identical rows
-    // The UPDATE import_batches rows_duplicate write also issues a query.
-    poolQuery.mockResolvedValueOnce({ rows: [] });
     expect(await validateBatch({ batchId: 5 })).toEqual({
-      validated: 1,
-      duplicates: 1,
+      validated: 2,
+      duplicates: 0,
       errors: 0,
     });
+    const update = getValidationUpdate();
+    expect(update.statuses).toEqual(["validated", "validated"]);
+    expect(update.hashes[0]).not.toBe(update.hashes[1]);
+    expect(update.occurrences).toEqual([1, 2]);
+  });
+
+  it("keeps occurrence ordinals stable when validation resumes after a chunk", async () => {
+    poolQuery.mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({
+      rows: [
+        { ...baseRow, id: 1, row_index: 0, status: "validated" },
+        { ...baseRow, id: 2, row_index: 1, status: "pending" },
+      ],
+    });
+
+    expect(await validateBatch({ batchId: 5 })).toEqual({
+      validated: 1,
+      duplicates: 0,
+      errors: 0,
+    });
+    expect(getValidationUpdate().occurrences).toEqual([2]);
   });
 
   it("keeps fallback-hash rows in different currencies distinct", async () => {
@@ -164,16 +184,17 @@ describe("validateBatch", () => {
       .mockResolvedValueOnce({ rows: [] });
 
     expect(await validateBatch({ batchId: 7 })).toEqual({
-      validated: 1,
-      duplicates: 1,
+      validated: 2,
+      duplicates: 0,
       errors: 0,
     });
     const update = getValidationUpdate();
-    expect(update.statuses).toEqual(["validated", "duplicate"]);
-    expect(update.hashes[0]).toBe(update.hashes[1]);
+    expect(update.statuses).toEqual(["validated", "validated"]);
+    expect(update.hashes[0]).not.toBe(update.hashes[1]);
+    expect(update.occurrences).toEqual([1, 2]);
   });
 
-  it("keeps literal raw_data as the complete hash identity", async () => {
+  it("keeps literal raw_data as provenance instead of duplicate identity", async () => {
     const first = { ...baseRow, raw_data: "literal source row" };
     const changedFallbackFields = {
       ...baseRow,
@@ -190,12 +211,13 @@ describe("validateBatch", () => {
       .mockResolvedValueOnce({ rows: [] });
 
     expect(await validateBatch({ batchId: 8 })).toEqual({
-      validated: 1,
-      duplicates: 1,
+      validated: 2,
+      duplicates: 0,
       errors: 0,
     });
     const update = getValidationUpdate();
-    expect(update.hashes[0]).toBe(update.hashes[1]);
+    expect(update.sourceHashes[0]).toBe(update.sourceHashes[1]);
+    expect(update.hashes[0]).not.toBe(update.hashes[1]);
   });
 });
 
@@ -350,6 +372,142 @@ describe("commitBatch", () => {
       errors: 0,
       autoLinkedCount: 0,
     });
+  });
+
+  it("commits versioned provenance and uses the fingerprint as the race guard", async () => {
+    setupCommit({
+      ...matchedRow,
+      tx_hash: "fingerprint-1",
+      source_record_hash: "source-hash-1",
+      dedup_fingerprint: "fingerprint-1",
+      dedup_fingerprint_version: 1,
+      dedup_occurrence: 1,
+    });
+    mockClient.query.mockImplementation(async (sql, params) => {
+      if (sql.includes("INSERT INTO accounts"))
+        return { rows: [{ id: BE12_ACCOUNT_ID }] };
+      if (sql.includes("WHERE dedup_fingerprint_version")) return { rows: [] };
+      if (sql.includes("dedup_fingerprint IS NULL AND tx_hash"))
+        return { rows: [] };
+      if (sql.includes("COUNT(*)::int AS n")) return { rows: [{ n: 0 }] };
+      if (sql.includes("INSERT INTO transactions")) {
+        expect(params.slice(11, 15)).toEqual([
+          "fingerprint-1",
+          "source-hash-1",
+          "fingerprint-1",
+          1,
+        ]);
+        expect(sql).toContain("ON CONFLICT DO NOTHING");
+        return { rows: [{ id: 100 }] };
+      }
+      return { rows: [] };
+    });
+
+    expect(await commitBatch({ batchId: 1 })).toEqual({
+      imported: 1,
+      duplicates: 0,
+      errors: 0,
+      autoLinkedCount: 0,
+    });
+  });
+
+  it("uses the source hash to recognize an edited historical import", async () => {
+    setupCommit({
+      ...matchedRow,
+      memo: "canonically edited later",
+      tx_hash: "fingerprint-1",
+      source_record_hash: "historical-raw-hash",
+      dedup_fingerprint: "fingerprint-1",
+      dedup_fingerprint_version: 1,
+      dedup_occurrence: 1,
+    });
+    mockClient.query.mockImplementation(async (sql) => {
+      if (sql.includes("INSERT INTO accounts"))
+        return { rows: [{ id: BE12_ACCOUNT_ID }] };
+      if (sql.includes("WHERE dedup_fingerprint_version")) return { rows: [] };
+      if (sql.includes("COUNT(*)::int AS n")) return { rows: [{ n: 1 }] };
+      return { rows: [] };
+    });
+
+    expect(await commitBatch({ batchId: 1 })).toEqual({
+      imported: 0,
+      duplicates: 1,
+      errors: 0,
+      autoLinkedCount: 0,
+    });
+    expect(
+      mockClient.query.mock.calls.some(([sql]) =>
+        String(sql).includes("COUNT(*)::int AS n"),
+      ),
+    ).toBe(true);
+  });
+
+  it("consumes one legacy source match without collapsing later repeated occurrences", async () => {
+    const first = {
+      ...matchedRow,
+      tx_hash: "fingerprint-1",
+      source_record_hash: "historical-raw-hash",
+      dedup_fingerprint: "fingerprint-1",
+      dedup_fingerprint_version: 1,
+      dedup_occurrence: 1,
+    };
+    const second = {
+      ...first,
+      id: 2,
+      row_index: 1,
+      tx_hash: "fingerprint-2",
+      dedup_fingerprint: "fingerprint-2",
+      dedup_occurrence: 2,
+    };
+    poolQuery
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [first, second] })
+      .mockResolvedValueOnce({ rows: [] });
+    mockClient.query.mockImplementation(async (sql) => {
+      if (sql.includes("INSERT INTO accounts"))
+        return { rows: [{ id: BE12_ACCOUNT_ID }] };
+      if (sql.includes("WHERE dedup_fingerprint_version")) return { rows: [] };
+      if (sql.includes("COUNT(*)::int AS n")) return { rows: [{ n: 1 }] };
+      if (sql.includes("INSERT INTO transactions"))
+        return { rows: [{ id: 100 }] };
+      return { rows: [] };
+    });
+
+    expect(await commitBatch({ batchId: 1 })).toEqual({
+      imported: 1,
+      duplicates: 1,
+      errors: 0,
+      autoLinkedCount: 0,
+    });
+  });
+
+  it("skips an existing versioned fingerprint without invoking legacy matching", async () => {
+    setupCommit({
+      ...matchedRow,
+      tx_hash: "fingerprint-1",
+      dedup_fingerprint: "fingerprint-1",
+      dedup_fingerprint_version: 1,
+      dedup_occurrence: 1,
+    });
+    mockClient.query.mockImplementation(async (sql) => {
+      if (sql.includes("INSERT INTO accounts"))
+        return { rows: [{ id: BE12_ACCOUNT_ID }] };
+      if (sql.includes("WHERE dedup_fingerprint_version"))
+        return { rows: [{ id: 91 }] };
+      return { rows: [] };
+    });
+
+    expect(await commitBatch({ batchId: 1 })).toEqual({
+      imported: 0,
+      duplicates: 1,
+      errors: 0,
+      autoLinkedCount: 0,
+    });
+    expect(
+      mockClient.query.mock.calls.some(([sql]) =>
+        String(sql).includes("COUNT(*)::int AS n"),
+      ),
+    ).toBe(false);
   });
 
   it("invalidates a count only after the import transaction commits", async () => {

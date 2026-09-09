@@ -34,6 +34,7 @@ import { ApiErrorCode } from "@vision/types/errors";
  * @property {boolean} [requiresReview]
  * @property {number|string} [batchId]
  * @property {any} [matchSourceCounts]
+ * @property {number} [skipped]
  * @property {number} [errors]
  */
 
@@ -117,6 +118,7 @@ export async function streamImport(
         await writer.write("review_required", {
           batch_id: result.batchId,
           match_source_counts: result.matchSourceCounts,
+          skipped: result.skipped,
           percent: 70,
         });
         writer.end();

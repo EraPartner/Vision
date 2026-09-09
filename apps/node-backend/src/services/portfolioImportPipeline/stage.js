@@ -124,7 +124,7 @@ async function insertStagingChunk(batchId, rows, startIndex) {
       const dateStr = parsedDateToYmd(r.date) ?? null;
 
       const base = values.length;
-      const ph = Array.from({ length: 15 }, (_, k) => `$${base + k + 1}`);
+      const ph = Array.from({ length: 17 }, (_, k) => `$${base + k + 1}`);
       // status defaults to 'pending' via the column default.
       placeholders.push(`(${ph.join(",")})`);
       values.push(
@@ -143,12 +143,15 @@ async function insertStagingChunk(batchId, rows, startIndex) {
         r.fxRateToEur != null ? r.fxRateToEur : null,
         r.note || null,
         r.rawData || null,
+        r.sourceId || null,
+        r.sourceAccountIdentity || null,
       );
     });
 
     const sql = `INSERT INTO portfolio_import_staging_rows
       (batch_id, row_index, tx_date, type_raw, symbol_raw, name_raw,
-       units, price_per_unit, amount, fees, taxes, currency, fx_rate_to_eur, note, raw_data)
+       units, price_per_unit, amount, fees, taxes, currency, fx_rate_to_eur, note, raw_data,
+       source_transaction_id, source_account_identity)
       VALUES ${placeholders.join(",")}`;
     await client.query(sql, values);
   });

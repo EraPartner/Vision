@@ -50,6 +50,34 @@ describe("streamImport terminal events", () => {
     expect(cleanup).toHaveBeenCalledWith("/tmp/import.csv");
   });
 
+  it("preserves skipped rows when review is required", async () => {
+    const { streamImport, writer } = await loadSubject();
+
+    await streamImport(
+      {},
+      {},
+      {
+        filePath: "/tmp/import.csv",
+        errorLogMessage: "failed",
+        run: vi.fn().mockResolvedValue({
+          requiresReview: true,
+          batchId: 9,
+          matchSourceCounts: { unresolved: 1 },
+          skipped: 4,
+          errors: 0,
+        }),
+        buildComplete: vi.fn(),
+      },
+    );
+
+    expect(writer.write).toHaveBeenCalledWith("review_required", {
+      batch_id: 9,
+      match_source_counts: { unresolved: 1 },
+      skipped: 4,
+      percent: 70,
+    });
+  });
+
   it("adds VALIDATION_ERROR to an actionable validation failure", async () => {
     const { streamImport, ValidationError, writer } = await loadSubject();
 

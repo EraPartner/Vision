@@ -64,6 +64,7 @@ describe("BNP adapter — parseAmountField edge cases", () => {
     ]);
     expect(txns[0].currency).toBe("EUR");
     expect(txns).toHaveLength(5);
+    expect(txns.every((txn) => txn.sourceId == null)).toBe(true);
   });
 
   it("skips rows with an unparseable amount, keeping the valid ones", async () => {
@@ -127,6 +128,7 @@ describe("ING adapter — parseCommaDecimal", () => {
     const txns = await parseIng(writeTempCSV("ing", csv));
     expect(txns.map((t) => t.amount)).toEqual([-67.9, 2500, 0.01, 1234.5]);
     expect(txns).toHaveLength(4);
+    expect(txns.every((txn) => txn.sourceId == null)).toBe(true);
   });
 
   it("keeps a quoted delimiter inside the message field (no column shift)", async () => {

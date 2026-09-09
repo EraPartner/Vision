@@ -1,0 +1,21 @@
+Statement,Header,Field Name,Field Value
+Statement,Data,Title,Transaction History
+Statement,Data,Period,January 1 2026 - January 31 2026
+Statement,Data,WhenGenerated,2026-02-01
+Summary,Header,Field Name,Field Value
+Summary,Data,Base Currency,EUR
+Summary,Data,Starting Cash,"1.234,56"
+Summary,Data,Change,"12,34"
+Summary,Data,Ending Cash,"1.246,90"
+Transaction History,Header,Date,Account,Description,Transaction Type,Symbol,Quantity,Price,Price Currency,Gross Amount ,Commission,Net Amount,Exchange Rate,Transaction Fees,Sub Type,Multiplier
+Transaction History,Data,2026-01-02,U0000000,Example Corp purchase,Buy,EXM,2.0,10.0,USD,-17.0,-0.85,-17.85,0.85,-0.17,-,1
+Transaction History,Data,2026-01-02,U0000000,Example Corp purchase,Buy,EXM,2.0,10.0,USD,-17.0,-0.85,-17.85,0.85,-0.17,-,1
+Transaction History,Data,2026-01-03,U0000000,Example Corp sale,Sell,EXM,-1.0,12.0,USD,10.2,-0.85,9.35,0.85,-,-,1
+Transaction History,Data,2026-01-04,U0000000,Example Corp dividend,Dividend,EXM,-,-,-,"4,25",-,"4,25",0.85,-,-,1
+Transaction History,Data,2026-01-04,U0000000,Example Corp withholding,Foreign Tax Withholding,EXM,-,-,-,"-1,25",-,"-1,25",0.85,-,-,1
+Transaction History,Data,2026-01-05,U0000000,Cash deposit,Deposit,-,-,-,-,100.0,-,100.0,1.0,-,-,1
+Transaction History,Data,2026-01-06,U0000000,Cash withdrawal,Withdrawal,-,-,-,-,-25.0,-,-25.0,1.0,-,-,1
+Transaction History,Data,2026-01-07,U0000000,Rounding adjustment,Adjustment,-,-,-,-,-0.01,-,-0.01,1.0,-,-,1
+Transaction History,Data,2026-01-08,U0000000,Positive adjustment,Adjustment,-,-,-,-,0.02,-,0.02,1.0,-,-,1
+Transaction History,Data,2026-01-09,U0000000,Zero adjustment,Adjustment,-,-,-,-,0,-,0,1.0,-,-,1
+Transaction History,Data,2026-01-02,U0000000,Net Amount in Base from Forex Trade,Forex Trade Component,EUR.USD,17.0,1.17647059,USD,-1.0E-7,-,-1.0E-7,0.85,-,-,1

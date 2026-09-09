@@ -138,7 +138,7 @@ async function insertStagingChunk(batchId, rows, startIndex) {
 
       const base = values.length;
       placeholders.push(
-        `($${base + 1},$${base + 2},'pending',$${base + 3},$${base + 4},$${base + 5},$${base + 6},$${base + 7},$${base + 8},$${base + 9},$${base + 10},$${base + 11},$${base + 12},$${base + 13},$${base + 14})`,
+        `($${base + 1},$${base + 2},'pending',$${base + 3},$${base + 4},$${base + 5},$${base + 6},$${base + 7},$${base + 8},$${base + 9},$${base + 10},$${base + 11},$${base + 12},$${base + 13},$${base + 14},$${base + 15},$${base + 16})`,
       );
       values.push(
         batchId,
@@ -155,13 +155,16 @@ async function insertStagingChunk(batchId, rows, startIndex) {
         r.recipientBankName || null,
         r.comment || null,
         r.rawData || null,
+        r.sourceId || null,
+        r.bankAccount || null,
       );
     });
 
     const sql = `INSERT INTO import_staging_rows
       (batch_id, row_index, status, tx_date, bank_account, recipient_raw, memo,
        amount, currency, balance, recipient_account, recipient_address,
-       recipient_bank_name, comment, raw_data)
+       recipient_bank_name, comment, raw_data, source_transaction_id,
+       source_account_identity)
       VALUES ${placeholders.join(",")}`;
 
     await client.query(sql, values);

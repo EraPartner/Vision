@@ -226,9 +226,9 @@ describe("importPortfolioCSVWithProgress SSE handling", () => {
         ]);
     });
 
-    it("resolves a review_required event exactly as before", async () => {
+    it("preserves skipped rows from a portfolio review_required event", async () => {
         stubFetch(
-            'event: review_required\ndata: {"batch_id":9,"match_source_counts":{},"percent":70}\n\n',
+            'event: review_required\ndata: {"batch_id":9,"match_source_counts":{},"skipped":4,"percent":70}\n\n',
         );
         const onProgress = vi.fn<(p: ImportProgress) => void>();
         const { result } = importPortfolioCSVWithProgress(
@@ -242,6 +242,7 @@ describe("importPortfolioCSVWithProgress SSE handling", () => {
             imported: 0,
             duplicates: 0,
             errors: 0,
+            skipped: 4,
             status: "review_required",
             requires_review: true,
         });

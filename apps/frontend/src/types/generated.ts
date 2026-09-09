@@ -2439,7 +2439,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * One-shot portfolio CSV import with custom column mapping
+         * One-shot portfolio CSV import with custom mapping or a supported format
          * @description Every mapping field also accepts a compatibility query parameter. A present multipart body field is authoritative when both locations supply the same field.
          */
         post: operations["portfolioImportCsvCustom"];
@@ -4462,6 +4462,50 @@ export interface components {
             started_at: string;
             /** Format: date-time */
             completed_at?: string;
+        };
+        PortfolioImportUpload: {
+            /** Format: binary */
+            file: string;
+            /** @description Display label for the import source */
+            adapter_name?: string;
+            /**
+             * @description Specialized portfolio statement parser; omit for generic column mapping. IBKR requires is_brokerage=true and account_id because its Transaction History includes cash movements.
+             * @enum {string}
+             */
+            portfolio_format?: "ibkr_transaction_history";
+            /** @description Python strptime format, default: %Y-%m-%d */
+            date_format?: string;
+            /** @description Single-character CSV delimiter, default ',' */
+            separator?: string;
+            /** @default utf-8 */
+            encoding: string;
+            /** @default 0 */
+            skip_rows: number;
+            date_column: string;
+            type_column?: string;
+            symbol_column?: string;
+            name_column?: string;
+            units_column?: string;
+            price_column?: string;
+            amount_column?: string;
+            fees_column?: string;
+            taxes_column?: string;
+            currency_column?: string;
+            fx_rate_column?: string;
+            note_column?: string;
+            /** @enum {string} */
+            default_asset_class: "stock" | "etf" | "crypto" | "metals" | "real_estate" | "savings" | "bond";
+            /** @enum {string} */
+            default_type?: "buy" | "sell" | "dividend" | "fee" | "tax" | "interest";
+            /** @description JSON object mapping raw CSV type strings to canonical portfolio_txn_type values */
+            type_mapping?: string;
+            /** @description Brokerage fan-out (ADR-095) — cash rows land on a ledger account */
+            is_brokerage?: boolean;
+            /**
+             * Format: int32
+             * @description Sleeve account every row of this import lands on. Required when is_brokerage is true or portfolio_format is ibkr_transaction_history; ignored otherwise. Must be a positive integer; malformed values are rejected rather than coerced.
+             */
+            account_id?: number;
         };
         PortfolioParserConfig: {
             id: number;
@@ -9983,45 +10027,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "multipart/form-data": {
-                    /** Format: binary */
-                    file: string;
-                    /** @description Display label for the import source */
-                    adapter_name?: string;
-                    /** @description Python strptime format, default: %Y-%m-%d */
-                    date_format?: string;
-                    /** @description Single-character CSV delimiter, default ',' */
-                    separator?: string;
-                    /** @default utf-8 */
-                    encoding?: string;
-                    /** @default 0 */
-                    skip_rows?: number;
-                    date_column: string;
-                    type_column?: string;
-                    symbol_column?: string;
-                    name_column?: string;
-                    units_column?: string;
-                    price_column?: string;
-                    amount_column?: string;
-                    fees_column?: string;
-                    taxes_column?: string;
-                    currency_column?: string;
-                    fx_rate_column?: string;
-                    note_column?: string;
-                    /** @enum {string} */
-                    default_asset_class: "stock" | "etf" | "crypto" | "metals" | "real_estate" | "savings" | "bond";
-                    /** @enum {string} */
-                    default_type?: "buy" | "sell" | "dividend" | "fee" | "tax" | "interest";
-                    /** @description JSON object mapping raw CSV type strings to canonical portfolio_txn_type values */
-                    type_mapping?: string;
-                    /** @description Brokerage fan-out (ADR-095) — cash rows land on a ledger account */
-                    is_brokerage?: boolean;
-                    /**
-                     * Format: int32
-                     * @description Sleeve account every row of this import lands on. Required when is_brokerage is true, ignored otherwise. Must be a positive integer; a malformed value is rejected rather than coerced, since a coerced id files the whole CSV against an account the uploader never named.
-                     */
-                    account_id?: number;
-                };
+                "multipart/form-data": components["schemas"]["PortfolioImportUpload"];
             };
         };
         responses: {
@@ -10052,6 +10058,7 @@ export interface operations {
                         data?: {
                             batch_id?: number;
                             requires_review?: boolean;
+                            skipped?: number;
                             match_source_counts?: {
                                 [key: string]: number;
                             };
@@ -10070,10 +10077,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "multipart/form-data": {
-                    /** Format: binary */
-                    file: string;
-                };
+                "multipart/form-data": components["schemas"]["PortfolioImportUpload"];
             };
         };
         responses: {

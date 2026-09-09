@@ -1,7 +1,7 @@
 /**
  * Portfolio import routes — CSV import of brokerage/exchange trades into
- * portfolio_transactions. Always custom-config driven (no pre-built adapters),
- * with a review step to resolve instruments. Mirrors importRoutes.js.
+ * portfolio_transactions. Supports custom column mappings and maintained
+ * format-specific adapters, with a review step to resolve instruments.
  *
  * Request parsing is validated with zod (schema → safeParse → ValidationError),
  * the idiom established in settings.js/reports.js. Batch/row route ids share
@@ -137,6 +137,24 @@ function parseBrokerageParams(data) {
   return parseImportInput(brokerageParamsSchema, data);
 }
 
+/**
+ * Format-specific routing contract. IBKR Transaction History contains cash
+ * movements as well as securities transactions, so every row must have the
+ * brokerage sleeve that receives both routes.
+ * @param {{ format?: string }} customConfig
+ * @param {{ isBrokerage: boolean, accountId?: number }} brokerage
+ */
+function assertPortfolioFormatBrokerage(customConfig, brokerage) {
+  if (
+    customConfig.format === "ibkr_transaction_history" &&
+    (!brokerage.isBrokerage || brokerage.accountId == null)
+  ) {
+    throw new ValidationError(
+      "IBKR Transaction History requires is_brokerage=true and account_id",
+    );
+  }
+}
+
 // Optional column-mapping field: trimmed when a string, '' otherwise.
 const trimOrEmptyField = z
   .unknown()
@@ -225,6 +243,11 @@ const portfolioImportConfigSchema = z
       }),
     type_mapping: z.unknown().optional().transform(parseTypeMapping),
     adapter_name: defaultedTextField("portfolio_generic"),
+    portfolio_format: z
+      .enum(["ibkr_transaction_history"], {
+        error: "portfolio_format must be a supported portfolio format",
+      })
+      .optional(),
   })
   .superRefine((data, ctx) => {
     if (!data.symbol_column && !data.name_column) {
@@ -243,6 +266,7 @@ const portfolioImportConfigSchema = z
       default_asset_class: data.default_asset_class,
       default_type: data.default_type || "buy",
       type_mapping: data.type_mapping,
+      ...(data.portfolio_format ? { format: data.portfolio_format } : {}),
       column_mapping: {
         date: data.date_column,
         type: data.type_column,
@@ -269,6 +293,14 @@ function buildPortfolioConfig(data) {
   return parseImportInput(portfolioImportConfigSchema, data);
 }
 
+// Pure contract seam for listener-free route-schema tests. The desktop
+// sandbox cannot bind Supertest sockets, but request coercion must still be
+// pinned independently of Express transport.
+export {
+  buildPortfolioConfig as __buildPortfolioConfig,
+  assertPortfolioFormatBrokerage as __assertPortfolioFormatBrokerage,
+};
+
 // POST /api/portfolio/import/csv/custom — one-shot (202 if review needed)
 router.post(
   "/csv/custom",
@@ -289,6 +321,7 @@ router.post(
     let brokerage;
     try {
       brokerage = parseBrokerageParams({ ...req.query, ...req.body });
+      assertPortfolioFormatBrokerage(built.customConfig, brokerage);
       await assertPortfolioImportAccount(brokerage.accountId);
     } catch (err) {
       cleanup(req.file.path);
@@ -314,6 +347,7 @@ router.post(
           batch_id: result.batchId,
           requires_review: true,
           match_source_counts: result.matchSourceCounts,
+          skipped: result.skipped,
         });
         return;
       }
@@ -356,6 +390,7 @@ router.post(
     let brokerage;
     try {
       brokerage = parseBrokerageParams({ ...req.query, ...req.body });
+      assertPortfolioFormatBrokerage(built.customConfig, brokerage);
       await assertPortfolioImportAccount(brokerage.accountId);
     } catch (err) {
       cleanup(req.file.path);

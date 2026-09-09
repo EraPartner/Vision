@@ -2736,6 +2736,69 @@ components:
           type: string
           format: date-time
 
+    PortfolioImportUpload:
+      type: object
+      required: [file, date_column, default_asset_class]
+      properties:
+        file:
+          type: string
+          format: binary
+        adapter_name:
+          type: string
+          description: Display label for the import source
+        portfolio_format:
+          type: string
+          enum: [ibkr_transaction_history]
+          description: >-
+            Specialized portfolio statement parser; omit for generic column
+            mapping. IBKR requires is_brokerage=true and account_id because
+            its Transaction History includes cash movements.
+        date_format:
+          type: string
+          description: "Python strptime format, default: %Y-%m-%d"
+        separator:
+          type: string
+          description: Single-character CSV delimiter, default ','
+        encoding:
+          type: string
+          default: utf-8
+        skip_rows:
+          type: integer
+          default: 0
+        date_column: { type: string }
+        type_column: { type: string }
+        symbol_column: { type: string }
+        name_column: { type: string }
+        units_column: { type: string }
+        price_column: { type: string }
+        amount_column: { type: string }
+        fees_column: { type: string }
+        taxes_column: { type: string }
+        currency_column: { type: string }
+        fx_rate_column: { type: string }
+        note_column: { type: string }
+        default_asset_class:
+          type: string
+          enum: [stock, etf, crypto, metals, real_estate, savings, bond]
+        default_type:
+          type: string
+          enum: [buy, sell, dividend, fee, tax, interest]
+        type_mapping:
+          type: string
+          description: JSON object mapping raw CSV type strings to canonical portfolio_txn_type values
+        is_brokerage:
+          type: boolean
+          description: Brokerage fan-out (ADR-095) — cash rows land on a ledger account
+        account_id:
+          type: integer
+          format: int32
+          minimum: 1
+          description: >-
+            Sleeve account every row of this import lands on. Required when
+            is_brokerage is true or portfolio_format is
+            ibkr_transaction_history; ignored otherwise. Must be a positive
+            integer; malformed values are rejected rather than coerced.
+
     PortfolioParserConfig:
       type: object
       required: [id, name, config]
@@ -8597,7 +8660,7 @@ paths:
   # ─── Portfolio Import ─────────────────────────────────────────────────────────
   /api/portfolio/import/csv/custom:
     post:
-      summary: One-shot portfolio CSV import with custom column mapping
+      summary: One-shot portfolio CSV import with custom mapping or a supported format
       description: >-
         Every mapping field also accepts a compatibility query parameter. A
         present multipart body field is authoritative when both locations
@@ -8609,73 +8672,7 @@ paths:
         content:
           multipart/form-data:
             schema:
-              type: object
-              required: [file, date_column, default_asset_class]
-              properties:
-                file:
-                  type: string
-                  format: binary
-                adapter_name:
-                  type: string
-                  description: Display label for the import source
-                date_format:
-                  type: string
-                  description: "Python strptime format, default: %Y-%m-%d"
-                separator:
-                  type: string
-                  description: Single-character CSV delimiter, default ','
-                encoding:
-                  type: string
-                  default: utf-8
-                skip_rows:
-                  type: integer
-                  default: 0
-                date_column:
-                  type: string
-                type_column:
-                  type: string
-                symbol_column:
-                  type: string
-                name_column:
-                  type: string
-                units_column:
-                  type: string
-                price_column:
-                  type: string
-                amount_column:
-                  type: string
-                fees_column:
-                  type: string
-                taxes_column:
-                  type: string
-                currency_column:
-                  type: string
-                fx_rate_column:
-                  type: string
-                note_column:
-                  type: string
-                default_asset_class:
-                  type: string
-                  enum: [stock, etf, crypto, metals, real_estate, savings, bond]
-                default_type:
-                  type: string
-                  enum: [buy, sell, dividend, fee, tax, interest]
-                type_mapping:
-                  type: string
-                  description: JSON object mapping raw CSV type strings to canonical portfolio_txn_type values
-                is_brokerage:
-                  type: boolean
-                  description: Brokerage fan-out (ADR-095) — cash rows land on a ledger account
-                account_id:
-                  type: integer
-                  format: int32
-                  minimum: 1
-                  description: >-
-                    Sleeve account every row of this import lands on. Required
-                    when is_brokerage is true, ignored otherwise. Must be a
-                    positive integer; a malformed value is rejected rather than
-                    coerced, since a coerced id files the whole CSV against an
-                    account the uploader never named.
+              $ref: "#/components/schemas/PortfolioImportUpload"
       responses:
         "201":
           description: All rows matched — batch committed immediately
@@ -8715,6 +8712,8 @@ paths:
                             type: integer
                           requires_review:
                             type: boolean
+                          skipped:
+                            type: integer
                           match_source_counts:
                             type: object
                             additionalProperties:
@@ -8734,13 +8733,7 @@ paths:
         content:
           multipart/form-data:
             schema:
-              type: object
-              description: Same fields as POST /api/portfolio/import/csv/custom
-              required: [file, date_column, default_asset_class]
-              properties:
-                file:
-                  type: string
-                  format: binary
+              $ref: "#/components/schemas/PortfolioImportUpload"
       responses:
         "200":
           description: >-

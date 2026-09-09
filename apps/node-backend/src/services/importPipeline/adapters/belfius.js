@@ -13,7 +13,8 @@ import {
   parseCommaDecimal,
   buildOptionalComment,
   splitCsvLines,
-  splitDelimitedRecord,
+  parseCsvText,
+  rawDataForCsvRecord,
   canonicalIban,
   readTextWithEncodingFallback,
   normalizeIsoCurrency,
@@ -88,11 +89,10 @@ function applyRunningBalances(transactions, lastBalance) {
 }
 
 /**
- * @param {string} line one ';'-delimited statement record
+ * @param {string[]} parts one ';'-delimited statement record
  * @returns {ParsedBankTransaction|null} null when the line is too short or unparseable
  */
-function parseTransactionLine(line) {
-  const parts = splitDelimitedRecord(line);
+function parseTransactionLine(parts) {
   if (!parts || parts.length < MIN_FIELDS) return null;
 
   const accountNumber = parts[0].trim();
@@ -146,7 +146,10 @@ function parseTransactionLine(line) {
     recipientAddress: recipientFullAddress,
     recipientBankName: recipientAccount ? "BELFIUS" : null,
     comment: buildOptionalComment(commentParts),
-    rawData: line,
+    rawData: rawDataForCsvRecord(parts),
+    // Statement/transaction counters are not proven globally immutable across
+    // export periods, so they remain descriptive fields rather than identity.
+    sourceId: null,
     // Statement + transaction number: the export's own ordering, used (and
     // stripped again) by applyRunningBalances.
     _seq: [
@@ -179,17 +182,25 @@ export function detect(csvSample) {
 export async function parse(filePath) {
   const content = await readTextWithEncodingFallback(filePath);
   const lines = splitCsvLines(content);
+  let malformed = 0;
+  const records = parseCsvText(content, {
+    delimiter: ";",
+    from_line: HEADER_ROWS + 1,
+    skip_empty_lines: true,
+    relax_column_count: true,
+    relax_quotes: true,
+    skip_records_with_error: true,
+    on_skip: () => malformed++,
+  });
   const transactions = /** @type {ParsedBankTransactions} */ ([]);
   const lastBalance =
     lines.length > BALANCE_LINE_INDEX
       ? parseLastBalance(lines[BALANCE_LINE_INDEX].trim())
       : null;
 
-  let skipped = 0;
-  for (let i = HEADER_ROWS; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-    const tx = parseTransactionLine(line);
+  let skipped = malformed;
+  for (const parts of records) {
+    const tx = parseTransactionLine(parts);
     if (tx) {
       transactions.push(tx);
     } else {

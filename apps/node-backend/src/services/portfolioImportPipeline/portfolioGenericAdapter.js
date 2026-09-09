@@ -9,8 +9,15 @@
  * requires positive amount/units/price for buy/sell.
  */
 
-import { logger } from '../../config/logger.js';
-import { parseCsvFile, buildRawRowString, parseAmountField, SUPPORTED_DATE_FORMATS, parseDateWithFormat } from '../importPipeline/adapters/_shared.js';
+import { logger } from "../../config/logger.js";
+import {
+  parseCsvFile,
+  rawDataForCsvRecord,
+  parseAmountField,
+  SUPPORTED_DATE_FORMATS,
+  parseDateWithFormat,
+} from "../importPipeline/adapters/_shared.js";
+import { parseIbkrTransactionHistory } from "./ibkrTransactionHistoryAdapter.js";
 
 /**
  * One raw row as this adapter extracts it — field names are the staging
@@ -31,6 +38,8 @@ import { parseCsvFile, buildRawRowString, parseAmountField, SUPPORTED_DATE_FORMA
  * @property {number|null} fxRateToEur
  * @property {string} note
  * @property {string} rawData source record, kept for dedup + provenance.
+ * @property {string|null} [sourceAccountIdentity]
+ * @property {string|null} [sourceId]
  */
 
 /**
@@ -52,7 +61,8 @@ import { parseCsvFile, buildRawRowString, parseAmountField, SUPPORTED_DATE_FORMA
  * @property {number} [skip_rows]
  * @property {BufferEncoding} [encoding] defaults to 'utf-8'
  * @property {Record<string, string>} [type_mapping] raw type label → canonical portfolio_txn_type (read by validate.js)
- * @property {{ date?: string, type?: string, symbol?: string, name?: string, units?: string, price?: string, amount?: string, fees?: string, taxes?: string, currency?: string, fx_rate?: string, note?: string }} [column_mapping] source column NAMES, not indices
+ * @property {'ibkr_transaction_history'} [format] specialized statement format
+ * @property {{ date?: string, type?: string, symbol?: string, name?: string, units?: string, price?: string, amount?: string, fees?: string, taxes?: string, currency?: string, fx_rate?: string, note?: string, source_account?: string, source_id?: string }} [column_mapping] source column NAMES, not indices
  */
 
 /**
@@ -62,7 +72,8 @@ import { parseCsvFile, buildRawRowString, parseAmountField, SUPPORTED_DATE_FORMA
  * @returns {number|null}
  */
 function parseMagnitude(raw) {
-  if (raw === undefined || raw === null || String(raw).trim() === '') return null;
+  if (raw === undefined || raw === null || String(raw).trim() === "")
+    return null;
   const n = parseAmountField(raw);
   if (isNaN(n)) return null;
   return Math.abs(n);
@@ -74,8 +85,8 @@ function parseMagnitude(raw) {
  * @returns {string} trimmed cell value, '' when the column is unmapped or absent
  */
 function cell(row, key) {
-  if (!key) return '';
-  return String(row[key] ?? '').trim();
+  if (!key) return "";
+  return String(row[key] ?? "").trim();
 }
 
 /**
@@ -87,10 +98,10 @@ function rowToParsed(row, config) {
   const colMap = config.column_mapping || {};
   const dateStr = cell(row, colMap.date);
   if (!dateStr) return null;
-  const date = parseDateWithFormat(dateStr, config.date_format || '');
+  const date = parseDateWithFormat(dateStr, config.date_format || "");
   if (!date || isNaN(date.getTime())) return null;
 
-  const currency = colMap.currency ? (cell(row, colMap.currency) || null) : null;
+  const currency = colMap.currency ? cell(row, colMap.currency) || null : null;
   const fxRaw = colMap.fx_rate ? parseMagnitude(row[colMap.fx_rate]) : null;
 
   return {
@@ -105,8 +116,10 @@ function rowToParsed(row, config) {
     taxes: colMap.taxes ? parseMagnitude(row[colMap.taxes]) : null,
     currency,
     fxRateToEur: fxRaw,
-    note: colMap.note ? cell(row, colMap.note) : '',
-    rawData: buildRawRowString(row),
+    note: colMap.note ? cell(row, colMap.note) : "",
+    rawData: rawDataForCsvRecord(row),
+    sourceAccountIdentity: cell(row, colMap.source_account) || null,
+    sourceId: cell(row, colMap.source_id) || null,
   };
 }
 
@@ -117,10 +130,13 @@ function rowToParsed(row, config) {
  * @throws {Error} when `date_format` is not one of SUPPORTED_DATE_FORMATS
  */
 export async function parseWithConfig(filePath, config) {
-  const dateFormat = config.date_format || '';
+  if (config.format === "ibkr_transaction_history") {
+    return parseIbkrTransactionHistory(filePath, config);
+  }
+  const dateFormat = config.date_format || "";
   if (!SUPPORTED_DATE_FORMATS.includes(dateFormat)) {
     throw new Error(
-      `Unsupported date_format "${dateFormat}". Supported: ${SUPPORTED_DATE_FORMATS.join(', ')}`,
+      `Unsupported date_format "${dateFormat}". Supported: ${SUPPORTED_DATE_FORMATS.join(", ")}`,
     );
   }
 
@@ -129,11 +145,11 @@ export async function parseWithConfig(filePath, config) {
     {
       columns: true,
       skip_empty_lines: true,
-      delimiter: config.separator || ',',
+      delimiter: config.separator || ",",
       from: (config.skip_rows || 0) + 1,
       relax_column_count: true,
     },
-    config.encoding || 'utf-8',
+    config.encoding || "utf-8",
   );
 
   const rows = /** @type {ParsedPortfolioRows} */ ([]);
@@ -153,4 +169,4 @@ export async function parseWithConfig(filePath, config) {
   return rows;
 }
 
-export default { name: 'portfolio_generic', parseWithConfig };
+export default { name: "portfolio_generic", parseWithConfig };

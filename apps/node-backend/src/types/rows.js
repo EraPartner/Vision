@@ -80,6 +80,9 @@
  * @property {string|null} [import_batch_id] BIGINT FK → import_batches — pg emits BIGINT as a string.
  * @property {number|null} [matched_pattern_id]
  * @property {string|null} [tx_hash]
+ * @property {string|null} [source_record_hash] Internal SHA-256 of the staged literal record; omitted from API rows.
+ * @property {string|null} [dedup_fingerprint] Internal versioned import identity; omitted from API rows.
+ * @property {number|null} [dedup_fingerprint_version]
  * @property {boolean} [is_transfer]
  * @property {number|null} [transfer_peer_id]
  * @property {'auto'|'manual'|null} [transfer_source]
@@ -873,6 +876,12 @@
  * @property {string|null} comment
  * @property {string|null} raw_data
  * @property {string|null} tx_hash sha256 hex of raw_data (or the field fallback).
+ * @property {string|null} [source_transaction_id]
+ * @property {string|null} [source_account_identity]
+ * @property {string|null} [source_record_hash]
+ * @property {string|null} [dedup_fingerprint]
+ * @property {number|null} [dedup_fingerprint_version]
+ * @property {number|null} [dedup_occurrence]
  * @property {number|null} resolved_recipient_id
  * @property {number|null} resolved_bank_account_id
  * @property {string|null} error_message
@@ -938,6 +947,12 @@
  * @property {string|null} note
  * @property {string|null} raw_data
  * @property {string|null} tx_hash
+ * @property {string|null} [source_transaction_id]
+ * @property {string|null} [source_account_identity]
+ * @property {string|null} [source_record_hash]
+ * @property {string|null} [dedup_fingerprint]
+ * @property {number|null} [dedup_fingerprint_version]
+ * @property {number|null} [dedup_occurrence]
  * @property {number|null} resolved_investment_id
  * @property {number|null} user_override_investment_id
  * @property {'symbol'|'name_exact'|null} match_source

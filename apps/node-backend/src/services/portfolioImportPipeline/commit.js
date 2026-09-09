@@ -41,7 +41,7 @@ import { classifyBrokerageRow } from "../importPipeline/brokerageRouting.js";
  * on `investments` (null for cash rows and unresolved instruments).
  *
  * @typedef {Pick<PortfolioImportStagingRow,
- *   'id'|'status'|'type'|'route'|'type_raw'|'units'|'price_per_unit'|'amount'|'fees'|'taxes'|'currency'|'fx_rate_to_eur'|'note'|'tx_hash'>
+ *   'id'|'status'|'type'|'route'|'type_raw'|'units'|'price_per_unit'|'amount'|'fees'|'taxes'|'currency'|'fx_rate_to_eur'|'note'|'tx_hash'|'source_record_hash'|'dedup_fingerprint'|'dedup_fingerprint_version'|'dedup_occurrence'>
  *   & {
  *     tx_date: string|null,
  *     investment_id: number|null,
@@ -125,6 +125,10 @@ export async function commitBatch({ batchId, onProgress }) {
             isr.fx_rate_to_eur,
             isr.note,
             isr.tx_hash,
+            isr.source_record_hash,
+            isr.dedup_fingerprint,
+            isr.dedup_fingerprint_version,
+            isr.dedup_occurrence,
             COALESCE(isr.user_override_investment_id, isr.resolved_investment_id) AS investment_id,
             inv.asset_class,
             inv.currency AS investment_currency
@@ -306,11 +310,23 @@ export async function commitBatch({ batchId, onProgress }) {
           const occurrence = cashSeenByIdentity.get(identity) ?? 0;
           cashSeenByIdentity.set(identity, occurrence + 1);
           const insertedThisRun = cashInsertedByIdentity.get(identity) ?? 0;
+          const fingerprintExists = await hasCanonicalFingerprint(
+            "transactions",
+            row,
+          );
           const ledgerMatches = await countCashFieldMatches(
             batchAccountId,
             row,
+            Boolean(row.dedup_fingerprint),
           );
-          if (occurrence < ledgerMatches - insertedThisRun) {
+          if (
+            fingerprintExists ||
+            (row.dedup_fingerprint &&
+              row.dedup_occurrence != null &&
+              Number(row.dedup_occurrence) <= ledgerMatches) ||
+            (!row.dedup_fingerprint &&
+              occurrence < ledgerMatches - insertedThisRun)
+          ) {
             chunkDuplicates++;
             await markRow(row.id, "duplicate");
             continue;
@@ -327,20 +343,43 @@ export async function commitBatch({ batchId, onProgress }) {
               (row.type_raw
                 ? String(row.type_raw).toUpperCase()
                 : "BROKERAGE CASH");
-            const r = await query(
-              `INSERT INTO transactions (date, amount, currency, memo, account_id, recipient_id, category_id, is_active)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, true) RETURNING id`,
-              [
-                row.tx_date,
-                signedCashAmount(row),
-                row.currency || "EUR",
-                memo,
-                batchAccountId,
-                cashRecipientId,
-                (row.type != null && cashCategoryIds.get(String(row.type))) ||
-                  null,
-              ],
-            );
+            const baseParams = [
+              row.tx_date,
+              signedCashAmount(row),
+              row.currency || "EUR",
+              memo,
+              batchAccountId,
+              cashRecipientId,
+              (row.type != null && cashCategoryIds.get(String(row.type))) ||
+                null,
+            ];
+            const r = row.dedup_fingerprint
+              ? await query(
+                  `INSERT INTO transactions
+                     (date, amount, currency, memo, account_id, recipient_id, category_id,
+                      tx_hash, source_record_hash, dedup_fingerprint,
+                      dedup_fingerprint_version, is_active)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true)
+                   ON CONFLICT DO NOTHING RETURNING id`,
+                  [
+                    ...baseParams,
+                    row.tx_hash || null,
+                    row.source_record_hash || null,
+                    row.dedup_fingerprint,
+                    row.dedup_fingerprint_version,
+                  ],
+                )
+              : await query(
+                  `INSERT INTO transactions (date, amount, currency, memo, account_id, recipient_id, category_id, is_active)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, true) RETURNING id`,
+                  baseParams,
+                );
+            if (!r.rows[0]) {
+              await client.query(`RELEASE SAVEPOINT ${sp}`);
+              chunkDuplicates++;
+              await markRow(row.id, "duplicate");
+              continue;
+            }
             await query(
               `UPDATE portfolio_import_staging_rows SET status = 'committed', committed_txn_id = $2 WHERE id = $1`,
               [row.id, r.rows[0]?.id ?? null],
@@ -389,12 +428,24 @@ export async function commitBatch({ batchId, onProgress }) {
         const occurrence = tradeSeenByIdentity.get(identity) ?? 0;
         tradeSeenByIdentity.set(identity, occurrence + 1);
         const insertedThisRun = tradeInsertedByIdentity.get(identity) ?? 0;
+        const fingerprintExists = await hasCanonicalFingerprint(
+          "portfolio_transactions",
+          row,
+        );
         const destinationMatches = await countTradeFieldMatches(
           row,
           batchAccountId,
           canonical,
+          Boolean(row.dedup_fingerprint),
         );
-        if (occurrence < destinationMatches - insertedThisRun) {
+        if (
+          fingerprintExists ||
+          (row.dedup_fingerprint &&
+            row.dedup_occurrence != null &&
+            Number(row.dedup_occurrence) <= destinationMatches) ||
+          (!row.dedup_fingerprint &&
+            occurrence < destinationMatches - insertedThisRun)
+        ) {
           chunkDuplicates++;
           await markRow(row.id, "duplicate");
           continue;
@@ -432,9 +483,20 @@ export async function commitBatch({ batchId, onProgress }) {
               // own import_batch_id FKs to the BANK `import_batches` table, so a
               // portfolio batch id must never be written there.
               import_batch_id: batchId,
+              tx_hash: row.tx_hash || null,
+              source_record_hash: row.source_record_hash || null,
+              dedup_fingerprint: row.dedup_fingerprint || null,
+              dedup_fingerprint_version: row.dedup_fingerprint_version ?? null,
               preloaded_asset_class: row.asset_class,
             }),
           );
+
+          if (!created) {
+            await client.query(`RELEASE SAVEPOINT ${sp}`);
+            chunkDuplicates++;
+            await markRow(row.id, "duplicate");
+            continue;
+          }
 
           await query(
             `UPDATE portfolio_import_staging_rows SET status = 'committed', committed_txn_id = $2 WHERE id = $1`,
@@ -561,7 +623,7 @@ function cashIdentityKey(row) {
  * @param {MatchedPortfolioStagingRow} row
  * @returns {Promise<number>} count of active ledger rows matching the identity
  */
-async function countCashFieldMatches(accountId, row) {
+async function countCashFieldMatches(accountId, row, legacyOnly = false) {
   const memo =
     row.note ||
     (row.type_raw ? String(row.type_raw).toUpperCase() : "BROKERAGE CASH");
@@ -592,7 +654,9 @@ async function countCashFieldMatches(accountId, row) {
       WHERE account_id = $1 AND date = $2::date
         AND ${amountPredicate}
         AND COALESCE(currency, 'EUR') = ${currencyParam}
-        AND COALESCE(memo, '') = COALESCE(${memoParam}, '') AND is_active = true`,
+        AND COALESCE(memo, '') = COALESCE(${memoParam}, '')
+        ${legacyOnly ? "AND dedup_fingerprint IS NULL" : ""}
+        AND is_active = true`,
     params,
   );
   return Number(r.rows[0]?.n) || 0;
@@ -656,7 +720,12 @@ function canonicalTradeValues(row) {
  * @param {{amount: number|undefined, units: number|undefined}} canonical
  * @returns {Promise<number>}
  */
-async function countTradeFieldMatches(row, batchAccountId, canonical) {
+async function countTradeFieldMatches(
+  row,
+  batchAccountId,
+  canonical,
+  legacyOnly = false,
+) {
   // account_id and currency are part of the identity: the same-shaped fill on
   // a different account (or in a different currency) is a distinct trade, not
   // a re-import of this one. IS NOT DISTINCT FROM keeps NULL==NULL matching
@@ -670,7 +739,8 @@ async function countTradeFieldMatches(row, batchAccountId, canonical) {
         AND amount = $4
         AND COALESCE(units, 0) = COALESCE($5, 0)
         AND account_id IS NOT DISTINCT FROM $6
-        AND COALESCE(currency, 'EUR') = $7`,
+        AND COALESCE(currency, 'EUR') = $7
+        ${legacyOnly ? "AND dedup_fingerprint IS NULL" : ""}`,
     [
       row.investment_id,
       row.tx_date,
@@ -682,4 +752,22 @@ async function countTradeFieldMatches(row, batchAccountId, canonical) {
     ],
   );
   return Number(matches.rows[0]?.n) || 0;
+}
+
+/**
+ * @param {'transactions'|'portfolio_transactions'} table
+ * @param {MatchedPortfolioStagingRow} row
+ * @returns {Promise<boolean>}
+ */
+async function hasCanonicalFingerprint(table, row) {
+  if (!row.dedup_fingerprint || row.dedup_fingerprint_version == null) {
+    return false;
+  }
+  const result = await query(
+    `SELECT 1 FROM ${table}
+      WHERE dedup_fingerprint_version = $1 AND dedup_fingerprint = $2
+      LIMIT 1`,
+    [row.dedup_fingerprint_version, row.dedup_fingerprint],
+  );
+  return result.rows.length > 0;
 }

@@ -10,12 +10,12 @@ import { logger } from "../../../config/logger.js";
 import {
   parseCsvFile,
   buildOptionalComment,
+  rawDataForCsvRecord,
   parseDecimalSafe,
   parseDateFlexibleUtc,
   normalizeIsoCurrency,
 } from "./_shared.js";
 import { toDecimal, roundMoney } from "../../../lib/money.js";
-import { epochMsToUtcYmd } from "../../../lib/dateFormat.js";
 
 /**
  * @typedef {import('./_shared.js').ParsedBankTransaction} ParsedBankTransaction
@@ -45,21 +45,6 @@ function buildBankAccount(product) {
   if (upper === "SAVINGS") return "REVOLUT SAVINGS";
   if (upper === "CURRENT") return "REVOLUT CURRENT";
   return `REVOLUT ${upper}`.trim();
-}
-
-/**
- * Rebuild the source record with both date columns normalized, so `rawData`
- * (and the dedup hash derived from it) is stable across export variants.
- *
- * @param {string[]} parts
- * @param {string} normalizedDate
- * @returns {string}
- */
-function buildNormalizedRawData(parts, normalizedDate) {
-  const normalized = [...parts];
-  normalized[2] = normalizedDate;
-  normalized[3] = normalizedDate;
-  return normalized.map((f) => (f.includes(",") ? `"${f}"` : f)).join(",");
 }
 
 /**
@@ -115,9 +100,6 @@ function parseRow(parts) {
   }
   if (state) commentParts.push(`State: ${state}`);
 
-  const normalizedDate = epochMsToUtcYmd(date.getTime());
-  const rawData = buildNormalizedRawData(parts, normalizedDate);
-
   return {
     date,
     bankAccount: buildBankAccount(product),
@@ -130,7 +112,7 @@ function parseRow(parts) {
     recipientAddress: null,
     recipientBankName: null,
     comment: buildOptionalComment(commentParts),
-    rawData,
+    rawData: rawDataForCsvRecord(parts),
   };
 }
 

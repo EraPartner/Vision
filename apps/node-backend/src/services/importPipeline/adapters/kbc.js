@@ -12,7 +12,8 @@ import {
   parseCommaDecimal,
   buildOptionalComment,
   splitCsvLines,
-  splitDelimitedRecord,
+  parseCsvText,
+  rawDataForCsvRecord,
   canonicalIban,
   readTextWithEncodingFallback,
   normalizeIsoCurrency,
@@ -45,11 +46,10 @@ function classifyTransactionType(creditStr, debitStr) {
 }
 
 /**
- * @param {string} line one ','-delimited statement record
+ * @param {string[]} parts one ';'-delimited statement record
  * @returns {ParsedBankTransaction|null} null when too short or unparseable
  */
-function parseLine(line) {
-  const parts = splitDelimitedRecord(line);
+function parseLine(parts) {
   if (!parts || parts.length < MIN_FIELDS) return null;
 
   const ownAccount = parts[0].trim(); // "Rekeningnummer" — the account holder's own IBAN
@@ -104,7 +104,7 @@ function parseLine(line) {
     recipientAddress: counterpartyAddress || null,
     recipientBankName: counterpartyAccount ? "KBC" : null,
     comment: buildOptionalComment(commentParts),
-    rawData: line,
+    rawData: rawDataForCsvRecord(parts),
   };
 }
 
@@ -139,15 +139,22 @@ export function detect(csvSample) {
  */
 export async function parse(filePath) {
   const content = await readTextWithEncodingFallback(filePath);
-  const lines = splitCsvLines(content);
+  let malformed = 0;
+  const records = parseCsvText(content, {
+    delimiter: ";",
+    skip_empty_lines: true,
+    relax_column_count: true,
+    relax_quotes: true,
+    skip_records_with_error: true,
+    on_skip: () => malformed++,
+  });
   const transactions = /** @type {ParsedBankTransactions} */ ([]);
-  let skipped = 0;
+  let skipped = malformed;
 
-  for (const rawLine of lines) {
-    const line = rawLine.trim();
-    if (!line) continue;
+  for (const parts of records) {
+    const line = rawDataForCsvRecord(parts).trim();
     if (isNonDataLine(line)) continue;
-    const tx = parseLine(line);
+    const tx = parseLine(parts);
     if (tx) transactions.push(tx);
     else skipped++;
   }

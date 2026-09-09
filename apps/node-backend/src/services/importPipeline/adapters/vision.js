@@ -2,24 +2,34 @@
  * Vision (self-import) CSV adapter — re-import Vision's own export format.
  */
 
-import { cleanRecipientName, normalizeToUppercase } from '../../../lib/textNormalization.js';
-import { logger } from '../../../config/logger.js';
-import { parseCsvFile, buildOptionalComment, buildRawRowString, parseAmountField, parseDateFlexibleUtc, normalizeIsoCurrency } from './_shared.js';
+import {
+  cleanRecipientName,
+  normalizeToUppercase,
+} from "../../../lib/textNormalization.js";
+import { logger } from "../../../config/logger.js";
+import {
+  parseCsvFile,
+  buildOptionalComment,
+  rawDataForCsvRecord,
+  parseAmountField,
+  parseDateFlexibleUtc,
+  normalizeIsoCurrency,
+} from "./_shared.js";
 
 /**
  * @typedef {import('./_shared.js').ParsedBankTransaction} ParsedBankTransaction
  * @typedef {import('./_shared.js').ParsedBankTransactions} ParsedBankTransactions
  */
 
-const NAME = 'vision';
-const BANK_LABEL = 'Vision';
+const NAME = "vision";
+const BANK_LABEL = "Vision";
 
 /**
  * @param {Record<string, string>} row a `columns: true` csv-parse record
  * @returns {ParsedBankTransaction|null} null when the row is unusable (no date / non-numeric amount)
  */
 function rowToTransaction(row) {
-  const dateStr = (row['Date'] || '').trim();
+  const dateStr = (row["Date"] || "").trim();
   if (!dateStr) return null;
 
   const date = parseDateFlexibleUtc(dateStr);
@@ -31,23 +41,27 @@ function rowToTransaction(row) {
   // Amounts go through parseAmountField — this adapter's loose header
   // detection can catch non-Vision CSVs, and blindly deleting commas turned
   // an EU-decimal "12,34" into 1234 (a silent 100× error).
-  const amountStr = (row['Amount'] || '').replace(/'/g, '').trim();
+  const amountStr = (row["Amount"] || "").replace(/'/g, "").trim();
   const amount = parseAmountField(amountStr);
   if (isNaN(amount)) return null;
 
-  const bankAccount = normalizeToUppercase((row['Bank Account'] || 'VISION').trim());
-  const recipientRaw = (row['Recipient'] || '').trim();
-  const recipient = recipientRaw ? normalizeToUppercase(cleanRecipientName(recipientRaw)) : 'UNKNOWN';
-  const memo = row['Memo'] ? normalizeToUppercase(row['Memo'].trim()) : '';
+  const bankAccount = normalizeToUppercase(
+    (row["Bank Account"] || "VISION").trim(),
+  );
+  const recipientRaw = (row["Recipient"] || "").trim();
+  const recipient = recipientRaw
+    ? normalizeToUppercase(cleanRecipientName(recipientRaw))
+    : "UNKNOWN";
+  const memo = row["Memo"] ? normalizeToUppercase(row["Memo"].trim()) : "";
   // ISO-shape normalize: a hand-edited "euro" cell became "EURO" and failed
   // the whole commit at the VARCHAR(3) + 0046 CHECK as a raw 500.
-  const currency = normalizeIsoCurrency(row['Currency']) || 'EUR';
+  const currency = normalizeIsoCurrency(row["Currency"]) || "EUR";
   // Same guard-apostrophe cleanup as Amount, so a negative Balance survives the
   // round-trip instead of being silently nulled.
-  const balanceStr = (row['Balance'] || '').replace(/'/g, '').trim();
+  const balanceStr = (row["Balance"] || "").replace(/'/g, "").trim();
   const balance = balanceStr ? parseAmountField(balanceStr) : null;
-  const category = (row['Category'] || '').trim();
-  const comment = (row['Comment'] || '').trim() || null;
+  const category = (row["Category"] || "").trim();
+  const comment = (row["Comment"] || "").trim() || null;
 
   const commentParts = [];
   if (category) commentParts.push(`Imported Category: ${category}`);
@@ -65,7 +79,7 @@ function rowToTransaction(row) {
     recipientAddress: null,
     recipientBankName: null,
     comment: buildOptionalComment(commentParts),
-    rawData: buildRawRowString(row),
+    rawData: rawDataForCsvRecord(row),
   };
 }
 
@@ -75,7 +89,14 @@ function rowToTransaction(row) {
 // account"/"recipient" to this adapter. Columns after Currency (Balance,
 // Category, Comment, Tags, Running Balance) are allowed to vary so older or
 // extended exports still detect.
-const EXPORT_HEADER_PREFIX = ['date', 'bank account', 'recipient', 'memo', 'amount', 'currency'];
+const EXPORT_HEADER_PREFIX = [
+  "date",
+  "bank account",
+  "recipient",
+  "memo",
+  "amount",
+  "currency",
+];
 
 /**
  * @param {string|null|undefined} csvSample raw head of the uploaded file
@@ -85,8 +106,10 @@ export function detect(csvSample) {
   if (!csvSample) return false;
   // Strip a UTF-8 BOM — detect() receives raw file content, not the
   // BOM-stripped lines the parsers see.
-  const firstLine = (csvSample.replace(/^\uFEFF/, '').split('\n')[0] || '').trim().toLowerCase();
-  const cols = firstLine.split(',').map((c) => c.trim());
+  const firstLine = (csvSample.replace(/^\uFEFF/, "").split("\n")[0] || "")
+    .trim()
+    .toLowerCase();
+  const cols = firstLine.split(",").map((c) => c.trim());
   return EXPORT_HEADER_PREFIX.every((name, i) => cols[i] === name);
 }
 
@@ -115,7 +138,9 @@ export async function parse(filePath) {
   }
   transactions.skipped = skipped;
 
-  logger.info(`Vision CSV parsed: ${transactions.length} transactions, ${skipped} skipped`);
+  logger.info(
+    `Vision CSV parsed: ${transactions.length} transactions, ${skipped} skipped`,
+  );
   return transactions;
 }
 

@@ -2,17 +2,27 @@
  * SABB (Saudi British Bank) CSV adapter.
  */
 
-import { cleanRecipientName, normalizeToUppercase } from '../../../lib/textNormalization.js';
-import { logger } from '../../../config/logger.js';
-import { parseCsvFile, buildOptionalComment, buildRawRowString, parseAmountField, parseDayMonthYear, parseDateFlexibleUtc } from './_shared.js';
+import {
+  cleanRecipientName,
+  normalizeToUppercase,
+} from "../../../lib/textNormalization.js";
+import { logger } from "../../../config/logger.js";
+import {
+  parseCsvFile,
+  buildOptionalComment,
+  rawDataForCsvRecord,
+  parseAmountField,
+  parseDayMonthYear,
+  parseDateFlexibleUtc,
+} from "./_shared.js";
 
 /**
  * @typedef {import('./_shared.js').ParsedBankTransaction} ParsedBankTransaction
  * @typedef {import('./_shared.js').ParsedBankTransactions} ParsedBankTransactions
  */
 
-const NAME = 'sabb';
-const BANK_LABEL = 'SABB';
+const NAME = "sabb";
+const BANK_LABEL = "SABB";
 
 // Non-completed rows (pending authorisations, declines, reversals) haven't
 // settled — importing them corrupts balances, the same class of bug the
@@ -20,17 +30,18 @@ const BANK_LABEL = 'SABB';
 // Denylist rather than "keep only Completed": SABB's status vocabulary isn't
 // pinned against a real export, so an unknown status keeps the row instead of
 // silently dropping a settled transaction.
-const NON_COMPLETED_STATUS_RE = /pending|declin|reject|refus|revers|fail|cancel/i;
+const NON_COMPLETED_STATUS_RE =
+  /pending|declin|reject|refus|revers|fail|cancel/i;
 
 /**
  * @param {Record<string, string>} row a `columns: true` csv-parse record
  * @returns {ParsedBankTransaction|null} null for a non-settled status or an unusable row
  */
 function rowToTransaction(row) {
-  const status = (row['Status'] || '').trim();
+  const status = (row["Status"] || "").trim();
   if (NON_COMPLETED_STATUS_RE.test(status)) return null;
 
-  const dateStr = (row['Transaction date'] || '').trim();
+  const dateStr = (row["Transaction date"] || "").trim();
   if (!dateStr) return null;
 
   // The SABB export's date format isn't pinned, so parse DD/MM/YYYY explicitly
@@ -45,19 +56,21 @@ function rowToTransaction(row) {
   }
   if (!date) return null;
 
-  const amountRaw = (row['Amount(SAR)'] || '').trim();
+  const amountRaw = (row["Amount(SAR)"] || "").trim();
   if (!amountRaw) return null;
-  const amountStr = amountRaw.replace(/[A-Za-z\s]/g, '').trim();
+  const amountStr = amountRaw.replace(/[A-Za-z\s]/g, "").trim();
   const amount = parseAmountField(amountStr);
   if (isNaN(amount)) return null;
 
-  const descriptionRaw = (row['Description'] || '').trim();
-  const descCleaned = descriptionRaw.replace(/^\d{16}/, '').trim();
-  const recipient = descCleaned ? normalizeToUppercase(cleanRecipientName(descCleaned)) : 'UNKNOWN';
-  const memo = descriptionRaw ? normalizeToUppercase(descriptionRaw) : '';
+  const descriptionRaw = (row["Description"] || "").trim();
+  const descCleaned = descriptionRaw.replace(/^\d{16}/, "").trim();
+  const recipient = descCleaned
+    ? normalizeToUppercase(cleanRecipientName(descCleaned))
+    : "UNKNOWN";
+  const memo = descriptionRaw ? normalizeToUppercase(descriptionRaw) : "";
 
-  const postingDate = (row['Posting date'] || '').trim();
-  const otherCurrency = (row['Amount(Other Currency)'] || '').trim();
+  const postingDate = (row["Posting date"] || "").trim();
+  const otherCurrency = (row["Amount(Other Currency)"] || "").trim();
 
   const commentParts = [];
   if (status) commentParts.push(`Status: ${status}`);
@@ -65,11 +78,11 @@ function rowToTransaction(row) {
   if (otherCurrency) commentParts.push(`Other Currency: ${otherCurrency}`);
 
   const currencyMatch = amountRaw.match(/[A-Z]{3}/);
-  const currency = currencyMatch ? currencyMatch[0] : 'SAR';
+  const currency = currencyMatch ? currencyMatch[0] : "SAR";
 
   return {
     date,
-    bankAccount: 'SABB',
+    bankAccount: "SABB",
     recipient,
     memo,
     amount,
@@ -79,7 +92,7 @@ function rowToTransaction(row) {
     recipientAddress: null,
     recipientBankName: null,
     comment: buildOptionalComment(commentParts),
-    rawData: buildRawRowString(row),
+    rawData: rawDataForCsvRecord(row),
   };
 }
 
@@ -89,8 +102,10 @@ function rowToTransaction(row) {
  */
 export function detect(csvSample) {
   if (!csvSample) return false;
-  const firstLine = (csvSample.split('\n')[0] || '').toLowerCase();
-  return firstLine.includes('transaction date') && firstLine.includes('amount(sar)');
+  const firstLine = (csvSample.split("\n")[0] || "").toLowerCase();
+  return (
+    firstLine.includes("transaction date") && firstLine.includes("amount(sar)")
+  );
 }
 
 /**
@@ -118,7 +133,9 @@ export async function parse(filePath) {
   }
   transactions.skipped = skipped;
 
-  logger.info(`SABB CSV parsed: ${transactions.length} transactions, ${skipped} skipped`);
+  logger.info(
+    `SABB CSV parsed: ${transactions.length} transactions, ${skipped} skipped`,
+  );
   return transactions;
 }
 

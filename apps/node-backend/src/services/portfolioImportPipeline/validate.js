@@ -3,20 +3,21 @@
  *
  * For each pending staging row: normalize the transaction type, check the row
  * carries enough numeric fields for its type (a light pre-check; the repo
- * re-validates at commit), compute a provenance hash, and mark the row
- * 'validated' or 'error'. Repeated hashes remain validated because identical
- * fills can be legitimate; commit performs occurrence-aware deduplication.
+ * re-validates at commit), compute separate provenance and versioned
+ * occurrence identity, and mark the row 'validated' or 'error'.
  */
 
-import crypto from "crypto";
 import { query } from "../../database/connection.js";
 import { logger } from "../../config/logger.js";
-import { parsedDateToYmd } from "../../lib/importDates.js";
 import { toYmd } from "../calculations/portfolioMath.js";
 import { todayAppDateString } from "../../lib/timezone.js";
 import { UNIT_BASED_ASSET_CLASSES } from "../portfolio/portfolioTransactionRules.js";
 import { normalizeType } from "./portfolioTypeNormalizer.js";
 import { classifyBrokerageRow } from "../importPipeline/brokerageRouting.js";
+import {
+  assignImportIdentities,
+  portfolioIdentityBase,
+} from "../importIdentity.js";
 
 /**
  * @typedef {import('../../types/rows.js').PortfolioImportStagingRow} PortfolioImportStagingRow
@@ -30,7 +31,9 @@ import { classifyBrokerageRow } from "../importPipeline/brokerageRouting.js";
  * `resolveAndCheck` formats it with LOCAL getters (`toYmd`) on purpose.
  *
  * @typedef {Pick<PortfolioImportStagingRow,
- *   'id'|'row_index'|'tx_date'|'type_raw'|'symbol_raw'|'name_raw'|'units'|'price_per_unit'|'amount'|'raw_data'>} PendingPortfolioStagingRow
+ *   'id'|'row_index'|'tx_date'|'type_raw'|'symbol_raw'|'name_raw'|'units'|'price_per_unit'|'amount'|'raw_data'>
+ *   & { fees?: string|null, taxes?: string|null, currency?: string|null, note?: string|null,
+ *       source_transaction_id?: string|null, source_account_identity?: string|null }} PendingPortfolioStagingRow
  */
 
 const VALIDATE_CHUNK = 500;
@@ -49,7 +52,11 @@ export async function validateBatch({ batchId, onProgress }) {
   );
 
   const { rows: batchRows } = await query(
-    `SELECT default_asset_class, default_type, custom_config, is_brokerage FROM portfolio_import_batches WHERE id = $1`,
+    `SELECT b.default_asset_class, b.default_type, b.custom_config, b.is_brokerage,
+            b.adapter_name, a.import_identity::text AS account_import_identity
+       FROM portfolio_import_batches b
+       LEFT JOIN accounts a ON a.id = b.account_id
+      WHERE b.id = $1`,
     [batchId],
   );
   const batch = batchRows[0] || {};
@@ -65,10 +72,12 @@ export async function validateBatch({ batchId, onProgress }) {
     ? UNIT_BASED_ASSET_CLASSES.has(defaultAssetClass)
     : false;
 
-  const { rows: pending } = await query(
-    `SELECT id, row_index, tx_date, type_raw, symbol_raw, name_raw, units, price_per_unit, amount, raw_data
+  const { rows: allRows } = await query(
+    `SELECT id, row_index, status, tx_date, type_raw, symbol_raw, name_raw, units,
+            price_per_unit, amount, fees, taxes, currency, note, raw_data,
+            source_transaction_id, source_account_identity
        FROM portfolio_import_staging_rows
-      WHERE batch_id = $1 AND status = 'pending'
+      WHERE batch_id = $1
       ORDER BY row_index ASC`,
     [batchId],
   );
@@ -77,10 +86,37 @@ export async function validateBatch({ batchId, onProgress }) {
   // future-dated rows below.
   const today = todayAppDateString();
 
+  const pending = allRows.filter(
+    (row) => row.status == null || row.status === "pending",
+  );
   const total = pending.length;
   let seen = 0;
   let errors = 0;
   const duplicates = 0;
+
+  const resolutions = allRows.map((row) =>
+    resolveAndCheck(row, {
+      typeMapping,
+      defaultType,
+      unitBased,
+      isBrokerage,
+      today,
+    }),
+  );
+  const identities = assignImportIdentities(
+    allRows.map((row, index) => ({ ...row, ...resolutions[index] })),
+    (row) =>
+      portfolioIdentityBase(row, {
+        adapterName: batch.adapter_name || "portfolio_generic",
+        accountIdentity: batch.account_import_identity || "UNASSIGNED",
+      }),
+  );
+  const resolutionById = new Map(
+    allRows.map((row, index) => [String(row.id), resolutions[index]]),
+  );
+  const identityById = new Map(
+    allRows.map((row, index) => [String(row.id), identities[index]]),
+  );
 
   if (onProgress) onProgress({ phase: "validating", current: 0, total });
 
@@ -97,31 +133,38 @@ export async function validateBatch({ batchId, onProgress }) {
     /** @type {(string|null)[]} */
     const txHashes = [];
     /** @type {(string|null)[]} */
+    const sourceRecordHashes = [];
+    /** @type {(number|null)[]} */
+    const fingerprintVersions = [];
+    /** @type {(number|null)[]} */
+    const occurrences = [];
+    /** @type {(string|null)[]} */
     const errorMessages = [];
 
-    for (const row of /** @type {PendingPortfolioStagingRow[]} */ (chunk)) {
+    for (let chunkIndex = 0; chunkIndex < chunk.length; chunkIndex++) {
+      const row = /** @type {PendingPortfolioStagingRow} */ (chunk[chunkIndex]);
+      const identity = identityById.get(String(row.id));
       ids.push(row.id);
-      const { type, route, error } = resolveAndCheck(row, {
-        typeMapping,
-        defaultType,
-        unitBased,
-        isBrokerage,
-        today,
-      });
+      const { type, route, error } = resolutionById.get(String(row.id));
       if (error) {
         errors++;
         statuses.push("error");
         types.push(null);
         routes.push(null);
         txHashes.push(null);
+        sourceRecordHashes.push(identity.sourceRecordHash);
+        fingerprintVersions.push(null);
+        occurrences.push(null);
         errorMessages.push(error);
         continue;
       }
-      const hash = computeRowHash(row, type, route);
       statuses.push("validated");
       types.push(type);
       routes.push(route);
-      txHashes.push(hash);
+      txHashes.push(identity.fingerprint);
+      sourceRecordHashes.push(identity.sourceRecordHash);
+      fingerprintVersions.push(identity.version);
+      occurrences.push(identity.occurrence);
       errorMessages.push(null);
     }
 
@@ -131,11 +174,25 @@ export async function validateBatch({ batchId, onProgress }) {
               type          = v.type::portfolio_txn_type,
               route         = v.route,
               tx_hash       = v.tx_hash,
+              source_record_hash = v.source_record_hash,
+              dedup_fingerprint = v.tx_hash,
+              dedup_fingerprint_version = v.fingerprint_version,
+              dedup_occurrence = v.occurrence,
               error_message = v.error_message
-         FROM unnest($1::bigint[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[])
-              AS v(id, status, type, route, tx_hash, error_message)
+         FROM unnest($1::bigint[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::smallint[], $8::integer[], $9::text[])
+              AS v(id, status, type, route, tx_hash, source_record_hash, fingerprint_version, occurrence, error_message)
         WHERE s.id = v.id`,
-      [ids, statuses, types, routes, txHashes, errorMessages],
+      [
+        ids,
+        statuses,
+        types,
+        routes,
+        txHashes,
+        sourceRecordHashes,
+        fingerprintVersions,
+        occurrences,
+        errorMessages,
+      ],
     );
     seen += chunk.length;
     if (onProgress) onProgress({ phase: "validating", current: seen, total });
@@ -237,24 +294,4 @@ function resolveAndCheck(
   }
 
   return { type, route: isBrokerage ? "portfolio" : undefined };
-}
-
-/**
- * sha256 of route|type|raw record, falling back to the parsed fields when the
- * adapter kept no raw record.
- *
- * @param {PendingPortfolioStagingRow} row
- * @param {string|undefined} type
- * @param {string|undefined} route
- * @returns {string} lowercase hex digest
- */
-function computeRowHash(row, type, route) {
-  let raw;
-  if (row.raw_data) {
-    raw = `${route || "portfolio"}|${type || ""}|${row.raw_data}`;
-  } else {
-    const dateStr = parsedDateToYmd(row.tx_date);
-    raw = `${route || "portfolio"}|${dateStr}|${type || ""}|${row.amount ?? ""}|${row.units ?? ""}`;
-  }
-  return crypto.createHash("sha256").update(raw, "utf-8").digest("hex");
 }

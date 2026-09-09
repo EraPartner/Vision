@@ -138,6 +138,7 @@ BE81 0637 5694 4024;24/11/2025;00010;52;;SHOP B;;1000 Brussels;BANCONTACT;24/11/
     for (const txn of txns) {
       expect(txn.rawData).toBeTruthy();
       expect(txn.rawData).toContain(";");
+      expect(txn.sourceId).toBeNull();
     }
   });
 

@@ -81,7 +81,13 @@ const PORTFOLIO_TX_DATE_FIELDS = ["date", "recurrence_end_date"];
  * @returns {PortfolioTransactionRow}
  */
 export const mapPortfolioTxRow = (row) => {
-  const mapped = coerceNumericFields(row, PORTFOLIO_TX_NUMERIC_FIELDS);
+  const {
+    source_record_hash: _sourceRecordHash,
+    dedup_fingerprint: _dedupFingerprint,
+    dedup_fingerprint_version: _dedupFingerprintVersion,
+    ...publicRow
+  } = row;
+  const mapped = coerceNumericFields(publicRow, PORTFOLIO_TX_NUMERIC_FIELDS);
   for (const field of PORTFOLIO_TX_DATE_FIELDS) {
     if (mapped[field] instanceof Date) mapped[field] = toYmd(mapped[field]);
   }

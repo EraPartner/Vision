@@ -6,9 +6,9 @@
  * move it back into the adapter that needs it.
  */
 
-import fs from 'fs';
-import { parse } from 'csv-parse/sync';
-import { toDecimal } from '../../../lib/money.js';
+import fs from "fs";
+import { parse } from "csv-parse/sync";
+import { toDecimal } from "../../../lib/money.js";
 
 /**
  * The row shape every bank CSV adapter emits and `stage.js` persists into
@@ -28,6 +28,7 @@ import { toDecimal } from '../../../lib/money.js';
  * @property {string|null} recipientBankName
  * @property {string|null} comment
  * @property {string} rawData the source line/record, kept for dedup + provenance.
+ * @property {string|null} [sourceId] immutable source transaction identifier when the export provides one.
  * @property {[number, number]} [_seq] belfius only: (statement no, transaction no); consumed and stripped by its applyRunningBalances.
  */
 
@@ -48,7 +49,7 @@ import { toDecimal } from '../../../lib/money.js';
  * @returns {number}
  */
 export function parseDecimalSafe(value) {
-  const s = String(value ?? '').trim();
+  const s = String(value ?? "").trim();
   if (!s) return NaN;
   try {
     return toDecimal(s).toNumber();
@@ -68,7 +69,9 @@ export function parseDecimalSafe(value) {
  * @returns {string|null}
  */
 export function normalizeIsoCurrency(value) {
-  const code = String(value ?? '').trim().toUpperCase();
+  const code = String(value ?? "")
+    .trim()
+    .toUpperCase();
   return /^[A-Z]{3}$/.test(code) ? code : null;
 }
 
@@ -85,9 +88,9 @@ export function normalizeIsoCurrency(value) {
  */
 export async function readTextWithEncodingFallback(filePath) {
   const buffer = await fs.promises.readFile(filePath);
-  const utf8 = buffer.toString('utf-8');
-  if (utf8.includes('\uFFFD')) {
-    return buffer.toString('latin1');
+  const utf8 = buffer.toString("utf-8");
+  if (utf8.includes("\uFFFD")) {
+    return buffer.toString("latin1");
   }
   return utf8;
 }
@@ -100,16 +103,25 @@ export async function readTextWithEncodingFallback(filePath) {
  * @returns {Date|null}
  */
 export function parseDayMonthYear(dateStr) {
-  const dateParts = String(dateStr).split('/');
+  const dateParts = String(dateStr).split("/");
   if (dateParts.length !== 3) return null;
   const day = parseInt(dateParts[0], 10);
   const month = parseInt(dateParts[1], 10);
   const year = parseInt(dateParts[2], 10);
-  if (!Number.isFinite(day) || !Number.isFinite(month) || !Number.isFinite(year)) return null;
+  if (
+    !Number.isFinite(day) ||
+    !Number.isFinite(month) ||
+    !Number.isFinite(year)
+  )
+    return null;
   // UTC midnight to avoid TZ-induced day shifts when serialised back to YYYY-MM-DD.
   const date = new Date(Date.UTC(year, month - 1, day));
   if (isNaN(date.getTime())) return null;
-  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
     return null;
   }
   return date;
@@ -130,16 +142,20 @@ const ISO_DATE_RE = /^(\d{4})-(\d{2})-(\d{2})(?:[T\s]|$)/;
  * @returns {Date|null} UTC-midnight Date, or null when unparseable
  */
 export function parseDateFlexibleUtc(dateStr) {
-  const s = String(dateStr ?? '').trim();
+  const s = String(dateStr ?? "").trim();
   if (!s) return null;
   const iso = ISO_DATE_RE.exec(s);
   if (iso) {
-    const date = new Date(Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3])));
+    const date = new Date(
+      Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3])),
+    );
     return isNaN(date.getTime()) ? null : date;
   }
   const parsed = new Date(s);
   if (isNaN(parsed.getTime())) return null;
-  return new Date(Date.UTC(parsed.getFullYear(), parsed.getMonth(), parsed.getDate()));
+  return new Date(
+    Date.UTC(parsed.getFullYear(), parsed.getMonth(), parsed.getDate()),
+  );
 }
 
 // Date formats offered by the import UI and used by the custom-config adapters
@@ -147,7 +163,13 @@ export function parseDateFlexibleUtc(dateStr) {
 // truth so the two adapters can't drift. Each is parsed via Date.UTC so a row
 // never shifts a calendar day under a server TZ east of UTC; callers reject an
 // unsupported format up front rather than silently importing zero rows.
-export const SUPPORTED_DATE_FORMATS = ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y', '%Y-%m-%d %H:%M:%S'];
+export const SUPPORTED_DATE_FORMATS = [
+  "%Y-%m-%d",
+  "%d/%m/%Y",
+  "%m/%d/%Y",
+  "%d-%m-%Y",
+  "%Y-%m-%d %H:%M:%S",
+];
 
 /**
  * Parse a date string against one of SUPPORTED_DATE_FORMATS into a UTC-midnight
@@ -169,31 +191,39 @@ export function parseDateWithFormat(dateStr, fmt) {
    * @returns {Date|null}
    */
   const build = (y, m, d) => {
-    if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return null;
+    if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d))
+      return null;
     if (y < 100) return null; // 2-digit-year misparse (e.g. "24" → 1924)
     const date = new Date(Date.UTC(y, m - 1, d));
     if (isNaN(date.getTime())) return null;
-    if (date.getUTCFullYear() !== y || date.getUTCMonth() !== m - 1 || date.getUTCDate() !== d) {
+    if (
+      date.getUTCFullYear() !== y ||
+      date.getUTCMonth() !== m - 1 ||
+      date.getUTCDate() !== d
+    ) {
       return null;
     }
     return date;
   };
-  if (fmt.includes('%d/%m/%Y')) {
-    const [d, m, y] = dateStr.split('/').map((s) => parseInt(s, 10));
+  if (fmt.includes("%d/%m/%Y")) {
+    const [d, m, y] = dateStr.split("/").map((s) => parseInt(s, 10));
     return build(y, m, d);
   }
-  if (fmt.includes('%m/%d/%Y')) {
-    const [m, d, y] = dateStr.split('/').map((s) => parseInt(s, 10));
+  if (fmt.includes("%m/%d/%Y")) {
+    const [m, d, y] = dateStr.split("/").map((s) => parseInt(s, 10));
     return build(y, m, d);
   }
-  if (fmt.includes('%d-%m-%Y')) {
-    const [d, m, y] = dateStr.split('-').map((s) => parseInt(s, 10));
+  if (fmt.includes("%d-%m-%Y")) {
+    const [d, m, y] = dateStr.split("-").map((s) => parseInt(s, 10));
     return build(y, m, d);
   }
-  if (fmt.includes('%Y-%m-%d')) {
+  if (fmt.includes("%Y-%m-%d")) {
     // Covers both '%Y-%m-%d' and '%Y-%m-%d %H:%M:%S' — parse the date part only,
     // as UTC, so an early-morning timestamp can't roll back a day.
-    const [y, m, d] = dateStr.slice(0, 10).split('-').map((s) => parseInt(s, 10));
+    const [y, m, d] = dateStr
+      .slice(0, 10)
+      .split("-")
+      .map((s) => parseInt(s, 10));
     return build(y, m, d);
   }
   // Unknown format token: shared parser rebuilds the parsed calendar day at
@@ -209,13 +239,13 @@ export function parseDateWithFormat(dateStr, fmt) {
  * @returns {number} NaN when the cell isn't numeric
  */
 export function parseCommaDecimal(value) {
-  const s = String(value).replace(/\s/g, '');
+  const s = String(value).replace(/\s/g, "");
   // EU format: comma is the decimal separator and dots are thousands separators.
   // "1.234,56" must become "1234.56" — the old code only swapped the comma,
   // leaving "1.234.56" which Decimal rejects (NaN), silently dropping the row.
   // Only strip dots when a comma is present so a dot-decimal "12.5" is untouched.
-  if (s.includes(',')) {
-    return parseDecimalSafe(s.replace(/\./g, '').replace(',', '.'));
+  if (s.includes(",")) {
+    return parseDecimalSafe(s.replace(/\./g, "").replace(",", "."));
   }
   return parseDecimalSafe(s);
 }
@@ -228,35 +258,35 @@ export function parseCommaDecimal(value) {
  * @returns {number} NaN when the cell isn't numeric
  */
 export function parseAmountField(raw) {
-  let s = String(raw || '').trim();
+  let s = String(raw || "").trim();
   if (!s) return NaN;
-  s = s.replace(/\s/g, '');
-  s = s.replace(/[$€£¥]/g, '');
+  s = s.replace(/\s/g, "");
+  s = s.replace(/[$€£¥]/g, "");
   let negative = false;
-  if (s.startsWith('(') && s.endsWith(')')) {
+  if (s.startsWith("(") && s.endsWith(")")) {
     negative = true;
     s = s.slice(1, -1);
   }
-  if (s.startsWith('-')) {
+  if (s.startsWith("-")) {
     negative = !negative;
     s = s.slice(1);
-  } else if (s.startsWith('+')) {
+  } else if (s.startsWith("+")) {
     s = s.slice(1);
   }
-  const lastComma = s.lastIndexOf(',');
-  const lastDot = s.lastIndexOf('.');
+  const lastComma = s.lastIndexOf(",");
+  const lastDot = s.lastIndexOf(".");
   if (lastComma >= 0 && lastDot >= 0) {
     if (lastComma > lastDot) {
-      s = s.replace(/\./g, '').replace(',', '.');
+      s = s.replace(/\./g, "").replace(",", ".");
     } else {
-      s = s.replace(/,/g, '');
+      s = s.replace(/,/g, "");
     }
   } else if (lastComma >= 0) {
     const tail = s.length - lastComma - 1;
-    if (tail === 3 && s.indexOf(',') !== lastComma) {
-      s = s.replace(/,/g, '');
+    if (tail === 3 && s.indexOf(",") !== lastComma) {
+      s = s.replace(/,/g, "");
     } else {
-      s = s.replace(',', '.');
+      s = s.replace(",", ".");
     }
   }
   const n = parseDecimalSafe(s);
@@ -276,7 +306,9 @@ export function splitCsvLines(content) {
   // Strip the UTF-8 BOM (U+FEFF) that Excel and several Windows tools
   // prepend to exported CSVs. Without this, the first header byte leaks
   // into the first field and breaks every column-name lookup downstream.
-  return String(content).replace(UTF8_BOM_RE, '').split(/\r\n|\r|\n/);
+  return String(content)
+    .replace(UTF8_BOM_RE, "")
+    .split(/\r\n|\r|\n/);
 }
 
 /**
@@ -294,11 +326,15 @@ export function splitCsvLines(content) {
  * @param {string} [delimiter]
  * @returns {string[]|null}
  */
-export function splitDelimitedRecord(line, delimiter = ';') {
+export function splitDelimitedRecord(line, delimiter = ";") {
   try {
     // relax_quotes: bank exports occasionally leave a stray quote mid-field;
     // treat it as literal text instead of failing the whole row.
-    const rows = parse(line, { delimiter, relax_column_count: true, relax_quotes: true });
+    const rows = parse(line, {
+      delimiter,
+      relax_column_count: true,
+      relax_quotes: true,
+    });
     return rows.length > 0 ? rows[0] : null;
   } catch {
     return null;
@@ -312,7 +348,7 @@ export function splitDelimitedRecord(line, delimiter = ';') {
  * @returns {string|null}
  */
 export function buildOptionalComment(commentParts) {
-  return commentParts.length ? commentParts.join(' | ') : null;
+  return commentParts.length ? commentParts.join(" | ") : null;
 }
 
 /**
@@ -325,8 +361,8 @@ export function buildOptionalComment(commentParts) {
  * @returns {string}
  */
 export function canonicalIban(value) {
-  if (!value) return '';
-  return String(value).replace(/\s+/g, '').toUpperCase();
+  if (!value) return "";
+  return String(value).replace(/\s+/g, "").toUpperCase();
 }
 
 /**
@@ -343,9 +379,71 @@ export function canonicalIban(value) {
  * @param {BufferEncoding} [encoding]
  * @returns {Promise<any[]>}
  */
-export async function parseCsvFile(filePath, options, encoding = 'utf-8') {
-  const content = await fs.promises.readFile(filePath, encoding);
-  return parse(content, options);
+export async function parseCsvFile(filePath, options, encoding = "utf-8") {
+  const buffer = await fs.promises.readFile(filePath);
+  let content = buffer.toString(encoding);
+  if (encoding === "utf-8" && content.includes("\uFFFD")) {
+    content = buffer.toString("latin1");
+  }
+  return parseCsvText(content, options);
+}
+
+const RAW_CSV_RECORD = Symbol("vision.rawCsvRecord");
+
+/**
+ * Remove only the record delimiter reported by csv-parse. All other bytes in
+ * the decoded record, including quoting, embedded newlines and surrounding
+ * field whitespace, remain provenance.
+ *
+ * @param {unknown} raw
+ * @returns {string}
+ */
+export function stripTerminalRecordDelimiter(raw) {
+  return String(raw ?? "").replace(/(?:\r\n|\r|\n)$/, "");
+}
+
+/**
+ * Parse decoded CSV text and attach its literal source record to each parsed
+ * tuple/object without changing the public record shape adapters consume.
+ *
+ * @param {string} content
+ * @param {object} options
+ * @returns {any[]}
+ */
+export function parseCsvText(content, options) {
+  const parsed = parse(String(content).replace(UTF8_BOM_RE, ""), {
+    ...options,
+    info: true,
+    raw: true,
+  });
+  return parsed.map((/** @type {any} */ entry) => {
+    const record = entry?.record ?? entry;
+    if (
+      entry?.raw !== undefined &&
+      record &&
+      (typeof record === "object" || typeof record === "function")
+    ) {
+      Object.defineProperty(record, RAW_CSV_RECORD, {
+        configurable: false,
+        enumerable: false,
+        value: stripTerminalRecordDelimiter(entry?.raw),
+        writable: false,
+      });
+    }
+    return record;
+  });
+}
+
+/**
+ * Return the exact decoded CSV record attached by parseCsvFile/parseCsvText.
+ * The reconstruction fallback keeps unit-test stubs and non-CSV callers
+ * compatible, but production adapters all receive literal records.
+ *
+ * @param {Record<string, any>|any[]} record
+ * @returns {string}
+ */
+export function rawDataForCsvRecord(record) {
+  return record?.[RAW_CSV_RECORD] ?? buildRawRowString(record);
 }
 
 /**
@@ -355,5 +453,5 @@ export async function parseCsvFile(filePath, options, encoding = 'utf-8') {
  * @returns {string}
  */
 export function buildRawRowString(row) {
-  return Object.values(row).join('|');
+  return Object.values(row).join("|");
 }

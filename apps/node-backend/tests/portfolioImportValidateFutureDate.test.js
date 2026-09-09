@@ -77,7 +77,7 @@ describe("validateBatch — future-dated rows", () => {
 
     const update = findUnnestUpdate();
     expect(update).toBeTruthy();
-    const [, [ids, statuses, , , , errorMessages]] = update;
+    const [, [ids, statuses, , , , , , , errorMessages]] = update;
     const idx1 = ids.indexOf(1);
     const idx2 = ids.indexOf(2);
     expect(statuses[idx1]).toBe("error");
@@ -85,7 +85,7 @@ describe("validateBatch — future-dated rows", () => {
     expect(statuses[idx2]).toBe("validated");
   });
 
-  it("keeps repeated hashes validated for occurrence-aware commit deduplication", async () => {
+  it("keeps repeated records with occurrence-distinct fingerprints", async () => {
     const repeated = {
       tx_date: new Date("2020-01-01T00:00:00Z"),
       type_raw: "buy",
@@ -104,8 +104,35 @@ describe("validateBatch — future-dated rows", () => {
     const result = await validateBatch({ batchId: 7 });
 
     expect(result).toEqual({ validated: 2, errors: 0, duplicates: 0 });
-    const [, [, statuses, , , hashes]] = findUnnestUpdate();
+    const [, [, statuses, , , hashes, sourceHashes, , occurrences]] =
+      findUnnestUpdate();
     expect(statuses).toEqual(["validated", "validated"]);
-    expect(hashes[0]).toBe(hashes[1]);
+    expect(sourceHashes[0]).toBe(sourceHashes[1]);
+    expect(hashes[0]).not.toBe(hashes[1]);
+    expect(occurrences).toEqual([1, 2]);
+  });
+
+  it("keeps occurrence ordinals stable when validation resumes after a chunk", async () => {
+    const repeated = {
+      tx_date: new Date("2020-01-01T00:00:00Z"),
+      type_raw: "buy",
+      symbol_raw: "ACME",
+      units: 2,
+      price_per_unit: 50,
+      amount: 100,
+      raw_data: "byte-identical-fill",
+    };
+    wireQuery([
+      { ...repeated, id: 1, row_index: 0, status: "validated" },
+      { ...repeated, id: 2, row_index: 1, status: "pending" },
+    ]);
+
+    expect(await validateBatch({ batchId: 7 })).toEqual({
+      validated: 1,
+      errors: 0,
+      duplicates: 0,
+    });
+    const [, [, , , , , , , occurrences]] = findUnnestUpdate();
+    expect(occurrences).toEqual([2]);
   });
 });

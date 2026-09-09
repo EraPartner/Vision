@@ -32,6 +32,7 @@ const portfolioImportResultSchema = z.looseObject({
 
 const portfolioReviewRequiredSchema = z.looseObject({
     batch_id: z.number(),
+    skipped: z.number().optional(),
 });
 
 const PORTFOLIO_STREAM_SCHEMAS: Record<string, z.ZodType> = {
@@ -47,6 +48,8 @@ export type { AssetClassValue, PortfolioTxnTypeValue };
 export interface PortfolioCustomConfig {
     /** Optional file-level destination for every trade staged with this parser. */
     accountId?: number;
+    /** Format-specific parser. Omit for the generic column mapper. */
+    format?: "ibkr_transaction_history";
     dateColumn: string;
     typeColumn: string;
     symbolColumn: string;
@@ -148,6 +151,7 @@ function configToParams(
 ): URLSearchParams {
     const p = new URLSearchParams();
     p.append("adapter_name", adapterName);
+    if (config.format) p.append("portfolio_format", config.format);
     p.append("date_format", config.dateFormat);
     p.append("separator", config.separator);
     p.append("encoding", config.encoding);
@@ -255,12 +259,14 @@ export function importPortfolioCSVWithProgress(
                     const d = data as {
                         batch_id: number;
                         match_source_counts?: unknown;
+                        skipped?: number;
                     };
                     finalResult = {
                         batch_id: d.batch_id,
                         imported: 0,
                         duplicates: 0,
                         errors: 0,
+                        skipped: d.skipped,
                         status: "review_required",
                         requires_review: true,
                     };

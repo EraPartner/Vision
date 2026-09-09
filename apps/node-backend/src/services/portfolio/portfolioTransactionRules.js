@@ -56,6 +56,10 @@ import { PORTFOLIO_RECURRENCE_INTERVALS } from "@vision/types/recurrence";
  *           created this lot (migration 0086) — set only by the import commit path,
  *           NULL for manual entry. Rollback bulk-deletes on it.
  * @property {string} [preloaded_asset_class]
+ * @property {string|null} [tx_hash] occurrence-distinct legacy compatibility value.
+ * @property {string|null} [source_record_hash]
+ * @property {string|null} [dedup_fingerprint]
+ * @property {number|null} [dedup_fingerprint_version]
  */
 
 // The canonical recurrence vocabulary is shared with planned transactions.

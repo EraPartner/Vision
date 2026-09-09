@@ -87,6 +87,23 @@ const DEFAULT_CONFIG: PortfolioCustomConfig = {
     typeMapping: {},
 };
 
+const IBKR_TRANSACTION_HISTORY_CONFIG: PortfolioCustomConfig = {
+    ...DEFAULT_CONFIG,
+    format: "ibkr_transaction_history",
+    dateColumn: "Date",
+    typeColumn: "Transaction Type",
+    symbolColumn: "Symbol",
+    nameColumn: "",
+    unitsColumn: "Quantity",
+    priceColumn: "Price",
+    amountColumn: "Gross Amount",
+    feesColumn: "Commission",
+    currencyColumn: "Price Currency",
+    fxRateColumn: "Exchange Rate",
+    noteColumn: "Description",
+    typeMapping: { "Foreign Tax Withholding": "tax" },
+};
+
 const PortfolioImportIcon = PAGE_ICONS["/portfolio/import"];
 
 export function PortfolioImportPage() {
@@ -112,6 +129,7 @@ export function PortfolioImportPage() {
     const { confirm, ConfirmDialog } = useConfirmDialog();
 
     const isSaved = source.startsWith("saved:");
+    const isIbkrFormat = config.format === "ibkr_transaction_history";
     const selectedParser = isSaved
         ? savedParsers?.find((p) => p.id === Number(source.slice(6)))
         : undefined;
@@ -142,6 +160,11 @@ export function PortfolioImportPage() {
                     JSON.stringify({ name: parser.name, config: nextConfig }),
                 );
             }
+        } else if (val === "ibkr") {
+            const nextConfig = { ...IBKR_TRANSACTION_HISTORY_CONFIG };
+            setConfig(nextConfig);
+            setParserName("");
+            setParserBaseline(JSON.stringify({ name: "", config: nextConfig }));
         } else {
             setConfig(DEFAULT_CONFIG);
             setParserName("");
@@ -159,6 +182,10 @@ export function PortfolioImportPage() {
         }
         if (!hasRequiredMapping) {
             toast.error(t("portfolioImport.toast.noMapping"));
+            return;
+        }
+        if (isIbkrFormat && config.accountId == null) {
+            toast.error(t("portfolioImport.toast.brokerAccountRequired"));
             return;
         }
         if (isSaved && selectedParser) {
@@ -197,6 +224,10 @@ export function PortfolioImportPage() {
             toast.error(t("portfolioImport.toast.noMapping"));
             return;
         }
+        if (isIbkrFormat && config.accountId == null) {
+            toast.error(t("portfolioImport.toast.brokerAccountRequired"));
+            return;
+        }
 
         setLoading(true);
         setProgress({
@@ -208,10 +239,11 @@ export function PortfolioImportPage() {
             errors: 0,
             percent: 0,
         });
-        const adapterName =
-            isSaved && selectedParser
-                ? selectedParser.name
-                : parserName.trim() || "portfolio_generic";
+        const adapterName = isIbkrFormat
+            ? "ibkr_transaction_history"
+            : isSaved && selectedParser
+              ? selectedParser.name
+              : parserName.trim() || "portfolio_generic";
 
         try {
             const { abort, result } = apiClient.importPortfolioCSVWithProgress(
@@ -226,6 +258,14 @@ export function PortfolioImportPage() {
             abortRef.current = abort;
             const data = await result;
             abortRef.current = null;
+
+            if ((data.skipped ?? 0) > 0) {
+                toast.warning(
+                    t("portfolioImport.toast.rowsSkipped", {
+                        n: data.skipped as number,
+                    }),
+                );
+            }
 
             if (data.requires_review && data.batch_id) {
                 bypassNextNavigation();
@@ -242,13 +282,6 @@ export function PortfolioImportPage() {
                     icon: <CheckCircle2 className="h-4 w-4" />,
                 },
             );
-            if ((data.skipped ?? 0) > 0) {
-                toast.warning(
-                    t("portfolioImport.toast.rowsSkipped", {
-                        n: data.skipped as number,
-                    }),
-                );
-            }
             setFile(null);
             setProgress((p) =>
                 p ? { ...p, phase: "complete", percent: 100 } : null,
@@ -312,6 +345,12 @@ export function PortfolioImportPage() {
                                         {t("portfolioImport.newCustom")}
                                     </span>
                                 </SelectItem>
+                                <SelectItem value="ibkr">
+                                    <span className="inline-flex items-center gap-2">
+                                        <Bookmark className="h-3.5 w-3.5 text-primary" />
+                                        {t("portfolioImport.ibkrParser")}
+                                    </span>
+                                </SelectItem>
                                 {savedParsers?.map((parser) => (
                                     <SelectItem
                                         key={parser.id}
@@ -327,58 +366,67 @@ export function PortfolioImportPage() {
                         </Select>
                     </div>
 
-                    {/* Format options */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <SeparatorSelect
-                            id="pf-separator"
-                            value={config.separator}
-                            onChange={(v) =>
-                                setConfig({ ...config, separator: v })
-                            }
-                        />
-                        <DateFormatSelect
-                            id="pf-date-format"
-                            value={config.dateFormat}
-                            onChange={(v) =>
-                                setConfig({ ...config, dateFormat: v })
-                            }
-                        />
-                        <EncodingSelect
-                            id="pf-encoding"
-                            value={config.encoding}
-                            onChange={(v) =>
-                                setConfig({ ...config, encoding: v })
-                            }
-                        />
-                        <div className="space-y-2">
-                            <Label htmlFor="pf-skip-rows">
-                                {t("importPage.skipRows")}
-                            </Label>
-                            <Input
-                                id="pf-skip-rows"
-                                type="number"
-                                min="0"
-                                value={config.skipRows}
-                                onChange={(e) =>
-                                    setConfig({
-                                        ...config,
-                                        skipRows: Math.max(
-                                            0,
-                                            parseInt(e.target.value) || 0,
-                                        ),
-                                    })
-                                }
-                            />
-                        </div>
-                    </div>
+                    {isIbkrFormat ? (
+                        <p className="rounded-md border bg-muted/20 p-3 text-sm text-muted-foreground">
+                            {t("portfolioImport.ibkrParserHint")}
+                        </p>
+                    ) : (
+                        <>
+                            {/* Format options */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <SeparatorSelect
+                                    id="pf-separator"
+                                    value={config.separator}
+                                    onChange={(v) =>
+                                        setConfig({ ...config, separator: v })
+                                    }
+                                />
+                                <DateFormatSelect
+                                    id="pf-date-format"
+                                    value={config.dateFormat}
+                                    onChange={(v) =>
+                                        setConfig({ ...config, dateFormat: v })
+                                    }
+                                />
+                                <EncodingSelect
+                                    id="pf-encoding"
+                                    value={config.encoding}
+                                    onChange={(v) =>
+                                        setConfig({ ...config, encoding: v })
+                                    }
+                                />
+                                <div className="space-y-2">
+                                    <Label htmlFor="pf-skip-rows">
+                                        {t("importPage.skipRows")}
+                                    </Label>
+                                    <Input
+                                        id="pf-skip-rows"
+                                        type="number"
+                                        min="0"
+                                        value={config.skipRows}
+                                        onChange={(e) =>
+                                            setConfig({
+                                                ...config,
+                                                skipRows: Math.max(
+                                                    0,
+                                                    parseInt(e.target.value) ||
+                                                        0,
+                                                ),
+                                            })
+                                        }
+                                    />
+                                </div>
+                            </div>
 
-                    {/* Column mapping */}
-                    <PortfolioCsvColumnMapper
-                        file={file}
-                        separator={config.separator}
-                        config={config}
-                        onChange={setConfig}
-                    />
+                            {/* Column mapping */}
+                            <PortfolioCsvColumnMapper
+                                file={file}
+                                separator={config.separator}
+                                config={config}
+                                onChange={setConfig}
+                            />
+                        </>
+                    )}
 
                     <PortfolioBrokerField
                         id="pf-broker-account"
@@ -449,12 +497,14 @@ export function PortfolioImportPage() {
                     />
 
                     {/* Detected columns of the selected file */}
-                    <FileHeadersPanel
-                        file={file}
-                        separator={config.separator}
-                        highlightedHeaders={portfolioMappedColumns(config)}
-                        defaultCollapsed
-                    />
+                    {!isIbkrFormat && (
+                        <FileHeadersPanel
+                            file={file}
+                            separator={config.separator}
+                            highlightedHeaders={portfolioMappedColumns(config)}
+                            defaultCollapsed
+                        />
+                    )}
 
                     {/* Progress */}
                     {progress && loading && (
@@ -495,7 +545,11 @@ export function PortfolioImportPage() {
                     <div className="flex gap-2">
                         <Button
                             onClick={handleImport}
-                            disabled={!file || loading}
+                            disabled={
+                                !file ||
+                                loading ||
+                                (isIbkrFormat && config.accountId == null)
+                            }
                             className="flex-1 h-11"
                             size="lg"
                         >

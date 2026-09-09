@@ -3,9 +3,16 @@
  * column mapping / date format / separator.
  */
 
-import { logger } from '../../../config/logger.js';
-import { normalizeToUppercase } from '../../../lib/textNormalization.js';
-import { parseCsvFile, buildRawRowString, parseAmountField, SUPPORTED_DATE_FORMATS, parseDateWithFormat, normalizeIsoCurrency } from './_shared.js';
+import { logger } from "../../../config/logger.js";
+import { normalizeToUppercase } from "../../../lib/textNormalization.js";
+import {
+  parseCsvFile,
+  rawDataForCsvRecord,
+  parseAmountField,
+  SUPPORTED_DATE_FORMATS,
+  parseDateWithFormat,
+  normalizeIsoCurrency,
+} from "./_shared.js";
 
 /**
  * @typedef {import('./_shared.js').ParsedBankTransaction} ParsedBankTransaction
@@ -28,11 +35,11 @@ import { parseCsvFile, buildRawRowString, parseAmountField, SUPPORTED_DATE_FORMA
  * @property {string} [separator] CSV delimiter; defaults to ','
  * @property {number} [skip_rows] leading rows to drop before the header
  * @property {BufferEncoding} [encoding] defaults to 'utf-8'
- * @property {{ date: string, recipient: string, amount: string, memo?: string, currency?: string, balance?: string }} column_mapping source column NAMES, not indices
+ * @property {{ date: string, recipient: string, amount: string, memo?: string, currency?: string, balance?: string, source_id?: string }} column_mapping source column NAMES, not indices
  */
 
-const NAME = 'generic';
-const BANK_LABEL = 'Generic';
+const NAME = "generic";
+const BANK_LABEL = "Generic";
 
 // Normalize to UPPER+trim so the custom/generic adapter matches every built-in adapter and the
 // manual-entry path (transactionRepository.create uppercases bank_account) — otherwise the same
@@ -42,9 +49,11 @@ const BANK_LABEL = 'Generic';
  * @returns {string}
  */
 function buildBankAccount(config) {
-  const bankName = config.bank_name || 'CUSTOM';
+  const bankName = config.bank_name || "CUSTOM";
   const accountType = config.account_type;
-  const label = accountType ? `${bankName} ${accountType.toUpperCase()}` : bankName;
+  const label = accountType
+    ? `${bankName} ${accountType.toUpperCase()}`
+    : bankName;
   return normalizeToUppercase(label);
 }
 
@@ -55,17 +64,17 @@ function buildBankAccount(config) {
  */
 function rowToTransaction(row, config) {
   const colMap = config.column_mapping;
-  const dateStr = String(row[colMap.date] || '').trim();
+  const dateStr = String(row[colMap.date] || "").trim();
   if (!dateStr) return null;
 
-  const date = parseDateWithFormat(dateStr, config.date_format || '');
+  const date = parseDateWithFormat(dateStr, config.date_format || "");
   if (!date || isNaN(date.getTime())) return null;
 
   const amount = parseAmountField(row[colMap.amount]);
   if (isNaN(amount)) return null;
 
-  const recipient = String(row[colMap.recipient] || '').trim();
-  const memo = colMap.memo ? String(row[colMap.memo] || '').trim() : '';
+  const recipient = String(row[colMap.recipient] || "").trim();
+  const memo = colMap.memo ? String(row[colMap.memo] || "").trim() : "";
 
   // ISO-shape normalize (uppercase) or null → commit's EUR default; a raw
   // free-text cell failed the whole commit at the 0046 currency CHECK (500).
@@ -90,7 +99,10 @@ function rowToTransaction(row, config) {
     recipientAddress: null,
     recipientBankName: null,
     comment: null,
-    rawData: buildRawRowString(row),
+    rawData: rawDataForCsvRecord(row),
+    sourceId: colMap.source_id
+      ? String(row[colMap.source_id] || "").trim() || null
+      : null,
   };
 }
 
@@ -101,13 +113,13 @@ function rowToTransaction(row, config) {
  * @throws {Error} when `date_format` is not one of SUPPORTED_DATE_FORMATS
  */
 export async function parseWithConfig(filePath, config) {
-  const dateFormat = config.date_format || '';
+  const dateFormat = config.date_format || "";
   if (!SUPPORTED_DATE_FORMATS.includes(dateFormat)) {
     // Fail fast and loudly: a chosen-but-unimplemented format previously fell
     // through to `new Date(string)`, producing Invalid Date for every row and a
     // silent zero-row "successful" import.
     throw new Error(
-      `Unsupported date_format "${dateFormat}". Supported: ${SUPPORTED_DATE_FORMATS.join(', ')}`,
+      `Unsupported date_format "${dateFormat}". Supported: ${SUPPORTED_DATE_FORMATS.join(", ")}`,
     );
   }
 
@@ -116,11 +128,11 @@ export async function parseWithConfig(filePath, config) {
     {
       columns: true,
       skip_empty_lines: true,
-      delimiter: config.separator || ',',
+      delimiter: config.separator || ",",
       from: (config.skip_rows || 0) + 1,
       relax_column_count: true,
     },
-    config.encoding || 'utf-8',
+    config.encoding || "utf-8",
   );
 
   const transactions = /** @type {ParsedBankTransactions} */ ([]);
@@ -138,7 +150,9 @@ export async function parseWithConfig(filePath, config) {
   // Surface unparseable rows instead of silently dropping them (an all-rows-
   // skipped import otherwise "succeeds" with 0 transactions and no signal).
   transactions.skipped = skipped;
-  logger.info(`Generic CSV parsed: ${transactions.length} transactions, ${skipped} skipped`);
+  logger.info(
+    `Generic CSV parsed: ${transactions.length} transactions, ${skipped} skipped`,
+  );
   return transactions;
 }
 
@@ -157,9 +171,15 @@ export function detect() {
  */
 export async function parse(filePath, config) {
   if (!config) {
-    throw new Error('Generic adapter requires a customConfig');
+    throw new Error("Generic adapter requires a customConfig");
   }
   return parseWithConfig(filePath, config);
 }
 
-export default { name: NAME, bankName: BANK_LABEL, detect, parse, parseWithConfig };
+export default {
+  name: NAME,
+  bankName: BANK_LABEL,
+  detect,
+  parse,
+  parseWithConfig,
+};

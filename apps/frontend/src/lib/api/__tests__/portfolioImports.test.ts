@@ -14,6 +14,7 @@ import {
     overridePortfolioImportRows,
     commitPortfolioImportBatch,
     rollbackPortfolioImportBatch,
+    importPortfolioCSVCustom,
     type PortfolioCustomConfig,
 } from "@/lib/api/portfolioImports";
 
@@ -85,6 +86,36 @@ describe("portfolioImports API client", () => {
         );
         await createPortfolioParserConfig("Mine", config);
         expect(body).toEqual({ name: "Mine", config });
+    });
+
+    it("sends the IBKR format selector with a portfolio CSV import", async () => {
+        let requestedUrl = "";
+        server.use(
+            http.post(
+                `${API_BASE}/api/portfolio/import/csv/custom`,
+                ({ request }) => {
+                    requestedUrl = request.url;
+                    return ok({
+                        batch_id: 2,
+                        imported: 1,
+                        duplicates: 0,
+                        errors: 0,
+                    });
+                },
+            ),
+        );
+
+        await importPortfolioCSVCustom(
+            new File(["fixture"], "ibkr.csv", { type: "text/csv" }),
+            { ...config, format: "ibkr_transaction_history" },
+            "ibkr_transaction_history",
+            { isBrokerage: true, accountId: 7 },
+        );
+
+        const params = new URL(requestedUrl).searchParams;
+        expect(params.get("portfolio_format")).toBe("ibkr_transaction_history");
+        expect(params.get("is_brokerage")).toBe("true");
+        expect(params.get("account_id")).toBe("7");
     });
 
     it("updatePortfolioParserConfig PATCHes by id", async () => {

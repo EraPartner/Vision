@@ -52,14 +52,27 @@ export async function insert(payload) {
     columns.push("import_batch_id");
     values.push(payload.import_batch_id);
   }
+  if (payload.dedup_fingerprint) {
+    columns.push(
+      "source_record_hash",
+      "dedup_fingerprint",
+      "dedup_fingerprint_version",
+    );
+    values.push(
+      payload.source_record_hash ?? null,
+      payload.dedup_fingerprint,
+      payload.dedup_fingerprint_version,
+    );
+  }
   const result = await query(
     `INSERT INTO portfolio_transactions
        (${columns.join(", ")})
        VALUES (${columns.map((_, index) => `$${index + 1}`).join(", ")})
+       ON CONFLICT DO NOTHING
        RETURNING *`,
     values,
   );
-  return mapPortfolioTxRow(result.rows[0]);
+  return result.rows[0] ? mapPortfolioTxRow(result.rows[0]) : null;
 }
 
 /** @param {number} id @param {Record<string, any>} fields @param {PortfolioTransactionRow|null} [unchanged] */
