@@ -1,7 +1,7 @@
 /**
  * Adapter registry. Auto-registers every adapter in this directory and
- * exposes factory + detection helpers used by the import pipeline and legacy
- * bankAdapters.js shim.
+ * exposes factory + detection helpers used by the import pipeline and focused
+ * adapter tests.
  *
  * Each adapter module must default-export `{ name, bankName, detect, parse }`.
  */

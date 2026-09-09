@@ -81,17 +81,6 @@ export function clearMvCache() {
   mvCache.clear();
 }
 
-// Compatibility re-exports for callers outside the info-repository family.
-// Internal consumers import these helpers from their canonical owners.
-export { roundMoney as roundToCents } from "../lib/money.js";
-export { formatDateToYmd, toWireDate } from "../lib/dateFormat.js";
-export {
-  formatYearMonthKey,
-  addDaysUtc,
-  getDayKeyUtc,
-  extractYearMonth,
-} from "../lib/dateKeys.js";
-
 // ── Aggregation helpers ────────────────────────────────────────────────────
 
 /**

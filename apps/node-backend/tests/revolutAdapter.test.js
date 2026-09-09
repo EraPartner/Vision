@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { createAdapter } from "../src/services/bankAdapters.js";
+import { createAdapter } from "../src/services/importPipeline/adapters/index.js";
 
 import { useTempCSV } from "./helpers/tempFile.js";
 
