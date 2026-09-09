@@ -5,8 +5,8 @@ method: POST, GET, PATCH, DELETE
 path: /api/import
 description: CSV import for transactions, recipients, and categories; CRUD for saved named custom CSV parsers
 date: 2026-08-31
-updated: 2026-08-31
-last_modified: 2026-08-31
+updated: 2026-09-09
+last_modified: 2026-09-09
 tags:
   [
     api,
@@ -38,7 +38,10 @@ related_code:
 
 ## Overview
 
-The Imports API handles CSV file imports from various banks with automatic deduplication and category detection. Supports standard bank formats and custom configurations.
+The Imports API handles CSV file imports from various banks with automatic deduplication and
+category detection. Standard and custom adapters retain the exact logical CSV record in staging.
+Internal provenance hashes and versioned duplicate fingerprints are not returned by transaction
+API responses. See [[docs/adr/134-versioned-import-identity-and-exact-provenance|ADR-134]].
 
 ## Endpoints
 
@@ -234,7 +237,8 @@ TRANSPORT,GAS,Fuel purchases
 - **Phase Isolation**: Each phase is idempotent at its boundary; failures in any phase mark the batch as `failed` without cascading partial state.
 - **Temp File Cleanup**: Route-level cleanup uses non-blocking `fs.promises.unlink(...).catch(...)` to avoid blocking the event loop under concurrent imports ([[apps/node-backend/src/routes/importRoutes.js]]).
 - **Concurrent Row Processing**: Row batches are processed with adaptive concurrency calculated as `Math.max(2, Math.floor(poolMax / 2))` where `poolMax = max(DB_POOL_SIZE, DB_MAX_OVERFLOW)`. With default pool settings (poolMax=10), concurrency is 5. Batches use `Promise.allSettled` so one bad row doesn't stall others.
-- **Deduplication**: SHA-256 hash-based dedup checks via raw transaction tables (Belfius, Revolut, KBC, SABB, Wise, Vision) with fallback to field-based matching for unsupported banks.
+- **Deduplication**: provider-neutral, versioned occurrence fingerprints shared across every
+  adapter. Immutable provider IDs take precedence; normalized field identity is the fallback.
 - **Error Sanitization**: Route failures return generic `"Import failed"` detail without exposing internal exception details. Every SSE error also includes a stable `code`; validation failures use `VALIDATION_ERROR` and unexpected failures use `INTERNAL_SERVER_ERROR`.
 
 ## Test Updates (Phase C, April 2026)

@@ -990,6 +990,8 @@
             "label": "Import pipeline",
             "sub": "services/importPipeline",
             "kind": "service",
+            "path": "apps/node-backend/src/services/importPipeline/",
+            "desc": "Budgeting CSV pipeline. Adapters retain exact logical CSV records; services/importIdentity.js assigns byte-sensitive provenance hashes and versioned occurrence fingerprints shared with portfolio import (ADR-134).",
             "x": 40,
             "y": 448
           },
@@ -1275,7 +1277,7 @@
             "sub": "services/portfolioImportPipeline",
             "kind": "service",
             "path": "apps/node-backend/src/services/portfolioImportPipeline/",
-            "desc": "Parallel import pipeline for brokerage/exchange CSV trades (ADR-078). Phases: stage \u2192 validate \u2192 matchInvestments \u2192 commit. Reuses portfolioTransactionService.create for 2-of-3 unit math and oversell prevention. FX auto-resolved via fxResolve (ADR-074). Saved parsers stored in custom_parser_configs with kind='portfolio' (migration 0041). Batches tracked in portfolio_import_batches + portfolio_import_staging_rows (migration 0040).",
+            "desc": "Parallel import pipeline for brokerage/exchange CSV trades (ADR-078). Phases: stage \u2192 validate \u2192 matchInvestments \u2192 commit. Exact source provenance and versioned occurrence fingerprints are owned by services/importIdentity.js and shared with budgeting imports (ADR-134). FX is resolved via fxResolve (ADR-074).",
             "x": 40,
             "y": 740
           },
@@ -1479,19 +1481,19 @@
                 "from": "sv.import",
                 "to": "be.bankadapters",
                 "payload": "adapter.parseRow(line)",
-                "annotation": "Belfius adapter normalises EU decimals, CRLF, and DD/MM/YYYY dates."
+                "annotation": "Belfius adapter parses financial fields and retains the exact logical CSV record, including quoting and embedded newlines."
               },
               {
                 "from": "sv.import",
                 "to": "be.repos",
                 "payload": "importBatchRepository.insertStaged(rows)",
-                "annotation": "stage.js writes raw rows; validate.js + match.js run dedup (SHA-256) and recipient clustering."
+                "annotation": "stage.js writes exact raw records; validate.js calls services/importIdentity.js for separate provenance hashes and versioned occurrence fingerprints, then match.js runs recipient clustering."
               },
               {
                 "from": "be.repos",
                 "to": "db.postgres",
                 "payload": "INSERT INTO import_batches, import_staging_rows",
-                "annotation": "Raw rows persisted so the user can review or rollback later."
+                "annotation": "Migration 0103 metadata keeps exact provenance separate from duplicate identity so repeated legitimate rows remain reviewable and distinct."
               },
               {
                 "from": "be.routes",
@@ -2655,7 +2657,7 @@
                 "from": "sv.portfolioimport",
                 "to": "db.postgres",
                 "payload": "INSERT INTO portfolio_import_batches; INSERT INTO portfolio_import_staging_rows (migration 0040)",
-                "annotation": "stage.js parses the CSV via portfolioGenericAdapter and bulk-inserts raw rows into portfolio_import_staging_rows. validate.js resolves types via portfolioTypeNormalizer (type_mapping \u2192 built-in aliases \u2192 error if unknown), parses numerics, and marks duplicates against portfolio_transactions."
+                "annotation": "stage.js stores exact logical CSV records. validate.js resolves types and calls services/importIdentity.js for provenance hashes plus versioned, account-aware occurrence fingerprints (ADR-134)."
               },
               {
                 "from": "sv.portfolioimport",
@@ -2691,7 +2693,7 @@
                 "from": "sv.portfolioimport",
                 "to": "db.postgres",
                 "payload": "INSERT INTO portfolio_transactions (via portfolioTransactionService.create)",
-                "annotation": "Commit reuses the same service path as manual portfolio transaction entry, ensuring 2-of-3 math (units \u00d7 price \u2248 amount) and oversell prevention apply. Intra-batch dedup tracks (date,symbol,units,amount,currency) hashes to skip duplicates within the same upload."
+                "annotation": "Commit keeps portfolio validation and oversell rules, checks exact versioned fingerprints, and relies on migration 0103's partial unique index as the concurrent-import race guard."
               }
             ]
           },

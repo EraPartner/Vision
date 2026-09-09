@@ -3,8 +3,8 @@ title: Backup Coverage Audit
 type: feature
 status: active
 date: 2026-08-30
-updated: 2026-09-08
-last_modified: 2026-09-08
+updated: 2026-09-09
+last_modified: 2026-09-09
 tags: [feature, backup, restore, database, filesystem, localStorage, bundle, encryption, schema-migration, phase-1, phase-2, phase-7, passphrase-modal, ux, aead, aes-256-gcm, rolling-cache, concurrent-backup-guard, pre-restore-confirmation, watchdog-pause, safe-storage, keychain, lazy-safeStorage, settings-dialog-fix, backup-path-revert-fix]
 description: Authoritative audit of every persistence surface in Vision and its backup/restore coverage status. Phase 1+2 implements .visionbak bundle format with optional AES-256-CBC encryption (v1) or AES-256-GCM (v2, 2026-04-28), schema-safe restore, and localStorage hydration. Phase 7 (May 2026) hardens restore with user confirmation, concurrent-backup guard, and health watchdog pause. safeStorage is now accessed lazily to avoid macOS Keychain prompts for users without a stored passphrase. 2026-06-11: fixes "backup path keeps reverting to default" — settings dialog now loads backup settings on open; Electron IPC handlers correctly unwrap the response envelope.
 aliases: [backup audit, coverage audit, backup coverage, visionbak, bundle format]
@@ -64,62 +64,64 @@ All user-data tables are included in the `pg_dump` SQL artifact inside every `.v
 
 #### Raw Bank Import Tables
 
-| Table                          | Domain         | Backup      | Notes                            |
-| ------------------------------ | -------------- | ----------- | -------------------------------- |
-| `belfius_raw_transactions`     | Import         | ✅ Included |                                  |
-| `belgian_inflation_rates`      | Tax            | ✅ Included |                                  |
-| `cashflow_forecast_accuracy`   | Forecasting    | ✅ Included | Backtest metrics                 |
-| `cashflow_forecast_mc`         | Forecasting    | ✅ Included | Month-view Monte Carlo cache     |
-| `cashflow_forecast_mc_rolling` | Forecasting    | ✅ Included | Rolling-window Monte Carlo cache |
-| `categories`                   | Categorisation | ✅ Included |                                  |
-| `custom_parser_configs`        | Import         | ✅ Included | Custom bank parser configs       |
-| `custom_raw_transactions`      | Import         | ✅ Included |                                  |
-| `exchange_rates`               | FX             | ✅ Included | Rate cache                       |
-| `import_batches`               | Import         | ✅ Included | Import batch records             |
-| `import_staging_rows`          | Import         | ✅ Included | Staging rows before commit       |
-| `insight_cash_projections`     | Insights       | ✅ Included | Significant-move baseline        |
-| `insight_digest_state`         | Insights       | ✅ Included | Versioned navigation badge count |
-| `insight_dismissals`           | Insights       | ✅ Included | Server-visible user preferences  |
-| `investments`                  | Portfolio      | ✅ Included | Holdings                         |
-| `kbc_raw_transactions`         | Import         | ✅ Included |                                  |
-| `manual_raw_transactions`      | Import         | ✅ Included |                                  |
+| Table                          | Domain         | Backup      | Notes                                        |
+| ------------------------------ | -------------- | ----------- | -------------------------------------------- |
+| `belfius_raw_transactions`     | Import         | ✅ Included |                                              |
+| `belgian_inflation_rates`      | Tax            | ✅ Included |                                              |
+| `cashflow_forecast_accuracy`   | Forecasting    | ✅ Included | Backtest metrics                             |
+| `cashflow_forecast_mc`         | Forecasting    | ✅ Included | Month-view Monte Carlo cache                 |
+| `cashflow_forecast_mc_rolling` | Forecasting    | ✅ Included | Rolling-window Monte Carlo cache             |
+| `categories`                   | Categorisation | ✅ Included |                                              |
+| `custom_parser_configs`        | Import         | ✅ Included | Custom bank parser configs                   |
+| `custom_raw_transactions`      | Import         | ✅ Included |                                              |
+| `exchange_rates`               | FX             | ✅ Included | Rate cache                                   |
+| `import_batches`               | Import         | ✅ Included | Import batch records                         |
+| `import_staging_rows`          | Import         | ✅ Included | Exact source records and import fingerprints |
+| `insight_cash_projections`     | Insights       | ✅ Included | Significant-move baseline                    |
+| `insight_digest_state`         | Insights       | ✅ Included | Versioned navigation badge count             |
+| `insight_dismissals`           | Insights       | ✅ Included | Server-visible user preferences              |
+| `investments`                  | Portfolio      | ✅ Included | Holdings                                     |
+| `kbc_raw_transactions`         | Import         | ✅ Included |                                              |
+| `manual_raw_transactions`      | Import         | ✅ Included |                                              |
 
 #### Planning & Recurring
 
-| Table                               | Domain        | Backup      | Notes                   |
-| ----------------------------------- | ------------- | ----------- | ----------------------- |
-| `planned_transaction_executions`    | Planning      | ✅ Included | Execution history       |
-| `planned_transaction_loan_schedule` | Planning      | ✅ Included | Loan amortisation       |
-| `planned_transaction_tags`          | Planning      | ✅ Included |                         |
-| `planned_transactions`              | Planning      | ✅ Included | Recurring rules         |
-| `portfolio_performance_snapshots`   | Portfolio     | ✅ Included | Performance snapshots   |
-| `portfolio_transactions`            | Portfolio     | ✅ Included | Buy/sell history        |
-| `provider_health`                   | Observability | ✅ Included | Provider status history |
+| Table                               | Domain        | Backup      | Notes                                        |
+| ----------------------------------- | ------------- | ----------- | -------------------------------------------- |
+| `planned_transaction_executions`    | Planning      | ✅ Included | Execution history                            |
+| `planned_transaction_loan_schedule` | Planning      | ✅ Included | Loan amortisation                            |
+| `planned_transaction_tags`          | Planning      | ✅ Included |                                              |
+| `planned_transactions`              | Planning      | ✅ Included | Recurring rules                              |
+| `portfolio_performance_snapshots`   | Portfolio     | ✅ Included | Performance snapshots                        |
+| `portfolio_import_batches`          | Import        | ✅ Included | Portfolio import history                     |
+| `portfolio_import_staging_rows`     | Import        | ✅ Included | Exact source records and import fingerprints |
+| `portfolio_transactions`            | Portfolio     | ✅ Included | Buy/sell history and import fingerprints     |
+| `provider_health`                   | Observability | ✅ Included | Provider status history                      |
 
 #### Core Transactional Data
 
-| Table                        | Domain       | Backup      | Notes                  |
-| ---------------------------- | ------------ | ----------- | ---------------------- |
-| `recipient_bank_accounts`    | Recipients   | ✅ Included |                        |
-| `recipient_match_patterns`   | Recipients   | ✅ Included | Auto-match rules       |
-| `recipients`                 | Recipients   | ✅ Included |                        |
-| `revolut_raw_transactions`   | Import       | ✅ Included |                        |
-| `sabb_raw_transactions`      | Import       | ✅ Included |                        |
-| `saved_chart_categories`     | Charts       | ✅ Included | Category memberships   |
-| `saved_chart_recipients`     | Charts       | ✅ Included | Recipient memberships  |
-| `saved_chart_tags`           | Charts       | ✅ Included | Tag memberships        |
-| `saved_charts`               | Charts       | ✅ Included | Chart configurations   |
-| `split_audit`                | Splits       | ✅ Included | Split change audit log |
-| `split_payments`             | Splits       | ✅ Included |                        |
-| `tags`                       | Tags         | ✅ Included |                        |
-| `transaction_raw_references` | Import       | ✅ Included | Raw↔canonical links    |
-| `transaction_splits`         | Splits       | ✅ Included |                        |
-| `transaction_tags`           | Tags         | ✅ Included |                        |
-| `transactions`               | Transactions | ✅ Included | Primary ledger         |
-| `user_settings`              | Settings     | ✅ Included | All app settings       |
-| `vision_raw_transactions`    | Import       | ✅ Included |                        |
-| `watchlist`                  | Portfolio    | ✅ Included |                        |
-| `wise_raw_transactions`      | Import       | ✅ Included |                        |
+| Table                        | Domain       | Backup      | Notes                                  |
+| ---------------------------- | ------------ | ----------- | -------------------------------------- |
+| `recipient_bank_accounts`    | Recipients   | ✅ Included |                                        |
+| `recipient_match_patterns`   | Recipients   | ✅ Included | Auto-match rules                       |
+| `recipients`                 | Recipients   | ✅ Included |                                        |
+| `revolut_raw_transactions`   | Import       | ✅ Included |                                        |
+| `sabb_raw_transactions`      | Import       | ✅ Included |                                        |
+| `saved_chart_categories`     | Charts       | ✅ Included | Category memberships                   |
+| `saved_chart_recipients`     | Charts       | ✅ Included | Recipient memberships                  |
+| `saved_chart_tags`           | Charts       | ✅ Included | Tag memberships                        |
+| `saved_charts`               | Charts       | ✅ Included | Chart configurations                   |
+| `split_audit`                | Splits       | ✅ Included | Split change audit log                 |
+| `split_payments`             | Splits       | ✅ Included |                                        |
+| `tags`                       | Tags         | ✅ Included |                                        |
+| `transaction_raw_references` | Import       | ✅ Included | Raw↔canonical links                    |
+| `transaction_splits`         | Splits       | ✅ Included |                                        |
+| `transaction_tags`           | Tags         | ✅ Included |                                        |
+| `transactions`               | Transactions | ✅ Included | Primary ledger and import fingerprints |
+| `user_settings`              | Settings     | ✅ Included | All app settings                       |
+| `vision_raw_transactions`    | Import       | ✅ Included |                                        |
+| `watchlist`                  | Portfolio    | ✅ Included |                                        |
+| `wise_raw_transactions`      | Import       | ✅ Included |                                        |
 
 #### Excluded Tables
 

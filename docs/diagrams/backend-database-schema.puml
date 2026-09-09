@@ -35,6 +35,7 @@ entity "recipients" as recipients {
 entity "accounts" as accounts {
   * id : serial <<PK>>
   * name : text <<UQ normalized>>
+  * import_identity : uuid <<UQ>>
   display_name : text
   currency : varchar(3)
   * is_active : boolean
@@ -153,6 +154,9 @@ entity "investments" as investments {
   current_price : numeric(18,6)
   * currency : varchar(10)
   notes : text
+  source_record_hash : char(64)
+  dedup_fingerprint : char(64)
+  dedup_fingerprint_version : smallint
   is_active : boolean
   * price_provider : price_provider
   price_provider_id : varchar(200)
@@ -187,6 +191,9 @@ entity "portfolio_transactions" as portfolio_transactions {
   * currency : varchar(10)
   fx_rate_to_eur : numeric(20,10)
   note : text
+  source_record_hash : char(64)
+  dedup_fingerprint : char(64)
+  dedup_fingerprint_version : smallint
   * is_recurring : boolean
   recurrence_interval : recurrence_interval
   recurrence_end_date : date
@@ -455,6 +462,12 @@ entity "import_staging_rows" as import_staging_rows {
   * batch_id : bigint <<FK>>
   * row_index : integer
   raw_data : text
+  source_transaction_id : text
+  source_account_identity : text
+  dedup_occurrence : integer
+  source_record_hash : char(64)
+  dedup_fingerprint : char(64)
+  dedup_fingerprint_version : smallint
   resolved_recipient_id : integer <<FK>>
   resolved_bank_account_id : integer <<FK>>
   user_override_recipient_id : integer <<FK>>
@@ -506,6 +519,13 @@ entity "portfolio_import_staging_rows" as portfolio_import_staging_rows {
   currency : varchar(3)
   fx_rate : numeric
   note : text
+  raw_data : text
+  source_transaction_id : text
+  source_account_identity : text
+  dedup_occurrence : integer
+  source_record_hash : char(64)
+  dedup_fingerprint : char(64)
+  dedup_fingerprint_version : smallint
   resolved_investment_id : integer <<FK>>
   user_override_investment_id : integer <<FK>>
   match_source : text

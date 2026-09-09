@@ -3,8 +3,8 @@ title: Feature - CSV Import, Export, Attachments & Deduplication
 type: feature
 status: active
 date: 2026-04-24
-updated: 2026-09-04
-last_modified: 2026-09-04
+updated: 2026-09-09
+last_modified: 2026-09-09
 tags:
   [
     feature,
@@ -32,7 +32,7 @@ tags:
     category-review,
     bigserial-fix,
     staging-rows,
-    tx-hash-dedup,
+    import-fingerprint,
     race-safe-dedup,
     decimal-precision,
     ing,
@@ -64,7 +64,7 @@ aliases:
     data-import,
     streaming-import,
   ]
-description: Import transactions from bank CSV files with automatic deduplication, fuzzy/pattern recipient matching, per-row category review (ADR-046), May 2026 BIGSERIAL fix for staging row ID validation, saved named custom CSV parsers (ADR-066), June 2026 V12 (ADR-072) window-wide CSV drag-drop + Finder/dock open-with handoff, and June 2026 always-on FileHeadersPanel (header chip preview + sample-rows table shown for all adapters in TransactionImportCard).
+description: Import transactions from bank CSV files with versioned occurrence-aware deduplication, exact source-record provenance, fuzzy/pattern recipient matching, per-row category review, and saved named custom CSV parsers.
 related_code:
   [
     "apps/node-backend/src/services/importPipeline/index.js",
@@ -72,6 +72,7 @@ related_code:
     "apps/node-backend/src/services/importPipeline/validate.js",
     "apps/node-backend/src/services/importPipeline/match.js",
     "apps/node-backend/src/services/importPipeline/commit.js",
+    "apps/node-backend/src/services/importIdentity.js",
     "apps/node-backend/src/services/importBatchService.js",
     "apps/node-backend/src/services/dataImportService.js",
     "apps/node-backend/src/services/deduplication.js",
@@ -315,8 +316,9 @@ Each phase is idempotent at its boundary. On error, the batch is marked `failed`
   cells to uppercase. Blank or malformed free text becomes `EUR` immediately for Vision; the other
   six stage `NULL`, which the commit phase defaults to `EUR`, instead of reaching the database
   currency constraint as a raw error.
-- Store parsed rows in the `import_staging_rows` table (the original CSV line is retained in the
-  `raw_data` column)
+- Store parsed rows in `import_staging_rows`. `raw_data` retains the exact logical CSV record,
+  including source quoting, escaped quotes, and embedded newlines. The parser removes only the
+  terminal record delimiter.
 - Emit progress events: `{ phase: 'staging', current, total }`
 
 The transaction and portfolio pipelines share `importStageLifecycle.js` for the staging status
@@ -327,11 +329,10 @@ sequence. Their adapters and staging INSERT schemas remain domain-specific.
 
 - Check required fields (date, recipient, amount)
 - Parse amounts and dates to canonical form
-- Compute each row's `tx_hash` and flag rows that collide with an earlier row in the same batch.
-  When the adapter retained a literal `raw_data` record, that record is the complete hash input.
-  Rows without `raw_data` use `date|amount|recipient|memo|currency`, with blank currency represented
-  by the commit phase's `EUR` default. Existing-transaction checks happen during commit (see
-  _Deduplication_ below; there are no per-bank raw tables in this path).
+- Compute separate provenance and duplicate identities through `importIdentity.js`:
+  `source_record_hash` hashes literal `raw_data`, while the versioned `dedup_fingerprint` prefers an
+  immutable source transaction ID and otherwise uses normalized financial fields plus an
+  occurrence ordinal. Identical legitimate rows therefore remain distinct.
 - Mark invalid rows with error details
 - Emit progress events: `{ phase: 'validating', current, total, errors }`
 
@@ -348,7 +349,11 @@ sequence. Their adapters and staging INSERT schemas remain domain-specific.
 
 - Insert canonical transactions with per-row SAVEPOINT protection (if insert fails, transaction stays usable for remaining rows)
 - **BIGSERIAL Validation (2026-05-12):** [[apps/node-backend/src/services/importPipeline/commit.js]] (lines 101–105) validates staging row IDs via regex `/^\d+$/` instead of `Number.isInteger()`. Root cause: `import_staging_rows.id` is BIGSERIAL; the `pg` driver returns BIGINT values as strings to preserve int64 precision. The old `Number.isInteger("123")` check failed silently, counting all rows as errors before any INSERT. New regex accepts string-form bigints and is injection-safe for SAVEPOINT identifiers.
-- **Transaction Hash Deduplication (2026-05-14; currency fallback hardened 2026-08-31):** Transaction INSERT statements include a `tx_hash` column and use `ON CONFLICT (tx_hash) WHERE tx_hash IS NOT NULL DO NOTHING RETURNING id` for race-safe deduplication. The hash uses the literal retained source record when available, or the currency-aware fallback identity described above. It is stored in the canonical `transactions` table (via migration [[alembic/versions/0036_add_transactions_tx_hash.py]]). Intra-batch validation tracks hashes in a Set; a second row with an identical `tx_hash` in the same batch is marked `duplicate`.
+- **Versioned import identity (2026-09-09):** migration 0103 adds a partial unique index over
+  `(dedup_fingerprint_version, dedup_fingerprint)`. Commit treats that index as the race guard. New
+  imports also copy the fingerprint into legacy `tx_hash`; historical `tx_hash` values are not
+  changed. Rows without a versioned fingerprint use the legacy occurrence-count compatibility
+  path.
 - **Deleted batch metadata (2026-08-31):** deleting an `import_batches` row sets its committed transactions' `import_batch_id` to NULL but does not delete the transactions. Those orphaned rows remain eligible for field dedup even when the incoming source hash differs, so deleting history metadata cannot make an existing transaction silently re-importable. The differing-hash exemption applies only to two rows still owned by the same batch.
 - **Poison-row fallback (decision 2026-08-31):** a failed speculative bulk INSERT rolls its chunk back and replays that chunk through per-row savepoints. Vision retains this bounded amplification because it preserves valid siblings and exact per-row error reporting. The chunk cap is 1,000 rows; optimize by subdivision only if production import profiles show this exceptional path is material.
 - Errors are captured and logged per row (the current pipeline does **not** write per-bank raw
@@ -469,24 +474,23 @@ Field-based deduplication for transactions. Uses SHA-256 hash of `date|amount|re
 
 ### 3. Deduplication
 
-Uses SHA-256 over the literal `raw_data` source record when an adapter retained one. The fallback
-for rows without a raw record is:
+Duplicate identity is independent from exact source provenance. See
+[[docs/adr/134-versioned-import-identity-and-exact-provenance|ADR-134]].
 
-```
-date|amount|recipient|memo|currency
-```
-
-Blank currency and `EUR` intentionally share the same fallback identity because commit resolves
-both to `EUR`. The fallback does not silently uppercase direct staging values; adapter normalization
-owns that boundary, so invalid direct staging data still fails visibly.
+- `source_record_hash`: byte-sensitive SHA-256 of the literal logical CSV record; non-unique.
+- `dedup_fingerprint`: SHA-256 of a canonical, versioned tuple. The tuple includes domain,
+  account identity, currency, and either an immutable source transaction ID or normalized date,
+  amount, recipient, recipient account, and memo.
+- `dedup_occurrence`: one-based position among rows with the same fallback field identity. This
+  preserves two legitimate identical purchases while making a complete re-import a no-op.
 
 Duplicate detection checks:
 
-1. Intra-batch `tx_hash` equality during validation
-2. A cross-batch canonical field key over date, amount, recipient, memo, resolved account, and
-   currency during commit
-3. The canonical `transactions.tx_hash` partial unique index during insert, which closes concurrent
-   import races
+1. Exact versioned fingerprint lookup during commit.
+2. A legacy-only occurrence count for canonical rows that predate migration 0103. The count is the
+   union of exact historical source-hash matches and canonical-field matches, and each incoming
+   occurrence consumes at most one existing legacy row.
+3. The partial unique fingerprint index during insert, which closes concurrent import races.
 
 ### 4. Category Detection (ADR-046)
 
@@ -517,33 +521,28 @@ The review page (`ImportReviewPage`) discloses, before commit, which accounts th
 
 ## Deduplication Strategies
 
-### Transaction Hash (Canonical Table, May 2026)
+### Versioned Fingerprint (Canonical Table, September 2026)
 
-As of 2026-05-14, all transactions are deduplicated via a `tx_hash` column in the canonical `transactions` table:
+New imports are deduplicated through migration 0103 metadata:
 
 ```sql
-ALTER TABLE transactions ADD COLUMN tx_hash TEXT;
-CREATE UNIQUE INDEX uq_transactions_tx_hash
-  ON transactions (tx_hash) WHERE tx_hash IS NOT NULL;
+CREATE UNIQUE INDEX uq_transactions_dedup_fingerprint
+  ON transactions (dedup_fingerprint_version, dedup_fingerprint)
+  WHERE dedup_fingerprint IS NOT NULL;
 ```
 
-**Hash computation:** SHA-256 of the literal staged `raw_data` record when present. If a producer
-does not retain a raw record, the fallback is `date|amount|recipient|memo|currency`, with blank
-currency represented as `EUR`.
-
-Existing transaction hashes are not rewritten or backfilled when the fallback identity changes.
-Re-import compatibility instead comes from the commit phase's canonical field match, which compares
-date, amount, recipient, memo, resolved account, and currency even when the old and new hashes differ.
-This avoids adopting an ambiguous legacy currency-blind hash while keeping old same-currency imports
-idempotent. Newly generated hashes remain race-safe under the partial unique index.
+The canonical input is owned by `importIdentity.js`, not by individual adapters. Existing
+`transactions.tx_hash` values are not rewritten or backfilled because older adapters mixed literal
+and reconstructed inputs. New budgeting imports write the fingerprint into `tx_hash` only as a
+compatibility value; the versioned fingerprint index is authoritative.
 
 **Conflict handling:**
 
-- `INSERT ... ON CONFLICT (tx_hash) WHERE tx_hash IS NOT NULL DO NOTHING RETURNING id` (race-safe)
+- `INSERT ... ON CONFLICT DO NOTHING RETURNING id` is race-safe under the fingerprint index.
 - A conflict returns no inserted row, so the staged row is marked as a duplicate; it does not return
   the existing transaction's ID.
-- The pre-insert cross-batch field match preserves idempotence when compatible rows carry different
-  historical hashes, while the unique index closes races between concurrent imports.
+- The pre-insert legacy-only occurrence count preserves idempotence for historical canonical rows
+  without letting one legacy source-hash match suppress every repeated incoming occurrence.
 
 ### Bank-Specific Raw Table Hashes (Legacy — write-orphaned)
 
@@ -775,17 +774,27 @@ Import routes sanitize error details to prevent exposure of internal exception m
 
 ## Raw Transaction Storage
 
-Imported transactions are stored in raw tables:
+The active pipeline stores source records in its existing staging tables, not in the legacy
+bank-specific raw tables:
 
-- Original CSV line preserved
-- Deduplication hash for future imports
-- Links to normalized transactions
+- `import_staging_rows.raw_data` preserves the exact logical CSV record.
+- `source_record_hash` supports provenance integrity checks without being unique.
+- `dedup_fingerprint` and its version provide canonical import identity.
+- `import_batch_id` links the committed ledger row back to its batch.
 
 This allows:
 
 - Re-import without duplicates
 - Audit trail of original data
 - Multiple bank account management
+
+Deleting a batch clears canonical `import_batch_id` through its foreign key but leaves the ledger
+row and its fingerprint in place. Rollback deletes rows created by that batch. Backup and restore
+include both staging and canonical identity columns. Ordinary list, preview, and export APIs do not
+expose raw records or internal hashes.
+
+The startup retention sweep deletes terminal import batches older than 30 days. Their staging rows
+and exact source records cascade with the batch; canonical ledger rows and fingerprints remain.
 
 ## Export Formats
 

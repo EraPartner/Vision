@@ -3,8 +3,8 @@ title: Feature - Portfolio CSV Import
 type: feature
 status: active
 date: 2026-06-20
-updated: 2026-09-05
-last_modified: 2026-09-05
+updated: 2026-09-09
+last_modified: 2026-09-09
 tags:
   [
     feature,
@@ -29,7 +29,7 @@ tags:
     adr-091,
   ]
 aliases: [portfolio-import, portfolio-csv-import, brokerage-import]
-description: CSV import of brokerage and exchange trades into portfolio_transactions. Parallel pipeline (stage → validate → matchInvestments → review/autoCommit → commit) with symbol→name exact matching, conservative auto-commit policy, type normalization, FX auto-resolution, occurrence-aware field deduplication, and saved portfolio parser configs (kind=portfolio on custom_parser_configs).
+description: CSV import of brokerage and exchange trades with exact source provenance, shared versioned occurrence fingerprints, symbol matching, review, type normalization, FX resolution, and saved parser configs.
 related_code:
   - "apps/node-backend/src/services/portfolioImportPipeline/index.js"
   - "apps/node-backend/src/services/portfolioImportPipeline/stage.js"
@@ -37,7 +37,9 @@ related_code:
   - "apps/node-backend/src/services/portfolioImportPipeline/matchInvestments.js"
   - "apps/node-backend/src/services/portfolioImportPipeline/commit.js"
   - "apps/node-backend/src/services/portfolioImportPipeline/portfolioGenericAdapter.js"
+  - "apps/node-backend/src/services/portfolioImportPipeline/ibkrTransactionHistoryAdapter.js"
   - "apps/node-backend/src/services/portfolioImportPipeline/portfolioTypeNormalizer.js"
+  - "apps/node-backend/src/services/importIdentity.js"
   - "apps/node-backend/src/services/portfolioImportBatchService.js"
   - "apps/node-backend/src/routes/portfolioImportRoutes.js"
   - "apps/node-backend/src/routes/importBatchRoutes.js"
@@ -61,7 +63,13 @@ Portfolio CSV Import lets users bulk-load brokerage and exchange trade history f
 
 Key design points:
 
-- **Always custom-config driven**: no pre-built adapter for specific brokers; the column mapper covers all CSV shapes.
+- **Generic mapping plus an IBKR preset**: ordinary CSVs use the custom column mapper. The IBKR
+  Transaction History preset handles that report's multi-section and mixed-currency semantics. It
+  requires an active broker account because the same report contains both trades and cash movements.
+- **Maintained acceptance targets**: IBKR Transaction History is validated against a real EUR-base
+  export and a sanitized regression fixture. Nexo, Kinesis Money, and Saxo remain unverified until
+  their runtime-acceptance records are completed with sanitized real exports. Other brokers may
+  still work through user-defined mappings, but are not maintained compatibility targets.
 - **Instrument matching by symbol then name** (exact, case-insensitive). No ISIN lookup, no fuzzy match.
 - **Conservative auto-commit**: only when every row matched exactly and there are zero errors/unresolved.
 - **Review step for mismatches**: unresolved rows go to `awaiting_review`; the user links each symbol/name to an existing investment or creates a new one.
@@ -76,7 +84,31 @@ Key design points:
 
 **Module:** [[apps/node-backend/src/services/portfolioImportPipeline/stage.js]]
 
-Parses the uploaded CSV using the `portfolioGenericAdapter` (the only adapter; no pre-configured bank adapters exist for portfolio CSVs). Raw rows are stored in `portfolio_import_staging_rows`. The adapter reads columns according to the `column_mapping` in the config.
+Parses an ordinary uploaded CSV using `portfolioGenericAdapter`, which reads `column_mapping` from
+the config. When `format = 'ibkr_transaction_history'`, that entry point delegates to
+`ibkrTransactionHistoryAdapter`. Raw rows from either path are stored in
+`portfolio_import_staging_rows`.
+
+The IBKR adapter locates the `Transaction History,Header` record instead of treating the statement's
+first metadata row as the CSV header. It trims the real column names, reads the Summary base
+currency, retains each literal `Transaction History,Data` CSV record in staging `raw_data`, and
+applies these format-specific rules:
+
+- `-` symbol, currency, price, quantity, and fee placeholders become missing values.
+- Buy/sell units and prices stay in `Price Currency`. The base-currency gross amount is omitted so
+  the shared 2-of-3 rule derives `amount = units × price`; base-currency commission is converted
+  back with the statement exchange rate. An exported rate is stamped as `fx_rate_to_eur` only for
+  an EUR-base statement.
+- Dividend, tax, deposit, withdrawal, and adjustment amounts stay in the statement base currency.
+  `Foreign Tax Withholding` normalizes to `tax`; signed instrument-less adjustments normalize to a
+  deposit or withdrawal. Descriptions remain notes, so a cash-row description cannot masquerade as
+  an investment name.
+- `Forex Trade Component` rows are skipped and included in `rowsSkipped`. They describe the
+  base-currency side of a securities transaction and are not independent portfolio holdings.
+
+Regression coverage uses `tests/fixtures/portfolio/ibkr-transaction-history.csv`, a synthetic file
+that preserves the real section framing, exact headers, locale-comma decimals, dash placeholders,
+and row kinds without retaining account or transaction data from the supplied export.
 
 The transaction and portfolio pipelines share `importStageLifecycle.js` for the staging status
 transition, BIGSERIAL batch-id normalization, 500-row chunk loop, persisted total, and progress
@@ -148,7 +180,7 @@ For each valid, resolved staged row:
 - Calls `portfolioTransactionService.create` (shared with the manual transaction entry path), which enforces 2-of-3 unit math (units × price ≈ amount), oversell prevention, and asset-class routing.
 - **Account assignment:** if the batch has `account_id` set (migration 0057), each committed `portfolio_transaction` inherits that `account_id` so all lots from this import belong to the specified brokerage account.
 - **FX auto-resolution**: if the trade currency is not EUR and no `fx_rate` was mapped or present in the row, calls `fxResolve` ([[apps/node-backend/src/services/portfolio/fxResolve.js]]) to look up the historical EUR rate for the trade date (ADR-074 semantics).
-- **Occurrence-aware deduplication**: each trade identity includes `(investment, date, type, amount, units, account, currency)`. The i-th occurrence in the uploaded statement is paired with the i-th matching destination row. This preserves legitimate identical fills on first import, makes a complete reimport a no-op, and inserts only missing occurrences after a partial import.
+- **Occurrence-aware deduplication**: each trade identity includes `(investment, date, type, amount, units, account, currency)`. The i-th occurrence in the uploaded statement is paired with the i-th matching destination row. This preserves legitimate identical fills on first import, makes a complete reimport a no-op, and inserts only missing occurrences after a partial import. As in budgeting imports, every row also gets a hash derived from its retained source record. Portfolio commit deliberately uses occurrence matching instead of collapsing equal hashes because a broker statement may contain two legitimate byte-identical fills.
 - Per-row errors (oversell, missing investment after override, FX failure) are recorded as `rows_error` without aborting the batch.
 
 Progress event: `{ phase: 'committing', current, total, imported, duplicates, errors, percent }`
@@ -211,9 +243,26 @@ Converts raw CSV type strings → canonical `portfolio_txn_type` values:
 
 ## Deduplication
 
-Commit compares each staged trade with the count of destination rows sharing `(investment, date, type, amount, units, account, currency)`. It also counts how many times that identity has occurred in the current statement. An occurrence is a duplicate only when a corresponding destination occurrence already exists. This avoids both failure modes of a boolean or hash guard: cross-account trades remain distinct, and byte-identical same-account fills are not silently dropped.
+Portfolio and budgeting imports now share `importIdentity.js`; see
+[[docs/adr/134-versioned-import-identity-and-exact-provenance|ADR-134]]. Every row stores a
+byte-sensitive, non-unique `source_record_hash` separately from its versioned
+`dedup_fingerprint`. The fingerprint prefers an immutable provider transaction ID. Otherwise it
+uses normalized trade or cash fields plus a one-based occurrence ordinal.
 
-Cash rows use the same rule with `(account, date, signed amount, currency, memo)`. There is no SHA-256 hash column on `portfolio_transactions`; staging `tx_hash` is provenance and is not used to collapse repeated occurrences during commit.
+The identity includes currency, route, and source account identity, but not the selected adapter.
+When the source does not provide an account, the destination account's stable
+`accounts.import_identity` UUID is used. This keeps cross-account and cash-versus-trade rows
+separate while allowing the same export to move between parser paths. Repeated identical fills
+receive different fingerprints, while a full re-import reproduces the same fingerprint set.
+
+Commit first checks the exact fingerprint. Historical rows without migration 0103 metadata use the
+previous occurrence-count field match. The canonical partial unique fingerprint index is the race
+guard for concurrent imports.
+
+Rollback deletes the canonical trade or brokerage-cash rows and retains the batch for review, so a
+later commit can reuse its stored fingerprints. The startup retention sweep deletes terminal
+batches older than 30 days and cascades their staging provenance; canonical rows and fingerprints
+survive ordinary batch pruning.
 
 ---
 

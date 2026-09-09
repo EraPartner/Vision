@@ -3,10 +3,10 @@ title: API - Portfolio Imports
 type: endpoint
 method: POST, GET, PATCH, DELETE
 path: /api/portfolio/import
-description: CSV import of brokerage/exchange trades into portfolio_transactions; instrument matching with review step; CRUD for saved portfolio parser configs (kind=portfolio)
+description: CSV import of brokerage/exchange trades with review, exact source provenance, versioned duplicate identity, and saved portfolio parser configs
 date: 2026-06-18
-updated: 2026-09-05
-last_modified: 2026-09-05
+updated: 2026-09-09
+last_modified: 2026-09-09
 tags:
   [
     api,
@@ -50,6 +50,17 @@ related_code:
 
 The Portfolio Imports API handles CSV import of brokerage and exchange trades into `portfolio_transactions`. It is a parallel pipeline to the budgeting import (`/api/import`) and mirrors its structure: stage → validate → matchInvestments → (review|autoCommit) → commit.
 
+Exact source records remain internal staging provenance. Versioned occurrence fingerprints provide
+race-safe duplicate identity across generic and built-in adapters and are not exposed in API
+responses. See [[docs/adr/134-versioned-import-identity-and-exact-provenance|ADR-134]].
+
+The import path provides a generic user-configured mapper and a built-in IBKR Transaction History
+format. IBKR is validated against a real EUR-base export and a sanitized fixture. Nexo, Kinesis
+Money, and Saxo remain intended maintained targets whose compatibility is unverified until their
+runtime-acceptance records are completed with sanitized real exports. Kinesis Money import
+acceptance is distinct from Vision's existing Kinesis market-price provider. Users may configure
+other broker mappings, but those formats are not maintained compatibility targets.
+
 All routes are mounted at `/api/portfolio/import` with `importRateLimiter`.
 
 > [!info] Auto-commit policy
@@ -75,6 +86,7 @@ the same body-first rule.
 | --------------------- | ------- | -------- | ------------------------------------------------------------------------------------------------------------------------- |
 | `file`                | File    | Yes      | CSV file (max 50 MB)                                                                                                      |
 | `adapter_name`        | string  | No       | Display label for the import source (written as `bank_account` on portfolio_transactions)                                 |
+| `portfolio_format`    | string  | No       | Specialized parser; currently `ibkr_transaction_history`. Omit for generic column mapping                                 |
 | `date_format`         | string  | No       | Python strptime format; default `%Y-%m-%d`                                                                                |
 | `separator`           | string  | No       | Single-character CSV delimiter; default `,`                                                                               |
 | `encoding`            | string  | No       | File encoding; default `utf-8`                                                                                            |
@@ -94,9 +106,22 @@ the same body-first rule.
 | `default_asset_class` | string  | Yes      | Fallback asset class: `stock` `etf` `crypto` `metals` `real_estate` `savings` `bond`                                      |
 | `default_type`        | string  | No       | Fallback transaction type when no `type_column` is mapped (default `buy`): `buy` `sell` `dividend` `fee` `tax` `interest` |
 | `type_mapping`        | string  | No       | JSON object mapping raw CSV type strings → canonical portfolio_txn_type values (e.g. `{"Koop":"buy","Verkoop":"sell"}`)   |
+| `is_brokerage`        | boolean | IBKR*    | Must be `true` for IBKR Transaction History so its trade and cash rows use brokerage routing                              |
+| `account_id`          | integer | IBKR*    | Active broker account receiving every row; required with `is_brokerage` and for IBKR Transaction History                  |
 
 > [!warning] Symbol or name required
 > At least one of `symbol_column` or `name_column` must be provided. Both may be mapped simultaneously for best matching.
+
+The IBKR preset supplies the compatibility mapping fields but parses the multi-section statement
+with format-specific rules. Each accepted `Transaction History,Data` record is retained literally
+in the batch staging row's `raw_data` provenance field, including the source CSV quoting and column
+order. `Forex Trade Component` records increase the returned `skipped` count; they are not imported
+as currency holdings or cash movements. This is an additive, non-breaking API option. Existing
+generic requests are unchanged.
+
+IBKR Transaction History requests are rejected before staging unless `is_brokerage=true` and a
+valid `account_id` are supplied. This prevents deposit and withdrawal rows from entering the
+portfolio-only route without a cash ledger destination.
 
 **201 Response — committed:**
 
@@ -121,6 +146,7 @@ the same body-first rule.
   "data": {
     "batch_id": 43,
     "requires_review": true,
+    "skipped": 15,
     "match_source_counts": {
       "symbol_exact": 120,
       "name_exact": 15,
@@ -147,7 +173,7 @@ event: progress
 data: {"phase":"validating","current":150,"total":150,"errors":0,"percent":55}
 
 event: review_required
-data: {"batch_id":"43","requires_review":true,"match_source_counts":{"unresolved":10}}
+data: {"batch_id":43,"skipped":15,"match_source_counts":{"unresolved":10},"percent":70}
 
 event: complete
 data: {"batch_id":"42","total":150,"imported":148,"duplicates":1,"errors":1}
@@ -191,7 +217,7 @@ row count.
     "items": [
       {
         "id": 5,
-        "name": "Degiro Trades",
+        "name": "My Broker Trades",
         "config": {
           "accountId": 7,
           "dateFormat": "%d-%m-%Y",
@@ -227,7 +253,7 @@ Create a new saved portfolio parser configuration.
 
 ```json
 {
-  "name": "Degiro Trades",
+  "name": "My Broker Trades",
   "config": {
     "accountId": 7,
     "dateFormat": "%d-%m-%Y",

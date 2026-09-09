@@ -15,6 +15,13 @@ package "Import Pipeline" {
     +commitBatch(batchId, overrides): Promise<CommitResult>
   }
 
+  class ImportIdentity <<ADR-134>> {
+    +assignImportIdentities(rows, baseFor): Identity[]
+    +budgetingIdentityBase(row, adapter): IdentityBase
+    +portfolioIdentityBase(row, context): IdentityBase
+    +computeSourceRecordHash(rawData): string
+  }
+
   class DataImportService {
     +importRecipientsCSV(path, opts): Promise<ImportResult>
     +importCategoriesCSV(path, opts): Promise<ImportResult>
@@ -241,7 +248,7 @@ package "Thin Route Seams (ADR-067, June 2026)" {
 
 ' Relationships
 ImportPipeline --> BankAdapters
-ImportPipeline --> DeduplicationService
+ImportPipeline --> ImportIdentity
 ImportPipeline --> RecipientPatternService
 ImportPipeline --> RecipientRepository
 ImportPipeline --> TransactionRepository
@@ -287,6 +294,7 @@ BulkSelection --> FilterBuilder
 PortfolioTransactionService --> PortfolioTransactionRules
 PortfolioTransactionService --> PortfolioTransactionRepository
 PortfolioImportPipelineService --> PortfolioTransactionService
+PortfolioImportPipelineService --> ImportIdentity
 
 AiChatService --> AiChatRepository
 AiChatService --> "Ollama client"
