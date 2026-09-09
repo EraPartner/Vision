@@ -38,10 +38,10 @@
   ],
   "summary": {
     "total": 53,
-    "remove-now": 9,
-    "migrate-then-remove": 27,
+    "remove-now": 2,
+    "migrate-then-remove": 23,
     "retain-with-reason": 15,
-    "historical-record-only": 2,
+    "historical-record-only": 13,
     "unknown": 0
   },
   "records": [
@@ -326,10 +326,9 @@
       "id": "LEG-BE-BANK-ADAPTER-SHIM",
       "title": "Deprecated bankAdapters.js entrypoint",
       "domain": "backend/imports",
-      "classification": "remove-now",
-      "disposition": "Zero production importers; tests and the test-only-export allowlist are its only consumers.",
+      "classification": "historical-record-only",
+      "disposition": "Removed after tests moved to the canonical adapter registry and its test-only export allowlist entries were repointed.",
       "paths": [
-        "apps/node-backend/src/services/bankAdapters.js",
         "apps/node-backend/src/services/importPipeline/adapters/index.js",
         "scripts/check-test-only-exports.js"
       ],
@@ -343,15 +342,15 @@
         "remove obsolete test-only allowlist entries",
         "update stale docs"
       ],
-      "liveEvidence": "Repository-wide import search found no production importer.",
-      "todoTitle": "Remove the unused bank adapter compatibility entrypoint"
+      "liveEvidence": "Repository-wide import search finds no legacy entrypoint or importer.",
+      "todoTitle": null
     },
     {
       "id": "LEG-BE-INFO-HELPER-REEXPORTS",
       "title": "Unused infoRepositoryHelpers compatibility re-exports",
       "domain": "backend/repositories",
-      "classification": "remove-now",
-      "disposition": "Seven generic money/date helpers are re-exported from the repository helper but every current caller imports their canonical owner.",
+      "classification": "historical-record-only",
+      "disposition": "Removed after confirming that every caller imports the seven money and date helpers from their canonical owners.",
       "paths": [
         "apps/node-backend/src/repositories/infoRepositoryHelpers.js",
         "apps/node-backend/src/lib/money.js",
@@ -364,8 +363,8 @@
       "supportWindow": "None; internal exports with zero importers.",
       "replacement": "Direct imports from lib/money.js, lib/dateFormat.js, and lib/dateKeys.js.",
       "deletionDependencies": ["exact stale-import scan", "repository tests"],
-      "liveEvidence": "Static symbol-import search found zero compatibility re-export consumers.",
-      "todoTitle": "Remove unused info-repository compatibility re-exports"
+      "liveEvidence": "Static symbol and export search finds no compatibility re-exports or consumers.",
+      "todoTitle": null
     },
     {
       "id": "LEG-BE-APP-UTILITY-SHIMS",
@@ -505,7 +504,7 @@
       "title": "Multipart import mapping query fallbacks",
       "domain": "API/imports",
       "classification": "migrate-then-remove",
-      "disposition": "Not irrelevant today: the shipped frontend still sends bank and mapping options in query parameters.",
+      "disposition": "The shipped frontend now sends every bank, mapping, and brokerage option as a multipart field; backend query fallbacks remain for the one-release client window.",
       "paths": [
         "apps/node-backend/src/routes/importRoutes.js",
         "apps/frontend/src/lib/api/imports.ts",
@@ -513,7 +512,7 @@
         "openapi.yaml"
       ],
       "readers": "Budgeting and portfolio import routes merge query and body fields.",
-      "writers": "The shipped frontend writes query fallbacks while uploading only the file body.",
+      "writers": "The shipped frontend writes multipart fields across one-shot and server-sent events variants.",
       "persistedData": "Import configuration and staged financial rows; no legacy storage is created by the parameter location.",
       "supportWindow": "Migrate all shipped multipart clients to FormData fields, dual-accept for one release, then remove query fallback.",
       "replacement": "Multipart body fields with body-wins precedence.",
@@ -522,7 +521,7 @@
         "all import/SSE variants",
         "client support window"
       ],
-      "liveEvidence": "Active current frontend query writes are confirmed.",
+      "liveEvidence": "Frontend request-shape tests confirm body fields and query-free upload URLs; backend fallback removal remains release-gated.",
       "todoTitle": "Move import options into multipart bodies and retire query fallbacks"
     },
     {
@@ -663,12 +662,12 @@
       "id": "LEG-PKG-ASSET-CLASS-SHIM",
       "title": "Unused shared-utils assetClasses subpath",
       "domain": "packages/types",
-      "classification": "remove-now",
-      "disposition": "Private workspace compatibility subpath has zero repository importers; canonical constants live in @vision/types.",
+      "classification": "historical-record-only",
+      "disposition": "Removed after confirming that canonical asset-class constants live in @vision/types and no repository importer used the compatibility subpath.",
       "paths": [
-        "packages/shared-utils/src/assetClasses.js",
-        "packages/shared-utils/src/assetClasses.d.ts",
-        "packages/shared-utils/package.json"
+        "packages/shared-utils/package.json",
+        "packages/types/src/assetClasses.js",
+        "packages/types/src/assetClasses.d.ts"
       ],
       "readers": "No repository callers.",
       "writers": "None.",
@@ -680,15 +679,15 @@
         "typecheck/build",
         "stale-import scan"
       ],
-      "liveEvidence": "Exact import search found no callers outside the shim.",
-      "todoTitle": "Remove unused shared package compatibility exports"
+      "liveEvidence": "Exact import and package-export searches find no shared-utils assetClasses surface.",
+      "todoTitle": null
     },
     {
       "id": "LEG-FE-DEFAULT-SETTINGS-ALIAS",
       "title": "Deprecated defaultAppSettings export alias",
       "domain": "frontend/settings",
-      "classification": "remove-now",
-      "disposition": "Zero callers; canonical DEFAULT_APP_SETTINGS is imported from settingsStore.",
+      "classification": "historical-record-only",
+      "disposition": "Removed after confirming that callers use canonical DEFAULT_APP_SETTINGS from settingsStore.",
       "paths": [
         "apps/frontend/src/stores/hydration/AppSettingsHydration.tsx",
         "apps/frontend/src/stores/settingsStore.ts"
@@ -702,15 +701,15 @@
         "frontend typecheck",
         "settings hydration tests"
       ],
-      "liveEvidence": "Exact symbol search found only the export declaration.",
-      "todoTitle": "Remove unused frontend settings and asset-class exports"
+      "liveEvidence": "Exact symbol search finds no defaultAppSettings compatibility alias.",
+      "todoTitle": null
     },
     {
       "id": "LEG-FE-ASSET-CLASS-GROUPS",
       "title": "Deprecated English ASSET_CLASS_GROUPS constant",
       "domain": "frontend/portfolio",
-      "classification": "remove-now",
-      "disposition": "Zero callers; the translated getAssetClassGroups function is canonical.",
+      "classification": "historical-record-only",
+      "disposition": "Removed after confirming that translated getAssetClassGroups is canonical.",
       "paths": ["apps/frontend/src/types/portfolio.ts"],
       "readers": "No repository callers.",
       "writers": "None.",
@@ -718,15 +717,15 @@
       "supportWindow": "None; internal zero-use constant.",
       "replacement": "getAssetClassGroups(t).",
       "deletionDependencies": ["frontend typecheck", "exact symbol scan"],
-      "liveEvidence": "Exact symbol search found only the declaration.",
-      "todoTitle": "Remove unused frontend settings and asset-class exports"
+      "liveEvidence": "Exact symbol search finds no ASSET_CLASS_GROUPS constant.",
+      "todoTitle": null
     },
     {
       "id": "LEG-FE-ASSET-CLASS-LABELS",
       "title": "Deprecated English ASSET_CLASS_LABELS constant",
       "domain": "frontend/portfolio",
-      "classification": "migrate-then-remove",
-      "disposition": "Still used by portfolio overview and investment creation; direct deletion would regress labels and enumeration.",
+      "classification": "historical-record-only",
+      "disposition": "Removed after portfolio overview adopted translated labels and investment creation adopted canonical ASSET_CLASSES enumeration.",
       "paths": [
         "apps/frontend/src/types/portfolio.ts",
         "apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx",
@@ -741,15 +740,15 @@
         "translated caller migration",
         "portfolio UI tests"
       ],
-      "liveEvidence": "Direct current imports are confirmed.",
-      "todoTitle": "Migrate deprecated frontend type and label aliases"
+      "liveEvidence": "Exact symbol search finds no ASSET_CLASS_LABELS constant or caller.",
+      "todoTitle": null
     },
     {
       "id": "LEG-FE-INSIGHT-DEAD-EXPORTS",
       "title": "Unused pre-server insight dismissal exports",
       "domain": "frontend/insights",
-      "classification": "remove-now",
-      "disposition": "Dismiss/filter/listener helpers are used only by their legacy unit tests; the migration gate needs only load and replace operations plus types.",
+      "classification": "historical-record-only",
+      "disposition": "Removed while preserving the migration gate's load, replace, storage key, and state type surface.",
       "paths": [
         "apps/frontend/src/lib/insightsDismiss.ts",
         "apps/frontend/src/components/shared/LegacyInsightDismissalMigrationGate.tsx",
@@ -764,8 +763,8 @@
         "preserve minimal migration parser",
         "rewrite focused tests"
       ],
-      "liveEvidence": "Production import scan isolates the required migration-only exports.",
-      "todoTitle": "Remove unused legacy insight dismissal exports"
+      "liveEvidence": "Production and test imports use only the retained migration-store boundary.",
+      "todoTitle": null
     },
     {
       "id": "LEG-FE-INSIGHT-GATE",
@@ -795,12 +794,12 @@
       "id": "LEG-FE-MONEY-SHIM",
       "title": "Frontend @/lib/money re-export",
       "domain": "frontend/money",
-      "classification": "migrate-then-remove",
-      "disposition": "Redundant but active in six production modules.",
+      "classification": "historical-record-only",
+      "disposition": "Removed after all six production modules moved to @vision/shared-utils/money.",
       "paths": [
-        "apps/frontend/src/lib/money.ts",
         "apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx",
-        "apps/frontend/src/features/splits/SplitTransactionDialog.tsx"
+        "apps/frontend/src/features/splits/SplitTransactionDialog.tsx",
+        "packages/shared-utils/src/money.js"
       ],
       "readers": "Six production portfolio, account, planned, and split modules.",
       "writers": "None.",
@@ -812,15 +811,15 @@
         "financial tests",
         "frontend typecheck"
       ],
-      "liveEvidence": "Exact import count is six non-test runtime files.",
-      "todoTitle": "Migrate frontend money imports off the redundant local shim"
+      "liveEvidence": "Exact import and path searches find no frontend money shim or caller.",
+      "todoTitle": null
     },
     {
       "id": "LEG-FE-TYPE-ALIASES",
       "title": "Market and portfolio-import compatibility type names",
       "domain": "frontend/types",
-      "classification": "migrate-then-remove",
-      "disposition": "Small active type-only aliases with canonical shared equivalents.",
+      "classification": "historical-record-only",
+      "disposition": "Removed after market-search and portfolio-import callers adopted ResearchSearchItem, AssetClass, and PortfolioTxnType.",
       "paths": [
         "apps/frontend/src/types/research.ts",
         "apps/frontend/src/lib/api/market.ts",
@@ -836,15 +835,15 @@
         "caller type import migration",
         "frontend typecheck"
       ],
-      "liveEvidence": "Exact type import sites are known.",
-      "todoTitle": "Migrate deprecated frontend type and label aliases"
+      "liveEvidence": "Exact type search finds no MarketSearchResult, AssetClassValue, or PortfolioTxnTypeValue compatibility alias outside generated OpenAPI names.",
+      "todoTitle": null
     },
     {
       "id": "LEG-FE-CURRENCY-FORMATTER",
       "title": "Positional currency formatter decimals signature",
       "domain": "frontend/formatting",
-      "classification": "migrate-then-remove",
-      "disposition": "The legacy third argument is active in multiple runtime consumers.",
+      "classification": "historical-record-only",
+      "disposition": "Removed after all hook consumers adopted the currency formatter options object.",
       "paths": [
         "apps/frontend/src/hooks/useCurrencyFormatter.ts",
         "apps/frontend/src/pages/portfolio/RebalancePage.tsx",
@@ -860,8 +859,8 @@
         "format snapshots",
         "typecheck"
       ],
-      "liveEvidence": "Direct runtime call sites are present.",
-      "todoTitle": "Replace the legacy currency formatter call signature"
+      "liveEvidence": "Typecheck and exact caller searches pin the options-only hook signature.",
+      "todoTitle": null
     },
     {
       "id": "LEG-FE-TAX-PIT-ALIAS",
@@ -1086,8 +1085,8 @@
       "id": "LEG-ELEC-ARCHIVER7",
       "title": "Archiver v7 callable factory compatibility",
       "domain": "Electron/backup",
-      "classification": "remove-now",
-      "disposition": "Pinned dependencies resolve Archiver 8; createBundle only requests zip, leaving the v7 callable and tar/json branches unreachable.",
+      "classification": "historical-record-only",
+      "disposition": "Removed after createBundle and malformed-bundle fixtures adopted the lazy Archiver 8 ZipArchive constructor.",
       "paths": [
         "packaging/electron/backup/bundle.js",
         "packaging/electron/package.json"
@@ -1102,8 +1101,8 @@
         "round-trip restore",
         "lazy-load assertion"
       ],
-      "liveEvidence": "Manifest and lock resolve Archiver 8; no alternate format caller exists.",
-      "todoTitle": "Remove the obsolete Archiver v7 compatibility wrapper"
+      "liveEvidence": "Manifest and lock resolve Archiver 8; code search finds only ZipArchive construction.",
+      "todoTitle": null
     },
     {
       "id": "LEG-ELEC-USERDATA-NAME",

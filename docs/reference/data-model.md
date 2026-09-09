@@ -2,11 +2,71 @@
 title: Data Model Reference
 type: reference
 status: active
-date: 2026-04-24
+date: 2026-09-09
 updated: 2026-09-09
 last_modified: 2026-09-09
-tags: [reference, data-model, entities, database, schema, phase-5a, phase-0, phase-1, may-2026, tags, tagging, orthogonal-dimension, aggregations, migration-0035, saved-custom-parsers, custom-parser-configs, adr-066, fx-attribution, value-fx-neutral, adr-074, migration-0039, portfolio-import, portfolio-import-batches, portfolio-import-staging-rows, kind-discriminator, migration-0040, migration-0041, adr-078, show-in-ticker, investment-ticker-prefs, migration-0061, portfolio-ticker, balance-write-protection, trigger-lookup-only, split-guard, migration-0062, db-editor-audit, migration-0059, adr-101, provider-api-keys, instrument-provider-map, provider-quota, migration-0042, migration-0043, adr-079, cashflow-forecast-accuracy, cashflow-forecast-mc, cashflow-forecast-mc-rolling, migration-0012, migration-0013, migration-0016, materialized-views, mv-monthly-summary, mv-category-totals, migration-0094, monetary-precision, migration-0088, adr-112]
-description: Complete reference for all data entities in Vision — core, portfolio, planning, supporting, and aggregation entities. Includes exchange_rate_cache (Phase 0), aggregation tables (Phase 1, consolidated in 0035), attachment entity (Phase 5A), transaction tags (May 2026), custom_parser_configs (June 2026, ADR-066) with kind discriminator (June 2026, ADR-078 migration 0041), value_fx_neutral snapshot column (June 2026, ADR-074 migration 0039), portfolio_import_batches and portfolio_import_staging_rows (June 2026, ADR-078 migration 0040), watchlist.added_price (June 2026, ADR-097 migration 0058), portfolio_import_batches.account_id (June 2026, ADR-091 migration 0057), investment_ticker_prefs side table (June 2026, migration 0061), and supporting entities transaction_splits, split_payments, split_audit, import_batches, provider_health, recipient_match_patterns, asset_price_history (June 2026). 2026-06-25: balance field write-protected (import-pipeline-only); migration 0062 hardens the dual-write trigger (lookup-only on UPDATE) and adds enforce_split_within_amount BEFORE UPDATE trigger. 2026-08-11: added the previously-undocumented db_editor_audit (ADR-101, migration 0059), provider_api_keys/instrument_provider_map/provider_quota (ADR-079, migrations 0042/0043), and cashflow_forecast_accuracy/_mc/_mc_rolling (migrations 0012/0013/0016) tables. Two runtime materialized views remain live: mv_monthly_summary and mv_category_totals; migrations 0038, 0082, and 0094 retired three zero-reader projections. 2026-08-19: migration 0088 aligns transaction-ledger money columns to NUMERIC(18,4) and removes the legacy-only split-payment overpayment trigger (ADR-112).
+tags:
+  [
+    reference,
+    data-model,
+    entities,
+    database,
+    schema,
+    phase-5a,
+    phase-0,
+    phase-1,
+    may-2026,
+    tags,
+    tagging,
+    orthogonal-dimension,
+    aggregations,
+    migration-0035,
+    saved-custom-parsers,
+    custom-parser-configs,
+    adr-066,
+    fx-attribution,
+    value-fx-neutral,
+    adr-074,
+    migration-0039,
+    portfolio-import,
+    portfolio-import-batches,
+    portfolio-import-staging-rows,
+    kind-discriminator,
+    migration-0040,
+    migration-0041,
+    adr-078,
+    show-in-ticker,
+    investment-ticker-prefs,
+    migration-0061,
+    portfolio-ticker,
+    balance-write-protection,
+    trigger-lookup-only,
+    split-guard,
+    migration-0062,
+    db-editor-audit,
+    migration-0059,
+    adr-101,
+    provider-api-keys,
+    instrument-provider-map,
+    provider-quota,
+    migration-0042,
+    migration-0043,
+    adr-079,
+    cashflow-forecast-accuracy,
+    cashflow-forecast-mc,
+    cashflow-forecast-mc-rolling,
+    migration-0012,
+    migration-0013,
+    migration-0016,
+    materialized-views,
+    mv-monthly-summary,
+    mv-category-totals,
+    migration-0094,
+    monetary-precision,
+    migration-0088,
+    adr-112,
+  ]
+description: Complete reference for all data entities in Vision — core, portfolio, planning, supporting, and aggregation entities. Covers aggregation tables, attachments, transaction tags, custom parser configs, portfolio imports, provider configuration, forecast accuracy, and current materialized views. September 2026 migrations retire dormant import bank-account resolution state and the empty upgraded-install-only exchange-rate cache.
 aliases: [data model, entities, domain model, schema entities]
 related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 ---
@@ -441,32 +501,6 @@ is no active UI control or business-rule consumer. Flag enum types: `account_typ
 
 ---
 
-### ExchangeRateCache (legacy installs only)
-
-> [!warning] Legacy-only table — not in the consolidated baseline
-> `exchange_rate_cache` exists **only on databases upgraded through the pre-baseline legacy migration chain** (`migrate.js` legacy list). It is **not created by the consolidated `0001` baseline**, and no current application code references the table. The columns below describe the legacy shape for reference only; treat `exchange_rates` (above) as the live FX-cache table.
-
-**Purpose:** Cached exchange rates for any currency pair at any date. Complements `exchange_rates` (EUR-only) for full FX flexibility.
-
-| Field        | Type           | Constraints   | Description                     |
-| ------------ | -------------- | ------------- | ------------------------------- |
-| `id`         | SERIAL         | PK            | Unique identifier               |
-| `from_ccy`   | CHAR(3)        | NOT NULL      | Source currency code (ISO 4217) |
-| `to_ccy`     | CHAR(3)        | NOT NULL      | Target currency code (ISO 4217) |
-| `rate_date`  | DATE           | NOT NULL      | Date the rate applies           |
-| `rate`       | NUMERIC(20,10) | NOT NULL      | Exchange rate (from → to)       |
-| `fetched_at` | TIMESTAMPTZ    | DEFAULT NOW() | When this rate was fetched      |
-
-**Constraints:**
-
-- `UNIQUE(from_ccy, to_ccy, rate_date)` — No duplicate rate pairs on the same date
-- `CHECK (rate > 0)` — All rates must be positive
-- Indices: `idx_exchange_rate_cache_date` (for date range queries), `idx_exchange_rate_cache_from_to` (for pair lookups)
-
-**Related:** [[docs/integrations/currency-conversion|Currency Conversion]] (legacy migration `exchange_rate_cache`, applied only via `migrate.js`'s legacy chain — there is no `0025_exchange_rate_cache.py` in the consolidated `alembic/versions/`)
-
----
-
 ### BelgianInflationRate
 
 **Purpose:** Monthly Belgian inflation rates for portfolio adjustment.
@@ -565,7 +599,6 @@ is no active UI control or business-rule consumer. Flag enum types: `account_typ
 | `dedup_fingerprint`          | CHAR(64)      | NULLABLE                                                   | Versioned duplicate identity                                              |
 | `dedup_fingerprint_version`  | SMALLINT      | NULLABLE, paired with fingerprint                          | Fingerprint algorithm version                                             |
 | `resolved_recipient_id`      | INTEGER       | FK → recipients ON DELETE SET NULL, NULLABLE               | Recipient chosen by automatic matching                                    |
-| `resolved_bank_account_id`   | INTEGER       | FK → recipient_bank_accounts ON DELETE SET NULL, NULLABLE  | Reserved resolution; currently dormant in runtime code                    |
 | `matched_pattern_id`         | INTEGER       | FK → recipient_match_patterns ON DELETE SET NULL, NULLABLE | Match pattern used for automatic resolution                               |
 | `match_source`               | TEXT          | NULLABLE                                                   | Match provenance                                                          |
 | `match_similarity`           | REAL          | NULLABLE                                                   | Similarity score for the automatic match                                  |
@@ -575,9 +608,9 @@ is no active UI control or business-rule consumer. Flag enum types: `account_typ
 | `created_at`                 | TIMESTAMPTZ   | NOT NULL, DEFAULT NOW()                                    | Staging timestamp                                                         |
 | `updated_at`                 | TIMESTAMPTZ   | NOT NULL, DEFAULT NOW()                                    | Last matching, repair, or commit change; maintained by the shared trigger |
 
-Migration 0091 normalizes any pre-existing dangling resolved ids to `NULL`, adds the two missing foreign keys, and adds partial covering indexes for non-null references. Parent deletion clears only the affected stored resolution. Clearing `resolved_recipient_id` returns the row to the unresolved review path unless `user_override_recipient_id` still supplies a recipient; `resolved_bank_account_id` remains a reserved, dormant field.
+Migration 0091 normalizes dangling recipient ids to `NULL` and protects the active recipient-resolution fields. Migration 0104 removes the dormant bank-account resolution column only after a locked preflight proves that every value is null and every import batch is terminal. Its downgrade recreates the nullable foreign key and partial index without reconstructing data.
 
-**Related:** [[docs/features/import|Import Feature]], migration [[alembic/versions/0091_import_staging_resolved_fks.py|0091]]
+**Related:** [[docs/features/import|Import Feature]], migrations [[alembic/versions/0091_import_staging_resolved_fks.py|0091]] and [[alembic/versions/0104_drop_dormant_import_bank_resolution.py|0104]]
 
 ---
 

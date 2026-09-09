@@ -2,9 +2,9 @@
 title: Vision Project Knowledge Base
 type: index
 status: active
-date: 2026-08-31
-updated: 2026-09-08
-last_modified: 2026-09-08
+date: 2026-09-09
+updated: 2026-09-09
+last_modified: 2026-09-09
 tags:
   [
     knowledge-base,
@@ -786,9 +786,9 @@ See [[docs/adr/010-phase1-aggregation-strategy|ADR-010]], [[docs/performance/mat
 
 - **ADR-009**: Timezone policy established for deterministic business math across zones
 - **Patterns**: Golden-fixture regression testing, centralized SQL filter builder, typed error hierarchy
-- **Infrastructure**: Database fixture helper (TEST_DATABASE_URL), exchange_rate_cache table for arbitrary FX pairs
+- **Infrastructure**: Database fixture helper (`TEST_DATABASE_URL`); the historical arbitrary-pair `exchange_rate_cache` was later retired by migration 0105
 - **Testing**: New patterns documented for golden fixtures and database-dependent tests
-- **Migration**: 0025_exchange_rate_cache.py adds schema support for arbitrary FX pair caching
+- **Historical migration**: legacy `0025_exchange_rate_cache.py` added arbitrary-pair caching; current runtime uses `exchange_rates`
 
 See [[docs/adr/009-timezone-policy|ADR-009]], [[docs/reference/code-patterns|Code Patterns]], [[docs/testing/testing|Testing Documentation]], [[docs/integrations/currency-conversion|Currency Conversion]]
 

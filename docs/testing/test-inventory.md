@@ -2,7 +2,7 @@
 title: Test Inventory
 type: testing
 status: active
-date: 2026-04-30
+date: 2026-09-09
 last_modified: 2026-09-09
 updated: 2026-09-09
 last-updated: 2026-09-09
@@ -957,17 +957,17 @@ The Transaction Tags feature test suite is now **complete and passing**. All tes
 
 ### High-Priority Missing Tests
 
-| Area                         | Files                                          | Why It Matters                                                                                                                                                    |
-| ---------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Bank adapters**            | `bankAdapters.js` (Wise, SABB, Vision, others) | Core data ingestion — each bank adapter needs format-specific parsing tests                                                                                       |
-| ~~**Import pipeline**~~      | ~~`importPipeline/*.js`~~                      | ✓ **COVERED** (2026-05-05) — 11 tests (`importPipeline.test.js`) covering validateBatch, stageBatch, matchBatch, commitBatch phases with full error path coverage |
-| **Portfolio math utilities** | ~~`portfolioMath.js`~~                         | ✓ **COVERED** (2026-05-05) — 21 tests covering FIFO/LIFO cost basis, accrued interest, spike sanitization with DST safety                                         |
-| **Deduplication**            | `deduplication.js`                             | SHA-256 hashing and field-based matching logic                                                                                                                    |
-| **Recurring detection**      | `recurringDetectionService.js`                 | Complex interval detection algorithm                                                                                                                              |
-| **Currency conversion**      | `currencyConversionService.js`                 | Multi-source rate resolution, historical rates                                                                                                                    |
-| **Materialized views**       | `materializedViewService.js`                   | Call coalescing, concurrent refresh                                                                                                                               |
-| **Loan repayment**           | `loanRepaymentService.js`                      | Amortization calculations for 3 loan types                                                                                                                        |
-| **Text normalization**       | `textNormalization.js`                         | Recipient name cleaning, European number parsing                                                                                                                  |
+| Area                         | Files                                                   | Why It Matters                                                                                                                                                    |
+| ---------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Bank adapters**            | `importPipeline/adapters/` (Wise, SABB, Vision, others) | Core data ingestion — each bank adapter needs format-specific parsing tests                                                                                       |
+| ~~**Import pipeline**~~      | ~~`importPipeline/*.js`~~                               | ✓ **COVERED** (2026-05-05) — 11 tests (`importPipeline.test.js`) covering validateBatch, stageBatch, matchBatch, commitBatch phases with full error path coverage |
+| **Portfolio math utilities** | ~~`portfolioMath.js`~~                                  | ✓ **COVERED** (2026-05-05) — 21 tests covering FIFO/LIFO cost basis, accrued interest, spike sanitization with DST safety                                         |
+| **Deduplication**            | `deduplication.js`                                      | SHA-256 hashing and field-based matching logic                                                                                                                    |
+| **Recurring detection**      | `recurringDetectionService.js`                          | Complex interval detection algorithm                                                                                                                              |
+| **Currency conversion**      | `currencyConversionService.js`                          | Multi-source rate resolution, historical rates                                                                                                                    |
+| **Materialized views**       | `materializedViewService.js`                            | Call coalescing, concurrent refresh                                                                                                                               |
+| **Loan repayment**           | `loanRepaymentService.js`                               | Amortization calculations for 3 loan types                                                                                                                        |
+| **Text normalization**       | `textNormalization.js`                                  | Recipient name cleaning, European number parsing                                                                                                                  |
 
 ### Medium-Priority Missing Tests
 
@@ -1095,7 +1095,7 @@ Removed tests (2026-05-29):
 - `iban.test.js` — Deleted (orphan; `iban.js` removed)
 - `importService.test.js` — Superseded by route-level tests mocking unified orchestrator
 
-Related code: [[apps/node-backend/src/services/bankAdapters.js]], [[apps/node-backend/src/services/importPipeline/index.js]], [[docs/testing/testing|Testing Documentation]]
+Related code: [[apps/node-backend/src/services/importPipeline/adapters/index.js]], [[apps/node-backend/src/services/importPipeline/index.js]], [[docs/testing/testing|Testing Documentation]]
 
 ### Backend coverage addendum (2026-04-11, info routes)
 

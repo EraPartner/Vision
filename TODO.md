@@ -25,12 +25,14 @@ Run `bun run todo:list` for the concise queue and `bun run todo:check` for ledge
 This is the current hand-off point after the complete TODO normalization audit. Do not repeat a
 repository-wide audit before selecting work. The legacy compatibility inventory is now recorded in
 `docs/audits/legacy-surface-inventory.json`; do not repeat it without new evidence. Following the
-product exploration and legacy audit below, the queue contains **69 open records and no checked
+product exploration and legacy audit below, the queue contains **60 open records and no checked
 records**. The records fall into these states:
 
-- **13 verified-present**: source work is still required; revalidate the named evidence, then
+- **1 verified-present**: source work is still required; revalidate the named evidence, then
   implement one item at a time.
-- **4 runtime-unverified**: source work is complete or substantially complete; perform only the
+- **1 partial**: the frontend import clients now send multipart options in request bodies; retain
+  the backend query fallback until the supported client window has soaked.
+- **6 runtime-unverified**: source work is complete or substantially complete; perform only the
   named live database, Demo, browser, Electron, or external acceptance check.
 - **52 decision-needed**: planned outcomes expanded on 2026-09-08 and 2026-09-09; the shared analysis workspace
   direction is user-requested. This session authorizes planning, not implementation. Resolve the
@@ -815,14 +817,14 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
     marker. Keep the pre-cleanup backup until the post-contract acceptance is complete.
 
 - [ ] **Drop dormant import staging bank-account resolution state** 🔼
-  - Tracking: 🔎 verified-present 2026-09-09 (the column has no production reader or writer; only schema tests reference it)
+  - Tracking: 🔎 runtime-unverified 2026-09-09 (migration 0104, fail-closed lifecycle coverage, row types, schema tests, docs, and static migration checks are complete; disposable PostgreSQL 18 upgrade/downgrade proof is blocked because the managed sandbox cannot create PostgreSQL shared memory: `shmget(... size=56 ...)` returns `Operation not permitted`)
   - ↪ _from: Legacy compatibility inventory LEG-DB-RESOLVED-BANK-ACCOUNT_
   - Add a guarded Alembic upgrade and downgrade. Refuse the upgrade if any value is non-null or an
     active staging batch makes removal unsafe. Prove both directions on disposable PostgreSQL 18;
     never apply the migration to the maintained database in this task.
 
 - [ ] **Retire upgraded-install-only exchange_rate_cache safely** 🔼
-  - Tracking: 🔎 verified-present 2026-09-09 (the runtime uses `exchange_rates`; the old relation is absent from the fresh baseline and backup registry)
+  - Tracking: 🔎 runtime-unverified 2026-09-09 (migration 0105 now guards the exact empty legacy columns, defaults, constraints, PostgreSQL 18 index definitions, triggers, and fresh-install no-op, with downgrade/lifecycle coverage and docs complete; disposable PostgreSQL 18 execution is blocked by the same managed-sandbox `shmget(... size=56 ...)` shared-memory denial)
   - ↪ _from: Legacy compatibility inventory LEG-DB-EXCHANGE-RATE-CACHE_
   - Add a shape-guarded forward migration with a fresh-install no-op and an explicit downgrade or
     restore boundary. Preserve unexpected shapes or populated rows instead of dropping them.
@@ -850,57 +852,6 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
   - ↪ _from: Legacy compatibility inventory LEG-DB-RECURRENCE-ENUM_
   - Wait for ADR-109 cleanup, use `pg_depend` to prove zero consumers, decide the supported downgrade
     boundary, and then remove the type in a reversible PostgreSQL migration.
-
-- [ ] **Remove the unused bank adapter compatibility entrypoint** 🔼
-  - Tracking: 🔎 verified-present 2026-09-09 (zero production importers; tests and the test-only-export allowlist are its only consumers)
-  - ↪ _from: Legacy compatibility inventory LEG-BE-BANK-ADAPTER-SHIM_
-  - Repoint focused tests to the canonical import-pipeline adapter index, remove obsolete allowlist
-    entries and stale docs, then delete `services/bankAdapters.js`.
-
-- [ ] **Remove unused info-repository compatibility re-exports** 🔼
-  - Tracking: 🔎 verified-present 2026-09-09 (all callers import the seven money/date helpers from their canonical owners)
-  - ↪ _from: Legacy compatibility inventory LEG-BE-INFO-HELPER-REEXPORTS_
-  - Remove the re-exports after an exact stale-import scan and run the repository-helper tests.
-
-- [ ] **Remove unused shared package compatibility exports** 🔼
-  - Tracking: 🔎 verified-present 2026-09-09 (the private asset-class subpath has zero repository importers; canonical constants live in `@vision/types`)
-  - ↪ _from: Legacy compatibility inventory LEG-PKG-ASSET-CLASS-SHIM_
-  - Remove the source, declaration, and package export. Prove no stale imports and run typecheck and build.
-
-- [ ] **Remove unused frontend settings and asset-class exports** 🔼
-  - Tracking: 🔎 verified-present 2026-09-09 (`defaultAppSettings` and `ASSET_CLASS_GROUPS` have zero callers)
-  - ↪ _from: Legacy compatibility inventory LEG-FE-DEFAULT-SETTINGS-ALIAS and LEG-FE-ASSET-CLASS-GROUPS_
-  - Remove both exports while keeping `DEFAULT_APP_SETTINGS` and translated
-    `getAssetClassGroups` canonical. Run settings hydration and portfolio frontend tests.
-
-- [ ] **Remove unused legacy insight dismissal exports** 🔼
-  - Tracking: 🔎 verified-present 2026-09-09 (dismiss, filter, and listener helpers are used only by their old unit tests)
-  - ↪ _from: Legacy compatibility inventory LEG-FE-INSIGHT-DEAD-EXPORTS_
-  - Preserve the migration gate's minimal load, replace, and type surface; rewrite focused tests
-    around that boundary and delete the unrelated exports.
-
-- [ ] **Remove the obsolete Archiver v7 compatibility wrapper** 🔼
-  - Tracking: 🔎 verified-present 2026-09-09 (the lock resolves Archiver 8 and `createBundle` only requests zip)
-  - ↪ _from: Legacy compatibility inventory LEG-ELEC-ARCHIVER7_
-  - Remove the callable-factory and tar/json compatibility branches. Prove lazy loading plus backup
-    bundle creation and restore round trips.
-
-- [ ] **Migrate frontend money imports off the redundant local shim** 🔼
-  - Tracking: 🔎 verified-present 2026-09-09 (the shim is redundant but still imported by six production modules)
-  - ↪ _from: Legacy compatibility inventory LEG-FE-MONEY-SHIM_
-  - Move the six callers to `@vision/shared-utils/money`, delete the shim, and run financial tests
-    plus frontend typecheck.
-
-- [ ] **Migrate deprecated frontend type and label aliases** 🔼
-  - Tracking: 🔎 verified-present 2026-09-09 (the aliases remain active in portfolio, market-search, and import UI callers)
-  - ↪ _from: Legacy compatibility inventory LEG-FE-ASSET-CLASS-LABELS and LEG-FE-TYPE-ALIASES_
-  - Move callers to translated asset-class helpers and canonical shared types, then remove the aliases
-    with focused portfolio/import tests and frontend typecheck.
-
-- [ ] **Replace the legacy currency formatter call signature** 🔼
-  - Tracking: 🔎 verified-present 2026-09-09 (multiple runtime consumers still use the positional third argument)
-  - ↪ _from: Legacy compatibility inventory LEG-FE-CURRENCY-FORMATTER_
-  - Move callers to the canonical options shape, update format snapshots, and remove the old signature.
 
 - [ ] **Migrate and remove the Belgian tax federalPITTotal alias** 🔼
   - Tracking: 🔎 decision-needed 2026-09-09 (the alias is still emitted and may be present in persisted views or snapshots)
@@ -939,7 +890,7 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
     types with endpoint contract tests.
 
 - [ ] **Move import options into multipart bodies and retire query fallbacks** 🔼
-  - Tracking: 🔎 verified-present 2026-09-09 (the shipped frontend still sends bank and mapping options in query parameters)
+  - Tracking: 🔎 partial 2026-09-09 (every shipped one-shot and server-sent events import variant now sends bank, mapping, format, and brokerage options as multipart fields with query-free request tests; backend query fallbacks and OpenAPI compatibility remain until the supported client release window has soaked)
   - ↪ _from: Legacy compatibility inventory LEG-API-IMPORT-QUERY-FALLBACKS_
   - Migrate every import and server-sent events variant to multipart fields, soak the new requests for
     the supported client window, then remove backend query fallbacks and update OpenAPI.

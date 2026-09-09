@@ -2,10 +2,10 @@
 title: Testing Documentation
 type: testing
 status: active
-date: 2026-04-30
-updated: 2026-09-04
-last-updated: 2026-09-04
-last_updated_timestamp: 2026-09-04T00:00:00Z
+date: 2026-09-09
+updated: 2026-09-09
+last-updated: 2026-09-09
+last_updated_timestamp: 2026-09-09T00:00:00Z
 added_portfolio_math_tests: 2026-05-05
 added_import_pipeline_tests: 2026-05-05
 wired_real_db_harness: 2026-07-27
@@ -92,7 +92,14 @@ bun run test:db tests/services/transferReconciliation.db.test.js
 
 # Keep the generated cluster after the run to inspect diagnostics
 VISION_TEST_DB_KEEP=1 bun run test:db
+
+# Exercise guarded 0104/0105 retirement lifecycles on a fresh disposable cluster
+VISION_TEST_DB_TASK=legacy-retirements scripts/with-test-db.sh
 ```
+
+The `legacy-retirements` task refuses caller-managed database URLs. It verifies successful and
+fail-closed upgrades, downgrade shape restoration, and re-upgrade for the dormant import staging
+field and the upgraded-install-only exchange-rate cache.
 
 Requires the Python Alembic toolchain (`pip install -r config/requirements.txt`) because migrations are Alembic even though the backend is Node. `config/requirements.txt` is an exact, hash-verified lock compiled from `config/requirements.in`. The migration runner uses an explicit `ALEMBIC_BIN` first, then a tool beside `VISION_PYTHON_BIN`, `.venv-native-build`, the prepared standalone native runtime, a runnable repository `venv`, and finally `alembic` on `PATH`. It probes a candidate before selecting it, so a stale container-created virtual environment cannot cause an `ENOENT` failure.
 
@@ -1467,7 +1474,7 @@ Validation run (passed): `bun vitest run tests/categoryRepository.test.js tests/
 - `iban.test.js` — Deleted (orphan; `iban.js` removed)
 - `importService.test.js` — Superseded by route tests
 
-Related code: [[apps/node-backend/src/services/bankAdapters.js]], [[apps/node-backend/src/services/importPipeline/index.js]]
+Related code: [[apps/node-backend/src/services/importPipeline/adapters/index.js]], [[apps/node-backend/src/services/importPipeline/index.js]]
 
 Validation runs (Phase C):
 

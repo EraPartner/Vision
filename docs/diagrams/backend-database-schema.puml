@@ -469,7 +469,6 @@ entity "import_staging_rows" as import_staging_rows {
   dedup_fingerprint : char(64)
   dedup_fingerprint_version : smallint
   resolved_recipient_id : integer <<FK>>
-  resolved_bank_account_id : integer <<FK>>
   user_override_recipient_id : integer <<FK>>
   status : text
 }
@@ -532,17 +531,6 @@ entity "portfolio_import_staging_rows" as portfolio_import_staging_rows {
   * status : text DEFAULT 'pending'
   error_detail : text
   committed_txn_id : integer <<FK>>
-}
-
-entity "exchange_rate_cache" as exchange_rate_cache {
-  * id : serial <<PK>>
-  * base : text
-  * quote : text
-  * rate : numeric
-  * as_of : date
-  source : text
-  ---
-  UNIQUE (base, quote, as_of)
 }
 
 entity "cashflow_forecast_mc" as cashflow_forecast_mc {
@@ -654,7 +642,6 @@ provider_health ..> "external\nproviders" : observes
 import_staging_rows }o--|| import_batches
 import_staging_rows }o--o| recipients : resolved_recipient_id
 import_staging_rows }o--o| recipients : user_override_recipient_id
-import_staging_rows }o--o| recipient_bank_accounts : resolved_bank_account_id
 portfolio_import_staging_rows }o--|| portfolio_import_batches
 portfolio_import_staging_rows }o--o| investments : resolved_investment_id
 portfolio_import_staging_rows }o--o| investments : user_override_investment_id

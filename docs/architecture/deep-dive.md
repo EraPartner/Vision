@@ -2,11 +2,25 @@
 title: Architecture Deep Dive
 type: architecture-doc
 status: active
-date: 2026-04-02
-updated: 2026-08-27
-tags: [architecture, design-patterns, system-design, deep-dive, phase-5, dependency-slim-down]
+date: 2026-09-09
+updated: 2026-09-09
+tags:
+  [
+    architecture,
+    design-patterns,
+    system-design,
+    deep-dive,
+    phase-5,
+    dependency-slim-down,
+  ]
 description: Comprehensive architectural analysis of Vision's design patterns, data flow, and system organization. CORS and zero-dependency gzip compression are isolated middleware modules.
-aliases: [architecture deep dive, system design, design patterns, architectural patterns]
+aliases:
+  [
+    architecture deep dive,
+    system design,
+    design patterns,
+    architectural patterns,
+  ]
 ---
 
 # Architecture Deep Dive
@@ -56,6 +70,7 @@ Entity CRUD repository object:       Specialized repository functions:
 ```
 
 **Benefits:**
+
 - Decouples business logic from SQL
 - Enables easy mocking in tests
 - Predictable API within each repository responsibility
@@ -77,6 +92,7 @@ Bank Adapter Interface:
 ```
 
 **Implementations:**
+
 - BelfiusAdapter
 - RevolutAdapter
 - KBCAdapter
@@ -84,7 +100,7 @@ Bank Adapter Interface:
 - WiseAdapter
 - VisionAdapter
 
-**Implementation:** [[apps/node-backend/src/services/bankAdapters.js]]
+**Implementation:** [[apps/node-backend/src/services/importPipeline/adapters/index.js]]
 
 ### 3. Chain of Responsibility (Price Providers)
 
@@ -192,12 +208,12 @@ User Action
 
 ### State Management Layers
 
-| Layer | Technology | Scope | Lifetime |
-|-------|-----------|-------|----------|
-| **Server State** | React Query | API data | Configurable stale time |
-| **Global State** | React Context | App settings, theme, language | App lifetime |
-| **Local State** | useState/useReducer | Component-specific | Component lifetime |
-| **URL State** | React Router | Page params, filters | Navigation lifetime |
+| Layer            | Technology          | Scope                         | Lifetime                |
+| ---------------- | ------------------- | ----------------------------- | ----------------------- |
+| **Server State** | React Query         | API data                      | Configurable stale time |
+| **Global State** | React Context       | App settings, theme, language | App lifetime            |
+| **Local State**  | useState/useReducer | Component-specific            | Component lifetime      |
+| **URL State**    | React Router        | Page params, filters          | Navigation lifetime     |
 
 ---
 
@@ -249,12 +265,12 @@ Shared:
 
 ### Bottleneck Analysis
 
-| Component | Current Bottleneck | Scaling Solution |
-|-----------|-------------------|------------------|
-| PostgreSQL | Connection pool size | PgBouncer connection pooling |
-| Backend | Single event loop | Worker threads or clustering |
-| Frontend | Large dataset rendering | Virtual scrolling (already implemented) |
-| Import | CSV parsing speed | Streaming (already implemented) |
+| Component  | Current Bottleneck      | Scaling Solution                        |
+| ---------- | ----------------------- | --------------------------------------- |
+| PostgreSQL | Connection pool size    | PgBouncer connection pooling            |
+| Backend    | Single event loop       | Worker threads or clustering            |
+| Frontend   | Large dataset rendering | Virtual scrolling (already implemented) |
+| Import     | CSV parsing speed       | Streaming (already implemented)         |
 
 ---
 

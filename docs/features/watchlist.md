@@ -2,9 +2,9 @@
 title: Watchlist Feature
 type: feature
 status: active
-date: 2026-06-18
-last_modified: 2026-09-03
-updated: 2026-09-03
+date: 2026-09-09
+last_modified: 2026-09-09
+updated: 2026-09-09
 tags: [feature, watchlist, investments, tracking, alerts, phase-3.6, offline-resilience, online-status-detection, api-client-migration, validation, june-2026, backtest, added-price, adr-097, destructive-confirm]
 description: Investment watchlist for tracking securities not yet in the portfolio with target price alerts. June 2026: POST/PATCH return 400 ValidationError for invalid fields; what-if backtest shows return since add date using added_price (migration 0058, ADR-097).
 aliases: [watch list, price alerts, investment tracking]
@@ -134,7 +134,7 @@ Watchlist prices are updated when:
 
 - Replaced 3 raw `fetch()` calls with `searchMarket()`, `getMarketQuotes()`, `createWatchlistItem()` from api client
 - Removed hardcoded `API_BASE_URL` dependency (now sourced via api client)
-- Added `MarketSearchResult` type export from `[[apps/frontend/src/lib/api/market.ts]]`
+- Uses the canonical `ResearchSearchItem` type from `[[apps/frontend/src/types/research.ts]]`
 - Dialog now benefits from shared error handling, retry logic, and timeout controls
 
 ### Prefill from Market Lookup (2026-06-16)

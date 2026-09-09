@@ -2,11 +2,12 @@
 title: Integration - Bank Adapters
 type: integration
 description: Bank API integrations for CSV imports
-date: 2026-04-25
-updated: 2026-05-12
+date: 2026-09-09
+updated: 2026-09-09
 tags: [integration, bank, csv, import, ing, bnp]
 status: active
-related_code: [[apps/node-backend/src/services/importPipeline/adapters/index.js]]
+related_code:
+  [[apps/node-backend/src/services/importPipeline/adapters/index.js]]
 ---
 
 # Integration: Bank Adapters
@@ -18,6 +19,7 @@ Bank adapters parse CSV files from various banks into a normalized transaction f
 ## Architecture
 
 Each bank adapter:
+
 1. Parses bank-specific CSV format
 2. Normalizes to common transaction structure
 3. Generates deduplication hash
@@ -26,18 +28,21 @@ Each bank adapter:
 ## Supported Banks
 
 ### Belfius
+
 - **Fields**: own_account (col 0, IBAN), transaction_date, amount, recipient_name, recipient_account, balance
 - **Date Format**: DD/MM/YYYY
 - **Separator**: ;
 - **Features**: Full transaction details including BIC and location; account = own IBAN (col 0), canonicalized (ADR-088)
 
 ### Revolut
+
 - **Fields**: completed_date, amount, fee, currency, state
 - **Date Format**: ISO 8601
 - **States**: COMPLETED, PENDING, REVERTED, DECLINED
 - **Features**: Multi-currency support, fees tracking
 
 ### ING
+
 - **Fields**: booking_date, amount, counterparty_account, transaction_number, description, detail, message
 - **Date Format**: DD/MM/YYYY
 - **Separator**: ;
@@ -46,12 +51,14 @@ Each bank adapter:
 - **Features**: Counterparty IBAN, transaction reference, free-text message field
 
 ### KBC
+
 - **Fields**: own_account (col 0, `Rekeningnummer`, IBAN), transaction_date, amount, counterparty_name, structured_communication
 - **Date Format**: DD/MM/YYYY
 - **Separator**: ;
 - **Features**: Belgian structured communications (OCR); account = own IBAN (col 0), canonicalized (ADR-088)
 
 ### BNP Paribas Fortis
+
 - **Fields**: sequence_number, execution_date, amount, transaction_type, counterparty_iban, counterparty_name, memo, details, status
 - **Date Format**: DD/MM/YYYY
 - **Separator**: ;
@@ -60,20 +67,24 @@ Each bank adapter:
 - **Features**: Dutch-language export; supports comma and dot decimal formats (via `parseAmountField`); counterparty IBAN parsing
 
 ### SABB
+
 - **Fields**: transaction_date, posting_date, description, amount
 - **Date Format**: DD/MM/YYYY
 - **Features**: Posting date vs transaction date
 
 ### Wise
+
 - **Fields**: finished_on, source_amount, target_amount, exchange_rate, fee
 - **Date Format**: ISO 8601
 - **Features**: Multi-currency with exchange rates
 
 ### Vision (Internal)
+
 - **Fields**: date, recipient, memo, amount
 - **Purpose**: Internal format for manual entry
 
 ### Custom
+
 - **Purpose**: User-defined column mapping
 - **Configuration**: Date format, column names, separator
 - **Date Parsing (2026-04-25)**: Generic adapter now uses `Date.UTC()` with explicit numeric components for all date formats, eliminating timezone-dependent parsing of unpadded dates (e.g., `5/1/2025`). This ensures dates are parsed consistently regardless of the server's local timezone, preventing off-by-one date shifts during import.
@@ -96,14 +107,14 @@ Everything downstream is derived from the registry — `getSupportedBanks()`, th
 the UI catalog (`listAdapters()` → the import-statistics endpoint → the frontend picker), and
 hash/dedup — so no other files (and no i18n keys) need editing.
 
-> [!warning] Do not add adapters to `bankAdapters.js`
-> `apps/node-backend/src/services/bankAdapters.js` is a **deprecated re-export shim** (zero
-> importers) that only forwards to `importPipeline/adapters/index.js` for backward compatibility.
-> New adapters must live in the `importPipeline/adapters/` directory above.
+> [!note] Canonical registry
+> The former `services/bankAdapters.js` compatibility entrypoint has been removed. New adapters
+> live in `importPipeline/adapters/` and are registered in `adapters/index.js` as described above.
 
 ## Field Mapping
 
 Each adapter maps to standard transaction:
+
 ```javascript
 {
   date: Date,
@@ -121,20 +132,20 @@ Each adapter maps to standard transaction:
 `bankAccount` is the parsed string that becomes the transaction's **owning account**: at import,
 `importPipeline/commit.js` writes it to `transactions.bank_account`, and the dual-write trigger
 (migration 0051) resolves it to `account_id` (resolve-or-create an `accounts` row whose `name` is
-the trimmed string). So the value each adapter emits *is* the account identity.
+the trimmed string). So the value each adapter emits _is_ the account identity.
 
 **Per-adapter identifier:**
 
-| Adapter | `bankAccount` source | Example |
-|---|---|---|
-| Belfius | own IBAN — column 0 (`Rekening`), canonicalized | `BE81063756944024` |
-| KBC | own IBAN — column 0 (`Rekeningnummer`), canonicalized | `BE61734041478017` |
-| BNP Paribas Fortis | own IBAN — `Rekeningnummer` column, canonicalized | `BE…` |
-| ING | own IBAN — `Rekeningnummer` column, canonicalized | `BE…`/`NL…` |
-| Revolut | `REVOLUT <PRODUCT>` (per product) | `REVOLUT CURRENT` |
-| Wise | `WISE <CURRENCY>` (per currency) | `WISE EUR` |
-| Vision | the `Bank Account` column, UPPER+trim | `MAIN` |
-| Generic/Custom | `bank_name` (+ ` <ACCOUNT_TYPE>`), UPPER+trim | `MYBANK CHECKING` |
+| Adapter            | `bankAccount` source                                  | Example            |
+| ------------------ | ----------------------------------------------------- | ------------------ |
+| Belfius            | own IBAN — column 0 (`Rekening`), canonicalized       | `BE81063756944024` |
+| KBC                | own IBAN — column 0 (`Rekeningnummer`), canonicalized | `BE61734041478017` |
+| BNP Paribas Fortis | own IBAN — `Rekeningnummer` column, canonicalized     | `BE…`              |
+| ING                | own IBAN — `Rekeningnummer` column, canonicalized     | `BE…`/`NL…`        |
+| Revolut            | `REVOLUT <PRODUCT>` (per product)                     | `REVOLUT CURRENT`  |
+| Wise               | `WISE <CURRENCY>` (per currency)                      | `WISE EUR`         |
+| Vision             | the `Bank Account` column, UPPER+trim                 | `MAIN`             |
+| Generic/Custom     | `bank_name` (+ ` <ACCOUNT_TYPE>`), UPPER+trim         | `MYBANK CHECKING`  |
 
 **IBAN canonicalization (`canonicalIban` in `adapters/_shared.js`):** IBAN-based adapters (Belfius,
 KBC, BNP, ING) strip all whitespace and uppercase the account number, so a Belgian IBAN exported

@@ -1658,12 +1658,6 @@
                 "annotation": "Batch FX conversion with historical-rate fallback."
               },
               {
-                "from": "sv.currency",
-                "to": "db.postgres",
-                "payload": "SELECT * FROM exchange_rate_cache",
-                "annotation": "Cache-first; falls through to providers when stale."
-              },
-              {
                 "from": "be.repos",
                 "to": "sv.snapshot",
                 "payload": "computeMetrics + computeHeatmap + period filter",

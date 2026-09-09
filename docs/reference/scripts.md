@@ -74,6 +74,15 @@ Run root scripts with `bun run <name>`. Run workspace scripts with
 creates a private native PostgreSQL 18 cluster, enables required extensions, migrates it, runs the
 requested test task, and removes it on exit. It never uses the user's Vision database.
 
+For the guarded legacy-retirement migrations, run:
+
+```bash
+VISION_TEST_DB_TASK=legacy-retirements scripts/with-test-db.sh
+```
+
+This mode refuses caller-managed databases. It creates a disposable PostgreSQL 18 cluster and
+proves the 0104 and 0105 success, refusal, fresh-install, downgrade, and re-upgrade paths.
+
 ## Database
 
 | Script               | Purpose                                                             |

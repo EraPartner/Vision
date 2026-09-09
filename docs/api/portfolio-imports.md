@@ -4,7 +4,7 @@ type: endpoint
 method: POST, GET, PATCH, DELETE
 path: /api/portfolio/import
 description: CSV import of brokerage/exchange trades with review, exact source provenance, versioned duplicate identity, and saved portfolio parser configs
-date: 2026-06-18
+date: 2026-09-09
 updated: 2026-09-09
 last_modified: 2026-09-09
 tags:
@@ -74,9 +74,9 @@ All routes are mounted at `/api/portfolio/import` with `importRateLimiter`.
 
 One-shot portfolio CSV import. Runs the full pipeline synchronously. Returns 201 if all rows committed, 202 if review is required.
 
-Every mapping field may also be supplied as a compatibility query parameter. When the same field
-is present in both locations, the multipart body value is authoritative. The streaming upload uses
-the same body-first rule.
+The shipped one-shot and streaming clients send every mapping, adapter, format, brokerage, and
+account option as a multipart field. Query parameters remain a one-release compatibility fallback;
+when the same field is present in both locations, the multipart body value is authoritative.
 
 **Content-Type:** multipart/form-data
 

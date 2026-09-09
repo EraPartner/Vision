@@ -2,8 +2,8 @@
 title: Service Layer Reference
 type: reference
 status: active
-date: 2026-08-30
-last_modified: 2026-09-05
+date: 2026-09-09
+last_modified: 2026-09-09
 tags: [backend, services, reference, business-logic, phase-1, phase-c, import-pipeline, graceful-shutdown, bug-hunt-2026-05-05, error-handling, robustness, route-service-boundary, repo-service-boundary, layering, thin-seams, adr-067]
 description: Complete reference for backend service modules. June 2026 — all 15 route files now go through thin `services/<domain>Service.js` seams; the lint rule `vision-local/no-repo-direct-from-route` is enforced as ERROR. 14 new thin seam modules added. August 2026 — the inverse edge is enforced too: `vision-local/no-service-import-from-repo` is an ERROR on `src/repositories/**`, with a closed allowlist for the seven sanctioned currency-conversion importers.
 aliases: [services, service layer, business logic, backend services]
@@ -65,19 +65,16 @@ Top-level modules such as `priceProviderService`, `providerHealthService`, `quot
 
 ---
 
-## 1. bankAdapters.js _(deprecated shim)_
+## 1. Import adapter registry
 
-**File:** [[apps/node-backend/src/services/bankAdapters.js]]  
+**File:** [[apps/node-backend/src/services/importPipeline/adapters/index.js]]
 **Purpose:** Parses bank-specific CSV files into a unified transaction format.
 
-> [!warning] Source of truth moved to `importPipeline/adapters/`
-> `bankAdapters.js` is now a **deprecated re-export shim** (zero importers) that only forwards
-> `createAdapter`/`getSupportedBanks`/`detectBank`/`getAdapter` from
-> `services/importPipeline/adapters/index.js`. Adapters live one per module in that directory and
-> the registry is auto-discovered — see [[docs/integrations/bank-adapters#adding-new-banks|Adding
-> New Banks]] for the current recipe.
+The compatibility entrypoint `services/bankAdapters.js` was removed in September 2026. Adapters
+live one per module under `services/importPipeline/adapters/`, and callers use the registry
+directly. See [[docs/integrations/bank-adapters#adding-new-banks|Adding New Banks]].
 
-### Exported Functions (re-exported from the adapter registry)
+### Exported Functions
 
 | Function            | Signature                                               | Returns                                                                                                                            |
 | ------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
@@ -311,7 +308,7 @@ retains its adapter selection and domain-specific staging INSERT.
 
 ### Dependencies
 
-- `bankAdapters.js`, `deduplication.js`, `lib/textNormalization.js`
+- `importPipeline/adapters/index.js`, `deduplication.js`, `lib/textNormalization.js`
 - `materializedViewService.js` (post-pipeline refresh)
 - `importBatchRepository.js`, `connection.js`, `logger.js`
 

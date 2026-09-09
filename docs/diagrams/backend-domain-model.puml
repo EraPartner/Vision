@@ -309,18 +309,8 @@ package "Storage & Observability (May 2026)" {
     +row_index: integer
     +raw: jsonb
     +resolved_recipient_id: integer <<FK>>
-    +resolved_bank_account_id: integer <<FK>>
     +user_override_recipient_id: integer <<FK>>
     +status: text
-  }
-
-  class ExchangeRateCache {
-    +id: integer
-    +base: text
-    +quote: text
-    +rate: numeric
-    +as_of: date
-    +source: text
   }
 
   class CashflowForecastMc {

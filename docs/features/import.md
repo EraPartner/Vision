@@ -2,7 +2,7 @@
 title: Feature - CSV Import, Export, Attachments & Deduplication
 type: feature
 status: active
-date: 2026-04-24
+date: 2026-09-09
 updated: 2026-09-09
 last_modified: 2026-09-09
 tags:
@@ -341,7 +341,7 @@ sequence. Their adapters and staging INSERT schemas remain domain-specific.
 - Look up or create recipients
 - Look up or create categories (via recipient default or explicit mapping)
 - Resolve recipient aliases
-- Persist the automatic recipient match as a nullable foreign key. Migration 0091 also constrains the reserved `resolved_bank_account_id` field, although the current runtime does not populate or consume that field. Deleting either referenced parent clears only the affected stored resolution instead of leaving a dangling id; clearing the recipient match returns the row to review unless a user override still resolves it.
+- Persist the automatic recipient match as a nullable foreign key. Deleting the referenced recipient clears the stored resolution instead of leaving a dangling id; clearing the recipient match returns the row to review unless a user override still resolves it. Migration 0104 removes the never-used bank-account resolution field after a locked empty-state preflight.
 - **Unresolved rows stay `'matched'` (2026-08-09):** a row whose `recipient_raw` is blank or unnormalizable gets `status='matched'` with a NULL `resolved_recipient_id` — deliberately, because `'matched'` is the only staging status the review preview (`getPreviewRows`) and the recipient/category override endpoints accept, so it is what keeps the row visible and fixable on `ImportReviewPage`. `prepareImport` forces `awaiting_review` whenever `unresolved > 0`; commit decides any row still lacking a recipient into `'error'` (see phase 4).
 - Emit progress events: `{ phase: 'matching', current, total }`
 

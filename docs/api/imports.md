@@ -4,7 +4,7 @@ type: endpoint
 method: POST, GET, PATCH, DELETE
 path: /api/import
 description: CSV import for transactions, recipients, and categories; CRUD for saved named custom CSV parsers
-date: 2026-08-31
+date: 2026-09-09
 updated: 2026-09-09
 last_modified: 2026-09-09
 tags:
@@ -58,8 +58,9 @@ Import transactions from a CSV file using a predefined bank adapter.
 | file      | File   | Yes      | CSV file (max 50MB) |
 | bank_name | string | Yes      | Bank identifier     |
 
-`bank_name` belongs in the multipart body. A query parameter remains a compatibility fallback;
-when both are present, the body value wins. The same precedence applies to `/csv/stream`.
+The shipped clients send `bank_name` in the multipart body for both one-shot and streaming uploads.
+A query parameter remains a compatibility fallback for one release; when both are present, the body
+value wins.
 
 **Supported Banks:**
 
@@ -178,9 +179,8 @@ Bulk import recipients from CSV.
 | separator | string | No       | CSV separator |
 | encoding  | string | No       | File encoding |
 
-For compatibility, `separator` and `encoding` may also be supplied as query parameters. A present
-multipart body field is authoritative when both are supplied; the query value is only a fallback.
-This is the shared rule for every non-GET import parameter that accepts both locations.
+The shipped clients send `separator` and `encoding` as multipart fields. Query parameters remain a
+one-release compatibility fallback; a present body field is authoritative when both are supplied.
 
 **CSV Format:**
 
@@ -218,7 +218,8 @@ name,default_category
 
 Bulk import categories from CSV.
 
-`separator` and `encoding` follow the same body-first, query-fallback rule as the recipient import.
+`separator` and `encoding` follow the same shipped-body and temporary query-fallback rule as the
+recipient import.
 
 **Response:** `201 Created` (2026-08-09: `openapi.yaml` corrected — it had documented this route as 200)
 

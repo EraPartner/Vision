@@ -2,8 +2,8 @@
 title: AI Agent Codebase Navigation Map
 type: reference
 status: active
-date: 2026-04-24
-updated: 2026-08-26
+date: 2026-09-09
+updated: 2026-09-09
 tags:
   [
     ai-agent,
@@ -145,7 +145,7 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | [[apps/frontend/src/features/imports/CsvColumnMapper.tsx]]   | CSV column mapping UI (used by TransactionImportCard) |
 
 **Backend Route** | [[apps/node-backend/src/routes/importRoutes.js]] |
-**Backend Services** | [[apps/node-backend/src/services/importPipeline/index.js|importPipeline]] (orchestrator), [[apps/node-backend/src/services/bankAdapters.js]], [[apps/node-backend/src/services/deduplication.js]], [[apps/node-backend/src/lib/textNormalization.js]] |
+**Backend Services** | [[apps/node-backend/src/services/importPipeline/index.js|importPipeline]] (orchestrator), [[apps/node-backend/src/services/importPipeline/adapters/index.js|adapter registry]], [[apps/node-backend/src/services/deduplication.js]], [[apps/node-backend/src/lib/textNormalization.js]] |
 | API Doc | [[docs/api/imports]] |
 | Feature Doc | [[docs/features/import]] |
 
@@ -290,7 +290,7 @@ Full reference: [[docs/reference/service-layer|Service Layer Reference]]
 | Service               | File                                                                                       |
 | --------------------- | ------------------------------------------------------------------------------------------ |
 | AI Chat               | [[apps/node-backend/src/services/aiChatService.js]]                                        |
-| Bank Adapters         | [[apps/node-backend/src/services/bankAdapters.js]]                                         |
+| Bank Adapters         | [[apps/node-backend/src/services/importPipeline/adapters/index.js]]                        |
 | Belgian Inflation     | [[apps/node-backend/src/services/belgianInflationService.js]]                              |
 | Currency Conversion   | [[apps/node-backend/src/services/currency/currencyConversionService.js]]                   |
 | Data Import           | [[apps/node-backend/src/services/dataImportService.js]]                                    |
@@ -363,7 +363,7 @@ Directory: `alembic/versions/` — active revisions; read each file's
 
 1. Read [[docs/features/import|Import Feature]]
 2. Read [[docs/integrations/bank-adapters|Bank Adapters]]
-3. Trace: `importRoutes.js` → `importPipeline/index.js` (orchestrator) → stages: stage/validate/match/commit → `bankAdapters.js` → `deduplication.js`
+3. Trace: `importRoutes.js` → `importPipeline/index.js` (orchestrator) → stages: stage/validate/match/commit → `importPipeline/adapters/index.js` → `deduplication.js`
 4. See [[docs/api/imports|Imports API]] for endpoint contracts (standard, custom, streaming)
 
 ### "I want to understand how prices are fetched"

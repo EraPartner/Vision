@@ -2,8 +2,8 @@
 title: Form Dialogs
 type: component
 status: active
-date: 2026-04-23
-updated: 2026-08-27
+date: 2026-09-09
+updated: 2026-09-09
 tags: [components, forms, dialogs, settings, refactor, phase-3]
 description: Modal dialogs for adding, editing data, and configuring settings throughout the application
 aliases:
@@ -769,7 +769,7 @@ const handleReset = () => {
   setLocalExcludedRecipients([]);
   setLocalExcludeHidden(true);
   setLocalExclusionScope("everywhere");
-  setLocalAppSettings(defaultAppSettings);
+  setLocalAppSettings(DEFAULT_APP_SETTINGS);
   toast.info(t("settings.resetToDefaults"));
 };
 ```

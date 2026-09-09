@@ -2,11 +2,11 @@
 title: Testing Documentation Index
 type: testing-index
 status: active
-date: 2026-04-30
-updated: 2026-08-26
-last-updated: 2026-08-26
-modified: 2026-08-26
-last_updated_timestamp: 2026-08-26T00:00:00Z
+date: 2026-09-09
+updated: 2026-09-09
+last-updated: 2026-09-09
+modified: 2026-09-09
+last_updated_timestamp: 2026-09-09T00:00:00Z
 added_phase_f1_backend_drift_detection: 2026-05-02
 added_phase_f2_stale_refetch: 2026-05-02
 added_phase_f3_dialog_completeness: 2026-05-02
@@ -273,7 +273,7 @@ bun vitest run src/path/to/test.test.js
 
 - Added targeted backend adapter/import branch coverage for Wise, SABB, and Vision adapters plus import orchestration paths.
 - Tests: [[apps/node-backend/tests/wiseAdapter.test.js]], [[apps/node-backend/tests/sabbAdapter.test.js]], [[apps/node-backend/tests/visionAdapter.test.js]], [[apps/node-backend/tests/routes/import.test.js]] (Phase C)
-- Related code: [[apps/node-backend/src/services/bankAdapters.js]], [[apps/node-backend/src/services/importPipeline/index.js]]
+- Related code: [[apps/node-backend/src/services/importPipeline/adapters/index.js]], [[apps/node-backend/src/services/importPipeline/index.js]]
 - Details and validation context: [[docs/testing/testing|Testing Documentation]], [[docs/testing/test-inventory|Test Inventory]]
 
 ### Coverage update addendum (2026-04-11, info route dependency branches)
