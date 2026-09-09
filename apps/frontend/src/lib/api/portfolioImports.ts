@@ -9,8 +9,8 @@ import { postMultipartImport } from "@/lib/api/helpers";
 import { importProgressSchema } from "@/lib/api/imports";
 import { readSseStream } from "@/lib/api/sse";
 import type { ImportProgress } from "@/types/apiClient";
-import type { AssetClass as AssetClassValue } from "@vision/types/assetClasses";
-import type { PortfolioTxnType as PortfolioTxnTypeValue } from "@vision/types/portfolioTxnTypes";
+import type { AssetClass } from "@vision/types/assetClasses";
+import type { PortfolioTxnType } from "@vision/types/portfolioTxnTypes";
 import { ImportCancelledError } from "@/lib/api/importCancelled";
 
 /**
@@ -41,10 +41,6 @@ const PORTFOLIO_STREAM_SCHEMAS: Record<string, z.ZodType> = {
     review_required: portfolioReviewRequiredSchema,
 };
 
-// Unions derive from the canonical runtime arrays in @vision/types; re-exported
-// under their historical names so existing imports keep resolving.
-export type { AssetClassValue, PortfolioTxnTypeValue };
-
 export interface PortfolioCustomConfig {
     /** Optional file-level destination for every trade staged with this parser. */
     accountId?: number;
@@ -66,8 +62,8 @@ export interface PortfolioCustomConfig {
     separator: string;
     encoding: string;
     skipRows: number;
-    defaultAssetClass: AssetClassValue;
-    defaultType: PortfolioTxnTypeValue;
+    defaultAssetClass: AssetClass;
+    defaultType: PortfolioTxnType;
     typeMapping: Record<string, string>;
 }
 
@@ -216,7 +212,10 @@ export function importPortfolioCSVWithProgress(
     const controller = new AbortController();
     const formData = new FormData();
     formData.append("file", file);
-    const url = `${API_BASE_URL}/api/portfolio/import/csv/stream?${appendBrokerage(configToParams(config, adapterName), brokerage).toString()}`;
+    appendBrokerage(configToParams(config, adapterName), brokerage).forEach(
+        (value, key) => formData.append(key, value),
+    );
+    const url = `${API_BASE_URL}/api/portfolio/import/csv/stream`;
 
     const extractErrorDetail = (payload: unknown): string => {
         if (payload && typeof payload === "object" && "detail" in payload) {

@@ -89,13 +89,13 @@ export async function createWithStatus<TPayload, TData>(
 export async function postMultipartImport<T>(
     endpoint: string,
     file: File,
-    queryParams: URLSearchParams,
+    fields: URLSearchParams,
 ): Promise<T> {
     const formData = new FormData();
     formData.append("file", file);
+    fields.forEach((value, key) => formData.append(key, value));
 
-    const query = queryParams.toString();
-    const url = `${API_BASE_URL}${endpoint}${query ? `?${query}` : ""}`;
+    const url = `${API_BASE_URL}${endpoint}`;
     const response = await rawFetch(url, { method: "POST", body: formData });
 
     if (!response.ok) {

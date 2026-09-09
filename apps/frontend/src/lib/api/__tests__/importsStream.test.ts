@@ -9,7 +9,10 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { importCSVWithProgress } from "@/lib/api/imports";
-import { importPortfolioCSVWithProgress } from "@/lib/api/portfolioImports";
+import {
+    importPortfolioCSVWithProgress,
+    type PortfolioCustomConfig,
+} from "@/lib/api/portfolioImports";
 import type { ImportProgress } from "@/types/apiClient";
 
 /** Build a Response whose body streams `text` as a single chunk. */
@@ -32,6 +35,27 @@ function stubFetch(wire: string) {
 }
 
 const file = new File(["a;b;c"], "test.csv", { type: "text/csv" });
+const portfolioConfig: PortfolioCustomConfig = {
+    dateColumn: "Date",
+    typeColumn: "Type",
+    symbolColumn: "Symbol",
+    nameColumn: "Name",
+    unitsColumn: "Units",
+    priceColumn: "Price",
+    amountColumn: "Amount",
+    feesColumn: "Fees",
+    taxesColumn: "Taxes",
+    currencyColumn: "Currency",
+    fxRateColumn: "FX Rate",
+    noteColumn: "Note",
+    dateFormat: "YYYY-MM-DD",
+    separator: ";",
+    encoding: "utf-8",
+    skipRows: 1,
+    defaultAssetClass: "stock",
+    defaultType: "buy",
+    typeMapping: { Purchase: "buy" },
+};
 
 afterEach(() => {
     vi.unstubAllGlobals();
@@ -71,6 +95,9 @@ describe("importCSVWithProgress SSE handling", () => {
             progressPayload,
             { ...completePayload, phase: "complete", percent: 100 },
         ]);
+        const [url, init] = vi.mocked(fetch).mock.calls[0];
+        expect(String(url)).not.toContain("?");
+        expect((init?.body as FormData).get("bank_name")).toBe("test-bank");
     });
 
     it("sends a saved file-level broker account with the staged import", async () => {
@@ -78,16 +105,24 @@ describe("importCSVWithProgress SSE handling", () => {
 
         const { result } = importPortfolioCSVWithProgress(
             file,
-            {} as never,
+            portfolioConfig,
             "saved-parser",
             vi.fn(),
             { isBrokerage: true, accountId: 7 },
         );
         await result;
 
-        const [url] = vi.mocked(fetch).mock.calls[0];
-        expect(String(url)).toContain("is_brokerage=true");
-        expect(String(url)).toContain("account_id=7");
+        const [url, init] = vi.mocked(fetch).mock.calls[0];
+        expect(String(url)).not.toContain("?");
+        const body = init?.body as FormData;
+        expect(body.get("adapter_name")).toBe("saved-parser");
+        expect(body.get("is_brokerage")).toBe("true");
+        expect(body.get("account_id")).toBe("7");
+        expect(body.get("date_format")).toBe("YYYY-MM-DD");
+        expect(body.get("date_column")).toBe("Date");
+        expect(body.get("default_asset_class")).toBe("stock");
+        expect(body.get("default_type")).toBe("buy");
+        expect(body.get("type_mapping")).toBe('{"Purchase":"buy"}');
     });
 
     it("resolves a review_required event (backend shape: no total field) without inventing counts", async () => {
@@ -184,7 +219,7 @@ describe("importCSVWithProgress SSE handling", () => {
 });
 
 describe("importPortfolioCSVWithProgress SSE handling", () => {
-    const config = {} as never;
+    const config = portfolioConfig;
 
     it("forwards well-formed progress events and resolves with the complete payload", async () => {
         const progressPayload = {

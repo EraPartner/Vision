@@ -1,10 +1,20 @@
-import { z } from 'zod';
-import { API_BASE_URL, generateRequestId, parseEnvelopeError, apiRequest } from '@/lib/api/client';
-import { postMultipartImport } from '@/lib/api/helpers';
-import { readSseStream } from '@/lib/api/sse';
-import type { ImportProgress, ImportResult, BatchListResponse, ImportPreviewResponse } from '@/types/apiClient';
-import type { components } from '@/types/generated';
-import { ImportCancelledError } from '@/lib/api/importCancelled';
+import { z } from "zod";
+import {
+    API_BASE_URL,
+    generateRequestId,
+    parseEnvelopeError,
+    apiRequest,
+} from "@/lib/api/client";
+import { postMultipartImport } from "@/lib/api/helpers";
+import { readSseStream } from "@/lib/api/sse";
+import type {
+    ImportProgress,
+    ImportResult,
+    BatchListResponse,
+    ImportPreviewResponse,
+} from "@/types/apiClient";
+import type { components } from "@/types/generated";
+import { ImportCancelledError } from "@/lib/api/importCancelled";
 
 /**
  * Runtime guards for the import SSE streams (ZOD-10). Loose objects so the
@@ -58,8 +68,9 @@ const IMPORT_STREAM_SCHEMAS: Record<string, z.ZodType> = {
  * they share the union here. Narrow with `'requires_review' in result` (the
  * idiom TransactionImportCard already uses for the streaming variant).
  */
-export type ImportCsvResult = components['schemas']['ImportCsvResult'];
-export type ImportCsvReviewRequired = components['schemas']['ImportCsvReviewRequired'];
+export type ImportCsvResult = components["schemas"]["ImportCsvResult"];
+export type ImportCsvReviewRequired =
+    components["schemas"]["ImportCsvReviewRequired"];
 export type ImportCsvResponse = ImportCsvResult | ImportCsvReviewRequired;
 
 /**
@@ -72,17 +83,19 @@ export type ImportCsvResponse = ImportCsvResult | ImportCsvReviewRequired;
  * narrowing must check the value and `batch_id`, so it deliberately does not
  * share this helper.
  */
-export function isReviewRequired(result: ImportCsvResponse): result is ImportCsvReviewRequired {
-    return 'requires_review' in result;
+export function isReviewRequired(
+    result: ImportCsvResponse,
+): result is ImportCsvReviewRequired {
+    return "requires_review" in result;
 }
 
 export function importCSV(
     file: File,
     bankName: string,
 ): Promise<ImportCsvResponse> {
-    const queryParams = new URLSearchParams();
-    queryParams.append('bank_name', bankName);
-    return postMultipartImport('/api/import/csv', file, queryParams);
+    const fields = new URLSearchParams();
+    fields.append("bank_name", bankName);
+    return postMultipartImport("/api/import/csv", file, fields);
 }
 
 export function importCSVWithProgress(
@@ -92,51 +105,52 @@ export function importCSVWithProgress(
 ): { abort: () => void; result: Promise<ImportResult> } {
     const controller = new AbortController();
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append("file", file);
+    formData.append("bank_name", bankName);
 
-    const queryParams = new URLSearchParams();
-    queryParams.append('bank_name', bankName);
-
-    const url = `${API_BASE_URL}/api/import/csv/stream?${queryParams.toString()}`;
+    const url = `${API_BASE_URL}/api/import/csv/stream`;
 
     const extractErrorDetail = (payload: unknown): string => {
-        if (payload && typeof payload === 'object' && 'detail' in payload) {
+        if (payload && typeof payload === "object" && "detail" in payload) {
             const detail = (payload as { detail?: unknown }).detail;
-            if (typeof detail === 'string' && detail.trim()) return detail;
+            if (typeof detail === "string" && detail.trim()) return detail;
         }
-        return 'Import failed';
+        return "Import failed";
     };
 
     const result = (async (): Promise<ImportResult> => {
         try {
             const response = await fetch(url, {
-                method: 'POST',
+                method: "POST",
                 body: formData,
-                headers: { 'X-Request-Id': generateRequestId() },
+                headers: { "X-Request-Id": generateRequestId() },
                 signal: controller.signal,
             });
 
             if (!response.ok) {
-                throw await parseEnvelopeError(response, 'Import failed');
+                throw await parseEnvelopeError(response, "Import failed");
             }
 
             let finalResult: ImportResult | null = null;
 
-            for await (const { event, data } of readSseStream<unknown>(response, { schemas: IMPORT_STREAM_SCHEMAS })) {
-                if (event === 'progress') {
+            for await (const { event, data } of readSseStream<unknown>(
+                response,
+                { schemas: IMPORT_STREAM_SCHEMAS },
+            )) {
+                if (event === "progress") {
                     onProgress(data as ImportProgress);
                     continue;
                 }
-                if (event === 'complete') {
+                if (event === "complete") {
                     finalResult = data as ImportResult;
                     onProgress({
                         ...(data as Partial<ImportProgress>),
-                        phase: 'complete',
+                        phase: "complete",
                         percent: 100,
                     } as ImportProgress);
                     continue;
                 }
-                if (event === 'review_required') {
+                if (event === "review_required") {
                     // The backend emits { batch_id, match_source_counts, percent }
                     // — no counts (lib/importProgress.js), so total_processed is
                     // omitted rather than synthesized (same as the portfolio
@@ -146,27 +160,37 @@ export function importCSVWithProgress(
                         imported: 0,
                         duplicates: 0,
                         errors: 0,
-                        status: 'review_required',
+                        status: "review_required",
                         batch_id: d.batch_id,
                         requires_review: true,
                     };
-                    onProgress({ phase: 'review_required', current: 0, total: 0, imported: 0, duplicates: 0, errors: 0, percent: 100 } as ImportProgress);
+                    onProgress({
+                        phase: "review_required",
+                        current: 0,
+                        total: 0,
+                        imported: 0,
+                        duplicates: 0,
+                        errors: 0,
+                        percent: 100,
+                    } as ImportProgress);
                     continue;
                 }
-                if (event === 'error') {
+                if (event === "error") {
                     throw new Error(extractErrorDetail(data));
                 }
             }
 
-            return finalResult ?? {
-                total_processed: 0,
-                imported: 0,
-                duplicates: 0,
-                errors: 0,
-                status: 'completed',
-            };
+            return (
+                finalResult ?? {
+                    total_processed: 0,
+                    imported: 0,
+                    duplicates: 0,
+                    errors: 0,
+                    status: "completed",
+                }
+            );
         } catch (err) {
-            if ((err as Error).name === 'AbortError') {
+            if ((err as Error).name === "AbortError") {
                 throw new ImportCancelledError({ cause: err });
             }
             throw err;
@@ -184,21 +208,21 @@ export function importCSVCustom(
     recipientColumn: string,
     amountColumn: string,
     memoColumn?: string,
-    separator: string = ',',
-    encoding: string = 'utf-8',
+    separator: string = ",",
+    encoding: string = "utf-8",
     skipRows: number = 0,
 ): Promise<ImportCsvResponse> {
-    const queryParams = new URLSearchParams();
-    queryParams.append('bank_name', bankName);
-    queryParams.append('date_format', dateFormat);
-    queryParams.append('date_column', dateColumn);
-    queryParams.append('recipient_column', recipientColumn);
-    queryParams.append('amount_column', amountColumn);
-    if (memoColumn) queryParams.append('memo_column', memoColumn);
-    queryParams.append('separator', separator);
-    queryParams.append('encoding', encoding);
-    queryParams.append('skip_rows', skipRows.toString());
-    return postMultipartImport('/api/import/csv/custom', file, queryParams);
+    const fields = new URLSearchParams();
+    fields.append("bank_name", bankName);
+    fields.append("date_format", dateFormat);
+    fields.append("date_column", dateColumn);
+    fields.append("recipient_column", recipientColumn);
+    fields.append("amount_column", amountColumn);
+    if (memoColumn) fields.append("memo_column", memoColumn);
+    fields.append("separator", separator);
+    fields.append("encoding", encoding);
+    fields.append("skip_rows", skipRows.toString());
+    return postMultipartImport("/api/import/csv/custom", file, fields);
 }
 
 export interface CustomParserConfigPayload {
@@ -225,7 +249,10 @@ export interface SavedParserConfig {
  * helper only need the rows, so the envelope is unwrapped here.
  */
 export async function listCustomParserConfigs(): Promise<SavedParserConfig[]> {
-    const { items } = await apiRequest<{ items: SavedParserConfig[]; total: number }>('/api/import/parsers');
+    const { items } = await apiRequest<{
+        items: SavedParserConfig[];
+        total: number;
+    }>("/api/import/parsers");
     return items;
 }
 
@@ -233,8 +260,8 @@ export function createCustomParserConfig(
     name: string,
     config: CustomParserConfigPayload,
 ): Promise<SavedParserConfig> {
-    return apiRequest<SavedParserConfig>('/api/import/parsers', {
-        method: 'POST',
+    return apiRequest<SavedParserConfig>("/api/import/parsers", {
+        method: "POST",
         body: JSON.stringify({ name, config }),
     });
 }
@@ -244,62 +271,105 @@ export function updateCustomParserConfig(
     patch: { name?: string; config?: CustomParserConfigPayload },
 ): Promise<SavedParserConfig> {
     return apiRequest<SavedParserConfig>(`/api/import/parsers/${id}`, {
-        method: 'PATCH',
+        method: "PATCH",
         body: JSON.stringify(patch),
     });
 }
 
 export function deleteCustomParserConfig(id: number): Promise<void> {
-    return apiRequest<void>(`/api/import/parsers/${id}`, { method: 'DELETE' });
+    return apiRequest<void>(`/api/import/parsers/${id}`, { method: "DELETE" });
 }
 
 export function importRecipients(
     file: File,
-    separator: string = ',',
-    encoding: string = 'utf-8',
-): Promise<{ total_processed: number; imported: number; skipped: number; errors: number; status: string }> {
-    const queryParams = new URLSearchParams({ separator, encoding });
-    return postMultipartImport('/api/import/recipients', file, queryParams);
+    separator: string = ",",
+    encoding: string = "utf-8",
+): Promise<{
+    total_processed: number;
+    imported: number;
+    skipped: number;
+    errors: number;
+    status: string;
+}> {
+    const fields = new URLSearchParams({ separator, encoding });
+    return postMultipartImport("/api/import/recipients", file, fields);
 }
 
 export function importCategories(
     file: File,
-    separator: string = ',',
-    encoding: string = 'utf-8',
-): Promise<{ total_processed: number; imported: number; skipped: number; errors: number; status: string }> {
-    const queryParams = new URLSearchParams({ separator, encoding });
-    return postMultipartImport('/api/import/categories', file, queryParams);
+    separator: string = ",",
+    encoding: string = "utf-8",
+): Promise<{
+    total_processed: number;
+    imported: number;
+    skipped: number;
+    errors: number;
+    status: string;
+}> {
+    const fields = new URLSearchParams({ separator, encoding });
+    return postMultipartImport("/api/import/categories", file, fields);
 }
 
 export function listImportBatches(
     limit: number = 20,
     offset: number = 0,
 ): Promise<BatchListResponse> {
-    return apiRequest<BatchListResponse>(`/api/import/batches?limit=${limit}&offset=${offset}`);
+    return apiRequest<BatchListResponse>(
+        `/api/import/batches?limit=${limit}&offset=${offset}`,
+    );
 }
 
-export function rollbackImportBatch(id: string | number): Promise<{ deleted: number }> {
-    return apiRequest<{ deleted: number }>(`/api/import/batches/${id}`, { method: 'DELETE' });
+export function rollbackImportBatch(
+    id: string | number,
+): Promise<{ deleted: number }> {
+    return apiRequest<{ deleted: number }>(`/api/import/batches/${id}`, {
+        method: "DELETE",
+    });
 }
 
-export function getImportPreview(batchId: number): Promise<ImportPreviewResponse> {
-    return apiRequest<ImportPreviewResponse>(`/api/import/batches/${batchId}/preview`);
+export function getImportPreview(
+    batchId: number,
+): Promise<ImportPreviewResponse> {
+    return apiRequest<ImportPreviewResponse>(
+        `/api/import/batches/${batchId}/preview`,
+    );
 }
 
-export function overrideImportRow(batchId: number, rowId: number, recipientId: number | null): Promise<{ row_id: number; user_override_recipient_id: number | null }> {
+export function overrideImportRow(
+    batchId: number,
+    rowId: number,
+    recipientId: number | null,
+): Promise<{ row_id: number; user_override_recipient_id: number | null }> {
     return apiRequest(`/api/import/batches/${batchId}/rows/${rowId}/override`, {
-        method: 'POST',
+        method: "POST",
         body: JSON.stringify({ recipient_id: recipientId }),
     });
 }
 
-export function overrideImportRowCategory(batchId: number, rowId: number, categoryId: number | null): Promise<{ row_id: number; override_category_id: number | null }> {
-    return apiRequest(`/api/import/batches/${batchId}/rows/${rowId}/category-override`, {
-        method: 'POST',
-        body: JSON.stringify({ category_id: categoryId }),
-    });
+export function overrideImportRowCategory(
+    batchId: number,
+    rowId: number,
+    categoryId: number | null,
+): Promise<{ row_id: number; override_category_id: number | null }> {
+    return apiRequest(
+        `/api/import/batches/${batchId}/rows/${rowId}/category-override`,
+        {
+            method: "POST",
+            body: JSON.stringify({ category_id: categoryId }),
+        },
+    );
 }
 
-export function commitImportBatch(batchId: number): Promise<{ batch_id: number; imported: number; duplicates: number; errors: number; auto_linked_count?: number }> {
-    return apiRequest(`/api/import/batches/${batchId}/commit`, { method: 'POST' });
+export function commitImportBatch(
+    batchId: number,
+): Promise<{
+    batch_id: number;
+    imported: number;
+    duplicates: number;
+    errors: number;
+    auto_linked_count?: number;
+}> {
+    return apiRequest(`/api/import/batches/${batchId}/commit`, {
+        method: "POST",
+    });
 }

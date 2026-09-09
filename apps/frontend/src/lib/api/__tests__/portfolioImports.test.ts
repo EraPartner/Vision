@@ -90,11 +90,13 @@ describe("portfolioImports API client", () => {
 
     it("sends the IBKR format selector with a portfolio CSV import", async () => {
         let requestedUrl = "";
+        let requestedBody: FormData | undefined;
         server.use(
             http.post(
                 `${API_BASE}/api/portfolio/import/csv/custom`,
-                ({ request }) => {
+                async ({ request }) => {
                     requestedUrl = request.url;
+                    requestedBody = await request.formData();
                     return ok({
                         batch_id: 2,
                         imported: 1,
@@ -112,10 +114,15 @@ describe("portfolioImports API client", () => {
             { isBrokerage: true, accountId: 7 },
         );
 
-        const params = new URL(requestedUrl).searchParams;
-        expect(params.get("portfolio_format")).toBe("ibkr_transaction_history");
-        expect(params.get("is_brokerage")).toBe("true");
-        expect(params.get("account_id")).toBe("7");
+        expect(new URL(requestedUrl).search).toBe("");
+        expect(requestedBody?.get("portfolio_format")).toBe(
+            "ibkr_transaction_history",
+        );
+        expect(requestedBody?.get("adapter_name")).toBe(
+            "ibkr_transaction_history",
+        );
+        expect(requestedBody?.get("is_brokerage")).toBe("true");
+        expect(requestedBody?.get("account_id")).toBe("7");
     });
 
     it("updatePortfolioParserConfig PATCHes by id", async () => {
