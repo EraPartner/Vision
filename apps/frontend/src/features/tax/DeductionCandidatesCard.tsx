@@ -96,11 +96,10 @@ export function DeductionCandidatesCard() {
                 description: t(
                     "tax.deductionCandidates.incompleteYearDescription",
                     {
-                        currentValue: fmt(
-                            profile[mapping.amountField] ?? 0,
+                        currentValue: fmt(profile[mapping.amountField] ?? 0, {
                             currency,
-                        ),
-                        candidateValue: fmt(group.total, currency),
+                        }),
+                        candidateValue: fmt(group.total, { currency }),
                     },
                 ),
                 confirmLabel: t(
@@ -162,10 +161,9 @@ export function DeductionCandidatesCard() {
                                                         {cat.category}
                                                     </span>
                                                     <span className="shrink-0">
-                                                        {fmt(
-                                                            cat.total,
+                                                        {fmt(cat.total, {
                                                             currency,
-                                                        )}
+                                                        })}
                                                     </span>
                                                 </li>
                                             ))}
@@ -174,17 +172,16 @@ export function DeductionCandidatesCard() {
                                             {t(
                                                 "tax.deductionCandidates.currentValue",
                                                 {
-                                                    value: fmt(
-                                                        currentValue,
+                                                    value: fmt(currentValue, {
                                                         currency,
-                                                    ),
+                                                    }),
                                                 },
                                             )}
                                         </p>
                                     </div>
                                     <div className="shrink-0 flex flex-col items-end gap-1.5 text-right">
                                         <span className="text-sm font-bold text-foreground">
-                                            {fmt(group.total, currency)}
+                                            {fmt(group.total, { currency })}
                                         </span>
                                         {appliedTypes.has(
                                             group.deductionType,

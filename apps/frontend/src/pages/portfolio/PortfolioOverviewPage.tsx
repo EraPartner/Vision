@@ -43,7 +43,7 @@ import { TotalValueCard } from "@/features/portfolio/TotalValueCard";
 import { PriceFreshnessCaption } from "@/features/portfolio/PriceFreshnessCaption";
 import { buildNetContributionSparkline } from "@/features/portfolio/netContributionSparkline";
 import { PortfolioTicker } from "@/features/portfolio/PortfolioTicker";
-import { ASSET_CLASS_LABELS, getAssetClassGroups } from "@/types/portfolio";
+import { getAssetClassGroups, getAssetClassLabel } from "@/types/portfolio";
 import { isUnitBased } from "@/utils/assetClass";
 import { cn } from "@/lib/utils";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
@@ -74,7 +74,7 @@ import {
 } from "@/components/ui/select";
 import { useAccounts } from "@/hooks/useAccounts";
 import { accountLabel } from "@/features/accounts/groupAccounts";
-import { addAll, toNumber } from "@/lib/money";
+import { addAll, toNumber } from "@vision/shared-utils/money";
 
 function getPortfolioWidgets(t: (key: string) => string): WidgetDefinition[] {
     return [
@@ -904,12 +904,10 @@ export default function PortfolioOverviewPage() {
                                                                     variant="secondary"
                                                                     className="text-2xs shrink-0"
                                                                 >
-                                                                    {
-                                                                        ASSET_CLASS_LABELS[
-                                                                            inv
-                                                                                .assetClass
-                                                                        ]
-                                                                    }
+                                                                    {getAssetClassLabel(
+                                                                        t,
+                                                                        inv.assetClass,
+                                                                    )}
                                                                 </Badge>
                                                                 <PortfolioOversoldBadge
                                                                     oversold={

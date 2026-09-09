@@ -16,11 +16,7 @@ import { apiClient } from "@/lib/api";
 import logger from "@/lib/logger";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { usePreloadedSetting } from "@/contexts/SettingsPreloadContext";
-import {
-    useSettingsStore,
-    DEFAULT_APP_SETTINGS,
-    migrateAppSettings,
-} from "@/stores/settingsStore";
+import { useSettingsStore, migrateAppSettings } from "@/stores/settingsStore";
 import type { AppSettings } from "@/stores/settingsStore";
 import { setSkinV2 } from "@/lib/skin";
 
@@ -35,10 +31,6 @@ interface AppSettingsHydrationValue {
 }
 
 const SETTINGS_KEY = "app_settings";
-
-/** @deprecated Import DEFAULT_APP_SETTINGS from \@/stores/settingsStore instead. */
-// eslint-disable-next-line react-refresh/only-export-components
-export { DEFAULT_APP_SETTINGS as defaultAppSettings };
 
 // ─── Provider ────────────────────────────────────────────────────────────────
 

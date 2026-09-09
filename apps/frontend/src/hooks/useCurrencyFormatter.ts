@@ -15,10 +15,10 @@ export interface CurrencyFormatterOptions {
     signed?: boolean;
 }
 
-export interface CurrencyFormatter {
-    (val: number, currency?: string, decimals?: number): string;
-    (val: number, options: CurrencyFormatterOptions): string;
-}
+export type CurrencyFormatter = (
+    val: number,
+    options?: CurrencyFormatterOptions,
+) => string;
 
 export interface ResolvedCurrencyFormatSettings {
     currency: string;
@@ -66,16 +66,7 @@ export function useCurrencyFormatter(
     } = useCurrencyFormatSettings(defaultCurrency);
 
     return useCallback(
-        (
-            val: number,
-            currencyOrOptions:
-                string | CurrencyFormatterOptions = fallbackCurrency,
-            legacyDecimals?: number,
-        ) => {
-            const options =
-                typeof currencyOrOptions === "string"
-                    ? { currency: currencyOrOptions, decimals: legacyDecimals }
-                    : currencyOrOptions;
+        (val: number, options: CurrencyFormatterOptions = {}) => {
             const currency = options.currency ?? fallbackCurrency;
             const resolvedDecimals = options.decimals ?? decimalsSetting ?? 2;
             const signed = options.signed ?? false;

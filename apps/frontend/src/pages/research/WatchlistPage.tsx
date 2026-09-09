@@ -255,7 +255,9 @@ export default function WatchlistPage() {
                                             <p className="text-xl font-semibold text-primary">
                                                 {formatDisplayCurrency(
                                                     item.target_price,
-                                                    item.currency,
+                                                    {
+                                                        currency: item.currency,
+                                                    },
                                                 )}
                                             </p>
                                         </div>
@@ -288,7 +290,10 @@ export default function WatchlistPage() {
                                                         <p className="text-lg font-medium">
                                                             {formatDisplayCurrency(
                                                                 currentPrice,
-                                                                item.currency,
+                                                                {
+                                                                    currency:
+                                                                        item.currency,
+                                                                },
                                                             )}
                                                         </p>
                                                     </>

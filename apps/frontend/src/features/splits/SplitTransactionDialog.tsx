@@ -17,7 +17,12 @@ import { Split, Plus, Trash2, Users } from "lucide-react";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { parseDecimal } from "@/lib/decimal";
-import { toDecimal, addAll, multiply, roundMoney } from "@/lib/money";
+import {
+    toDecimal,
+    addAll,
+    multiply,
+    roundMoney,
+} from "@vision/shared-utils/money";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 
 interface SplitEntry {
@@ -189,10 +194,9 @@ export function SplitTransactionDialog({
                     </DialogTitle>
                     <DialogDescription>
                         {t("splitDialog.total", {
-                            amount: formatCurrency(
-                                absAmount,
-                                transactionCurrency,
-                            ),
+                            amount: formatCurrency(absAmount, {
+                                currency: transactionCurrency,
+                            }),
                         })}
                     </DialogDescription>
                 </DialogHeader>
@@ -234,7 +238,10 @@ export function SplitTransactionDialog({
                                                                 ),
                                                             amount: formatCurrency(
                                                                 split.amount,
-                                                                transactionCurrency,
+                                                                {
+                                                                    currency:
+                                                                        transactionCurrency,
+                                                                },
                                                             ),
                                                         },
                                                     )}
@@ -253,7 +260,10 @@ export function SplitTransactionDialog({
                                         {t("splitDialog.exceedsTotal", {
                                             remaining: formatCurrency(
                                                 remainingSplitCapacity,
-                                                transactionCurrency,
+                                                {
+                                                    currency:
+                                                        transactionCurrency,
+                                                },
                                             ),
                                         })}
                                     </AlertDescription>
@@ -291,10 +301,9 @@ export function SplitTransactionDialog({
                         {splitType === "equal" && validEntries.length > 0 && (
                             <div className="text-sm text-muted-foreground rounded-md bg-muted p-3">
                                 {t("splitDialog.eachPays", {
-                                    amount: formatCurrency(
-                                        equalShare,
-                                        transactionCurrency,
-                                    ),
+                                    amount: formatCurrency(equalShare, {
+                                        currency: transactionCurrency,
+                                    }),
                                     n: totalPeople,
                                 })}
                             </div>
@@ -384,14 +393,12 @@ export function SplitTransactionDialog({
                         {splitType === "custom" && validEntries.length > 0 && (
                             <p className="text-sm text-muted-foreground">
                                 {t("splitDialog.othersOwe", {
-                                    x: formatCurrency(
-                                        customTotal,
-                                        transactionCurrency,
-                                    ),
-                                    total: formatCurrency(
-                                        absAmount,
-                                        transactionCurrency,
-                                    ),
+                                    x: formatCurrency(customTotal, {
+                                        currency: transactionCurrency,
+                                    }),
+                                    total: formatCurrency(absAmount, {
+                                        currency: transactionCurrency,
+                                    }),
                                 })}
                             </p>
                         )}

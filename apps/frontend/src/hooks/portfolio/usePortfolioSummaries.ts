@@ -19,7 +19,7 @@ import {
 import { todayYmd } from "@/lib/timezone";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useExchangeRates } from "@/hooks/useExchangeRates";
-import { toNumber, multiply, addAll } from "@/lib/money";
+import { toNumber, multiply, addAll } from "@vision/shared-utils/money";
 
 interface BuildSummaryOpts {
     costBasisMethod: CostBasisMethod;

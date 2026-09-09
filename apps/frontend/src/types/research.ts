@@ -36,9 +36,6 @@ export interface ResearchSearchResponse {
     items: ResearchSearchItem[];
 }
 
-/** Market-lookup compatibility alias for the same search-result wire shape. */
-export type MarketSearchResult = ResearchSearchItem;
-
 export interface ResearchQuote {
     symbol: string;
     name: string;

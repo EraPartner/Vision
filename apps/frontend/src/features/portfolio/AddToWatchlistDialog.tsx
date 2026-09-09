@@ -28,7 +28,8 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { toast } from "sonner";
 
-import { createWatchlistItem, type MarketSearchResult } from "@/lib/api/market";
+import { createWatchlistItem } from "@/lib/api/market";
+import type { ResearchSearchItem } from "@/types/research";
 import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 import {
     useMarketQuoteQuery,
@@ -36,7 +37,7 @@ import {
 } from "./usePortfolioQueries";
 import { formatEditableNumber } from "@/utils/currency";
 
-type SearchResult = MarketSearchResult;
+type SearchResult = ResearchSearchItem;
 type AssetClass = "stock" | "etf" | "crypto" | "metals";
 
 /**

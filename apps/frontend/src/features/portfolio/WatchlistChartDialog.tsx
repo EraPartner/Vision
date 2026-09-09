@@ -232,10 +232,9 @@ export function WatchlistChartDialog({
                                     }}
                                     className="text-2xl font-bold text-primary hover:underline text-left"
                                 >
-                                    {formatDisplayCurrency(
-                                        targetPrice,
-                                        item.currency,
-                                    )}
+                                    {formatDisplayCurrency(targetPrice, {
+                                        currency: item.currency,
+                                    })}
                                 </button>
                             )}
                         </div>
@@ -247,10 +246,9 @@ export function WatchlistChartDialog({
                             {currentPrice != null ? (
                                 <>
                                     <p className="text-2xl font-bold">
-                                        {formatDisplayCurrency(
-                                            currentPrice,
-                                            item.currency,
-                                        )}
+                                        {formatDisplayCurrency(currentPrice, {
+                                            currency: item.currency,
+                                        })}
                                     </p>
                                     {priceDiff != null && (
                                         <div
@@ -340,11 +338,15 @@ export function WatchlistChartDialog({
                                     )
                                 }
                                 yTickFormat={(v) =>
-                                    formatDisplayCurrency(v, item.currency)
+                                    formatDisplayCurrency(v, {
+                                        currency: item.currency,
+                                    })
                                 }
                                 tooltipTitle={(d) => d.date}
                                 tooltipValueFormat={(v) =>
-                                    formatDisplayCurrency(v, item.currency)
+                                    formatDisplayCurrency(v, {
+                                        currency: item.currency,
+                                    })
                                 }
                                 referenceLines={
                                     [
@@ -356,7 +358,10 @@ export function WatchlistChartDialog({
                                                     currency: item.currency,
                                                     price: formatDisplayCurrency(
                                                         targetPrice,
-                                                        item.currency,
+                                                        {
+                                                            currency:
+                                                                item.currency,
+                                                        },
                                                     ),
                                                 },
                                             ),

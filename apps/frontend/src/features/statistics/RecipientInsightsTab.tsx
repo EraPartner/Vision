@@ -73,7 +73,7 @@ export function RecipientInsightsTab({
     const formatCurrencyBase = useCurrencyFormatter();
     const formatCurrency = useCallback(
         (val: number, fractionDigits?: number) =>
-            formatCurrencyBase(val, undefined, fractionDigits),
+            formatCurrencyBase(val, { decimals: fractionDigits }),
         [formatCurrencyBase],
     );
     const { data, isLoading, isError } = useRecipientInsights(

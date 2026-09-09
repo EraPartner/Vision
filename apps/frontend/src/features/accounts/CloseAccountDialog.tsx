@@ -91,7 +91,9 @@ export function CloseAccountDialog({
             : [];
     const hasResidual = residualParts.length > 0;
     const residualLabel = residualParts
-        .map((part) => fmtCur(Number(part.balance), part.currency))
+        .map((part) =>
+            fmtCur(Number(part.balance), { currency: part.currency }),
+        )
         .join(", ");
     const shouldRetag =
         portfolioAccount &&

@@ -1,5 +1,5 @@
 import { isHoldingsOnlyPortfolioType } from "@/features/accounts/groupAccounts";
-import { addAll, roundMoney, toNumber } from "@/lib/money";
+import { addAll, roundMoney, toNumber } from "@vision/shared-utils/money";
 import type { PortfolioSummaryResponse } from "@/lib/api/info";
 import type { Account } from "@/types/api";
 

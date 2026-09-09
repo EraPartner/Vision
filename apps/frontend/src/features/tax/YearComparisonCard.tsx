@@ -95,7 +95,7 @@ export function YearComparisonCard({ className }: YearComparisonCardProps) {
     // 0, same rendering as the old maximumFractionDigits: 0 formatter).
     const fmtBase = useCurrencyFormatter();
     const formatPercent = usePercentFormatter();
-    const fmtCurrency = (val: number) => fmtBase(val, undefined, 0);
+    const fmtCurrency = (val: number) => fmtBase(val, { decimals: 0 });
     // Unsigned 1dp — these rows are rate readouts (effective rate), not deltas.
     function fmtPercent(val: number) {
         return formatPercent(val, { digits: 1 });

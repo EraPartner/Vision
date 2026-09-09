@@ -149,9 +149,12 @@ export function MergeAccountDialog({
                                             ),
                                             balance: fmtCur(
                                                 preview.data.projectedBalance,
-                                                preview.data
-                                                    .projectedBalanceCurrency ||
-                                                    target.currency,
+                                                {
+                                                    currency:
+                                                        preview.data
+                                                            .projectedBalanceCurrency ||
+                                                        target.currency,
+                                                },
                                             ),
                                         })}
                                     </p>
@@ -171,10 +174,10 @@ export function MergeAccountDialog({
                                                 )
                                                 .map((part) => (
                                                     <p key={part.currency}>
-                                                        {fmtCur(
-                                                            part.balance,
-                                                            part.currency,
-                                                        )}{" "}
+                                                        {fmtCur(part.balance, {
+                                                            currency:
+                                                                part.currency,
+                                                        })}{" "}
                                                         {t(
                                                             "accounts.balanceExcluded",
                                                         )}

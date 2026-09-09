@@ -66,7 +66,7 @@ export function MultiYearTrendStrip({
     // Shared cached currency formatter; whole-euro tiles (decimals pinned to 0,
     // same rendering as the old maximumFractionDigits: 0 formatter).
     const fmtBase = useCurrencyFormatter();
-    const fmtCurrency = (val: number) => fmtBase(val, undefined, 0);
+    const fmtCurrency = (val: number) => fmtBase(val, { decimals: 0 });
 
     const tiles = useMemo(() => {
         const limited = years.slice(0, maxYears);

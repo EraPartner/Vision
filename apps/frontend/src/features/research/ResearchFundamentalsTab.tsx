@@ -181,7 +181,9 @@ export function ResearchFundamentalsTab({
     const fmtPrice = useCallback(
         (val: number | null | undefined) =>
             // Shared cached currency formatter; fundamentals pin 2 decimals (unchanged).
-            val == null || isNaN(val) ? "—" : fmtCurrency(val, currency, 2),
+            val == null || isNaN(val)
+                ? "—"
+                : fmtCurrency(val, { currency, decimals: 2 }),
         [fmtCurrency, currency],
     );
 

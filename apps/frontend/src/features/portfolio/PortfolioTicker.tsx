@@ -154,7 +154,9 @@ export function PortfolioTicker({ items }: PortfolioTickerProps) {
                 symbol: inv.symbol || quote.symbol,
                 name: inv.name,
                 up,
-                priceLabel: fmt(quote.price, quote.currency || "USD"),
+                priceLabel: fmt(quote.price, {
+                    currency: quote.currency || "USD",
+                }),
                 // 2dp kept deliberately: this is a market-quote daily move, where 2dp is
                 // the domain convention — not a portfolio holding gain/loss chip (those
                 // standardize on signed 1dp).

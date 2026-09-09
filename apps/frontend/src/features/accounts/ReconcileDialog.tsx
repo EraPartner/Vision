@@ -402,7 +402,9 @@ export function ReconcileDialog({
                                 {t("accounts.reconcile.statementLabel")}
                             </dt>
                             <dd className="tabular-nums font-medium">
-                                {fmtCur(statement, baseCurrency)}
+                                {fmtCur(statement, {
+                                    currency: baseCurrency,
+                                })}
                             </dd>
                         </div>
                         <div className="flex items-center justify-between py-1">
@@ -410,7 +412,9 @@ export function ReconcileDialog({
                                 {t("accounts.reconcile.computedLabel")}
                             </dt>
                             <dd className="tabular-nums font-medium">
-                                {fmtCur(computed, account.currency)}
+                                {fmtCur(computed, {
+                                    currency: account.currency,
+                                })}
                             </dd>
                         </div>
                         {/* The base the difference below is actually measured against.
@@ -428,7 +432,7 @@ export function ReconcileDialog({
                                     data-testid="reconcile-base"
                                     className="tabular-nums font-medium"
                                 >
-                                    {fmtCur(base, baseCurrency)}
+                                    {fmtCur(base, { currency: baseCurrency })}
                                 </dd>
                             </div>
                         )}
@@ -456,7 +460,9 @@ export function ReconcileDialog({
                                 id="reconcile-reading"
                                 type="text"
                                 inputMode="decimal"
-                                placeholder={fmtCur(statement, baseCurrency)}
+                                placeholder={fmtCur(statement, {
+                                    currency: baseCurrency,
+                                })}
                                 value={reading}
                                 disabled={busy}
                                 onChange={(e) => setReading(e.target.value)}
@@ -596,10 +602,9 @@ export function ReconcileDialog({
                             </p>
                             <p className="text-xs text-muted-foreground">
                                 {t("accounts.reconcile.backfillDescription", {
-                                    balance: fmtCur(
-                                        backfillBalance,
-                                        baseCurrency,
-                                    ),
+                                    balance: fmtCur(backfillBalance, {
+                                        currency: baseCurrency,
+                                    }),
                                 })}
                             </p>
                             <Button

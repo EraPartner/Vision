@@ -188,10 +188,9 @@ export function InsightsDigestPanel() {
                                         </Badge>
                                     </div>
                                     <span className="text-sm font-bold text-foreground shrink-0">
-                                        {formatCurrency(
-                                            finding.latestAmount,
-                                            finding.currency,
-                                        )}
+                                        {formatCurrency(finding.latestAmount, {
+                                            currency: finding.currency,
+                                        })}
                                     </span>
                                     <DismissButton
                                         label={t("insights.dismiss")}
@@ -228,7 +227,10 @@ export function InsightsDigestPanel() {
                                                 <span className="text-xs text-muted-foreground line-through">
                                                     {formatCurrency(
                                                         finding.previousAmount,
-                                                        finding.currency,
+                                                        {
+                                                            currency:
+                                                                finding.currency,
+                                                        },
                                                     )}
                                                 </span>
                                                 <span className="text-xs">
@@ -244,7 +246,10 @@ export function InsightsDigestPanel() {
                                                 >
                                                     {formatCurrency(
                                                         finding.newAmount,
-                                                        finding.currency,
+                                                        {
+                                                            currency:
+                                                                finding.currency,
+                                                        },
                                                     )}
                                                 </span>
                                                 <DeltaPill
@@ -355,7 +360,10 @@ export function InsightsDigestPanel() {
                                             {
                                                 amount: formatCurrency(
                                                     cashForecast.monthEndNetCashflow,
-                                                    cashForecast.currency,
+                                                    {
+                                                        currency:
+                                                            cashForecast.currency,
+                                                    },
                                                 ),
                                             },
                                         )}

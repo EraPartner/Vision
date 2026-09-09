@@ -10,17 +10,6 @@ import type { RecurrenceInterval } from "@vision/types/recurrence";
 // this union can no longer drift from the shared ASSET_CLASSES list.
 export type { AssetClass };
 
-/** @deprecated Use getAssetClassLabel(t, assetClass) for UI display */
-export const ASSET_CLASS_LABELS: Record<AssetClass, string> = {
-    stock: "Stock",
-    etf: "ETF",
-    crypto: "Cryptocurrency",
-    metals: "Metals",
-    real_estate: "Real Estate",
-    savings: "Savings Account",
-    bond: "Bond",
-};
-
 /** Returns a translated label for an asset class. */
 export function getAssetClassLabel(
     t: (key: string) => string,
@@ -28,14 +17,6 @@ export function getAssetClassLabel(
 ): string {
     return t(`portfolio.assetClass.${assetClass}`);
 }
-
-/** @deprecated Use getAssetClassGroups(t) for UI display */
-export const ASSET_CLASS_GROUPS: Record<string, AssetClass[]> = {
-    "Stocks & ETFs": ["stock", "etf"],
-    Crypto: ["crypto"],
-    "Real Estate": ["real_estate"],
-    "Savings & Bonds": ["savings", "bond"],
-};
 
 /** Returns translated asset class groups for UI display. */
 export function getAssetClassGroups(

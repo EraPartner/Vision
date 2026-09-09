@@ -15,7 +15,8 @@ import { Plus, ArrowRight, Loader2 } from "lucide-react";
 import { isUnitBased, isFixedIncome, isRealEstate } from "@/utils/assetClass";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import type { AssetClass } from "@/types/portfolio";
-import { ASSET_CLASS_LABELS, getAssetClassLabel } from "@/types/portfolio";
+import { getAssetClassLabel } from "@/types/portfolio";
+import { ASSET_CLASSES } from "@vision/types/assetClasses";
 import { toast } from "sonner";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
@@ -270,7 +271,7 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
     const visibleAssetClasses =
         allowedAssetClasses && allowedAssetClasses.length > 0
             ? allowedAssetClasses
-            : (Object.keys(ASSET_CLASS_LABELS) as AssetClass[]);
+            : [...ASSET_CLASSES];
 
     return (
         <Dialog

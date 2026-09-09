@@ -223,7 +223,7 @@ export default function RebalancePage() {
     // number-format setting; amounts now follow it like every other page.
     const fmtCurrency = useCurrencyFormatter(currency);
     const formatPercent = usePercentFormatter();
-    const fmt = (v: number) => fmtCurrency(v, currency, 0);
+    const fmt = (v: number) => fmtCurrency(v, { currency, decimals: 0 });
     // Show up to one decimal so fractional targets (e.g. All Weather's 7.5%) read
     // accurately and the column doesn't visibly sum to 101% from rounding.
     // `minDigits: 0` preserves that "up to" behaviour; the shared formatter

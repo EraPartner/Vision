@@ -33,7 +33,9 @@ describe("useCurrencyPartsFormatter — malformed currency degrades like Money",
             .join("");
         const { container } = render(<Money amount={1234} currency="JPY" />);
 
-        expect(stringFormatter(1234, "JPY")).toBe("1.234,00\u00a0¥");
+        expect(stringFormatter(1234, { currency: "JPY" })).toBe(
+            "1.234,00\u00a0¥",
+        );
         expect(partsText).toBe("1.234,00\u00a0¥");
         expect(container.textContent).toBe(partsText);
     });
@@ -50,7 +52,9 @@ describe("useCurrencyPartsFormatter — malformed currency degrades like Money",
         const partsFormatter = renderHook(() => useCurrencyPartsFormatter())
             .result.current;
 
-        expect(stringFormatter(1234.4, "JPY", 0)).toBe("1.234\u00a0¥");
+        expect(stringFormatter(1234.4, { currency: "JPY", decimals: 0 })).toBe(
+            "1.234\u00a0¥",
+        );
         expect(
             partsFormatter(1234.4, { currency: "JPY", decimals: 0 })
                 .map((part) => part.value)
@@ -159,29 +163,39 @@ describe("useCurrencyFormatter (string path) — malformed currency degrades lik
             .map((p) => p.value)
             .join("");
         const { container } = render(<Money amount={1234.56} currency="US" />);
-        expect(str(1234.56, "US")).toBe(partsText);
-        expect(str(1234.56, "US")).toBe(container.textContent);
+        expect(str(1234.56, { currency: "US" })).toBe(partsText);
+        expect(str(1234.56, { currency: "US" })).toBe(container.textContent);
     });
 
     it("degrades on out-of-range decimals too, keeping sign", () => {
         const { result } = renderHook(() => useCurrencyFormatter());
-        expect(result.current(-42.5, "EUR", -1)).toBe("-42.5");
-        expect(result.current(1234.56, "EUR", 101)).toBe("1234.56");
+        expect(result.current(-42.5, { currency: "EUR", decimals: -1 })).toBe(
+            "-42.5",
+        );
+        expect(
+            result.current(1234.56, { currency: "EUR", decimals: 101 }),
+        ).toBe("1234.56");
     });
 
     it("does not poison the cache — a valid code still works after a bad one", () => {
         const { result } = renderHook(() => useCurrencyFormatter());
-        result.current(1, "US");
-        expect(result.current(1234.56, "EUR")).toBe("1.234,56\u00a0€");
+        result.current(1, { currency: "US" });
+        expect(result.current(1234.56, { currency: "EUR" })).toBe(
+            "1.234,56\u00a0€",
+        );
     });
 
     it("still formats a valid currency normally", () => {
         const { result } = renderHook(() => useCurrencyFormatter());
-        expect(result.current(1234.56, "EUR")).toBe("1.234,56\u00a0€");
-        expect(result.current(1234.56, "USD", 0)).toBe("1.235\u00a0$");
+        expect(result.current(1234.56, { currency: "EUR" })).toBe(
+            "1.234,56\u00a0€",
+        );
+        expect(result.current(1234.56, { currency: "USD", decimals: 0 })).toBe(
+            "1.235\u00a0$",
+        );
     });
 
-    it("supports the signed options form without changing the legacy call shape", () => {
+    it("supports signed and currency options", () => {
         const { result } = renderHook(() => useCurrencyFormatter("EUR"));
         expect(result.current(12, { signed: true, decimals: 0 })).toBe(
             "+12\u00a0€",
@@ -192,7 +206,9 @@ describe("useCurrencyFormatter (string path) — malformed currency degrades lik
         expect(result.current(0, { signed: true, decimals: 0 })).toBe(
             "0\u00a0€",
         );
-        expect(result.current(12, "USD", 0)).toBe("12\u00a0$");
+        expect(result.current(12, { currency: "USD", decimals: 0 })).toBe(
+            "12\u00a0$",
+        );
     });
 });
 

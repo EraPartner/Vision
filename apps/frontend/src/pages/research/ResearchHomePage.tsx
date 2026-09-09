@@ -278,7 +278,10 @@ export default function ResearchHomePage() {
                                                     {quote ? (
                                                         formatPrice(
                                                             quote.price,
-                                                            item.currency,
+                                                            {
+                                                                currency:
+                                                                    item.currency,
+                                                            },
                                                         )
                                                     ) : (
                                                         <span className="text-muted-foreground/40">

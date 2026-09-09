@@ -165,8 +165,10 @@ const TransactionRow = memo(function TransactionRow({
                                     (txn.units !== 0
                                         ? txn.amount / txn.units
                                         : 0),
-                                txn.currency || nativeCurrency,
-                                2,
+                                {
+                                    currency: txn.currency || nativeCurrency,
+                                    decimals: 2,
+                                },
                             ),
                         })}
                     </p>
@@ -203,18 +205,16 @@ const TransactionRow = memo(function TransactionRow({
                     <p className="text-xs text-muted-foreground">
                         {(txn.fees ?? 0) > 0 &&
                             t("invDetail.fee", {
-                                amount: fmt(
-                                    txn.fees ?? 0,
-                                    txn.currency || nativeCurrency,
-                                ),
+                                amount: fmt(txn.fees ?? 0, {
+                                    currency: txn.currency || nativeCurrency,
+                                }),
                             })}
                         {(txn.fees ?? 0) > 0 && (txn.taxes ?? 0) > 0 && " · "}
                         {(txn.taxes ?? 0) > 0 &&
                             t("invDetail.tax", {
-                                amount: fmt(
-                                    txn.taxes ?? 0,
-                                    txn.currency || nativeCurrency,
-                                ),
+                                amount: fmt(txn.taxes ?? 0, {
+                                    currency: txn.currency || nativeCurrency,
+                                }),
                             })}
                     </p>
                 )}
@@ -646,10 +646,9 @@ export function InvestmentDetailDialog({
                                             {t("invDetail.currentValue")}
                                         </div>
                                         <p className="text-2xl font-bold tabular-nums">
-                                            {fmt(
-                                                investment.currentValue,
-                                                investment.currency,
-                                            )}
+                                            {fmt(investment.currentValue, {
+                                                currency: investment.currency,
+                                            })}
                                         </p>
                                     </CardContent>
                                 </Card>
@@ -713,7 +712,10 @@ export function InvestmentDetailDialog({
                                                 <span className="font-medium tabular-nums">
                                                     {fmt(
                                                         investment.totalBuyCost,
-                                                        investment.currency,
+                                                        {
+                                                            currency:
+                                                                investment.currency,
+                                                        },
                                                     )}
                                                 </span>
                                             </div>
@@ -742,8 +744,11 @@ export function InvestmentDetailDialog({
                                                         <span className="font-medium tabular-nums">
                                                             {fmt(
                                                                 investment.avgCostBasis,
-                                                                investment.currency,
-                                                                2,
+                                                                {
+                                                                    currency:
+                                                                        investment.currency,
+                                                                    decimals: 2,
+                                                                },
                                                             )}
                                                         </span>
                                                     </div>
@@ -757,8 +762,11 @@ export function InvestmentDetailDialog({
                                                             <span className="font-medium tabular-nums">
                                                                 {fmt(
                                                                     investment.currentPrice,
-                                                                    investment.currency,
-                                                                    2,
+                                                                    {
+                                                                        currency:
+                                                                            investment.currency,
+                                                                        decimals: 2,
+                                                                    },
                                                                 )}
                                                             </span>
                                                         </div>
@@ -813,7 +821,10 @@ export function InvestmentDetailDialog({
                                                             {fmt(
                                                                 investment.cadastral_income ||
                                                                     0,
-                                                                investment.currency,
+                                                                {
+                                                                    currency:
+                                                                        investment.currency,
+                                                                },
                                                             )}
                                                         </span>
                                                     </div>
@@ -1043,7 +1054,10 @@ export function InvestmentDetailDialog({
                                                     {fmt(
                                                         fxSummary.nativeCurrentValue ??
                                                             investment.currentValue,
-                                                        nativeCurrency,
+                                                        {
+                                                            currency:
+                                                                nativeCurrency,
+                                                        },
                                                     )}
                                                 </span>
                                             </div>
@@ -1060,7 +1074,10 @@ export function InvestmentDetailDialog({
                                                 <span className="font-medium tabular-nums">
                                                     {fmt(
                                                         fxSummary.totalInvested,
-                                                        targetCurrency,
+                                                        {
+                                                            currency:
+                                                                targetCurrency,
+                                                        },
                                                     )}
                                                 </span>
                                             </div>

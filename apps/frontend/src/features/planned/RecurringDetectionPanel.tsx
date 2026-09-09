@@ -337,7 +337,10 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                                     <span className="text-xs text-muted-foreground line-through">
                                                         {formatCurrency(
                                                             lastChange.previousAmount,
-                                                            pattern.currency,
+                                                            {
+                                                                currency:
+                                                                    pattern.currency,
+                                                            },
                                                         )}
                                                     </span>
                                                     <span className="text-xs">
@@ -354,7 +357,10 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                                     >
                                                         {formatCurrency(
                                                             lastChange.newAmount,
-                                                            pattern.currency,
+                                                            {
+                                                                currency:
+                                                                    pattern.currency,
+                                                            },
                                                         )}
                                                     </span>
                                                     <Badge
@@ -511,7 +517,10 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                             <span className="text-sm font-bold text-foreground">
                                                 {formatCurrency(
                                                     pattern.latestAmount,
-                                                    pattern.currency,
+                                                    {
+                                                        currency:
+                                                            pattern.currency,
+                                                    },
                                                 )}
                                             </span>
                                             <div className="flex items-center gap-1">

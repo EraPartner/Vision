@@ -11,7 +11,7 @@ import type {
     MarketChartPoint,
     MarketChartResponse,
     MarketQuote,
-    MarketSearchResult,
+    ResearchSearchItem,
 } from "@/types/research";
 
 export type { MarketNewsArticle };
@@ -19,7 +19,7 @@ export type {
     MarketChartPoint,
     MarketChartResponse,
     MarketQuote,
-    MarketSearchResult,
+    ResearchSearchItem,
 };
 
 /** Canonical `{items, total}` collection body — callers only need the rows. */
@@ -80,7 +80,7 @@ export async function getMarketChart<P = MarketChartPoint>(
 
 export function searchMarket(
     query: string,
-): Promise<{ items: MarketSearchResult[] }> {
+): Promise<{ items: ResearchSearchItem[] }> {
     return apiRequest(`/api/market/search?q=${encodeURIComponent(query)}`);
 }
 
