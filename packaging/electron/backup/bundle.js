@@ -22,23 +22,12 @@
 // memoized getters so `require('./backup/bundle')` at Electron module-eval time
 // stays cheap — the first backup/restore pays the load cost instead of every launch.
 
-// archiver v7 exposes a CJS factory: archiver('zip', opts).
-// archiver v8+ is ESM with named class exports: new ZipArchive(opts).
-// This shim keeps the call site (`archiver('zip', opts)`) stable across both.
-let _archiver = null;
-function getArchiver() {
-  if (_archiver) return _archiver;
-  const archiverPkg = require("archiver");
-  _archiver =
-    typeof archiverPkg === "function"
-      ? archiverPkg
-      : (format, opts) => {
-          if (format === "zip") return new archiverPkg.ZipArchive(opts);
-          if (format === "tar") return new archiverPkg.TarArchive(opts);
-          if (format === "json") return new archiverPkg.JsonArchive(opts);
-          throw new Error(`Unsupported archiver format: ${format}`);
-        };
-  return _archiver;
+let _ZipArchive = null;
+function getZipArchive() {
+  if (!_ZipArchive) {
+    ({ ZipArchive: _ZipArchive } = require("archiver"));
+  }
+  return _ZipArchive;
 }
 
 let _yauzl = null;
@@ -138,7 +127,8 @@ async function createBundle({
 
   await new Promise((resolve, reject) => {
     const output = fs.createWriteStream(partialPath);
-    const archive = getArchiver()("zip", { zlib: { level: 6 } });
+    const ZipArchive = getZipArchive();
+    const archive = new ZipArchive({ zlib: { level: 6 } });
 
     let settled = false;
     const fail = (err) => {
