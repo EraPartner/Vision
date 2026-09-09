@@ -104,6 +104,22 @@ const IBKR_TRANSACTION_HISTORY_CONFIG: PortfolioCustomConfig = {
     typeMapping: { "Foreign Tax Withholding": "tax" },
 };
 
+const KINESIS_TRANSACTION_HISTORY_CONFIG: PortfolioCustomConfig = {
+    ...DEFAULT_CONFIG,
+    format: "kinesis_transaction_history",
+    dateColumn: "DateTime",
+    typeColumn: "Transaction_Type",
+    symbolColumn: "Currency_Code",
+    unitsColumn: "Amount",
+    priceColumn: "Trade_Price",
+    amountColumn: "Trade_Value",
+    feesColumn: "Fee",
+    currencyColumn: "Trade_Value_Currency",
+    // Kinesis mixes metals and crypto in one statement. New KAU/KAG holdings
+    // are inferred as metals by the backend; remaining codes use this fallback.
+    defaultAssetClass: "crypto",
+};
+
 const PortfolioImportIcon = PAGE_ICONS["/portfolio/import"];
 
 export function PortfolioImportPage() {
@@ -130,6 +146,8 @@ export function PortfolioImportPage() {
 
     const isSaved = source.startsWith("saved:");
     const isIbkrFormat = config.format === "ibkr_transaction_history";
+    const isKinesisFormat = config.format === "kinesis_transaction_history";
+    const isSpecializedFormat = isIbkrFormat || isKinesisFormat;
     const selectedParser = isSaved
         ? savedParsers?.find((p) => p.id === Number(source.slice(6)))
         : undefined;
@@ -165,6 +183,11 @@ export function PortfolioImportPage() {
             setConfig(nextConfig);
             setParserName("");
             setParserBaseline(JSON.stringify({ name: "", config: nextConfig }));
+        } else if (val === "kinesis") {
+            const nextConfig = { ...KINESIS_TRANSACTION_HISTORY_CONFIG };
+            setConfig(nextConfig);
+            setParserName("");
+            setParserBaseline(JSON.stringify({ name: "", config: nextConfig }));
         } else {
             setConfig(DEFAULT_CONFIG);
             setParserName("");
@@ -184,7 +207,7 @@ export function PortfolioImportPage() {
             toast.error(t("portfolioImport.toast.noMapping"));
             return;
         }
-        if (isIbkrFormat && config.accountId == null) {
+        if (isSpecializedFormat && config.accountId == null) {
             toast.error(t("portfolioImport.toast.brokerAccountRequired"));
             return;
         }
@@ -224,7 +247,7 @@ export function PortfolioImportPage() {
             toast.error(t("portfolioImport.toast.noMapping"));
             return;
         }
-        if (isIbkrFormat && config.accountId == null) {
+        if (isSpecializedFormat && config.accountId == null) {
             toast.error(t("portfolioImport.toast.brokerAccountRequired"));
             return;
         }
@@ -239,8 +262,8 @@ export function PortfolioImportPage() {
             errors: 0,
             percent: 0,
         });
-        const adapterName = isIbkrFormat
-            ? "ibkr_transaction_history"
+        const adapterName = isSpecializedFormat
+            ? config.format!
             : isSaved && selectedParser
               ? selectedParser.name
               : parserName.trim() || "portfolio_generic";
@@ -351,6 +374,12 @@ export function PortfolioImportPage() {
                                         {t("portfolioImport.ibkrParser")}
                                     </span>
                                 </SelectItem>
+                                <SelectItem value="kinesis">
+                                    <span className="inline-flex items-center gap-2">
+                                        <Bookmark className="h-3.5 w-3.5 text-primary" />
+                                        {t("portfolioImport.kinesisParser")}
+                                    </span>
+                                </SelectItem>
                                 {savedParsers?.map((parser) => (
                                     <SelectItem
                                         key={parser.id}
@@ -366,9 +395,13 @@ export function PortfolioImportPage() {
                         </Select>
                     </div>
 
-                    {isIbkrFormat ? (
+                    {isSpecializedFormat ? (
                         <p className="rounded-md border bg-muted/20 p-3 text-sm text-muted-foreground">
-                            {t("portfolioImport.ibkrParserHint")}
+                            {t(
+                                isIbkrFormat
+                                    ? "portfolioImport.ibkrParserHint"
+                                    : "portfolioImport.kinesisParserHint",
+                            )}
                         </p>
                     ) : (
                         <>
@@ -497,7 +530,7 @@ export function PortfolioImportPage() {
                     />
 
                     {/* Detected columns of the selected file */}
-                    {!isIbkrFormat && (
+                    {!isSpecializedFormat && (
                         <FileHeadersPanel
                             file={file}
                             separator={config.separator}

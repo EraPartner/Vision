@@ -56,6 +56,7 @@ postgres_data/
 Backups/
 *.csv
 !apps/node-backend/tests/fixtures/portfolio/ibkr-transaction-history.csv
+!apps/node-backend/tests/fixtures/portfolio/kinesis-transaction-history.csv
 !apps/node-backend/tests/fixtures/portfolio/not-ibkr.csv
 # SQLite artifacts only — a bare *.db* also swallowed tests named *.db.test.js
 *.db

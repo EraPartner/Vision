@@ -3,10 +3,10 @@ title: Test Inventory
 type: testing
 status: active
 date: 2026-04-30
-last_modified: 2026-08-26
-updated: 2026-08-31
-last-updated: 2026-08-26
-last_updated_timestamp: 2026-08-26T00:00:00Z
+last_modified: 2026-09-09
+updated: 2026-09-09
+last-updated: 2026-09-09
+last_updated_timestamp: 2026-09-09T00:00:00Z
 added_portfolio_tax_pure_module_tests: 2026-05-29
 added_chart_aria_tests: 2026-05-29
 added_portfolio_math_tests: 2026-05-05
@@ -936,10 +936,11 @@ The Transaction Tags feature test suite is now **complete and passing**. All tes
 
 ### Recently Updated Backend Coverage (2026-04-26)
 
-| File                                                    | Area                         | Coverage Added                                                                                                                       |
-| ------------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `apps/node-backend/tests/priceProviderRegistry.test.js` | Price providers (Kinesis)    | Stale-run removal (≥ 8 identical prices), edge-point anomalies (first/last point 1.8x deviation), combined scenarios, immutability   |
-| `apps/node-backend/tests/sseWriter.test.js`             | SSE backpressure (Phase 3.2) | `drainIfNeeded()` immediate return + full-buffer pause; `createSseWriter()` client tracking, async write, closed state, frame format |
+| File                                                               | Area                             | Coverage Added                                                                                                                                 |
+| ------------------------------------------------------------------ | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/node-backend/tests/priceProviderRegistry.test.js`            | Price providers (Kinesis)        | Stale-run removal (≥ 8 identical prices), edge-point anomalies (first/last point 1.8x deviation), combined scenarios, immutability             |
+| `apps/node-backend/tests/kinesisTransactionHistoryAdapter.test.js` | Portfolio import (Kinesis Money) | Real 18-column schema, shared-ID trade/cash legs, fee conversion, distributions, fiat-symbol stripping, transfer-out review errors, provenance |
+| `apps/node-backend/tests/sseWriter.test.js`                        | SSE backpressure (Phase 3.2)     | `drainIfNeeded()` immediate return + full-buffer pause; `createSseWriter()` client tracking, async write, closed state, frame format           |
 
 ### Earlier Backend Coverage (2026-04-10)
 

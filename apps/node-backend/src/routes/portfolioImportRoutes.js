@@ -138,19 +138,21 @@ function parseBrokerageParams(data) {
 }
 
 /**
- * Format-specific routing contract. IBKR Transaction History contains cash
- * movements as well as securities transactions, so every row must have the
- * brokerage sleeve that receives both routes.
+ * Format-specific routing contract. Maintained transaction-history formats
+ * contain cash movements as well as asset transactions, so every row must have
+ * the brokerage sleeve that receives both routes.
  * @param {{ format?: string }} customConfig
  * @param {{ isBrokerage: boolean, accountId?: number }} brokerage
  */
 function assertPortfolioFormatBrokerage(customConfig, brokerage) {
   if (
-    customConfig.format === "ibkr_transaction_history" &&
+    ["ibkr_transaction_history", "kinesis_transaction_history"].includes(
+      customConfig.format,
+    ) &&
     (!brokerage.isBrokerage || brokerage.accountId == null)
   ) {
     throw new ValidationError(
-      "IBKR Transaction History requires is_brokerage=true and account_id",
+      `${customConfig.format === "ibkr_transaction_history" ? "IBKR" : "Kinesis"} Transaction History requires is_brokerage=true and account_id`,
     );
   }
 }
@@ -244,7 +246,7 @@ const portfolioImportConfigSchema = z
     type_mapping: z.unknown().optional().transform(parseTypeMapping),
     adapter_name: defaultedTextField("portfolio_generic"),
     portfolio_format: z
-      .enum(["ibkr_transaction_history"], {
+      .enum(["ibkr_transaction_history", "kinesis_transaction_history"], {
         error: "portfolio_format must be a supported portfolio format",
       })
       .optional(),

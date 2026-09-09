@@ -22,6 +22,15 @@ describe("portfolio import format contract", () => {
     expect(parsed.adapterName).toBe("portfolio_generic");
   });
 
+  it("passes the supported Kinesis format into the parser config", () => {
+    const parsed = __buildPortfolioConfig({
+      ...minimal,
+      portfolio_format: "kinesis_transaction_history",
+    });
+
+    expect(parsed.customConfig.format).toBe("kinesis_transaction_history");
+  });
+
   it("rejects an unknown specialized format", () => {
     expect(() =>
       __buildPortfolioConfig({ ...minimal, portfolio_format: "guess" }),
@@ -37,6 +46,23 @@ describe("portfolio import format contract", () => {
         accountId: undefined,
       }),
     ).toThrow(/requires is_brokerage=true and account_id/);
+    expect(() =>
+      __assertPortfolioFormatBrokerage(config, {
+        isBrokerage: true,
+        accountId: 7,
+      }),
+    ).not.toThrow();
+  });
+
+  it("requires an explicit brokerage account for Kinesis cash routing", () => {
+    const config = { format: "kinesis_transaction_history" };
+
+    expect(() =>
+      __assertPortfolioFormatBrokerage(config, {
+        isBrokerage: false,
+        accountId: undefined,
+      }),
+    ).toThrow(/Kinesis Transaction History requires/);
     expect(() =>
       __assertPortfolioFormatBrokerage(config, {
         isBrokerage: true,

@@ -84,6 +84,39 @@ describe("versioned import identity", () => {
     expect(fingerprint({ currency: "USD" })).not.toBe(fingerprint({}));
   });
 
+  it("keeps paired Kinesis trade legs distinct when they share a source id", () => {
+    const rows = [
+      {
+        tx_date: "2026-01-02",
+        type: "buy",
+        route: "portfolio",
+        symbol_raw: "KAG",
+        currency: "EUR",
+        source_transaction_id: "TX-BUY",
+        source_account_identity: "KM00000001",
+        raw_data: "asset leg",
+      },
+      {
+        tx_date: "2026-01-02",
+        type: "withdrawal",
+        route: "cash",
+        symbol_raw: "",
+        currency: "EUR",
+        source_transaction_id: "TX-BUY",
+        source_account_identity: "KM00000001",
+        raw_data: "cash leg",
+      },
+    ];
+    const identities = assignImportIdentities(rows, (row) =>
+      portfolioIdentityBase(row, {
+        adapterName: "kinesis_transaction_history",
+        accountIdentity: "fallback-account",
+      }),
+    );
+
+    expect(identities[0].fingerprint).not.toBe(identities[1].fingerprint);
+  });
+
   it("hashes an empty literal record but not an absent record", () => {
     expect(computeSourceRecordHash("")).toMatch(/^[0-9a-f]{64}$/);
     expect(computeSourceRecordHash(null)).toBeNull();

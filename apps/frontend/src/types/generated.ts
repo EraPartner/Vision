@@ -4469,10 +4469,10 @@ export interface components {
             /** @description Display label for the import source */
             adapter_name?: string;
             /**
-             * @description Specialized portfolio statement parser; omit for generic column mapping. IBKR requires is_brokerage=true and account_id because its Transaction History includes cash movements.
+             * @description Specialized portfolio statement parser; omit for generic column mapping. IBKR and Kinesis require is_brokerage=true and account_id because their transaction histories include cash movements.
              * @enum {string}
              */
-            portfolio_format?: "ibkr_transaction_history";
+            portfolio_format?: "ibkr_transaction_history" | "kinesis_transaction_history";
             /** @description Python strptime format, default: %Y-%m-%d */
             date_format?: string;
             /** @description Single-character CSV delimiter, default ',' */
@@ -4503,7 +4503,7 @@ export interface components {
             is_brokerage?: boolean;
             /**
              * Format: int32
-             * @description Sleeve account every row of this import lands on. Required when is_brokerage is true or portfolio_format is ibkr_transaction_history; ignored otherwise. Must be a positive integer; malformed values are rejected rather than coerced.
+             * @description Sleeve account every row of this import lands on. Required when is_brokerage is true or portfolio_format is a maintained transaction-history parser; ignored otherwise. Must be a positive integer; malformed values are rejected rather than coerced.
              */
             account_id?: number;
         };

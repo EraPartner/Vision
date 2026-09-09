@@ -196,7 +196,9 @@ export async function overrideInvestment({ batchId, rowId, investmentId }) {
         SELECT id, status AS old_status
           FROM portfolio_import_staging_rows
          WHERE batch_id = $1 AND id = $2
-           AND status IN ('matched', 'error')
+           AND (status = 'matched'
+             OR (status = 'error'
+               AND error_message = 'unresolved instrument — pick or create a holding'))
            AND route IS DISTINCT FROM 'cash'
          FOR UPDATE
      ),
@@ -244,7 +246,7 @@ export async function overrideInvestment({ batchId, rowId, investmentId }) {
  * overrides.
  *
  * @param {{ batchId: number, rowIds: number[] }} args
- * @returns {Promise<{ batchStatus: string|undefined, rows: Array<{ id: number, status: string, route: string|null, user_override_investment_id: number|null }> }>}
+ * @returns {Promise<{ batchStatus: string|undefined, rows: Array<{ id: number, status: string, route: string|null, error_message: string|null, user_override_investment_id: number|null }> }>}
  */
 export async function lockInvestmentResolutionRows({ batchId, rowIds }) {
   const batch = await lockBatchForUpdate(batchId);
@@ -253,7 +255,7 @@ export async function lockInvestmentResolutionRows({ batchId, rowIds }) {
   }
 
   const { rows } = await query(
-    `SELECT id, status, route, user_override_investment_id
+    `SELECT id, status, route, error_message, user_override_investment_id
        FROM portfolio_import_staging_rows
       WHERE batch_id = $1 AND id = ANY($2::bigint[])
       ORDER BY id
@@ -281,7 +283,7 @@ export async function overrideInvestments({ batchId, rowIds, investmentId }) {
         SELECT DISTINCT unnest($2::bigint[]) AS id
      ),
      locked AS (
-        SELECT r.id, r.status AS old_status, r.route
+        SELECT r.id, r.status AS old_status, r.route, r.error_message
           FROM portfolio_import_staging_rows r
           JOIN requested req ON req.id = r.id
          WHERE r.batch_id = $1
@@ -291,7 +293,9 @@ export async function overrideInvestments({ batchId, rowIds, investmentId }) {
      eligible AS (
         SELECT id, old_status
           FROM locked
-         WHERE old_status IN ('matched', 'error')
+         WHERE (old_status = 'matched'
+             OR (old_status = 'error'
+               AND error_message = 'unresolved instrument — pick or create a holding'))
            AND route IS DISTINCT FROM 'cash'
      ),
      counts AS (
@@ -347,11 +351,12 @@ export async function overrideInvestments({ batchId, rowIds, investmentId }) {
  * for creating a new holding from the review "create new" action.
  *
  * @param {{ batchId: number, rowId: number }} args
- * @returns {Promise<{ symbol_raw: string|null, name_raw: string|null, currency: string|null, default_asset_class: string|null }|undefined>}
+ * @returns {Promise<{ symbol_raw: string|null, name_raw: string|null, currency: string|null, default_asset_class: string|null, custom_config: object|string|null }|undefined>}
  */
 export async function getRowForInvestmentCreation({ batchId, rowId }) {
   const { rows } = await query(
-    `SELECT isr.symbol_raw, isr.name_raw, isr.currency, b.default_asset_class
+    `SELECT isr.symbol_raw, isr.name_raw, isr.currency, b.default_asset_class,
+            b.custom_config
        FROM portfolio_import_staging_rows isr
        JOIN portfolio_import_batches b ON b.id = isr.batch_id
       WHERE isr.batch_id = $1 AND isr.id = $2`,

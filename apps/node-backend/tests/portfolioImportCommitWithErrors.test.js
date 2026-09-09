@@ -76,7 +76,9 @@ describe("overrideInvestment — repair path for errored rows", () => {
 
     expect(rowCount).toBe(1);
     const updateSql = query.mock.calls[0][0];
-    expect(updateSql).toMatch(/status IN \('matched', 'error'\)/);
+    expect(updateSql).toContain(
+      "error_message = 'unresolved instrument — pick or create a holding'",
+    );
     expect(updateSql).toMatch(/'matched'/);
     // Second call decrements the batch counter (never below zero).
     const decrement = query.mock.calls[1];
@@ -191,6 +193,9 @@ describe("overrideInvestments — atomic row-set guard", () => {
     });
     const [sql, params] = query.mock.calls[0];
     expect(sql).toMatch(/counts\.requested_count = counts\.eligible_count/);
+    expect(sql).toContain(
+      "error_message = 'unresolved instrument — pick or create a holding'",
+    );
     expect(sql).toMatch(/ORDER BY r\.id\s+FOR UPDATE OF r/);
     expect(sql).toMatch(/FOR UPDATE OF r/);
     expect(params).toEqual([5, [10, 11, 12], 88]);

@@ -23,6 +23,8 @@ import {
   resetCommittedRowsToMatched,
 } from "../repositories/portfolioImportBatchRepository.js";
 
+const KINESIS_METAL_SYMBOLS = new Set(["KAU", "KAG"]);
+
 export {
   listBatches,
   getBatch,
@@ -159,7 +161,13 @@ async function validateInvestmentResolutionRows({
     locked.rows.length !== rowIds.length ||
     locked.rows.some(
       (row) =>
-        row.route === "cash" || !["matched", "error"].includes(row.status),
+        row.route === "cash" ||
+        (row.status !== "matched" &&
+          !(
+            row.status === "error" &&
+            row.error_message ===
+              "unresolved instrument — pick or create a holding"
+          )),
     )
   ) {
     const err = /** @type {Error & { code?: string }} */ (
@@ -223,12 +231,34 @@ async function createInvestmentFromRow({ batchId, rowId }) {
   const rawCurrency = String(row.currency || "")
     .trim()
     .toUpperCase();
+  let config = {};
+  try {
+    config =
+      typeof row.custom_config === "string"
+        ? JSON.parse(row.custom_config)
+        : row.custom_config || {};
+  } catch {
+    // Malformed historical config falls back to the batch default, matching
+    // the generic create-new behavior instead of blocking review.
+  }
+  const symbol = (row.symbol_raw || "").trim().toUpperCase();
+  const assetClass =
+    config.format === "kinesis_transaction_history" &&
+    KINESIS_METAL_SYMBOLS.has(symbol)
+      ? "metals"
+      : row.default_asset_class;
+  const holdingCurrency =
+    config.format === "kinesis_transaction_history"
+      ? "USD"
+      : /^[A-Z]{3}$/.test(rawCurrency)
+        ? rawCurrency
+        : "EUR";
   const investment = await investmentRepository.create(
     /** @type {any} */ ({
       name,
-      symbol: (row.symbol_raw || "").trim() || undefined,
-      asset_class: row.default_asset_class,
-      currency: /^[A-Z]{3}$/.test(rawCurrency) ? rawCurrency : "EUR",
+      symbol: symbol || undefined,
+      asset_class: assetClass,
+      currency: holdingCurrency,
       price_provider: "manual",
     }),
   );

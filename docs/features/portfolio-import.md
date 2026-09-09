@@ -38,6 +38,7 @@ related_code:
   - "apps/node-backend/src/services/portfolioImportPipeline/commit.js"
   - "apps/node-backend/src/services/portfolioImportPipeline/portfolioGenericAdapter.js"
   - "apps/node-backend/src/services/portfolioImportPipeline/ibkrTransactionHistoryAdapter.js"
+  - "apps/node-backend/src/services/portfolioImportPipeline/kinesisTransactionHistoryAdapter.js"
   - "apps/node-backend/src/services/portfolioImportPipeline/portfolioTypeNormalizer.js"
   - "apps/node-backend/src/services/importIdentity.js"
   - "apps/node-backend/src/services/portfolioImportBatchService.js"
@@ -63,13 +64,14 @@ Portfolio CSV Import lets users bulk-load brokerage and exchange trade history f
 
 Key design points:
 
-- **Generic mapping plus an IBKR preset**: ordinary CSVs use the custom column mapper. The IBKR
-  Transaction History preset handles that report's multi-section and mixed-currency semantics. It
-  requires an active broker account because the same report contains both trades and cash movements.
-- **Maintained acceptance targets**: IBKR Transaction History is validated against a real EUR-base
-  export and a sanitized regression fixture. Nexo, Kinesis Money, and Saxo remain unverified until
-  their runtime-acceptance records are completed with sanitized real exports. Other brokers may
-  still work through user-defined mappings, but are not maintained compatibility targets.
+- **Generic mapping plus maintained presets**: ordinary CSVs use the custom column mapper. The IBKR
+  and Kinesis Money transaction-history presets handle their format-specific framing and
+  mixed-currency semantics. Both require an active broker account because the reports contain trades
+  and cash movements.
+- **Maintained acceptance targets**: IBKR Transaction History and Kinesis Money Transactions are
+  validated against real exports and sanitized regression fixtures. Nexo and Saxo remain unverified
+  until their runtime-acceptance records are completed with sanitized real exports. Other brokers
+  may still work through user-defined mappings, but are not maintained compatibility targets.
 - **Instrument matching by symbol then name** (exact, case-insensitive). No ISIN lookup, no fuzzy match.
 - **Conservative auto-commit**: only when every row matched exactly and there are zero errors/unresolved.
 - **Review step for mismatches**: unresolved rows go to `awaiting_review`; the user links each symbol/name to an existing investment or creates a new one.
@@ -86,7 +88,8 @@ Key design points:
 
 Parses an ordinary uploaded CSV using `portfolioGenericAdapter`, which reads `column_mapping` from
 the config. When `format = 'ibkr_transaction_history'`, that entry point delegates to
-`ibkrTransactionHistoryAdapter`. Raw rows from either path are stored in
+`ibkrTransactionHistoryAdapter`; `format = 'kinesis_transaction_history'` delegates to
+`kinesisTransactionHistoryAdapter`. Raw rows from every path are stored in
 `portfolio_import_staging_rows`.
 
 The IBKR adapter locates the `Transaction History,Header` record instead of treating the statement's
@@ -109,6 +112,30 @@ applies these format-specific rules:
 Regression coverage uses `tests/fixtures/portfolio/ibkr-transaction-history.csv`, a synthetic file
 that preserves the real section framing, exact headers, locale-comma decimals, dash placeholders,
 and row kinds without retaining account or transaction data from the supplied export.
+
+The Kinesis adapter validates the real Transactions statement's 18 headers. Kinesis writes the
+asset and quote sides of a trade as separate rows with the same `Order_ID`; the adapter collapses
+them into one portfolio buy/sell and one real cash-ledger movement. It uses balance deltas for
+direction, strips fiat quote codes from instrument matching, converts asset-denominated fees at the
+exported trade price, and retains `Transaction_ID` and `HIN` as source and account identity.
+
+Holder and velocity yields are paid in metal, so one source record becomes dividend income plus a
+gifted-unit row carrying the same value as basis. This keeps both income and units without creating
+an immediate duplicate gain. Asset deposits become zero-basis gifts because their original basis is
+not present. Fiat deposits, withdrawals, and card payments remain instrument-less cash rows.
+Positive distribution adjustments add zero-basis units. The current portfolio transaction model
+has no transfer-out type, and treating an asset withdrawal or negative unit adjustment as a sale
+would fabricate proceeds. The adapter therefore stages those source records as explicit review
+errors. They remain visible with their original CSV provenance and cannot be committed silently.
+Review-time holding creation infers KAU and KAG as `metals`; other Kinesis asset codes use the
+preset's `crypto` fallback so mixed statements create the expected asset classes. Kinesis-created
+holdings use USD as their valuation currency, including asset-deposit rows that carry no quote
+currency.
+
+Regression coverage uses `tests/fixtures/portfolio/kinesis-transaction-history.csv`, a synthetic
+file preserving the real headers, UTC timestamp style, dot-decimal values, paired trade legs,
+distributions, fiat rows, noisy currency-code cells, and unsupported transfer-out cases without
+retaining the supplied HIN or transaction identifiers.
 
 The transaction and portfolio pipelines share `importStageLifecycle.js` for the staging status
 transition, BIGSERIAL batch-id normalization, 500-row chunk loop, persisted total, and progress

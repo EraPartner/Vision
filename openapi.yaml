@@ -2748,11 +2748,11 @@ components:
           description: Display label for the import source
         portfolio_format:
           type: string
-          enum: [ibkr_transaction_history]
+          enum: [ibkr_transaction_history, kinesis_transaction_history]
           description: >-
             Specialized portfolio statement parser; omit for generic column
-            mapping. IBKR requires is_brokerage=true and account_id because
-            its Transaction History includes cash movements.
+            mapping. IBKR and Kinesis require is_brokerage=true and account_id
+            because their transaction histories include cash movements.
         date_format:
           type: string
           description: "Python strptime format, default: %Y-%m-%d"
@@ -2795,8 +2795,8 @@ components:
           minimum: 1
           description: >-
             Sleeve account every row of this import lands on. Required when
-            is_brokerage is true or portfolio_format is
-            ibkr_transaction_history; ignored otherwise. Must be a positive
+            is_brokerage is true or portfolio_format is a maintained
+            transaction-history parser; ignored otherwise. Must be a positive
             integer; malformed values are rejected rather than coerced.
 
     PortfolioParserConfig:

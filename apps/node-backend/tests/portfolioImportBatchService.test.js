@@ -424,6 +424,87 @@ describe("resolveInvestmentRows — atomic group resolution", () => {
     });
   });
 
+  it("creates Kinesis metal symbols as metals in a mixed crypto batch", async () => {
+    lockInvestmentResolutionRows.mockResolvedValue({
+      batchStatus: "awaiting_review",
+      rows: [
+        {
+          id: 10,
+          status: "matched",
+          user_override_investment_id: null,
+        },
+      ],
+    });
+    getRowForInvestmentCreation.mockResolvedValue({
+      symbol_raw: "kau",
+      name_raw: "",
+      currency: null,
+      default_asset_class: "crypto",
+      custom_config: { format: "kinesis_transaction_history" },
+    });
+    investmentRepository.create.mockResolvedValue({ id: 92, name: "KAU" });
+    overrideInvestments.mockResolvedValue({
+      requestedCount: 1,
+      eligibleCount: 1,
+      updatedCount: 1,
+    });
+
+    await resolveInvestmentRows({
+      batchId: 5,
+      rowIds: [10],
+      createNew: true,
+    });
+
+    expect(investmentRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "kau",
+        symbol: "KAU",
+        asset_class: "metals",
+        currency: "USD",
+      }),
+    );
+  });
+
+  it("creates a Kinesis crypto holding in USD when its transfer row has no valuation currency", async () => {
+    lockInvestmentResolutionRows.mockResolvedValue({
+      batchStatus: "awaiting_review",
+      rows: [
+        {
+          id: 13,
+          status: "matched",
+          user_override_investment_id: null,
+        },
+      ],
+    });
+    getRowForInvestmentCreation.mockResolvedValue({
+      symbol_raw: "BTC",
+      name_raw: "",
+      currency: null,
+      default_asset_class: "crypto",
+      custom_config: { format: "kinesis_transaction_history" },
+    });
+    investmentRepository.create.mockResolvedValue({ id: 93, name: "BTC" });
+    overrideInvestments.mockResolvedValue({
+      requestedCount: 1,
+      eligibleCount: 1,
+      updatedCount: 1,
+    });
+
+    await resolveInvestmentRows({
+      batchId: 5,
+      rowIds: [13],
+      createNew: true,
+    });
+
+    expect(investmentRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        symbol: "BTC",
+        asset_class: "crypto",
+        currency: "USD",
+      }),
+    );
+  });
+
   it("throws inside the transaction when any requested row is ineligible", async () => {
     lockInvestmentResolutionRows.mockResolvedValue({
       batchStatus: "awaiting_review",
@@ -466,6 +547,33 @@ describe("resolveInvestmentRows — atomic group resolution", () => {
 
     expect(investmentRepository.create).not.toHaveBeenCalled();
     expect(overrideInvestment).not.toHaveBeenCalled();
+  });
+
+  it("does not clear an adapter validation error through holding resolution", async () => {
+    lockInvestmentResolutionRows.mockResolvedValue({
+      batchStatus: "awaiting_review",
+      rows: [
+        {
+          id: 10,
+          status: "error",
+          route: null,
+          error_message:
+            'unknown transaction type "Unsupported Kinesis event: Withdrawal"',
+          user_override_investment_id: null,
+        },
+      ],
+    });
+
+    await expect(
+      resolveInvestmentRows({
+        batchId: 5,
+        rowIds: [10],
+        investmentId: 88,
+      }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+    expect(investmentRepository.getById).not.toHaveBeenCalled();
+    expect(overrideInvestments).not.toHaveBeenCalled();
   });
 
   it("rejects an aborted batch before any investment lookup, creation, or row write", async () => {

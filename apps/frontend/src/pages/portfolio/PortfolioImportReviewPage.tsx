@@ -39,6 +39,16 @@ import {
  * it the scrollbar) does not drift as the user scrolls a long group.
  */
 const PREVIEW_ROW_ESTIMATE = 38;
+const RESOLVABLE_INSTRUMENT_ERROR =
+    "unresolved instrument — pick or create a holding";
+
+function isHoldingResolvable(row: PortfolioPreviewRow) {
+    return (
+        row.status === "matched" ||
+        (row.status === "error" &&
+            row.error_message === RESOLVABLE_INSTRUMENT_ERROR)
+    );
+}
 
 /**
  * A group's preview rows. The page has no scroll container of its own — it
@@ -209,13 +219,13 @@ export function PortfolioImportReviewPage() {
         investmentId: number | null,
     ) => {
         if (investmentId == null) return;
+        const rowIds = g.rows.filter(isHoldingResolvable).map((row) => row.id);
+        if (!rowIds.length) return;
         setBusyGroup(groupKey(g));
         try {
-            await apiClient.overridePortfolioImportRows(
-                batchId,
-                g.rows.map((row) => row.id),
-                { investmentId },
-            );
+            await apiClient.overridePortfolioImportRows(batchId, rowIds, {
+                investmentId,
+            });
             await refresh();
         } catch (err) {
             toast.error(t("importPage.toast.serverError"), {
@@ -227,14 +237,13 @@ export function PortfolioImportReviewPage() {
     };
 
     const createNew = async (g: PortfolioPreviewGroup) => {
-        if (!g.rows.length) return;
+        const rowIds = g.rows.filter(isHoldingResolvable).map((row) => row.id);
+        if (!rowIds.length) return;
         setBusyGroup(groupKey(g));
         try {
-            await apiClient.overridePortfolioImportRows(
-                batchId,
-                g.rows.map((row) => row.id),
-                { createNew: true },
-            );
+            await apiClient.overridePortfolioImportRows(batchId, rowIds, {
+                createNew: true,
+            });
             await refresh();
             toast.success(t("portfolioImport.toast.holdingCreated"));
         } catch (err) {
@@ -332,6 +341,7 @@ export function PortfolioImportReviewPage() {
 
             {data.groups.map((g) => {
                 const key = groupKey(g);
+                const hasResolvableRows = g.rows.some(isHoldingResolvable);
                 // Brokerage cash group (ADR-095): no instrument to resolve — it commits as
                 // plain cash transactions on the batch's sleeve.
                 const resolved = g.is_cash || g.investment_id != null;
@@ -373,7 +383,7 @@ export function PortfolioImportReviewPage() {
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-3">
-                            {!g.is_cash && (
+                            {!g.is_cash && hasResolvableRows && (
                                 <div className="flex flex-wrap items-center gap-2">
                                     <span className="text-xs text-muted-foreground">
                                         {t("portfolioImport.review.holding")}
