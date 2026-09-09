@@ -24,13 +24,13 @@ Run `bun run todo:list` for the concise queue and `bun run todo:check` for ledge
 
 This is the current hand-off point after the complete TODO normalization audit. Do not repeat a
 repository-wide audit before selecting work. Following the product exploration below, the queue
-contains **39 open records and no checked records**. The records fall into these states:
+contains **41 open records and no checked records**. The records fall into these states:
 
 - **1 verified-present**: source work is still required; revalidate the named evidence, then
   implement one item at a time.
 - **4 runtime-unverified**: source work is complete or substantially complete; perform only the
   named live database, Demo, browser, Electron, or external acceptance check.
-- **35 decision-needed**: planned outcomes expanded on 2026-09-08 and 2026-09-09; the shared analysis workspace
+- **36 decision-needed**: planned outcomes expanded on 2026-09-08 and 2026-09-09; the shared analysis workspace
   direction is user-requested. This session authorizes planning, not implementation. Resolve the
   remaining engineering/provider choices during design; do not ask the user to reapprove the shared
   manual/visual/SQL/local-AI direction. Portfolio exposure, dossiers, integrated research, stronger
@@ -751,6 +751,94 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
     records, historical provenance reconstruction, new per-bank raw tables, and deletion of legacy
     columns are explicitly outside this item.
 
+- [ ] **Migrate and retire provider-specific raw transaction storage without losing provenance** ⏫
+  - Tracking: 🔎 decision-needed 2026-09-09 (direction fixed: converge on provider-neutral storage; after the ADR-134 live gate, settle the durable archive shape and manual-duplicate transition before authoring destructive DDL)
+  - ↪ _from: User legacy-removal plan 2026-09-09 · uniform bank and broker import storage with zero current-data loss_
+  - **Current split:** active bank imports already use `import_batches` plus
+    `import_staging_rows`, and broker imports use their portfolio equivalents. The old
+    `belfius_raw_transactions`, `revolut_raw_transactions`, `kbc_raw_transactions`,
+    `sabb_raw_transactions`, `wise_raw_transactions`, `vision_raw_transactions`, and
+    `custom_raw_transactions` tables have no runtime readers or writers. Do not copy their history
+    only into ordinary staging: terminal staging provenance is deleted after 30 days.
+    `transaction_raw_references` also has no runtime consumer but may preserve historical
+    many-to-many links. `manual_raw_transactions` is not dead: manual creation still reads and
+    writes it for duplicate detection, so it must be replaced before it is dropped.
+  - **Expand and migrate:** define one durable provider-neutral provenance model, or another
+    reviewed non-lossy destination, that preserves every source row's adapter/source type, old ID,
+    creation time, deduplication hash, exact `raw_csv_line`, complete provider-specific fields, and
+    every valid `transaction_raw_references` link. Preserve unlinked and dangling records with an
+    explicit status instead of discarding them. Move manual duplicate identity to canonical,
+    versioned transaction metadata or an accurately named replacement with equivalent atomic and
+    concurrency-safe behavior; preserve deleted/re-added and intentionally allowed duplicate cases.
+  - **Shape guards:** support both known installation histories: fresh databases may contain all
+    eight raw tables, while pre-squash databases may lack `custom_raw_transactions`. Inventory the
+    live relation kinds, constraints, row counts, duplicate hashes, reference targets, and orphan
+    sets before mutation. Abort on an unknown/partial shape or unexplained count, link, or digest
+    mismatch. Do not infer the live shape from Alembic revision alone.
+  - **Contract only after parity:** deploy readers/writers for the new model first; backfill in a
+    restart-safe transaction or bounded resumable chunks; compare per-source counts, hashes,
+    timestamps, exact raw bytes, JSON/native-field payloads, and links; then stop writers and repeat
+    the delta check. Only after all parity gates pass may a later contract migration remove
+    `transaction_raw_references`, every provider-specific raw table, their constraints/indexes, and
+    obsolete manual-dedup code. Update backup/restore coverage, schema allowlists, data editor,
+    diagrams, docs, and fresh-install expectations in the same contract change.
+  - **Recovery evidence:** add mixed-shape PostgreSQL fixtures with linked, unlinked, dangling,
+    duplicate, and manual rows. Prove upgrade restart/idempotence, concurrent manual creates,
+    downgrade reconstruction or a clearly tested pre-contract rollback, logical backup listing,
+    restore into disposable PostgreSQL 18, and row-level parity after restore. Live execution is a
+    separate user-approved maintenance operation; never auto-apply the destructive contract to the
+    maintained database.
+
+- [ ] **Preserve and remove the ADR-109 `legacy_inh_*` rollback relations after their live safety gate** 🔼
+  - Tracking: 🔎 runtime-unverified 2026-09-09 (the guarded out-of-band cleanup exists but must not run before the exact installation completes its 30-day incident-free soak, a fresh logical backup is restore-tested, and every legacy-only row has a non-lossy disposition)
+  - ↪ _from: User legacy-removal plan 2026-09-09 · converted flat-investments database cleanup_
+  - Keep this separate from ordinary Alembic upgrades. Start from
+    `alembic/manual/drop_adr109_legacy_relations/`, which already requires stopped writers, canonical
+    flat tables, a complete expected relation set, correct relation kinds, an explicit verified
+    backup flag, and a durable cleanup marker. Fresh flat installations remain a no-op; partial or
+    unknown residue must fail closed before `CASCADE`.
+  - Strengthen the preflight from recoverability to zero loss: compare every legacy investment and
+    portfolio-transaction row with the canonical flat tables, including rows intentionally omitted
+    by migration 0087 because their parent had already been deleted. Restore valid missing business
+    rows where domain invariants allow it; otherwise retain the full original row, relation name,
+    identifiers, and exclusion reason in a reviewed durable quarantine/export that is included in
+    the verified restore test. Do not silently treat a mismatch as disposable corruption.
+  - Run the exact-installation soak from the first stable 0087 deployment; any conversion repair,
+    rollback, or portfolio-integrity incident restarts it. At the approved maintenance window,
+    stop all writers, repeat counts and digests, create and restore-test a fresh `pg_dump`, run the
+    guarded cleanup once, then verify Alembic state, portfolio reads, a disposable write/rollback,
+    canonical totals, backup/restore, absence of all targeted relations, and presence of the cleanup
+    marker. Keep the pre-cleanup backup until the post-contract acceptance is complete.
+
+- [ ] **Inventory all remaining legacy and compatibility surfaces and queue bounded retirements** 🔼
+  - Tracking: 🔎 decision-needed 2026-09-09 (repository-wide inventory requested; define evidence and soak windows per consumer before splitting removal work, and do not equate a `legacy`, `compatibility`, `fallback`, or `skeleton` label with dead code)
+  - ↪ _from: User legacy-removal plan 2026-09-09 · remove every no-longer-needed code, schema, API, configuration, and storage remnant_
+  - Produce a machine-checkable inventory across runtime code, database relations/columns/types,
+    migrations and manual contracts, API aliases/events, frontend persisted settings, Electron user
+    data and backup readers, configuration/provider shims, generated types, tests, and documentation.
+    For each candidate record its current readers/writers, persisted-data population, supported
+    client/install window, replacement, deletion dependency, telemetry or live evidence, migration
+    and rollback needs, and final classification: remove now, migrate then remove, retain with reason,
+    historical record only, or unknown. Search by reachability and schema usage as well as naming.
+  - Seed the audit with known active compatibility surfaces: legacy `tx_hash` after ADR-134;
+    `bank_account` request compatibility and fresh-Alembic columns; account-statement scalar
+    projections; dormant `import_staging_rows.resolved_bank_account_id`; upgraded-install-only
+    `exchange_rate_cache`; the old portfolio transaction enum retained for downgrade/frozen
+    relations; the deprecated AI `done` event; deprecated category/date/import API aliases;
+    persisted `enhancedEffects`, dashboard, and insight-dismissal migrations; Electron
+    `vision-desktop` user-data migration; legacy encrypted backup readers; the archived-revision
+    stamp map; root Alembic, API-client, money-module, and provider adapter shims; and the apparent
+    zero-importer `bankAdapters.js`, shared asset-class, app-settings-default, and repository-helper
+    re-exports. Classify each from current evidence instead of pre-authorizing removal. Loading
+    `Skeleton` components, archived Alembic history, superseded ADRs, and rollback scripts are not
+    deletion candidates merely because their names contain legacy terms.
+  - Split every approved retirement into one owner-sized TODO finding ordered as
+    expand/migrate/soak/contract. A finding that can affect stored data must require a live preflight,
+    stopped-writer contract where needed, count/digest and orphan checks, a tested downgrade or
+    restore boundary, full backup coverage, disposable PostgreSQL 18 proof, and explicit approval
+    before touching the maintained database. Complete this inventory only when every candidate has
+    a recorded disposition and no broad unowned "remove legacy" remainder is left.
+
 ### 🏦 Accounts and portfolio features
 
 - [ ] **Build forward-only persisted per-broker history after current-point surfaces have soaked** 🔽
@@ -763,11 +851,6 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
 
 - [ ] **Validate the portfolio import adapter against a real Nexo export** 🔼
   - Tracking: 🔎 runtime-unverified 2026-09-09 (requires a user-provided sanitized Nexo export)
-  - ↪ _from: ADR-108 · WP-C2 acceptance_
-  - Pin real column names, locale decimals, instrument-less rows, and noisy symbol cells in a fixture.
-
-- [ ] **Validate the portfolio import adapter against a real Kinesis Money export** 🔼
-  - Tracking: 🔎 runtime-unverified 2026-09-09 (requires a user-provided sanitized Kinesis Money export; this is separate from the existing Kinesis market-price provider)
   - ↪ _from: ADR-108 · WP-C2 acceptance_
   - Pin real column names, locale decimals, instrument-less rows, and noisy symbol cells in a fixture.
 
