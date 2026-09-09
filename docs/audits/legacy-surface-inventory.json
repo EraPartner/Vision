@@ -1,0 +1,1231 @@
+{
+  "version": 1,
+  "auditedAt": "2026-09-09",
+  "scope": "Runtime code, database schema and migrations, API compatibility, persisted frontend state, Electron migration and backup compatibility, package shims, tests, generated contracts, and historical documentation.",
+  "searches": [
+    "Name scan for legacy, deprecated, compatibility, backward, fallback, old-version, alias, shim, migration, and v1 markers outside generated/build output",
+    "Static importer and symbol-use scan for every seeded compatibility surface and every remove-now candidate",
+    "Schema-object scan across the fresh baseline, forward migrations, archived revisions, manual contracts, backup coverage, database tests, and runtime SQL",
+    "OpenAPI deprecated-operation and parameter scan followed through backend handlers, frontend clients, and generated types",
+    "Persisted-state scan across PostgreSQL, server settings, localStorage, Electron userData, runtime markers, and backup formats",
+    "False-positive review for fallbacks, Skeleton components, historical ADRs, archived migrations, rollback scripts, and formula-lineage comments"
+  ],
+  "requiredSeeds": [
+    "LEG-DB-TX-HASH",
+    "LEG-DB-BANK-ACCOUNT",
+    "LEG-DB-STATEMENT-SCALARS",
+    "LEG-DB-RESOLVED-BANK-ACCOUNT",
+    "LEG-DB-EXCHANGE-RATE-CACHE",
+    "LEG-DB-RECURRENCE-ENUM",
+    "LEG-API-AI-DONE",
+    "LEG-API-CATEGORY-ASSIGN",
+    "LEG-API-AGGREGATION-ALIASES",
+    "LEG-API-IMPORT-QUERY-FALLBACKS",
+    "LEG-FE-ENHANCED-EFFECTS",
+    "LEG-FE-DASHBOARD-STORAGE",
+    "LEG-FE-INSIGHT-GATE",
+    "LEG-ELEC-USERDATA-NAME",
+    "LEG-ELEC-CBC-V1",
+    "LEG-MIG-REVISION-BRIDGE",
+    "LEG-MIG-ROOT-CONFIG",
+    "LEG-FE-API-FACADE",
+    "LEG-FE-MONEY-SHIM",
+    "LEG-BE-BANK-ADAPTER-SHIM",
+    "LEG-PKG-ASSET-CLASS-SHIM",
+    "LEG-FE-DEFAULT-SETTINGS-ALIAS",
+    "LEG-BE-INFO-HELPER-REEXPORTS",
+    "LEG-UI-SKELETONS"
+  ],
+  "summary": {
+    "total": 53,
+    "remove-now": 9,
+    "migrate-then-remove": 27,
+    "retain-with-reason": 15,
+    "historical-record-only": 2,
+    "unknown": 0
+  },
+  "records": [
+    {
+      "id": "LEG-DB-RAW-PROVENANCE",
+      "title": "Provider-specific and manual raw transaction relations",
+      "domain": "database/imports",
+      "classification": "migrate-then-remove",
+      "disposition": "Seven provider relations have no runtime callers, but their rows and links may be unique provenance. The manual relation is still active.",
+      "paths": [
+        "alembic/versions/0001_initial_database_schema.py",
+        "apps/node-backend/src/services/deduplication.js",
+        "apps/node-backend/src/backup/coverage.js"
+      ],
+      "readers": "Manual duplicate checks read manual_raw_transactions; backup and database tools enumerate all relations.",
+      "writers": "Manual transaction creation writes manual_raw_transactions; provider-specific relations have no current runtime writers.",
+      "persistedData": "Raw CSV, provider fields, hashes, timestamps, and transaction_raw_references links may exist on maintained databases.",
+      "supportWindow": "Contract removal follows the ADR-134 live gate and an installation-specific parity maintenance window.",
+      "replacement": "A durable provider-neutral provenance archive plus canonical manual duplicate identity.",
+      "deletionDependencies": [
+        "ADR-134 live migration and concurrency acceptance",
+        "restart-safe backfill",
+        "stopped-writer delta check",
+        "restore-tested PostgreSQL 18 backup"
+      ],
+      "liveEvidence": "Static reachability is known; relation populations and orphan/link sets are unverified.",
+      "todoTitle": "Migrate and retire provider-specific raw transaction storage without losing provenance"
+    },
+    {
+      "id": "LEG-DB-TX-HASH",
+      "title": "Legacy import tx_hash identity",
+      "domain": "database/imports",
+      "classification": "migrate-then-remove",
+      "disposition": "Still participates in dual-write, duplicate fallback, bulk planning, and concurrency behavior; historical values cannot be reinterpreted safely.",
+      "paths": [
+        "alembic/versions/0103_import_identity_provenance.py",
+        "apps/node-backend/src/repositories/transactionRepository.js",
+        "apps/node-backend/src/services/importPipeline/commit.js"
+      ],
+      "readers": "Budgeting and portfolio import validation, commit, and repository paths read legacy hashes.",
+      "writers": "New import paths still populate tx_hash alongside versioned fingerprints.",
+      "persistedData": "Historical hashes were derived from adapter-specific and sometimes reconstructed records.",
+      "supportWindow": "Remove only after ADR-134 live acceptance, fallback telemetry or exact-install evidence, and a no-fallback soak.",
+      "replacement": "source_record_hash plus versioned dedup_fingerprint.",
+      "deletionDependencies": [
+        "ADR-134 acceptance",
+        "stop tx_hash writes",
+        "fallback-free soak",
+        "contract migration and restore boundary"
+      ],
+      "liveEvidence": "Source tests exist; the live PostgreSQL migration and concurrency gate remains open.",
+      "todoTitle": "Retire legacy tx_hash after versioned import identity has soaked"
+    },
+    {
+      "id": "LEG-DB-RESOLVED-BANK-ACCOUNT",
+      "title": "Dormant import_staging_rows.resolved_bank_account_id",
+      "domain": "database/imports",
+      "classification": "remove-now",
+      "disposition": "No production reader or writer exists; only schema tests reference the column.",
+      "paths": [
+        "alembic/versions/0091_import_staging_resolved_fks.py",
+        "apps/node-backend/src/types/rows.js",
+        "apps/node-backend/tests/importStagingResolvedForeignKeys.db.test.js"
+      ],
+      "readers": "No production readers.",
+      "writers": "No production writers.",
+      "persistedData": "Transient staging rows may contain values on upgraded installations.",
+      "supportWindow": "No runtime soak; maintained data still requires non-null and batch-state preflight before application.",
+      "replacement": "The active budgeting pipeline resolves canonical account identity without this dormant staging field.",
+      "deletionDependencies": [
+        "Alembic upgrade/downgrade",
+        "non-null and active-batch preflight",
+        "PostgreSQL 18 proof"
+      ],
+      "liveEvidence": "Static repository reachability shows no runtime access; live non-null count is unverified.",
+      "todoTitle": "Drop dormant import staging bank-account resolution state"
+    },
+    {
+      "id": "LEG-DB-EXCHANGE-RATE-CACHE",
+      "title": "Upgraded-install-only exchange_rate_cache",
+      "domain": "database/currency",
+      "classification": "remove-now",
+      "disposition": "The current runtime uses exchange_rates. This older cache relation is absent from the fresh baseline and backup registry.",
+      "paths": [
+        "alembic/legacy_versions/0025_exchange_rate_cache.py",
+        "apps/node-backend/src/backup/coverage.js",
+        "apps/node-backend/src/services/currency/currencyConversionService.js"
+      ],
+      "readers": "No current application readers.",
+      "writers": "No current application writers.",
+      "persistedData": "Older upgraded installations may retain regenerable arbitrary-pair cache rows.",
+      "supportWindow": "No application soak, but exact legacy shape and row/pair counts must be inspected before drop.",
+      "replacement": "exchange_rates and normal provider refresh.",
+      "deletionDependencies": [
+        "shape-guarded forward migration",
+        "fresh-install no-op",
+        "upgrade/downgrade or restore proof"
+      ],
+      "liveEvidence": "Runtime reachability is zero; maintained relation presence and shape are unverified.",
+      "todoTitle": "Retire upgraded-install-only exchange_rate_cache safely"
+    },
+    {
+      "id": "LEG-DB-ADR109-ROLLBACK",
+      "title": "ADR-109 legacy_inh rollback relations",
+      "domain": "database/portfolio",
+      "classification": "migrate-then-remove",
+      "disposition": "Not runtime data, but still the only exact rollback copy and may contain rows intentionally omitted from the flat conversion.",
+      "paths": [
+        "alembic/versions/0087_flat_investments_conversion.py",
+        "alembic/manual/drop_adr109_legacy_relations/up.sql",
+        "apps/node-backend/tests/adr109Cleanup.test.js"
+      ],
+      "readers": "Only migration, cleanup, downgrade, and verification paths.",
+      "writers": "Frozen after conversion; cleanup drops them.",
+      "persistedData": "Exact pre-conversion investment hierarchy, including legacy-only orphan transaction rows.",
+      "supportWindow": "Thirty incident-free days for the exact installation after stable 0087 deployment.",
+      "replacement": "Canonical flat tables plus a reviewed non-lossy disposition for every legacy-only row.",
+      "deletionDependencies": [
+        "zero-loss parity/quarantine design",
+        "30-day soak",
+        "stopped writers",
+        "restore-tested logical backup"
+      ],
+      "liveEvidence": "Static cleanup guards pass; exact-installation soak and restore evidence are unavailable.",
+      "todoTitle": "Preserve and remove the ADR-109 `legacy_inh_*` rollback relations after their live safety gate"
+    },
+    {
+      "id": "LEG-DB-RECURRENCE-ENUM",
+      "title": "Old recurrence_interval enum after canonical text migration",
+      "domain": "database/portfolio",
+      "classification": "migrate-then-remove",
+      "disposition": "Current canonical portfolio recurrence is checked text, but the enum remains a dependency of downgrade and frozen rollback relations.",
+      "paths": [
+        "alembic/versions/0099_canonical_biweekly_recurrence.py",
+        "alembic/versions/0087_flat_investments_conversion.py"
+      ],
+      "readers": "Migration downgrade and catalog dependency checks.",
+      "writers": "No current canonical writer.",
+      "persistedData": "Frozen legacy relations may retain enum-typed columns.",
+      "supportWindow": "After ADR-109 rollback relation cleanup and an explicit downgrade-boundary decision.",
+      "replacement": "Canonical recurrence_interval checked text values.",
+      "deletionDependencies": [
+        "ADR-109 cleanup",
+        "pg_depend proves zero consumers",
+        "downgrade support decision"
+      ],
+      "liveEvidence": "Current-schema dependency state is unverified on the maintained database.",
+      "todoTitle": "Drop the obsolete recurrence enum after ADR-109 rollback retirement"
+    },
+    {
+      "id": "LEG-DB-PORTFOLIO-ENUM",
+      "title": "portfolio_txn_type enum",
+      "domain": "database/portfolio",
+      "classification": "retain-with-reason",
+      "disposition": "This is a current schema and runtime contract, despite nearby comments that discuss older recurrence behavior.",
+      "paths": [
+        "alembic/versions/0001_initial_database_schema.py",
+        "apps/node-backend/src/services/portfolioImportPipeline/validate.js",
+        "apps/node-backend/src/repositories/portfolioTxRepo.reads.js"
+      ],
+      "readers": "Portfolio repositories and import validation cast and read it.",
+      "writers": "Current portfolio staging and canonical transaction writes use it.",
+      "persistedData": "Canonical portfolio transaction type.",
+      "supportWindow": "Current supported contract.",
+      "replacement": "None.",
+      "deletionDependencies": [],
+      "liveEvidence": "Direct runtime imports and SQL casts prove current use.",
+      "todoTitle": null
+    },
+    {
+      "id": "LEG-DB-BANK-ACCOUNT",
+      "title": "Canonical transaction bank_account columns and request labels",
+      "domain": "database/API/accounts",
+      "classification": "migrate-then-remove",
+      "disposition": "Canonical identity uses account_id, but shipped create/edit/planned flows still send labels and the stored compatibility columns support rollback.",
+      "paths": [
+        "alembic/manual/contract_drop_bank_account/up.sql",
+        "apps/node-backend/src/repositories/transactionRepository.js",
+        "apps/frontend/src/features/transactions/components/AddTransactionDialog.tsx"
+      ],
+      "readers": "Backend request normalization and frontend forms read or emit compatibility labels.",
+      "writers": "Dual-era schema and request paths still handle bank_account.",
+      "persistedData": "transactions and planned_transactions may carry the compatibility string; staging/manual raw labels are separate valid fields.",
+      "supportWindow": "Migrate the shipped client to account_id, dual-accept for one supported-client window, then run the guarded contract.",
+      "replacement": "account_id for writes and accounts.name projection for display.",
+      "deletionDependencies": [
+        "client request migration",
+        "label/account parity",
+        "stopped writers",
+        "restore-tested backup"
+      ],
+      "liveEvidence": "Static callers are active; live divergence and orphan counts are unverified.",
+      "todoTitle": "Retire canonical bank_account storage and write compatibility"
+    },
+    {
+      "id": "LEG-DB-STATEMENT-SCALARS",
+      "title": "Account statement scalar projections",
+      "domain": "database/API/accounts",
+      "classification": "migrate-then-remove",
+      "disposition": "statement_balance and statement_balance_date are actively dual-written and consumed as the declared-currency projection.",
+      "paths": [
+        "alembic/versions/0098_account_statement_balances.py",
+        "apps/node-backend/src/repositories/accountRepository.js",
+        "apps/frontend/src/lib/api/accounts.ts"
+      ],
+      "readers": "Account service, repository, reconciliation, API normalization, and UI drift surfaces.",
+      "writers": "Account create/update/reconcile paths dual-write the scalar and side table.",
+      "persistedData": "The scalar preserves one declared-currency statement while account_statement_balances is authoritative for all currencies.",
+      "supportWindow": "Move every client to statement_balances, stop dual writes, prove parity, and soak one supported release.",
+      "replacement": "account_statement_balances and dedicated set/delete statement endpoints.",
+      "deletionDependencies": [
+        "multi-currency client migration",
+        "count/digest parity",
+        "downgrade or restore boundary"
+      ],
+      "liveEvidence": "Active source use is confirmed; live cross-table parity is unverified.",
+      "todoTitle": "Retire account statement scalar projections after collection migration"
+    },
+    {
+      "id": "LEG-MIG-REVISION-BRIDGE",
+      "title": "Archived Alembic revision stamp bridge",
+      "domain": "database/migrations",
+      "classification": "retain-with-reason",
+      "disposition": "The startup migrator still needs the map to prevent supported old databases from failing with an unknown revision.",
+      "paths": [
+        "apps/node-backend/src/database/migrate.js",
+        "apps/node-backend/tests/migrationRolePreflight.test.js"
+      ],
+      "readers": "Startup reads alembic_version and the archived revision set.",
+      "writers": "The schema-owner preflight can rewrite an archived stamp to the current baseline.",
+      "persistedData": "Alembic revision metadata only; removal can still brick upgrades.",
+      "supportWindow": "Retain until the minimum supported upgrade origin excludes every mapped revision and live install evidence confirms zero old stamps.",
+      "replacement": "A future explicit minimum-version cutoff.",
+      "deletionDependencies": [
+        "support policy",
+        "install census",
+        "release soak"
+      ],
+      "liveEvidence": "Static startup reachability is active; old-stamp population is unverified.",
+      "todoTitle": null
+    },
+    {
+      "id": "LEG-MIG-ARCHIVE",
+      "title": "Archived Alembic revisions",
+      "domain": "database/migrations",
+      "classification": "historical-record-only",
+      "disposition": "Excluded from the active version path but retained for deployed-schema ancestry, fixtures, incident analysis, and the revision bridge.",
+      "paths": [
+        "alembic/legacy_versions",
+        "docs/reference/migration-dependencies.md"
+      ],
+      "readers": "Human audit and test-fixture construction.",
+      "writers": "None in current migration execution.",
+      "persistedData": "Historical definitions describe database states that may still exist in old installations.",
+      "supportWindow": "Historical record; no routine removal window.",
+      "replacement": "None.",
+      "deletionDependencies": [],
+      "liveEvidence": "config/alembic.ini excludes the directory from active version_locations.",
+      "todoTitle": null
+    },
+    {
+      "id": "LEG-MIG-ROOT-CONFIG",
+      "title": "Root Alembic configuration shim",
+      "domain": "database/developer tooling",
+      "classification": "retain-with-reason",
+      "disposition": "Deliberately keeps standard root Alembic commands working while runtime commands use config/alembic.ini explicitly.",
+      "paths": [
+        "alembic.ini",
+        "config/alembic.ini",
+        "docs/guides/migrations.md"
+      ],
+      "readers": "Human/operator Alembic CLI invocations.",
+      "writers": "None.",
+      "persistedData": "No data, but deleting it changes documented operator behavior.",
+      "supportWindow": "Retain unless all human workflows standardize on -c config/alembic.ini.",
+      "replacement": "Explicit -c config/alembic.ini commands.",
+      "deletionDependencies": ["documentation and operator workflow decision"],
+      "liveEvidence": "Runtime scripts use the canonical config; direct root CLI compatibility is intentional.",
+      "todoTitle": null
+    },
+    {
+      "id": "LEG-BE-BANK-ADAPTER-SHIM",
+      "title": "Deprecated bankAdapters.js entrypoint",
+      "domain": "backend/imports",
+      "classification": "remove-now",
+      "disposition": "Zero production importers; tests and the test-only-export allowlist are its only consumers.",
+      "paths": [
+        "apps/node-backend/src/services/bankAdapters.js",
+        "apps/node-backend/src/services/importPipeline/adapters/index.js",
+        "scripts/check-test-only-exports.js"
+      ],
+      "readers": "Backend adapter tests only.",
+      "writers": "None.",
+      "persistedData": "None.",
+      "supportWindow": "None; private repository entrypoint.",
+      "replacement": "services/importPipeline/adapters/index.js and production registry APIs.",
+      "deletionDependencies": [
+        "repoint tests",
+        "remove obsolete test-only allowlist entries",
+        "update stale docs"
+      ],
+      "liveEvidence": "Repository-wide import search found no production importer.",
+      "todoTitle": "Remove the unused bank adapter compatibility entrypoint"
+    },
+    {
+      "id": "LEG-BE-INFO-HELPER-REEXPORTS",
+      "title": "Unused infoRepositoryHelpers compatibility re-exports",
+      "domain": "backend/repositories",
+      "classification": "remove-now",
+      "disposition": "Seven generic money/date helpers are re-exported from the repository helper but every current caller imports their canonical owner.",
+      "paths": [
+        "apps/node-backend/src/repositories/infoRepositoryHelpers.js",
+        "apps/node-backend/src/lib/money.js",
+        "apps/node-backend/src/lib/dateFormat.js",
+        "apps/node-backend/src/lib/dateKeys.js"
+      ],
+      "readers": "No callers through infoRepositoryHelpers; the file's repository-specific helpers remain active.",
+      "writers": "None.",
+      "persistedData": "None.",
+      "supportWindow": "None; internal exports with zero importers.",
+      "replacement": "Direct imports from lib/money.js, lib/dateFormat.js, and lib/dateKeys.js.",
+      "deletionDependencies": ["exact stale-import scan", "repository tests"],
+      "liveEvidence": "Static symbol-import search found zero compatibility re-export consumers.",
+      "todoTitle": "Remove unused info-repository compatibility re-exports"
+    },
+    {
+      "id": "LEG-BE-APP-UTILITY-SHIMS",
+      "title": "Backend and frontend app-local money, CSV, and slugify modules",
+      "domain": "application module boundaries",
+      "classification": "retain-with-reason",
+      "disposition": "Thin modules are heavily imported and form stable app-local boundaries over shared implementations.",
+      "paths": [
+        "apps/node-backend/src/lib/money.js",
+        "apps/node-backend/src/lib/csv.js",
+        "apps/node-backend/src/lib/slugify.js",
+        "apps/frontend/src/lib/csv.ts",
+        "apps/frontend/src/lib/slugify.ts"
+      ],
+      "readers": "Many runtime modules in both workspaces.",
+      "writers": "None.",
+      "persistedData": "None.",
+      "supportWindow": "Current architecture boundary, not a legacy support window.",
+      "replacement": "Direct shared-package imports would increase broad coupling and are not currently required.",
+      "deletionDependencies": [],
+      "liveEvidence": "Direct runtime import scans show active use.",
+      "todoTitle": null
+    },
+    {
+      "id": "LEG-BE-PRICE-SERVICE",
+      "title": "priceProviderService facade",
+      "domain": "backend/pricing",
+      "classification": "retain-with-reason",
+      "disposition": "This facade is an active orchestrator and provider boundary, not a dead adapter shim.",
+      "paths": [
+        "apps/node-backend/src/services/priceProviderService.js",
+        "apps/node-backend/src/services/quoteBackfillService.js"
+      ],
+      "readers": "Investment, quote backfill, startup warmup, and admin paths.",
+      "writers": "Coordinates live and historical price persistence.",
+      "persistedData": "Current prices and asset_price_history.",
+      "supportWindow": "Current runtime contract.",
+      "replacement": "None.",
+      "deletionDependencies": [],
+      "liveEvidence": "Production importers are present.",
+      "todoTitle": null
+    },
+    {
+      "id": "LEG-BE-AGGREGATION-MV",
+      "title": "Materialized-view aggregation service called legacy in comments",
+      "domain": "backend/analytics",
+      "classification": "retain-with-reason",
+      "disposition": "The materialized views remain current aggregation infrastructure; legacy wording describes an older service split, not obsolete behavior.",
+      "paths": [
+        "apps/node-backend/src/services/aggregationRefresh.js",
+        "apps/node-backend/src/services/materializedViewService.js"
+      ],
+      "readers": "Dashboard and statistics refresh paths.",
+      "writers": "Refreshes current materialized views and aggregation state.",
+      "persistedData": "Current materialized database projections.",
+      "supportWindow": "Current architecture.",
+      "replacement": "No complete replacement is deployed.",
+      "deletionDependencies": [],
+      "liveEvidence": "Production callers and tests prove active use.",
+      "todoTitle": null
+    },
+    {
+      "id": "LEG-API-AI-DONE",
+      "title": "Deprecated AI stream done event",
+      "domain": "API/AI",
+      "classification": "migrate-then-remove",
+      "disposition": "The server emits complete and done; the frontend normalizes both but its internal terminal type still uses done.",
+      "paths": [
+        "apps/node-backend/src/routes/ai.js",
+        "packages/types/src/aiChat.js",
+        "apps/frontend/src/lib/api/ai.ts",
+        "openapi.yaml"
+      ],
+      "readers": "Current frontend accepts both; older clients may terminate only on done.",
+      "writers": "Current server emits both terminal events.",
+      "persistedData": "None.",
+      "supportWindow": "Stop server emission after an explicit client window; keep client acceptance for a later rollback/server-skew window.",
+      "replacement": "complete terminal event and canonical internal terminal semantics.",
+      "deletionDependencies": [
+        "client internal migration",
+        "supported-client policy",
+        "SSE replay and packaged skew tests"
+      ],
+      "liveEvidence": "Current source emission and acceptance are confirmed; external client population is unverified.",
+      "todoTitle": "Retire the deprecated AI done event in staged client and server windows"
+    },
+    {
+      "id": "LEG-API-CATEGORY-ASSIGN",
+      "title": "Deprecated category name-assignment endpoint",
+      "domain": "API/categories",
+      "classification": "migrate-then-remove",
+      "disposition": "No shipped production frontend caller exists, but external client use has not been measured.",
+      "paths": [
+        "apps/node-backend/src/routes/categories.js",
+        "apps/frontend/src/test/msw/handlers.ts",
+        "openapi.yaml"
+      ],
+      "readers": "Potential external callers; MSW tests model it.",
+      "writers": "The endpoint resolves or creates a category and assigns recipients.",
+      "persistedData": "Category and recipient associations; removal itself needs no data migration.",
+      "supportWindow": "One published API deprecation window or access-log proof of zero use.",
+      "replacement": "POST /api/categories/{id}/assign after explicit category resolution.",
+      "deletionDependencies": [
+        "external-client decision",
+        "route/OpenAPI/generated-type removal"
+      ],
+      "liveEvidence": "Zero shipped caller is confirmed; API access telemetry is unavailable.",
+      "todoTitle": "Remove the deprecated category name-assignment endpoint after its client gate"
+    },
+    {
+      "id": "LEG-API-AGGREGATION-ALIASES",
+      "title": "Aggregation start/end and all_tags query aliases",
+      "domain": "API/analytics",
+      "classification": "migrate-then-remove",
+      "disposition": "The shipped frontend uses canonical start_date/end_date and all, while the backend continues accepting older aliases.",
+      "paths": [
+        "apps/node-backend/src/lib/aggregationDateRange.js",
+        "apps/node-backend/src/routes/aggregations.js",
+        "apps/frontend/src/lib/api/aggregations.ts",
+        "openapi.yaml"
+      ],
+      "readers": "Potential external clients; current frontend reads canonical responses only.",
+      "writers": "No persistence; query normalization only.",
+      "persistedData": "Saved-chart all_tags is a separate canonical field and must remain.",
+      "supportWindow": "Published API deprecation window or zero-use telemetry.",
+      "replacement": "start_date, end_date, and all query parameters.",
+      "deletionDependencies": [
+        "external-client decision",
+        "endpoint contract tests",
+        "generated type refresh"
+      ],
+      "liveEvidence": "Current frontend canonical usage is confirmed; external usage is unverified.",
+      "todoTitle": "Retire deprecated aggregation query aliases"
+    },
+    {
+      "id": "LEG-API-IMPORT-QUERY-FALLBACKS",
+      "title": "Multipart import mapping query fallbacks",
+      "domain": "API/imports",
+      "classification": "migrate-then-remove",
+      "disposition": "Not irrelevant today: the shipped frontend still sends bank and mapping options in query parameters.",
+      "paths": [
+        "apps/node-backend/src/routes/importRoutes.js",
+        "apps/frontend/src/lib/api/imports.ts",
+        "apps/frontend/src/lib/api/portfolioImports.ts",
+        "openapi.yaml"
+      ],
+      "readers": "Budgeting and portfolio import routes merge query and body fields.",
+      "writers": "The shipped frontend writes query fallbacks while uploading only the file body.",
+      "persistedData": "Import configuration and staged financial rows; no legacy storage is created by the parameter location.",
+      "supportWindow": "Migrate all shipped multipart clients to FormData fields, dual-accept for one release, then remove query fallback.",
+      "replacement": "Multipart body fields with body-wins precedence.",
+      "deletionDependencies": [
+        "frontend upload migration",
+        "all import/SSE variants",
+        "client support window"
+      ],
+      "liveEvidence": "Active current frontend query writes are confirmed.",
+      "todoTitle": "Move import options into multipart bodies and retire query fallbacks"
+    },
+    {
+      "id": "LEG-API-ADMIN-FORCE",
+      "title": "Admin reset force query fallback",
+      "domain": "API/admin",
+      "classification": "migrate-then-remove",
+      "disposition": "Current frontend uses the JSON body, but the route accepts the deprecated query location for older clients.",
+      "paths": [
+        "apps/node-backend/src/routes/admin.js",
+        "apps/frontend/src/features/admin/useAdminQueries.ts",
+        "openapi.yaml"
+      ],
+      "readers": "Potential external or older admin clients.",
+      "writers": "The endpoint performs destructive reset only under its existing safeguards.",
+      "persistedData": "Removal changes request compatibility, not reset semantics.",
+      "supportWindow": "Explicit admin-client support cutoff.",
+      "replacement": "force in the JSON request body.",
+      "deletionDependencies": [
+        "external-client decision",
+        "destructive-route contract tests"
+      ],
+      "liveEvidence": "Current frontend body usage is confirmed; external usage is unverified.",
+      "todoTitle": "Retire the admin reset force query fallback"
+    },
+    {
+      "id": "LEG-API-AI-UNPAGED",
+      "title": "Unpaged AI conversation list compatibility",
+      "domain": "API/AI",
+      "classification": "migrate-then-remove",
+      "disposition": "Current frontend always requests bounded pages, but omitted parameters still trigger the historical full list.",
+      "paths": [
+        "apps/node-backend/src/routes/ai.js",
+        "apps/frontend/src/lib/api/ai.ts",
+        "openapi.yaml"
+      ],
+      "readers": "Potential older or external clients.",
+      "writers": "None.",
+      "persistedData": "Reads persisted conversations; the risk is unbounded load rather than data loss.",
+      "supportWindow": "External-client cutoff or zero-use evidence.",
+      "replacement": "Required bounded pagination with a documented default limit.",
+      "deletionDependencies": [
+        "client policy",
+        "load and pagination contract tests"
+      ],
+      "liveEvidence": "Shipped client pagination is confirmed; external omission is unverified.",
+      "todoTitle": "Require bounded AI conversation pagination after the compatibility window"
+    },
+    {
+      "id": "LEG-API-ERROR-SHAPES",
+      "title": "Frontend parsing of legacy HTTP error envelopes",
+      "domain": "frontend/API client",
+      "classification": "migrate-then-remove",
+      "disposition": "Current Node handlers use the unified envelope, but the parser protects server/client skew and several older detail/message shapes.",
+      "paths": [
+        "apps/frontend/src/lib/api/client.ts",
+        "apps/node-backend/src/middleware/errorHandler.js"
+      ],
+      "readers": "Every frontend API request uses the parser.",
+      "writers": "Current backend middleware emits canonical envelopes; SSE detail payloads are separate.",
+      "persistedData": "None.",
+      "supportWindow": "Complete a route-wide writer scan and define supported server/client skew before simplifying.",
+      "replacement": "Strict unified error envelope plus unparsable/status fallback.",
+      "deletionDependencies": [
+        "route-wide error contract proof",
+        "packaged skew decision",
+        "focused parser tests"
+      ],
+      "liveEvidence": "Canonical middleware is present; route-wide and packaged skew evidence is incomplete.",
+      "todoTitle": "Retire legacy HTTP error envelopes after route-wide contract proof"
+    },
+    {
+      "id": "LEG-API-TX-DATE",
+      "title": "Transaction response date alias fallback",
+      "domain": "frontend/API client",
+      "classification": "migrate-then-remove",
+      "disposition": "The client accepts raw.date when canonical transaction_date is missing; the current typed server contract requires transaction_date.",
+      "paths": [
+        "apps/frontend/src/lib/api/transactions.ts",
+        "apps/frontend/src/lib/api/__tests__/transactions.test.ts",
+        "openapi.yaml"
+      ],
+      "readers": "Transaction list client normalization.",
+      "writers": "Current server writes canonical transaction_date in responses.",
+      "persistedData": "Only short-lived query cache or older server responses.",
+      "supportWindow": "Verify live/fixture responses and supported server skew before deletion.",
+      "replacement": "Strict transaction_date validation with an explicit malformed-response error.",
+      "deletionDependencies": [
+        "response fixture proof",
+        "server/client skew decision"
+      ],
+      "liveEvidence": "Current OpenAPI contract is canonical; live payload evidence is unverified.",
+      "todoTitle": "Remove the transaction date response fallback after contract proof"
+    },
+    {
+      "id": "LEG-FE-API-FACADE",
+      "title": "Frontend apiClient facade",
+      "domain": "frontend/API client",
+      "classification": "retain-with-reason",
+      "disposition": "Widely used assembly boundary over domain modules; compatibility wording does not make it dead.",
+      "paths": [
+        "apps/frontend/src/lib/api.ts",
+        "docs/reference/frontend-api-client.md"
+      ],
+      "readers": "Dozens of production hooks, pages, contexts, and features.",
+      "writers": "Delegates to current domain clients.",
+      "persistedData": "None.",
+      "supportWindow": "Current internal architecture; migrate per feature only if ownership benefits justify it.",
+      "replacement": "Direct domain-module imports, gradually.",
+      "deletionDependencies": [
+        "zero importers",
+        "full frontend typecheck/test/build"
+      ],
+      "liveEvidence": "Static import scan shows extensive current use.",
+      "todoTitle": null
+    },
+    {
+      "id": "LEG-FE-API-TYPE-BARRELS",
+      "title": "Hand-written frontend API type barrels",
+      "domain": "frontend/types",
+      "classification": "retain-with-reason",
+      "disposition": "Historical names remain active and sometimes supplement generated OpenAPI types; bulk deletion would erase app-specific contracts.",
+      "paths": [
+        "apps/frontend/src/types/api.ts",
+        "apps/frontend/src/types/apiClient.ts",
+        "apps/frontend/src/types/generated.ts"
+      ],
+      "readers": "Many current frontend modules.",
+      "writers": "Generated types derive from openapi.yaml; hand-written types are maintained manually.",
+      "persistedData": "Wire-shape typing only.",
+      "supportWindow": "Current contract; any consolidation must compare one domain at a time.",
+      "replacement": "Generated schemas where equivalent, plus explicit app-only types.",
+      "deletionDependencies": [],
+      "liveEvidence": "Static imports confirm active use.",
+      "todoTitle": null
+    },
+    {
+      "id": "LEG-PKG-ASSET-CLASS-SHIM",
+      "title": "Unused shared-utils assetClasses subpath",
+      "domain": "packages/types",
+      "classification": "remove-now",
+      "disposition": "Private workspace compatibility subpath has zero repository importers; canonical constants live in @vision/types.",
+      "paths": [
+        "packages/shared-utils/src/assetClasses.js",
+        "packages/shared-utils/src/assetClasses.d.ts",
+        "packages/shared-utils/package.json"
+      ],
+      "readers": "No repository callers.",
+      "writers": "None.",
+      "persistedData": "None.",
+      "supportWindow": "None; private package and zero importers.",
+      "replacement": "@vision/types/assetClasses.",
+      "deletionDependencies": [
+        "package export removal",
+        "typecheck/build",
+        "stale-import scan"
+      ],
+      "liveEvidence": "Exact import search found no callers outside the shim.",
+      "todoTitle": "Remove unused shared package compatibility exports"
+    },
+    {
+      "id": "LEG-FE-DEFAULT-SETTINGS-ALIAS",
+      "title": "Deprecated defaultAppSettings export alias",
+      "domain": "frontend/settings",
+      "classification": "remove-now",
+      "disposition": "Zero callers; canonical DEFAULT_APP_SETTINGS is imported from settingsStore.",
+      "paths": [
+        "apps/frontend/src/stores/hydration/AppSettingsHydration.tsx",
+        "apps/frontend/src/stores/settingsStore.ts"
+      ],
+      "readers": "No repository callers.",
+      "writers": "None.",
+      "persistedData": "None; the migration function itself remains.",
+      "supportWindow": "None; internal zero-use alias.",
+      "replacement": "DEFAULT_APP_SETTINGS.",
+      "deletionDependencies": [
+        "frontend typecheck",
+        "settings hydration tests"
+      ],
+      "liveEvidence": "Exact symbol search found only the export declaration.",
+      "todoTitle": "Remove unused frontend settings and asset-class exports"
+    },
+    {
+      "id": "LEG-FE-ASSET-CLASS-GROUPS",
+      "title": "Deprecated English ASSET_CLASS_GROUPS constant",
+      "domain": "frontend/portfolio",
+      "classification": "remove-now",
+      "disposition": "Zero callers; the translated getAssetClassGroups function is canonical.",
+      "paths": ["apps/frontend/src/types/portfolio.ts"],
+      "readers": "No repository callers.",
+      "writers": "None.",
+      "persistedData": "None.",
+      "supportWindow": "None; internal zero-use constant.",
+      "replacement": "getAssetClassGroups(t).",
+      "deletionDependencies": ["frontend typecheck", "exact symbol scan"],
+      "liveEvidence": "Exact symbol search found only the declaration.",
+      "todoTitle": "Remove unused frontend settings and asset-class exports"
+    },
+    {
+      "id": "LEG-FE-ASSET-CLASS-LABELS",
+      "title": "Deprecated English ASSET_CLASS_LABELS constant",
+      "domain": "frontend/portfolio",
+      "classification": "migrate-then-remove",
+      "disposition": "Still used by portfolio overview and investment creation; direct deletion would regress labels and enumeration.",
+      "paths": [
+        "apps/frontend/src/types/portfolio.ts",
+        "apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx",
+        "apps/frontend/src/features/portfolio/AddInvestmentDialog.tsx"
+      ],
+      "readers": "Two production UI surfaces.",
+      "writers": "None.",
+      "persistedData": "None.",
+      "supportWindow": "No external window; migrate callers in one UI batch.",
+      "replacement": "ASSET_CLASSES plus getAssetClassLabel(t, value).",
+      "deletionDependencies": [
+        "translated caller migration",
+        "portfolio UI tests"
+      ],
+      "liveEvidence": "Direct current imports are confirmed.",
+      "todoTitle": "Migrate deprecated frontend type and label aliases"
+    },
+    {
+      "id": "LEG-FE-INSIGHT-DEAD-EXPORTS",
+      "title": "Unused pre-server insight dismissal exports",
+      "domain": "frontend/insights",
+      "classification": "remove-now",
+      "disposition": "Dismiss/filter/listener helpers are used only by their legacy unit tests; the migration gate needs only load and replace operations plus types.",
+      "paths": [
+        "apps/frontend/src/lib/insightsDismiss.ts",
+        "apps/frontend/src/components/shared/LegacyInsightDismissalMigrationGate.tsx",
+        "apps/frontend/src/lib/__tests__/insightsDismiss.test.ts"
+      ],
+      "readers": "Migration gate reads loadDismissState and replaceDismissState; dead exports have test-only callers.",
+      "writers": "Migration replacement remains active; old dismissal commit helpers have no production writers.",
+      "persistedData": "dismissed_insights_v1 must still be migrated; removing dead helpers must not remove the loader/replacer.",
+      "supportWindow": "None for dead exports; the gate itself has a separate support window.",
+      "replacement": "Server-backed insight dismissal APIs.",
+      "deletionDependencies": [
+        "preserve minimal migration parser",
+        "rewrite focused tests"
+      ],
+      "liveEvidence": "Production import scan isolates the required migration-only exports.",
+      "todoTitle": "Remove unused legacy insight dismissal exports"
+    },
+    {
+      "id": "LEG-FE-INSIGHT-GATE",
+      "title": "Legacy insight dismissal migration gate",
+      "domain": "frontend/insights",
+      "classification": "migrate-then-remove",
+      "disposition": "Still protects unopened browser profiles and retries transient server failures before releasing app queries.",
+      "paths": [
+        "apps/frontend/src/components/shared/LegacyInsightDismissalMigrationGate.tsx",
+        "apps/frontend/src/App.tsx",
+        "apps/frontend/src/lib/insightsDismiss.ts"
+      ],
+      "readers": "App startup reads dismissed_insights_v1 through the gate.",
+      "writers": "Posts server dismissals, rewrites remaining local records, then clears migrated storage.",
+      "persistedData": "Per-browser legacy dismissal records invisible to server telemetry until that profile opens.",
+      "supportWindow": "Require a minimum frontend upgrade horizon or explicit migration version marker.",
+      "replacement": "Server-backed dismissals only.",
+      "deletionDependencies": [
+        "browser support cutoff",
+        "offline/retry smoke",
+        "legacy-key census where possible"
+      ],
+      "liveEvidence": "Active App wrapper is confirmed; unopened-profile population is unknowable.",
+      "todoTitle": "Retire browser-only insight dismissal migration after its support horizon"
+    },
+    {
+      "id": "LEG-FE-MONEY-SHIM",
+      "title": "Frontend @/lib/money re-export",
+      "domain": "frontend/money",
+      "classification": "migrate-then-remove",
+      "disposition": "Redundant but active in six production modules.",
+      "paths": [
+        "apps/frontend/src/lib/money.ts",
+        "apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx",
+        "apps/frontend/src/features/splits/SplitTransactionDialog.tsx"
+      ],
+      "readers": "Six production portfolio, account, planned, and split modules.",
+      "writers": "None.",
+      "persistedData": "None; financial calculation behavior must remain byte-for-byte equivalent.",
+      "supportWindow": "No external window; private import migration.",
+      "replacement": "@vision/shared-utils/money.",
+      "deletionDependencies": [
+        "six import rewrites",
+        "financial tests",
+        "frontend typecheck"
+      ],
+      "liveEvidence": "Exact import count is six non-test runtime files.",
+      "todoTitle": "Migrate frontend money imports off the redundant local shim"
+    },
+    {
+      "id": "LEG-FE-TYPE-ALIASES",
+      "title": "Market and portfolio-import compatibility type names",
+      "domain": "frontend/types",
+      "classification": "migrate-then-remove",
+      "disposition": "Small active type-only aliases with canonical shared equivalents.",
+      "paths": [
+        "apps/frontend/src/types/research.ts",
+        "apps/frontend/src/lib/api/market.ts",
+        "apps/frontend/src/lib/api/portfolioImports.ts",
+        "apps/frontend/src/features/imports/PortfolioCsvColumnMapper.tsx"
+      ],
+      "readers": "AddToWatchlistDialog and PortfolioCsvColumnMapper.",
+      "writers": "None.",
+      "persistedData": "None; compile-time names only.",
+      "supportWindow": "No external window; private type migration.",
+      "replacement": "ResearchSearchItem, AssetClass, and PortfolioTxnType from canonical type packages.",
+      "deletionDependencies": [
+        "caller type import migration",
+        "frontend typecheck"
+      ],
+      "liveEvidence": "Exact type import sites are known.",
+      "todoTitle": "Migrate deprecated frontend type and label aliases"
+    },
+    {
+      "id": "LEG-FE-CURRENCY-FORMATTER",
+      "title": "Positional currency formatter decimals signature",
+      "domain": "frontend/formatting",
+      "classification": "migrate-then-remove",
+      "disposition": "The legacy third argument is active in multiple runtime consumers.",
+      "paths": [
+        "apps/frontend/src/hooks/useCurrencyFormatter.ts",
+        "apps/frontend/src/pages/portfolio/RebalancePage.tsx",
+        "apps/frontend/src/features/research/ResearchFundamentalsTab.tsx"
+      ],
+      "readers": "Several portfolio, analytics, and research components call the positional form.",
+      "writers": "None.",
+      "persistedData": "None.",
+      "supportWindow": "No external window; migrate internal callers together.",
+      "replacement": "Options object with currency and decimals.",
+      "deletionDependencies": [
+        "caller migration",
+        "format snapshots",
+        "typecheck"
+      ],
+      "liveEvidence": "Direct runtime call sites are present.",
+      "todoTitle": "Replace the legacy currency formatter call signature"
+    },
+    {
+      "id": "LEG-FE-TAX-PIT-ALIAS",
+      "title": "Belgian tax federalPITTotal compatibility field",
+      "domain": "frontend/tax",
+      "classification": "migrate-then-remove",
+      "disposition": "Still emitted and pinned because persisted views or snapshots may use the old name.",
+      "paths": [
+        "apps/frontend/src/lib/belgianTax/types.ts",
+        "apps/frontend/src/lib/belgianTax/pit.ts",
+        "apps/frontend/src/lib/belgianTax/__tests__/pit.test.ts"
+      ],
+      "readers": "Tests and potentially restored/persisted Belgian tax views.",
+      "writers": "Current calculator emits both old and canonical fields.",
+      "persistedData": "Tax profile snapshot or saved-view JSON may contain the alias.",
+      "supportWindow": "Inventory persisted key population, migrate readers/data, then soak one supported release.",
+      "replacement": "federalPITBeforeExemption.",
+      "deletionDependencies": [
+        "persisted JSON key census",
+        "migration/backup proof",
+        "consumer migration"
+      ],
+      "liveEvidence": "Current dual emission is confirmed; stored key population is unverified.",
+      "todoTitle": "Migrate and remove the Belgian tax federalPITTotal alias"
+    },
+    {
+      "id": "LEG-FE-RECURRENCE-INPUT",
+      "title": "bi-weekly recurrence input and output compatibility",
+      "domain": "API/portfolio",
+      "classification": "migrate-then-remove",
+      "disposition": "Migration 0099 rewrites stored values, but frontend and backend still normalize the old spelling.",
+      "paths": [
+        "packages/types/src/recurrence.js",
+        "apps/node-backend/src/services/investmentService.js",
+        "apps/node-backend/src/services/portfolio/portfolioTransactionRules.js"
+      ],
+      "readers": "Portfolio request and response normalization accepts the old spelling.",
+      "writers": "Current code emits canonical values after normalization.",
+      "persistedData": "Older databases may have carried bi-weekly before migration 0099.",
+      "supportWindow": "Complete live 0099 proof and the documented one-release client window.",
+      "replacement": "biweekly.",
+      "deletionDependencies": [
+        "live migration proof",
+        "client window",
+        "canonical-value query"
+      ],
+      "liveEvidence": "Compatibility code remains active; live stored-value proof is unavailable.",
+      "todoTitle": "Retire bi-weekly recurrence compatibility after its release gate"
+    },
+    {
+      "id": "LEG-FE-ENHANCED-EFFECTS",
+      "title": "Persisted enhancedEffects settings migration",
+      "domain": "frontend/settings",
+      "classification": "migrate-then-remove",
+      "disposition": "Hydration still maps old app_settings blobs and strips the key on a later persist.",
+      "paths": [
+        "apps/frontend/src/stores/settingsStore.ts",
+        "apps/frontend/src/lib/__tests__/visualEffects.test.ts",
+        "docs/features/settings.md"
+      ],
+      "readers": "migrateAppSettings during app hydration.",
+      "writers": "Canonical settings persistence eventually rewrites the blob without enhancedEffects.",
+      "persistedData": "Unopened or rarely used self-hosted profiles may still hold the old key.",
+      "supportWindow": "Minimum supported upgrade horizon plus live key-population query or explicit migration stamp.",
+      "replacement": "visualEffects.",
+      "deletionDependencies": [
+        "settings support policy",
+        "population evidence",
+        "backup-safe migration"
+      ],
+      "liveEvidence": "Static mapper is active; maintained key population is unverified.",
+      "todoTitle": "Retire completed persisted-settings migrations after a defined support horizon"
+    },
+    {
+      "id": "LEG-FE-DASHBOARD-STORAGE",
+      "title": "Legacy dashboard localStorage migration",
+      "domain": "frontend/settings",
+      "classification": "migrate-then-remove",
+      "disposition": "Startup still imports vision_dashboardSettings into server settings and removes it; unopened profiles remain invisible.",
+      "paths": [
+        "apps/frontend/src/stores/hydration/SettingsHydration.tsx",
+        "apps/frontend/src/lib/localStorage-keys.ts"
+      ],
+      "readers": "Settings hydration reads the old localStorage key.",
+      "writers": "Persists dashboard_settings then removes the old key.",
+      "persistedData": "Per-browser dashboard preferences.",
+      "supportWindow": "Minimum browser-profile upgrade horizon or explicit migration marker.",
+      "replacement": "Server-backed dashboard_settings.",
+      "deletionDependencies": [
+        "browser support policy",
+        "profile migration smoke"
+      ],
+      "liveEvidence": "Migration code is active; unopened-profile population cannot be measured centrally.",
+      "todoTitle": "Retire completed persisted-settings migrations after a defined support horizon"
+    },
+    {
+      "id": "LEG-FE-CHART-V1-STORAGE",
+      "title": "Chart Builder v1 localStorage migration",
+      "domain": "frontend/research",
+      "classification": "migrate-then-remove",
+      "disposition": "Layout loading still imports research.chartBuilder.v1 into the v2 library and deletes it.",
+      "paths": [
+        "apps/frontend/src/pages/research/chartBuilderLayouts.ts",
+        "apps/frontend/src/pages/research/chartBuilderState.ts",
+        "apps/frontend/src/lib/localStorage-keys.ts"
+      ],
+      "readers": "Chart Builder library loader.",
+      "writers": "Writes canonical v2 layouts and deletes the v1 key.",
+      "persistedData": "Saved layouts in unopened browser profiles.",
+      "supportWindow": "Minimum browser-profile upgrade horizon or explicit migration marker.",
+      "replacement": "vision.research.chartBuilder.layouts.v2.",
+      "deletionDependencies": [
+        "browser support policy",
+        "saved-layout round trip"
+      ],
+      "liveEvidence": "Migration code is active; unopened-profile population is unverified.",
+      "todoTitle": "Retire completed persisted-settings migrations after a defined support horizon"
+    },
+    {
+      "id": "LEG-FE-DEEP-LINKS",
+      "title": "Legacy settings, account, and relocated-route deep links",
+      "domain": "frontend/routing",
+      "classification": "migrate-then-remove",
+      "disposition": "Redirects remain externally reachable through bookmarks, Electron menus, and old documentation even when no current code creates some forms.",
+      "paths": [
+        "apps/frontend/src/App.tsx",
+        "apps/frontend/src/pages/AccountsPage.tsx",
+        "apps/frontend/src/features/settings/DashboardSettingsDialog.tsx"
+      ],
+      "readers": "Router and settings dialog parse old URLs and tab names.",
+      "writers": "Current app generally generates canonical routes; Electron still uses at least the canonical general tab name.",
+      "persistedData": "External bookmarks and OS-level deep links, not database rows.",
+      "supportWindow": "Define a deep-link support policy and verify Electron/docs no longer emit old names.",
+      "replacement": "Canonical /accounts/:id, research, portfolio, and settings section routes.",
+      "deletionDependencies": [
+        "deep-link cutoff",
+        "Electron and route tests",
+        "documentation scan"
+      ],
+      "liveEvidence": "Redirect code is active; external bookmark population is unknowable.",
+      "todoTitle": "Retire legacy deep-link redirects after a published support window"
+    },
+    {
+      "id": "LEG-FE-QUERY-KEY",
+      "title": "CamelCase exchange-rate query key",
+      "domain": "frontend/cache",
+      "classification": "retain-with-reason",
+      "disposition": "The key is actively shared by the FX status banner and its dbOnly query; it must remain distinct from the full exchange-rate payload.",
+      "paths": [
+        "apps/frontend/src/lib/queryKeys.ts",
+        "apps/frontend/src/hooks/useExchangeRates.ts",
+        "apps/frontend/src/components/notifications/FxStatusBanner.tsx"
+      ],
+      "readers": "Current React Query hooks and invalidation paths.",
+      "writers": "In-memory query cache only.",
+      "persistedData": "None beyond process-lifetime cache.",
+      "supportWindow": "Current contract; renaming would be cosmetic and would invalidate cache.",
+      "replacement": "None required.",
+      "deletionDependencies": [],
+      "liveEvidence": "Direct current callers exist.",
+      "todoTitle": null
+    },
+    {
+      "id": "LEG-FE-GAIN-LOSS",
+      "title": "Portfolio gainLoss metric labelled legacy",
+      "domain": "portfolio/calculations",
+      "classification": "retain-with-reason",
+      "disposition": "Legacy describes formula lineage; the metric remains heavily used and intentionally differs from narrower gain components.",
+      "paths": [
+        "apps/frontend/src/types/portfolio.ts",
+        "apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx",
+        "apps/node-backend/src/services/portfolio/portfolioSummaryService.js"
+      ],
+      "readers": "Portfolio pages, accounts, reports, hooks, and metrics.",
+      "writers": "Backend summary calculation emits it.",
+      "persistedData": "Derived response metric only.",
+      "supportWindow": "Current user-visible financial contract.",
+      "replacement": "No equivalent single field without a product contract change.",
+      "deletionDependencies": [],
+      "liveEvidence": "Broad production reachability is confirmed.",
+      "todoTitle": null
+    },
+    {
+      "id": "LEG-FE-UPCOMING-DISMISSALS",
+      "title": "Upcoming-payment dismissal validation for old numeric entries",
+      "domain": "frontend/planned payments",
+      "classification": "retain-with-reason",
+      "disposition": "The code does not preserve old behavior; it prunes malformed and stale entries while validating the canonical id:date format.",
+      "paths": [
+        "apps/frontend/src/hooks/useUpcomingPlannedPayments.ts",
+        "apps/frontend/src/hooks/__tests__/useUpcomingPlannedPayments.test.tsx"
+      ],
+      "readers": "Current reminder dismissal storage.",
+      "writers": "Persists only canonical well-formed keys.",
+      "persistedData": "Current per-browser reminder dismissals.",
+      "supportWindow": "Current validation behavior.",
+      "replacement": "None.",
+      "deletionDependencies": [],
+      "liveEvidence": "Tests prove old numeric entries are already discarded.",
+      "todoTitle": null
+    },
+    {
+      "id": "LEG-UI-SKELETONS",
+      "title": "Skeleton and PageLoader components",
+      "domain": "frontend/loading UI",
+      "classification": "retain-with-reason",
+      "disposition": "False positive: Skeleton is a current loading-state component, not a legacy implementation skeleton.",
+      "paths": [
+        "apps/frontend/src/components/ui/skeleton.tsx",
+        "apps/frontend/src/App.tsx"
+      ],
+      "readers": "Many current pages, charts, tables, and lazy-route loaders.",
+      "writers": "None.",
+      "persistedData": "None.",
+      "supportWindow": "Current accessibility and loading contract.",
+      "replacement": "None.",
+      "deletionDependencies": [],
+      "liveEvidence": "Direct production imports and accessibility tests are present.",
+      "todoTitle": null
+    },
+    {
+      "id": "LEG-ELEC-ARCHIVER7",
+      "title": "Archiver v7 callable factory compatibility",
+      "domain": "Electron/backup",
+      "classification": "remove-now",
+      "disposition": "Pinned dependencies resolve Archiver 8; createBundle only requests zip, leaving the v7 callable and tar/json branches unreachable.",
+      "paths": [
+        "packaging/electron/backup/bundle.js",
+        "packaging/electron/package.json"
+      ],
+      "readers": "createBundle calls the compatibility wrapper for zip only.",
+      "writers": "Creates current backup zip archives.",
+      "persistedData": "Backup output format remains unchanged if ZipArchive construction is preserved.",
+      "supportWindow": "None; dependency version is pinned in the application bundle.",
+      "replacement": "Lazy new ZipArchive(options).",
+      "deletionDependencies": [
+        "backup bundle tests",
+        "round-trip restore",
+        "lazy-load assertion"
+      ],
+      "liveEvidence": "Manifest and lock resolve Archiver 8; no alternate format caller exists.",
+      "todoTitle": "Remove the obsolete Archiver v7 compatibility wrapper"
+    },
+    {
+      "id": "LEG-ELEC-USERDATA-NAME",
+      "title": "vision-desktop userData directory migration",
+      "domain": "Electron/persistence",
+      "classification": "migrate-then-remove",
+      "disposition": "Startup still moves or archives the old directory; removing it can strand settings or native/embedded database state for skipped-version installs.",
+      "paths": [
+        "packaging/electron/main.js",
+        "docs/adr/045-electron-app-name-userData-migration.md"
+      ],
+      "readers": "Electron startup checks the legacy and canonical userData paths.",
+      "writers": "Renames the old directory or archives it when the canonical target is populated.",
+      "persistedData": "Settings, native runtime state, attachments, or retired embedded-compose data.",
+      "supportWindow": "Oldest-supported-version policy plus one release of zero legacy-directory detections.",
+      "replacement": "Canonical Vision userData directory.",
+      "deletionDependencies": [
+        "host census or telemetry",
+        "backup/recovery rule",
+        "packaged migration smoke"
+      ],
+      "liveEvidence": "Startup path is active; host population was not inspected.",
+      "todoTitle": "Retire Electron legacy-install migration guards after the support cutoff"
+    },
+    {
+      "id": "LEG-ELEC-NATIVE-CUTOVER",
+      "title": "Retired Docker runtime cutover guards",
+      "domain": "Electron/runtime",
+      "classification": "migrate-then-remove",
+      "disposition": "Fail-closed guards prevent an old installation from silently opening an empty native database.",
+      "paths": [
+        "packaging/electron/runtime/index.js",
+        "packaging/electron/runtime/native.js",
+        "packaging/release/README.md"
+      ],
+      "readers": "Runtime selection reads settings, native cutover marker, and embedded_compose residue.",
+      "writers": "Current native activation writes runtime-state markers.",
+      "persistedData": "Legacy Docker database and cutover state can represent the user's only financial data.",
+      "supportWindow": "Explicit legacy-install cutoff with restore-tested migration/backup evidence.",
+      "replacement": "Canonical native runtime with a verified cutover marker.",
+      "deletionDependencies": [
+        "support cutoff",
+        "zero maintained legacy installs",
+        "recovery proof"
+      ],
+      "liveEvidence": "Guard code is active; legacy-install population is unverified.",
+      "todoTitle": "Retire Electron legacy-install migration guards after the support cutoff"
+    },
+    {
+      "id": "LEG-ELEC-RAW-BACKUP",
+      "title": "Raw SQL and .enc backup restore compatibility",
+      "domain": "Electron/backup",
+      "classification": "retain-with-reason",
+      "disposition": "Old user-created backups are durable recovery artifacts; current restore flows intentionally accept them.",
+      "paths": [
+        "packaging/electron/main.js",
+        "packaging/electron/backup/restore.js",
+        "docs/features/settings.md"
+      ],
+      "readers": "Backup picker and restore controller.",
+      "writers": "Current backups use bundle format; legacy files are read-only inputs.",
+      "persistedData": "Potentially the only restorable copy of a user's financial history.",
+      "supportWindow": "Indefinite under the current backup compatibility promise.",
+      "replacement": "A future explicit offline converter would be required before policy changes.",
+      "deletionDependencies": [],
+      "liveEvidence": "Active restore dispatch and documentation confirm support.",
+      "todoTitle": null
+    },
+    {
+      "id": "LEG-ELEC-CBC-V1",
+      "title": "AES-256-CBC VISIONBAK1 backup reader",
+      "domain": "Electron/backup/security",
+      "classification": "retain-with-reason",
+      "disposition": "ADR-040 promises old encrypted backups remain readable; current code auto-detects VISIONBAK1 and VISIONBAK2.",
+      "paths": [
+        "packaging/electron/backup/bundle.js",
+        "packaging/electron/backup/encrypted-file.js",
+        "docs/adr/040-backup-format-v2-aead-encryption.md"
+      ],
+      "readers": "Encrypted backup restore path.",
+      "writers": "New backups write authenticated VISIONBAK2 only.",
+      "persistedData": "Existing user backup archives.",
+      "supportWindow": "Indefinite under current ADR; retirement would require a converter and retained recovery utility.",
+      "replacement": "AES-256-GCM VISIONBAK2 for new output.",
+      "deletionDependencies": [],
+      "liveEvidence": "Fixed-byte compatibility fixtures exercise the reader.",
+      "todoTitle": null
+    },
+    {
+      "id": "LEG-ELEC-BACKUP-FIXTURE",
+      "title": "Vision 1.0.2 backup compatibility fixture",
+      "domain": "Electron/backup tests",
+      "classification": "retain-with-reason",
+      "disposition": "Active regression evidence for cross-release restore, not stale production data.",
+      "paths": [
+        "packaging/electron/backup/fixtures/vision-1.0.2-sanitized.visionbak.enc",
+        "apps/node-backend/tests/backup-release-compat.test.js"
+      ],
+      "readers": "Backup release compatibility test.",
+      "writers": "None; immutable fixture.",
+      "persistedData": "Sanitized synthetic compatibility data.",
+      "supportWindow": "For as long as the corresponding backup format remains supported.",
+      "replacement": "None.",
+      "deletionDependencies": [],
+      "liveEvidence": "Focused test hashes and restores the fixture.",
+      "todoTitle": null
+    },
+    {
+      "id": "LEG-DOC-HISTORY",
+      "title": "Superseded ADRs and manual rollback contracts",
+      "domain": "documentation/operations",
+      "classification": "historical-record-only",
+      "disposition": "Append-only decisions and recovery artifacts are historical evidence, not runtime debris.",
+      "paths": ["docs/adr", "alembic/manual"],
+      "readers": "Operators, maintainers, incident response, and migration tests.",
+      "writers": "ADRs are append-only; manual contracts execute only under their explicit gates.",
+      "persistedData": "Some manual scripts are the only documented rollback or destructive-maintenance boundary.",
+      "supportWindow": "Retain as project history and operational evidence.",
+      "replacement": "Superseding ADRs describe current decisions without erasing history.",
+      "deletionDependencies": [],
+      "liveEvidence": "Repository rules explicitly require ADR history and gated rollback artifacts to remain.",
+      "todoTitle": null
+    }
+  ]
+}

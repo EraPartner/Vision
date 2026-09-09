@@ -20,25 +20,29 @@ Vision's live implementation queue. Priority: 🔺 highest, ⏫ high, 🔼 mediu
 
 Run `bun run todo:list` for the concise queue and `bun run todo:check` for ledger hygiene.
 
-## Continuation checkpoint — 2026-09-08
+## Continuation checkpoint — 2026-09-09
 
 This is the current hand-off point after the complete TODO normalization audit. Do not repeat a
-repository-wide audit before selecting work. Following the product exploration below, the queue
-contains **41 open records and no checked records**. The records fall into these states:
+repository-wide audit before selecting work. The legacy compatibility inventory is now recorded in
+`docs/audits/legacy-surface-inventory.json`; do not repeat it without new evidence. Following the
+product exploration and legacy audit below, the queue contains **69 open records and no checked
+records**. The records fall into these states:
 
-- **1 verified-present**: source work is still required; revalidate the named evidence, then
+- **13 verified-present**: source work is still required; revalidate the named evidence, then
   implement one item at a time.
 - **4 runtime-unverified**: source work is complete or substantially complete; perform only the
   named live database, Demo, browser, Electron, or external acceptance check.
-- **36 decision-needed**: planned outcomes expanded on 2026-09-08 and 2026-09-09; the shared analysis workspace
+- **52 decision-needed**: planned outcomes expanded on 2026-09-08 and 2026-09-09; the shared analysis workspace
   direction is user-requested. This session authorizes planning, not implementation. Resolve the
   remaining engineering/provider choices during design; do not ask the user to reapprove the shared
   manual/visual/SQL/local-AI direction. Portfolio exposure, dossiers, integrated research, stronger
   local AI, and saved analyses/monitoring are part of that direction.
   Commitment-aware budgeting and shared life scenarios remain lower-priority alternatives.
-  The September 9 opt-in OpenAI/Codex plan adds eight records. Both API and supported subscription
-  access are requested directions; retention and onward disclosure are the user's primary privacy
-  concerns. Cloud use remains an explicit exception to the default local/free-only behavior.
+  The September 9 opt-in OpenAI/Codex plan adds eight records. The legacy inventory replaces one
+  broad record with 29 owner-sized retirements; two other retirements were already tracked. Both API
+  and supported subscription access are requested directions; retention and onward disclosure are
+  the user's primary privacy concerns. Cloud use remains an explicit exception to the default
+  local/free-only behavior.
 
 Continue as follows:
 
@@ -810,34 +814,175 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
     canonical totals, backup/restore, absence of all targeted relations, and presence of the cleanup
     marker. Keep the pre-cleanup backup until the post-contract acceptance is complete.
 
-- [ ] **Inventory all remaining legacy and compatibility surfaces and queue bounded retirements** 🔼
-  - Tracking: 🔎 decision-needed 2026-09-09 (repository-wide inventory requested; define evidence and soak windows per consumer before splitting removal work, and do not equate a `legacy`, `compatibility`, `fallback`, or `skeleton` label with dead code)
-  - ↪ _from: User legacy-removal plan 2026-09-09 · remove every no-longer-needed code, schema, API, configuration, and storage remnant_
-  - Produce a machine-checkable inventory across runtime code, database relations/columns/types,
-    migrations and manual contracts, API aliases/events, frontend persisted settings, Electron user
-    data and backup readers, configuration/provider shims, generated types, tests, and documentation.
-    For each candidate record its current readers/writers, persisted-data population, supported
-    client/install window, replacement, deletion dependency, telemetry or live evidence, migration
-    and rollback needs, and final classification: remove now, migrate then remove, retain with reason,
-    historical record only, or unknown. Search by reachability and schema usage as well as naming.
-  - Seed the audit with known active compatibility surfaces: legacy `tx_hash` after ADR-134;
-    `bank_account` request compatibility and fresh-Alembic columns; account-statement scalar
-    projections; dormant `import_staging_rows.resolved_bank_account_id`; upgraded-install-only
-    `exchange_rate_cache`; the old portfolio transaction enum retained for downgrade/frozen
-    relations; the deprecated AI `done` event; deprecated category/date/import API aliases;
-    persisted `enhancedEffects`, dashboard, and insight-dismissal migrations; Electron
-    `vision-desktop` user-data migration; legacy encrypted backup readers; the archived-revision
-    stamp map; root Alembic, API-client, money-module, and provider adapter shims; and the apparent
-    zero-importer `bankAdapters.js`, shared asset-class, app-settings-default, and repository-helper
-    re-exports. Classify each from current evidence instead of pre-authorizing removal. Loading
-    `Skeleton` components, archived Alembic history, superseded ADRs, and rollback scripts are not
-    deletion candidates merely because their names contain legacy terms.
-  - Split every approved retirement into one owner-sized TODO finding ordered as
-    expand/migrate/soak/contract. A finding that can affect stored data must require a live preflight,
-    stopped-writer contract where needed, count/digest and orphan checks, a tested downgrade or
-    restore boundary, full backup coverage, disposable PostgreSQL 18 proof, and explicit approval
-    before touching the maintained database. Complete this inventory only when every candidate has
-    a recorded disposition and no broad unowned "remove legacy" remainder is left.
+- [ ] **Drop dormant import staging bank-account resolution state** 🔼
+  - Tracking: 🔎 verified-present 2026-09-09 (the column has no production reader or writer; only schema tests reference it)
+  - ↪ _from: Legacy compatibility inventory LEG-DB-RESOLVED-BANK-ACCOUNT_
+  - Add a guarded Alembic upgrade and downgrade. Refuse the upgrade if any value is non-null or an
+    active staging batch makes removal unsafe. Prove both directions on disposable PostgreSQL 18;
+    never apply the migration to the maintained database in this task.
+
+- [ ] **Retire upgraded-install-only exchange_rate_cache safely** 🔼
+  - Tracking: 🔎 verified-present 2026-09-09 (the runtime uses `exchange_rates`; the old relation is absent from the fresh baseline and backup registry)
+  - ↪ _from: Legacy compatibility inventory LEG-DB-EXCHANGE-RATE-CACHE_
+  - Add a shape-guarded forward migration with a fresh-install no-op and an explicit downgrade or
+    restore boundary. Preserve unexpected shapes or populated rows instead of dropping them.
+
+- [ ] **Retire legacy tx_hash after versioned import identity has soaked** 🔼
+  - Tracking: 🔎 decision-needed 2026-09-09 (`tx_hash` is still dual-written and used as a duplicate fallback; removal waits for ADR-134 acceptance and a fallback-free soak)
+  - ↪ _from: Legacy compatibility inventory LEG-DB-TX-HASH_
+  - Stop writers first, measure fallback use, and soak the versioned identity path. Then use a
+    contract migration with count/digest checks and a restore-tested rollback boundary.
+
+- [ ] **Retire canonical bank_account storage and write compatibility** 🔼
+  - Tracking: 🔎 decision-needed 2026-09-09 (shipped create, edit, and planned-transaction flows still send labels, and stored columns remain rollback support)
+  - ↪ _from: Legacy compatibility inventory LEG-DB-BANK-ACCOUNT_
+  - Migrate all clients to account identifiers, prove label/account parity, stop compatibility
+    writers, and only then use the guarded manual contract with stopped writers and a verified backup.
+
+- [ ] **Retire account statement scalar projections after collection migration** 🔼
+  - Tracking: 🔎 decision-needed 2026-09-09 (the scalar fields are still dual-written and consumed as the declared-currency projection)
+  - ↪ _from: Legacy compatibility inventory LEG-DB-STATEMENT-SCALARS_
+  - Move clients to the multi-currency collection, prove count and digest parity, stop scalar writes,
+    and preserve a tested downgrade or restore boundary before dropping the projections.
+
+- [ ] **Drop the obsolete recurrence enum after ADR-109 rollback retirement** 🔽
+  - Tracking: 🔎 decision-needed 2026-09-09 (the enum remains a downgrade and frozen rollback-relation dependency)
+  - ↪ _from: Legacy compatibility inventory LEG-DB-RECURRENCE-ENUM_
+  - Wait for ADR-109 cleanup, use `pg_depend` to prove zero consumers, decide the supported downgrade
+    boundary, and then remove the type in a reversible PostgreSQL migration.
+
+- [ ] **Remove the unused bank adapter compatibility entrypoint** 🔼
+  - Tracking: 🔎 verified-present 2026-09-09 (zero production importers; tests and the test-only-export allowlist are its only consumers)
+  - ↪ _from: Legacy compatibility inventory LEG-BE-BANK-ADAPTER-SHIM_
+  - Repoint focused tests to the canonical import-pipeline adapter index, remove obsolete allowlist
+    entries and stale docs, then delete `services/bankAdapters.js`.
+
+- [ ] **Remove unused info-repository compatibility re-exports** 🔼
+  - Tracking: 🔎 verified-present 2026-09-09 (all callers import the seven money/date helpers from their canonical owners)
+  - ↪ _from: Legacy compatibility inventory LEG-BE-INFO-HELPER-REEXPORTS_
+  - Remove the re-exports after an exact stale-import scan and run the repository-helper tests.
+
+- [ ] **Remove unused shared package compatibility exports** 🔼
+  - Tracking: 🔎 verified-present 2026-09-09 (the private asset-class subpath has zero repository importers; canonical constants live in `@vision/types`)
+  - ↪ _from: Legacy compatibility inventory LEG-PKG-ASSET-CLASS-SHIM_
+  - Remove the source, declaration, and package export. Prove no stale imports and run typecheck and build.
+
+- [ ] **Remove unused frontend settings and asset-class exports** 🔼
+  - Tracking: 🔎 verified-present 2026-09-09 (`defaultAppSettings` and `ASSET_CLASS_GROUPS` have zero callers)
+  - ↪ _from: Legacy compatibility inventory LEG-FE-DEFAULT-SETTINGS-ALIAS and LEG-FE-ASSET-CLASS-GROUPS_
+  - Remove both exports while keeping `DEFAULT_APP_SETTINGS` and translated
+    `getAssetClassGroups` canonical. Run settings hydration and portfolio frontend tests.
+
+- [ ] **Remove unused legacy insight dismissal exports** 🔼
+  - Tracking: 🔎 verified-present 2026-09-09 (dismiss, filter, and listener helpers are used only by their old unit tests)
+  - ↪ _from: Legacy compatibility inventory LEG-FE-INSIGHT-DEAD-EXPORTS_
+  - Preserve the migration gate's minimal load, replace, and type surface; rewrite focused tests
+    around that boundary and delete the unrelated exports.
+
+- [ ] **Remove the obsolete Archiver v7 compatibility wrapper** 🔼
+  - Tracking: 🔎 verified-present 2026-09-09 (the lock resolves Archiver 8 and `createBundle` only requests zip)
+  - ↪ _from: Legacy compatibility inventory LEG-ELEC-ARCHIVER7_
+  - Remove the callable-factory and tar/json compatibility branches. Prove lazy loading plus backup
+    bundle creation and restore round trips.
+
+- [ ] **Migrate frontend money imports off the redundant local shim** 🔼
+  - Tracking: 🔎 verified-present 2026-09-09 (the shim is redundant but still imported by six production modules)
+  - ↪ _from: Legacy compatibility inventory LEG-FE-MONEY-SHIM_
+  - Move the six callers to `@vision/shared-utils/money`, delete the shim, and run financial tests
+    plus frontend typecheck.
+
+- [ ] **Migrate deprecated frontend type and label aliases** 🔼
+  - Tracking: 🔎 verified-present 2026-09-09 (the aliases remain active in portfolio, market-search, and import UI callers)
+  - ↪ _from: Legacy compatibility inventory LEG-FE-ASSET-CLASS-LABELS and LEG-FE-TYPE-ALIASES_
+  - Move callers to translated asset-class helpers and canonical shared types, then remove the aliases
+    with focused portfolio/import tests and frontend typecheck.
+
+- [ ] **Replace the legacy currency formatter call signature** 🔼
+  - Tracking: 🔎 verified-present 2026-09-09 (multiple runtime consumers still use the positional third argument)
+  - ↪ _from: Legacy compatibility inventory LEG-FE-CURRENCY-FORMATTER_
+  - Move callers to the canonical options shape, update format snapshots, and remove the old signature.
+
+- [ ] **Migrate and remove the Belgian tax federalPITTotal alias** 🔼
+  - Tracking: 🔎 decision-needed 2026-09-09 (the alias is still emitted and may be present in persisted views or snapshots)
+  - ↪ _from: Legacy compatibility inventory LEG-FE-TAX-PIT-ALIAS_
+  - Census persisted JSON keys, migrate consumers and stored data with backup proof, then stop emitting
+    and accepting the alias.
+
+- [ ] **Retire bi-weekly recurrence compatibility after its release gate** 🔼
+  - Tracking: 🔎 decision-needed 2026-09-09 (frontend and backend still normalize the old spelling after migration 0099)
+  - ↪ _from: Legacy compatibility inventory LEG-FE-RECURRENCE-INPUT_
+  - Prove the live migration, query for zero legacy values, define the old-client window, and only
+    then remove the normalization paths.
+
+- [ ] **Retire the deprecated AI done event in staged client and server windows** 🔼
+  - Tracking: 🔎 decision-needed 2026-09-09 (the server emits both terminal events and the frontend still normalizes `done`)
+  - ↪ _from: Legacy compatibility inventory LEG-API-AI-DONE_
+  - Migrate the internal client type, define supported client/server skew, stop server emission after
+    that window, and remove client acceptance in a later compatible release.
+
+- [ ] **Require bounded AI conversation pagination after the compatibility window** 🔼
+  - Tracking: 🔎 decision-needed 2026-09-09 (current frontend calls are bounded, but omitted parameters still request the historical full list)
+  - ↪ _from: Legacy compatibility inventory LEG-API-AI-UNPAGED_
+  - Define the external-client window, require pagination in the contract, and prove bounded load and
+    pagination behavior before deleting the fallback.
+
+- [ ] **Remove the deprecated category name-assignment endpoint after its client gate** 🔼
+  - Tracking: 🔎 decision-needed 2026-09-09 (no shipped frontend caller exists, but external client use is unmeasured)
+  - ↪ _from: Legacy compatibility inventory LEG-API-CATEGORY-ASSIGN_
+  - Decide the external-client boundary, then remove the route, OpenAPI operation, generated types,
+    mocks, and route tests together.
+
+- [ ] **Retire deprecated aggregation query aliases** 🔼
+  - Tracking: 🔎 decision-needed 2026-09-09 (the shipped frontend is canonical, but external client use is unmeasured)
+  - ↪ _from: Legacy compatibility inventory LEG-API-AGGREGATION-ALIASES_
+  - Define the client window, remove `start`/`end` and `all_tags` aliases, and refresh OpenAPI-derived
+    types with endpoint contract tests.
+
+- [ ] **Move import options into multipart bodies and retire query fallbacks** 🔼
+  - Tracking: 🔎 verified-present 2026-09-09 (the shipped frontend still sends bank and mapping options in query parameters)
+  - ↪ _from: Legacy compatibility inventory LEG-API-IMPORT-QUERY-FALLBACKS_
+  - Migrate every import and server-sent events variant to multipart fields, soak the new requests for
+    the supported client window, then remove backend query fallbacks and update OpenAPI.
+
+- [ ] **Retire the admin reset force query fallback** 🔼
+  - Tracking: 🔎 decision-needed 2026-09-09 (the frontend uses the JSON body, but older clients may use the deprecated query location)
+  - ↪ _from: Legacy compatibility inventory LEG-API-ADMIN-FORCE_
+  - Define the external-client boundary and remove the query fallback with destructive-route contract tests.
+
+- [ ] **Retire legacy HTTP error envelopes after route-wide contract proof** 🔼
+  - Tracking: 🔎 decision-needed 2026-09-09 (the parser protects server/client skew and accepts several historical shapes)
+  - ↪ _from: Legacy compatibility inventory LEG-API-ERROR-SHAPES_
+  - Prove the unified envelope across every route, decide packaged client/server skew support, then
+    narrow the parser with focused compatibility tests.
+
+- [ ] **Remove the transaction date response fallback after contract proof** 🔼
+  - Tracking: 🔎 decision-needed 2026-09-09 (the client accepts `date`, while the typed server contract requires `transaction_date`)
+  - ↪ _from: Legacy compatibility inventory LEG-API-TX-DATE_
+  - Prove response fixtures and the supported skew boundary, then remove the fallback and its tests.
+
+- [ ] **Retire completed persisted-settings migrations after a defined support horizon** 🔽
+  - Tracking: 🔎 decision-needed 2026-09-09 (unopened browser profiles may still contain `enhancedEffects`, dashboard settings, or chart-builder v1 layouts)
+  - ↪ _from: Legacy compatibility inventory LEG-FE-ENHANCED-EFFECTS, LEG-FE-DASHBOARD-STORAGE, and LEG-FE-CHART-V1-STORAGE_
+  - Define the browser-profile support policy, measure legacy-key population where possible, exercise
+    each migration round trip, then remove the migrations only after the horizon expires.
+
+- [ ] **Retire browser-only insight dismissal migration after its support horizon** 🔽
+  - Tracking: 🔎 decision-needed 2026-09-09 (the gate still protects unopened profiles and retries transient server failures)
+  - ↪ _from: Legacy compatibility inventory LEG-FE-INSIGHT-GATE_
+  - Define the browser cutoff, census the key where possible, and prove offline/retry behavior before
+    deleting the gate and its startup block.
+
+- [ ] **Retire legacy deep-link redirects after a published support window** 🔽
+  - Tracking: 🔎 decision-needed 2026-09-09 (old bookmarks, Electron menus, and documentation can still reach the redirects)
+  - ↪ _from: Legacy compatibility inventory LEG-FE-DEEP-LINKS_
+  - Publish a cutoff, scan producers and docs, test Electron and browser routes, then remove redirects
+    after the supported window.
+
+- [ ] **Retire Electron legacy-install migration guards after the support cutoff** 🔽
+  - Tracking: 🔎 decision-needed 2026-09-09 (the user-data move and native cutover guards still prevent skipped-version installs from stranding data or opening an empty database)
+  - ↪ _from: Legacy compatibility inventory LEG-ELEC-USERDATA-NAME and LEG-ELEC-NATIVE-CUTOVER_
+  - Establish zero maintained legacy installs or a published cutoff, preserve a recovery rule, and
+    run packaged migration smoke tests before removing both startup guards.
 
 ### 🏦 Accounts and portfolio features
 

@@ -1,7 +1,7 @@
 ---
 title: Scripts Reference
 type: reference
-date: 2026-09-08
+date: 2026-09-09
 tags: [reference, scripts, bun, testing, database, electron, native-runtime]
 description: Authoritative guide to Vision package scripts and their intended use.
 aliases: [scripts reference, package scripts]
@@ -46,6 +46,7 @@ Run root scripts with `bun run <name>`. Run workspace scripts with
 | `generate-locales`        | Generate frontend and Electron locale outputs      |
 | `generate:types`          | Generate frontend OpenAPI types                    |
 | `check-endpoint-matrix`   | Verify the documented operation count              |
+| `check-legacy-inventory`  | Validate legacy dispositions and TODO ownership    |
 | `check-test-only-exports` | Reject production imports of test-only helpers     |
 | `todo:list`               | Print the current TODO ledger                      |
 | `todo:check`              | Verify TODO counts and ledger integrity            |
