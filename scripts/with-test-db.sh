@@ -36,9 +36,9 @@ NATIVE_LOG=
 POSTGRES_BIN=
 
 case "$TASK" in
-  tests|migration-fidelity|adr090-retirement|adr088-contract) ;;
+  tests|migration-fidelity|legacy-retirements|adr090-retirement|adr088-contract) ;;
   *)
-    echo "[test-db] VISION_TEST_DB_TASK must be tests, migration-fidelity, adr090-retirement, or adr088-contract." >&2
+    echo "[test-db] VISION_TEST_DB_TASK must be tests, migration-fidelity, legacy-retirements, adr090-retirement, or adr088-contract." >&2
     exit 1
     ;;
 esac
@@ -59,7 +59,7 @@ if [ -n "${TEST_DATABASE_URL:-}" ]; then
     echo "[test-db] Caller-managed TEST_DATABASE_URL is available."
     exit 0
   fi
-  if [ "$TASK" = migration-fidelity ] || [ "$TASK" = adr090-retirement ] || [ "$TASK" = adr088-contract ]; then
+  if [ "$TASK" = migration-fidelity ] || [ "$TASK" = legacy-retirements ] || [ "$TASK" = adr090-retirement ] || [ "$TASK" = adr088-contract ]; then
     echo "[test-db] Destructive migration lifecycle tasks refuse a caller-managed TEST_DATABASE_URL." >&2
     echo "[test-db] Unset it so this script provisions a disposable database." >&2
     exit 1
@@ -232,6 +232,12 @@ if [ "$TASK" = migration-fidelity ]; then
   bun run apps/node-backend/scripts/db-migrate.js downgrade -1
   bun run apps/node-backend/scripts/db-migrate.js upgrade head
   echo "[test-db] Migration fidelity check passed."
+  exit 0
+fi
+
+if [ "$TASK" = legacy-retirements ]; then
+  echo "[test-db] Verifying guarded legacy-retirement lifecycles."
+  bun run scripts/test-legacy-retirements.js
   exit 0
 fi
 

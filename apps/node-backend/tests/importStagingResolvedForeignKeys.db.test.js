@@ -33,6 +33,7 @@ const FOREIGN_KEYS = [
     "recipient_bank_accounts",
   ],
 ];
+const CURRENT_FOREIGN_KEYS = [FOREIGN_KEYS[0]];
 
 const REPO_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -63,7 +64,7 @@ function alembic(...args) {
   });
 }
 
-describeDb("import staging resolved foreign keys (migration 0091)", () => {
+describeDb("current import staging resolved foreign keys", () => {
   beforeAll(async () => {
     await acquireDbSuiteLock();
   }, 180_000);
@@ -74,7 +75,7 @@ describeDb("import staging resolved foreign keys (migration 0091)", () => {
   });
 
   it("has validated ON DELETE SET NULL constraints and covering indexes", async () => {
-    for (const [constraint, column, parentTable] of FOREIGN_KEYS) {
+    for (const [constraint, column, parentTable] of CURRENT_FOREIGN_KEYS) {
       const fk = await pool.query(
         `SELECT convalidated, confdeltype, confrelid::regclass::text AS parent_table
            FROM pg_constraint
@@ -114,13 +115,6 @@ describeDb("import staging resolved foreign keys (migration 0091)", () => {
          RETURNING id`,
       );
       const recipientId = recipient.rows[0].id;
-      const account = await client.query(
-        `INSERT INTO recipient_bank_accounts (recipient_id, account_number)
-         VALUES ($1, '_0091_account')
-         RETURNING id`,
-        [recipientId],
-      );
-      const accountId = account.rows[0].id;
       const batch = await client.query(
         `INSERT INTO import_batches (adapter_name)
          VALUES ('_0091')
@@ -129,10 +123,10 @@ describeDb("import staging resolved foreign keys (migration 0091)", () => {
       const batchId = batch.rows[0].id;
       const staging = await client.query(
         `INSERT INTO import_staging_rows
-           (batch_id, row_index, resolved_recipient_id, resolved_bank_account_id)
-         VALUES ($1, 0, $2, $3)
+           (batch_id, row_index, resolved_recipient_id)
+         VALUES ($1, 0, $2)
          RETURNING id`,
-        [batchId, recipientId, accountId],
+        [batchId, recipientId],
       );
       const stagingId = staging.rows[0].id;
 
@@ -154,37 +148,14 @@ describeDb("import staging resolved foreign keys (migration 0091)", () => {
       );
       await client.query("ROLLBACK TO SAVEPOINT before_dangling");
 
-      await client.query("SAVEPOINT before_dangling_account");
-      const danglingAccountError = await client
-        .query(
-          `INSERT INTO import_staging_rows
-             (batch_id, row_index, resolved_bank_account_id)
-           VALUES ($1, 2, 2147483647)`,
-          [batchId],
-        )
-        .then(
-          () => null,
-          (error) => error,
-        );
-      expect(danglingAccountError?.code).toBe("23503");
-      expect(danglingAccountError?.constraint).toBe(
-        "fk_import_staging_rows_resolved_bank_account",
-      );
-      await client.query("ROLLBACK TO SAVEPOINT before_dangling_account");
-
-      await client.query("DELETE FROM recipient_bank_accounts WHERE id = $1", [
-        accountId,
-      ]);
       await client.query("DELETE FROM recipients WHERE id = $1", [recipientId]);
       const cleared = await client.query(
-        `SELECT resolved_recipient_id, resolved_bank_account_id
+        `SELECT resolved_recipient_id
            FROM import_staging_rows
           WHERE id = $1`,
         [stagingId],
       );
-      expect(cleared.rows).toEqual([
-        { resolved_recipient_id: null, resolved_bank_account_id: null },
-      ]);
+      expect(cleared.rows).toEqual([{ resolved_recipient_id: null }]);
     } finally {
       await client.query("ROLLBACK").catch(() => {});
       client.release();

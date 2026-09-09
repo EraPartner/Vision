@@ -152,7 +152,6 @@ export function makeImportStagingRow(overrides = {}) {
     raw_data: "synthetic,test,row",
     tx_hash: "test-hash",
     resolved_recipient_id: null,
-    resolved_bank_account_id: null,
     error_message: null,
     match_source: null,
     matched_pattern_id: null,

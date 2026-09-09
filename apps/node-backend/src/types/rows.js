@@ -883,7 +883,6 @@
  * @property {number|null} [dedup_fingerprint_version]
  * @property {number|null} [dedup_occurrence]
  * @property {number|null} resolved_recipient_id
- * @property {number|null} resolved_bank_account_id
  * @property {string|null} error_message
  * @property {'pattern'|'exact'|'fuzzy'|'new'|null} [match_source] migration 0015.
  * @property {number|null} [matched_pattern_id] migration 0015.
