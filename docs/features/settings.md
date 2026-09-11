@@ -3,7 +3,7 @@ title: Settings Feature
 type: feature
 status: active
 date: 2026-06-19
-updated: 2026-08-27
+updated: 2026-09-11
 tags:
   [
     feature,
@@ -112,7 +112,12 @@ SettingsPreloadContext → SettingsHydration/AppSettingsHydration/ThemeHydration
 The persisted `app_settings` and `dashboard_settings` blobs are untrusted JSON from the settings API. Both are validated at the store boundary during hydration, in `[[apps/frontend/src/stores/settingsStore.ts|settingsStore.ts]]`:
 
 - `migrateDashboardSettings` (ZOD-11) parses the blob with `storedDashboardSettingsSchema` — a Zod `looseObject` (unknown keys survive and are persisted back) with per-field `.catch` to the default, so one malformed field never poisons the merge.
-- `migrateAppSettings` (2026-08) does the same via `storedAppSettingsSchema`, in addition to its pre-ADR-075 `enhancedEffects → visualEffects` legacy mapping. The money-formatting fields get value-level bounds because bad values make `Intl.NumberFormat` throw `RangeError` (crashing pages into the error boundary, or degrading guarded money surfaces to raw unlocalised numbers): `defaultCurrency` must be a well-formed 3-letter ISO-4217 code, `showDecimalPlaces` an integer 0–20, and `numberFormat` one of `eu`, `us`, `ch`, or `in`. `dateFormat` is limited to the five values offered by Settings; malformed or hand-edited values recover to `DD/MM/YYYY` instead of reaching a locale-sensitive fallback. A blob that is not an object at all falls back to `DEFAULT_APP_SETTINGS` wholesale.
+- `migrateAppSettings` does the same via `storedAppSettingsSchema`. It validates the canonical `visualEffects` tier directly; the retired `enhancedEffects` boolean no longer changes hydration. The money-formatting fields get value-level bounds because bad values make `Intl.NumberFormat` throw `RangeError` (crashing pages into the error boundary, or degrading guarded money surfaces to raw unlocalised numbers): `defaultCurrency` must be a well-formed 3-letter ISO-4217 code, `showDecimalPlaces` an integer 0–20, and `numberFormat` one of `eu`, `us`, `ch`, or `in`. `dateFormat` is limited to the five values offered by Settings; malformed or hand-edited values recover to `DD/MM/YYYY` instead of reaching a locale-sensitive fallback. A blob that is not an object at all falls back to `DEFAULT_APP_SETTINGS` wholesale.
+
+Since the 2026-09-11 compatibility cutoff, dashboard hydration reads only the server-backed
+`dashboard_settings` value and otherwise uses defaults. It no longer imports
+`vision_dashboardSettings` from browser storage. See
+[[docs/adr/135-compatibility-cutoff-for-september-retirements|ADR-135]].
 
 A well-formed (possibly partial) blob produces exactly the pre-validation `{ ...DEFAULTS, ...blob }` result, byte for byte. All `Intl.NumberFormat`-backed money formatters (`Money.tsx`, `useCurrencyFormatter` string + parts paths, `utils/currency.ts#formatCurrency`) additionally guard construction with try/catch and degrade to the same bare `` `${val}` `` text — defense in depth for per-call currency/decimals overrides that come from data rather than settings.
 

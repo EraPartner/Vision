@@ -62,7 +62,7 @@ package "UI Components (Radix + Tailwind)" {
 package "Layout Components" {
   class AppLayout {
     +LiquidCanvas: atmosphere layer
-    +ShaderAurora: WebGL (enhancedEffects only)
+    +ShaderAurora: WebGL (effective enhanced tier only)
     +Topbar: scroll-linked + title collapse
     +Sidebar: AppSidebar
     +CommandPalette: ⌘K palette
@@ -97,7 +97,7 @@ package "Layout Components" {
     +webgl: raw (no deps)
     +fbm: 4-octave noise
     +resolution: 0.25x
-    +gate: enhancedEffects
+    +gate: effective visualEffects tier
   }
 
   class ShortcutsOverlay {

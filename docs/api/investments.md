@@ -5,8 +5,8 @@ method: GET, POST, PUT, PATCH, DELETE
 path: /api/investments
 description: Investment portfolio management (stocks, crypto, real estate, savings)
 date: 2026-06-18
-last_modified: 2026-09-07
-updated: 2026-09-07
+last_modified: 2026-09-11
+updated: 2026-09-11
 tags: [api, investments, portfolio, stocks, crypto, metals, phase-9, decimal, money, offline-fallback, per-account, adr-091, show-in-ticker, portfolio-ticker]
 status: active
 aliases: [investments-api, portfolio-api, holdings, stocks, crypto, real-estate, savings, bonds, metals]
@@ -26,10 +26,9 @@ The storage layer uses the canonical flat `investments` and `portfolio_transacti
 Migration 0087 converted former PostgreSQL-inheritance installations before the runtime starts;
 the old base/child/view shape is historical only (ADR-109).
 
-Portfolio recurrence values now use the canonical `biweekly` spelling (ADR-130). During one
-compatibility release, writes using legacy `bi-weekly` are normalized; every response emits
-`biweekly`. This narrows the published enum and is breaking only for clients that validate
-responses against the legacy spelling instead of treating the cadence semantically.
+Portfolio recurrence values use the canonical `biweekly` spelling (ADR-130). Requests using the
+retired `bi-weekly` spelling are rejected, and every response emits `biweekly`. This is a breaking
+input change made under the explicit cutoff in [[docs/adr/135-compatibility-cutoff-for-september-retirements|ADR-135]].
 
 > [!info] Monetary Precision (Phase 9)
 > All monetary values in responses (amounts, valuations, costs, prices) use **Decimal.js** for precision. Values are serialized as JSON `number` type, safe to 2 decimal places (cents). See [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] for details.
@@ -449,23 +448,23 @@ notation, remain accepted and are normalized to numbers for compatibility. Creat
 
 **Request Body Fields:**
 
-| Field                      | Type                    | Required | Description                                                                                                                                         |
-| -------------------------- | ----------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| type                       | string                  | Yes      | Canonical transaction type: buy, sell, dividend, fee, tax, interest, rent_income, appreciation, gift, split, merger, spinoff, return_of_capital     |
-| date                       | string                  | Yes      | Transaction date (YYYY-MM-DD)                                                                                                                       |
-| amount                     | number                  | No       | Total amount (auto-computed if missing for unit-based types)                                                                                        |
-| units                      | number                  | No       | Number of units (required for buy/sell/gift on unit-based assets)                                                                                   |
-| price_per_unit             | number                  | No       | Price per unit (auto-computed if missing for unit-based types)                                                                                      |
-| fees                       | number                  | No       | Transaction fees                                                                                                                                    |
-| taxes                      | number                  | No       | Transaction taxes (supported for dividend transactions)                                                                                             |
-| dividend_amount_convention | gross \| net \| unknown | No       | Whether a dividend amount is before or after withholding tax; defaults to `unknown` (ADR-126)                                                       |
-| currency                   | string                  | No       | Currency code (defaults to investment currency)                                                                                                     |
-| fx_rate_to_eur             | number                  | No       | FX rate to EUR at transaction date                                                                                                                  |
-| note                       | string                  | No       | Transaction note                                                                                                                                    |
-| is_recurring               | boolean                 | No       | Whether this transaction is recurring                                                                                                               |
-| recurrence_interval        | string                  | No       | Recurrence pattern: daily, weekly, biweekly, monthly, quarterly, yearly. Legacy `bi-weekly` writes are normalized during one compatibility release. |
-| account_id                 | integer \| null         | No       | Owning account for the lot (ADR-091). Absent or `null` leaves it unassigned. Accepted here all along — undocumented until 2026-08-11                |
-| recurrence_end_date        | string                  | No       | End date for recurring transactions (YYYY-MM-DD)                                                                                                    |
+| Field                      | Type                    | Required | Description                                                                                                                                     |
+| -------------------------- | ----------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| type                       | string                  | Yes      | Canonical transaction type: buy, sell, dividend, fee, tax, interest, rent_income, appreciation, gift, split, merger, spinoff, return_of_capital |
+| date                       | string                  | Yes      | Transaction date (YYYY-MM-DD)                                                                                                                   |
+| amount                     | number                  | No       | Total amount (auto-computed if missing for unit-based types)                                                                                    |
+| units                      | number                  | No       | Number of units (required for buy/sell/gift on unit-based assets)                                                                               |
+| price_per_unit             | number                  | No       | Price per unit (auto-computed if missing for unit-based types)                                                                                  |
+| fees                       | number                  | No       | Transaction fees                                                                                                                                |
+| taxes                      | number                  | No       | Transaction taxes (supported for dividend transactions)                                                                                         |
+| dividend_amount_convention | gross \| net \| unknown | No       | Whether a dividend amount is before or after withholding tax; defaults to `unknown` (ADR-126)                                                   |
+| currency                   | string                  | No       | Currency code (defaults to investment currency)                                                                                                 |
+| fx_rate_to_eur             | number                  | No       | FX rate to EUR at transaction date                                                                                                              |
+| note                       | string                  | No       | Transaction note                                                                                                                                |
+| is_recurring               | boolean                 | No       | Whether this transaction is recurring                                                                                                           |
+| recurrence_interval        | string                  | No       | Recurrence pattern: daily, weekly, biweekly, monthly, quarterly, yearly.                                                                        |
+| account_id                 | integer \| null         | No       | Owning account for the lot (ADR-091). Absent or `null` leaves it unassigned. Accepted here all along — undocumented until 2026-08-11            |
+| recurrence_end_date        | string                  | No       | End date for recurring transactions (YYYY-MM-DD)                                                                                                |
 
 **Required Fields:** type, date (additional type-specific validation below)
 

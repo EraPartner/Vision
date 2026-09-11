@@ -3,7 +3,7 @@ title: Admin API
 type: endpoint
 status: active
 date: 2026-08-31
-updated: 2026-09-03
+updated: 2026-09-11
 tags:
   - api
   - admin
@@ -114,8 +114,8 @@ Reset the database (requires explicit confirmation).
 { "force": true }
 ```
 
-The JSON body is authoritative. `?force=true` remains a deprecated compatibility fallback for
-older clients; if both are supplied, the body wins.
+The required confirmation is the exact JSON boolean body `{ "force": true }`. Query-string and
+string-valued confirmations are rejected.
 
 **Response:** `200 OK`
 

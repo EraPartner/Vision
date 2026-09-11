@@ -2,13 +2,13 @@
 title: API Endpoint Matrix
 type: reference
 status: active
-date: 2026-08-31
-updated: 2026-09-08
-last_modified: 2026-09-08
+date: 2026-09-11
+updated: 2026-09-11
+last_modified: 2026-09-11
 adr-reference: 026
 # Authoritative HTTP-operation count, derived from openapi.yaml and enforced by
 # scripts/check-endpoint-matrix.js (CI verify-generated). Bump when routes change.
-api_operation_count: 221
+api_operation_count: 220
 tags:
   [
     reference,
@@ -72,7 +72,7 @@ tags:
     auto-link,
     planned-match,
   ]
-description: Complete matrix of all 217 HTTP API operations (authoritative count from openapi.yaml), 2 health endpoints, and 24 Electron IPC invoke channels. The Electron contract also defines 6 renderer event channels.
+description: Complete matrix of all 220 HTTP API operations (authoritative count from openapi.yaml), 2 health endpoints, and 24 Electron IPC invoke channels. The Electron contract also defines 6 renderer event channels.
 aliases:
   [api matrix, endpoint matrix, all endpoints, api overview, endpoint list]
 ---
@@ -80,9 +80,11 @@ aliases:
 # API Endpoint Matrix
 
 > [!abstract] Overview
-> **217 HTTP API operations** (authoritative count = operations in `openapi.yaml`, enforced by `scripts/check-endpoint-matrix.js` in CI), 2 unversioned `/health` endpoints, and 24 Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
+> **220 HTTP API operations** (authoritative count = operations in `openapi.yaml`, enforced by `scripts/check-endpoint-matrix.js` in CI), 2 unversioned `/health` endpoints, and 24 Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
 >
 > **Note:** As of Phase 2.4, `openapi.yaml` is the authoritative API specification. This matrix provides a quick lookup; see the OpenAPI spec for formal schemas and examples.
+>
+> **Breaking compatibility cleanup (2026-09-11):** `POST /api/categories/assign` was removed. Category assignment now uses only `POST /api/categories/:id/assign`. AI streams terminate only with `complete`; AI conversation lists are always bounded; aggregation date filters accept only `start_date`/`end_date` and tag pivot accepts only `all`; admin database reset requires the JSON boolean body `{ "force": true }`.
 >
 > **2026-09-03 — Research response contracts made endpoint-specific (schema correction; operation count unchanged):** all successful `/api/research` responses now reference concrete OpenAPI data schemas instead of the untyped base envelope. The generated frontend contract guard covers every Research operation. The scorecard unavailable response now serializes `data: null`, and mapping resolution exposes the documented `instrument_key` / `key_type` wire keys instead of service-internal camel-case keys. Provider-dependent optional fields are recorded explicitly. This is a breaking correction only for clients that depended on the two undocumented response mismatches.
 >
@@ -159,6 +161,9 @@ aliases:
 
 ## Transactions (18 endpoints — incl. 4 Tags endpoints)
 
+> [!warning] Breaking transaction response cleanup (2026-09-11)
+> Transaction list, single-row, create, and update responses expose only `transaction_date`. The undocumented duplicate `date` property and the frontend fallback were removed under [[docs/adr/135-compatibility-cutoff-for-september-retirements|ADR-135]]. Request-side date compatibility is unchanged. The operation count did not change.
+
 | Method | Path                                     | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Rate Limit | Doc                                          |
 | ------ | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------- | -------------------------------------------- |
 | GET    | `/api/transactions`                      | List with filtering/pagination (Phase 13: supports `transaction_id`, `recipient_id`, `recipient_name`, `search`, `transaction_type`, `category_ids`, `bank_accounts`; also single `bank_account` — used by the accounts-hub double-click deep link, 2026-06-19; 2026-06-28 additive: `amount_min`, `amount_max`, `amount_exact` filter on ABS magnitude, plus `amount_signed=true` to compare the signed `t.amount` instead; `search` now also matches ISO date text and active tag slugs) | —          | [[docs/api/transactions\|Transactions]]      |
@@ -186,7 +191,6 @@ aliases:
 | ------ | ---------------------------- | -------------------------------------------------------- | ---------- | ----------------------------------- |
 | GET    | `/api/categories`            | List with filtering                                      | —          | [[docs/api/categories\|Categories]] |
 | POST   | `/api/categories`            | Create or get existing; response includes `created`      | —          | [[docs/api/categories\|Categories]] |
-| POST   | `/api/categories/assign`     | Deprecated name-resolved assignment compatibility route  | —          | [[docs/api/categories\|Categories]] |
 | GET    | `/api/categories/:id`        | Get single                                               | —          | [[docs/api/categories\|Categories]] |
 | PATCH  | `/api/categories/:id`        | Update                                                   | —          | [[docs/api/categories\|Categories]] |
 | DELETE | `/api/categories/:id`        | Hard delete                                              | —          | [[docs/api/categories\|Categories]] |
@@ -396,7 +400,7 @@ All routes mounted at `/api/portfolio/import` with `importRateLimiter`. Parallel
 | ------ | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | ------------------------- |
 | GET    | `/api/admin`                                      | Admin status                                                                                                                                 | —                  | [[docs/api/admin\|Admin]] |
 | POST   | `/api/admin/database/init`                        | Verify DB connection                                                                                                                         | —                  | [[docs/api/admin\|Admin]] |
-| POST   | `/api/admin/database/reset`                       | Reset database; JSON body `force: true` is authoritative                                                                                     | —                  | [[docs/api/admin\|Admin]] |
+| POST   | `/api/admin/database/reset`                       | Reset database; requires exact JSON boolean body `{ "force": true }`                                                                         | —                  | [[docs/api/admin\|Admin]] |
 | GET    | `/api/admin/update/check`                         | Check for updates                                                                                                                            | —                  | [[docs/api/admin\|Admin]] |
 | POST   | `/api/admin/update/apply`                         | Acknowledge update                                                                                                                           | —                  | [[docs/api/admin\|Admin]] |
 | POST   | `/api/admin/update/apply-and-restart`             | Apply and restart                                                                                                                            | —                  | [[docs/api/admin\|Admin]] |
@@ -473,7 +477,7 @@ Aggregation routes removed in Phase 9 as migration to `/api/aggregations/*` is c
 | ------ | --------------------------- | ----------------------------------------------------------------------------------------------------------- | ---------- | ------------------------ |
 | GET    | `/api/ai/status`            | Ollama reachability + default model                                                                         | —          | [[docs/api/ai\|AI Chat]] |
 | GET    | `/api/ai/models`            | Installed Ollama models (pass-through)                                                                      | —          | [[docs/api/ai\|AI Chat]] |
-| GET    | `/api/ai/conversations`     | List conversations newest-first; optional `limit`/`offset` pages, legacy full list when omitted             | —          | [[docs/api/ai\|AI Chat]] |
+| GET    | `/api/ai/conversations`     | List conversations newest-first; always bounded (`limit=50`, `offset=0` defaults; maximum limit 200)        | —          | [[docs/api/ai\|AI Chat]] |
 | POST   | `/api/ai/conversations`     | Create empty conversation (pre-created before streaming to avoid PENDING bookkeeping)                       | —          | [[docs/api/ai\|AI Chat]] |
 | GET    | `/api/ai/conversations/:id` | Conversation with messages                                                                                  | —          | [[docs/api/ai\|AI Chat]] |
 | PATCH  | `/api/ai/conversations/:id` | Rename                                                                                                      | —          | [[docs/api/ai\|AI Chat]] |
@@ -527,18 +531,18 @@ equal the main senders and preload subscriptions.
 
 | Resource                             | Endpoints | Rate-Limited |
 | ------------------------------------ | --------- | ------------ |
-| Accounts (ADR-088)                   | 12        | 0            |
+| Accounts (ADR-088)                   | 13        | 0            |
 | Cross-Workspace (ADR-098)            | 1         | 0            |
 | Transactions (incl. Tags)            | 18        | 2            |
-| Categories                           | 7         | 0            |
+| Categories                           | 6         | 0            |
 | Recipients                           | 14        | 0            |
 | Planned Transactions                 | 8         | 1            |
-| Investments                          | 14        | 0            |
+| Investments                          | 15        | 0            |
 | Watchlist                            | 5         | 0            |
 | Market Lookup                        | 4         | 0            |
 | Research (ADR-079/081/082)           | 18        | 0            |
 | Import                               | 16        | 0            |
-| Portfolio Import (ADR-078)           | 12        | 2            |
+| Portfolio Import (ADR-078)           | 13        | 2            |
 | Attachments (Phase 5A)               | 4         | 0            |
 | Saved Charts                         | 4         | 0            |
 | Settings                             | 5         | 0            |
@@ -548,12 +552,12 @@ equal the main senders and preload subscriptions.
 | Health                               | 2         | 0            |
 | Aggregations (Phase 2/6/10/D)        | 15        | 0            |
 | Reports (Phase 3/7)                  | 3         | 0            |
-| Info/Statistics (Phase 14)           | 13        | 4            |
+| Info/Statistics (Phase 14)           | 16        | 4            |
 | AI Chat                              | 9         | 2            |
 | Electron IPC invoke channels         | 24        | 0            |
-| **Total**                            | **241**   | **14**       |
+| **Total**                            | **246**   | **14**       |
 
-> **217** of these are versioned `/api` HTTP operations — the authoritative count enforced against `openapi.yaml` by `scripts/check-endpoint-matrix.js`. The remaining 26 are 2 unversioned `/health` endpoints and 24 Electron invoke channels, which sit outside OpenAPI. The 6 Electron event channels are documented separately and are not request endpoints. (The Rate-Limited column is approximate and not gate-checked.)
+> **220** versioned `/api` HTTP operations are declared in `openapi.yaml` and enforced by `scripts/check-endpoint-matrix.js`. The summary rows are a hand-maintained navigation aid and also list the 2 unversioned `/health` endpoints plus 24 Electron invoke channels. The 6 Electron event channels are documented separately and are not request endpoints. (The Rate-Limited column is approximate and not gate-checked.)
 
 ## Phase G Endpoint Consolidation (April 2026)
 

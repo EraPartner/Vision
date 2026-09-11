@@ -4,8 +4,8 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/categories
 description: Category management for organizing transactions with UNIQUE constraint and atomic assignment
-date: 2026-08-31
-updated: 2026-08-31
+date: 2026-09-11
+updated: 2026-09-11
 tags: [api, categories, organization, GENERAL-DETAIL, atomic, phase-6]
 status: active
 aliases: [categories-api, category-management, labels, tags, GENERAL-DETAIL]
@@ -90,39 +90,6 @@ Implementation note:
 
 **Response:** `201` with `created: true` if created; `200` with `created: false` if the existing
 category is returned. The boolean is part of the response data alongside the category fields.
-
-### POST /api/categories/assign
-
-> [!warning] Deprecated compatibility endpoint
-> Resolve the category first and use `POST /api/categories/:id/assign` for new callers. This
-> name-based form remains available so existing clients can resolve-or-create a category and assign
-> it in one request.
-
-Assign a name-resolved category to multiple recipients.
-
-**Request Body:**
-
-```json
-{
-  "category_general": "FOOD",
-  "category_detail": "GROCERIES",
-  "recipient_ids": [1, 2, 3]
-}
-```
-
-**Required Fields:** category_general, category_detail, recipient_ids
-
-**Response:**
-
-```json
-{
-  "updated_recipients": 3,
-  "links": []
-}
-```
-
-For compatibility, `recipient_ids` also accepts one integer. The response count reports how many
-recipient rows were updated.
 
 ### GET /api/categories/:id
 

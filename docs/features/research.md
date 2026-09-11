@@ -3,7 +3,7 @@ title: Research Feature
 type: feature
 status: active
 date: 2026-06-16
-updated: 2026-09-08
+updated: 2026-09-11
 tags:
   - url-state
   - feature
@@ -275,8 +275,9 @@ With no `FRED_API_KEY`, the macro surface degrades gracefully to the keyless **E
 `ChartBuilderPage.tsx` has a **single unified search box** that fires both ticker search and macro search simultaneously (both debounced 300 ms), merging results into one dropdown. Results are grouped under **"Markets"** (ticker results) and **"Economic data"** (macro results) headers, with a source badge per macro row. A macro series renders as another line in the existing chart (`value → close`); its row hides the provider dropdown (provider-pinned) and shows a provider badge; candlestick mode is disabled for macro series. The `BuilderSeries` type gained an optional `macro?: { provider; seriesId; title }` field.
 
 The builder persists an unnamed draft plus up to 20 named layouts in the versioned
-`vision.research.chartBuilder.layouts.v2` library. Existing `research.chartBuilder.v1` state is
-migrated only after the new library writes successfully. New, Save as, layout selection, and
+`vision.research.chartBuilder.layouts.v2` library. The retired `research.chartBuilder.v1` browser
+key is no longer read after the cutoff in
+[[docs/adr/135-compatibility-cutoff-for-september-retirements|ADR-135]]. New, Save as, layout selection, and
 confirmed deletion are available in the toolbar; changes to the active layout save automatically.
 Copy share link encodes a strictly validated, size-limited chart state in the `chart` query
 parameter. Opening that link imports an unnamed draft without replacing saved layouts. If an

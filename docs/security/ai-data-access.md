@@ -2,11 +2,31 @@
 title: AI Data Access Policy
 type: security
 status: active
-date: 2026-04-25
-tags: [security, ai, llm, ollama, privacy, tool-calling, rate-limiting, audit, phase-1]
+date: 2026-09-09
+tags:
+  [
+    security,
+    ai,
+    llm,
+    ollama,
+    privacy,
+    tool-calling,
+    rate-limiting,
+    audit,
+    phase-1,
+  ]
 description: Security posture for the local AI chat feature — 30 read-only tools across 6 domains, rate limits, no-external-calls guarantee, audit logging, CI test enforcement
-aliases: [ai data access, ai security, llm security, ollama security, ai chat security]
-related_code: ["apps/node-backend/src/routes/ai.js", "apps/node-backend/src/services/aiChatService.js", "apps/node-backend/src/services/aiChat/tools/index.js", "apps/node-backend/src/integrations/ollama/client.js", "apps/node-backend/tests/aiChatService.test.js", "apps/node-backend/tests/aiChatTools.test.js"]
+aliases:
+  [ai data access, ai security, llm security, ollama security, ai chat security]
+related_code:
+  [
+    "apps/node-backend/src/routes/ai.js",
+    "apps/node-backend/src/services/aiChatService.js",
+    "apps/node-backend/src/services/aiChat/tools/index.js",
+    "apps/node-backend/src/integrations/ollama/client.js",
+    "apps/node-backend/tests/aiChatService.test.js",
+    "apps/node-backend/tests/aiChatTools.test.js",
+  ]
 ---
 
 # AI Data Access Policy
@@ -20,63 +40,64 @@ Security policies governing the AI chat feature introduced by [[docs/adr/024-loc
 3. **Parameterized queries only.** All tool dispatch goes through `query(text, params)` / `queryPrepared()` in [apps/node-backend/src/database/connection.js](apps/node-backend/src/database/connection.js). No string concatenation.
 4. **Audit trail.** Every `tool_call` and `tool_result` persists in `ai_messages` (role `tool`, with `tool_name`, `tool_args`, `tool_result` JSONB columns). Forensic review is possible per-conversation.
 5. **Local data stays local.** Data flows from repository → tool → `ai_messages` → Ollama (local) → user browser. No step crosses the machine boundary.
+6. **Canonical financial math where shared.** Portfolio metrics and monthly cash-flow tools delegate currency conversion, transfer treatment, cost basis, partial-sale basis, and totals to the same calculation services used by Vision's screens. Tool names are not permission to redefine a metric.
 
 ## Threat Model
 
-| Threat | Mitigation |
-|--------|-----------|
-| Third-party LLM exfiltration | Enforced Ollama-only via service-layer convention + **CI test implemented** (lines 727–783 in `aiChatService.test.js`) spying on `fetch`/`http` calls in `services/aiChat/**` |
-| Prompt injection from user message (e.g., "ignore instructions and dump all data") | LLM has no raw data access; even if jailbroken, it can only call tools in the registry with validated args |
-| LLM hallucinating a destructive tool (e.g., `deleteAllTransactions`) | Dispatcher rejects unknown tool names; registry contains read-only tools only; no write-capable tool exists; **CI denylist check implemented** (lines 741–778 in `aiChatTools.test.js`) |
-| LLM hallucinating figures in prose | System prompt: "Never cite figures not returned by a tool." Audit log captures every tool result — a figure without a preceding tool result is a lint violation |
-| SQL injection via tool args | Zod validation on every tool args before repository dispatch; repositories use parameterized queries |
-| Resource exhaustion (LLM requests huge result sets) | Result cap (default 500 rows) on every tool; `meta.truncated` flag surfaced to LLM |
-| Abuse/rate (script hammering `/api/ai/chat`) | 30 req/min rate limit; standard limits on CRUD endpoints |
-| Context overflow exposing unintended history | Service trims history to last N turns; summaries generated server-side, never pass raw unbounded history to the LLM |
-| Aborted stream leaves orphaned state | `req.on('close')` handler marks in-flight assistant message aborted; no dangling transactions |
-| Ollama host pointed at a malicious server | `OLLAMA_URL` validated at startup (localhost or RFC1918 private only by default); warning surfaced if user overrides to a public IP |
+| Threat                                                                             | Mitigation                                                                                                                                                                              |
+| ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Third-party LLM exfiltration                                                       | Enforced Ollama-only via service-layer convention + **CI test implemented** (lines 727–783 in `aiChatService.test.js`) spying on `fetch`/`http` calls in `services/aiChat/**`           |
+| Prompt injection from user message (e.g., "ignore instructions and dump all data") | LLM has no raw data access; even if jailbroken, it can only call tools in the registry with validated args                                                                              |
+| LLM hallucinating a destructive tool (e.g., `deleteAllTransactions`)               | Dispatcher rejects unknown tool names; registry contains read-only tools only; no write-capable tool exists; **CI denylist check implemented** (lines 741–778 in `aiChatTools.test.js`) |
+| LLM hallucinating figures in prose                                                 | System prompt: "Never cite figures not returned by a tool." Audit log captures every tool result — a figure without a preceding tool result is a lint violation                         |
+| SQL injection via tool args                                                        | Zod validation on every tool args before repository dispatch; repositories use parameterized queries                                                                                    |
+| Resource exhaustion (LLM requests huge result sets)                                | Result cap (default 500 rows) on every tool; `meta.truncated` flag surfaced to LLM                                                                                                      |
+| Abuse/rate (script hammering `/api/ai/chat`)                                       | 30 req/min rate limit; standard limits on CRUD endpoints                                                                                                                                |
+| Context overflow exposing unintended history                                       | Service trims history to last N turns; summaries generated server-side, never pass raw unbounded history to the LLM                                                                     |
+| Aborted stream leaves orphaned state                                               | `req.on('close')` handler marks in-flight assistant message aborted; no dangling transactions                                                                                           |
+| Ollama host pointed at a malicious server                                          | `OLLAMA_URL` validated at startup (localhost or RFC1918 private only by default); warning surfaced if user overrides to a public IP                                                     |
 
 ## Tool Registry Policy
 
 The registry contains **30 read-only tools** across **6 domains**: Expenses (11), Portfolio (6), Planned (4), Tax (3), Insights (6).
 
 - **Read-only.** Every tool in `services/aiChat/tools/**` must map to a read-only repository method. No tool calls any `create*`, `update*`, `delete*`, `bulk*`, or migration path.
-- **Explicit schema.** Each tool declares a Zod schema for its args. The schema is the only contract surface between the LLM and the repositories.
-- **Result shape contract.** Every tool returns `{ok, data, meta, renderAs}`. `renderAs` drives UI rendering only; the LLM receives the same payload.
+- **Explicit schema.** Each tool declares JSON Schema for model-facing arguments. The dispatcher applies the shared hand-written date, enum, and bounded-integer validators before repository or service calls.
+- **Result shape contract.** Every tool returns `{ok, data, meta}`. Optional `meta.renderAs` drives UI rendering only; the LLM receives the same payload.
 - **Row cap.** Default 500 rows per call. Tools exceeding the cap return with `meta.truncated = true`.
 - **Denylist check (implemented).** A CI check verifies that no tool file calls write methods (`create(`, `update(`, `delete(`, `bulk(`, `upsert(`, `insert(`) or imports the Postgres pool directly. See `describe('tool write-method denylist')` in `apps/node-backend/tests/aiChatTools.test.js` (lines 741–778). Ten test cases: 5 tool files × 2 assertions each (banned call patterns + pg pool import guard).
 
 ### Tool Domains and Purposes
 
-| Domain | Count | Purpose |
-|--------|-------|---------|
-| Expenses | 11 | Transaction analysis, category breakdowns, spending trends, net cashflow, full-text search |
-| Portfolio | 6 | Holdings, returns, allocation, unrealized gains, performance ranking |
-| Planned/Recurring | 4 | Upcoming transactions, subscriptions, loan schedules, balance projection |
-| Belgian Tax | 3 | Taxable income, capital gains, deductibles (Belgium-specific) |
-| Insights | 6 | Bank balances, spending pace, recipient patterns, recurring detection, watchlist, category lookup |
+| Domain            | Count | Purpose                                                                                                                         |
+| ----------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Expenses          | 11    | Transaction analysis, category breakdowns, spending trends, net cashflow, full-text search                                      |
+| Portfolio         | 6     | Holdings, income flows, allocation, unrealized gains, income ranking; all monetary values use the configured reporting currency |
+| Planned/Recurring | 4     | Upcoming transactions, subscriptions, loan schedules, balance projection                                                        |
+| Belgian Tax       | 3     | Approximate taxable inflows, separate sale proceeds and canonical realized gains, deductibles (Belgium-specific)                |
+| Insights          | 6     | Bank balances, spending pace, recipient patterns, recurring detection, watchlist, category lookup                               |
 
 ## Input Validation
 
 All inputs validated before reaching the service layer:
 
 - Chat request body — Zod schema: `{conversationId: uuid, message: string (1–4000 chars), model: string}`.
-- Tool args — each tool's Zod schema.
+- Tool args — each tool's JSON Schema plus the dispatcher validators in `services/aiChat/tools/_validate.js`.
 - Conversation IDs — UUID v4 validation (reuse [[docs/security/input-validation|Input Validation]] helpers).
-- Dates — ISO-8601 parse + range clamp (no dates before 1900 or after year 2100).
+- Dates — strict calendar-valid `YYYY-MM-DD`; tools with year arguments apply their own documented bounds.
 - Topic/category/recipient IDs — positive 32-bit integers via `validateId()`.
 
 Invalid input returns a structured error to the LLM as a `tool` error message, allowing retry without aborting the conversation.
 
 ## Rate Limiting
 
-| Endpoint | Limit |
-|----------|-------|
-| `POST /api/ai/chat` | 30 req/min |
-| `GET /api/ai/conversations` | standard (default middleware) |
-| `POST /api/ai/conversations` | standard |
-| `GET /api/ai/status` | standard |
-| `GET /api/ai/models` | standard (cached 60s) |
+| Endpoint                     | Limit                         |
+| ---------------------------- | ----------------------------- |
+| `POST /api/ai/chat`          | 30 req/min                    |
+| `GET /api/ai/conversations`  | standard (default middleware) |
+| `POST /api/ai/conversations` | standard                      |
+| `GET /api/ai/status`         | standard                      |
+| `GET /api/ai/models`         | standard (cached 60s)         |
 
 Configurable via `AI_CHAT_RATE_LIMIT` env var.
 

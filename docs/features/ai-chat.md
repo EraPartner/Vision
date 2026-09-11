@@ -2,9 +2,9 @@
 title: Feature - AI Chat
 type: feature
 status: active
-date: 2026-05-03
-updated: 2026-09-05
-last_modified: 2026-09-05
+date: 2026-09-11
+updated: 2026-09-11
+last_modified: 2026-09-11
 tags:
   [
     feature,
@@ -157,16 +157,16 @@ preview and export before deletion.
 
 ### API Endpoints
 
-| Endpoint                    | Methods            | Description                                                                                |
-| --------------------------- | ------------------ | ------------------------------------------------------------------------------------------ |
-| `/api/ai/status`            | GET                | Ollama health + configured URL                                                             |
-| `/api/ai/models`            | GET                | List available models from the configured Ollama instance                                  |
-| `/api/ai/conversations`     | GET, POST          | List conversations; create a new one                                                       |
-| `/api/ai/conversations/:id` | GET, PATCH, DELETE | Read (incl. messages), rename, delete                                                      |
-| `/api/ai/chat`              | POST               | Run one chat turn and return the completed JSON payload                                    |
-| `/api/ai/chat/stream`       | POST (SSE)         | Stream events: `token`, `tool_call`, `tool_result`, `complete`, deprecated `done`, `error` |
+| Endpoint                    | Methods            | Description                                                             |
+| --------------------------- | ------------------ | ----------------------------------------------------------------------- |
+| `/api/ai/status`            | GET                | Ollama health + configured URL                                          |
+| `/api/ai/models`            | GET                | List available models from the configured Ollama instance               |
+| `/api/ai/conversations`     | GET, POST          | List conversations; create a new one                                    |
+| `/api/ai/conversations/:id` | GET, PATCH, DELETE | Read (incl. messages), rename, delete                                   |
+| `/api/ai/chat`              | POST               | Run one chat turn and return the completed JSON payload                 |
+| `/api/ai/chat/stream`       | POST (SSE)         | Stream events: `token`, `tool_call`, `tool_result`, `complete`, `error` |
 
-The frontend, backend service, and route use the shared `@vision/types/aiChat` contract. It also owns the supported tool-result envelope and `renderAs` vocabulary. The service emits public `user_message`, `token`, `tool_call`, and `tool_result` frames directly. The route passes them through and adds canonical terminal `complete`, the deprecated byte-equivalent `done` compatibility alias, or `error`. New clients normalize and deduplicate the two success names before updating stream state.
+The frontend, backend service, and route use the shared `@vision/types/aiChat` contract. It also owns the supported tool-result envelope and `renderAs` vocabulary. The service emits public `user_message`, `token`, `tool_call`, and `tool_result` frames directly. The route passes them through and adds the canonical terminal `complete` or `error`. The frontend updates stream state directly from `complete`.
 
 ## Tool Registry (30 tools across 6 domains)
 
@@ -176,8 +176,8 @@ Tools are declared with JSON Schema params. Backend validates args before dispat
 
 - `getSpendByCategory(from, to, topN?)` — top categories by total spend in date range
 - `getTopRecipients(from, to, topN?)` — most-spent recipients
-- `getMonthlySpend(from, to, groupBy?: "month" | "quarter")` — monthly or quarterly spend totals
-- `getNetCashflow(from, to, groupBy?: "month" | "quarter")` — income vs expenses grouped by month or quarter; returns per-period income, expenses, net; meta includes totalIncome, totalExpenses, totalNet
+- `getMonthlySpend(from, to, groupBy?: "month" | "quarter")` — canonical monthly or quarterly income, spend, and net totals in the configured reporting currency
+- `getNetCashflow(from, to, groupBy?: "month" | "quarter")` — the same canonical cash-flow series plus total income, expenses, and net; internal transfers follow the application policy and refunds remain positive inflows
 - `getTransactionsInRange(from, to, categoryId?, recipientId?, limit?)` — raw transactions, optionally filtered
 - `getMonthlyCategoryBreakdown(from, to, topN?)` — top N categories per month (time series)
 - `searchTransactions(query, from?, to?, limit?)` — full-text search over transaction memos/recipients
@@ -188,12 +188,12 @@ Tools are declared with JSON Schema params. Backend validates args before dispat
 
 ### Portfolio (6 tools)
 
-- `getPortfolioHoldings(at?)` — current holdings with quantity, cost basis, market value
-- `getReturnsForRange(from, to, assetClass?)` — realized returns by asset class
-- `getDividendIncome(from, to)` — dividend/distribution income per holding
-- `getAssetAllocation(at?)` — portfolio allocation by asset class
-- `getUnrealizedGains(assetClass?)` — unrealized P&L per holding (costBasis vs marketValue)
-- `getBestWorstPerformers(from, to, topN?, assetClass?)` — top/bottom performers by return %
+- `getPortfolioHoldings(assetClass?)` — canonical current holdings, including non-unit assets, in the configured reporting currency
+- `getReturnsForRange(from, to, assetClass?)` — compatibility-named income-flow tool; returns income minus recorded fees and taxes as `netIncome`, not investment performance
+- `getDividendIncome(from, to)` — canonical dividend income per holding in the configured reporting currency
+- `getAssetAllocation()` — canonical current-value allocation by asset class
+- `getUnrealizedGains(assetClass?)` — canonical unrealized gain against the remaining open-position basis after partial sales
+- `getBestWorstPerformers(from, to, topN?, assetClass?)` — compatibility-named ranking by `netIncome`, not price performance
 
 ### Planned / Recurring (4 tools)
 
@@ -204,8 +204,8 @@ Tools are declared with JSON Schema params. Backend validates args before dispat
 
 ### Belgian Tax (3 tools)
 
-- `getTaxableIncomeSummary(year)` — taxable income, exemptions, Belgian-specific calculations
-- `getCapitalGainsForYear(year)` — realized capital gains by asset class
+- `getTaxableIncomeSummary(year)` — approximate positive ledger inflows and portfolio income; refunds are identified as potentially non-taxable
+- `getCapitalGainsForYear(year)` — gross sale proceeds and canonical realized gain as separate fields, including inactive historical investments; non-unit assets expose unsupported realized gain as `null`
 - `getDeductibles(year)` — deductible expenses and records
 
 ### Insights (6 tools)
@@ -309,7 +309,7 @@ Tools are declared with JSON Schema params. Backend validates args before dispat
 
 - `[ai] streamChat start` — sent when beginning SSE fetch.
 - `[ai] streamChat response` — logged on stream open with event target details.
-- `[ai] streamChat event` — per normalized SSE event (user_message, token, tool_call, tool_result, done, error); wire `complete` and compatibility `done` appear once here as semantic `done`.
+- `[ai] streamChat event` — per Server-Sent Events frame (`user_message`, `token`, `tool_call`, `tool_result`, `complete`, `error`).
 - `AI tool returned an error` — records the tool name and original tool-result diagnostic that the
   transcript intentionally replaces with localized safe copy.
 

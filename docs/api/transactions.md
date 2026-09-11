@@ -5,8 +5,8 @@ method: GET, POST, PATCH, DELETE
 path: /api/transactions
 description: CRUD operations for financial transactions, including CSV and NDJSON export, bulk operations
 date: 2026-04-24
-updated: 2026-09-03
-last_modified: 2026-09-03
+updated: 2026-09-11
+last_modified: 2026-09-11
 tags: [api, transactions, finance, phase-5a, phase-9, phase-13, phase-q, decimal, money, export, drillthrough, filters, recipient-groups, bulk-actions, amount-filter, date-search, tag-search]
 status: active
 aliases: [transactions-api, transaction-crud, financial-records, income, expenses]
@@ -88,7 +88,6 @@ Notes:
     {
       "id": 123,
       "transaction_date": "2026-01-15",
-      "date": "2026-01-15",
       "bank_account": "BE12 3456...",
       "recipient_id": 1,
       "recipient_name": "Supermarket",
@@ -112,6 +111,10 @@ Notes:
   "links": []
 }
 ```
+
+`transaction_date` is the only date property on transaction API responses. The deprecated duplicate
+`date` response field was removed on 2026-09-11. This is a breaking response change for clients that
+read the undocumented alias. Request-side date compatibility is unchanged.
 
 ### GET /api/transactions/export/csv
 

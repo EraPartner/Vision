@@ -3,8 +3,8 @@ title: Statistics Feature
 type: feature
 status: active
 date: 2026-04-24
-updated: 2026-09-08
-last_modified: 2026-09-08
+updated: 2026-09-11
+last_modified: 2026-09-11
 tags:
   [
     feature,
@@ -77,6 +77,9 @@ are capped at five and before the shared digest reaches either the panel or AI n
 navigation badge reads only a versioned persisted count. Database statement triggers dirty that
 projection for transaction, category, recipient, planned-transaction, and dismissal changes; a
 dirty badge request starts a coalesced background refresh and does not show a stale number.
+The browser-only dismissal import gate was retired on 2026-09-11, so app startup no longer blocks
+or retries while copying `dismissed_insights_v1`. See
+[[docs/adr/135-compatibility-cutoff-for-september-retirements|ADR-135]].
 
 Category overspend detection compares like-for-like calendar windows: day 1 through the current
 comparison day for both the current month and every baseline month. Each category finding includes

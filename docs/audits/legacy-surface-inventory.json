@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "auditedAt": "2026-09-09",
+  "auditedAt": "2026-09-11",
   "scope": "Runtime code, database schema and migrations, API compatibility, persisted frontend state, Electron migration and backup compatibility, package shims, tests, generated contracts, and historical documentation.",
   "searches": [
     "Name scan for legacy, deprecated, compatibility, backward, fallback, old-version, alias, shim, migration, and v1 markers outside generated/build output",
@@ -38,10 +38,10 @@
   ],
   "summary": {
     "total": 53,
-    "remove-now": 2,
-    "migrate-then-remove": 23,
+    "remove-now": 0,
+    "migrate-then-remove": 11,
     "retain-with-reason": 15,
-    "historical-record-only": 13,
+    "historical-record-only": 27,
     "unknown": 0
   },
   "records": [
@@ -99,49 +99,45 @@
       "id": "LEG-DB-RESOLVED-BANK-ACCOUNT",
       "title": "Dormant import_staging_rows.resolved_bank_account_id",
       "domain": "database/imports",
-      "classification": "remove-now",
-      "disposition": "No production reader or writer exists; only schema tests reference the column.",
+      "classification": "historical-record-only",
+      "disposition": "Removed by guarded migration 0104 after proving the staging column empty and all import batches terminal.",
       "paths": [
         "alembic/versions/0091_import_staging_resolved_fks.py",
+        "alembic/versions/0104_drop_dormant_import_bank_resolution.py",
         "apps/node-backend/src/types/rows.js",
-        "apps/node-backend/tests/importStagingResolvedForeignKeys.db.test.js"
+        "apps/node-backend/tests/importStagingResolvedForeignKeys.db.test.js",
+        "scripts/test-legacy-retirements.js"
       ],
       "readers": "No production readers.",
       "writers": "No production writers.",
-      "persistedData": "Transient staging rows may contain values on upgraded installations.",
-      "supportWindow": "No runtime soak; maintained data still requires non-null and batch-state preflight before application.",
+      "persistedData": "Migration 0104 refuses non-null staging values or active batches before dropping the dormant column.",
+      "supportWindow": "No runtime soak; the guarded disposable PostgreSQL 18 lifecycle passed on 2026-09-11.",
       "replacement": "The active budgeting pipeline resolves canonical account identity without this dormant staging field.",
-      "deletionDependencies": [
-        "Alembic upgrade/downgrade",
-        "non-null and active-batch preflight",
-        "PostgreSQL 18 proof"
-      ],
-      "liveEvidence": "Static repository reachability shows no runtime access; live non-null count is unverified.",
-      "todoTitle": "Drop dormant import staging bank-account resolution state"
+      "deletionDependencies": [],
+      "liveEvidence": "The disposable PostgreSQL 18 legacy-retirement lifecycle passed its active-batch and non-null refusal cases, successful upgrade, downgrade restoration, and re-upgrade on 2026-09-11.",
+      "todoTitle": null
     },
     {
       "id": "LEG-DB-EXCHANGE-RATE-CACHE",
       "title": "Upgraded-install-only exchange_rate_cache",
       "domain": "database/currency",
-      "classification": "remove-now",
-      "disposition": "The current runtime uses exchange_rates. This older cache relation is absent from the fresh baseline and backup registry.",
+      "classification": "historical-record-only",
+      "disposition": "Removed by guarded migration 0105. The current runtime uses exchange_rates; fresh installations remain a no-op.",
       "paths": [
         "alembic/legacy_versions/0025_exchange_rate_cache.py",
+        "alembic/versions/0105_retire_legacy_exchange_rate_cache.py",
         "apps/node-backend/src/backup/coverage.js",
-        "apps/node-backend/src/services/currency/currencyConversionService.js"
+        "apps/node-backend/src/services/currency/currencyConversionService.js",
+        "scripts/test-legacy-retirements.js"
       ],
       "readers": "No current application readers.",
       "writers": "No current application writers.",
-      "persistedData": "Older upgraded installations may retain regenerable arbitrary-pair cache rows.",
-      "supportWindow": "No application soak, but exact legacy shape and row/pair counts must be inspected before drop.",
+      "persistedData": "Migration 0105 refuses populated tables, unexpected columns, defaults, constraints, indexes, triggers, or relation kinds before removal.",
+      "supportWindow": "No application soak; the guarded disposable PostgreSQL 18 lifecycle passed on 2026-09-11.",
       "replacement": "exchange_rates and normal provider refresh.",
-      "deletionDependencies": [
-        "shape-guarded forward migration",
-        "fresh-install no-op",
-        "upgrade/downgrade or restore proof"
-      ],
-      "liveEvidence": "Runtime reachability is zero; maintained relation presence and shape are unverified.",
-      "todoTitle": "Retire upgraded-install-only exchange_rate_cache safely"
+      "deletionDependencies": [],
+      "liveEvidence": "The disposable PostgreSQL 18 legacy-retirement lifecycle passed populated and malformed-shape refusal, fresh-install no-op, exact empty-shape removal, downgrade recreation, and re-upgrade on 2026-09-11.",
+      "todoTitle": null
     },
     {
       "id": "LEG-DB-ADR109-ROLLBACK",
@@ -430,74 +426,63 @@
       "id": "LEG-API-AI-DONE",
       "title": "Deprecated AI stream done event",
       "domain": "API/AI",
-      "classification": "migrate-then-remove",
-      "disposition": "The server emits complete and done; the frontend normalizes both but its internal terminal type still uses done.",
+      "classification": "historical-record-only",
+      "disposition": "Removed after the explicit client/server compatibility cutoff; complete is the sole terminal success event.",
       "paths": [
         "apps/node-backend/src/routes/ai.js",
         "packages/types/src/aiChat.js",
         "apps/frontend/src/lib/api/ai.ts",
         "openapi.yaml"
       ],
-      "readers": "Current frontend accepts both; older clients may terminate only on done.",
-      "writers": "Current server emits both terminal events.",
+      "readers": "Current frontend accepts complete only; older done-only servers are outside the supported window.",
+      "writers": "Current server emits complete only.",
       "persistedData": "None.",
-      "supportWindow": "Stop server emission after an explicit client window; keep client acceptance for a later rollback/server-skew window.",
+      "supportWindow": "Ended 2026-09-11 by explicit compatibility-boundary decision.",
       "replacement": "complete terminal event and canonical internal terminal semantics.",
-      "deletionDependencies": [
-        "client internal migration",
-        "supported-client policy",
-        "SSE replay and packaged skew tests"
-      ],
-      "liveEvidence": "Current source emission and acceptance are confirmed; external client population is unverified.",
-      "todoTitle": "Retire the deprecated AI done event in staged client and server windows"
+      "deletionDependencies": [],
+      "liveEvidence": "Shared types, server emission, frontend decoder, store logic, and stream contract tests use complete only.",
+      "todoTitle": null
     },
     {
       "id": "LEG-API-CATEGORY-ASSIGN",
       "title": "Deprecated category name-assignment endpoint",
       "domain": "API/categories",
-      "classification": "migrate-then-remove",
-      "disposition": "No shipped production frontend caller exists, but external client use has not been measured.",
+      "classification": "historical-record-only",
+      "disposition": "Removed after the explicit external-client cutoff; assignment uses the category-id resource action.",
       "paths": [
         "apps/node-backend/src/routes/categories.js",
         "apps/frontend/src/test/msw/handlers.ts",
         "openapi.yaml"
       ],
-      "readers": "Potential external callers; MSW tests model it.",
-      "writers": "The endpoint resolves or creates a category and assigns recipients.",
+      "readers": "No current repository frontend caller; older external clients are outside the supported window.",
+      "writers": "The removed endpoint resolved or created a category and assigned recipients.",
       "persistedData": "Category and recipient associations; removal itself needs no data migration.",
-      "supportWindow": "One published API deprecation window or access-log proof of zero use.",
+      "supportWindow": "Ended 2026-09-11 by explicit compatibility-boundary decision.",
       "replacement": "POST /api/categories/{id}/assign after explicit category resolution.",
-      "deletionDependencies": [
-        "external-client decision",
-        "route/OpenAPI/generated-type removal"
-      ],
-      "liveEvidence": "Zero shipped caller is confirmed; API access telemetry is unavailable.",
-      "todoTitle": "Remove the deprecated category name-assignment endpoint after its client gate"
+      "deletionDependencies": [],
+      "liveEvidence": "Route, OpenAPI operation, generated type, mock, and legacy behavior tests were removed; a 404 contract test remains.",
+      "todoTitle": null
     },
     {
       "id": "LEG-API-AGGREGATION-ALIASES",
       "title": "Aggregation start/end and all_tags query aliases",
       "domain": "API/analytics",
-      "classification": "migrate-then-remove",
-      "disposition": "The shipped frontend uses canonical start_date/end_date and all, while the backend continues accepting older aliases.",
+      "classification": "historical-record-only",
+      "disposition": "Removed after the explicit external-client cutoff; stale aliases now fail validation instead of widening results.",
       "paths": [
         "apps/node-backend/src/lib/aggregationDateRange.js",
         "apps/node-backend/src/routes/aggregations.js",
         "apps/frontend/src/lib/api/aggregations.ts",
         "openapi.yaml"
       ],
-      "readers": "Potential external clients; current frontend reads canonical responses only.",
-      "writers": "No persistence; query normalization only.",
+      "readers": "Current frontend uses start_date, end_date, and all; older external clients are outside the supported window.",
+      "writers": "No persistence; the removed surface normalized query parameters only.",
       "persistedData": "Saved-chart all_tags is a separate canonical field and must remain.",
-      "supportWindow": "Published API deprecation window or zero-use telemetry.",
+      "supportWindow": "Ended 2026-09-11 by explicit compatibility-boundary decision.",
       "replacement": "start_date, end_date, and all query parameters.",
-      "deletionDependencies": [
-        "external-client decision",
-        "endpoint contract tests",
-        "generated type refresh"
-      ],
-      "liveEvidence": "Current frontend canonical usage is confirmed; external usage is unverified.",
-      "todoTitle": "Retire deprecated aggregation query aliases"
+      "deletionDependencies": [],
+      "liveEvidence": "Focused helper and route tests accept canonical parameters and reject start, end, and all_tags; generated types were refreshed.",
+      "todoTitle": null
     },
     {
       "id": "LEG-API-IMPORT-QUERY-FALLBACKS",
@@ -528,47 +513,42 @@
       "id": "LEG-API-ADMIN-FORCE",
       "title": "Admin reset force query fallback",
       "domain": "API/admin",
-      "classification": "migrate-then-remove",
-      "disposition": "Current frontend uses the JSON body, but the route accepts the deprecated query location for older clients.",
+      "classification": "historical-record-only",
+      "disposition": "Removed after the explicit admin-client cutoff; reset confirmation accepts only the required JSON boolean body field.",
       "paths": [
         "apps/node-backend/src/routes/admin.js",
-        "apps/frontend/src/features/admin/useAdminQueries.ts",
+        "apps/node-backend/tests/routes/admin.test.js",
+        "apps/frontend/src/types/generated.ts",
         "openapi.yaml"
       ],
-      "readers": "Potential external or older admin clients.",
+      "readers": "No current repository frontend caller; older external query-form clients are outside the supported window.",
       "writers": "The endpoint performs destructive reset only under its existing safeguards.",
       "persistedData": "Removal changes request compatibility, not reset semantics.",
-      "supportWindow": "Explicit admin-client support cutoff.",
+      "supportWindow": "Ended 2026-09-11 by explicit compatibility-boundary decision.",
       "replacement": "force in the JSON request body.",
-      "deletionDependencies": [
-        "external-client decision",
-        "destructive-route contract tests"
-      ],
-      "liveEvidence": "Current frontend body usage is confirmed; external usage is unverified.",
-      "todoTitle": "Retire the admin reset force query fallback"
+      "deletionDependencies": [],
+      "liveEvidence": "Static caller scan finds no frontend reset request; contract tests reject query-only and string confirmation and accept the required boolean body.",
+      "todoTitle": null
     },
     {
       "id": "LEG-API-AI-UNPAGED",
       "title": "Unpaged AI conversation list compatibility",
       "domain": "API/AI",
-      "classification": "migrate-then-remove",
-      "disposition": "Current frontend always requests bounded pages, but omitted parameters still trigger the historical full list.",
+      "classification": "historical-record-only",
+      "disposition": "Removed after the explicit external-client cutoff; omitted pagination now returns the bounded default page.",
       "paths": [
         "apps/node-backend/src/routes/ai.js",
         "apps/frontend/src/lib/api/ai.ts",
         "openapi.yaml"
       ],
-      "readers": "Potential older or external clients.",
-      "writers": "None.",
+      "readers": "Current frontend requests bounded pages; older clients expecting an unbounded response are outside the supported window.",
+      "writers": "None; the list repository now always executes LIMIT and OFFSET with a separate total count.",
       "persistedData": "Reads persisted conversations; the risk is unbounded load rather than data loss.",
-      "supportWindow": "External-client cutoff or zero-use evidence.",
+      "supportWindow": "Ended 2026-09-11 by explicit compatibility-boundary decision.",
       "replacement": "Required bounded pagination with a documented default limit.",
-      "deletionDependencies": [
-        "client policy",
-        "load and pagination contract tests"
-      ],
-      "liveEvidence": "Shipped client pagination is confirmed; external omission is unverified.",
-      "todoTitle": "Require bounded AI conversation pagination after the compatibility window"
+      "deletionDependencies": [],
+      "liveEvidence": "Route tests prove the default 50-row page and explicit offsets; repository tests require bounded SQL and preserve total counts.",
+      "todoTitle": null
     },
     {
       "id": "LEG-API-ERROR-SHAPES",
@@ -597,24 +577,22 @@
       "id": "LEG-API-TX-DATE",
       "title": "Transaction response date alias fallback",
       "domain": "frontend/API client",
-      "classification": "migrate-then-remove",
-      "disposition": "The client accepts raw.date when canonical transaction_date is missing; the current typed server contract requires transaction_date.",
+      "classification": "historical-record-only",
+      "disposition": "Removed. Transaction responses now expose only transaction_date, and the frontend rejects list items that omit it.",
       "paths": [
         "apps/frontend/src/lib/api/transactions.ts",
         "apps/frontend/src/lib/api/__tests__/transactions.test.ts",
+        "apps/node-backend/src/routes/transactions.js",
         "openapi.yaml"
       ],
-      "readers": "Transaction list client normalization.",
-      "writers": "Current server writes canonical transaction_date in responses.",
-      "persistedData": "Only short-lived query cache or older server responses.",
-      "supportWindow": "Verify live/fixture responses and supported server skew before deletion.",
+      "readers": "Current clients read transaction_date directly.",
+      "writers": "The backend formatter emits transaction_date and no duplicate date property.",
+      "persistedData": "None; older cached or server responses are outside the support cutoff.",
+      "supportWindow": "Ended by explicit compatibility cutoff on 2026-09-11.",
       "replacement": "Strict transaction_date validation with an explicit malformed-response error.",
-      "deletionDependencies": [
-        "response fixture proof",
-        "server/client skew decision"
-      ],
-      "liveEvidence": "Current OpenAPI contract is canonical; live payload evidence is unverified.",
-      "todoTitle": "Remove the transaction date response fallback after contract proof"
+      "deletionDependencies": [],
+      "liveEvidence": "OpenAPI, backend formatter tests, MSW fixtures, and frontend client tests use the canonical field; live route execution is environment-blocked.",
+      "todoTitle": null
     },
     {
       "id": "LEG-FE-API-FACADE",
@@ -748,47 +726,38 @@
       "title": "Unused pre-server insight dismissal exports",
       "domain": "frontend/insights",
       "classification": "historical-record-only",
-      "disposition": "Removed while preserving the migration gate's load, replace, storage key, and state type surface.",
+      "disposition": "Removed. The unused helpers were deleted first; the remaining migration-only parser and gate were later retired with the browser support cutoff.",
       "paths": [
-        "apps/frontend/src/lib/insightsDismiss.ts",
-        "apps/frontend/src/components/shared/LegacyInsightDismissalMigrationGate.tsx",
-        "apps/frontend/src/lib/__tests__/insightsDismiss.test.ts"
+        "apps/frontend/src/App.tsx",
+        "apps/frontend/src/features/statistics/InsightsDigestPanel.tsx"
       ],
-      "readers": "Migration gate reads loadDismissState and replaceDismissState; dead exports have test-only callers.",
-      "writers": "Migration replacement remains active; old dismissal commit helpers have no production writers.",
-      "persistedData": "dismissed_insights_v1 must still be migrated; removing dead helpers must not remove the loader/replacer.",
-      "supportWindow": "None for dead exports; the gate itself has a separate support window.",
+      "readers": "Current insight consumers use server-backed state only.",
+      "writers": "Current dismiss actions use the server API.",
+      "persistedData": "The former dismissed_insights_v1 browser key is outside the ended support window.",
+      "supportWindow": "Ended by the explicit 2026-09-11 browser-profile cutoff.",
       "replacement": "Server-backed insight dismissal APIs.",
-      "deletionDependencies": [
-        "preserve minimal migration parser",
-        "rewrite focused tests"
-      ],
-      "liveEvidence": "Production and test imports use only the retained migration-store boundary.",
+      "deletionDependencies": [],
+      "liveEvidence": "Exact source search finds no remaining browser dismissal helper or gate.",
       "todoTitle": null
     },
     {
       "id": "LEG-FE-INSIGHT-GATE",
       "title": "Legacy insight dismissal migration gate",
       "domain": "frontend/insights",
-      "classification": "migrate-then-remove",
-      "disposition": "Still protects unopened browser profiles and retries transient server failures before releasing app queries.",
+      "classification": "historical-record-only",
+      "disposition": "Removed. App startup no longer reads browser-only insight dismissals or blocks while copying them to the server.",
       "paths": [
-        "apps/frontend/src/components/shared/LegacyInsightDismissalMigrationGate.tsx",
         "apps/frontend/src/App.tsx",
-        "apps/frontend/src/lib/insightsDismiss.ts"
+        "apps/frontend/src/features/statistics/InsightsDigestPanel.tsx"
       ],
-      "readers": "App startup reads dismissed_insights_v1 through the gate.",
-      "writers": "Posts server dismissals, rewrites remaining local records, then clears migrated storage.",
-      "persistedData": "Per-browser legacy dismissal records invisible to server telemetry until that profile opens.",
-      "supportWindow": "Require a minimum frontend upgrade horizon or explicit migration version marker.",
+      "readers": "Current insight consumers read server-backed dismissal state.",
+      "writers": "Current dismiss actions write through the server API.",
+      "persistedData": "Unopened browser-only dismissal records are intentionally outside the support cutoff.",
+      "supportWindow": "Ended by explicit browser-profile cutoff on 2026-09-11.",
       "replacement": "Server-backed dismissals only.",
-      "deletionDependencies": [
-        "browser support cutoff",
-        "offline/retry smoke",
-        "legacy-key census where possible"
-      ],
-      "liveEvidence": "Active App wrapper is confirmed; unopened-profile population is unknowable.",
-      "todoTitle": "Retire browser-only insight dismissal migration after its support horizon"
+      "deletionDependencies": [],
+      "liveEvidence": "The startup gate, helper, and migration tests were removed. Unopened-profile population cannot be measured centrally.",
+      "todoTitle": null
     },
     {
       "id": "LEG-FE-MONEY-SHIM",
@@ -866,118 +835,101 @@
       "id": "LEG-FE-TAX-PIT-ALIAS",
       "title": "Belgian tax federalPITTotal compatibility field",
       "domain": "frontend/tax",
-      "classification": "migrate-then-remove",
-      "disposition": "Still emitted and pinned because persisted views or snapshots may use the old name.",
+      "classification": "historical-record-only",
+      "disposition": "Removed from runtime emission and acceptance. Migration 0106 strips equal persisted aliases and refuses alias-only, malformed, or divergent data.",
       "paths": [
         "apps/frontend/src/lib/belgianTax/types.ts",
         "apps/frontend/src/lib/belgianTax/pit.ts",
-        "apps/frontend/src/lib/belgianTax/__tests__/pit.test.ts"
+        "alembic/versions/0106_remove_federal_pit_total_alias.py",
+        "apps/node-backend/src/routes/settings.js"
       ],
-      "readers": "Tests and potentially restored/persisted Belgian tax views.",
-      "writers": "Current calculator emits both old and canonical fields.",
-      "persistedData": "Tax profile snapshot or saved-view JSON may contain the alias.",
-      "supportWindow": "Inventory persisted key population, migrate readers/data, then soak one supported release.",
+      "readers": "Current code reads only federalPITBeforeExemption.",
+      "writers": "Current calculation output and settings validation accept only the canonical field.",
+      "persistedData": "Frozen calculations in belgian_tax_profile_snapshot_meta_v1 are rewritten by migration 0106; user_settings is backup-covered.",
+      "supportWindow": "The explicit 2026-09-11 cutoff ended source compatibility; the guarded disposable PostgreSQL 18 lifecycle passed the same day.",
       "replacement": "federalPITBeforeExemption.",
-      "deletionDependencies": [
-        "persisted JSON key census",
-        "migration/backup proof",
-        "consumer migration"
-      ],
-      "liveEvidence": "Current dual emission is confirmed; stored key population is unverified.",
-      "todoTitle": "Migrate and remove the Belgian tax federalPITTotal alias"
+      "deletionDependencies": [],
+      "liveEvidence": "The disposable PostgreSQL 18 lifecycle passed divergent-alias refusal, equal-alias rewrite, canonical-value verification, downgrade reconstruction, and re-upgrade on 2026-09-11.",
+      "todoTitle": null
     },
     {
       "id": "LEG-FE-RECURRENCE-INPUT",
       "title": "bi-weekly recurrence input and output compatibility",
       "domain": "API/portfolio",
-      "classification": "migrate-then-remove",
-      "disposition": "Migration 0099 rewrites stored values, but frontend and backend still normalize the old spelling.",
+      "classification": "historical-record-only",
+      "disposition": "Removed. Portfolio and planned-transaction runtime paths accept and emit only biweekly; migration 0099 rewrites and constrains stored values.",
       "paths": [
         "packages/types/src/recurrence.js",
         "apps/node-backend/src/services/investmentService.js",
         "apps/node-backend/src/services/portfolio/portfolioTransactionRules.js"
       ],
-      "readers": "Portfolio request and response normalization accepts the old spelling.",
-      "writers": "Current code emits canonical values after normalization.",
-      "persistedData": "Older databases may have carried bi-weekly before migration 0099.",
-      "supportWindow": "Complete live 0099 proof and the documented one-release client window.",
+      "readers": "Current runtime readers accept only canonical recurrence values.",
+      "writers": "Current writers persist and emit only biweekly.",
+      "persistedData": "Migration 0099 rewrites bi-weekly and constrains active storage to the canonical vocabulary.",
+      "supportWindow": "Ended by explicit override on 2026-09-11 before migration 0099 appeared in a tagged release; its disposable PostgreSQL 18 lifecycle then passed.",
       "replacement": "biweekly.",
-      "deletionDependencies": [
-        "live migration proof",
-        "client window",
-        "canonical-value query"
-      ],
-      "liveEvidence": "Compatibility code remains active; live stored-value proof is unavailable.",
-      "todoTitle": "Retire bi-weekly recurrence compatibility after its release gate"
+      "deletionDependencies": [],
+      "liveEvidence": "The dedicated disposable PostgreSQL 18 recurrence migration test passed legacy-value rewrite, canonical constraint, downgrade restoration, and re-upgrade on 2026-09-11.",
+      "todoTitle": null
     },
     {
       "id": "LEG-FE-ENHANCED-EFFECTS",
       "title": "Persisted enhancedEffects settings migration",
       "domain": "frontend/settings",
-      "classification": "migrate-then-remove",
-      "disposition": "Hydration still maps old app_settings blobs and strips the key on a later persist.",
+      "classification": "historical-record-only",
+      "disposition": "Removed. App settings hydration sanitizes visualEffects directly and no longer maps enhancedEffects.",
       "paths": [
         "apps/frontend/src/stores/settingsStore.ts",
         "apps/frontend/src/lib/__tests__/visualEffects.test.ts",
         "docs/features/settings.md"
       ],
-      "readers": "migrateAppSettings during app hydration.",
-      "writers": "Canonical settings persistence eventually rewrites the blob without enhancedEffects.",
-      "persistedData": "Unopened or rarely used self-hosted profiles may still hold the old key.",
-      "supportWindow": "Minimum supported upgrade horizon plus live key-population query or explicit migration stamp.",
+      "readers": "Current hydration reads visualEffects only.",
+      "writers": "Current app settings persistence writes visualEffects.",
+      "persistedData": "Unopened profiles may retain an inert unknown key, but it no longer changes behavior.",
+      "supportWindow": "Ended by explicit browser-profile cutoff on 2026-09-11.",
       "replacement": "visualEffects.",
-      "deletionDependencies": [
-        "settings support policy",
-        "population evidence",
-        "backup-safe migration"
-      ],
-      "liveEvidence": "Static mapper is active; maintained key population is unverified.",
-      "todoTitle": "Retire completed persisted-settings migrations after a defined support horizon"
+      "deletionDependencies": [],
+      "liveEvidence": "Focused settings tests prove canonical defaulting. Browser-profile population remains unmeasurable.",
+      "todoTitle": null
     },
     {
       "id": "LEG-FE-DASHBOARD-STORAGE",
       "title": "Legacy dashboard localStorage migration",
       "domain": "frontend/settings",
-      "classification": "migrate-then-remove",
-      "disposition": "Startup still imports vision_dashboardSettings into server settings and removes it; unopened profiles remain invisible.",
+      "classification": "historical-record-only",
+      "disposition": "Removed. Dashboard hydration now uses server-backed dashboard_settings or canonical defaults only.",
       "paths": [
         "apps/frontend/src/stores/hydration/SettingsHydration.tsx",
         "apps/frontend/src/lib/localStorage-keys.ts"
       ],
-      "readers": "Settings hydration reads the old localStorage key.",
-      "writers": "Persists dashboard_settings then removes the old key.",
-      "persistedData": "Per-browser dashboard preferences.",
-      "supportWindow": "Minimum browser-profile upgrade horizon or explicit migration marker.",
+      "readers": "Current hydration reads preloaded server settings.",
+      "writers": "Current changes persist dashboard_settings to the server.",
+      "persistedData": "Unopened browser-only dashboard preferences are intentionally outside the support cutoff.",
+      "supportWindow": "Ended by explicit browser-profile cutoff on 2026-09-11.",
       "replacement": "Server-backed dashboard_settings.",
-      "deletionDependencies": [
-        "browser support policy",
-        "profile migration smoke"
-      ],
-      "liveEvidence": "Migration code is active; unopened-profile population cannot be measured centrally.",
-      "todoTitle": "Retire completed persisted-settings migrations after a defined support horizon"
+      "deletionDependencies": [],
+      "liveEvidence": "Focused hydration tests prove server/default behavior. Unopened-profile population cannot be measured centrally.",
+      "todoTitle": null
     },
     {
       "id": "LEG-FE-CHART-V1-STORAGE",
       "title": "Chart Builder v1 localStorage migration",
       "domain": "frontend/research",
-      "classification": "migrate-then-remove",
-      "disposition": "Layout loading still imports research.chartBuilder.v1 into the v2 library and deletes it.",
+      "classification": "historical-record-only",
+      "disposition": "Removed. Chart Builder loads and saves only the bounded v2 draft and named-layout library.",
       "paths": [
         "apps/frontend/src/pages/research/chartBuilderLayouts.ts",
         "apps/frontend/src/pages/research/chartBuilderState.ts",
         "apps/frontend/src/lib/localStorage-keys.ts"
       ],
-      "readers": "Chart Builder library loader.",
-      "writers": "Writes canonical v2 layouts and deletes the v1 key.",
-      "persistedData": "Saved layouts in unopened browser profiles.",
-      "supportWindow": "Minimum browser-profile upgrade horizon or explicit migration marker.",
+      "readers": "Current Chart Builder reads only the v2 library key.",
+      "writers": "Current Chart Builder writes only the v2 library key.",
+      "persistedData": "Unopened v1 browser drafts are intentionally outside the support cutoff; v2 layouts remain backup-covered.",
+      "supportWindow": "Ended by explicit browser-profile cutoff on 2026-09-11.",
       "replacement": "vision.research.chartBuilder.layouts.v2.",
-      "deletionDependencies": [
-        "browser support policy",
-        "saved-layout round trip"
-      ],
-      "liveEvidence": "Migration code is active; unopened-profile population is unverified.",
-      "todoTitle": "Retire completed persisted-settings migrations after a defined support horizon"
+      "deletionDependencies": [],
+      "liveEvidence": "Focused v2 layout round-trip and malformed-storage tests pass. Unopened-profile population is unverified.",
+      "todoTitle": null
     },
     {
       "id": "LEG-FE-DEEP-LINKS",

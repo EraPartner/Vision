@@ -509,16 +509,6 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
     memory use, latency and completion rate; define thresholds before selecting defaults. A model
     unavailable locally is a visible unavailable result, never a silent remote fallback.
 
-- [ ] **Reconcile AI financial metrics with canonical application calculations** ⏫
-  - Tracking: 🔎 decision-needed 2026-09-08 (stage 1 prerequisite; resolve exact public metric names/compatibility and reproduce source findings before choosing fix slices)
-  - ↪ _from: User unified analysis plan 2026-09-08 · local AI correctness review_
-  - Static review of `services/aiChat/tools/portfolio.js` found native-currency allocation sums,
-    unrealized basis using all historical buy costs after partial sales, and cash-flow measures
-    labeled as returns; `tools/tax.js` reports proceeds rather than actual capital gains. These are
-    source findings, not runtime-verified results. Reproduce on synthetic data and split confirmed
-    corrections into focused fixes. Acceptance: tools use canonical services, distinguish total
-    return/income/proceeds/gains, and agree with screens after partial sales and currency conversion.
-
 - [ ] **Plan AI questions and propose inspectable edits to shared analyses** ⏫
   - Tracking: 🔎 decision-needed 2026-09-08 (stage 4; depends on shared definitions/executor; choose bounded plan schema and ambiguity policy)
   - ↪ _from: User unified analysis plan 2026-09-08 · AI question planning and assistance_
@@ -816,19 +806,6 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
     canonical totals, backup/restore, absence of all targeted relations, and presence of the cleanup
     marker. Keep the pre-cleanup backup until the post-contract acceptance is complete.
 
-- [ ] **Drop dormant import staging bank-account resolution state** 🔼
-  - Tracking: 🔎 runtime-unverified 2026-09-09 (migration 0104, fail-closed lifecycle coverage, row types, schema tests, docs, and static migration checks are complete; disposable PostgreSQL 18 upgrade/downgrade proof is blocked because the managed sandbox cannot create PostgreSQL shared memory: `shmget(... size=56 ...)` returns `Operation not permitted`)
-  - ↪ _from: Legacy compatibility inventory LEG-DB-RESOLVED-BANK-ACCOUNT_
-  - Add a guarded Alembic upgrade and downgrade. Refuse the upgrade if any value is non-null or an
-    active staging batch makes removal unsafe. Prove both directions on disposable PostgreSQL 18;
-    never apply the migration to the maintained database in this task.
-
-- [ ] **Retire upgraded-install-only exchange_rate_cache safely** 🔼
-  - Tracking: 🔎 runtime-unverified 2026-09-09 (migration 0105 now guards the exact empty legacy columns, defaults, constraints, PostgreSQL 18 index definitions, triggers, and fresh-install no-op, with downgrade/lifecycle coverage and docs complete; disposable PostgreSQL 18 execution is blocked by the same managed-sandbox `shmget(... size=56 ...)` shared-memory denial)
-  - ↪ _from: Legacy compatibility inventory LEG-DB-EXCHANGE-RATE-CACHE_
-  - Add a shape-guarded forward migration with a fresh-install no-op and an explicit downgrade or
-    restore boundary. Preserve unexpected shapes or populated rows instead of dropping them.
-
 - [ ] **Retire legacy tx_hash after versioned import identity has soaked** 🔼
   - Tracking: 🔎 decision-needed 2026-09-09 (`tx_hash` is still dual-written and used as a duplicate fallback; removal waits for ADR-134 acceptance and a fallback-free soak)
   - ↪ _from: Legacy compatibility inventory LEG-DB-TX-HASH_
@@ -853,75 +830,17 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
   - Wait for ADR-109 cleanup, use `pg_depend` to prove zero consumers, decide the supported downgrade
     boundary, and then remove the type in a reversible PostgreSQL migration.
 
-- [ ] **Migrate and remove the Belgian tax federalPITTotal alias** 🔼
-  - Tracking: 🔎 decision-needed 2026-09-09 (the alias is still emitted and may be present in persisted views or snapshots)
-  - ↪ _from: Legacy compatibility inventory LEG-FE-TAX-PIT-ALIAS_
-  - Census persisted JSON keys, migrate consumers and stored data with backup proof, then stop emitting
-    and accepting the alias.
-
-- [ ] **Retire bi-weekly recurrence compatibility after its release gate** 🔼
-  - Tracking: 🔎 decision-needed 2026-09-09 (frontend and backend still normalize the old spelling after migration 0099)
-  - ↪ _from: Legacy compatibility inventory LEG-FE-RECURRENCE-INPUT_
-  - Prove the live migration, query for zero legacy values, define the old-client window, and only
-    then remove the normalization paths.
-
-- [ ] **Retire the deprecated AI done event in staged client and server windows** 🔼
-  - Tracking: 🔎 decision-needed 2026-09-09 (the server emits both terminal events and the frontend still normalizes `done`)
-  - ↪ _from: Legacy compatibility inventory LEG-API-AI-DONE_
-  - Migrate the internal client type, define supported client/server skew, stop server emission after
-    that window, and remove client acceptance in a later compatible release.
-
-- [ ] **Require bounded AI conversation pagination after the compatibility window** 🔼
-  - Tracking: 🔎 decision-needed 2026-09-09 (current frontend calls are bounded, but omitted parameters still request the historical full list)
-  - ↪ _from: Legacy compatibility inventory LEG-API-AI-UNPAGED_
-  - Define the external-client window, require pagination in the contract, and prove bounded load and
-    pagination behavior before deleting the fallback.
-
-- [ ] **Remove the deprecated category name-assignment endpoint after its client gate** 🔼
-  - Tracking: 🔎 decision-needed 2026-09-09 (no shipped frontend caller exists, but external client use is unmeasured)
-  - ↪ _from: Legacy compatibility inventory LEG-API-CATEGORY-ASSIGN_
-  - Decide the external-client boundary, then remove the route, OpenAPI operation, generated types,
-    mocks, and route tests together.
-
-- [ ] **Retire deprecated aggregation query aliases** 🔼
-  - Tracking: 🔎 decision-needed 2026-09-09 (the shipped frontend is canonical, but external client use is unmeasured)
-  - ↪ _from: Legacy compatibility inventory LEG-API-AGGREGATION-ALIASES_
-  - Define the client window, remove `start`/`end` and `all_tags` aliases, and refresh OpenAPI-derived
-    types with endpoint contract tests.
-
 - [ ] **Move import options into multipart bodies and retire query fallbacks** 🔼
   - Tracking: 🔎 partial 2026-09-09 (every shipped one-shot and server-sent events import variant now sends bank, mapping, format, and brokerage options as multipart fields with query-free request tests; backend query fallbacks and OpenAPI compatibility remain until the supported client release window has soaked)
   - ↪ _from: Legacy compatibility inventory LEG-API-IMPORT-QUERY-FALLBACKS_
   - Migrate every import and server-sent events variant to multipart fields, soak the new requests for
     the supported client window, then remove backend query fallbacks and update OpenAPI.
 
-- [ ] **Retire the admin reset force query fallback** 🔼
-  - Tracking: 🔎 decision-needed 2026-09-09 (the frontend uses the JSON body, but older clients may use the deprecated query location)
-  - ↪ _from: Legacy compatibility inventory LEG-API-ADMIN-FORCE_
-  - Define the external-client boundary and remove the query fallback with destructive-route contract tests.
-
 - [ ] **Retire legacy HTTP error envelopes after route-wide contract proof** 🔼
   - Tracking: 🔎 decision-needed 2026-09-09 (the parser protects server/client skew and accepts several historical shapes)
   - ↪ _from: Legacy compatibility inventory LEG-API-ERROR-SHAPES_
   - Prove the unified envelope across every route, decide packaged client/server skew support, then
     narrow the parser with focused compatibility tests.
-
-- [ ] **Remove the transaction date response fallback after contract proof** 🔼
-  - Tracking: 🔎 decision-needed 2026-09-09 (the client accepts `date`, while the typed server contract requires `transaction_date`)
-  - ↪ _from: Legacy compatibility inventory LEG-API-TX-DATE_
-  - Prove response fixtures and the supported skew boundary, then remove the fallback and its tests.
-
-- [ ] **Retire completed persisted-settings migrations after a defined support horizon** 🔽
-  - Tracking: 🔎 decision-needed 2026-09-09 (unopened browser profiles may still contain `enhancedEffects`, dashboard settings, or chart-builder v1 layouts)
-  - ↪ _from: Legacy compatibility inventory LEG-FE-ENHANCED-EFFECTS, LEG-FE-DASHBOARD-STORAGE, and LEG-FE-CHART-V1-STORAGE_
-  - Define the browser-profile support policy, measure legacy-key population where possible, exercise
-    each migration round trip, then remove the migrations only after the horizon expires.
-
-- [ ] **Retire browser-only insight dismissal migration after its support horizon** 🔽
-  - Tracking: 🔎 decision-needed 2026-09-09 (the gate still protects unopened profiles and retries transient server failures)
-  - ↪ _from: Legacy compatibility inventory LEG-FE-INSIGHT-GATE_
-  - Define the browser cutoff, census the key where possible, and prove offline/retry behavior before
-    deleting the gate and its startup block.
 
 - [ ] **Retire legacy deep-link redirects after a published support window** 🔽
   - Tracking: 🔎 decision-needed 2026-09-09 (old bookmarks, Electron menus, and documentation can still reach the redirects)

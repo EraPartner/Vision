@@ -2,9 +2,9 @@
 title: Data Model Reference
 type: reference
 status: active
-date: 2026-09-09
-updated: 2026-09-09
-last_modified: 2026-09-09
+date: 2026-09-11
+updated: 2026-09-11
+last_modified: 2026-09-11
 tags:
   [
     reference,
@@ -1116,6 +1116,12 @@ ADR-119 records this as the explicit exception to the shared timestamp-trigger p
 ### UserSetting
 
 **Purpose:** User preferences stored as JSONB.
+
+Migration 0106 rewrites the `belgian_tax_profile_snapshot_meta_v1` value in place to remove
+`frozenCalculation.federalPITTotal`. The migration proceeds only when the alias and
+`federalPITBeforeExemption` are both numeric and equal; malformed or divergent data aborts the
+upgrade atomically. Downgrade reconstructs the alias from the canonical value. See
+[[docs/adr/135-compatibility-cutoff-for-september-retirements|ADR-135]].
 
 | Field   | Type  | Constraints | Description   |
 | ------- | ----- | ----------- | ------------- |

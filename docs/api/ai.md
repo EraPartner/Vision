@@ -2,8 +2,8 @@
 title: AI Chat API
 type: api
 status: active
-date: 2026-05-03
-updated: 2026-08-31
+date: 2026-09-11
+updated: 2026-09-11
 tags: [api, ai, chat, ollama, sse, streaming, llm, phase-1, idle-timeout, tool-call-accumulation]
 description: Local AI chat endpoints — Ollama status, model discovery, conversation CRUD, chat turn (JSON + SSE) with tools opt-out toggle and 30 tool-calling tools. All responses use camelCase field names. June 2026: streaming uses per-chunk idle timeout (OLLAMA_STREAM_IDLE_TIMEOUT_MS) instead of a fixed total budget; tool calls accumulated across all NDJSON chunks and deduped.
 aliases: [ai api, chat api, ollama api, ai endpoints]
@@ -82,14 +82,14 @@ Pass-through of `GET /api/tags` from Ollama, served in the canonical collection 
 ## GET /api/ai/conversations
 
 List conversations newest-first. All fields use camelCase (e.g., `createdAt`, `updatedAt`). The
-shipped frontend requests 50-row pages with `limit` and `offset` and exposes **Load more**. For
-backward compatibility, callers that omit both query parameters still receive the historical full
-list. `limit` is clamped to 200.
+shipped frontend requests 50-row pages with `limit` and `offset` and exposes **Load more**. Callers
+that omit pagination receive the bounded default page: `limit=50`, `offset=0`. `limit` is clamped
+to 200.
 
-**Response 200:** canonical collection body `{ items, total, limit?, offset? }`, where each item is
+**Response 200:** canonical collection body `{ items, total, limit, offset }`, where each item is
 `{ id, title, model, createdAt, updatedAt }`. `total` is always the full conversation count, even
-when the requested offset is past the end; `limit` and `offset` appear only for a paginated request.
-There is no message count in the payload — the list query selects only these five columns.
+when the requested offset is past the end. There is no message count in the payload — the list
+query selects only these five columns.
 
 ## POST /api/ai/conversations
 
@@ -191,7 +191,7 @@ Non-streaming chat turn — runs the tool loop to completion then returns the fu
 
 | HTTP | `code`                   | Meaning                                               |
 | ---- | ------------------------ | ----------------------------------------------------- |
-| 400  | `VALIDATION_ERROR`       | Zod validation on tool args                           |
+| 400  | `VALIDATION_ERROR`       | Request-schema or tool-argument validation            |
 | 404  | `CONVERSATION_NOT_FOUND` | `conversationId` does not exist                       |
 | 409  | `TURN_NOT_RETRYABLE`     | Conversation has no persisted user turn to regenerate |
 | 409  | `TURN_ALREADY_COMPLETE`  | Latest user turn already has an assistant response    |
@@ -199,11 +199,24 @@ Non-streaming chat turn — runs the tool loop to completion then returns the fu
 | 504  | `OLLAMA_TIMEOUT`         | Tool loop exceeded deadline                           |
 | 500  | `AI_CHAT_ERROR`          | Fallback                                              |
 
+### Financial tool result semantics
+
+The reconciled portfolio, capital-gain, monthly-spend, and net-cash-flow tools use the same calculation services as the shipped screens. Their monetary results use `app_settings.defaultCurrency`, with `EUR` only as the invalid-or-missing setting fallback. Dated portfolio values replay the complete transaction history through the requested day, then range tools subtract the cumulative value immediately before the range. For unit-based assets, this preserves the configured weighted-average, FIFO, or LIFO cost-basis method and the transaction-date foreign-exchange conversion. Other tool domains retain their documented contracts.
+
+The compatibility tool names do not change, but their result fields state the measured quantity:
+
+| Tool                                           | Result meaning                                                                                                                                                                          |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `getReturnsForRange`, `getBestWorstPerformers` | `netIncome`: portfolio income minus recorded fees and taxes. This is not price performance.                                                                                             |
+| `getCapitalGainsForYear`                       | `proceeds` is gross sale value. Unit-based assets have a separate canonical `realizedGain`; unsupported non-unit assets return `realizedGain: null` and `realizedGainSupported: false`. |
+| `getUnrealizedGains`                           | `costBasis` is the remaining open-position basis after partial sales; `unrealizedGain` is current value minus that basis.                                                               |
+| `getMonthlySpend`, `getNetCashflow`            | Canonical ledger cash flow. Internal transfers follow application policy; refunds are positive inflows and are not assumed taxable.                                                     |
+
 ## POST /api/ai/chat/stream
 
 Same contract as `/chat` but streamed over Server-Sent Events. Uses backpressure-aware writer (Phase 3.2) to prevent unbounded memory growth.
 
-The public event names and payload shapes are defined once in `@vision/types/aiChat`. The service emits those wire-ready events and the route forwards them without an internal rename layer. The route owns canonical terminal `complete`, the deprecated byte-equivalent `done` compatibility alias, and `error` frames.
+The public event names and payload shapes are defined once in `@vision/types/aiChat`. The service emits those wire-ready events and the route forwards them without an internal rename layer. The route owns the canonical terminal `complete` and `error` frames.
 
 **Request headers / body:** identical to `/chat`. **Response:** `Content-Type: text/event-stream`, `Cache-Control: no-cache`, `X-Accel-Buffering: no`.
 
@@ -244,8 +257,6 @@ data: {
   "iterations": 2
 }
 
-event: done
-data: { ...same terminal payload... }
 ```
 
 ### Event Reference
@@ -257,7 +268,6 @@ data: { ...same terminal payload... }
 | `tool_call`    | `{ name, args }`                                        | Model requested a tool — before dispatch                                                                                               |
 | `tool_result`  | `{ message }`                                           | Tool row persisted (camelCase fields; result in `message.toolResult`)                                                                  |
 | `complete`     | `{ conversation, assistantMessage, usage, iterations }` | Canonical terminal success (all fields camelCase)                                                                                      |
-| `done`         | Same as `complete`                                      | Deprecated compatibility alias emitted after `complete`; new clients deduplicate it                                                    |
 | `error`        | `{ detail, code }`                                      | Terminal failure with a stable API error code                                                                                          |
 
 > [!info] Disconnect

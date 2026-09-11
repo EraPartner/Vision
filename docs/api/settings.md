@@ -5,7 +5,7 @@ method: GET, PUT, DELETE
 path: /api/settings
 description: User preferences and application settings
 date: 2026-06-19
-updated: 2026-08-31
+updated: 2026-09-11
 tags: [api, settings, preferences, phase-3, auto-link, planned-match, june-2026]
 status: active
 aliases: [settings-api, preferences-api, user-settings, app-settings]
@@ -100,6 +100,7 @@ Validation behavior:
 - Any key longer than 100 chars returns `400` and includes the offending key in the detail text
 - `dashboard_settings` is normalized/validated during bulk upsert (`excludedCategoryIds` / `excludedRecipientIds` positive-int arrays)
 - `theme_settings` is validated for variant ∈ {default, dracula, solarized, nord, high-contrast}, mode ∈ {light, dark, system, schedule}, and schedule times (if mode is 'schedule') match `HH:MM`
+- `belgian_tax_profile_snapshot_meta_v1` rejects a `frozenCalculation.federalPITTotal` property. Use `federalPITBeforeExemption`; migration 0106 removes proven-equal stored aliases and fails closed on divergent data.
 
 **Request Body:**
 

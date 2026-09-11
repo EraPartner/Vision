@@ -2,8 +2,8 @@
 title: Ollama Integration
 type: integration
 status: active
-date: 2026-08-30
-updated: 2026-08-25
+date: 2026-09-09
+updated: 2026-09-09
 tags: [integration, ollama, llm, local-ai, streaming, tool-calling, idle-timeout, tool-call-accumulation]
 description: HTTP client wrapper around local Ollama for AI chat — health, model discovery, chat/stream, abort support. June 2026: per-chunk idle timeout replaces single total budget; tool calls accumulated and deduped across NDJSON chunks; request/response logs downgraded to debug.
 aliases: [ollama, ollama-client, local-llm]
@@ -108,6 +108,8 @@ The service builds a `tools` array in Ollama's native function-calling format:
 ```
 
 The model emits `tool_calls: [{ function: { name, arguments } }]`. The dispatcher validates `arguments` against the tool's JSON Schema and invokes the matching repository call. Result is fed back as a `role: "tool"` message in the next iteration.
+
+The system prompt requires reconciled financial results to use the canonical reporting currency and keeps income, sale proceeds, realized gain, unrealized gain, and total return distinct. The compatibility-named `getReturnsForRange` and `getBestWorstPerformers` tools are explicitly described as `netIncome` tools, so the model must not present them as investment performance. A `null` realized gain with `realizedGainSupported: false` is an unsupported non-unit calculation, never a zero gain.
 
 Persisted history stores final assistant text and tool-result rows, but not the assistant `tool_calls` frame that originally preceded each result. Replayed history can therefore contain an orphan `role: "tool"` message. Ollama accepts this lenient shape. A future stricter provider requires either a history adapter or persistence of the original assistant tool-call frames.
 

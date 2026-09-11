@@ -1681,7 +1681,7 @@
             "id": "ai-chat",
             "name": "Local AI chat with tool calls",
             "category": "AI",
-            "summary": "User asks a question; aiChat orchestrates an Ollama tool-loop against transaction repositories.",
+            "summary": "User asks a question; aiChat orchestrates an Ollama tool-loop against canonical financial services and read-only repositories.",
             "steps": [
               {
                 "from": "browser",
@@ -1728,8 +1728,8 @@
               {
                 "from": "sv.aichat",
                 "to": "be.repos",
-                "payload": "dispatchTool(name, args)  \u2192  transactionRepository.search(...)",
-                "annotation": "Tools resolve against the repository layer with the same auth scope."
+                "payload": "dispatchTool(name, args)  \u2192  canonical calculation service or repository",
+                "annotation": "Financial metrics reuse monthly-summary and portfolio-summary calculations; all tools remain read-only."
               },
               {
                 "from": "be.repos",

@@ -231,7 +231,7 @@ package "Thin Route Seams (ADR-067, June 2026)" {
   class PortfolioImportBatchService <<ADR-078>>
   class FxResolveService <<ADR-074, ADR-078>>
   class PortfolioSummaryService <<ADR-044, ADR-091, ADR-100>> {
-    +getPortfolioSummary(currency): Promise<Summary>
+    +getPortfolioSummary(currency, options?): Promise<Summary>
     ' Returns totals + summaries[] + byAccount[] (per-account holdings, parity-locked)
   }
   class MoveHoldingService <<ADR-091>> {
@@ -299,6 +299,8 @@ PortfolioImportPipelineService --> ImportIdentity
 AiChatService --> AiChatRepository
 AiChatService --> "Ollama client"
 AiChatService --> TransactionRepository
+AiChatService --> InfoRepository : canonical cash flow
+AiChatService --> PortfolioSummaryService : canonical portfolio metrics
 
 ProviderHealthService --> ProviderHealthRepository
 

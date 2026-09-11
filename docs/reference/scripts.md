@@ -1,7 +1,7 @@
 ---
 title: Scripts Reference
 type: reference
-date: 2026-09-09
+date: 2026-09-11
 tags: [reference, scripts, bun, testing, database, electron, native-runtime]
 description: Authoritative guide to Vision package scripts and their intended use.
 aliases: [scripts reference, package scripts]
@@ -81,7 +81,7 @@ VISION_TEST_DB_TASK=legacy-retirements scripts/with-test-db.sh
 ```
 
 This mode refuses caller-managed databases. It creates a disposable PostgreSQL 18 cluster and
-proves the 0104 and 0105 success, refusal, fresh-install, downgrade, and re-upgrade paths.
+proves the 0104 through 0106 success, refusal, fresh-install, downgrade, and re-upgrade paths.
 
 ## Database
 

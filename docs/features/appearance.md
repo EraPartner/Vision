@@ -3,7 +3,7 @@ title: Appearance Feature
 type: feature
 status: active
 date: 2026-04-21
-updated: 2026-08-27
+updated: 2026-09-11
 tags: [feature, appearance, theming, personalization, frontend, settings, phase-1, visual-effects-tiers, auto-adapt-display, fx-reduced, shader-aurora, webgl, premium-v3, system-accent, vibrancy, electron-native, macos, june-2026, canvas-text, aurora-legibility, liquid-glass-sidebar, accessibility, colorblind, gain-loss, skin-v2]
 description: Per-user theme variant selection with five color palettes, light/dark mode switching, and schedule-based mode transitions. June 2026 (ADR-075): Visual-effects tier model (reduced/standard/enhanced) + autoAdaptDisplay replaces the ADR-071 enhancedEffects boolean; large-display heuristic auto-drops to reduced on 4K-class screens. June 2026 V12 (ADR-072): system accent color overlay (Electron/macOS only, persisted in theme_settings.systemAccent) and vibrancy gated on effective tier. 2026-06-24: colorblind gain/loss palette promoted to a persisted user setting (colorblindGainLoss, default false/classic); --gain/--loss CSS tokens unified app-wide; gain/loss Tailwind color utilities added.
 aliases: [appearance, theming, theme variants, color palettes, dark mode, light mode, system accent, vibrancy]
@@ -387,9 +387,12 @@ When the display is auto-capped, a note styled `text-primary` explains the situa
 | `apps/frontend/src/stores/settingsStore.ts`                              | Persisted state + `migrateAppSettings`; `sessionTierOverride` (non-persisted) |
 | `apps/frontend/src/lib/__tests__/visualEffects.test.ts`                  | 17 unit tests (13 original + 4 override cases)                                |
 
-### Migration from enhancedEffects boolean
+### Retired enhancedEffects migration
 
-`migrateAppSettings` (applied at hydration in `AppSettingsHydration`) converts legacy stored blobs: `enhancedEffects: true → visualEffects: 'enhanced'`; `enhancedEffects: false → visualEffects: 'standard'`. An explicitly stored `visualEffects` value wins without remapping. The legacy key is stripped so the next debounced persist writes the new shape. No backend change — `app_settings` is an opaque JSON blob.
+`migrateAppSettings` validates `visualEffects` directly. Since the 2026-09-11 compatibility cutoff,
+the old `enhancedEffects` boolean is not mapped and cannot change the active tier. Unopened profiles
+that skipped the migration window fall back to the standard canonical tier. See
+[[docs/adr/135-compatibility-cutoff-for-september-retirements|ADR-135]].
 
 ### ShaderAurora technical details
 

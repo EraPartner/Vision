@@ -3,8 +3,8 @@ title: Aggregations API
 type: endpoint
 status: active
 date: 2026-04-25
-updated: 2026-09-07
-last_modified: 2026-09-07
+updated: 2026-09-11
+last_modified: 2026-09-11
 recipient_pivot_added: 2026-04-28
 tag_pivot_added: 2026-06-26
 tags: [endpoint, api, aggregations, backend, phase-2, phase-6, phase-9, phase-10, phase-d, phase-e, phase-f, phase-g, phase-h, phase-h-v2, decimal, money, cashflow-forecast, multi-method-forecast, statistical-forecasting, ensemble-methods, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience, rolling-window, url-persistence, rolling-cache, rolling-diagnostics, recipient-pivot, tag-pivot, saved-charts, exclusion-filters, ensemble-v2, tags]
@@ -395,7 +395,7 @@ Per-recipient aggregated spending data with category and time-bucket filtering, 
 | `start_date`               | string    | null    | Inclusive ISO date filter start (`YYYY-MM-DD`)                                                                                                                                                                                  |
 | `end_date`                 | string    | null    | Inclusive ISO date filter end (`YYYY-MM-DD`)                                                                                                                                                                                    |
 
-The deprecated `start` and `end` aliases remain accepted for existing clients. If both spellings are present, `start_date` and `end_date` take precedence. Malformed dates return `400 VALIDATION_ERROR` before the pivot is computed.
+The canonical parameters are `start_date` and `end_date`. Retired `start` or `end` parameters return `400 VALIDATION_ERROR` rather than silently widening the result. Malformed dates also return `400 VALIDATION_ERROR` before the pivot is computed.
 
 **Response (data field):**
 
@@ -463,16 +463,16 @@ Per-tag aggregated spending data keyed by period, supporting custom chart render
 
 **Query Parameters:**
 
-| Parameter    | Type      | Required                | Description                                                                                                                                                      |
-| ------------ | --------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tag_ids[]`  | integer[] | Conditional             | Tag IDs to include; repeatable param. Empty selection returns an empty pivot unless `all=true` is also passed. Required unless `all=true`.                       |
-| `all`        | boolean   | No                      | Alias: `all_tags`. When `true`, returns every active tag in the workspace; `tag_ids[]` is ignored. Used by the dynamic "all tags" source in saved custom charts. |
-| `bucket`     | string    | No (default: `monthly`) | `monthly` or `yearly`                                                                                                                                            |
-| `start_date` | string    | No                      | Inclusive ISO date filter start (`YYYY-MM-DD`)                                                                                                                   |
-| `end_date`   | string    | No                      | Inclusive ISO date filter end (`YYYY-MM-DD`)                                                                                                                     |
-| `currency`   | string    | No (default: `EUR`)     | Target currency (3-letter code, case-insensitive)                                                                                                                |
+| Parameter    | Type      | Required                | Description                                                                                                                                   |
+| ------------ | --------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tag_ids[]`  | integer[] | Conditional             | Tag IDs to include; repeatable param. Empty selection returns an empty pivot unless `all=true` is also passed. Required unless `all=true`.    |
+| `all`        | boolean   | No                      | When `true`, returns every active tag in the workspace; `tag_ids[]` is ignored. Used by the dynamic "all tags" source in saved custom charts. |
+| `bucket`     | string    | No (default: `monthly`) | `monthly` or `yearly`                                                                                                                         |
+| `start_date` | string    | No                      | Inclusive ISO date filter start (`YYYY-MM-DD`)                                                                                                |
+| `end_date`   | string    | No                      | Inclusive ISO date filter end (`YYYY-MM-DD`)                                                                                                  |
+| `currency`   | string    | No (default: `EUR`)     | Target currency (3-letter code, case-insensitive)                                                                                             |
 
-The deprecated `start` and `end` aliases remain accepted for existing clients. If both spellings are present, `start_date` and `end_date` take precedence. Malformed dates return `400 VALIDATION_ERROR` before the pivot is computed.
+The canonical parameters are `start_date` and `end_date`. Retired `start` or `end` parameters return `400 VALIDATION_ERROR` rather than silently widening the result. Malformed dates also return `400 VALIDATION_ERROR` before the pivot is computed.
 
 **Response envelope:**
 
@@ -560,7 +560,7 @@ const allTagsEnvelope = await getAggregationTagPivot({
 
 - Repository: `apps/node-backend/src/repositories/infoRepositoryTags.js` — `tagInsightsRepository.getTagPivot`; when `allTags=true`, the tag-id filter is dropped and the short-circuit is bypassed, returning all active tags.
 - Service: `apps/node-backend/src/services/calculations/aggregation/tagPivot.js` — `computeTagPivot`; passes `allTags` flag through to the repository.
-- Route: wired in `apps/node-backend/src/routes/aggregations.js`; accepts `all` and `all_tags` query params as boolean aliases.
+- Route: wired in `apps/node-backend/src/routes/aggregations.js`; accepts the `all` query parameter and rejects the retired `all_tags` alias.
 - Frontend hook: `apps/frontend/src/hooks/useTagPivot.ts`; enabled when `tag_ids.length > 0` **or** `all_tags = true`; cache key includes `'all'` token when all-flag is active.
 - Frontend API client: `getAggregationTagPivot` in `apps/frontend/src/lib/api/aggregations.ts`; when `all=true`, omits `tag_ids` from the request; `TagPivotItem` type in `apps/frontend/src/lib/api/types.ts`.
 

@@ -3,7 +3,7 @@ title: Feature - Belgian Tax
 type: feature
 status: active
 date: 2026-05-11
-updated: 2026-09-05
+updated: 2026-09-11
 tags: [feature, tax, belgian, cadastral-income, deductions, phase-8, pdf-export, regional-own-home-credit, exemption-brackets, taxable-income-sources, audit-2026-05-11, disabled-dependents, regional-autonomy-factor, property-tax-centimes, etf-tob, reynders-routing, portfolio-tax-pure-module, decimal-migration, point-in-time-fx, url-state, filing-masthead, computation-flow, adr-105]
 description: Belgian tax profile management with PIT calculator using exemption-bracket method (CIR-92 art. 134 §3), regional own-home credits (Flemish woonbonus, Walloon chèque habitat), taxable income source filtering, cadastral income tracking, deduction management, PDF tax report export, and May 2026 PwC audit fixes (disabled-dependent doubling, child-under-3 forfeiture, regional autonomy factor, property-tax centimes calibration). May 2026: Portfolio-tax estimators extracted to a pure, tested module with Decimal.js accumulation.
 aliases: [belgian-tax, tax-feature, cadastral, deductions, belgium]
@@ -201,7 +201,7 @@ The `BelgianTaxCalculation` result object includes:
 
 | Field                       | Definition                                                                                                                                   |
 | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `federalPITBeforeExemption` | Federal PIT before personal exemption deduction (formerly `federalPITTotal`; aliased for back-compat)                                        |
+| `federalPITBeforeExemption` | Federal PIT before personal exemption deduction                                                                                              |
 | `personalExemptionBenefit`  | Tax benefit from applying personal exemption via exemption-bracket table                                                                     |
 | `federalTaxCredits`         | Total tax credits (pension savings, life insurance, donations, childcare, domestic help, etc.), clamped so sum ≤ `federalPITBeforeExemption` |
 | `ownHomeCreditRegime`       | Applicable regime: `'flemish_woonbonus'`, `'walloon_cheque_habitat'`, or `'none'`                                                            |
@@ -209,7 +209,7 @@ The `BelgianTaxCalculation` result object includes:
 | `totalPIT`                  | Federal PIT after exemption, credits, and communal surcharge (income tax only)                                                               |
 | `totalTaxBurden`            | `totalPIT` + employee SS + special SS + property tax estimate (no double-counting)                                                           |
 
-> **Back-compat:** `federalPITTotal` is aliased to `federalPITBeforeExemption` for consumers expecting the old name.
+> **Compatibility cutoff (2026-09-11):** `federalPITTotal` is no longer emitted or accepted in frozen calculations. Migration 0106 removes it only when its numeric value equals `federalPITBeforeExemption`; alias-only, malformed, or divergent stored values stop the migration for operator review. The affected `user_settings` row is included in normal database backups. See [[docs/adr/135-compatibility-cutoff-for-september-retirements|ADR-135]].
 >
 > **Regression note (2026-04-26):** an earlier implementation added the communal surcharge twice into `totalTaxBurden`. Covered now by [`pit.test.ts`](apps/frontend/src/lib/belgianTax/__tests__/pit.test.ts).
 

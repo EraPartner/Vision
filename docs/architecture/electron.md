@@ -3,7 +3,7 @@ title: Electron Desktop Architecture
 type: architecture-doc
 status: active
 date: 2026-08-31
-updated: 2026-09-08
+updated: 2026-09-11
 tags:
   [
     architecture,
@@ -1254,13 +1254,13 @@ With automatic pre-pull + `pull_policy: missing`, Docker Compose finds the local
 - [[docs/adr/072-electron-native-desktop-integration|ADR-072: Electron-Native Desktop Integration]] — hiddenInset chrome, native menu/dock, CSV handoff, system accent, vibrancy (June 2026)
 - [[docs/adr/113-native-macos-runtime|ADR-113: Native macOS Runtime]] — PostgreSQL 18, runtime providers, cutover, and rollback
 - [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]] — operation and migration procedure
-- [[docs/adr/071-premium-v3-effects-toggle|ADR-071: Premium v3]] — `enhancedEffects` toggle that gates vibrancy
+- [[docs/adr/075-visual-effects-tiers-display-adaptation|ADR-075]] — effective `visualEffects` tier that gates vibrancy
 - [[docs/adr/045-electron-app-name-userData-migration|ADR-045: App Name & userData Migration]] — macOS TCC prompt fix + legacy dir migration
 - [[docs/adr/022-electron-sandbox-hardening-and-recovery|ADR-022: Electron Sandbox Hardening]] — Security + recovery design
 - [[docs/adr/023-update-installer-checksum-verification|ADR-023: Installer Checksum Verification]] — Supply-chain security
 - [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020: Glass System Downgrade]] — Electron M1 GPU budget history (vibrancy context)
 - [[docs/api/health|Health API]] — Backend readiness endpoints
-- [[docs/features/appearance|Appearance]] — System accent toggle, enhancedEffects, vibrancy
+- [[docs/features/appearance|Appearance]] — System accent, visual-effects tiers, and vibrancy
 - [[docs/features/import|Import Feature]] — CSV drag-and-drop + Finder handoff
 - [[docs/guides/deployment]] — Deployment guide
 - [[docs/reference/scripts]] — Build scripts
