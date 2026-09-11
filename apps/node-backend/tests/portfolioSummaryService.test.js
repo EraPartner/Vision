@@ -972,6 +972,69 @@ describe("asset-class formula coverage", () => {
     expect(s.currentValue).toBe(150); // 1 unit * 150
   });
 
+  it("replays full history only through the requested date boundary", async () => {
+    query
+      .mockResolvedValueOnce({
+        rows: [investmentRow({ currency: "EUR", current_price: 150 })],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          txnRow({
+            id: 1,
+            type: "buy",
+            amount: 100,
+            units: 1,
+            currency: "EUR",
+            date: "2024-01-01",
+          }),
+          txnRow({
+            id: 2,
+            type: "buy",
+            amount: 120,
+            units: 1,
+            currency: "EUR",
+            date: "2025-01-01",
+          }),
+          txnRow({
+            id: 3,
+            type: "sell",
+            amount: 200,
+            units: 1,
+            currency: "EUR",
+            date: "2026-01-01",
+          }),
+        ],
+      });
+
+    const result = await getPortfolioSummary("EUR", {
+      throughDate: "2025-12-31",
+    });
+
+    expect(result.summaries[0]).toMatchObject({
+      totalUnits: 2,
+      totalSellProceeds: 0,
+      realizedGain: 0,
+      totalInvested: 220,
+    });
+  });
+
+  it("can include inactive investments for historical reporting", async () => {
+    query
+      .mockResolvedValueOnce({
+        rows: [investmentRow({ is_active: false, currency: "EUR" })],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const result = await getPortfolioSummary("EUR", {
+      throughDate: "2025-12-31",
+      activeInvestmentsOnly: false,
+    });
+
+    expect(result.summaries).toHaveLength(1);
+    expect(query.mock.calls[0][0]).not.toContain("WHERE i.is_active = true");
+    expect(query.mock.calls[1][0]).not.toContain("i.is_active = true");
+  });
+
   it("honors the cost_basis_method setting (fifo vs weighted_avg realized gain)", async () => {
     // Two lots at different prices, then sell one unit at 200:
     //   weighted_avg: cost of sold unit = (100+120)/2 = 110 → gain 90

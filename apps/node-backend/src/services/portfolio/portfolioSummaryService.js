@@ -20,6 +20,7 @@ import { buildInvestmentSummaryCorePartitioned } from "@vision/shared-utils/port
 import { settingsRepository } from "../../repositories/settingsRepository.js";
 import { portfolioTransactionRepository } from "../../repositories/portfolioTransactionRepository.js";
 import { todayAppDateString } from "../../lib/timezone.js";
+import { toYmd } from "../../lib/dateFormat.js";
 import {
   toDecimal,
   addAll,
@@ -82,10 +83,11 @@ async function resolveCostBasisMethod() {
 }
 
 /**
- * Fetch active investments and their transactions, then compute per-investment
+ * Fetch investments and their transactions, then compute per-investment
  * summaries plus aggregated totals — all pre-converted to targetCurrency.
  *
  * @param {string} targetCurrency
+ * @param {{ throughDate?: string, activeInvestmentsOnly?: boolean }} [options]
  * @returns {Promise<{
  *   currency: string,
  *   computed_at: string,
@@ -94,7 +96,10 @@ async function resolveCostBasisMethod() {
  *   byAccount: ReturnType<typeof aggregateByAccount>,
  * }>}
  */
-export async function getPortfolioSummary(targetCurrency = "EUR") {
+export async function getPortfolioSummary(
+  targetCurrency = "EUR",
+  { throughDate = undefined, activeInvestmentsOnly = true } = {},
+) {
   const target = (targetCurrency || "EUR").toUpperCase();
 
   const costBasisMethod = await resolveCostBasisMethod();
@@ -108,19 +113,23 @@ export async function getPortfolioSummary(targetCurrency = "EUR") {
              COALESCE(i.current_price, 0) AS current_price,
              COALESCE(i.interest_rate, 0) AS interest_rate
       FROM investments i
-      WHERE i.is_active = true
+      ${activeInvestmentsOnly ? "WHERE i.is_active = true" : ""}
       ORDER BY i.name
     `)
     ),
     /** @type {Promise<AnnotatedTxRow[]>} */ (
       portfolioTransactionRepository.getRowsForPortfolioMath({
-        activeInvestmentsOnly: true,
+        activeInvestmentsOnly,
       })
     ),
   ]);
 
+  const includedTxnRows = throughDate
+    ? txnRows.filter((txn) => toYmd(txn.date) <= throughDate)
+    : txnRows;
+
   const txnsByInvestment = new Map();
-  for (const txn of txnRows) {
+  for (const txn of includedTxnRows) {
     const id = Number(txn.investment_id);
     if (!txnsByInvestment.has(id)) txnsByInvestment.set(id, []);
     txnsByInvestment.get(id).push(txn);
@@ -135,7 +144,7 @@ export async function getPortfolioSummary(targetCurrency = "EUR") {
       ...investmentsResult.rows.map((inv) =>
         (inv.currency || "EUR").toUpperCase(),
       ),
-      ...txnRows.map((txn) => (txn.currency || "EUR").toUpperCase()),
+      ...includedTxnRows.map((txn) => (txn.currency || "EUR").toUpperCase()),
     ]),
   ];
   const multiplierByCurrency = new Map();
@@ -156,7 +165,7 @@ export async function getPortfolioSummary(targetCurrency = "EUR") {
     target,
   );
   annotateTransactionFxMultipliers(
-    txnRows,
+    includedTxnRows,
     target,
     historicalIndex,
     multiplierByCurrency,

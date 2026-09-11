@@ -1,37 +1,51 @@
-import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock('../src/repositories/transactionRepository.js', () => ({
+vi.mock("../src/repositories/transactionRepository.js", () => ({
   transactionRepository: {
     getAll: vi.fn(),
   },
 }));
 
-vi.mock('../src/repositories/investmentRepository.js', () => ({
+vi.mock("../src/repositories/investmentRepository.js", () => ({
   investmentRepository: {
     getAll: vi.fn(),
   },
 }));
 
-vi.mock('../src/repositories/portfolioTransactionRepository.js', () => ({
+vi.mock("../src/repositories/portfolioTransactionRepository.js", () => ({
   portfolioTransactionRepository: {
     getAllByInvestmentIds: vi.fn(),
   },
 }));
 
-vi.mock('../src/repositories/plannedTransactionRepository.js', () => ({
+vi.mock("../src/repositories/plannedTransactionRepository.js", () => ({
   plannedTransactionRepository: {
     getAll: vi.fn(),
     getById: vi.fn(),
   },
 }));
 
-import { transactionRepository } from '../src/repositories/transactionRepository.js';
-import { investmentRepository } from '../src/repositories/investmentRepository.js';
-import { portfolioTransactionRepository } from '../src/repositories/portfolioTransactionRepository.js';
-import { plannedTransactionRepository } from '../src/repositories/plannedTransactionRepository.js';
+vi.mock("../src/repositories/infoRepository.js", () => ({
+  default: { getMonthlyFinancialSummary: vi.fn() },
+}));
+
+vi.mock("../src/services/aiChat/tools/_financialMetrics.js", () => ({
+  getAiDisplayCurrency: vi.fn(),
+  loadCanonicalPortfolioSummary: vi.fn(),
+}));
+
+import { transactionRepository } from "../src/repositories/transactionRepository.js";
+import { investmentRepository } from "../src/repositories/investmentRepository.js";
+import { portfolioTransactionRepository } from "../src/repositories/portfolioTransactionRepository.js";
+import { plannedTransactionRepository } from "../src/repositories/plannedTransactionRepository.js";
+import infoRepository from "../src/repositories/infoRepository.js";
+import {
+  getAiDisplayCurrency,
+  loadCanonicalPortfolioSummary,
+} from "../src/services/aiChat/tools/_financialMetrics.js";
 import {
   getSpendByCategory,
   getMonthlySpend,
@@ -39,348 +53,496 @@ import {
   getTransactionsInRange,
   getMonthlyCategoryBreakdown,
   getNetCashflow,
-} from '../src/services/aiChat/tools/expenses.js';
+} from "../src/services/aiChat/tools/expenses.js";
 import {
   getPortfolioHoldings,
   getReturnsForRange,
   getDividendIncome,
   getAssetAllocation,
-} from '../src/services/aiChat/tools/portfolio.js';
+} from "../src/services/aiChat/tools/portfolio.js";
 import {
   getUpcomingPlanned,
   getSubscriptionTotal,
   getLoanSchedule,
-} from '../src/services/aiChat/tools/planned.js';
+} from "../src/services/aiChat/tools/planned.js";
 import {
   getTaxableIncomeSummary,
   getCapitalGainsForYear,
   getDeductibles,
-} from '../src/services/aiChat/tools/tax.js';
-import { DEDUCTION_TYPES } from '../src/services/tax/deductionClassifier.js';
-import { dispatchTool, getToolSchemas, getToolNames } from '../src/services/aiChat/tools/index.js';
-import { parsePositiveInt, ToolValidationError } from '../src/services/aiChat/tools/_validate.js';
+} from "../src/services/aiChat/tools/tax.js";
+import { DEDUCTION_TYPES } from "../src/services/tax/deductionClassifier.js";
+import {
+  dispatchTool,
+  getToolSchemas,
+  getToolNames,
+} from "../src/services/aiChat/tools/index.js";
+import {
+  parsePositiveInt,
+  ToolValidationError,
+} from "../src/services/aiChat/tools/_validate.js";
 
 beforeEach(() => {
   vi.resetAllMocks();
+  getAiDisplayCurrency.mockResolvedValue("EUR");
+  loadCanonicalPortfolioSummary.mockResolvedValue({
+    currency: "EUR",
+    summaries: [],
+    totals: {
+      totalPortfolioValue: 0,
+      totalDividends: 0,
+      totalIncome: 0,
+    },
+  });
+  infoRepository.getMonthlyFinancialSummary.mockResolvedValue({ months: [] });
 });
 
-describe('getSpendByCategory', () => {
-  it('sums negative amounts by category and sorts desc', async () => {
+describe("getSpendByCategory", () => {
+  it("sums negative amounts by category and sorts desc", async () => {
     transactionRepository.getAll.mockResolvedValueOnce([
-      { amount: '-120.50', category_name: 'Groceries', date: '2025-03-01' },
-      { amount: '-45.00', category_name: 'Groceries', date: '2025-03-15' },
-      { amount: '-300.00', category_name: 'Rent', date: '2025-03-01' },
-      { amount: '500.00', category_name: 'Salary', date: '2025-03-28' }, // income, skip
-      { amount: '-12.00', category_name: null, date: '2025-03-18' },     // uncategorised
+      { amount: "-120.50", category_name: "Groceries", date: "2025-03-01" },
+      { amount: "-45.00", category_name: "Groceries", date: "2025-03-15" },
+      { amount: "-300.00", category_name: "Rent", date: "2025-03-01" },
+      { amount: "500.00", category_name: "Salary", date: "2025-03-28" }, // income, skip
+      { amount: "-12.00", category_name: null, date: "2025-03-18" }, // uncategorised
     ]);
 
     const result = await getSpendByCategory.run({
-      from: '2025-03-01',
-      to: '2025-03-31',
+      from: "2025-03-01",
+      to: "2025-03-31",
     });
 
     expect(result.ok).toBe(true);
     expect(result.data).toEqual([
-      { category: 'Rent', total: 300, count: 1 },
-      { category: 'Groceries', total: 165.5, count: 2 },
-      { category: 'Uncategorised', total: 12, count: 1 },
+      { category: "Rent", total: 300, count: 1 },
+      { category: "Groceries", total: 165.5, count: 2 },
+      { category: "Uncategorised", total: 12, count: 1 },
     ]);
     expect(result.meta.rowsScanned).toBe(5);
     expect(result.meta.categoryCount).toBe(3);
-    expect(result.meta.renderAs).toBe('bar');
+    expect(result.meta.renderAs).toBe("bar");
   });
 
-  it('applies topN limit', async () => {
+  it("applies topN limit", async () => {
     transactionRepository.getAll.mockResolvedValueOnce([
-      { amount: '-100', category_name: 'A', date: '2025-01-01' },
-      { amount: '-90', category_name: 'B', date: '2025-01-01' },
-      { amount: '-80', category_name: 'C', date: '2025-01-01' },
+      { amount: "-100", category_name: "A", date: "2025-01-01" },
+      { amount: "-90", category_name: "B", date: "2025-01-01" },
+      { amount: "-80", category_name: "C", date: "2025-01-01" },
     ]);
 
     const result = await getSpendByCategory.run({
-      from: '2025-01-01',
-      to: '2025-01-31',
+      from: "2025-01-01",
+      to: "2025-01-31",
       topN: 2,
     });
 
     expect(result.data).toHaveLength(2);
-    expect(result.data.map((d) => d.category)).toEqual(['A', 'B']);
+    expect(result.data.map((d) => d.category)).toEqual(["A", "B"]);
   });
 
-  it('rejects invalid date format', async () => {
+  it("rejects invalid date format", async () => {
     await expect(
-      getSpendByCategory.run({ from: '03/01/2025', to: '2025-12-31' }),
+      getSpendByCategory.run({ from: "03/01/2025", to: "2025-12-31" }),
     ).rejects.toThrow(/from must be an ISO date/);
   });
 
-  it('rejects calendar-invalid date', async () => {
+  it("rejects calendar-invalid date", async () => {
     await expect(
-      getSpendByCategory.run({ from: '2025-13-45', to: '2025-12-31' }),
+      getSpendByCategory.run({ from: "2025-13-45", to: "2025-12-31" }),
     ).rejects.toThrow(/from is not a valid date/);
   });
 
-  it('rejects reversed date order', async () => {
+  it("rejects reversed date order", async () => {
     await expect(
-      getSpendByCategory.run({ from: '2025-12-31', to: '2025-01-01' }),
+      getSpendByCategory.run({ from: "2025-12-31", to: "2025-01-01" }),
     ).rejects.toThrow(/from.*must be on or before.*to/);
   });
 });
 
-describe('getMonthlySpend', () => {
-  it('buckets by month with income/spend/net', async () => {
-    transactionRepository.getAll.mockResolvedValueOnce([
-      { amount: '1000', date: '2025-01-15' },
-      { amount: '-200', date: '2025-01-20' },
-      { amount: '-50', date: '2025-01-28' },
-      { amount: '2000', date: '2025-02-01' },
-      { amount: '-1500', date: '2025-02-25' },
-    ]);
+describe("getMonthlySpend", () => {
+  it("maps canonical transfer, refund, and currency-normalized totals", async () => {
+    getAiDisplayCurrency.mockResolvedValueOnce("USD");
+    infoRepository.getMonthlyFinancialSummary.mockResolvedValueOnce({
+      months: [
+        {
+          year: 2025,
+          month: 1,
+          total_income: 500,
+          total_spending: -300,
+          net_amount: 200,
+          transaction_count: 2,
+        },
+        {
+          year: 2025,
+          month: 2,
+          total_income: 2000,
+          total_spending: -1500,
+          net_amount: 500,
+          transaction_count: 2,
+        },
+      ],
+    });
 
     const result = await getMonthlySpend.run({
-      from: '2025-01-01',
-      to: '2025-02-28',
+      from: "2025-01-01",
+      to: "2025-02-28",
     });
 
     expect(result.ok).toBe(true);
     expect(result.data).toEqual([
-      { bucket: '2025-01', income: 1000, spend: 250, net: 750, count: 3 },
-      { bucket: '2025-02', income: 2000, spend: 1500, net: 500, count: 2 },
+      { bucket: "2025-01", income: 500, spend: 300, net: 200, count: 2 },
+      { bucket: "2025-02", income: 2000, spend: 1500, net: 500, count: 2 },
     ]);
-    expect(result.meta.groupBy).toBe('month');
-    expect(result.meta.renderAs).toBe('line');
+    expect(infoRepository.getMonthlyFinancialSummary).toHaveBeenCalledWith(
+      [],
+      "USD",
+      [],
+      false,
+      "2025-01-01",
+      "2025-02-28",
+    );
+    expect(result.meta.currency).toBe("USD");
+    expect(result.meta.groupBy).toBe("month");
+    expect(result.meta.renderAs).toBe("line");
   });
 
-  it('buckets by quarter when requested', async () => {
-    transactionRepository.getAll.mockResolvedValueOnce([
-      { amount: '-100', date: '2025-01-15' },
-      { amount: '-200', date: '2025-04-10' },
-      { amount: '-300', date: '2025-07-22' },
-    ]);
-
-    const result = await getMonthlySpend.run({
-      from: '2025-01-01',
-      to: '2025-12-31',
-      groupBy: 'quarter',
+  it("buckets by quarter when requested", async () => {
+    infoRepository.getMonthlyFinancialSummary.mockResolvedValueOnce({
+      months: [
+        {
+          year: 2025,
+          month: 1,
+          total_income: 0,
+          total_spending: -100,
+          net_amount: -100,
+          transaction_count: 1,
+        },
+        {
+          year: 2025,
+          month: 4,
+          total_income: 0,
+          total_spending: -200,
+          net_amount: -200,
+          transaction_count: 1,
+        },
+        {
+          year: 2025,
+          month: 7,
+          total_income: 0,
+          total_spending: -300,
+          net_amount: -300,
+          transaction_count: 1,
+        },
+      ],
     });
 
-    expect(result.data.map((d) => d.bucket)).toEqual(['2025-Q1', '2025-Q2', '2025-Q3']);
+    const result = await getMonthlySpend.run({
+      from: "2025-01-01",
+      to: "2025-12-31",
+      groupBy: "quarter",
+    });
+
+    expect(result.data.map((d) => d.bucket)).toEqual([
+      "2025-Q1",
+      "2025-Q2",
+      "2025-Q3",
+    ]);
   });
 
-  it('rejects unknown groupBy', async () => {
+  it("rejects unknown groupBy", async () => {
     await expect(
-      getMonthlySpend.run({ from: '2025-01-01', to: '2025-12-31', groupBy: 'weekly' }),
+      getMonthlySpend.run({
+        from: "2025-01-01",
+        to: "2025-12-31",
+        groupBy: "weekly",
+      }),
     ).rejects.toThrow(/groupBy must be one of/);
   });
-
-  it('buckets a local-midnight Date into its local month (pg DATE shape)', async () => {
-    // Same pg-DATE pitfall as getMonthlyCategoryBreakdown below: getUTC* put a
-    // 1st-of-month local-midnight Date into the previous month in a UTC+ zone.
-    transactionRepository.getAll.mockResolvedValueOnce([
-      { amount: '-10', date: new Date(2026, 5, 1) },
-    ]);
-
-    const result = await getMonthlySpend.run({ from: '2026-06-01', to: '2026-06-30' });
-
-    expect(result.data.map((d) => d.bucket)).toEqual(['2026-06']); // not 2026-05
-  });
 });
 
-describe('getNetCashflow', () => {
-  it('buckets income/expenses by month including pg DATE-shaped rows', async () => {
-    transactionRepository.getAll.mockResolvedValueOnce([
-      { amount: '1000', date: new Date(2026, 5, 1) }, // pg local-midnight Date → 2026-06
-      { amount: '-300', date: '2026-06-15' },
-      { amount: '-100', date: '2026-07-01' },
-    ]);
+describe("getNetCashflow", () => {
+  it("maps the same canonical monthly result as getMonthlySpend", async () => {
+    infoRepository.getMonthlyFinancialSummary.mockResolvedValueOnce({
+      months: [
+        {
+          year: 2026,
+          month: 6,
+          total_income: 1000,
+          total_spending: -300,
+          net_amount: 700,
+          transaction_count: 2,
+        },
+        {
+          year: 2026,
+          month: 7,
+          total_income: 0,
+          total_spending: -100,
+          net_amount: -100,
+          transaction_count: 1,
+        },
+      ],
+    });
 
-    const result = await getNetCashflow.run({ from: '2026-06-01', to: '2026-07-31' });
+    const result = await getNetCashflow.run({
+      from: "2026-06-01",
+      to: "2026-07-31",
+    });
 
     expect(result.ok).toBe(true);
     expect(result.data).toEqual([
-      { period: '2026-06', income: 1000, expenses: 300, net: 700 },
-      { period: '2026-07', income: 0, expenses: 100, net: -100 },
+      { period: "2026-06", income: 1000, expenses: 300, net: 700 },
+      { period: "2026-07", income: 0, expenses: 100, net: -100 },
     ]);
   });
 
-  it('buckets by quarter when requested', async () => {
-    transactionRepository.getAll.mockResolvedValueOnce([
-      { amount: '-100', date: new Date(2026, 0, 1) },  // Q1 — not 2025-Q4
-      { amount: '-200', date: '2026-04-10' },
-    ]);
+  it("buckets by quarter when requested", async () => {
+    infoRepository.getMonthlyFinancialSummary.mockResolvedValueOnce({
+      months: [
+        {
+          year: 2026,
+          month: 1,
+          total_income: 0,
+          total_spending: -100,
+          net_amount: -100,
+          transaction_count: 1,
+        },
+        {
+          year: 2026,
+          month: 4,
+          total_income: 0,
+          total_spending: -200,
+          net_amount: -200,
+          transactionCount: 1,
+        },
+      ],
+    });
 
-    const result = await getNetCashflow.run({ from: '2026-01-01', to: '2026-06-30', groupBy: 'quarter' });
+    const result = await getNetCashflow.run({
+      from: "2026-01-01",
+      to: "2026-06-30",
+      groupBy: "quarter",
+    });
 
-    expect(result.data.map((d) => d.period)).toEqual(['2026-Q1', '2026-Q2']);
+    expect(result.data.map((d) => d.period)).toEqual(["2026-Q1", "2026-Q2"]);
   });
 });
 
-describe('getMonthlyCategoryBreakdown', () => {
-  it('buckets a local-midnight Date into its local month (pg DATE shape)', async () => {
+describe("getMonthlyCategoryBreakdown", () => {
+  it("buckets a local-midnight Date into its local month (pg DATE shape)", async () => {
     // node-postgres returns DATE columns as a local-midnight Date; getUTC* put
     // the 1st of a month into the previous month in a UTC+ zone. new Date(y,m,d)
     // is local midnight, so toYmd reads it back deterministically in any TZ.
     transactionRepository.getAll.mockResolvedValueOnce([
-      { amount: '-10', date: new Date(2026, 5, 1), category_name: 'FOOD:GROCERIES' },
+      {
+        amount: "-10",
+        date: new Date(2026, 5, 1),
+        category_name: "FOOD:GROCERIES",
+      },
     ]);
 
-    const result = await getMonthlyCategoryBreakdown.run({ from: '2026-06-01', to: '2026-06-30' });
+    const result = await getMonthlyCategoryBreakdown.run({
+      from: "2026-06-01",
+      to: "2026-06-30",
+    });
 
-    expect(result.data[0].month).toBe('2026-06'); // not 2026-05
+    expect(result.data[0].month).toBe("2026-06"); // not 2026-05
   });
 });
 
-describe('getPortfolioHoldings', () => {
-  it('computes net units and market value per investment', async () => {
-    investmentRepository.getAll.mockResolvedValueOnce([
-      { id: 1, name: 'VWCE', symbol: 'VWCE', asset_class: 'etf', currency: 'EUR', current_price: '100.00' },
-      { id: 2, name: 'BTC', symbol: 'BTC', asset_class: 'crypto', currency: 'EUR', current_price: '50000.00' },
-      { id: 3, name: 'Sold out', symbol: 'SO', asset_class: 'stock', currency: 'EUR', current_price: '10.00' },
-    ]);
-    portfolioTransactionRepository.getAllByInvestmentIds.mockResolvedValueOnce([
-      { investment_id: 1, type: 'buy', units: '10' },
-      { investment_id: 1, type: 'buy', units: '5' },
-      { investment_id: 1, type: 'sell', units: '3' },
-      { investment_id: 2, type: 'buy', units: '0.5' },
-      { investment_id: 3, type: 'buy', units: '100' },
-      { investment_id: 3, type: 'sell', units: '100' },
-    ]);
+describe("getPortfolioHoldings", () => {
+  it("maps canonical reporting-currency holdings, including non-unit assets", async () => {
+    loadCanonicalPortfolioSummary.mockResolvedValueOnce({
+      currency: "USD",
+      totals: { totalPortfolioValue: 26000 },
+      summaries: [
+        {
+          id: 1,
+          name: "VWCE",
+          symbol: "VWCE",
+          asset_class: "etf",
+          originalCurrency: "EUR",
+          totalUnits: 12,
+          currentPrice: 100,
+          currentValue: 1200,
+        },
+        {
+          id: 2,
+          name: "Savings",
+          symbol: null,
+          asset_class: "savings",
+          originalCurrency: "USD",
+          totalUnits: 0,
+          currentPrice: 0,
+          currentValue: 24800,
+        },
+        {
+          id: 3,
+          name: "Sold",
+          asset_class: "stock",
+          totalUnits: 0,
+          currentValue: 0,
+        },
+      ],
+    });
 
     const result = await getPortfolioHoldings.run({});
 
     expect(result.ok).toBe(true);
-    expect(result.data).toHaveLength(2); // id:3 excluded (zero position)
+    expect(result.data).toHaveLength(2);
     expect(result.data[0]).toMatchObject({
-      name: 'BTC',
-      units: 0.5,
-      marketValue: 25000,
+      name: "Savings",
+      currency: "USD",
+      units: 0,
+      marketValue: 24800,
     });
     expect(result.data[1]).toMatchObject({
-      name: 'VWCE',
+      name: "VWCE",
       units: 12,
       marketValue: 1200,
     });
-    expect(result.meta.renderAs).toBe('pie');
+    expect(result.meta.currency).toBe("USD");
     expect(result.meta.totalPositions).toBe(2);
   });
 
-  it('applies a stock split (split units = new post-split total)', async () => {
-    investmentRepository.getAll.mockResolvedValueOnce([
-      { id: 1, name: 'VWCE', symbol: 'VWCE', asset_class: 'etf', currency: 'EUR', current_price: '50.00' },
-    ]);
-    portfolioTransactionRepository.getAllByInvestmentIds.mockResolvedValueOnce([
-      { investment_id: 1, type: 'buy', units: '10' },
-      { investment_id: 1, type: 'split', units: '20' }, // 2:1 split → 20 total units
-    ]);
-
-    const result = await getPortfolioHoldings.run({});
-
-    // Before the fix the split was ignored → 10 units → marketValue 500 (half).
-    expect(result.data[0]).toMatchObject({ name: 'VWCE', units: 20, marketValue: 1000 });
+  it("filters the canonical snapshot by asset class", async () => {
+    loadCanonicalPortfolioSummary.mockResolvedValueOnce({
+      currency: "EUR",
+      totals: { totalPortfolioValue: 20 },
+      summaries: [
+        {
+          id: 1,
+          name: "Stock",
+          asset_class: "stock",
+          totalUnits: 1,
+          currentPrice: 10,
+          currentValue: 10,
+        },
+        {
+          id: 2,
+          name: "ETF",
+          asset_class: "etf",
+          totalUnits: 1,
+          currentPrice: 10,
+          currentValue: 10,
+        },
+      ],
+    });
+    const result = await getPortfolioHoldings.run({ assetClass: "stock" });
+    expect(result.data).toHaveLength(1);
   });
 
-  it('passes assetClass filter through to repository', async () => {
-    investmentRepository.getAll.mockResolvedValueOnce([]);
-
-    await getPortfolioHoldings.run({ assetClass: 'stock' });
-
-    expect(investmentRepository.getAll).toHaveBeenCalledWith(
-      expect.objectContaining({ assetClass: 'stock', active: true }),
-    );
-  });
-
-  it('rejects unknown assetClass', async () => {
+  it("rejects unknown assetClass", async () => {
     await expect(
-      getPortfolioHoldings.run({ assetClass: 'nft' }),
+      getPortfolioHoldings.run({ assetClass: "nft" }),
     ).rejects.toThrow(/assetClass must be one of/);
   });
 
-  it('skips portfolio-transaction query when no active investments', async () => {
-    investmentRepository.getAll.mockResolvedValueOnce([]);
-
+  it("returns empty for an empty canonical snapshot", async () => {
     const result = await getPortfolioHoldings.run({});
-
-    expect(portfolioTransactionRepository.getAllByInvestmentIds).not.toHaveBeenCalled();
     expect(result.data).toEqual([]);
   });
 });
 
-describe('getTopRecipients', () => {
-  it('sums outflows by recipient and sorts desc', async () => {
+describe("getTopRecipients", () => {
+  it("sums outflows by recipient and sorts desc", async () => {
     transactionRepository.getAll.mockResolvedValueOnce([
-      { amount: '-50', recipient_name: 'Coffee Shop' },
-      { amount: '-25', recipient_name: 'Coffee Shop' },
-      { amount: '-400', recipient_name: 'Landlord' },
-      { amount: '1000', recipient_name: 'Employer' }, // income skipped
-      { amount: '-10', recipient_name: null },        // unknown
+      { amount: "-50", recipient_name: "Coffee Shop" },
+      { amount: "-25", recipient_name: "Coffee Shop" },
+      { amount: "-400", recipient_name: "Landlord" },
+      { amount: "1000", recipient_name: "Employer" }, // income skipped
+      { amount: "-10", recipient_name: null }, // unknown
     ]);
 
-    const result = await getTopRecipients.run({ from: '2025-01-01', to: '2025-01-31' });
+    const result = await getTopRecipients.run({
+      from: "2025-01-01",
+      to: "2025-01-31",
+    });
 
     expect(result.ok).toBe(true);
     expect(result.data).toEqual([
-      { recipient: 'Landlord', total: 400, count: 1 },
-      { recipient: 'Coffee Shop', total: 75, count: 2 },
-      { recipient: 'Unknown', total: 10, count: 1 },
+      { recipient: "Landlord", total: 400, count: 1 },
+      { recipient: "Coffee Shop", total: 75, count: 2 },
+      { recipient: "Unknown", total: 10, count: 1 },
     ]);
     expect(result.meta.recipientCount).toBe(3);
   });
 
-  it('applies topN cap', async () => {
+  it("applies topN cap", async () => {
     transactionRepository.getAll.mockResolvedValueOnce([
-      { amount: '-100', recipient_name: 'A' },
-      { amount: '-90', recipient_name: 'B' },
-      { amount: '-80', recipient_name: 'C' },
+      { amount: "-100", recipient_name: "A" },
+      { amount: "-90", recipient_name: "B" },
+      { amount: "-80", recipient_name: "C" },
     ]);
 
-    const result = await getTopRecipients.run({ from: '2025-01-01', to: '2025-01-31', topN: 2 });
+    const result = await getTopRecipients.run({
+      from: "2025-01-01",
+      to: "2025-01-31",
+      topN: 2,
+    });
 
     expect(result.data).toHaveLength(2);
   });
 
-  it('rejects missing from', async () => {
-    await expect(
-      getTopRecipients.run({ to: '2025-01-31' }),
-    ).rejects.toThrow(/from is required/);
+  it("rejects missing from", async () => {
+    await expect(getTopRecipients.run({ to: "2025-01-31" })).rejects.toThrow(
+      /from is required/,
+    );
   });
 });
 
-describe('getTransactionsInRange', () => {
-  it('shapes rows with date slice and fallback labels', async () => {
+describe("getTransactionsInRange", () => {
+  it("shapes rows with date slice and fallback labels", async () => {
     transactionRepository.getAll.mockResolvedValueOnce([
       {
         id: 1,
-        date: '2025-03-10',
-        amount: '-12.34',
-        recipient_name: 'Store',
-        category_name: 'Groceries',
-        memo: 'eggs',
+        date: "2025-03-10",
+        amount: "-12.34",
+        recipient_name: "Store",
+        category_name: "Groceries",
+        memo: "eggs",
       },
       {
         id: 2,
-        date: new Date('2025-03-11T00:00:00Z'),
-        amount: '50',
+        date: new Date("2025-03-11T00:00:00Z"),
+        amount: "50",
         recipient_name: null,
         category_name: null,
         memo: null,
       },
     ]);
 
-    const result = await getTransactionsInRange.run({ from: '2025-03-01', to: '2025-03-31' });
+    const result = await getTransactionsInRange.run({
+      from: "2025-03-01",
+      to: "2025-03-31",
+    });
 
     expect(result.ok).toBe(true);
     expect(result.data).toEqual([
-      { id: 1, date: '2025-03-10', amount: -12.34, recipient: 'Store', category: 'Groceries', memo: 'eggs' },
-      { id: 2, date: '2025-03-11', amount: 50, recipient: 'Unknown', category: 'Uncategorised', memo: '' },
+      {
+        id: 1,
+        date: "2025-03-10",
+        amount: -12.34,
+        recipient: "Store",
+        category: "Groceries",
+        memo: "eggs",
+      },
+      {
+        id: 2,
+        date: "2025-03-11",
+        amount: 50,
+        recipient: "Unknown",
+        category: "Uncategorised",
+        memo: "",
+      },
     ]);
-    expect(result.meta.renderAs).toBe('table');
+    expect(result.meta.renderAs).toBe("table");
   });
 
-  it('passes categoryId and recipientId through to repo', async () => {
+  it("passes categoryId and recipientId through to repo", async () => {
     transactionRepository.getAll.mockResolvedValueOnce([]);
 
     await getTransactionsInRange.run({
-      from: '2025-01-01',
-      to: '2025-01-31',
+      from: "2025-01-01",
+      to: "2025-01-31",
       categoryId: 7,
       recipientId: 42,
       limit: 20,
@@ -391,104 +553,153 @@ describe('getTransactionsInRange', () => {
     );
   });
 
-  it('rejects limit above 500', async () => {
+  it("rejects limit above 500", async () => {
     await expect(
-      getTransactionsInRange.run({ from: '2025-01-01', to: '2025-01-31', limit: 1000 }),
+      getTransactionsInRange.run({
+        from: "2025-01-01",
+        to: "2025-01-31",
+        limit: 1000,
+      }),
     ).rejects.toThrow(/limit must be an integer between 1 and 500/);
   });
 });
 
-describe('getReturnsForRange', () => {
-  it('aggregates income minus costs per investment, sorts by net desc', async () => {
-    investmentRepository.getAll.mockResolvedValueOnce([
-      { id: 1, name: 'VWCE', symbol: 'VWCE', asset_class: 'etf', currency: 'EUR' },
-      { id: 2, name: 'REIT', symbol: 'REIT', asset_class: 'real_estate', currency: 'EUR' },
-    ]);
-    portfolioTransactionRepository.getAllByInvestmentIds.mockResolvedValueOnce([
-      { investment_id: 1, type: 'dividend', amount: '20', fees: '0', taxes: '0', date: '2025-03-15' },
-      { investment_id: 1, type: 'fee', amount: '5', fees: '0', taxes: '0', date: '2025-04-01' },
-      { investment_id: 2, type: 'rent_income', amount: '500', fees: '0', taxes: '50', date: '2025-05-01' },
-      { investment_id: 2, type: 'rent_income', amount: '500', fees: '0', taxes: '0', date: '2026-01-01' }, // out of range
-    ]);
+describe("getReturnsForRange", () => {
+  it("reports canonical net income without calling it return", async () => {
+    loadCanonicalPortfolioSummary
+      .mockResolvedValueOnce({
+        currency: "EUR",
+        summaries: [
+          {
+            id: 1,
+            name: "VWCE",
+            asset_class: "etf",
+            totalIncome: 20,
+            totalFees: 5,
+            totalTaxes: 0,
+          },
+          {
+            id: 2,
+            name: "REIT",
+            asset_class: "real_estate",
+            totalIncome: 500,
+            totalFees: 0,
+            totalTaxes: 50,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        currency: "EUR",
+        summaries: [
+          { id: 1, totalIncome: 0, totalFees: 0, totalTaxes: 0 },
+          { id: 2, totalIncome: 0, totalFees: 0, totalTaxes: 0 },
+        ],
+      });
 
-    const result = await getReturnsForRange.run({ from: '2025-01-01', to: '2025-12-31' });
+    const result = await getReturnsForRange.run({
+      from: "2025-01-01",
+      to: "2025-12-31",
+    });
 
     expect(result.ok).toBe(true);
     expect(result.data).toEqual([
-      expect.objectContaining({ name: 'REIT', income: 500, costs: 50, net: 450 }),
-      expect.objectContaining({ name: 'VWCE', income: 20, costs: 5, net: 15 }),
+      expect.objectContaining({
+        name: "REIT",
+        income: 500,
+        costs: 50,
+        netIncome: 450,
+      }),
+      expect.objectContaining({
+        name: "VWCE",
+        income: 20,
+        costs: 5,
+        netIncome: 15,
+      }),
     ]);
-    expect(result.meta.renderAs).toBe('bar');
+    expect(result.meta.metric).toBe("netIncome");
+    expect(loadCanonicalPortfolioSummary).toHaveBeenNthCalledWith(
+      1,
+      undefined,
+      { throughDate: "2025-12-31", activeInvestmentsOnly: false },
+    );
+    expect(loadCanonicalPortfolioSummary).toHaveBeenNthCalledWith(
+      2,
+      undefined,
+      { throughDate: "2024-12-31", activeInvestmentsOnly: false },
+    );
   });
 
-  it('rejects unknown assetClass', async () => {
+  it("rejects unknown assetClass", async () => {
     await expect(
-      getReturnsForRange.run({ from: '2025-01-01', to: '2025-12-31', assetClass: 'nft' }),
+      getReturnsForRange.run({
+        from: "2025-01-01",
+        to: "2025-12-31",
+        assetClass: "nft",
+      }),
     ).rejects.toThrow(/assetClass must be one of/);
   });
 });
 
-describe('getDividendIncome', () => {
-  it('sums dividend payments per investment and totals', async () => {
-    investmentRepository.getAll.mockResolvedValueOnce([
-      { id: 1, name: 'VWCE', symbol: 'VWCE', asset_class: 'etf', currency: 'EUR' },
-      { id: 2, name: 'NoDiv', symbol: 'X', asset_class: 'etf', currency: 'EUR' },
-    ]);
-    portfolioTransactionRepository.getAllByInvestmentIds.mockResolvedValueOnce([
-      { investment_id: 1, amount: '12.50', date: '2025-03-01' },
-      { investment_id: 1, amount: '7.50', date: '2025-06-01' },
-      { investment_id: 1, amount: '99', date: '2024-12-31' }, // out of range
-    ]);
+describe("getDividendIncome", () => {
+  it("returns reporting-currency dividend deltas", async () => {
+    loadCanonicalPortfolioSummary
+      .mockResolvedValueOnce({
+        currency: "GBP",
+        summaries: [
+          { id: 1, name: "VWCE", asset_class: "etf", totalDividends: 120 },
+        ],
+      })
+      .mockResolvedValueOnce({
+        currency: "GBP",
+        summaries: [{ id: 1, totalDividends: 100 }],
+      });
 
-    const result = await getDividendIncome.run({ from: '2025-01-01', to: '2025-12-31' });
+    const result = await getDividendIncome.run({
+      from: "2025-01-01",
+      to: "2025-12-31",
+    });
 
     expect(result.ok).toBe(true);
     expect(result.data).toEqual([
-      expect.objectContaining({ name: 'VWCE', total: 20, payments: 2 }),
+      expect.objectContaining({ name: "VWCE", total: 20, currency: "GBP" }),
     ]);
     expect(result.meta.grandTotal).toBe(20);
     expect(result.meta.payingPositions).toBe(1);
   });
-
-  it('queries portfolio repo with type=dividend', async () => {
-    investmentRepository.getAll.mockResolvedValueOnce([{ id: 1 }]);
-    portfolioTransactionRepository.getAllByInvestmentIds.mockResolvedValueOnce([]);
-
-    await getDividendIncome.run({ from: '2025-01-01', to: '2025-12-31' });
-
-    expect(portfolioTransactionRepository.getAllByInvestmentIds).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'dividend' }),
-    );
-  });
 });
 
-describe('getAssetAllocation', () => {
-  it('groups holdings by asset class with percentages', async () => {
-    investmentRepository.getAll.mockResolvedValueOnce([
-      { id: 1, name: 'A', asset_class: 'etf', current_price: '100' },
-      { id: 2, name: 'B', asset_class: 'crypto', current_price: '50000' },
-      { id: 3, name: 'C', asset_class: 'etf', current_price: '10' },
-    ]);
-    portfolioTransactionRepository.getAllByInvestmentIds.mockResolvedValueOnce([
-      { investment_id: 1, type: 'buy', units: '10' },   // 1000
-      { investment_id: 2, type: 'buy', units: '0.5' },  // 25000
-      { investment_id: 3, type: 'buy', units: '50' },   // 500 → etf bucket 1500
-    ]);
+describe("getAssetAllocation", () => {
+  it("groups already-converted canonical values", async () => {
+    loadCanonicalPortfolioSummary.mockResolvedValueOnce({
+      currency: "EUR",
+      totals: { totalPortfolioValue: 26500 },
+      summaries: [
+        { id: 1, asset_class: "etf", currentValue: 1000 },
+        { id: 2, asset_class: "crypto", currentValue: 25000 },
+        { id: 3, asset_class: "etf", currentValue: 500 },
+      ],
+    });
 
     const result = await getAssetAllocation.run({});
 
     expect(result.ok).toBe(true);
-    expect(result.data[0]).toMatchObject({ assetClass: 'crypto', marketValue: 25000, positions: 1 });
-    expect(result.data[1]).toMatchObject({ assetClass: 'etf', marketValue: 1500, positions: 2 });
+    expect(result.data[0]).toMatchObject({
+      assetClass: "crypto",
+      marketValue: 25000,
+      positions: 1,
+    });
+    expect(result.data[1]).toMatchObject({
+      assetClass: "etf",
+      marketValue: 1500,
+      positions: 2,
+    });
     const cryptoPct = result.data[0].percent;
     const etfPct = result.data[1].percent;
     expect(cryptoPct + etfPct).toBeCloseTo(100, 1);
-    expect(result.meta.renderAs).toBe('pie');
+    expect(result.meta.renderAs).toBe("pie");
   });
 
-  it('returns empty when no holdings', async () => {
-    investmentRepository.getAll.mockResolvedValueOnce([]);
-
+  it("returns empty when no holdings", async () => {
     const result = await getAssetAllocation.run({});
 
     expect(result.data).toEqual([]);
@@ -496,30 +707,30 @@ describe('getAssetAllocation', () => {
   });
 });
 
-describe('getUpcomingPlanned', () => {
-  it('shapes repo items, sorts by date', async () => {
+describe("getUpcomingPlanned", () => {
+  it("shapes repo items, sorts by date", async () => {
     plannedTransactionRepository.getAll.mockResolvedValueOnce({
       items: [
         {
           id: 2,
-          planned_date: '2025-04-15',
-          amount: '-50',
-          recipient_name: 'Netflix',
-          category_name: 'subscriptions',
-          memo: '',
+          planned_date: "2025-04-15",
+          amount: "-50",
+          recipient_name: "Netflix",
+          category_name: "subscriptions",
+          memo: "",
           is_recurring: true,
-          recurrence_pattern: 'monthly',
+          recurrence_pattern: "monthly",
           is_loan: false,
         },
         {
           id: 1,
-          planned_date: '2025-04-10',
-          amount: '-800',
-          recipient_name: 'Landlord',
-          category_name: 'housing',
-          memo: 'rent',
+          planned_date: "2025-04-10",
+          amount: "-800",
+          recipient_name: "Landlord",
+          category_name: "housing",
+          memo: "rent",
           is_recurring: true,
-          recurrence_pattern: 'monthly',
+          recurrence_pattern: "monthly",
           is_loan: false,
         },
       ],
@@ -533,21 +744,41 @@ describe('getUpcomingPlanned', () => {
     expect(result.meta.count).toBe(2);
   });
 
-  it('rejects horizonDays above 365', async () => {
-    await expect(
-      getUpcomingPlanned.run({ horizonDays: 1000 }),
-    ).rejects.toThrow(/horizonDays must be an integer between 1 and 365/);
+  it("rejects horizonDays above 365", async () => {
+    await expect(getUpcomingPlanned.run({ horizonDays: 1000 })).rejects.toThrow(
+      /horizonDays must be an integer between 1 and 365/,
+    );
   });
 });
 
-describe('getSubscriptionTotal', () => {
-  it('normalizes negative recurring outflows to monthly', async () => {
+describe("getSubscriptionTotal", () => {
+  it("normalizes negative recurring outflows to monthly", async () => {
     plannedTransactionRepository.getAll.mockResolvedValueOnce({
       items: [
-        { id: 1, amount: '-10', recurrence_pattern: 'monthly', recipient_name: 'Spotify' },
-        { id: 2, amount: '-120', recurrence_pattern: 'yearly', recipient_name: 'Domain' }, // /12 = 10
-        { id: 3, amount: '500', recurrence_pattern: 'monthly', recipient_name: 'Salary' }, // income skipped
-        { id: 4, amount: '-5', recurrence_pattern: 'unknown', recipient_name: 'Odd' },     // pattern skipped
+        {
+          id: 1,
+          amount: "-10",
+          recurrence_pattern: "monthly",
+          recipient_name: "Spotify",
+        },
+        {
+          id: 2,
+          amount: "-120",
+          recurrence_pattern: "yearly",
+          recipient_name: "Domain",
+        }, // /12 = 10
+        {
+          id: 3,
+          amount: "500",
+          recurrence_pattern: "monthly",
+          recipient_name: "Salary",
+        }, // income skipped
+        {
+          id: 4,
+          amount: "-5",
+          recurrence_pattern: "unknown",
+          recipient_name: "Odd",
+        }, // pattern skipped
       ],
     });
 
@@ -555,49 +786,60 @@ describe('getSubscriptionTotal', () => {
 
     expect(result.ok).toBe(true);
     expect(result.data).toHaveLength(2);
-    expect(result.data[0]).toMatchObject({ recipient: 'Spotify', normalizedAmount: 10 });
-    expect(result.data[1]).toMatchObject({ recipient: 'Domain', normalizedAmount: 10 });
+    expect(result.data[0]).toMatchObject({
+      recipient: "Spotify",
+      normalizedAmount: 10,
+    });
+    expect(result.data[1]).toMatchObject({
+      recipient: "Domain",
+      normalizedAmount: 10,
+    });
     expect(result.meta.total).toBe(20);
-    expect(result.meta.period).toBe('monthly');
+    expect(result.meta.period).toBe("monthly");
   });
 
-  it('multiplies by 12 when period is yearly', async () => {
+  it("multiplies by 12 when period is yearly", async () => {
     plannedTransactionRepository.getAll.mockResolvedValueOnce({
       items: [
-        { id: 1, amount: '-10', recurrence_pattern: 'monthly', recipient_name: 'Sub' },
+        {
+          id: 1,
+          amount: "-10",
+          recurrence_pattern: "monthly",
+          recipient_name: "Sub",
+        },
       ],
     });
 
-    const result = await getSubscriptionTotal.run({ period: 'yearly' });
+    const result = await getSubscriptionTotal.run({ period: "yearly" });
 
     expect(result.data[0].normalizedAmount).toBe(120);
-    expect(result.meta.period).toBe('yearly');
+    expect(result.meta.period).toBe("yearly");
   });
 
-  it('rejects unknown period', async () => {
-    await expect(
-      getSubscriptionTotal.run({ period: 'daily' }),
-    ).rejects.toThrow(/period must be one of/);
+  it("rejects unknown period", async () => {
+    await expect(getSubscriptionTotal.run({ period: "daily" })).rejects.toThrow(
+      /period must be one of/,
+    );
   });
 });
 
-describe('getLoanSchedule', () => {
-  it('shapes loan_schedule for a loan row', async () => {
+describe("getLoanSchedule", () => {
+  it("shapes loan_schedule for a loan row", async () => {
     plannedTransactionRepository.getById.mockResolvedValueOnce({
       id: 9,
       is_loan: true,
-      loan_type: 'mortgage',
-      loan_principal: '100000',
+      loan_type: "mortgage",
+      loan_principal: "100000",
       loan_annual_interest_rate: 3.5,
       loan_term_months: 240,
       loan_schedule: [
         {
           installment_number: 1,
-          due_date: '2025-04-01',
-          payment_amount: '580',
-          principal_amount: '291.67',
-          interest_amount: '288.33',
-          remaining_principal: '99708.33',
+          due_date: "2025-04-01",
+          payment_amount: "580",
+          principal_amount: "291.67",
+          interest_amount: "288.33",
+          remaining_principal: "99708.33",
         },
       ],
     });
@@ -608,19 +850,22 @@ describe('getLoanSchedule', () => {
     expect(result.data).toEqual([
       {
         installment: 1,
-        dueDate: '2025-04-01',
+        dueDate: "2025-04-01",
         payment: 580,
         principal: 291.67,
         interest: 288.33,
         remainingPrincipal: 99708.33,
       },
     ]);
-    expect(result.meta.loanType).toBe('mortgage');
-    expect(result.meta.renderAs).toBe('table');
+    expect(result.meta.loanType).toBe("mortgage");
+    expect(result.meta.renderAs).toBe("table");
   });
 
-  it('returns ok:false when planned transaction is not a loan', async () => {
-    plannedTransactionRepository.getById.mockResolvedValueOnce({ id: 5, is_loan: false });
+  it("returns ok:false when planned transaction is not a loan", async () => {
+    plannedTransactionRepository.getById.mockResolvedValueOnce({
+      id: 5,
+      is_loan: false,
+    });
 
     const result = await getLoanSchedule.run({ plannedId: 5 });
 
@@ -628,7 +873,7 @@ describe('getLoanSchedule', () => {
     expect(result.error).toMatch(/not a loan/);
   });
 
-  it('returns ok:false when planned transaction is missing', async () => {
+  it("returns ok:false when planned transaction is missing", async () => {
     plannedTransactionRepository.getById.mockResolvedValueOnce(null);
 
     const result = await getLoanSchedule.run({ plannedId: 999 });
@@ -637,129 +882,184 @@ describe('getLoanSchedule', () => {
     expect(result.error).toMatch(/not found/);
   });
 
-  it('rejects non-positive plannedId', async () => {
-    await expect(
-      getLoanSchedule.run({ plannedId: 0 }),
-    ).rejects.toThrow(/plannedId must be an integer/);
+  it("rejects non-positive plannedId", async () => {
+    await expect(getLoanSchedule.run({ plannedId: 0 })).rejects.toThrow(
+      /plannedId must be an integer/,
+    );
   });
 });
 
-describe('getTaxableIncomeSummary', () => {
-  it('sums transaction income + portfolio income buckets by year', async () => {
-    transactionRepository.getAll.mockResolvedValueOnce([
-      { amount: '1000', date: '2025-02-01' },  // income
-      { amount: '-200', date: '2025-02-05' },  // outflow, ignored
-      { amount: '500', date: '2025-11-15' },   // income
-    ]);
-    investmentRepository.getAll.mockResolvedValueOnce([{ id: 1 }]);
-    portfolioTransactionRepository.getAllByInvestmentIds.mockResolvedValueOnce([
-      { investment_id: 1, type: 'dividend', amount: '30', date: '2025-03-01' },
-      { investment_id: 1, type: 'interest', amount: '10', date: '2025-06-01' },
-      { investment_id: 1, type: 'rent_income', amount: '200', date: '2025-09-01' },
-      { investment_id: 1, type: 'appreciation', amount: '50', date: '2025-12-31' },
-      { investment_id: 1, type: 'sell', amount: '999', date: '2025-06-01' }, // not an income bucket, ignored
-      { investment_id: 1, type: 'dividend', amount: '999', date: '2024-12-31' }, // out of range
-    ]);
+describe("getTaxableIncomeSummary", () => {
+  it("uses canonical bank inflows and distinguishes refunds from taxable income", async () => {
+    infoRepository.getMonthlyFinancialSummary.mockResolvedValueOnce({
+      months: [{ total_income: 1500 }],
+    });
+    loadCanonicalPortfolioSummary
+      .mockResolvedValueOnce({
+        currency: "EUR",
+        totals: { totalDividends: 130, totalIncome: 540 },
+      })
+      .mockResolvedValueOnce({
+        currency: "EUR",
+        totals: { totalDividends: 100, totalIncome: 300 },
+      });
 
     const result = await getTaxableIncomeSummary.run({ year: 2025 });
 
     expect(result.ok).toBe(true);
-    const byLabel = Object.fromEntries(result.data.map((r) => [r.source, r.amount]));
-    expect(byLabel['Transaction income (gross)']).toBe(1500);
-    expect(byLabel['Dividends']).toBe(30);
-    expect(byLabel['Interest']).toBe(10);
-    expect(byLabel['Rent income']).toBe(200);
-    expect(byLabel['Appreciation (realized)']).toBe(50);
-    expect(result.meta.grossTotal).toBe(1790);
+    const byLabel = Object.fromEntries(
+      result.data.map((r) => [r.source, r.amount]),
+    );
+    expect(byLabel["Positive bank transactions (includes refunds)"]).toBe(1500);
+    expect(byLabel["Dividends"]).toBe(30);
+    expect(byLabel["Interest and rent income"]).toBe(210);
+    expect(byLabel["Appreciation (realized)"]).toBeUndefined();
+    expect(result.meta.grossTotal).toBe(1740);
     expect(result.meta.disclaimer).toMatch(/Approximation only/);
+    expect(loadCanonicalPortfolioSummary).toHaveBeenNthCalledWith(
+      1,
+      undefined,
+      { throughDate: "2025-12-31", activeInvestmentsOnly: false },
+    );
   });
 
-  it('rejects year out of range', async () => {
-    await expect(getTaxableIncomeSummary.run({ year: 999 })).rejects.toThrow(/year must be an integer/);
+  it("rejects year out of range", async () => {
+    await expect(getTaxableIncomeSummary.run({ year: 999 })).rejects.toThrow(
+      /year must be an integer/,
+    );
   });
 });
 
-describe('getCapitalGainsForYear', () => {
-  it('groups sell proceeds by investment and totals taxes', async () => {
-    investmentRepository.getAll.mockResolvedValueOnce([
-      { id: 1, name: 'VWCE', symbol: 'VWCE', asset_class: 'etf', currency: 'EUR' },
-      { id: 2, name: 'BTC', symbol: 'BTC', asset_class: 'crypto', currency: 'EUR' },
-    ]);
-    portfolioTransactionRepository.getAllByInvestmentIds.mockResolvedValueOnce([
-      { investment_id: 1, type: 'sell', amount: '2000', taxes: '50', fees: '5', date: '2025-05-01' },
-      { investment_id: 1, type: 'sell', amount: '1000', taxes: '25', fees: '2', date: '2025-09-01' },
-      { investment_id: 2, type: 'sell', amount: '500', taxes: '0', fees: '1', date: '2025-11-11' },
-      { investment_id: 2, type: 'sell', amount: '999', taxes: '0', fees: '0', date: '2024-12-31' }, // out of range
-    ]);
+describe("getCapitalGainsForYear", () => {
+  it("subtracts cumulative canonical snapshots for yearly gain and proceeds", async () => {
+    loadCanonicalPortfolioSummary
+      .mockResolvedValueOnce({
+        currency: "EUR",
+        summaries: [
+          {
+            id: 1,
+            name: "VWCE",
+            asset_class: "etf",
+            totalSellProceeds: 4000,
+            realizedGain: 900,
+          },
+          {
+            id: 2,
+            name: "BTC",
+            asset_class: "crypto",
+            totalSellProceeds: 500,
+            realizedGain: 100,
+          },
+          {
+            id: 3,
+            name: "Term deposit",
+            asset_class: "savings",
+            totalSellProceeds: 1000,
+            realizedGain: 0,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        currency: "EUR",
+        summaries: [
+          { id: 1, totalSellProceeds: 1000, realizedGain: 250 },
+          { id: 2, totalSellProceeds: 0, realizedGain: 0 },
+          { id: 3, totalSellProceeds: 0, realizedGain: 0 },
+        ],
+      });
 
     const result = await getCapitalGainsForYear.run({ year: 2025 });
 
     expect(result.ok).toBe(true);
     expect(result.data).toEqual([
-      expect.objectContaining({ name: 'VWCE', proceeds: 3000, taxesPaid: 75, feesPaid: 7, sellCount: 2 }),
-      expect.objectContaining({ name: 'BTC', proceeds: 500, taxesPaid: 0, feesPaid: 1, sellCount: 1 }),
+      expect.objectContaining({
+        name: "VWCE",
+        proceeds: 3000,
+        realizedGain: 650,
+      }),
+      expect.objectContaining({
+        name: "BTC",
+        proceeds: 500,
+        realizedGain: 100,
+      }),
+      expect.objectContaining({
+        name: "Term deposit",
+        proceeds: 1000,
+        realizedGain: null,
+        realizedGainSupported: false,
+      }),
     ]);
-    expect(result.meta.totalProceeds).toBe(3500);
-    expect(result.meta.totalTaxesPaid).toBe(75);
-    expect(result.meta.disclaimer).toMatch(/not a realized gain/);
-  });
-
-  it('filters portfolio repo to sell type', async () => {
-    investmentRepository.getAll.mockResolvedValueOnce([{ id: 1 }]);
-    portfolioTransactionRepository.getAllByInvestmentIds.mockResolvedValueOnce([]);
-
-    await getCapitalGainsForYear.run({ year: 2025 });
-
-    expect(portfolioTransactionRepository.getAllByInvestmentIds).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'sell' }),
-    );
+    expect(result.meta.totalProceeds).toBe(4500);
+    expect(result.meta.totalRealizedGain).toBe(750);
+    expect(result.meta.unsupportedAssetClasses).toEqual(["savings"]);
+    expect(result.meta.disclaimer).toMatch(/configured cost-basis method/);
   });
 });
 
-describe('getDeductibles', () => {
-  it('classifies outflows into deduction types, groups by category, excludes unrecognized', async () => {
+describe("getDeductibles", () => {
+  it("classifies outflows into deduction types, groups by category, excludes unrecognized", async () => {
     transactionRepository.getAll.mockResolvedValueOnce([
-      { amount: '-90', category_name: 'PENSION:SAVINGS' },
-      { amount: '-30', category_name: 'PENSION:SAVINGS' },
-      { amount: '-200', category_name: 'GIVING:DONATION' },
-      { amount: '-75', category_name: 'INSURANCE:LIFE' },
-      { amount: '-25', category_name: 'PENSIOENSPAREN' },      // NL, same type other category
-      { amount: '-500', category_name: 'INSURANCE:CAR' },      // not deductible, skip
-      { amount: '-100', category_name: 'health:medical' },     // old heuristic matched this; now skip
-      { amount: '-40', category_name: 'GIFTS:BIRTHDAY' },      // present, not donation, skip
-      { amount: '-30', category_name: 'food:lunch' },          // skip
-      { amount: '100', category_name: 'GIVING:DONATION' },     // inflow, skip
-      { amount: '-60', category_name: null },                  // no label, skip
+      { amount: "-90", category_name: "PENSION:SAVINGS" },
+      { amount: "-30", category_name: "PENSION:SAVINGS" },
+      { amount: "-200", category_name: "GIVING:DONATION" },
+      { amount: "-75", category_name: "INSURANCE:LIFE" },
+      { amount: "-25", category_name: "PENSIOENSPAREN" }, // NL, same type other category
+      { amount: "-500", category_name: "INSURANCE:CAR" }, // not deductible, skip
+      { amount: "-100", category_name: "health:medical" }, // old heuristic matched this; now skip
+      { amount: "-40", category_name: "GIFTS:BIRTHDAY" }, // present, not donation, skip
+      { amount: "-30", category_name: "food:lunch" }, // skip
+      { amount: "100", category_name: "GIVING:DONATION" }, // inflow, skip
+      { amount: "-60", category_name: null }, // no label, skip
     ]);
 
     const result = await getDeductibles.run({ year: 2025 });
 
     expect(result.ok).toBe(true);
     expect(result.data).toEqual([
-      { category: 'GIVING:DONATION', deductionType: 'charitableDonations', total: 200, count: 1 },
-      { category: 'PENSION:SAVINGS', deductionType: 'pensionSavings', total: 120, count: 2 },
-      { category: 'INSURANCE:LIFE', deductionType: 'lifeInsurance', total: 75, count: 1 },
-      { category: 'PENSIOENSPAREN', deductionType: 'pensionSavings', total: 25, count: 1 },
+      {
+        category: "GIVING:DONATION",
+        deductionType: "charitableDonations",
+        total: 200,
+        count: 1,
+      },
+      {
+        category: "PENSION:SAVINGS",
+        deductionType: "pensionSavings",
+        total: 120,
+        count: 2,
+      },
+      {
+        category: "INSURANCE:LIFE",
+        deductionType: "lifeInsurance",
+        total: 75,
+        count: 1,
+      },
+      {
+        category: "PENSIOENSPAREN",
+        deductionType: "pensionSavings",
+        total: 25,
+        count: 1,
+      },
     ]);
     expect(result.meta.grandTotal).toBe(420);
     expect(result.meta.categoryCount).toBe(4);
     expect(result.meta.byDeductionType).toEqual([
-      { deductionType: 'charitableDonations', total: 200, categoryCount: 1 },
-      { deductionType: 'pensionSavings', total: 145, categoryCount: 2 },
-      { deductionType: 'lifeInsurance', total: 75, categoryCount: 1 },
+      { deductionType: "charitableDonations", total: 200, categoryCount: 1 },
+      { deductionType: "pensionSavings", total: 145, categoryCount: 2 },
+      { deductionType: "lifeInsurance", total: 75, categoryCount: 1 },
     ]);
     expect(result.meta.matchedKeywords).toBeUndefined();
     expect(result.meta.deductionTypes).toEqual(DEDUCTION_TYPES);
     expect(result.meta.disclaimer).toMatch(/explicit name-based classifier/);
-    expect(result.meta.renderAs).toBe('bar');
-    expect(result.meta.xField).toBe('category');
-    expect(result.meta.yField).toBe('total');
+    expect(result.meta.renderAs).toBe("bar");
+    expect(result.meta.xField).toBe("category");
+    expect(result.meta.yField).toBe("total");
   });
 
-  it('returns empty list when nothing classifies', async () => {
+  it("returns empty list when nothing classifies", async () => {
     transactionRepository.getAll.mockResolvedValueOnce([
-      { amount: '-10', category_name: 'food:coffee' },
-      { amount: '-300', category_name: 'INSURANCE:CAR' },
+      { amount: "-10", category_name: "food:coffee" },
+      { amount: "-300", category_name: "INSURANCE:CAR" },
     ]);
 
     const result = await getDeductibles.run({ year: 2025 });
@@ -770,41 +1070,46 @@ describe('getDeductibles', () => {
   });
 });
 
-describe('dispatchTool', () => {
-  it('returns UNKNOWN_TOOL for unregistered name', async () => {
-    const { result } = await dispatchTool('doesNotExist', {});
+describe("dispatchTool", () => {
+  it("returns UNKNOWN_TOOL for unregistered name", async () => {
+    const { result } = await dispatchTool("doesNotExist", {});
     expect(result.ok).toBe(false);
-    expect(result.error.code).toBe('UNKNOWN_TOOL');
-    expect(result.error.availableTools).toContain('getSpendByCategory');
+    expect(result.error.code).toBe("UNKNOWN_TOOL");
+    expect(result.error.availableTools).toContain("getSpendByCategory");
   });
 
-  it('returns VALIDATION_ERROR when args fail validation', async () => {
-    const { args, result } = await dispatchTool('getSpendByCategory', { from: 'bad' });
+  it("returns VALIDATION_ERROR when args fail validation", async () => {
+    const { args, result } = await dispatchTool("getSpendByCategory", {
+      from: "bad",
+    });
     expect(result.ok).toBe(false);
-    expect(result.error.code).toBe('VALIDATION_ERROR');
-    expect(result.error.field).toBe('from');
+    expect(result.error.code).toBe("VALIDATION_ERROR");
+    expect(result.error.field).toBe("from");
     // Coercion succeeded — `args` is the object the tool's validator saw.
-    expect(args).toEqual({ from: 'bad' });
+    expect(args).toEqual({ from: "bad" });
   });
 
-  it('parses arguments from a JSON string and returns the coerced args', async () => {
+  it("parses arguments from a JSON string and returns the coerced args", async () => {
     transactionRepository.getAll.mockResolvedValueOnce([]);
 
     const { args, result } = await dispatchTool(
-      'getSpendByCategory',
-      JSON.stringify({ from: '2025-01-01', to: '2025-01-31' }),
+      "getSpendByCategory",
+      JSON.stringify({ from: "2025-01-01", to: "2025-01-31" }),
     );
 
     expect(result.ok).toBe(true);
     // The single coercion point reports back exactly what the tool ran with.
-    expect(args).toEqual({ from: '2025-01-01', to: '2025-01-31' });
+    expect(args).toEqual({ from: "2025-01-01", to: "2025-01-31" });
     expect(transactionRepository.getAll).toHaveBeenCalled();
   });
 
-  it('rejects malformed JSON argument string — raw value returned, LLM-facing error shape pinned', async () => {
-    const { args, result } = await dispatchTool('getSpendByCategory', '{not valid json');
+  it("rejects malformed JSON argument string — raw value returned, LLM-facing error shape pinned", async () => {
+    const { args, result } = await dispatchTool(
+      "getSpendByCategory",
+      "{not valid json",
+    );
     // The tool never ran; the honest record is the raw string next to the error.
-    expect(args).toBe('{not valid json');
+    expect(args).toBe("{not valid json");
     // Byte-compatible retry contract: the exact `{ok:false, error:{...}}`
     // payload the model receives (formatError over ToolValidationError).
     // `field: null` is what ToolValidationError carries when no field is
@@ -812,61 +1117,72 @@ describe('dispatchTool', () => {
     expect(result).toEqual({
       ok: false,
       error: {
-        code: 'VALIDATION_ERROR',
+        code: "VALIDATION_ERROR",
         field: null,
         message: expect.stringMatching(/^arguments is not valid JSON: /),
       },
     });
   });
 
-  it('rejects a JSON string encoding a non-object', async () => {
-    const { args, result } = await dispatchTool('getSpendByCategory', '"just a string"');
+  it("rejects a JSON string encoding a non-object", async () => {
+    const { args, result } = await dispatchTool(
+      "getSpendByCategory",
+      '"just a string"',
+    );
     expect(args).toBe('"just a string"');
     expect(result).toEqual({
       ok: false,
       error: {
-        code: 'VALIDATION_ERROR',
+        code: "VALIDATION_ERROR",
         field: null,
-        message: 'arguments must be a JSON object',
+        message: "arguments must be a JSON object",
       },
     });
   });
 
-  it('treats null arguments as empty object', async () => {
+  it("treats null arguments as empty object", async () => {
     investmentRepository.getAll.mockResolvedValueOnce([]);
 
-    const { args, result } = await dispatchTool('getPortfolioHoldings', null);
+    const { args, result } = await dispatchTool("getPortfolioHoldings", null);
 
     expect(result.ok).toBe(true);
     expect(args).toEqual({});
   });
 
-  it('getToolSchemas returns OpenAI-compatible function definitions', () => {
+  it("getToolSchemas returns OpenAI-compatible function definitions", () => {
     const schemas = getToolSchemas();
     expect(schemas.length).toBeGreaterThanOrEqual(3);
     for (const s of schemas) {
-      expect(s.type).toBe('function');
+      expect(s.type).toBe("function");
       expect(s.function.name).toBeTruthy();
       expect(s.function.parameters).toBeTruthy();
     }
   });
 
-  it('getToolNames lists registered tools', () => {
+  it("getToolNames lists registered tools", () => {
     const names = getToolNames();
-    expect(names).toEqual(expect.arrayContaining([
-      'getSpendByCategory',
-      'getMonthlySpend',
-      'getPortfolioHoldings',
-    ]));
+    expect(names).toEqual(
+      expect.arrayContaining([
+        "getSpendByCategory",
+        "getMonthlySpend",
+        "getPortfolioHoldings",
+      ]),
+    );
   });
 });
 
-describe('tool write-method denylist', () => {
+describe("tool write-method denylist", () => {
   const toolsDir = resolve(
     dirname(fileURLToPath(import.meta.url)),
-    '../src/services/aiChat/tools',
+    "../src/services/aiChat/tools",
   );
-  const toolFiles = ['expenses.js', 'portfolio.js', 'planned.js', 'tax.js', 'insights.js'];
+  const toolFiles = [
+    "expenses.js",
+    "portfolio.js",
+    "planned.js",
+    "tax.js",
+    "insights.js",
+  ];
 
   const BANNED_CALL_PATTERNS = [
     /\bcreate\s*\(/,
@@ -881,7 +1197,7 @@ describe('tool write-method denylist', () => {
 
   for (const file of toolFiles) {
     it(`${file} contains no write-method calls`, () => {
-      const source = readFileSync(resolve(toolsDir, file), 'utf8');
+      const source = readFileSync(resolve(toolsDir, file), "utf8");
       for (const pattern of BANNED_CALL_PATTERNS) {
         expect(
           pattern.test(source),
@@ -891,7 +1207,7 @@ describe('tool write-method denylist', () => {
     });
 
     it(`${file} does not import pg pool directly`, () => {
-      const source = readFileSync(resolve(toolsDir, file), 'utf8');
+      const source = readFileSync(resolve(toolsDir, file), "utf8");
       expect(
         BANNED_IMPORT_PATTERN.test(source),
         `${file} imports directly from database/connection`,
@@ -900,7 +1216,7 @@ describe('tool write-method denylist', () => {
   }
 });
 
-describe('parsePositiveInt — the AI-chat tools\' id/bound parser', () => {
+describe("parsePositiveInt — the AI-chat tools' id/bound parser", () => {
   // Was `parseInt`, the fourth copy of the truncation the :id params, the body
   // arrays and the import batch ids all lost. Here it is the worst of the four:
   // the caller is a model, so a truncated `categoryId` did not 404 or surface
@@ -909,77 +1225,79 @@ describe('parsePositiveInt — the AI-chat tools\' id/bound parser', () => {
   // caller's own bounds.
   const ID_OPTS = { min: 1, max: Number.MAX_SAFE_INTEGER };
 
-  it('accepts a plain digit string or an integer number', () => {
-    expect(parsePositiveInt('12', 'categoryId', ID_OPTS)).toBe(12);
-    expect(parsePositiveInt('007', 'categoryId', ID_OPTS)).toBe(7);
-    expect(parsePositiveInt(12, 'categoryId', ID_OPTS)).toBe(12);
+  it("accepts a plain digit string or an integer number", () => {
+    expect(parsePositiveInt("12", "categoryId", ID_OPTS)).toBe(12);
+    expect(parsePositiveInt("007", "categoryId", ID_OPTS)).toBe(7);
+    expect(parsePositiveInt(12, "categoryId", ID_OPTS)).toBe(12);
   });
 
-  it('returns the default when the value is absent', () => {
-    expect(parsePositiveInt(undefined, 'limit', { defaultValue: 20 })).toBe(20);
-    expect(parsePositiveInt(null, 'limit', { defaultValue: 20 })).toBe(20);
-    expect(parsePositiveInt(undefined, 'categoryId', ID_OPTS)).toBe(null);
+  it("returns the default when the value is absent", () => {
+    expect(parsePositiveInt(undefined, "limit", { defaultValue: 20 })).toBe(20);
+    expect(parsePositiveInt(null, "limit", { defaultValue: 20 })).toBe(20);
+    expect(parsePositiveInt(undefined, "categoryId", ID_OPTS)).toBe(null);
   });
 
-  it('rejects everything validateId rejects — no more leading-digit truncation', () => {
+  it("rejects everything validateId rejects — no more leading-digit truncation", () => {
     for (const value of [
-      '12abc',   // was 12 — the headline case
-      '12.9',    // was 12
-      ' 12 ',    // was 12
-      '1e3',     // was 1
-      '0x10',
-      '+5',
-      '12,5',
-      '1_0',
-      '',
-      'abc',
-      '١٢',
+      "12abc", // was 12 — the headline case
+      "12.9", // was 12
+      " 12 ", // was 12
+      "1e3", // was 1
+      "0x10",
+      "+5",
+      "12,5",
+      "1_0",
+      "",
+      "abc",
+      "١٢",
       12.9,
       true,
       [12],
       {},
     ]) {
       expect(
-        () => parsePositiveInt(value, 'categoryId', ID_OPTS),
+        () => parsePositiveInt(value, "categoryId", ID_OPTS),
         `expected ${JSON.stringify(value)} to be rejected`,
       ).toThrow(ToolValidationError);
     }
   });
 
-  it('still enforces the caller\'s own min/max, separately from the shape', () => {
-    expect(() => parsePositiveInt(1000, 'limit', { min: 1, max: 500 }))
-      .toThrow(/limit must be an integer between 1 and 500/);
-    expect(() => parsePositiveInt(1999, 'year', { min: 2000, max: 2100 }))
-      .toThrow(/year must be an integer between 2000 and 2100/);
-    expect(parsePositiveInt(2024, 'year', { min: 2000, max: 2100 })).toBe(2024);
-    expect(parsePositiveInt(2, 'minOccurrences', { min: 2, max: 20 })).toBe(2);
+  it("still enforces the caller's own min/max, separately from the shape", () => {
+    expect(() => parsePositiveInt(1000, "limit", { min: 1, max: 500 })).toThrow(
+      /limit must be an integer between 1 and 500/,
+    );
+    expect(() =>
+      parsePositiveInt(1999, "year", { min: 2000, max: 2100 }),
+    ).toThrow(/year must be an integer between 2000 and 2100/);
+    expect(parsePositiveInt(2024, "year", { min: 2000, max: 2100 })).toBe(2024);
+    expect(parsePositiveInt(2, "minOccurrences", { min: 2, max: 20 })).toBe(2);
   });
 
-  it('names the field and echoes what it received, so the model can correct itself', () => {
+  it("names the field and echoes what it received, so the model can correct itself", () => {
     let caught;
     try {
-      parsePositiveInt('12.9', 'categoryId', ID_OPTS);
+      parsePositiveInt("12.9", "categoryId", ID_OPTS);
     } catch (err) {
       caught = err;
     }
     expect(caught).toBeInstanceOf(ToolValidationError);
-    expect(caught.field).toBe('categoryId');
-    expect(caught.message).toContain('categoryId must be an integer');
+    expect(caught.field).toBe("categoryId");
+    expect(caught.message).toContain("categoryId must be an integer");
     expect(caught.message).toContain('"12.9"');
   });
 
-  it('a malformed id reaches the model as a VALIDATION_ERROR, not a wrong-record answer', async () => {
+  it("a malformed id reaches the model as a VALIDATION_ERROR, not a wrong-record answer", async () => {
     transactionRepository.getAll.mockResolvedValueOnce([]);
 
-    const { result } = await dispatchTool('getTransactionsInRange', {
-      from: '2025-01-01',
-      to: '2025-01-31',
-      categoryId: '12abc',
+    const { result } = await dispatchTool("getTransactionsInRange", {
+      from: "2025-01-01",
+      to: "2025-01-31",
+      categoryId: "12abc",
     });
 
     expect(result.ok).toBe(false);
-    expect(result.error.code).toBe('VALIDATION_ERROR');
-    expect(result.error.field).toBe('categoryId');
+    expect(result.error.code).toBe("VALIDATION_ERROR");
+    expect(result.error.field).toBe("categoryId");
     // The old parse would have answered 200 about category 12.
     expect(transactionRepository.getAll).not.toHaveBeenCalled();
   });
