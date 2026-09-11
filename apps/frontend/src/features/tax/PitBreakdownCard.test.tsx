@@ -13,7 +13,6 @@ const calculation = {
     federalPITBracket3: 4,
     federalPITBracket4: 5,
     federalPITBeforeExemption: 111,
-    federalPITTotal: 222,
     personalExemptionBenefit: 6,
     federalTaxCredits: 7,
     federalPITAfterReductions: 8,
@@ -24,7 +23,7 @@ const calculation = {
 } as BelgianTaxCalculation;
 
 describe("PitBreakdownCard", () => {
-    it("renders the canonical federal PIT before-exemption field, not its deprecated alias", async () => {
+    it("renders the federal PIT before-exemption field", async () => {
         renderWithApp(
             <PitBreakdownCard
                 calculation={calculation}

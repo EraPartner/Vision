@@ -216,6 +216,23 @@ const brokerageCashCategoryIdsSchema = z.strictObject({
 
 // Any plain JSON object (null/array/scalar rejected, all keys passed through).
 const jsonObjectSchema = z.looseObject({});
+const belgianTaxSnapshotMetaEntrySchema = z
+  .looseObject({
+    frozenCalculation: z.looseObject({}).optional(),
+  })
+  .superRefine((entry, ctx) => {
+    if (
+      entry.frozenCalculation &&
+      Object.hasOwn(entry.frozenCalculation, "federalPITTotal")
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["frozenCalculation", "federalPITTotal"],
+        message:
+          "legacy field is no longer accepted; use federalPITBeforeExemption",
+      });
+    }
+  });
 
 const SETTING_SCHEMAS = {
   dashboard_settings: dashboardSettingsSchema,
@@ -240,7 +257,10 @@ const SETTING_SCHEMAS = {
     z.string(),
     belgianTaxProfileSchema,
   ),
-  belgian_tax_profile_snapshot_meta_v1: z.record(z.string(), jsonObjectSchema),
+  belgian_tax_profile_snapshot_meta_v1: z.record(
+    z.string(),
+    belgianTaxSnapshotMetaEntrySchema,
+  ),
   // Remaining first-party keys, same conservative top-level-shape guards.
   // RecurringDetectionPanel stores an array of dismissed recipient ids (top-
   // level shape only — entries stay unvalidated, matching the blob guards).
@@ -482,4 +502,5 @@ router.delete(
   },
 );
 
+export { validateSettingValue as __validateSettingValue };
 export default router;

@@ -9,16 +9,16 @@
  */
 
 export type EmploymentType =
-    | 'employee'
-    | 'self_employed'
-    | 'director'
-    | 'civil_servant'
-    | 'retired'
-    | 'other';
+    | "employee"
+    | "self_employed"
+    | "director"
+    | "civil_servant"
+    | "retired"
+    | "other";
 
-export type BelgianRegion = 'flanders' | 'wallonia' | 'brussels';
-export type ProfessionalExpenseMethod = 'lump_sum' | 'actual';
-export type PensionScheme = '1050' | '1350';
+export type BelgianRegion = "flanders" | "wallonia" | "brussels";
+export type ProfessionalExpenseMethod = "lump_sum" | "actual";
+export type PensionScheme = "1050" | "1350";
 
 /**
  * Filing status for income-splitting purposes.
@@ -27,7 +27,7 @@ export type PensionScheme = '1050' | '1350';
  *  - `married_joint`: married or legal cohabitants opting for joint return. Triggers marital
  *    quotient modeling when one spouse has materially lower professional income than the other.
  */
-export type FilingStatus = 'single' | 'married_joint';
+export type FilingStatus = "single" | "married_joint";
 
 /**
  * Regional own-home credit regime. Determined by the mortgage's region and origination year.
@@ -39,9 +39,7 @@ export type FilingStatus = 'single' | 'married_joint';
  *    pre-existing Brussels and post-2020 Flemish regimes are not modeled).
  */
 export type MortgageCreditRegime =
-    | 'flemish_woonbonus'
-    | 'walloon_cheque_habitat'
-    | 'none';
+    "flemish_woonbonus" | "walloon_cheque_habitat" | "none";
 
 export interface BelgianTaxProfile {
     profileConfigured: boolean;
@@ -169,12 +167,7 @@ export interface FilingRecord {
 
 /** Discriminator for `SnapshotAuditEntry`. */
 export type SnapshotAuditEntryKind =
-    | 'created'
-    | 'patched'
-    | 'filed'
-    | 'unfiled'
-    | 'frozen'
-    | 'unfrozen';
+    "created" | "patched" | "filed" | "unfiled" | "frozen" | "unfrozen";
 
 /**
  * Audit log entry capturing a single amendment to a year's snapshot or meta. Append-only.
@@ -217,7 +210,10 @@ export interface BelgianTaxProfileSnapshotMeta {
 }
 
 /** Map of income year → `BelgianTaxProfileSnapshotMeta`. */
-export type BelgianTaxProfileSnapshotMetas = Record<number, BelgianTaxProfileSnapshotMeta>;
+export type BelgianTaxProfileSnapshotMetas = Record<
+    number,
+    BelgianTaxProfileSnapshotMeta
+>;
 
 export interface BracketTax {
     b1: number;
@@ -241,13 +237,8 @@ export interface BelgianTaxCalculation {
     federalPITBracket2: number;
     federalPITBracket3: number;
     federalPITBracket4: number;
-    /** Federal PIT before any reduction (exemption, credits). Was `federalPITTotal` pre-IY2026 fix. */
+    /** Federal PIT before any reduction (exemption, credits). */
     federalPITBeforeExemption: number;
-    /**
-     * @deprecated Old field name kept for back-compat with persisted views and tests.
-     * Equals `federalPITBeforeExemption`. New code should use `federalPITBeforeExemption`.
-     */
-    federalPITTotal: number;
     personalExemptionBenefit: number;
     federalTaxCredits: number;
     /** Regime applied for own-home credit, if any. */

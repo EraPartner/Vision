@@ -151,7 +151,7 @@ try {
     "Fresh-install no-op created exchange_rate_cache",
   );
 
-  migrate(["downgrade", "-1"], true);
+  migrate(["downgrade", "0104_drop_dormant_import_bank_resolution"], true);
   expectCount(
     await client.query("SELECT count(*) FROM exchange_rate_cache"),
     0,
@@ -169,6 +169,72 @@ try {
       "Downgrade did not restore the legacy fetched_at NOT NULL default shape",
     );
   }
+  migrate(["upgrade", "head"], true);
+
+  migrate(["downgrade", "0105_retire_legacy_exchange_rate_cache"], true);
+  await client.query(
+    `INSERT INTO user_settings (key, value)
+     VALUES ('belgian_tax_profile_snapshot_meta_v1', $1::jsonb)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+    [
+      JSON.stringify({
+        2025: {
+          frozenCalculation: {
+            federalPITBeforeExemption: 11,
+            federalPITTotal: 10,
+          },
+        },
+      }),
+    ],
+  );
+  migrate(["upgrade", "head"], false);
+  expectCount(
+    await client.query(
+      `SELECT count(*) FROM user_settings
+       WHERE key = 'belgian_tax_profile_snapshot_meta_v1'
+         AND (value #> '{2025,frozenCalculation}') ? 'federalPITTotal'`,
+    ),
+    1,
+    "Divergent-alias refusal did not preserve federalPITTotal",
+  );
+
+  await client.query(
+    `UPDATE user_settings
+        SET value = $1::jsonb
+      WHERE key = 'belgian_tax_profile_snapshot_meta_v1'`,
+    [
+      JSON.stringify({
+        2025: {
+          status: "frozen",
+          frozenCalculation: {
+            federalPITBeforeExemption: 10,
+            federalPITTotal: 10,
+            totalPIT: 8,
+          },
+        },
+      }),
+    ],
+  );
+  migrate(["upgrade", "head"], true);
+  expectCount(
+    await client.query(
+      `SELECT count(*) FROM user_settings
+       WHERE key = 'belgian_tax_profile_snapshot_meta_v1'
+         AND (value #> '{2025,frozenCalculation}') ? 'federalPITTotal'`,
+    ),
+    0,
+    "Successful upgrade did not remove federalPITTotal",
+  );
+  migrate(["downgrade", "0105_retire_legacy_exchange_rate_cache"], true);
+  expectCount(
+    await client.query(
+      `SELECT count(*) FROM user_settings
+       WHERE key = 'belgian_tax_profile_snapshot_meta_v1'
+         AND (value #> '{2025,frozenCalculation,federalPITTotal}') = '10'::jsonb`,
+    ),
+    1,
+    "Downgrade did not recreate federalPITTotal from the canonical value",
+  );
   migrate(["upgrade", "head"], true);
 
   migrate(["downgrade", "0103_import_identity_provenance"], true);
@@ -189,7 +255,7 @@ try {
   migrate(["upgrade", "head"], true);
 
   console.log(
-    "Guarded bank-resolution and exchange-cache retirement lifecycles passed.",
+    "Guarded bank-resolution, exchange-cache, and federal-PIT-alias retirement lifecycles passed.",
   );
 } finally {
   await client.end();
