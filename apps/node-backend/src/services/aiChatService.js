@@ -15,7 +15,7 @@
  * Also emits a `tool_call` event before each dispatch (progress affordance
  * for slow tools) carrying the model's args when they are already a plain
  * object, else `{}`. Every service event already uses the public SSE name and
- * payload; the terminal assistant row is carried only by the route's `done` frame.
+ * payload; the terminal assistant row is carried only by the route's `complete` frame.
  *
  * Tool-call argument coercion lives in exactly one place: `dispatchTool`
  * (services/aiChat/tools/index.js). This module passes the model's raw
@@ -669,7 +669,7 @@ async function runChatTurnLocked({
 /**
  * Thin wrappers around the repository for route handlers.
  */
-export async function listConversations(page = null) {
+export async function listConversations(page) {
   return aiChatRepository.listConversations(page);
 }
 

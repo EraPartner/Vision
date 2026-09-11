@@ -13,7 +13,7 @@ import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { aiChatStreamStore, type SendBody } from "@/lib/aiChatStreamStore";
 import type {
-    ChatDoneEvent,
+    ChatCompleteEvent,
     ConversationDetail,
     CreateConversationBody,
 } from "@/types/aiChat";
@@ -145,7 +145,7 @@ export function useSendChatMessage(conversationId: string | null) {
     const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
     const send = useCallback(
-        (body: SendBody): Promise<ChatDoneEvent | null> => {
+        (body: SendBody): Promise<ChatCompleteEvent | null> => {
             return aiChatStreamStore.send(body, queryClient, (error) => {
                 toast.error(t("aiChat.sendFailed"), {
                     description: apiErrorToMessage(error, t),

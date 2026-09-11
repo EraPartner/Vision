@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { AI_CHAT_STREAM_EVENT } from "@vision/types/aiChat";
 import type {
-    ChatDoneEvent,
+    ChatCompleteEvent,
     ChatMessage,
     ChatStreamEvent,
     Conversation,
@@ -46,9 +46,9 @@ const toolCallEventSchema = z.looseObject({
     args: z.record(z.string(), z.unknown()).optional(),
 });
 
-// Terminal `done` payloads are deliberately only object-gated: consumers
+// Terminal `complete` payloads are deliberately only object-gated: consumers
 // (and existing tests) accept sparse payloads here.
-const doneEventSchema = z.looseObject({});
+const completeEventSchema = z.looseObject({});
 
 const errorEventSchema = z
     .looseObject({
@@ -74,7 +74,7 @@ export interface ConversationPage {
     offset: number;
 }
 
-/** The shipped client opts into bounded pages; unpaged compatibility stays server-side. */
+/** The client requests an explicit page; the server also bounds omitted pagination. */
 export async function getConversations({
     limit = 50,
     offset = 0,
@@ -119,7 +119,10 @@ export async function deleteConversation(id: string): Promise<void> {
 export function streamChat(
     body: SendChatBody,
     onEvent: (event: ChatStreamEvent) => void,
-): { abort: () => void; result: Promise<ChatStreamEvent & { type: "done" }> } {
+): {
+    abort: () => void;
+    result: Promise<ChatStreamEvent & { type: "complete" }>;
+} {
     const controller = new AbortController();
     const url = `${API_BASE_URL}/api/ai/chat/stream`;
 
@@ -173,13 +176,12 @@ export function streamChat(
                     message: parsed.data.message as unknown as ChatMessage,
                 };
             }
-            case AI_CHAT_STREAM_EVENT.COMPLETE:
-            case AI_CHAT_STREAM_EVENT.DONE: {
-                const parsed = doneEventSchema.safeParse(payload);
+            case AI_CHAT_STREAM_EVENT.COMPLETE: {
+                const parsed = completeEventSchema.safeParse(payload);
                 if (!parsed.success) return undefined;
                 return {
-                    type: AI_CHAT_STREAM_EVENT.DONE,
-                    payload: parsed.data as unknown as ChatDoneEvent,
+                    type: AI_CHAT_STREAM_EVENT.COMPLETE,
+                    payload: parsed.data as unknown as ChatCompleteEvent,
                 };
             }
             case AI_CHAT_STREAM_EVENT.ERROR: {
@@ -197,7 +199,9 @@ export function streamChat(
         }
     };
 
-    const result = (async (): Promise<ChatStreamEvent & { type: "done" }> => {
+    const result = (async (): Promise<
+        ChatStreamEvent & { type: "complete" }
+    > => {
         const start = Date.now();
         let timedOut = false;
         let watchdog: ReturnType<typeof setTimeout> | undefined;
@@ -234,20 +238,21 @@ export function streamChat(
                 throw await parseEnvelopeError(response, "Chat stream failed");
             }
 
-            let terminal: (ChatStreamEvent & { type: "done" }) | null = null;
+            let terminal: (ChatStreamEvent & { type: "complete" }) | null =
+                null;
             let terminalError: { detail: string; code?: string } | null = null;
 
             for await (const frame of readSseFrames(response)) {
                 armWatchdog();
                 const event = decodeEvent(frame.eventName, frame.dataRaw);
                 if (!event) continue;
-                if (event.type === "done" && terminal) continue;
+                if (event.type === "complete" && terminal) continue;
                 logger.debug("[ai] streamChat event", {
                     type: event.type,
                     ms: Date.now() - start,
                 });
                 onEvent(event);
-                if (event.type === "done") terminal = event;
+                if (event.type === "complete") terminal = event;
                 if (event.type === "error")
                     terminalError = { detail: event.detail, code: event.code };
             }

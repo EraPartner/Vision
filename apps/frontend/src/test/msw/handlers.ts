@@ -70,7 +70,6 @@ export function noContent() {
 export const TRANSACTION_STUB = {
     id: 1,
     transaction_date: "2025-01-15",
-    date: "2025-01-15",
     bank_account: "BE12345678901234",
     recipient_id: 1,
     recipient_name: "Test Recipient",
@@ -771,9 +770,6 @@ export const defaultHandlers = [
     http.delete(`${API_BASE}/api/attachments/:id`, () => noContent()),
 
     // Categories sub-routes
-    http.post(`${API_BASE}/api/categories/assign`, () =>
-        ok({ message: "Assigned", count: 0 }),
-    ),
     http.post(`${API_BASE}/api/categories/:id/assign`, () =>
         ok({ message: "Assigned", count: 0 }),
     ),

@@ -949,7 +949,6 @@ function formatTransaction(row) {
     // DATE column: emit the calendar day, not the raw pg Date (which JSON-
     // serializes as the previous day's ISO timestamp east of UTC).
     transaction_date: toWireDate(row.date),
-    date: toWireDate(row.date),
     bank_account: row.bank_account,
     recipient_id: row.recipient_id,
     recipient_name: row.recipient_name || null,
@@ -978,4 +977,5 @@ function formatTransaction(row) {
   };
 }
 
+export { formatTransaction as __formatTransaction };
 export default router;

@@ -254,7 +254,7 @@ describe("streamChat SSE handling", () => {
         await rejection;
     });
 
-    it("parses token, user_message, tool_call, tool_result and done events", async () => {
+    it("parses token, user_message, tool_call, tool_result and complete events", async () => {
         const wire =
             [
                 'event: user_message\ndata: {"message":{"role":"user","content":"hi"}}',
@@ -262,7 +262,7 @@ describe("streamChat SSE handling", () => {
                 'event: token\ndata: "lo"',
                 'event: tool_call\ndata: {"name":"search","args":{"q":"x"}}',
                 'event: tool_result\ndata: {"message":{"role":"tool","content":"ok"}}',
-                'event: done\ndata: {"finishReason":"stop"}',
+                'event: complete\ndata: {"finishReason":"stop"}',
             ].join("\n\n") + "\n\n";
 
         vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
@@ -279,12 +279,12 @@ describe("streamChat SSE handling", () => {
             "token",
             "tool_call",
             "tool_result",
-            "done",
+            "complete",
         ]);
-        expect(terminal.type).toBe("done");
+        expect(terminal.type).toBe("complete");
     });
 
-    it("normalizes complete and deduplicates the following done compatibility alias", async () => {
+    it("accepts the canonical complete terminal event", async () => {
         const payload = {
             conversation: {},
             assistantMessage: {},
@@ -292,9 +292,7 @@ describe("streamChat SSE handling", () => {
             iterations: 1,
         };
         const data = JSON.stringify(payload);
-        const wire =
-            `event: complete\ndata: ${data}\n\n` +
-            `event: done\ndata: ${data}\n\n`;
+        const wire = `event: complete\ndata: ${data}\n\n`;
         vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
 
         const events: string[] = [];
@@ -302,11 +300,14 @@ describe("streamChat SSE handling", () => {
             events.push(event.type),
         );
 
-        await expect(result).resolves.toMatchObject({ type: "done", payload });
-        expect(events).toEqual(["done"]);
+        await expect(result).resolves.toMatchObject({
+            type: "complete",
+            payload,
+        });
+        expect(events).toEqual(["complete"]);
     });
 
-    it("still accepts a legacy server that emits only done", async () => {
+    it("rejects a legacy server that emits only done", async () => {
         const wire = "event: done\ndata: {}\n\n";
         vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
 
@@ -315,8 +316,10 @@ describe("streamChat SSE handling", () => {
             events.push(event.type),
         );
 
-        await expect(result).resolves.toMatchObject({ type: "done" });
-        expect(events).toEqual(["done"]);
+        await expect(result).rejects.toThrow(
+            /Stream ended without terminal event/,
+        );
+        expect(events).toEqual([]);
     });
 
     it("passes the user_message payload's message object through unchanged", async () => {
@@ -332,7 +335,7 @@ describe("streamChat SSE handling", () => {
         };
         const wire =
             `event: user_message\ndata: ${JSON.stringify({ message })}\n\n` +
-            "event: done\ndata: {}\n\n";
+            "event: complete\ndata: {}\n\n";
         vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
 
         const captured: Array<{ type: string; message?: unknown }> = [];
@@ -347,7 +350,7 @@ describe("streamChat SSE handling", () => {
 
     it("ignores unknown event names", async () => {
         const wire =
-            'event: telemetry\ndata: {"x":1}\n\nevent: done\ndata: {}\n\n';
+            'event: telemetry\ndata: {"x":1}\n\nevent: complete\ndata: {}\n\n';
         vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
 
         const events: string[] = [];
@@ -355,12 +358,12 @@ describe("streamChat SSE handling", () => {
             events.push(e.type),
         );
         await result;
-        expect(events).toEqual(["done"]);
+        expect(events).toEqual(["complete"]);
     });
 
     it("decodes a non-JSON token payload as a raw string", async () => {
         const wire =
-            "event: token\ndata: plain text token\n\nevent: done\ndata: {}\n\n";
+            "event: token\ndata: plain text token\n\nevent: complete\ndata: {}\n\n";
         vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
 
         const captured: Array<{ type: string; delta?: string }> = [];
@@ -375,7 +378,7 @@ describe("streamChat SSE handling", () => {
 
     it("drops a user_message event whose message is not an object", async () => {
         const wire =
-            'event: user_message\ndata: {"message":"not-an-object"}\n\nevent: done\ndata: {}\n\n';
+            'event: user_message\ndata: {"message":"not-an-object"}\n\nevent: complete\ndata: {}\n\n';
         vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
 
         const events: string[] = [];
@@ -383,12 +386,12 @@ describe("streamChat SSE handling", () => {
             events.push(e.type),
         );
         await result;
-        expect(events).toEqual(["done"]);
+        expect(events).toEqual(["complete"]);
     });
 
     it("drops a tool_call event without a string name", async () => {
         const wire =
-            'event: tool_call\ndata: {"args":{"q":"x"}}\n\nevent: done\ndata: {}\n\n';
+            'event: tool_call\ndata: {"args":{"q":"x"}}\n\nevent: complete\ndata: {}\n\n';
         vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
 
         const events: string[] = [];
@@ -396,11 +399,11 @@ describe("streamChat SSE handling", () => {
             events.push(e.type),
         );
         await result;
-        expect(events).toEqual(["done"]);
+        expect(events).toEqual(["complete"]);
     });
 
-    it("drops a done event whose payload is not an object", async () => {
-        const wire = 'event: done\ndata: "finished"\n\n';
+    it("drops a complete event whose payload is not an object", async () => {
+        const wire = 'event: complete\ndata: "finished"\n\n';
         vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
 
         const { result } = streamChat({ message: "hi" } as never, () => {});

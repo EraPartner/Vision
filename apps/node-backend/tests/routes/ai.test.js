@@ -152,7 +152,7 @@ describe("POST /api/ai/chat/stream", () => {
     expect(res.headers["content-type"]).toMatch(/json/);
   });
 
-  it("streams canonical complete then the deprecated done compatibility alias", async () => {
+  it("streams the canonical complete terminal event", async () => {
     const userMsg = { id: "u1", role: "user", content: "hi" };
     const toolMsg = {
       id: "t1",
@@ -210,7 +210,6 @@ describe("POST /api/ai/chat/stream", () => {
       "tool_call",
       "tool_result",
       "complete",
-      "done",
     ]);
 
     expect(frames[0].data).toEqual({ message: userMsg });
@@ -222,12 +221,10 @@ describe("POST /api/ai/chat/stream", () => {
     expect(frames[5].data).toEqual({ message: toolMsg });
 
     const completePayload = frames[6].data;
-    const donePayload = frames[7].data;
-    expect(donePayload).toEqual(completePayload);
-    expect(donePayload.conversation).toEqual(conversation);
-    expect(donePayload.assistantMessage).toEqual(assistantMsg);
-    expect(donePayload.usage.evalCount).toBe(10);
-    expect(donePayload.iterations).toBe(2);
+    expect(completePayload.conversation).toEqual(conversation);
+    expect(completePayload.assistantMessage).toEqual(assistantMsg);
+    expect(completePayload.usage.evalCount).toBe(10);
+    expect(completePayload.iterations).toBe(2);
   });
 
   it("passes AbortSignal to runChatTurn and streams with streaming:true", async () => {
@@ -269,7 +266,7 @@ describe("POST /api/ai/chat/stream", () => {
       detail: "Model unavailable",
       code: "OLLAMA_UNREACHABLE",
     });
-    expect(frames.some((f) => f.name === "done")).toBe(false);
+    expect(frames.some((f) => f.name === "complete")).toBe(false);
   });
 
   it("emits generic error SSE event on unexpected failure", async () => {
@@ -351,7 +348,7 @@ describe("POST /api/ai/chat/stream", () => {
 
     const eventNames = parseSseFrames(res.text).map((f) => f.name);
     expect(eventNames).toContain("tool_result");
-    expect(eventNames).toContain("done");
+    expect(eventNames).toContain("complete");
   });
 });
 
@@ -634,10 +631,9 @@ describe("POST /api/ai/chat body validation", () => {
 describe("AI conversation routes validation", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  // Optional pagination preserves the historical unbounded response when no
-  // params are supplied, while bounded callers receive limit/offset metadata.
+  // Conversation history is always bounded, including when parameters are omitted.
   describe("GET /conversations", () => {
-    it("returns the legacy full-list shape and calls the service with null", async () => {
+    it("returns the default first page when pagination is omitted", async () => {
       const rows = [
         { id: UUID, title: "One" },
         { id: UUID, title: "Two" },
@@ -645,15 +641,19 @@ describe("AI conversation routes validation", () => {
       listConversations.mockResolvedValue({ items: rows, total: 2 });
 
       const res = await api.get(`${BASE}/conversations`).expect(200);
-      expect(res.body).toEqual(okEnvelope({ items: rows, total: 2 }));
-      expect(listConversations).toHaveBeenCalledWith(null);
+      expect(res.body).toEqual(
+        okEnvelope({ items: rows, total: 2, limit: 50, offset: 0 }),
+      );
+      expect(listConversations).toHaveBeenCalledWith({ limit: 50, offset: 0 });
     });
 
     it("reports total 0 for an empty list", async () => {
       listConversations.mockResolvedValue({ items: [], total: 0 });
 
       const res = await api.get(`${BASE}/conversations`).expect(200);
-      expect(res.body).toEqual(okEnvelope({ items: [], total: 0 }));
+      expect(res.body).toEqual(
+        okEnvelope({ items: [], total: 0, limit: 50, offset: 0 }),
+      );
     });
 
     it("returns page metadata and forwards parsed limit/offset", async () => {

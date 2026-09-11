@@ -4,8 +4,6 @@ export declare const AI_CHAT_STREAM_EVENT: Readonly<{
   TOOL_CALL: "tool_call";
   TOOL_RESULT: "tool_result";
   COMPLETE: "complete";
-  /** @deprecated Compatibility alias for AI clients predating the shared terminal event name. */
-  DONE: "done";
   ERROR: "error";
 }>;
 
@@ -52,7 +50,7 @@ export interface AiChatWireUsage {
   totalDurationMs: number | null;
 }
 
-export interface AiChatDonePayload<
+export interface AiChatCompletePayload<
   TMessage = AiChatWireMessage,
   TConversation = AiChatWireConversation,
   TUsage = AiChatWireUsage,
@@ -81,7 +79,7 @@ export type AiChatStreamEvent<
   | { type: "tool_call"; name: string; args: Record<string, unknown> }
   | { type: "tool_result"; message: TMessage }
   | {
-      type: "done";
-      payload: AiChatDonePayload<TMessage, TConversation, TUsage>;
+      type: "complete";
+      payload: AiChatCompletePayload<TMessage, TConversation, TUsage>;
     }
   | { type: "error"; detail: string; code?: string };

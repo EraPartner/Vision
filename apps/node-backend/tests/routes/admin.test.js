@@ -243,18 +243,27 @@ describe("Admin Routes", () => {
       expect(res.body).toEqual(expect.objectContaining({ ok: true }));
     });
 
-    it("keeps query force=true as a compatibility fallback", async () => {
+    it("rejects query-only force confirmation", async () => {
       settings.admin.enableResetDb = true;
 
-      await api.post(`${BASE}/database/reset?force=true`).expect(200);
+      await api.post(`${BASE}/database/reset?force=true`).expect(400);
     });
 
-    it("lets an explicit body value override the legacy query parameter", async () => {
+    it("ignores the query parameter when the body confirms reset", async () => {
       settings.admin.enableResetDb = true;
 
       await api
-        .post(`${BASE}/database/reset?force=true`)
-        .send({ force: false })
+        .post(`${BASE}/database/reset?force=false`)
+        .send({ force: true })
+        .expect(200);
+    });
+
+    it("rejects string force values in the JSON body", async () => {
+      settings.admin.enableResetDb = true;
+
+      await api
+        .post(`${BASE}/database/reset`)
+        .send({ force: "true" })
         .expect(400);
     });
   });

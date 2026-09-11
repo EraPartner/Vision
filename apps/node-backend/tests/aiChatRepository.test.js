@@ -9,17 +9,6 @@ import { aiChatRepository } from "../src/repositories/aiChatRepository.js";
 describe("aiChatRepository.listConversations", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("preserves the historical unbounded query when pagination is omitted", async () => {
-    query.mockResolvedValue({ rows: [{ id: "a" }, { id: "b" }] });
-
-    await expect(aiChatRepository.listConversations()).resolves.toEqual({
-      items: [{ id: "a" }, { id: "b" }],
-      total: 2,
-    });
-    expect(query).toHaveBeenCalledOnce();
-    expect(query.mock.calls[0][0]).not.toContain("LIMIT");
-  });
-
   it("uses a bounded page and a separate full count", async () => {
     query
       .mockResolvedValueOnce({ rows: [{ id: "c" }] })

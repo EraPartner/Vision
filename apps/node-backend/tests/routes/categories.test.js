@@ -263,80 +263,19 @@ describe("Category Routes", () => {
     });
   });
 
-  // ── POST /assign (standalone by name) ──────────────────────
-  describe("POST /assign (standalone)", () => {
-    it("should assign category by general:detail name", async () => {
-      categoryRepository.createOrGet.mockResolvedValue({
-        category: { id: 5, general: "GROCERIES", detail: "FOOD" },
-        created: false,
-      });
-      categoryRepository.assignToRecipients.mockResolvedValue(3);
-
-      const res = await api
-        .post(`${BASE}/assign`)
-        .send({
-          category_general: "GROCERIES",
-          category_detail: "FOOD",
-          recipient_ids: [1, 2, 3],
-        })
-        .expect(200);
-      expect(res.body.data.updated_recipients).toBe(3);
-    });
-
-    it("should return a 400 VALIDATION_ERROR envelope for missing category_general", async () => {
-      const res = await api
-        .post(`${BASE}/assign`)
-        .send({ category_detail: "FOOD", recipient_ids: [1] })
-        .expect(400);
-      expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
-    });
-
-    it("should return a 400 VALIDATION_ERROR envelope for missing category_detail", async () => {
-      const res = await api
-        .post(`${BASE}/assign`)
-        .send({ category_general: "GROCERIES", recipient_ids: [1] })
-        .expect(400);
-      expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
-    });
-
-    it("should return a 400 VALIDATION_ERROR envelope for missing recipient_ids", async () => {
-      const res = await api
-        .post(`${BASE}/assign`)
-        .send({ category_general: "GROCERIES", category_detail: "FOOD" })
-        .expect(400);
-      expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
-    });
-
-    it("should handle single recipient_id (not array)", async () => {
-      categoryRepository.createOrGet.mockResolvedValue({
-        category: { id: 5, general: "GROCERIES", detail: "FOOD" },
-        created: false,
-      });
-      categoryRepository.assignToRecipients.mockResolvedValue(1);
-
-      const res = await api
-        .post(`${BASE}/assign`)
-        .send({
-          category_general: "GROCERIES",
-          category_detail: "FOOD",
-          recipient_ids: 42,
-        })
-        .expect(200);
-      expect(res.body.data.updated_recipients).toBe(1);
-    });
-
-    it("should propagate a 500 when the DB throws", async () => {
-      categoryRepository.createOrGet.mockRejectedValue(new Error("DB error"));
-
-      const res = await api
+  describe("removed POST /assign compatibility route", () => {
+    it("returns 404 without resolving or assigning a category", async () => {
+      await api
         .post(`${BASE}/assign`)
         .send({
           category_general: "GROCERIES",
           category_detail: "FOOD",
           recipient_ids: [1],
         })
-        .expect(500);
-      expect(res.body.error.message).toBe("DB error");
+        .expect(404);
+
+      expect(categoryRepository.createOrGet).not.toHaveBeenCalled();
+      expect(categoryRepository.assignToRecipients).not.toHaveBeenCalled();
     });
   });
 

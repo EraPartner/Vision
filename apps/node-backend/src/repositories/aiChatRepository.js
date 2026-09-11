@@ -52,19 +52,10 @@ function serializeJsonb(value) {
 
 const aiChatRepository = {
   /**
-   * @param {{ limit: number, offset: number }|null} [page]
+   * @param {{ limit: number, offset: number }} page
    * @returns {Promise<{items: AiConversationRow[], total: number}>}
    */
-  async listConversations(page = null) {
-    if (!page) {
-      const result = await query(
-        `SELECT ${CONVERSATION_COLUMNS}
-           FROM ai_conversations
-          ORDER BY updated_at DESC`,
-      );
-      return { items: result.rows, total: result.rows.length };
-    }
-
+  async listConversations(page) {
     const [itemsResult, countResult] = await Promise.all([
       query(
         `SELECT ${CONVERSATION_COLUMNS}

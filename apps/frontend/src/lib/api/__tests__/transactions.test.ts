@@ -16,18 +16,14 @@ import {
 afterEach(() => server.resetHandlers());
 
 describe("transactions API client", () => {
-    it("getTransactions joins category_ids and backfills transaction_date from date", async () => {
+    it("getTransactions joins category_ids and accepts canonical transaction dates", async () => {
         let url = "";
         server.use(
             http.get(`${API_BASE}/api/transactions`, ({ request }) => {
                 url = request.url;
                 return ok({
-                    items: [
-                        { id: 1, transaction_date: "2026-01-01" },
-                        { id: 2, date: "2026-02-02" }, // legacy `date` field, no transaction_date
-                        { id: 3 }, // neither -> ''
-                    ],
-                    total: 3,
+                    items: [{ id: 1, transaction_date: "2026-01-01" }],
+                    total: 1,
                 });
             }),
         );
@@ -39,8 +35,18 @@ describe("transactions API client", () => {
 
         expect(url).toContain("category_ids=4%2C5"); // "4,5" encoded
         expect(res.items[0].transaction_date).toBe("2026-01-01");
-        expect(res.items[1].transaction_date).toBe("2026-02-02");
-        expect(res.items[2].transaction_date).toBe("");
+    });
+
+    it("rejects a response without the canonical transaction_date", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/transactions`, () =>
+                ok({ items: [{ id: 2, date: "2026-02-02" }], total: 1 }),
+            ),
+        );
+
+        await expect(getTransactions()).rejects.toThrow(
+            "items[0].transaction_date must be a non-empty string",
+        );
     });
 
     it("createTransaction POSTs", async () => {

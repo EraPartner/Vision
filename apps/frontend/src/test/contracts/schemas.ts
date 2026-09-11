@@ -13,7 +13,10 @@ export const paginatedOf = <T extends z.ZodTypeAny>(item: T) =>
 
 /** `{ items, total }` — the canonical body for unpaginated collection GETs. */
 export const collectionSchema = (item: z.ZodTypeAny = z.unknown()) =>
-    z.strictObject({ items: z.array(item), total: z.number().int().nonnegative() });
+    z.strictObject({
+        items: z.array(item),
+        total: z.number().int().nonnegative(),
+    });
 
 export const CategoryItemSchema = z.strictObject({
     id: z.number().int().positive(),
@@ -43,7 +46,6 @@ export const RecipientItemSchema = z.strictObject({
 export const TransactionItemSchema = z.strictObject({
     id: z.number().int().positive(),
     transaction_date: z.string(),
-    date: z.string(),
     bank_account: z.string(),
     recipient_id: z.number().int().positive().nullable(),
     recipient_name: z.string().nullable(),

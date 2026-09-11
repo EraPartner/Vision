@@ -5,8 +5,6 @@ export const AI_CHAT_STREAM_EVENT = Object.freeze({
   TOOL_CALL: "tool_call",
   TOOL_RESULT: "tool_result",
   COMPLETE: "complete",
-  /** @deprecated Compatibility alias for AI clients predating the shared terminal event name. */
-  DONE: "done",
   ERROR: "error",
 });
 

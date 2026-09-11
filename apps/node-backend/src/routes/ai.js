@@ -25,7 +25,6 @@
  *                                            raw value next to the error)
  *   - tool_result        {message}         — tool row persisted (result in .tool_result)
  *   - complete           {assistantMessage, usage, iterations, conversation}
- *   - done               same payload; deprecated compatibility alias
  *   - error              {detail, code}
  *
  * JSON responses use the unified envelope (ADR-026). The SSE stream keeps
@@ -52,7 +51,7 @@ import {
 } from "../services/aiChatService.js";
 import { ApiErrorCode } from "@vision/types/errors";
 import { AI_CHAT_STREAM_EVENT } from "@vision/types/aiChat";
-import { listBody, parseOptionalPagination } from "../lib/pagination.js";
+import { listBody, parsePagination } from "../lib/pagination.js";
 import {
   AppError,
   NotFoundError,
@@ -270,15 +269,15 @@ router.get(
 
 // GET /api/ai/conversations
 //
-// Pagination is opt-in for compatibility. No params preserve the historical
-// full list; the shipped frontend always requests a bounded page.
+// Conversation history is always bounded. Callers may omit pagination and
+// receive the documented first page.
 router.get(
   "/conversations",
   /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
     req,
     res,
   ) => {
-    const page = parseOptionalPagination(req.query, {
+    const page = parsePagination(req.query, {
       defaultLimit: 50,
       maxLimit: 200,
     });
@@ -444,9 +443,6 @@ router.post(
           iterations: turn.iterations,
         };
         await writer.write(AI_CHAT_STREAM_EVENT.COMPLETE, terminalPayload);
-        // Compatibility window: old AI clients ignore `complete` and still
-        // terminate on `done`. New clients normalize and deduplicate both.
-        await writer.write(AI_CHAT_STREAM_EVENT.DONE, terminalPayload);
         writer.end();
       }
     } catch (err) {

@@ -11,15 +11,13 @@ describe("parseAggregationDateRange", () => {
     ).toEqual({ startDate: "2024-10-01", endDate: "2026-09-07" });
   });
 
-  it("accepts legacy aliases while canonical keys take precedence", () => {
-    expect(
+  it("rejects the retired start/end aliases", () => {
+    expect(() =>
       parseAggregationDateRange({
         start: "2020-01-01",
         end: "2020-12-31",
-        start_date: "2024-10-01",
-        end_date: "2026-09-07",
       }),
-    ).toEqual({ startDate: "2024-10-01", endDate: "2026-09-07" });
+    ).toThrow(/no longer supported/);
   });
 
   it("rejects malformed and reversed ranges", () => {

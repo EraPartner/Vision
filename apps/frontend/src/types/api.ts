@@ -224,7 +224,7 @@ export interface RecipientUpdate {
 
 export interface Transaction {
     id: number;
-    transaction_date: string; // date field, aliased as "date" in API
+    transaction_date: string;
     // Nullable on the wire: rows without a label exist (e.g. ADR-090 trade
     // cash legs), and a PATCH null-to-clear leaves NULL behind.
     bank_account: string | null;

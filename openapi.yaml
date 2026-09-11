@@ -4889,54 +4889,6 @@ paths:
                 type: string
 
   # ─── Categories extra ────────────────────────────────────────────────────────
-  /api/categories/assign:
-    post:
-      summary: Assign a name-resolved category to recipients (deprecated)
-      description: >-
-        Compatibility endpoint that resolves or creates a category from category_general and
-        category_detail, then assigns it to recipient_ids. New callers should resolve the category
-        first and use POST /api/categories/{id}/assign.
-      deprecated: true
-      operationId: bulkAssignCategory
-      tags: [Categories]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [category_general, category_detail, recipient_ids]
-              properties:
-                category_general:
-                  type: string
-                category_detail:
-                  type: string
-                recipient_ids:
-                  oneOf:
-                    - type: integer
-                    - type: array
-                      items:
-                        type: integer
-      responses:
-        "200":
-          description: Assignment result
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: "#/components/schemas/Envelope"
-                  - type: object
-                    properties:
-                      data:
-                        type: object
-                        required: [updated_recipients, links]
-                        properties:
-                          updated_recipients:
-                            type: integer
-                          links:
-                            type: array
-                            items: {}
-
   /api/categories/{id}/assign:
     parameters:
       - in: path
@@ -6341,27 +6293,13 @@ paths:
             enum: [monthly, yearly]
         - in: query
           name: start_date
-          description: Inclusive start date. Preferred over the deprecated `start` alias when both are present.
+          description: Inclusive start date.
           schema:
             type: string
             format: date
         - in: query
           name: end_date
-          description: Inclusive end date. Preferred over the deprecated `end` alias when both are present.
-          schema:
-            type: string
-            format: date
-        - in: query
-          name: start
-          deprecated: true
-          description: Deprecated alias for `start_date`.
-          schema:
-            type: string
-            format: date
-        - in: query
-          name: end
-          deprecated: true
-          description: Deprecated alias for `end_date`.
+          description: Inclusive end date.
           schema:
             type: string
             format: date
@@ -6383,7 +6321,7 @@ paths:
       description: >
         Per-tag, per-period spending breakdown (expenses only, internal
         transfers excluded). Pass explicit tag_ids[] for a specific selection,
-        or all=true (alias all_tags=true) to return every active tag in the
+        or all=true to return every active tag in the
         workspace. With neither, the pivot is empty. A transaction carrying
         several selected tags counts toward each tag's total independently.
         Used by custom saved charts with tag series; the frontend caps results
@@ -6400,7 +6338,7 @@ paths:
               type: integer
         - in: query
           name: all
-          description: "When true, returns all active tags; tag_ids is ignored. Alias: all_tags."
+          description: "When true, returns all active tags; tag_ids is ignored."
           schema:
             type: boolean
         - in: query
@@ -6410,27 +6348,13 @@ paths:
             enum: [monthly, yearly]
         - in: query
           name: start_date
-          description: Inclusive start date. Preferred over the deprecated `start` alias when both are present.
+          description: Inclusive start date.
           schema:
             type: string
             format: date
         - in: query
           name: end_date
-          description: Inclusive end date. Preferred over the deprecated `end` alias when both are present.
-          schema:
-            type: string
-            format: date
-        - in: query
-          name: start
-          deprecated: true
-          description: Deprecated alias for `start_date`.
-          schema:
-            type: string
-            format: date
-        - in: query
-          name: end
-          deprecated: true
-          description: Deprecated alias for `end_date`.
+          description: Inclusive end date.
           schema:
             type: string
             format: date
@@ -7824,13 +7748,15 @@ paths:
             type: integer
             minimum: 1
             maximum: 200
-          description: Optional page size. Omit both parameters for the legacy full list; when either is supplied, a missing or invalid limit falls back to 50.
+            default: 50
+          description: Page size. Missing or invalid values use 50; values above 200 are capped.
         - in: query
           name: offset
           schema:
             type: integer
             minimum: 0
-          description: Optional zero-based row offset. When pagination is requested, a missing or invalid offset falls back to 0.
+            default: 0
+          description: Zero-based row offset. Missing or invalid values use 0.
       responses:
         "200":
           description: Conversation list
@@ -7843,7 +7769,7 @@ paths:
                     properties:
                       data:
                         type: object
-                        required: [items, total]
+                        required: [items, total, limit, offset]
                         properties:
                           items:
                             type: array
@@ -7853,10 +7779,8 @@ paths:
                             type: integer
                           limit:
                             type: integer
-                            description: Present only when pagination was requested.
                           offset:
                             type: integer
-                            description: Present only when pagination was requested.
     post:
       summary: Create AI conversation
       operationId: createAiConversation
@@ -8046,9 +7970,8 @@ paths:
       responses:
         "200":
           description: >-
-            Server-sent event stream. Success terminates with canonical `complete`
-            followed by the byte-equivalent deprecated `done` compatibility alias;
-            new clients deduplicate them. Errors carry `{detail, code}`.
+            Server-sent event stream. Success terminates with the canonical `complete`
+            event. Errors carry `{detail, code}`.
           content:
             text/event-stream:
               schema:
@@ -9145,21 +9068,13 @@ paths:
       summary: Reset database (destructive — drops all data)
       operationId: adminDatabaseReset
       tags: [Admin]
-      parameters:
-        - in: query
-          name: force
-          required: false
-          deprecated: true
-          schema:
-            type: boolean
-            enum: [true]
-          description: Compatibility fallback; the JSON body key wins when present.
       requestBody:
-        required: false
+        required: true
         content:
           application/json:
             schema:
               type: object
+              required: [force]
               properties:
                 force:
                   type: boolean

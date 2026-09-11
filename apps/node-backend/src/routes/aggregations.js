@@ -492,14 +492,17 @@ router.get(
     req,
     res,
   ) => {
+    if (req.query.all_tags !== undefined) {
+      throw new ValidationError(
+        'Use "all"; the "all_tags" query parameter is no longer supported',
+      );
+    }
     const bucket = ["monthly", "yearly"].includes(req.query.bucket)
       ? req.query.bucket
       : "monthly";
     const { startDate, endDate } = parseAggregationDateRange(req.query);
     const tagIds = parseIdArrayQueryParam(req.query.tag_ids, "tag_ids");
-    const allTags =
-      parseBooleanQueryParam(req.query.all) ||
-      parseBooleanQueryParam(req.query.all_tags);
+    const allTags = parseBooleanQueryParam(req.query.all);
     const { data, meta } = await computeTagPivot({
       targetCurrency: getTargetCurrency(req),
       bucket,

@@ -75,32 +75,6 @@ router.post(
   },
 );
 
-// Must precede /:id route so "assign" does not match as id param.
-router.post(
-  "/assign",
-  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
-    req,
-    res,
-  ) => {
-    const { category_general, category_detail, recipient_ids } = req.body;
-    if (!category_general || !category_detail) {
-      throw new ValidationError(
-        "Missing required fields: category_general, category_detail",
-      );
-    }
-    if (!recipient_ids) throw new ValidationError("Missing recipient_ids");
-
-    const ids = Array.isArray(recipient_ids) ? recipient_ids : [recipient_ids];
-    const { category } = await categoryService.createOrGet({
-      general: category_general,
-      detail: category_detail,
-    });
-    const updated = await categoryService.assignToRecipients(category.id, ids);
-    scheduleRefresh();
-    res.ok({ updated_recipients: updated, links: [] });
-  },
-);
-
 router.get(
   "/:id",
   validateIdParam,

@@ -51,15 +51,19 @@ export async function getTransactions(
         { ...params, category_ids: params?.category_ids?.join(",") },
         signal,
     );
+    for (const [index, transaction] of res.items.entries()) {
+        if (
+            typeof transaction.transaction_date !== "string" ||
+            transaction.transaction_date.length === 0
+        ) {
+            throw new Error(
+                `Malformed transaction response: items[${index}].transaction_date must be a non-empty string`,
+            );
+        }
+    }
     return {
         ...res,
-        items: res.items.map((tx) => {
-            const raw = tx as Transaction & { date?: string };
-            return {
-                ...tx,
-                transaction_date: raw.transaction_date ?? raw.date ?? "",
-            };
-        }),
+        items: res.items,
     };
 }
 

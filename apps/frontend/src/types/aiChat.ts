@@ -1,5 +1,5 @@
 import type {
-    AiChatDonePayload,
+    AiChatCompletePayload,
     AiChatStreamEvent as SharedAiChatStreamEvent,
     AiChatToolResultEnvelope,
     AiChatToolResultMeta,
@@ -95,7 +95,7 @@ export interface ChatTurnResponse {
     iterations: number;
 }
 
-export type ChatDoneEvent = AiChatDonePayload<
+export type ChatCompleteEvent = AiChatCompletePayload<
     ChatMessage,
     Conversation,
     TokenUsage

@@ -50,45 +50,14 @@ describe.each(routes)("GET %s date-range query params", (path, computeSpy) => {
     });
   });
 
-  it("keeps the legacy start/end aliases backward compatible", async () => {
-    await invoke({ start: "2024-01-01", end: "2024-12-31" });
-    expect(computeSpy.mock.calls[0][0]).toMatchObject({
-      startDate: "2024-01-01",
-      endDate: "2024-12-31",
-    });
+  it("rejects the retired start/end aliases before computing", async () => {
+    await expect(
+      invoke({ start: "2024-01-01", end: "2024-12-31" }),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    expect(computeSpy).not.toHaveBeenCalled();
   });
 
-  it("gives the canonical spelling precedence when both are present", async () => {
-    await invoke({
-      start_date: "2025-02-03",
-      start: "2020-01-01",
-      end_date: "2025-04-05",
-      end: "2020-12-31",
-    });
-    expect(computeSpy.mock.calls[0][0]).toMatchObject({
-      startDate: "2025-02-03",
-      endDate: "2025-04-05",
-    });
-  });
-
-  it("treats an explicitly empty canonical value as authoritative over a legacy bound", async () => {
-    await invoke({
-      start_date: "",
-      start: "2020-01-01",
-      end_date: "",
-      end: "2020-12-31",
-    });
-    expect(computeSpy.mock.calls[0][0]).toMatchObject({
-      startDate: undefined,
-      endDate: undefined,
-    });
-  });
-
-  it.each([
-    { start_date: "2025-02-30x" },
-    { end_date: "not-a-date" },
-    { start: "2025/01/01" },
-  ])(
+  it.each([{ start_date: "2025-02-30x" }, { end_date: "not-a-date" }])(
     "rejects malformed dates before computing the pivot (%j)",
     async (query) => {
       await expect(invoke(query)).rejects.toMatchObject({
@@ -97,4 +66,22 @@ describe.each(routes)("GET %s date-range query params", (path, computeSpy) => {
       expect(computeSpy).not.toHaveBeenCalled();
     },
   );
+});
+
+describe("GET /tag-pivot all query parameter", () => {
+  const handler = getHandler("/tag-pivot");
+
+  it("forwards the canonical all=true parameter", async () => {
+    const response = { ok: vi.fn() };
+    await handler({ query: { all: "true" } }, response);
+    expect(tagPivotSpy.mock.calls[0][0]).toMatchObject({ allTags: true });
+  });
+
+  it("rejects the retired all_tags alias before computing", async () => {
+    const response = { ok: vi.fn() };
+    await expect(
+      handler({ query: { all_tags: "true" } }, response),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    expect(tagPivotSpy).not.toHaveBeenCalled();
+  });
 });

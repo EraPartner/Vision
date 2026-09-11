@@ -640,27 +640,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/categories/assign": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Assign a name-resolved category to recipients (deprecated)
-         * @deprecated
-         * @description Compatibility endpoint that resolves or creates a category from category_general and category_detail, then assigns it to recipient_ids. New callers should resolve the category first and use POST /api/categories/{id}/assign.
-         */
-        post: operations["bulkAssignCategory"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/categories/{id}/assign": {
         parameters: {
             query?: never;
@@ -1484,7 +1463,7 @@ export interface paths {
         };
         /**
          * Per-tag spending pivot (periods × tags) for custom charts
-         * @description Per-tag, per-period spending breakdown (expenses only, internal transfers excluded). Pass explicit tag_ids[] for a specific selection, or all=true (alias all_tags=true) to return every active tag in the workspace. With neither, the pivot is empty. A transaction carrying several selected tags counts toward each tag's total independently. Used by custom saved charts with tag series; the frontend caps results to top 8 by spend + "Other" when all=true and entity count exceeds 8.
+         * @description Per-tag, per-period spending breakdown (expenses only, internal transfers excluded). Pass explicit tag_ids[] for a specific selection, or all=true to return every active tag in the workspace. With neither, the pivot is empty. A transaction carrying several selected tags counts toward each tag's total independently. Used by custom saved charts with tag series; the frontend caps results to top 8 by spend + "Other" when all=true and entity count exceeds 8.
          */
         get: operations["getTagPivot"];
         put?: never;
@@ -6516,39 +6495,6 @@ export interface operations {
             };
         };
     };
-    bulkAssignCategory: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    category_general: string;
-                    category_detail: string;
-                    recipient_ids: number | number[];
-                };
-            };
-        };
-        responses: {
-            /** @description Assignment result */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope"] & {
-                        data?: {
-                            updated_recipients: number;
-                            links: unknown[];
-                        };
-                    };
-                };
-            };
-        };
-    };
     assignCategory: {
         parameters: {
             query?: never;
@@ -7884,20 +7830,10 @@ export interface operations {
                 /** @description Canonical recipient cluster ids to exclude (repeatable). */
                 excluded_recipient_ids?: number[];
                 bucket?: "monthly" | "yearly";
-                /** @description Inclusive start date. Preferred over the deprecated `start` alias when both are present. */
+                /** @description Inclusive start date. */
                 start_date?: string;
-                /** @description Inclusive end date. Preferred over the deprecated `end` alias when both are present. */
+                /** @description Inclusive end date. */
                 end_date?: string;
-                /**
-                 * @deprecated
-                 * @description Deprecated alias for `start_date`.
-                 */
-                start?: string;
-                /**
-                 * @deprecated
-                 * @description Deprecated alias for `end_date`.
-                 */
-                end?: string;
                 currency?: string;
             };
             header?: never;
@@ -7922,23 +7858,13 @@ export interface operations {
             query?: {
                 /** @description Tag ids to include as series (repeatable). Ignored when all=true. */
                 tag_ids?: number[];
-                /** @description When true, returns all active tags; tag_ids is ignored. Alias: all_tags. */
+                /** @description When true, returns all active tags; tag_ids is ignored. */
                 all?: boolean;
                 bucket?: "monthly" | "yearly";
-                /** @description Inclusive start date. Preferred over the deprecated `start` alias when both are present. */
+                /** @description Inclusive start date. */
                 start_date?: string;
-                /** @description Inclusive end date. Preferred over the deprecated `end` alias when both are present. */
+                /** @description Inclusive end date. */
                 end_date?: string;
-                /**
-                 * @deprecated
-                 * @description Deprecated alias for `start_date`.
-                 */
-                start?: string;
-                /**
-                 * @deprecated
-                 * @description Deprecated alias for `end_date`.
-                 */
-                end?: string;
                 currency?: string;
             };
             header?: never;
@@ -9221,9 +9147,9 @@ export interface operations {
     getAiConversations: {
         parameters: {
             query?: {
-                /** @description Optional page size. Omit both parameters for the legacy full list; when either is supplied, a missing or invalid limit falls back to 50. */
+                /** @description Page size. Missing or invalid values use 50; values above 200 are capped. */
                 limit?: number;
-                /** @description Optional zero-based row offset. When pagination is requested, a missing or invalid offset falls back to 0. */
+                /** @description Zero-based row offset. Missing or invalid values use 0. */
                 offset?: number;
             };
             header?: never;
@@ -9242,10 +9168,8 @@ export interface operations {
                         data?: {
                             items: components["schemas"]["AiConversation"][];
                             total: number;
-                            /** @description Present only when pagination was requested. */
-                            limit?: number;
-                            /** @description Present only when pagination was requested. */
-                            offset?: number;
+                            limit: number;
+                            offset: number;
                         };
                     };
                 };
@@ -9428,7 +9352,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Server-sent event stream. Success terminates with canonical `complete` followed by the byte-equivalent deprecated `done` compatibility alias; new clients deduplicate them. Errors carry `{detail, code}`. */
+            /** @description Server-sent event stream. Success terminates with the canonical `complete` event. Errors carry `{detail, code}`. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -10535,25 +10459,19 @@ export interface operations {
     };
     adminDatabaseReset: {
         parameters: {
-            query?: {
-                /**
-                 * @deprecated
-                 * @description Compatibility fallback; the JSON body key wins when present.
-                 */
-                force?: true;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: {
+        requestBody: {
             content: {
                 "application/json": {
                     /**
                      * @description Explicit confirmation of the destructive reset.
                      * @enum {boolean}
                      */
-                    force?: true;
+                    force: true;
                 };
             };
         };

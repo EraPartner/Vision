@@ -253,7 +253,7 @@ describe("AIChatPage (integration)", () => {
                     string,
                     unknown
                 >;
-                const donePayload = {
+                const completePayload = {
                     conversation,
                     assistantMessage: {
                         id: "msg-assistant-1",
@@ -269,7 +269,7 @@ describe("AIChatPage (integration)", () => {
                     iterations: 1,
                 };
                 return new HttpResponse(
-                    `event: done\ndata: ${JSON.stringify(donePayload)}\n\n`,
+                    `event: complete\ndata: ${JSON.stringify(completePayload)}\n\n`,
                     { headers: { "Content-Type": "text/event-stream" } },
                 );
             }),

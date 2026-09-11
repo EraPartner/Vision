@@ -84,8 +84,8 @@ export default function AIChatPage() {
     );
 
     // Defensive sweep: if the conversation cache picks up an assistant message
-    // (via refetch or done-merge) while the streaming entry still claims to be
-    // streaming, the `done` SSE event was lost or never arrived. Clear the
+    // (via refetch or completion merge) while the streaming entry still claims
+    // to be streaming, the `complete` SSE event was lost or never arrived. Clear the
     // stale entry so the UI flips out of "Thinking..." instead of getting
     // stuck rendering both the persisted response and the spinner.
     useEffect(() => {

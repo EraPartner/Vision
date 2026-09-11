@@ -16,7 +16,7 @@ import { apiClient } from "@/lib/api";
 import { aiKeys } from "@/lib/queryKeys";
 import logger from "@/lib/logger";
 import type {
-    ChatDoneEvent,
+    ChatCompleteEvent,
     ChatMessage,
     ChatStreamEvent,
     ConversationDetail,
@@ -47,10 +47,10 @@ function mergeMessageIntoConversationCache(
     );
 }
 
-function mergeDoneIntoConversationCache(
+function mergeCompleteIntoConversationCache(
     queryClient: QueryClient,
     conversationId: string,
-    done: ChatDoneEvent,
+    complete: ChatCompleteEvent,
     current: StreamState,
 ): void {
     queryClient.setQueryData<ConversationDetail | null>(
@@ -75,12 +75,15 @@ function mergeDoneIntoConversationCache(
                     seen.add(toolMsg.id);
                 }
             }
-            if (done.assistantMessage && !seen.has(done.assistantMessage.id)) {
-                additions.push(done.assistantMessage);
+            if (
+                complete.assistantMessage &&
+                !seen.has(complete.assistantMessage.id)
+            ) {
+                additions.push(complete.assistantMessage);
             }
 
             return {
-                conversation: done.conversation,
+                conversation: complete.conversation,
                 messages: [...existing, ...additions],
             };
         },
@@ -211,7 +214,7 @@ class AiChatStreamStore {
         // copy instead of "Failed to fetch". The raw text is still kept on the
         // stream state for logs/devtools.
         onError: (error: unknown) => void,
-    ): Promise<ChatDoneEvent | null> {
+    ): Promise<ChatCompleteEvent | null> {
         const id = body.conversationId;
         const generation = (this.generations.get(id) ?? 0) + 1;
         this.generations.set(id, generation);
@@ -275,22 +278,25 @@ class AiChatStreamStore {
                         });
                     }
                     break;
-                case "done":
+                case "complete":
                     // Fast-path cleanup. Tied to the SSE event so the UI flips
                     // out of streaming the instant the terminal frame lands —
                     // we do not wait for the post-await path which can race
                     // against a refetch that has already populated the cache.
                     try {
-                        mergeDoneIntoConversationCache(
+                        mergeCompleteIntoConversationCache(
                             queryClient,
                             id,
                             event.payload,
                             current,
                         );
                     } catch (cacheErr) {
-                        logger.warn("[aiChatStreamStore] done merge failed", {
-                            cacheErr,
-                        });
+                        logger.warn(
+                            "[aiChatStreamStore] complete merge failed",
+                            {
+                                cacheErr,
+                            },
+                        );
                     }
                     this.streams.delete(id);
                     this.aborts.delete(id);
@@ -321,8 +327,8 @@ class AiChatStreamStore {
         this.aborts.set(id, abort);
 
         try {
-            const done = await result;
-            // Cleanup already happened inside handleEvent on the 'done' SSE
+            const complete = await result;
+            // Cleanup already happened inside handleEvent on the 'complete' SSE
             // event. Defensive: if for any reason the entry survived (e.g.
             // event arrived corrupt), make sure it is gone now.
             if (this.streams.has(id)) {
@@ -330,7 +336,7 @@ class AiChatStreamStore {
                 this.emit();
             }
             this.aborts.delete(id);
-            return done.payload;
+            return complete.payload;
         } catch (err) {
             if (this.generations.get(id) !== generation) return null;
             if (
