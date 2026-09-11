@@ -35,8 +35,8 @@ import {
 /**
  * AI-insights digest for the Statistics page (detection layer, no LLM):
  * new subscriptions, subscription price changes, category overspend, and a
- * month-end cash-forecast line. Rows are dismissible client-side via
- * insightsDismiss (localStorage); the cash forecast is a standing read.
+ * month-end cash-forecast line. Row dismissals are persisted through the
+ * server-backed insights API; the cash forecast is a standing read.
  *
  * Structure mirrors RecurringDetectionPanel (glass card, Sparkles title,
  * expand/collapse, X-dismiss rows).

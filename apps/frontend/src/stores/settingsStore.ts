@@ -180,16 +180,13 @@ const storedAppSettingsSchema = z.looseObject({
         ] as const satisfies readonly CostBasisMethod[])
         .catch(DEFAULT_APP_SETTINGS.costBasisMethod),
     adminMode: z.boolean().catch(DEFAULT_APP_SETTINGS.adminMode),
-    // Optional (not caught to the default): the pre-ADR-075 legacy mapping in
-    // migrateAppSettings must still see "absent" to apply `enhancedEffects`.
     visualEffects: z
         .enum([
             "reduced",
             "standard",
             "enhanced",
         ] as const satisfies readonly VisualEffectsTier[])
-        .optional()
-        .catch(undefined),
+        .catch(DEFAULT_APP_SETTINGS.visualEffects),
     autoAdaptDisplay: z.boolean().catch(DEFAULT_APP_SETTINGS.autoAdaptDisplay),
     startupSection: z
         .enum([
@@ -206,15 +203,10 @@ const storedAppSettingsSchema = z.looseObject({
     colorblindGainLoss: z
         .boolean()
         .catch(DEFAULT_APP_SETTINGS.colorblindGainLoss),
-    enhancedEffects: z.boolean().optional().catch(undefined),
 });
 
 /**
- * Merge a stored app_settings blob over the defaults, mapping the pre-ADR-075
- * `enhancedEffects` boolean onto `visualEffects` (true → enhanced, false →
- * standard). The legacy key is dropped so the next persist writes the new
- * shape. A blob that already carries `visualEffects` wins over the legacy key.
- *
+ * Sanitize and merge a stored app_settings blob over the defaults.
  * The blob is untrusted (arbitrary JSON from the settings API):
  * `storedAppSettingsSchema` validates it per-field first, so a well-formed
  * (possibly partial) blob produces exactly the old
@@ -225,12 +217,9 @@ const storedAppSettingsSchema = z.looseObject({
 export function migrateAppSettings(raw: unknown): AppSettings {
     const parsed = storedAppSettingsSchema.safeParse(raw);
     if (!parsed.success) return DEFAULT_APP_SETTINGS;
-    const { enhancedEffects, visualEffects, aiDefaultModel, ...rest } =
-        parsed.data;
+    const { aiDefaultModel, ...rest } = parsed.data;
     const merged: AppSettings = { ...DEFAULT_APP_SETTINGS, ...rest };
     if (aiDefaultModel !== undefined) merged.aiDefaultModel = aiDefaultModel;
-    merged.visualEffects =
-        visualEffects ?? (enhancedEffects ? "enhanced" : "standard");
     return merged;
 }
 

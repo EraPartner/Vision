@@ -262,87 +262,26 @@ describe("AppSettingsHydration — edge cases", () => {
     });
 });
 
-describe("SettingsHydration — legacy localStorage migration", () => {
+describe("SettingsHydration — canonical server storage", () => {
     afterEach(() => {
         vi.restoreAllMocks();
-        localStorage.removeItem("vision_dashboardSettings");
     });
 
-    function renderWithLegacyBlob(blob: string) {
+    it("uses defaults without writing when the server has no value", async () => {
         const getSpy = vi
             .spyOn(apiClient, "getSettings")
             .mockResolvedValueOnce({});
         const saveSpy = vi
             .spyOn(apiClient, "saveSetting")
             .mockResolvedValue(undefined as never);
-        localStorage.setItem("vision_dashboardSettings", blob);
-        const rendered = renderHook(() => useSettings(), {
+        const { result } = renderHook(() => useSettings(), {
             wrapper: makeProviderWrapper(),
         });
-        return { ...rendered, getSpy, saveSpy };
-    }
-
-    it("hydrates a valid legacy blob merged over defaults and persists that merge to the API", async () => {
-        const blob = {
-            excludedCategoryIds: [3, 4],
-            exclusionScope: "dashboard",
-        };
-        const { result, saveSpy } = renderWithLegacyBlob(JSON.stringify(blob));
         await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-        const expected = { ...DEFAULT_DASHBOARD_SETTINGS, ...blob };
-        expect(result.current.settings).toEqual(expected);
-        expect(saveSpy).toHaveBeenCalledWith("dashboard_settings", expected);
-        expect(localStorage.getItem("vision_dashboardSettings")).toBeNull();
-    });
-
-    it("preserves unknown keys from the legacy blob (loose merge)", async () => {
-        const blob = { excludedCategoryIds: [1], someLegacyFlag: true };
-        const { result, saveSpy } = renderWithLegacyBlob(JSON.stringify(blob));
-        await waitFor(() => expect(result.current.isLoading).toBe(false));
-        expect(saveSpy).toHaveBeenCalledWith("dashboard_settings", {
-            ...DEFAULT_DASHBOARD_SETTINGS,
-            ...blob,
-        });
-    });
-
-    it("falls back to defaults and does not persist when the legacy blob is not valid JSON", async () => {
-        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-        const { result, saveSpy } = renderWithLegacyBlob("{not json");
-        await waitFor(() => expect(result.current.isLoading).toBe(false));
+        expect(getSpy).toHaveBeenCalledOnce();
         expect(result.current.settings).toEqual(DEFAULT_DASHBOARD_SETTINGS);
         expect(saveSpy).not.toHaveBeenCalled();
-        warnSpy.mockRestore();
-    });
-
-    it("defaults a malformed field instead of writing it back to the API", async () => {
-        const blob = {
-            excludedCategoryIds: "not-an-array",
-            exclusionScope: "dashboard",
-        };
-        const { result, saveSpy } = renderWithLegacyBlob(JSON.stringify(blob));
-        await waitFor(() => expect(result.current.isLoading).toBe(false));
-
-        const expected = {
-            ...DEFAULT_DASHBOARD_SETTINGS,
-            exclusionScope: "dashboard",
-        };
-        expect(result.current.settings).toEqual(expected);
-        expect(saveSpy).toHaveBeenCalledWith("dashboard_settings", expected);
-    });
-
-    it("falls back to defaults wholesale when the legacy blob is not an object", async () => {
-        const { result, saveSpy } = renderWithLegacyBlob(
-            JSON.stringify([1, 2]),
-        );
-        await waitFor(() => expect(result.current.isLoading).toBe(false));
-        expect(result.current.settings).toEqual(DEFAULT_DASHBOARD_SETTINGS);
-        // Still migrated (write-back timing unchanged), but with a valid shape —
-        // never the old `{ ...defaults, ...[1,2] }` index-key poisoning.
-        expect(saveSpy).toHaveBeenCalledWith(
-            "dashboard_settings",
-            DEFAULT_DASHBOARD_SETTINGS,
-        );
     });
 });
 
@@ -397,11 +336,9 @@ describe("SettingsHydration — edge cases", () => {
     afterEach(() => vi.restoreAllMocks());
 
     it("hydrates from preloaded dashboard_settings (boot fetch success)", async () => {
-        const spy = vi
-            .spyOn(apiClient, "getSettings")
-            .mockResolvedValueOnce({
-                dashboard_settings: { excludedCategoryIds: [42] },
-            });
+        const spy = vi.spyOn(apiClient, "getSettings").mockResolvedValueOnce({
+            dashboard_settings: { excludedCategoryIds: [42] },
+        });
         const { result } = renderHook(() => useSettings(), {
             wrapper: makeProviderWrapper(),
         });

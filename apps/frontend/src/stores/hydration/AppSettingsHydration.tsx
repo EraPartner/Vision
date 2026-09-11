@@ -52,8 +52,7 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
     // the settings value came from the server and doesn't need saving back.
     const isFirstPersistRun = useRef(true);
 
-    // Hydrate store from preloaded data (migrates pre-ADR-075 blobs that
-    // still carry the legacy enhancedEffects boolean)
+    // Hydrate and sanitize the preloaded server value.
     useEffect(() => {
         if (preloadLoading) return;
         const migrated = migrateAppSettings(preloaded ?? undefined);

@@ -5,11 +5,11 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router";
 import { toast } from "sonner";
 import ChartBuilderPage from "@/pages/research/ChartBuilderPage";
+import type { BuilderState } from "@/pages/research/chartBuilderState";
 import {
-    STORAGE_KEY,
-    type BuilderState,
-} from "@/pages/research/chartBuilderState";
-import { encodeSharedChart } from "@/pages/research/chartBuilderLayouts";
+    createChartBuilderLibrary,
+    encodeSharedChart,
+} from "@/pages/research/chartBuilderLayouts";
 import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
 
 const queryState = vi.hoisted(() => ({ loading: true }));
@@ -34,7 +34,9 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
 
 vi.mock("@/stores/hydration/LanguageHydration", async (importOriginal) => {
     const actual =
-        await importOriginal<typeof import("@/stores/hydration/LanguageHydration")>();
+        await importOriginal<
+            typeof import("@/stores/hydration/LanguageHydration")
+        >();
     const { default: en } = await import("@/locales/en");
     return {
         ...actual,
@@ -105,7 +107,12 @@ function renderPage(initialEntry = "/research/charts") {
 
 describe("ChartBuilderPage oscillator state", () => {
     beforeEach(() => {
-        storageValues = new Map([[STORAGE_KEY, JSON.stringify(STORED_STATE)]]);
+        storageValues = new Map([
+            [
+                LOCAL_STORAGE_KEYS.CHART_BUILDER_LAYOUTS,
+                JSON.stringify(createChartBuilderLibrary(STORED_STATE)),
+            ],
+        ]);
         vi.stubGlobal("localStorage", {
             getItem: (key: string) => storageValues.get(key) ?? null,
             setItem: (key: string, value: string) =>
@@ -216,16 +223,18 @@ describe("ChartBuilderPage oscillator state", () => {
 
     it("disables new indicators at the persisted limit", () => {
         storageValues.set(
-            STORAGE_KEY,
-            JSON.stringify({
-                ...STORED_STATE,
-                indicators: Array.from({ length: 20 }, (_, index) => ({
-                    id: `indicator-${index}`,
-                    type: "sma",
-                    period: 20,
-                    seriesId: "series-1",
-                })),
-            }),
+            LOCAL_STORAGE_KEYS.CHART_BUILDER_LAYOUTS,
+            JSON.stringify(
+                createChartBuilderLibrary({
+                    ...STORED_STATE,
+                    indicators: Array.from({ length: 20 }, (_, index) => ({
+                        id: `indicator-${index}`,
+                        type: "sma",
+                        period: 20,
+                        seriesId: "series-1",
+                    })),
+                }),
+            ),
         );
 
         renderPage();

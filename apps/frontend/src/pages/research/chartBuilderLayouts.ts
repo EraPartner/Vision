@@ -1,12 +1,7 @@
 import { z } from "zod";
 
 import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
-import {
-    DEFAULT_STATE,
-    STORAGE_KEY as LEGACY_STORAGE_KEY,
-    storedBuilderStateSchema,
-    type BuilderState,
-} from "./chartBuilderState";
+import { DEFAULT_STATE, type BuilderState } from "./chartBuilderState";
 
 export const MAX_CHART_LAYOUTS = 20;
 export const MAX_CHART_INDICATORS = 20;
@@ -171,46 +166,6 @@ const shareSchema = z
 
 type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
-function normalizeLegacyState(state: BuilderState): BuilderState {
-    const series: BuilderState["series"] = [];
-    const seriesIds = new Set<string>();
-    for (const candidate of state.series) {
-        const parsed = seriesSchema.safeParse(candidate);
-        if (!parsed.success || seriesIds.has(parsed.data.id)) continue;
-        seriesIds.add(parsed.data.id);
-        series.push(parsed.data as BuilderState["series"][number]);
-    }
-
-    const indicators: BuilderState["indicators"] = [];
-    const indicatorIds = new Set<string>();
-    for (const candidate of state.indicators) {
-        if (indicators.length >= MAX_CHART_INDICATORS) break;
-        const parsed = indicatorSchema.safeParse(candidate);
-        if (
-            !parsed.success ||
-            indicatorIds.has(parsed.data.id) ||
-            !seriesIds.has(parsed.data.seriesId)
-        ) {
-            continue;
-        }
-        indicatorIds.add(parsed.data.id);
-        indicators.push(parsed.data as BuilderState["indicators"][number]);
-    }
-
-    return {
-        range: state.range,
-        logLeft: state.logLeft,
-        rebase: state.rebase,
-        series,
-        indicators,
-        oscillator: state.oscillator,
-        oscillatorSeriesId:
-            state.oscillatorSeriesId && seriesIds.has(state.oscillatorSeriesId)
-                ? state.oscillatorSeriesId
-                : null,
-    };
-}
-
 export function createChartBuilderLibrary(
     draft: BuilderState = DEFAULT_STATE,
 ): ChartBuilderLibrary {
@@ -270,22 +225,6 @@ export function loadChartBuilderLibrary(
         if (raw && raw.length <= MAX_LIBRARY_BYTES) {
             const parsed = librarySchema.safeParse(JSON.parse(raw));
             if (parsed.success) return parsed.data as ChartBuilderLibrary;
-        }
-
-        const legacyRaw = storage.getItem(LEGACY_STORAGE_KEY);
-        if (legacyRaw) {
-            const legacy = storedBuilderStateSchema.safeParse(
-                JSON.parse(legacyRaw),
-            );
-            if (legacy.success) {
-                const migrated = createChartBuilderLibrary(
-                    normalizeLegacyState(legacy.data as BuilderState),
-                );
-                if (saveChartBuilderLibrary(migrated, storage)) {
-                    storage.removeItem(LEGACY_STORAGE_KEY);
-                }
-                return migrated;
-            }
         }
     } catch {
         // Invalid or unavailable storage falls through to a clean library.

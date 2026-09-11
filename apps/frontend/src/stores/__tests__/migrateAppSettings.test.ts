@@ -10,8 +10,7 @@ import {
 // money-formatting fields: an unvalidated defaultCurrency ("US") or
 // showDecimalPlaces (-1 / NaN / 101) makes Intl.NumberFormat throw RangeError,
 // which either crashes a page into the error boundary or renders a raw
-// unlocalised number on every money tile. The legacy enhancedEffects mapping
-// itself is covered in lib/__tests__/visualEffects.test.ts.
+// unlocalised number on every money tile.
 describe("migrateAppSettings — blob validation", () => {
     it("passes a well-formed partial blob through exactly like the old spread merge", () => {
         expect(
@@ -178,15 +177,9 @@ describe("migrateAppSettings — blob validation", () => {
         ).toBe("claude-haiku");
     });
 
-    it("a malformed visualEffects falls back without breaking the legacy mapping", () => {
+    it("a malformed visualEffects falls back to the canonical default", () => {
         expect(
             migrateAppSettings({ visualEffects: "ultra" }).visualEffects,
         ).toBe("standard");
-        expect(
-            migrateAppSettings({
-                visualEffects: "ultra",
-                enhancedEffects: true,
-            }).visualEffects,
-        ).toBe("enhanced");
     });
 });

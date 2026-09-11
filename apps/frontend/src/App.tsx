@@ -32,7 +32,6 @@ import { ScrollToTop } from "@/components/shared/ScrollToTop";
 import { StartupRedirect } from "@/components/shared/StartupRedirect";
 import { PageLoader } from "@/components/shared/PageLoader";
 import { RequireAdmin } from "@/components/auth/RequireAdmin";
-import { LegacyInsightDismissalMigrationGate } from "@/components/shared/LegacyInsightDismissalMigrationGate";
 
 import { useSettingsStore } from "@/stores/settingsStore";
 
@@ -200,15 +199,13 @@ const App = () => {
                                     <LanguageHydration>
                                         <TooltipProvider>
                                             <ErrorBoundary>
-                                                <LegacyInsightDismissalMigrationGate>
-                                                    <Sonner />
-                                                    <SettingsSaveErrorToaster />
-                                                    <BelgianTaxSaveErrorToaster />
-                                                    <GlobalMutationErrorToaster />
-                                                    <RouterProvider
-                                                        router={browserRouter}
-                                                    />
-                                                </LegacyInsightDismissalMigrationGate>
+                                                <Sonner />
+                                                <SettingsSaveErrorToaster />
+                                                <BelgianTaxSaveErrorToaster />
+                                                <GlobalMutationErrorToaster />
+                                                <RouterProvider
+                                                    router={browserRouter}
+                                                />
                                             </ErrorBoundary>
                                         </TooltipProvider>
                                     </LanguageHydration>

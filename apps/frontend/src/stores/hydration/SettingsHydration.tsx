@@ -17,7 +17,6 @@ import { usePreloadedSetting } from "@/contexts/SettingsPreloadContext";
 import {
     useSettingsStore,
     DEFAULT_DASHBOARD_SETTINGS,
-    migrateDashboardSettings,
 } from "@/stores/settingsStore";
 import type { ExclusionScope, DashboardSettings } from "@/stores/settingsStore";
 
@@ -54,7 +53,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     // same render, so the value came from the server and doesn't need saving back.
     const isFirstPersistRun = useRef(true);
 
-    // Hydrate store from preloaded data (with localStorage migration fallback)
+    // Hydrate store from preloaded server data.
     useEffect(() => {
         if (preloadLoading) return;
 
@@ -64,39 +63,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                 false,
             );
         } else {
-            // Fallback: migrate from localStorage for users upgrading from older
-            // versions. The blob is untrusted — migrateDashboardSettings validates
-            // it (per-field fallback to defaults) so a malformed legacy value can
-            // never be written back to the API below.
-            try {
-                const stored = localStorage.getItem("vision_dashboardSettings");
-                if (stored) {
-                    const parsed: unknown = JSON.parse(stored);
-                    const migrated = migrateDashboardSettings(parsed);
-                    _hydrateDashboardSettings(migrated, false);
-                    apiClient
-                        .saveSetting(SETTINGS_KEY, migrated)
-                        .catch((err) => {
-                            logger.error(
-                                "Failed to migrate settings to database",
-                                err,
-                            );
-                            _markSettingsSaveError();
-                        });
-                    localStorage.removeItem("vision_dashboardSettings");
-                } else {
-                    _hydrateDashboardSettings(
-                        DEFAULT_DASHBOARD_SETTINGS,
-                        false,
-                    );
-                }
-            } catch (err) {
-                logger.warn(
-                    "Failed to read legacy settings from localStorage",
-                    err,
-                );
-                _hydrateDashboardSettings(DEFAULT_DASHBOARD_SETTINGS, false);
-            }
+            _hydrateDashboardSettings(DEFAULT_DASHBOARD_SETTINGS, false);
         }
         hasHydrated.current = true;
     }, [
