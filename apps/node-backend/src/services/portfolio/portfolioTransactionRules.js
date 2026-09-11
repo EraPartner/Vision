@@ -153,14 +153,8 @@ function normalizeBuySellMath({ amount, units, pricePerUnit }) {
  */
 export function normalizeTransactionPayload(payload, { assetClass } = {}) {
   const type = payload.type;
-  const recurrenceInterval =
-    payload.recurrence_interval === "bi-weekly"
-      ? "biweekly"
-      : payload.recurrence_interval;
-  const normalizedPayload = {
-    ...payload,
-    recurrence_interval: recurrenceInterval,
-  };
+  const recurrenceInterval = payload.recurrence_interval;
+  const normalizedPayload = { ...payload };
   // Membership guard: an unknown type ('banana') otherwise inserted (invisible
   // to the units replay) or reached the enum column as a raw cast 500. The
   // import pipeline already constrains types to this same canonical set, so this

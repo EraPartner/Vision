@@ -72,10 +72,10 @@ describe("portfolio transaction request body validation", () => {
     });
   });
 
-  it("normalizes the legacy portfolio recurrence spelling at the route edge", () => {
-    expect(
+  it("accepts only the canonical portfolio recurrence spelling", () => {
+    expect(() =>
       parsePortfolioTransactionBody({ recurrence_interval: "bi-weekly" }),
-    ).toEqual({ recurrence_interval: "biweekly" });
+    ).toThrow(/recurrence_interval/);
     expect(
       parsePortfolioTransactionBody({ recurrence_interval: "biweekly" }),
     ).toEqual({ recurrence_interval: "biweekly" });

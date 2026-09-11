@@ -3,8 +3,7 @@
  *
  * Both portfolio and planned transactions use the unhyphenated `biweekly`
  * spelling. Migration 0099 rewrites the legacy portfolio `bi-weekly` value.
- * API writers retain a one-release compatibility mapper for that legacy input,
- * but it is never emitted or persisted by current code.
+ * Current API writers accept only the canonical spelling.
  *
  * Both lists are append-only — the values are persisted — and share the same
  * canonical display order.

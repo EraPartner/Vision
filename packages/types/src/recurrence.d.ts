@@ -7,8 +7,7 @@
  */
 
 /**
- * Portfolio recurrence cadences. Legacy `bi-weekly` input is normalized at the
- * API boundary and is not part of the current wire contract.
+ * Portfolio recurrence cadences. The API boundary accepts only these values.
  */
 export declare const PORTFOLIO_RECURRENCE_INTERVALS: readonly [
   "daily",

@@ -73,14 +73,6 @@ function normalizeYmdInput(value?: string): string {
     return toYmd(parsed);
 }
 
-function normalizeRecurrenceInterval(
-    value: string | null | undefined,
-): RecurrenceInterval {
-    return value === "bi-weekly"
-        ? "biweekly"
-        : ((value || "monthly") as RecurrenceInterval);
-}
-
 interface Props extends ControlledDialogProps {
     investment: InvestmentSummary;
     transaction: PortfolioTransaction;
@@ -159,9 +151,9 @@ export function EditPortfolioTxnDialog({
                 ? String(transaction.account_id)
                 : "",
         isRecurring: Boolean(transaction.is_recurring),
-        recurrenceInterval: normalizeRecurrenceInterval(
-            transaction.recurrence_interval,
-        ),
+        recurrenceInterval:
+            transaction.recurrence_interval ??
+            ("monthly" as RecurrenceInterval),
         recurrenceEndDate: normalizeYmdInput(transaction.recurrence_end_date),
     });
 

@@ -41,13 +41,10 @@ describe("portfolioTransactionService recurrence compatibility", () => {
     }));
   });
 
-  it("normalizes legacy direct-service updates before persistence", async () => {
-    await update(7, { recurrence_interval: "bi-weekly" });
-
-    expect(writes.updateFields).toHaveBeenCalledWith(
-      7,
-      expect.objectContaining({ recurrence_interval: "biweekly" }),
-      expect.any(Object),
-    );
+  it("rejects the retired recurrence spelling before persistence", async () => {
+    await expect(
+      update(7, { recurrence_interval: "bi-weekly" }),
+    ).rejects.toThrow(/Invalid recurrence_interval/);
+    expect(writes.updateFields).not.toHaveBeenCalled();
   });
 });

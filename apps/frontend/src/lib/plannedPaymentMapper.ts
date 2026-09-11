@@ -68,8 +68,7 @@ export function mapFromAPI(
         const pattern = pt.recurrence_pattern.toLowerCase();
         if (pattern === "daily") frequency = "daily";
         else if (pattern === "weekly") frequency = "weekly";
-        else if (pattern === "biweekly" || pattern === "bi-weekly")
-            frequency = "biweekly";
+        else if (pattern === "biweekly") frequency = "biweekly";
         else if (pattern === "monthly") frequency = "monthly";
         else if (pattern === "quarterly") frequency = "quarterly";
         else if (pattern === "yearly") frequency = "yearly";

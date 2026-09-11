@@ -48,8 +48,8 @@ import { formatDateToYmd } from "../dateFormat.js";
 import { PLANNED_RECURRENCE_PATTERNS } from "@vision/types/recurrence";
 
 // The named cadences this module recognises, single-sourced in
-// @vision/types/recurrence alongside the portfolio vocabulary that spells the
-// same cadence 'bi-weekly'. Note this list is the *named* half of the grammar
+// @vision/types/recurrence alongside the portfolio vocabulary. Note this list
+// is the *named* half of the grammar
 // only — parseRecurrenceStep additionally accepts the custom `every N days`
 // form, which is deliberately not a member.
 const SUPPORTED_PATTERNS = PLANNED_RECURRENCE_PATTERNS;
@@ -74,7 +74,7 @@ const SUPPORTED_PATTERNS = PLANNED_RECURRENCE_PATTERNS;
  * @param {string|null|undefined} pattern
  * @returns {RecurrenceStep|undefined}
  */
- function parseRecurrenceStep(pattern) {
+function parseRecurrenceStep(pattern) {
   const p = String(pattern || "")
     .toLowerCase()
     .trim();
@@ -263,7 +263,7 @@ export function fastForwardYmd(ymd, pattern, targetYmd) {
   return addDaysYmd(ymd, hops * step.amount);
 }
 
- function getSupportedPatterns() {
+function getSupportedPatterns() {
   return [...SUPPORTED_PATTERNS];
 }
 
@@ -333,4 +333,7 @@ export function expandOccurrences(
   return occurrences;
 }
 
-export { parseRecurrenceStep as __parseRecurrenceStep, getSupportedPatterns as __getSupportedPatterns };
+export {
+  parseRecurrenceStep as __parseRecurrenceStep,
+  getSupportedPatterns as __getSupportedPatterns,
+};

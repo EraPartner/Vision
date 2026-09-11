@@ -89,7 +89,6 @@ describe("mapFromAPI", () => {
         ["daily", "daily"],
         ["weekly", "weekly"],
         ["biweekly", "biweekly"],
-        ["bi-weekly", "biweekly"], // DB-enum compat spelling
         ["monthly", "monthly"],
         ["quarterly", "quarterly"],
         ["yearly", "yearly"],

@@ -348,7 +348,6 @@ const portfolioCurrencyField = z
 const portfolioRecurrenceIntervalField = z
   .union([
     z.enum(PORTFOLIO_RECURRENCE_INTERVALS),
-    z.literal("bi-weekly").transform(() => "biweekly"),
     z.null(),
     z.literal("").transform(/** @returns {null} */ () => null),
   ])
@@ -879,13 +878,7 @@ export async function listTransactions(req, res) {
   );
   const result = await portfolioTransactionRepository.getAllWithCount(opts);
   res.ok({
-    items: result.rows.map((row) => ({
-      ...row,
-      recurrence_interval:
-        row.recurrence_interval === "bi-weekly"
-          ? "biweekly"
-          : row.recurrence_interval,
-    })),
+    items: result.rows,
     total: result.total,
     limit: opts.limit,
     offset: opts.offset,
