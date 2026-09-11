@@ -26,6 +26,8 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    # Escape colons that follow closing parentheses so SQLAlchemy does not
+    # reinterpret ``:true`` inside these SQL string literals as a bind.
     op.execute(
         """
         DO $$
@@ -65,10 +67,10 @@ def upgrade() -> None:
                AND NOT attribute.attisdropped;
             IF column_shape <> ARRAY[
                 'id:integer:true',
-                'from_ccy:character(3):true',
-                'to_ccy:character(3):true',
+                'from_ccy:character(3)\\:true',
+                'to_ccy:character(3)\\:true',
                 'rate_date:date:true',
-                'rate:numeric(20,10):true',
+                'rate:numeric(20,10)\\:true',
                 'fetched_at:timestamp with time zone:true'
             ] THEN
                 RAISE EXCEPTION
@@ -115,13 +117,22 @@ def upgrade() -> None:
                     default_shape;
             END IF;
 
-            SELECT array_agg(contype || ':' || pg_get_constraintdef(oid) ORDER BY conname)
+            SELECT array_agg(
+                       contype::text || ':' || pg_get_constraintdef(oid)
+                       ORDER BY conname
+                   )
               INTO constraint_shape
               FROM pg_constraint
              WHERE conrelid = 'public.exchange_rate_cache'::regclass;
             IF constraint_shape <> ARRAY[
                 'c:CHECK ((rate > (0)::numeric))',
+                'n:NOT NULL fetched_at',
+                'n:NOT NULL from_ccy',
+                'n:NOT NULL id',
                 'p:PRIMARY KEY (id)',
+                'n:NOT NULL rate_date',
+                'n:NOT NULL rate',
+                'n:NOT NULL to_ccy',
                 'u:UNIQUE (from_ccy, to_ccy, rate_date)'
             ] THEN
                 RAISE EXCEPTION
