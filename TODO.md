@@ -685,70 +685,8 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
 
 ### 🏛️ API and architecture
 
-- [ ] **Separate exact import provenance from versioned duplicate identity across every CSV adapter** ⏫
-  - Tracking: 🔎 runtime-unverified 2026-09-09 (implementation and ADR-134 are present in the working tree; 346 focused import/backup tests, both typechecks, lint, static Alembic SQL, schema-head, destructive-DDL, docs diagrams, and visualizer checks pass; live migration round-trip and database concurrency evidence remain blocked because managed sandbox policy denies PostgreSQL shared memory, and the full backend route suite is blocked by `listen EPERM`)
-  - ↪ _from: User import architecture request 2026-09-09 · preserve literal source records while deduplicating canonical transactions_
-  - **Problem and current evidence:** `raw_data` currently serves both audit provenance and hash
-    input. Belfius, BNP, ING, KBC, and the IBKR portfolio adapter retain source records, while the
-    generic budgeting mapper, Vision, SABB, and Wise store pipe-joined reconstructions; Revolut
-    stores a normalized CSV reconstruction. Budgeting validation hashes this mixed representation
-    and collapses equal hashes within one batch; `transactions.tx_hash` then provides a legacy
-    partial unique index. Portfolio validation also hashes staging provenance, but commit correctly
-    uses destination occurrence counts so two legitimate byte-identical fills are preserved. One
-    field therefore cannot reliably provide exact evidence, format-stable identity, cross-account
-    isolation, and legitimate-repeat handling at the same time.
-  - **Target contract:** retain the exact decoded source record without its terminal CR/LF in
-    `raw_data`; store a non-unique `source_record_hash = SHA-256(raw_data)` for integrity checks;
-    store a separate versioned `dedup_fingerprint` for import idempotence. Fingerprints must use a
-    deterministic canonical serialization, include a budgeting/portfolio domain namespace and the
-    destination/source-account identity, prefer an immutable source transaction ID when present,
-    and otherwise include stable normalized source fields plus a deterministic occurrence ordinal.
-    Mutable recipient, category, investment name, review override, or database row ID must not
-    silently redefine the same source transaction.
-  - **Adapter migration:** make every budgeting and portfolio adapter capture literal CSV records
-    with CSV-aware parsing, preserving quoted separators, escaped quotes, embedded newlines, column
-    order, and the decoded source text while normalizing only the record delimiter. Move Revolut's
-    useful date normalization and every other adapter-specific compatibility transform into the
-    canonical fingerprint builder rather than rewriting `raw_data`. Keep parser error/skipped-row
-    behavior unchanged. Do not introduce or revive per-bank raw transaction tables.
-  - **Duplicate semantics:** use occurrence-aware fingerprints in both domains so a first import
-    preserves legitimate identical transactions, a partial re-import inserts only missing
-    occurrences, and a complete re-import reports every existing occurrence as a duplicate. A
-    source-provided immutable transaction ID takes precedence over occurrence fallback. Define
-    deterministic ordering and restart behavior so chunk retries, review commits, reordered files,
-    overlapping export windows, and concurrent imports cannot change an occurrence assignment or
-    create duplicates. Preserve account and currency boundaries.
-  - **Schema and compatibility:** add nullable fingerprint/version/source-hash fields to both
-    staging models and the canonical budgeting and portfolio storage surfaces, with partial indexes
-    or constraints that match the chosen concurrency rule and a complete Alembic downgrade. Do not
-    reinterpret, rewrite, or bulk-backfill historical `tx_hash` values: old staging rows contain
-    mixed provenance formats. During a dual-read/dual-write transition, new rows write the new
-    fields while duplicate checks fall back to the existing hash and canonical field probes for
-    legacy rows. Keep legacy `tx_hash` and its unique index until a separately documented soak and
-    compatibility gate proves they can be retired without making old imports re-importable.
-  - **Retention and recovery:** continue storing raw records in the existing import batch/staging
-    tables, which are already backup-covered; do not duplicate raw financial data into canonical
-    ledger rows. Specify what batch deletion, rollback, backup/restore, and data export/delete do to
-    provenance and fingerprints. Never expose raw records through ordinary list or preview APIs;
-    any future diagnostic access needs an explicit privacy and authorization review.
-  - **Required evidence:** add golden raw-record and fingerprint fixtures for all adapters covering
-    LF/CRLF, UTF-8/Latin-1, quoted delimiters, escaped quotes, embedded newlines, harmless export
-    formatting variants, missing source IDs, multiple accounts/currencies, and intentional repeated
-    transactions. Prove first import, partial re-import, full re-import, overlapping windows,
-    reorder, retry/resume, rollback, legacy-row fallback, and concurrent-import behavior for both
-    budgeting and portfolio pipelines. Run focused and full import suites, lint, both typechecks,
-    migration upgrade/downgrade on a disposable database, backup/restore coverage, locale/API/docs
-    validation where affected, and an independent financial-correctness review.
-  - **Completion boundary:** the migration is complete only when every registered adapter preserves
-    exact provenance, new canonical writes use a documented fingerprint version, legacy imports
-    remain idempotent, legitimate identical occurrences are not lost, duplicate counts/statuses are
-    consistent across one-shot, Server-Sent Events, review, and rollback flows, and the ADR plus
-    import/portfolio/API/schema/backup documentation matches verified behavior. UI exposure of raw
-    records, historical provenance reconstruction, new per-bank raw tables, and deletion of legacy
-    columns are explicitly outside this item.
-
 - [ ] **Migrate and retire provider-specific raw transaction storage without losing provenance** ⏫
-  - Tracking: 🔎 decision-needed 2026-09-09 (direction fixed: converge on provider-neutral storage; after the ADR-134 live gate, settle the durable archive shape and manual-duplicate transition before authoring destructive DDL)
+  - Tracking: 🔎 decision-needed 2026-09-12 (ADR-134's live migration and concurrency gate passed; settle the durable provider-neutral archive shape and manual-duplicate transition before authoring destructive DDL)
   - ↪ _from: User legacy-removal plan 2026-09-09 · uniform bank and broker import storage with zero current-data loss_
   - **Current split:** active bank imports already use `import_batches` plus
     `import_staging_rows`, and broker imports use their portfolio equivalents. The old
@@ -807,7 +745,7 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
     marker. Keep the pre-cleanup backup until the post-contract acceptance is complete.
 
 - [ ] **Retire legacy tx_hash after versioned import identity has soaked** 🔼
-  - Tracking: 🔎 decision-needed 2026-09-09 (`tx_hash` is still dual-written and used as a duplicate fallback; removal waits for ADR-134 acceptance and a fallback-free soak)
+  - Tracking: 🔎 decision-needed 2026-09-12 (ADR-134's live gate passed, but `tx_hash` is still dual-written and used as a duplicate fallback; removal still requires exact-install or telemetry evidence and a fallback-free soak)
   - ↪ _from: Legacy compatibility inventory LEG-DB-TX-HASH_
   - Stop writers first, measure fallback use, and soak the versioned identity path. Then use a
     contract migration with count/digest checks and a restore-tested rollback boundary.
@@ -830,24 +768,6 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
   - Wait for ADR-109 cleanup, use `pg_depend` to prove zero consumers, decide the supported downgrade
     boundary, and then remove the type in a reversible PostgreSQL migration.
 
-- [ ] **Move import options into multipart bodies and retire query fallbacks** 🔼
-  - Tracking: 🔎 partial 2026-09-09 (every shipped one-shot and server-sent events import variant now sends bank, mapping, format, and brokerage options as multipart fields with query-free request tests; backend query fallbacks and OpenAPI compatibility remain until the supported client release window has soaked)
-  - ↪ _from: Legacy compatibility inventory LEG-API-IMPORT-QUERY-FALLBACKS_
-  - Migrate every import and server-sent events variant to multipart fields, soak the new requests for
-    the supported client window, then remove backend query fallbacks and update OpenAPI.
-
-- [ ] **Retire legacy HTTP error envelopes after route-wide contract proof** 🔼
-  - Tracking: 🔎 decision-needed 2026-09-09 (the parser protects server/client skew and accepts several historical shapes)
-  - ↪ _from: Legacy compatibility inventory LEG-API-ERROR-SHAPES_
-  - Prove the unified envelope across every route, decide packaged client/server skew support, then
-    narrow the parser with focused compatibility tests.
-
-- [ ] **Retire legacy deep-link redirects after a published support window** 🔽
-  - Tracking: 🔎 decision-needed 2026-09-09 (old bookmarks, Electron menus, and documentation can still reach the redirects)
-  - ↪ _from: Legacy compatibility inventory LEG-FE-DEEP-LINKS_
-  - Publish a cutoff, scan producers and docs, test Electron and browser routes, then remove redirects
-    after the supported window.
-
 - [ ] **Retire Electron legacy-install migration guards after the support cutoff** 🔽
   - Tracking: 🔎 decision-needed 2026-09-09 (the user-data move and native cutover guards still prevent skipped-version installs from stranding data or opening an empty database)
   - ↪ _from: Legacy compatibility inventory LEG-ELEC-USERDATA-NAME and LEG-ELEC-NATIVE-CUTOVER_
@@ -861,15 +781,3 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
   - ↪ _from: ADR-108 implementation plan · WP-C7_
   - Add a dedicated snapshot-by-account table, writer, endpoint, chart, backup coverage, downgrade,
     and per-date sum invariant. Do not retroactively synthesize history.
-
-### 🧪 Runtime and external acceptance
-
-- [ ] **Validate the portfolio import adapter against a real Nexo export** 🔼
-  - Tracking: 🔎 runtime-unverified 2026-09-09 (requires a user-provided sanitized Nexo export)
-  - ↪ _from: ADR-108 · WP-C2 acceptance_
-  - Pin real column names, locale decimals, instrument-less rows, and noisy symbol cells in a fixture.
-
-- [ ] **Validate the portfolio import adapter against a real Saxo export** 🔼
-  - Tracking: 🔎 runtime-unverified 2026-09-09 (requires a user-provided sanitized Saxo export)
-  - ↪ _from: ADR-108 · WP-C2 acceptance_
-  - Pin real column names, locale decimals, instrument-less rows, and noisy symbol cells in a fixture.
