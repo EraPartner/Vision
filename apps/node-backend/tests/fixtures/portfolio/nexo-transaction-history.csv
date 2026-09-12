@@ -1,0 +1,13 @@
+Transaction,Type,Input Currency,Input Amount,Output Currency,Output Amount,USD Equivalent,Fee,Fee Currency,Details,Date / Time (UTC)
+NX-TRADE-1,Deposit To Exchange,USD,100.00,EURX,0.05000000,$100.00,0.01000000,USD,Synthetic conversion,2026-01-02 10:00:00
+NX-DUP-1,Exchange Deposited On,USD,-100,EURX,0.05,100,0,,Synthetic linked wallet row,2026-01-02 10:00:01
+NX-TRADE-2,Exchange To Withdraw,BTC,0.01,USD,250,250,1,USD,Synthetic conversion,2026-01-03 11:00:00
+NX-DUP-2,Withdraw Exchanged,USD,-250,USD,250,250,0,,Synthetic linked wallet row,2026-01-03 11:00:01
+NX-MOVE-1,Transfer To Pro Wallet,ETH,-0.10000000,ETH,0.10000000,$200.00,-,-,Synthetic internal transfer,2026-01-04 12:00:00
+NX-MOVE-2,Transfer From Pro Wallet,ETH,0.1,ETH,0.1,200,0,,Synthetic internal transfer,2026-01-04 12:01:00
+NX-INCOME-1,Interest,ETH,0.002,ETH,0.002,4,0,,Synthetic interest,2026-01-05 13:00:00
+NX-TOPUP-1,Top up Crypto,BTC,0.003,BTC,0.003,75,0,,Synthetic top up,2026-01-06 14:00:00
+NX-OUT-1,Withdrawal,BTC,-0.001,BTC,0.001,25,0,,Synthetic withdrawal,2026-01-07 15:00:00
+NX-UNKNOWN-1,Card Cashback,USDC,2,USDC,2,2,0,,Synthetic unsupported event,2026-01-08 16:00:00
+NX-FAILED-1,Deposit To Exchange,USDC,10,ETH,0,10,0,,Synthetic failed conversion,2026-01-09 17:00:00
+NX-FEE-1,Deposit To Exchange,USD,100,ETH,0.05,100,1,EUR,Synthetic non-USD fee,2026-01-10 18:00:00

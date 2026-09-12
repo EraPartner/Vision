@@ -88,42 +88,46 @@ describe("portfolioImports API client", () => {
         expect(body).toEqual({ name: "Mine", config });
     });
 
-    it("sends the IBKR format selector with a portfolio CSV import", async () => {
-        let requestedUrl = "";
-        let requestedBody: FormData | undefined;
-        server.use(
-            http.post(
-                `${API_BASE}/api/portfolio/import/csv/custom`,
-                async ({ request }) => {
-                    requestedUrl = request.url;
-                    requestedBody = await request.formData();
-                    return ok({
-                        batch_id: 2,
-                        imported: 1,
-                        duplicates: 0,
-                        errors: 0,
-                    });
-                },
-            ),
-        );
+    it.each([
+        "ibkr_transaction_history",
+        "kinesis_transaction_history",
+        "nexo_transaction_history",
+        "saxo_transaction_history",
+    ] as const)(
+        "sends the %s selector and brokerage account in the multipart body",
+        async (format) => {
+            let requestedUrl = "";
+            let requestedBody: FormData | undefined;
+            server.use(
+                http.post(
+                    `${API_BASE}/api/portfolio/import/csv/custom`,
+                    async ({ request }) => {
+                        requestedUrl = request.url;
+                        requestedBody = await request.formData();
+                        return ok({
+                            batch_id: 2,
+                            imported: 1,
+                            duplicates: 0,
+                            errors: 0,
+                        });
+                    },
+                ),
+            );
 
-        await importPortfolioCSVCustom(
-            new File(["fixture"], "ibkr.csv", { type: "text/csv" }),
-            { ...config, format: "ibkr_transaction_history" },
-            "ibkr_transaction_history",
-            { isBrokerage: true, accountId: 7 },
-        );
+            await importPortfolioCSVCustom(
+                new File(["fixture"], `${format}.csv`, { type: "text/csv" }),
+                { ...config, format },
+                format,
+                { isBrokerage: true, accountId: 7 },
+            );
 
-        expect(new URL(requestedUrl).search).toBe("");
-        expect(requestedBody?.get("portfolio_format")).toBe(
-            "ibkr_transaction_history",
-        );
-        expect(requestedBody?.get("adapter_name")).toBe(
-            "ibkr_transaction_history",
-        );
-        expect(requestedBody?.get("is_brokerage")).toBe("true");
-        expect(requestedBody?.get("account_id")).toBe("7");
-    });
+            expect(new URL(requestedUrl).search).toBe("");
+            expect(requestedBody?.get("portfolio_format")).toBe(format);
+            expect(requestedBody?.get("adapter_name")).toBe(format);
+            expect(requestedBody?.get("is_brokerage")).toBe("true");
+            expect(requestedBody?.get("account_id")).toBe("7");
+        },
+    );
 
     it("updatePortfolioParserConfig PATCHes by id", async () => {
         server.use(

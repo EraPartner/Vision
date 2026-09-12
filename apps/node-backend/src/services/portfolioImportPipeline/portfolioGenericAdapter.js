@@ -19,6 +19,8 @@ import {
 } from "../importPipeline/adapters/_shared.js";
 import { parseIbkrTransactionHistory } from "./ibkrTransactionHistoryAdapter.js";
 import { parseKinesisTransactionHistory } from "./kinesisTransactionHistoryAdapter.js";
+import { parseNexoTransactionHistory } from "./nexoTransactionHistoryAdapter.js";
+import { parseSaxoTransactionHistory } from "./saxoTransactionHistoryAdapter.js";
 
 /**
  * One raw row as this adapter extracts it — field names are the staging
@@ -62,7 +64,7 @@ import { parseKinesisTransactionHistory } from "./kinesisTransactionHistoryAdapt
  * @property {number} [skip_rows]
  * @property {BufferEncoding} [encoding] defaults to 'utf-8'
  * @property {Record<string, string>} [type_mapping] raw type label → canonical portfolio_txn_type (read by validate.js)
- * @property {'ibkr_transaction_history'|'kinesis_transaction_history'} [format] specialized statement format
+ * @property {'ibkr_transaction_history'|'kinesis_transaction_history'|'nexo_transaction_history'|'saxo_transaction_history'} [format] specialized statement format
  * @property {{ date?: string, type?: string, symbol?: string, name?: string, units?: string, price?: string, amount?: string, fees?: string, taxes?: string, currency?: string, fx_rate?: string, note?: string, source_account?: string, source_id?: string }} [column_mapping] source column NAMES, not indices
  */
 
@@ -136,6 +138,12 @@ export async function parseWithConfig(filePath, config) {
   }
   if (config.format === "kinesis_transaction_history") {
     return parseKinesisTransactionHistory(filePath, config);
+  }
+  if (config.format === "nexo_transaction_history") {
+    return parseNexoTransactionHistory(filePath, config);
+  }
+  if (config.format === "saxo_transaction_history") {
+    return parseSaxoTransactionHistory(filePath, config);
   }
   const dateFormat = config.date_format || "";
   if (!SUPPORTED_DATE_FORMATS.includes(dateFormat)) {

@@ -64,61 +64,11 @@ import { useUnsavedChanges } from "@/contexts/UnsavedChangesContext";
 import { useAccounts } from "@/hooks/useAccounts";
 import { activeBrokerAccounts } from "@/features/portfolio/manualTradeBroker";
 import { PortfolioBrokerField } from "@/features/portfolio/PortfolioBrokerField";
-
-const DEFAULT_CONFIG: PortfolioCustomConfig = {
-    dateColumn: "",
-    typeColumn: "",
-    symbolColumn: "",
-    nameColumn: "",
-    unitsColumn: "",
-    priceColumn: "",
-    amountColumn: "",
-    feesColumn: "",
-    taxesColumn: "",
-    currencyColumn: "",
-    fxRateColumn: "",
-    noteColumn: "",
-    dateFormat: "%Y-%m-%d",
-    separator: ",",
-    encoding: "utf-8",
-    skipRows: 0,
-    defaultAssetClass: "stock",
-    defaultType: "buy",
-    typeMapping: {},
-};
-
-const IBKR_TRANSACTION_HISTORY_CONFIG: PortfolioCustomConfig = {
-    ...DEFAULT_CONFIG,
-    format: "ibkr_transaction_history",
-    dateColumn: "Date",
-    typeColumn: "Transaction Type",
-    symbolColumn: "Symbol",
-    nameColumn: "",
-    unitsColumn: "Quantity",
-    priceColumn: "Price",
-    amountColumn: "Gross Amount",
-    feesColumn: "Commission",
-    currencyColumn: "Price Currency",
-    fxRateColumn: "Exchange Rate",
-    noteColumn: "Description",
-    typeMapping: { "Foreign Tax Withholding": "tax" },
-};
-
-const KINESIS_TRANSACTION_HISTORY_CONFIG: PortfolioCustomConfig = {
-    ...DEFAULT_CONFIG,
-    format: "kinesis_transaction_history",
-    dateColumn: "DateTime",
-    typeColumn: "Transaction_Type",
-    symbolColumn: "Currency_Code",
-    unitsColumn: "Amount",
-    priceColumn: "Trade_Price",
-    amountColumn: "Trade_Value",
-    feesColumn: "Fee",
-    currencyColumn: "Trade_Value_Currency",
-    // Kinesis mixes metals and crypto in one statement. New KAU/KAG holdings
-    // are inferred as metals by the backend; remaining codes use this fallback.
-    defaultAssetClass: "crypto",
-};
+import {
+    DEFAULT_PORTFOLIO_IMPORT_CONFIG,
+    portfolioImportPresetConfig,
+    portfolioImportSpecializedHintKey,
+} from "./portfolioImportPresets";
 
 const PortfolioImportIcon = PAGE_ICONS["/portfolio/import"];
 
@@ -128,11 +78,13 @@ export function PortfolioImportPage() {
     const [file, setFile] = useState<File | null>(null);
     const [source, setSource] = useState("custom");
     const [parserName, setParserName] = useState("");
-    const [config, setConfig] = useState<PortfolioCustomConfig>(DEFAULT_CONFIG);
+    const [config, setConfig] = useState<PortfolioCustomConfig>(
+        DEFAULT_PORTFOLIO_IMPORT_CONFIG,
+    );
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState<ImportProgress | null>(null);
     const [parserBaseline, setParserBaseline] = useState(() =>
-        JSON.stringify({ name: "", config: DEFAULT_CONFIG }),
+        JSON.stringify({ name: "", config: DEFAULT_PORTFOLIO_IMPORT_CONFIG }),
     );
     const abortRef = useRef<(() => void) | null>(null);
 
@@ -145,9 +97,8 @@ export function PortfolioImportPage() {
     const { confirm, ConfirmDialog } = useConfirmDialog();
 
     const isSaved = source.startsWith("saved:");
-    const isIbkrFormat = config.format === "ibkr_transaction_history";
-    const isKinesisFormat = config.format === "kinesis_transaction_history";
-    const isSpecializedFormat = isIbkrFormat || isKinesisFormat;
+    const specializedHintKey = portfolioImportSpecializedHintKey(config.format);
+    const isSpecializedFormat = specializedHintKey !== undefined;
     const selectedParser = isSaved
         ? savedParsers?.find((p) => p.id === Number(source.slice(6)))
         : undefined;
@@ -171,29 +122,23 @@ export function PortfolioImportPage() {
                 (p) => p.id === Number(val.slice(6)),
             );
             if (parser) {
-                const nextConfig = { ...DEFAULT_CONFIG, ...parser.config };
+                const nextConfig = {
+                    ...DEFAULT_PORTFOLIO_IMPORT_CONFIG,
+                    ...parser.config,
+                };
                 setConfig(nextConfig);
                 setParserName(parser.name);
                 setParserBaseline(
                     JSON.stringify({ name: parser.name, config: nextConfig }),
                 );
             }
-        } else if (val === "ibkr") {
-            const nextConfig = { ...IBKR_TRANSACTION_HISTORY_CONFIG };
-            setConfig(nextConfig);
-            setParserName("");
-            setParserBaseline(JSON.stringify({ name: "", config: nextConfig }));
-        } else if (val === "kinesis") {
-            const nextConfig = { ...KINESIS_TRANSACTION_HISTORY_CONFIG };
-            setConfig(nextConfig);
-            setParserName("");
-            setParserBaseline(JSON.stringify({ name: "", config: nextConfig }));
         } else {
-            setConfig(DEFAULT_CONFIG);
+            const nextConfig =
+                portfolioImportPresetConfig(val) ??
+                DEFAULT_PORTFOLIO_IMPORT_CONFIG;
+            setConfig(nextConfig);
             setParserName("");
-            setParserBaseline(
-                JSON.stringify({ name: "", config: DEFAULT_CONFIG }),
-            );
+            setParserBaseline(JSON.stringify({ name: "", config: nextConfig }));
         }
     };
 
@@ -380,6 +325,18 @@ export function PortfolioImportPage() {
                                         {t("portfolioImport.kinesisParser")}
                                     </span>
                                 </SelectItem>
+                                <SelectItem value="nexo">
+                                    <span className="inline-flex items-center gap-2">
+                                        <Bookmark className="h-3.5 w-3.5 text-primary" />
+                                        {t("portfolioImport.nexoParser")}
+                                    </span>
+                                </SelectItem>
+                                <SelectItem value="saxo">
+                                    <span className="inline-flex items-center gap-2">
+                                        <Bookmark className="h-3.5 w-3.5 text-primary" />
+                                        {t("portfolioImport.saxoParser")}
+                                    </span>
+                                </SelectItem>
                                 {savedParsers?.map((parser) => (
                                     <SelectItem
                                         key={parser.id}
@@ -397,11 +354,7 @@ export function PortfolioImportPage() {
 
                     {isSpecializedFormat ? (
                         <p className="rounded-md border bg-muted/20 p-3 text-sm text-muted-foreground">
-                            {t(
-                                isIbkrFormat
-                                    ? "portfolioImport.ibkrParserHint"
-                                    : "portfolioImport.kinesisParserHint",
-                            )}
+                            {t(specializedHintKey!)}
                         </p>
                     ) : (
                         <>
@@ -581,7 +534,8 @@ export function PortfolioImportPage() {
                             disabled={
                                 !file ||
                                 loading ||
-                                (isIbkrFormat && config.accountId == null)
+                                (isSpecializedFormat &&
+                                    config.accountId == null)
                             }
                             className="flex-1 h-11"
                             size="lg"

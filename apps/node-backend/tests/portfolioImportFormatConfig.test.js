@@ -31,6 +31,18 @@ describe("portfolio import format contract", () => {
     expect(parsed.customConfig.format).toBe("kinesis_transaction_history");
   });
 
+  it.each(["nexo_transaction_history", "saxo_transaction_history"])(
+    "passes the supported %s format into the parser config",
+    (format) => {
+      const parsed = __buildPortfolioConfig({
+        ...minimal,
+        portfolio_format: format,
+      });
+
+      expect(parsed.customConfig.format).toBe(format);
+    },
+  );
+
   it("rejects an unknown specialized format", () => {
     expect(() =>
       __buildPortfolioConfig({ ...minimal, portfolio_format: "guess" }),
@@ -63,6 +75,26 @@ describe("portfolio import format contract", () => {
         accountId: undefined,
       }),
     ).toThrow(/Kinesis Transaction History requires/);
+    expect(() =>
+      __assertPortfolioFormatBrokerage(config, {
+        isBrokerage: true,
+        accountId: 7,
+      }),
+    ).not.toThrow();
+  });
+
+  it.each([
+    ["nexo_transaction_history", "Nexo"],
+    ["saxo_transaction_history", "Saxo"],
+  ])("requires an explicit brokerage account for %s", (format, label) => {
+    const config = { format };
+
+    expect(() =>
+      __assertPortfolioFormatBrokerage(config, {
+        isBrokerage: false,
+        accountId: undefined,
+      }),
+    ).toThrow(new RegExp(`${label} Transaction History requires`));
     expect(() =>
       __assertPortfolioFormatBrokerage(config, {
         isBrokerage: true,

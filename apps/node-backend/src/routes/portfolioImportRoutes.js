@@ -145,14 +145,18 @@ function parseBrokerageParams(data) {
  * @param {{ isBrokerage: boolean, accountId?: number }} brokerage
  */
 function assertPortfolioFormatBrokerage(customConfig, brokerage) {
+  const formatNames = {
+    ibkr_transaction_history: "IBKR",
+    kinesis_transaction_history: "Kinesis",
+    nexo_transaction_history: "Nexo",
+    saxo_transaction_history: "Saxo",
+  };
   if (
-    ["ibkr_transaction_history", "kinesis_transaction_history"].includes(
-      customConfig.format,
-    ) &&
+    Object.prototype.hasOwnProperty.call(formatNames, customConfig.format) &&
     (!brokerage.isBrokerage || brokerage.accountId == null)
   ) {
     throw new ValidationError(
-      `${customConfig.format === "ibkr_transaction_history" ? "IBKR" : "Kinesis"} Transaction History requires is_brokerage=true and account_id`,
+      `${formatNames[customConfig.format]} Transaction History requires is_brokerage=true and account_id`,
     );
   }
 }
@@ -246,9 +250,15 @@ const portfolioImportConfigSchema = z
     type_mapping: z.unknown().optional().transform(parseTypeMapping),
     adapter_name: defaultedTextField("portfolio_generic"),
     portfolio_format: z
-      .enum(["ibkr_transaction_history", "kinesis_transaction_history"], {
-        error: "portfolio_format must be a supported portfolio format",
-      })
+      .enum(
+        [
+          "ibkr_transaction_history",
+          "kinesis_transaction_history",
+          "nexo_transaction_history",
+          "saxo_transaction_history",
+        ],
+        { error: "portfolio_format must be a supported portfolio format" },
+      )
       .optional(),
   })
   .superRefine((data, ctx) => {

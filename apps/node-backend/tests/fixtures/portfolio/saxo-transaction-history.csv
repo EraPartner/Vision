@@ -1,0 +1,7 @@
+Gebruikersnaam,Transactiedatum,Valutadatum,Rekening-ID,Transactie-ID, Positie-ID,Corporate action-Id,Bk Record Id,Booking Id,Transactietype,Acties,Boekingsbedrag,Valuta,Omrekeningskoers,Conversion cost,Totale kosten,Gerealiseerde W/V,IBAN,IBAN owner name,Opmerking,Correction reason,Instrument,Instrumentsymbool,Instrument ISIN,Instrumentvaluta,Type,Uitwisselingsbeschrijving,From Derivative,Underlying asset type
+synthetic,2026/01/02,2026/01/04,ACC-1,TX-1,POS-1,,101,BK-1,Transactie,Koop 10 @ 20.00 USD,-181,EUR,0.9,-0.5,-1,,, ,Synthetic buy,,Example Inc,EXM:xnas,XX0000000001,USD,Stock,Synthetic exchange,false,
+synthetic,2026/01/03,2026/01/05,ACC-1,TX-2,POS-1,,102,BK-2,Trade,Sell 2 @ 25.00 USD,44.5,EUR,0.9,-0.25,-0.5,,, ,Synthetic sell,,Example Inc,EXM:xnas,XX0000000001,USD,Stock,Synthetic exchange,false,
+synthetic,2026/01/04,2026/01/04,ACC-1,,,CA-1,103,BK-3,Corporate action,Cashdividend,4.5,EUR,0.9,0,0,,, ,Synthetic dividend,,Example Inc,EXM:xnas,XX0000000001,USD,Stock,Synthetic exchange,false,
+synthetic,2026/01/05,2026/01/05,ACC-1,,,,104,BK-4,Storting/opname,Storting,"1.234,56",EUR,1,0,0,,, ,Synthetic deposit,,,,,EUR,Cash,,false,
+synthetic,2026/01/06,2026/01/06,ACC-1,,,,105,BK-5,Cash transfer,Withdrawal,-50,EUR,1,0,0,,, ,Synthetic withdrawal,,,,,EUR,Cash,,false,
+synthetic,2026/01/07,2026/01/07,ACC-1,,,CA-2,106,BK-6,Corporate action,Stock dividend,12,EUR,1,0,0,,, ,Synthetic unsupported action,,Other Inc,OTH:xnys,XX0000000002,EUR,Stock,Synthetic exchange,false,

@@ -2748,11 +2748,16 @@ components:
           description: Display label for the import source
         portfolio_format:
           type: string
-          enum: [ibkr_transaction_history, kinesis_transaction_history]
+          enum:
+            - ibkr_transaction_history
+            - kinesis_transaction_history
+            - nexo_transaction_history
+            - saxo_transaction_history
           description: >-
             Specialized portfolio statement parser; omit for generic column
-            mapping. IBKR and Kinesis require is_brokerage=true and account_id
-            because their transaction histories include cash movements.
+            mapping. Maintained IBKR, Kinesis, Nexo, and Saxo formats require
+            is_brokerage=true and account_id because their transaction histories
+            include or affect sleeve cash movements.
         date_format:
           type: string
           description: "Python strptime format, default: %Y-%m-%d"

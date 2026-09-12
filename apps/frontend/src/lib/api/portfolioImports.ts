@@ -45,7 +45,11 @@ export interface PortfolioCustomConfig {
     /** Optional file-level destination for every trade staged with this parser. */
     accountId?: number;
     /** Format-specific parser. Omit for the generic column mapper. */
-    format?: "ibkr_transaction_history" | "kinesis_transaction_history";
+    format?:
+        | "ibkr_transaction_history"
+        | "kinesis_transaction_history"
+        | "nexo_transaction_history"
+        | "saxo_transaction_history";
     dateColumn: string;
     typeColumn: string;
     symbolColumn: string;
