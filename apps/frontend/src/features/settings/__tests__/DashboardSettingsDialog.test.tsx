@@ -17,7 +17,7 @@ function renderDialog(open = true, defaultTab = "general") {
             open={open}
             onOpenChange={onOpenChange}
             defaultTab={defaultTab}
-        />
+        />,
     );
     return { ...result, onOpenChange };
 }
@@ -37,8 +37,18 @@ describe("DashboardSettingsDialog", () => {
         renderDialog(true);
         await screen.findByRole("dialog");
 
-        for (const name of [/^general$/i, /^appearance$/i, /^statistics$/i, /^behavior$/i, /AI & Research/i, /^backup$/i, /About & Maintenance/i]) {
-            expect(await screen.findByRole("tab", { name })).toBeInTheDocument();
+        for (const name of [
+            /^general$/i,
+            /^appearance$/i,
+            /^statistics$/i,
+            /^behavior$/i,
+            /AI & Research/i,
+            /^backup$/i,
+            /About & Maintenance/i,
+        ]) {
+            expect(
+                await screen.findByRole("tab", { name }),
+            ).toBeInTheDocument();
         }
     });
 
@@ -47,7 +57,9 @@ describe("DashboardSettingsDialog", () => {
         renderDialog(true, "general");
         await screen.findByRole("dialog");
 
-        await user.click(await screen.findByRole("tab", { name: /^appearance$/i }));
+        await user.click(
+            await screen.findByRole("tab", { name: /^appearance$/i }),
+        );
 
         expect(await screen.findByText(/theme variant/i)).toBeInTheDocument();
     });
@@ -57,9 +69,13 @@ describe("DashboardSettingsDialog", () => {
         renderDialog(true, "general");
         await screen.findByRole("dialog");
 
-        await user.click(await screen.findByRole("tab", { name: /^statistics$/i }));
+        await user.click(
+            await screen.findByRole("tab", { name: /^statistics$/i }),
+        );
 
-        expect(await screen.findAllByText(/exclusion scope/i)).not.toHaveLength(0);
+        expect(await screen.findAllByText(/exclusion scope/i)).not.toHaveLength(
+            0,
+        );
     });
 
     it("Done button closes the dialog", async () => {
@@ -67,7 +83,9 @@ describe("DashboardSettingsDialog", () => {
         const { onOpenChange } = renderDialog(true);
         await screen.findByRole("dialog");
 
-        await user.click(await screen.findByRole("button", { name: /^done$/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /^done$/i }),
+        );
 
         await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
     });
@@ -85,26 +103,26 @@ describe("DashboardSettingsDialog", () => {
         await screen.findByRole("dialog");
 
         expect(await screen.findByText(/theme variant/i)).toBeInTheDocument();
-        const navBtn = await screen.findByRole("tab", { name: /^appearance$/i });
+        const navBtn = await screen.findByRole("tab", {
+            name: /^appearance$/i,
+        });
         expect(navBtn).toHaveAttribute("aria-selected", "true");
     });
 
-    it("legacy 'dashboard' deep-link maps to the Statistics section", async () => {
+    it("retired 'dashboard' deep-link falls back to General", async () => {
         renderDialog(true, "dashboard");
         await screen.findByRole("dialog");
 
-        const navBtn = await screen.findByRole("tab", { name: /^statistics$/i });
+        const navBtn = await screen.findByRole("tab", { name: /^general$/i });
         expect(navBtn).toHaveAttribute("aria-selected", "true");
-        expect(await screen.findAllByText(/exclusion scope/i)).not.toHaveLength(0);
     });
 
-    it("legacy 'app' deep-link maps to the About section", async () => {
+    it("retired 'app' deep-link falls back to General", async () => {
         renderDialog(true, "app");
         await screen.findByRole("dialog");
 
-        const navBtn = await screen.findByRole("tab", { name: /About & Maintenance/i });
+        const navBtn = await screen.findByRole("tab", { name: /^general$/i });
         expect(navBtn).toHaveAttribute("aria-selected", "true");
-        expect(await screen.findByText(/reset all settings/i)).toBeInTheDocument();
     });
 
     it("dialog renders in open state (a11y / backdrop guard)", async () => {
@@ -117,7 +135,9 @@ describe("DashboardSettingsDialog", () => {
         const user = userEvent.setup();
         renderDialog(true, "general");
 
-        const tablist = await screen.findByRole("tablist", { name: /settings/i });
+        const tablist = await screen.findByRole("tablist", {
+            name: /settings/i,
+        });
         const general = screen.getByRole("tab", { name: /^general$/i });
         general.focus();
         await user.keyboard("{ArrowRight}");
@@ -126,6 +146,9 @@ describe("DashboardSettingsDialog", () => {
         expect(tablist).toContainElement(appearance);
         expect(appearance).toHaveFocus();
         expect(appearance).toHaveAttribute("aria-selected", "true");
-        expect(screen.getByRole("tabpanel")).toHaveAttribute("aria-labelledby", appearance.id);
+        expect(screen.getByRole("tabpanel")).toHaveAttribute(
+            "aria-labelledby",
+            appearance.id,
+        );
     });
 });

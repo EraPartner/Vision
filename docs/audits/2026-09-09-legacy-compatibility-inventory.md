@@ -1,7 +1,7 @@
 ---
 title: Legacy and Compatibility Surface Inventory
 type: audit
-date: 2026-09-09
+date: 2026-09-12
 tags: [audit, legacy, compatibility, database, api, frontend, electron]
 description: Repository-wide classification of legacy and compatibility surfaces, their consumers, retirement gates, and bounded TODO ownership.
 aliases: [legacy inventory, compatibility inventory]
@@ -10,9 +10,19 @@ related_code: [[TODO.md]], [[package.json]], [[scripts/check-legacy-inventory.js
 
 # Legacy and Compatibility Surface Inventory
 
+> [!note] Frozen discovery snapshot
+> The counts and candidate tables below capture the repository on 2026-09-09 and are not maintained
+> as a current queue. Use [[docs/audits/legacy-surface-inventory.json|the machine-readable inventory]]
+> and [[TODO|TODO.md]] for current classifications and ownership. Since this snapshot, the ADR-134
+> live PostgreSQL gate passed on 2026-09-12. Accepted ADR-136 retires the HTTP-error and import-query
+> compatibility surfaces and removes the deep-link redirects under a same-release policy. The
+> deep-link source and contract checks pass; manual browser acceptance against the rebuilt synthetic
+> Demo was user-confirmed on 2026-09-12. Electron legacy-install guards remain retained recovery
+> compatibility and continue to fail closed for unknown skipped-version installs.
+
 ## Outcome
 
-The repository-wide discovery found **53 candidate surfaces**:
+At the audit date, repository-wide discovery found **53 candidate surfaces**:
 
 | Classification         | Count | Meaning                                                                                                                    |
 | ---------------------- | ----: | -------------------------------------------------------------------------------------------------------------------------- |
@@ -61,7 +71,7 @@ required migration or decision.
 | ID                         | Surface                                  | Current gate                                                                               |
 | -------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------ |
 | `LEG-DB-RAW-PROVENANCE`    | Provider raw transaction relations       | Preserve unique provenance, backfill links, stop writers, and prove backup/restore parity. |
-| `LEG-DB-TX-HASH`           | Legacy `tx_hash` identity                | ADR-134 acceptance plus a fallback-free soak.                                              |
+| `LEG-DB-TX-HASH`           | Legacy `tx_hash` identity                | ADR-134's live gate passed on 2026-09-12; a fallback-free soak still remains.              |
 | `LEG-DB-ADR109-ROLLBACK`   | `legacy_inh_*` relations                 | Zero-loss disposition, 30-day soak, stopped writers, and restore-tested backup.            |
 | `LEG-DB-RECURRENCE-ENUM`   | Old recurrence enum                      | ADR-109 retirement, zero `pg_depend` consumers, and downgrade-policy decision.             |
 | `LEG-DB-BANK-ACCOUNT`      | Transaction `bank_account` compatibility | Client identifier migration, parity proof, stopped writers, and guarded contract.          |

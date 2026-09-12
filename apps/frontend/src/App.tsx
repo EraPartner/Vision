@@ -4,13 +4,11 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { LazyMotion } from "framer-motion";
 import {
-    Navigate,
     Route,
     RouterProvider,
     Routes,
     createBrowserRouter,
     useLocation,
-    useParams,
 } from "react-router";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { SettingsProvider } from "@/stores/hydration/SettingsHydration";
@@ -98,25 +96,6 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
     return <ErrorBoundary key={pathname}>{children}</ErrorBoundary>;
 }
 
-// Redirect a relocated route to its new path, preserving the query string so
-// deep-links (e.g. /portfolio/market?symbol=AAPL&investmentId=3) survive the
-// ADR-079 Research move.
-function RedirectWithQuery({ to }: { to: string }) {
-    const { search } = useLocation();
-    return <Navigate to={`${to}${search}`} replace />;
-}
-
-// The standalone research symbol page was retired in favour of Market Lookup as
-// the single security-detail surface. Old /research/symbol/:symbol links (and
-// holding deep-links carrying ?investmentId=) redirect into the ?symbol= form.
-function RedirectSymbolToMarket() {
-    const { symbol } = useParams<{ symbol: string }>();
-    const { search } = useLocation();
-    const params = new URLSearchParams(search);
-    if (symbol) params.set("symbol", symbol);
-    return <Navigate to={`/research/market?${params.toString()}`} replace />;
-}
-
 function RouterSurface() {
     return (
         <UnsavedChangesProvider>
@@ -141,31 +120,6 @@ function RouterSurface() {
                                     }
                                 />
                             ))}
-                            <Route
-                                path="/portfolio/exchange-rates"
-                                element={
-                                    <Navigate
-                                        to="/admin/exchange-rates"
-                                        replace
-                                    />
-                                }
-                            />
-                            <Route
-                                path="/research/symbol/:symbol"
-                                element={<RedirectSymbolToMarket />}
-                            />
-                            <Route
-                                path="/portfolio/market"
-                                element={
-                                    <RedirectWithQuery to="/research/market" />
-                                }
-                            />
-                            <Route
-                                path="/portfolio/watchlist"
-                                element={
-                                    <RedirectWithQuery to="/research/watchlist" />
-                                }
-                            />
                             <Route path="*" element={<NotFound />} />
                         </Routes>
                     </Suspense>

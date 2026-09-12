@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "auditedAt": "2026-09-11",
+  "auditedAt": "2026-09-12",
   "scope": "Runtime code, database schema and migrations, API compatibility, persisted frontend state, Electron migration and backup compatibility, package shims, tests, generated contracts, and historical documentation.",
   "searches": [
     "Name scan for legacy, deprecated, compatibility, backward, fallback, old-version, alias, shim, migration, and v1 markers outside generated/build output",
@@ -39,9 +39,9 @@
   "summary": {
     "total": 53,
     "remove-now": 0,
-    "migrate-then-remove": 11,
-    "retain-with-reason": 15,
-    "historical-record-only": 27,
+    "migrate-then-remove": 6,
+    "retain-with-reason": 17,
+    "historical-record-only": 30,
     "unknown": 0
   },
   "records": [
@@ -59,10 +59,9 @@
       "readers": "Manual duplicate checks read manual_raw_transactions; backup and database tools enumerate all relations.",
       "writers": "Manual transaction creation writes manual_raw_transactions; provider-specific relations have no current runtime writers.",
       "persistedData": "Raw CSV, provider fields, hashes, timestamps, and transaction_raw_references links may exist on maintained databases.",
-      "supportWindow": "Contract removal follows the ADR-134 live gate and an installation-specific parity maintenance window.",
+      "supportWindow": "The ADR-134 live gate passed on 2026-09-12; contract removal still requires an installation-specific parity maintenance window.",
       "replacement": "A durable provider-neutral provenance archive plus canonical manual duplicate identity.",
       "deletionDependencies": [
-        "ADR-134 live migration and concurrency acceptance",
         "restart-safe backfill",
         "stopped-writer delta check",
         "restore-tested PostgreSQL 18 backup"
@@ -84,15 +83,14 @@
       "readers": "Budgeting and portfolio import validation, commit, and repository paths read legacy hashes.",
       "writers": "New import paths still populate tx_hash alongside versioned fingerprints.",
       "persistedData": "Historical hashes were derived from adapter-specific and sometimes reconstructed records.",
-      "supportWindow": "Remove only after ADR-134 live acceptance, fallback telemetry or exact-install evidence, and a no-fallback soak.",
+      "supportWindow": "ADR-134 live acceptance passed on 2026-09-12; removal still requires fallback telemetry or exact-install evidence and a no-fallback soak.",
       "replacement": "source_record_hash plus versioned dedup_fingerprint.",
       "deletionDependencies": [
-        "ADR-134 acceptance",
         "stop tx_hash writes",
         "fallback-free soak",
         "contract migration and restore boundary"
       ],
-      "liveEvidence": "Source tests exist; the live PostgreSQL migration and concurrency gate remains open.",
+      "liveEvidence": "The disposable PostgreSQL migration round-trip and budgeting/portfolio concurrency suites passed outside the restricted Codex runner on 2026-09-12.",
       "todoTitle": "Retire legacy tx_hash after versioned import identity has soaked"
     },
     {
@@ -488,26 +486,22 @@
       "id": "LEG-API-IMPORT-QUERY-FALLBACKS",
       "title": "Multipart import mapping query fallbacks",
       "domain": "API/imports",
-      "classification": "migrate-then-remove",
-      "disposition": "The shipped frontend now sends every bank, mapping, and brokerage option as a multipart field; backend query fallbacks remain for the one-release client window.",
+      "classification": "historical-record-only",
+      "disposition": "Removed under accepted ADR-136's explicit same-release client cutoff. Budgeting and portfolio imports now accept upload options only as multipart fields.",
       "paths": [
         "apps/node-backend/src/routes/importRoutes.js",
         "apps/frontend/src/lib/api/imports.ts",
         "apps/frontend/src/lib/api/portfolioImports.ts",
         "openapi.yaml"
       ],
-      "readers": "Budgeting and portfolio import routes merge query and body fields.",
+      "readers": "Budgeting and portfolio import routes read upload options only from the multipart body.",
       "writers": "The shipped frontend writes multipart fields across one-shot and server-sent events variants.",
       "persistedData": "Import configuration and staged financial rows; no legacy storage is created by the parameter location.",
-      "supportWindow": "Migrate all shipped multipart clients to FormData fields, dual-accept for one release, then remove query fallback.",
-      "replacement": "Multipart body fields with body-wins precedence.",
-      "deletionDependencies": [
-        "frontend upload migration",
-        "all import/SSE variants",
-        "client support window"
-      ],
-      "liveEvidence": "Frontend request-shape tests confirm body fields and query-free upload URLs; backend fallback removal remains release-gated.",
-      "todoTitle": "Move import options into multipart bodies and retire query fallbacks"
+      "supportWindow": "Ended 2026-09-12 under ADR-136's same-release client boundary.",
+      "replacement": "Multipart body fields.",
+      "deletionDependencies": [],
+      "liveEvidence": "Frontend request-shape tests confirm body fields and query-free upload URLs; OpenAPI and generated types expose no compatibility query fields; focused backend validation tests pass, while socket-bound route tests are host-blocked.",
+      "todoTitle": null
     },
     {
       "id": "LEG-API-ADMIN-FORCE",
@@ -554,24 +548,20 @@
       "id": "LEG-API-ERROR-SHAPES",
       "title": "Frontend parsing of legacy HTTP error envelopes",
       "domain": "frontend/API client",
-      "classification": "migrate-then-remove",
-      "disposition": "Current Node handlers use the unified envelope, but the parser protects server/client skew and several older detail/message shapes.",
+      "classification": "historical-record-only",
+      "disposition": "Removed under accepted ADR-136's explicit same-release client/server cutoff. The frontend parses the unified HTTP failure envelope and uses status fallback for malformed bodies.",
       "paths": [
         "apps/frontend/src/lib/api/client.ts",
         "apps/node-backend/src/middleware/errorHandler.js"
       ],
-      "readers": "Every frontend API request uses the parser.",
+      "readers": "Every frontend API request uses the canonical-envelope parser.",
       "writers": "Current backend middleware emits canonical envelopes; SSE detail payloads are separate.",
       "persistedData": "None.",
-      "supportWindow": "Complete a route-wide writer scan and define supported server/client skew before simplifying.",
+      "supportWindow": "Ended 2026-09-12 under ADR-136's same-release frontend/backend boundary.",
       "replacement": "Strict unified error envelope plus unparsable/status fallback.",
-      "deletionDependencies": [
-        "route-wide error contract proof",
-        "packaged skew decision",
-        "focused parser tests"
-      ],
-      "liveEvidence": "Canonical middleware is present; route-wide and packaged skew evidence is incomplete.",
-      "todoTitle": "Retire legacy HTTP error envelopes after route-wide contract proof"
+      "deletionDependencies": [],
+      "liveEvidence": "A backend source convention guard confines res.json application responses to health and shared envelope boundaries; focused parser tests cover canonical, malformed, empty, and retired bodies. Aliased or renamed response objects require focused route coverage.",
+      "todoTitle": null
     },
     {
       "id": "LEG-API-TX-DATE",
@@ -935,25 +925,21 @@
       "id": "LEG-FE-DEEP-LINKS",
       "title": "Legacy settings, account, and relocated-route deep links",
       "domain": "frontend/routing",
-      "classification": "migrate-then-remove",
-      "disposition": "Redirects remain externally reachable through bookmarks, Electron menus, and old documentation even when no current code creates some forms.",
+      "classification": "historical-record-only",
+      "disposition": "Removed under accepted ADR-136's same-release cutoff after producer scans, focused tests, Electron contract coverage, and user-confirmed manual browser acceptance against the rebuilt synthetic Demo.",
       "paths": [
         "apps/frontend/src/App.tsx",
         "apps/frontend/src/pages/AccountsPage.tsx",
         "apps/frontend/src/features/settings/DashboardSettingsDialog.tsx"
       ],
-      "readers": "Router and settings dialog parse old URLs and tab names.",
-      "writers": "Current app generally generates canonical routes; Electron still uses at least the canonical general tab name.",
+      "readers": "The wildcard renders Not Found for retired paths; the accounts hub and settings resolver ignore retired query values.",
+      "writers": "Current app, Electron menus, onboarding, and page objects use canonical routes and section names.",
       "persistedData": "External bookmarks and OS-level deep links, not database rows.",
-      "supportWindow": "Define a deep-link support policy and verify Electron/docs no longer emit old names.",
+      "supportWindow": "Ended 2026-09-12 under ADR-136's same-release cutoff.",
       "replacement": "Canonical /accounts/:id, research, portfolio, and settings section routes.",
-      "deletionDependencies": [
-        "deep-link cutoff",
-        "Electron and route tests",
-        "documentation scan"
-      ],
-      "liveEvidence": "Redirect code is active; external bookmark population is unknowable.",
-      "todoTitle": "Retire legacy deep-link redirects after a published support window"
+      "deletionDependencies": [],
+      "liveEvidence": "Focused unit tests, a portable frontend build, and the Electron source-contract test pass. On 2026-09-12 the user manually confirmed that all four retired paths rendered Not Found without redirecting, the retired account query stayed on the Accounts hub, and both retired settings aliases left the Transactions page open without a settings dialog while preserving the unrelated query parameter.",
+      "todoTitle": null
     },
     {
       "id": "LEG-FE-QUERY-KEY",
@@ -1060,8 +1046,8 @@
       "id": "LEG-ELEC-USERDATA-NAME",
       "title": "vision-desktop userData directory migration",
       "domain": "Electron/persistence",
-      "classification": "migrate-then-remove",
-      "disposition": "Startup still moves or archives the old directory; removing it can strand settings or native/embedded database state for skipped-version installs.",
+      "classification": "retain-with-reason",
+      "disposition": "Retained by explicit owner decision on 2026-09-12. The small startup guard protects skipped-version installations from stranding settings, attachments, or their only database, while its removal has no material runtime benefit.",
       "paths": [
         "packaging/electron/main.js",
         "docs/adr/045-electron-app-name-userData-migration.md"
@@ -1069,22 +1055,18 @@
       "readers": "Electron startup checks the legacy and canonical userData paths.",
       "writers": "Renames the old directory or archives it when the canonical target is populated.",
       "persistedData": "Settings, native runtime state, attachments, or retired embedded-compose data.",
-      "supportWindow": "Oldest-supported-version policy plus one release of zero legacy-directory detections.",
+      "supportWindow": "Indefinite recovery compatibility; reconsider only with a new evidence-backed retirement decision.",
       "replacement": "Canonical Vision userData directory.",
-      "deletionDependencies": [
-        "host census or telemetry",
-        "backup/recovery rule",
-        "packaged migration smoke"
-      ],
-      "liveEvidence": "Startup path is active; host population was not inspected.",
-      "todoTitle": "Retire Electron legacy-install migration guards after the support cutoff"
+      "deletionDependencies": [],
+      "liveEvidence": "All 144 Electron contract tests pass. Source-runtime and packaged-payload PostgreSQL 18 smokes passed through revision 0106 on 2026-09-12, including API, encrypted backup/restore, and attachment readback; skipped-version population remains unknown, which is the reason to retain the guard.",
+      "todoTitle": null
     },
     {
       "id": "LEG-ELEC-NATIVE-CUTOVER",
       "title": "Retired Docker runtime cutover guards",
       "domain": "Electron/runtime",
-      "classification": "migrate-then-remove",
-      "disposition": "Fail-closed guards prevent an old installation from silently opening an empty native database.",
+      "classification": "retain-with-reason",
+      "disposition": "Retained by explicit owner decision on 2026-09-12. The fail-closed guard prevents a skipped-version installation with legacy Docker state from silently opening an empty native database.",
       "paths": [
         "packaging/electron/runtime/index.js",
         "packaging/electron/runtime/native.js",
@@ -1093,15 +1075,11 @@
       "readers": "Runtime selection reads settings, native cutover marker, and embedded_compose residue.",
       "writers": "Current native activation writes runtime-state markers.",
       "persistedData": "Legacy Docker database and cutover state can represent the user's only financial data.",
-      "supportWindow": "Explicit legacy-install cutoff with restore-tested migration/backup evidence.",
+      "supportWindow": "Indefinite recovery compatibility; reconsider only with a new evidence-backed retirement decision.",
       "replacement": "Canonical native runtime with a verified cutover marker.",
-      "deletionDependencies": [
-        "support cutoff",
-        "zero maintained legacy installs",
-        "recovery proof"
-      ],
-      "liveEvidence": "Guard code is active; legacy-install population is unverified.",
-      "todoTitle": "Retire Electron legacy-install migration guards after the support cutoff"
+      "deletionDependencies": [],
+      "liveEvidence": "The active guard is covered by Electron contract tests, and current source and packaged native-runtime restore smokes pass. Legacy-install population remains unknown, so fail-closed behavior remains the safe supported result.",
+      "todoTitle": null
     },
     {
       "id": "LEG-ELEC-RAW-BACKUP",

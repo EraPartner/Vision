@@ -2,8 +2,8 @@
 title: AI Agent Codebase Navigation Map
 type: reference
 status: active
-date: 2026-09-09
-updated: 2026-09-09
+date: 2026-09-11
+updated: 2026-09-11
 tags:
   [
     ai-agent,
@@ -212,9 +212,9 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | `/portfolio/performance` | [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]]        |
 | `/portfolio/net-worth`   | [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]] |
 | `/admin/exchange-rates`  | [[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx]]          |
-| `/portfolio/watchlist`   | [[apps/frontend/src/pages/research/WatchlistPage.tsx]]           |
+| `/research/watchlist`    | [[apps/frontend/src/pages/research/WatchlistPage.tsx]]           |
 | `/portfolio/tax`         | [[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx]]   |
-| `/portfolio/market`      | [[apps/frontend/src/pages/research/MarketLookupPage.tsx]]        |
+| `/research/market`       | [[apps/frontend/src/pages/research/MarketLookupPage.tsx]]        |
 | `*` (404)                | [[apps/frontend/src/pages/NotFound.tsx]]                         |
 
 ### Frontend global-state entry points

@@ -26,6 +26,10 @@ SORT date DESC
 
 ## Active Decisions
 
+[[docs/adr/136-same-release-http-import-and-navigation-contract|ADR-136]] (Accepted) defines the
+same-release frontend/backend support policy and retires legacy HTTP error parsing, import
+query-field fallbacks, and old frontend entry points.
+
 [[docs/adr/134-versioned-import-identity-and-exact-provenance|ADR-134]] (Accepted) separates exact
 CSV provenance from versioned, occurrence-aware duplicate identity shared by budgeting and
 portfolio imports.

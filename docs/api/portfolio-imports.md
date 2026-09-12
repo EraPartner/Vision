@@ -4,9 +4,9 @@ type: endpoint
 method: POST, GET, PATCH, DELETE
 path: /api/portfolio/import
 description: CSV import of brokerage/exchange trades with review, exact source provenance, versioned duplicate identity, and saved portfolio parser configs
-date: 2026-09-09
-updated: 2026-09-09
-last_modified: 2026-09-09
+date: 2026-09-11
+updated: 2026-09-12
+last_modified: 2026-09-12
 tags:
   [
     api,
@@ -33,6 +33,10 @@ related_code:
   - "apps/node-backend/src/services/portfolioImportPipeline/validate.js"
   - "apps/node-backend/src/services/portfolioImportPipeline/matchInvestments.js"
   - "apps/node-backend/src/services/portfolioImportPipeline/commit.js"
+  - "apps/node-backend/src/services/portfolioImportPipeline/ibkrTransactionHistoryAdapter.js"
+  - "apps/node-backend/src/services/portfolioImportPipeline/kinesisTransactionHistoryAdapter.js"
+  - "apps/node-backend/src/services/portfolioImportPipeline/nexoTransactionHistoryAdapter.js"
+  - "apps/node-backend/src/services/portfolioImportPipeline/saxoTransactionHistoryAdapter.js"
   - "apps/node-backend/src/services/portfolioImportBatchService.js"
   - "apps/node-backend/src/services/customParserConfigService.js"
   - "apps/node-backend/src/lib/csvUpload.js"
@@ -54,17 +58,18 @@ Exact source records remain internal staging provenance. Versioned occurrence fi
 race-safe duplicate identity across generic and built-in adapters and are not exposed in API
 responses. See [[docs/adr/134-versioned-import-identity-and-exact-provenance|ADR-134]].
 
-The import path provides a generic user-configured mapper plus built-in IBKR and Kinesis Money
-transaction-history formats. Both maintained formats are validated against real exports and
-sanitized fixtures. Nexo and Saxo remain intended maintained targets whose compatibility is
-unverified until their runtime-acceptance records are completed with sanitized real exports.
+The import path provides a generic user-configured mapper plus built-in IBKR, Kinesis Money, Nexo,
+and Saxo transaction-history formats. All four maintained presets are validated against sanitized
+real exports and regression fixtures.
 Kinesis Money import is distinct from Vision's existing Kinesis market-price provider. Users may
 configure other broker mappings, but those formats are not maintained compatibility targets.
 
 All routes are mounted at `/api/portfolio/import` with `importRateLimiter`.
 
 > [!info] Auto-commit policy
-> The pipeline auto-commits (returns 201) only when every row was matched by exact symbol and there are zero errors or unresolved rows. Any mismatch or row error puts the batch into `awaiting_review` (returns 202) and requires the review flow before committing.
+> Non-brokerage generic imports auto-commit (return 201) only when every row was matched by exact
+> symbol and there are zero errors or unresolved rows. Every maintained preset is a brokerage import
+> and always enters `awaiting_review` (return 202), even when every symbol matches exactly.
 
 ---
 
@@ -74,40 +79,40 @@ All routes are mounted at `/api/portfolio/import` with `importRateLimiter`.
 
 One-shot portfolio CSV import. Runs the full pipeline synchronously. Returns 201 if all rows committed, 202 if review is required.
 
-The shipped one-shot and streaming clients send every mapping, adapter, format, brokerage, and
-account option as a multipart field. Query parameters remain a one-release compatibility fallback;
-when the same field is present in both locations, the multipart body value is authoritative.
+Every mapping, adapter, format, brokerage, and account option is accepted only as a multipart
+field. Query fields are ignored. This is a breaking request-contract change under
+[[docs/adr/136-same-release-http-import-and-navigation-contract|ADR-136]].
 
 **Content-Type:** multipart/form-data
 
 **Form Data:**
 
-| Field                 | Type    | Required | Description                                                                                                                  |
-| --------------------- | ------- | -------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `file`                | File    | Yes      | CSV file (max 50 MB)                                                                                                         |
-| `adapter_name`        | string  | No       | Display label for the import source (written as `bank_account` on portfolio_transactions)                                    |
-| `portfolio_format`    | string  | No       | Specialized parser: `ibkr_transaction_history` or `kinesis_transaction_history`. Omit for generic column mapping             |
-| `date_format`         | string  | No       | Python strptime format; default `%Y-%m-%d`                                                                                   |
-| `separator`           | string  | No       | Single-character CSV delimiter; default `,`                                                                                  |
-| `encoding`            | string  | No       | File encoding; default `utf-8`                                                                                               |
-| `skip_rows`           | integer | No       | Header rows to skip; default `0`                                                                                             |
-| `date_column`         | string  | Yes      | CSV header name for the trade date                                                                                           |
-| `type_column`         | string  | No       | CSV header name for the transaction type (buy/sell/dividend/…)                                                               |
-| `symbol_column`       | string  | No*      | CSV header name for the ticker symbol                                                                                        |
-| `name_column`         | string  | No*      | CSV header name for the instrument name                                                                                      |
-| `units_column`        | string  | No       | CSV header name for number of units                                                                                          |
-| `price_column`        | string  | No       | CSV header name for unit price                                                                                               |
-| `amount_column`       | string  | No       | CSV header name for total amount                                                                                             |
-| `fees_column`         | string  | No       | CSV header name for transaction fees                                                                                         |
-| `taxes_column`        | string  | No       | CSV header name for taxes/withholding                                                                                        |
-| `currency_column`     | string  | No       | CSV header name for trade currency                                                                                           |
-| `fx_rate_column`      | string  | No       | CSV header name for EUR FX rate                                                                                              |
-| `note_column`         | string  | No       | CSV header name for a free-text note                                                                                         |
-| `default_asset_class` | string  | Yes      | Fallback asset class: `stock` `etf` `crypto` `metals` `real_estate` `savings` `bond`                                         |
-| `default_type`        | string  | No       | Fallback transaction type when no `type_column` is mapped (default `buy`): `buy` `sell` `dividend` `fee` `tax` `interest`    |
-| `type_mapping`        | string  | No       | JSON object mapping raw CSV type strings → canonical portfolio_txn_type values (e.g. `{"Koop":"buy","Verkoop":"sell"}`)      |
-| `is_brokerage`        | boolean | Format*  | Must be `true` for IBKR and Kinesis transaction history so trade and cash rows use brokerage routing                         |
-| `account_id`          | integer | Format*  | Active broker account receiving every row; required with `is_brokerage` and for either maintained transaction-history format |
+| Field                 | Type    | Required | Description                                                                                                                                                        |
+| --------------------- | ------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `file`                | File    | Yes      | CSV file (max 50 MB)                                                                                                                                               |
+| `adapter_name`        | string  | No       | Display label for the import source (written as `bank_account` on portfolio_transactions)                                                                          |
+| `portfolio_format`    | string  | No       | Specialized parser: `ibkr_transaction_history`, `kinesis_transaction_history`, `nexo_transaction_history`, or `saxo_transaction_history`. Omit for generic mapping |
+| `date_format`         | string  | No       | Python strptime format; default `%Y-%m-%d`                                                                                                                         |
+| `separator`           | string  | No       | Single-character CSV delimiter; default `,`                                                                                                                        |
+| `encoding`            | string  | No       | File encoding; default `utf-8`                                                                                                                                     |
+| `skip_rows`           | integer | No       | Header rows to skip; default `0`                                                                                                                                   |
+| `date_column`         | string  | Yes      | CSV header name for the trade date                                                                                                                                 |
+| `type_column`         | string  | No       | CSV header name for the transaction type (buy/sell/dividend/…)                                                                                                     |
+| `symbol_column`       | string  | No*      | CSV header name for the ticker symbol                                                                                                                              |
+| `name_column`         | string  | No*      | CSV header name for the instrument name                                                                                                                            |
+| `units_column`        | string  | No       | CSV header name for number of units                                                                                                                                |
+| `price_column`        | string  | No       | CSV header name for unit price                                                                                                                                     |
+| `amount_column`       | string  | No       | CSV header name for total amount                                                                                                                                   |
+| `fees_column`         | string  | No       | CSV header name for transaction fees                                                                                                                               |
+| `taxes_column`        | string  | No       | CSV header name for taxes/withholding                                                                                                                              |
+| `currency_column`     | string  | No       | CSV header name for trade currency                                                                                                                                 |
+| `fx_rate_column`      | string  | No       | CSV header name for EUR FX rate                                                                                                                                    |
+| `note_column`         | string  | No       | CSV header name for a free-text note                                                                                                                               |
+| `default_asset_class` | string  | Yes      | Fallback asset class: `stock` `etf` `crypto` `metals` `real_estate` `savings` `bond`                                                                               |
+| `default_type`        | string  | No       | Fallback transaction type when no `type_column` is mapped (default `buy`): `buy` `sell` `dividend` `fee` `tax` `interest`                                          |
+| `type_mapping`        | string  | No       | JSON object mapping raw CSV type strings → canonical portfolio_txn_type values (e.g. `{"Koop":"buy","Verkoop":"sell"}`)                                            |
+| `is_brokerage`        | boolean | Format*  | Must be `true` for every maintained transaction-history format so portfolio and cash effects use brokerage routing                                                 |
+| `account_id`          | integer | Format*  | Active broker account receiving every row; required with `is_brokerage` and for each maintained transaction-history format                                         |
 
 > [!warning] Symbol or name required
 > At least one of `symbol_column` or `name_column` must be provided. Both may be mapped simultaneously for best matching.
@@ -145,6 +150,29 @@ when the selected source row is an asset deposit with no quote currency.
 
 Kinesis Transaction History requests have the same pre-staging brokerage-account requirement as
 IBKR. This is an additive, non-breaking API option; generic and IBKR requests are unchanged.
+
+The Nexo preset accepts the 11-column Transaction history export. It treats `Deposit To Exchange`
+and `Exchange To Withdraw` as conversion records. Wallet lifecycle and internal-transfer rows stay
+as explicit review errors until pairing is proven, so an unmatched row is never silently lost.
+Cash-like-to-asset conversions become buys; asset-to-cash-like
+conversions become sells. Conversion values use `USD Equivalent` for a stable valuation currency.
+Conversions without one unambiguous cash-like side remain review errors. A non-zero fee outside USD
+also remains a review error because the adapter cannot value it safely. Interest produces a linked
+income row and gifted-unit row; crypto top-ups become gifts with the exported USD basis. Vision
+cannot represent an asset transfer-out without fabricating a sale, so withdrawals remain explicit
+review errors. Incomplete or zero-output conversions also remain explicit review errors instead of
+being skipped.
+
+The Saxo preset accepts localized Transactions exports and normalizes ordinary and non-breaking
+whitespace in headers without changing literal row provenance. Dutch and English buy/sell labels
+are parsed from `Acties`; `ticker:venue` symbols are reduced to the ticker for exact matching. Units
+and price remain in `Instrumentvaluta`, while account-currency costs are converted with
+`Omrekeningskoers`. Cash dividends retain their instrument metadata. Deposits and withdrawals are
+instrument-less cash rows. Other corporate actions remain review errors.
+
+Nexo and Saxo requests have the same pre-staging brokerage-account requirement as IBKR and
+Kinesis. Adding these two enum values is additive; generic and existing maintained formats are
+unchanged.
 
 **201 Response — committed:**
 

@@ -3,7 +3,7 @@ title: Accounts
 type: feature
 status: active
 date: 2026-07-22
-updated: 2026-09-08
+updated: 2026-09-11
 tags:
   [
     feature,
@@ -88,7 +88,8 @@ or currency with only future rows remains visible with a zero current balance.
 - **Card interactions** (WP-B4): the account name and the menu's **View details** item are real links to `/accounts/:id`. The card stays a passive container so its independent Reconcile control and menu do not create nested interaction. The menu also keeps **View transactions** (account-filtered Transactions page) and **Reconcile balance** (only while drift is non-zero). Everything lifecycle-shaped moved to the detail route's header menu.
 - The **drift badge** on a card (statement vs computed disagreement, ADR-094) opens the Reconcile dialog directly.
 - **Add account** stays in the page header.
-- Legacy deep-links `/accounts?account=<id>` forward (replace) to `/accounts/<id>`.
+- Account detail links use `/accounts/<id>`. The retired `/accounts?account=<id>` query form opens
+  the hub and does not forward.
 
 ## The ledger route (`/accounts/:id`) — WP-B4
 
@@ -185,7 +186,7 @@ The Transactions page's actions bar has an **Account** combobox (`AccountFilterC
 ## Testing
 
 - `apps/frontend/src/pages/__tests__/AccountDetailPage.integration.test.tsx` — header/balance/provenance, running-balance column, header menu verbs, drift chip → Reconcile, live broker holdings/P&L states, holdings-only suppression, `?since=` narrowing + clear, not-found state.
-- `apps/frontend/src/pages/__tests__/AccountsPage.integration.test.tsx` — grouped hub, current broker holdings/P&L/cash composition and subtotal states, card→route navigation, reduced hub menu, `?account=` forwarding.
+- `apps/frontend/src/pages/__tests__/AccountsPage.integration.test.tsx` — grouped hub, current broker holdings/P&L/cash composition and subtotal states, card→route navigation, reduced hub menu, and retired `?account=` query behavior.
 - `apps/frontend/src/pages/__tests__/TransactionsPage.integration.test.tsx` — Account filter sets/clears `account_id`.
 - `apps/node-backend/tests/routes/transactions.test.js` — `include_balance` threading + `running_balance` on/off the wire.
 - `apps/frontend/src/features/accounts/__tests__/groupAccounts.test.ts` — grouping/subtotal/Net-cash math.

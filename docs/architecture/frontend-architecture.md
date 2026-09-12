@@ -4,7 +4,7 @@ type: architecture
 status: active
 description: React frontend architecture, design system, and diagrams with liquid-glass aesthetic, visx charts, Framer Motion, and Zustand store. May 2026 Tailwind v4 migration with unified CSS architecture. June 2026 Liquid Glass v2 — atmosphere layer, saturated blur tiers, CommandPalette, optimistic mutations, route preload. June 2026 Premium v3 — RollingNumber/Money/DeltaPill, chart scrub+sync, ChartSkeleton, PageTitleContext, palette v2, ShortcutsOverlay + go-to sequences, animated tabs, workspace aurora, ShaderAurora behind visual-effects tier model (ADR-075), per-widget dashboard hydration, optimistic create. 2026-06-24: --gain/--loss CSS semantic tokens unified app-wide (tokens.css baseline, skin-v2.css Okabe-Ito overrides); gain/loss Tailwind color utilities added; colorblindGainLoss default OFF/classic.
 date: 2026-04-23
-updated: 2026-09-08
+updated: 2026-09-11
 tags: [architecture, frontend, uml, plantuml, react, phase-4, phase-6, phase-9, liquid-glass, liquid-glass-v2, premium-v3, visx, framer-motion, statistics-refactoring, zustand, state-management, tailwind-v4, css-architecture, command-palette, optimistic-updates, route-preload, chart-scrub, chart-sync, shader-aurora, visual-effects-tiers, auto-adapt-display, fx-reduced, role-based-glass, glass-by-default, june-2026, gain-loss, css-tokens, skin-v2, tailwind-colors]
 aliases: [frontend architecture, react architecture, frontend design, design system]
 ---
@@ -404,7 +404,6 @@ package "Budgeting" {
 
 package "Portfolio" {
   class PortfolioOverviewPage <<path: /portfolio>>
-  class MarketLookupPage <<path: /portfolio/market>>
   class StocksPage <<path: /portfolio/stocks>>
   class CryptoPage <<path: /portfolio/crypto>>
   class MetalsPage <<path: /portfolio/metals>>
@@ -412,9 +411,18 @@ package "Portfolio" {
   class SavingsPage <<path: /portfolio/savings>>
   class PerformancePage <<path: /portfolio/performance>>
   class NetWorthPage <<path: /portfolio/net-worth>>
-  class ExchangeRatesPage <<path: /admin/exchange-rates>>
-  class WatchlistPage <<path: /portfolio/watchlist>>
   class PortfolioTaxPage <<path: /portfolio/tax>>
+}
+
+package "Research" {
+  class ResearchHomePage <<path: /research>>
+  class MarketLookupPage <<path: /research/market>>
+  class WatchlistPage <<path: /research/watchlist>>
+}
+
+package "Admin" {
+  class AdminOverviewPage <<path: /admin>>
+  class ExchangeRatesPage <<path: /admin/exchange-rates>>
 }
 
 package "Shared" {
@@ -440,10 +448,14 @@ PortfolioOverviewPage --> RealEstatePage
 PortfolioOverviewPage --> SavingsPage
 PortfolioOverviewPage --> PerformancePage
 PortfolioOverviewPage --> NetWorthPage
-PortfolioOverviewPage --> ExchangeRatesPage
-PortfolioOverviewPage --> WatchlistPage
-PortfolioOverviewPage --> MarketLookupPage
 PortfolioOverviewPage --> PortfolioTaxPage
+
+AppLayout --> ResearchHomePage
+ResearchHomePage --> MarketLookupPage
+ResearchHomePage --> WatchlistPage
+
+AppLayout --> AdminOverviewPage
+AdminOverviewPage --> ExchangeRatesPage
 
 @enduml
 ```

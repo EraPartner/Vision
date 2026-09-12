@@ -159,6 +159,17 @@ test("application URLs are derived from the single mutable app port", () => {
   assert.doesNotMatch(main, /appPort\s*=\s*port;\s*(?:APP_URL|HEALTH_URL)\s*=/);
 });
 
+test("desktop menus do not emit retired browser deep links", () => {
+  for (const retiredPath of [
+    "/portfolio/exchange-rates",
+    "/research/symbol/",
+    "/portfolio/market",
+    "/portfolio/watchlist",
+  ]) {
+    assert.doesNotMatch(main, new RegExp(retiredPath.replaceAll("/", "\\/")));
+  }
+});
+
 test("macOS vibrancy is enabled only through the validated renderer request", () => {
   assert.doesNotMatch(main, /vibrancy:\s*["']under-window["']/);
   assert.match(main, /registerHandler\(\s*["']app:set-vibrancy["']/);

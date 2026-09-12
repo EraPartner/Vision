@@ -4,9 +4,9 @@ type: endpoint
 method: POST, GET, PATCH, DELETE
 path: /api/import
 description: CSV import for transactions, recipients, and categories; CRUD for saved named custom CSV parsers
-date: 2026-09-09
-updated: 2026-09-09
-last_modified: 2026-09-09
+date: 2026-09-11
+updated: 2026-09-11
+last_modified: 2026-09-11
 tags:
   [
     api,
@@ -58,9 +58,9 @@ Import transactions from a CSV file using a predefined bank adapter.
 | file      | File   | Yes      | CSV file (max 50MB) |
 | bank_name | string | Yes      | Bank identifier     |
 
-The shipped clients send `bank_name` in the multipart body for both one-shot and streaming uploads.
-A query parameter remains a compatibility fallback for one release; when both are present, the body
-value wins.
+`bank_name` is accepted only in the multipart body for both one-shot and streaming uploads. Query
+fields are ignored. This is a breaking contract change under
+[[docs/adr/136-same-release-http-import-and-navigation-contract|ADR-136]].
 
 **Supported Banks:**
 
@@ -94,6 +94,8 @@ value wins.
 ### POST /api/import/csv/custom
 
 Import using custom CSV configuration.
+
+All configuration fields are multipart body fields. Query fields are ignored.
 
 **Form Data:**
 
@@ -179,8 +181,7 @@ Bulk import recipients from CSV.
 | separator | string | No       | CSV separator |
 | encoding  | string | No       | File encoding |
 
-The shipped clients send `separator` and `encoding` as multipart fields. Query parameters remain a
-one-release compatibility fallback; a present body field is authoritative when both are supplied.
+`separator` and `encoding` are accepted only as multipart fields. Query fields are ignored.
 
 **CSV Format:**
 
@@ -218,8 +219,7 @@ name,default_category
 
 Bulk import categories from CSV.
 
-`separator` and `encoding` follow the same shipped-body and temporary query-fallback rule as the
-recipient import.
+`separator` and `encoding` follow the same multipart-body-only rule as the recipient import.
 
 **Response:** `201 Created` (2026-08-09: `openapi.yaml` corrected — it had documented this route as 200)
 
@@ -295,8 +295,9 @@ See [[docs/testing/testing|Testing Documentation]] for envelope-aware test patte
 
 - Returns count of errors in response
 - Partial imports complete even with some errors
-- Import route failures now return generic `detail: "Import failed"` style responses and avoid leaking raw internal exception strings.
-- SSE error events also use sanitized generic details to keep payloads safe for frontend display.
+- HTTP route failures use the canonical failure envelope and avoid leaking raw internal exception
+  strings. Server-Sent Events remain a separate stream protocol whose `error` events use sanitized
+  `{ detail, code }` payloads.
 
 ## Saved Custom Parser Endpoints (ADR-066)
 
@@ -563,6 +564,7 @@ Commit a reviewed batch. Honours all recipient and category overrides set above.
 - [[docs/api/recipients|Recipients API]]
 - [[docs/integrations/index|Integrations]]
 - [[docs/adr/066-saved-named-custom-csv-parsers|ADR-066: Saved Named Custom CSV Parsers]]
+- [[docs/adr/136-same-release-http-import-and-navigation-contract|ADR-136: Same-Release HTTP, Import, and Navigation Contract]]
 - [[docs/features/import|Import Feature]]
 
 ## Test Coverage

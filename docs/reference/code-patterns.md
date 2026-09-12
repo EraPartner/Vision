@@ -1209,12 +1209,7 @@ class ApiClient {
           continue;
 
         if (!response.ok) {
-          const error = await response
-            .json()
-            .catch(() => ({ detail: "Request failed" }));
-          throw new Error(
-            error.detail || "Request failed with status " + response.status,
-          );
+          throw await parseEnvelopeError(response, "Request failed");
         }
 
         if (response.status === 204) return undefined as unknown as T;
@@ -2310,7 +2305,7 @@ router.get('/export/csv', rateLimiter(...), async (req, res) => {
       params
     );
     if (probe.rows.length === 0) {
-      return res.status(404).json({ detail: 'No transactions found' });
+      throw new NotFoundError('No transactions found');
     }
 
     // Set response headers

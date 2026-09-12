@@ -2,10 +2,10 @@
 title: Testing Documentation
 type: testing
 status: active
-date: 2026-09-09
-updated: 2026-09-09
-last-updated: 2026-09-09
-last_updated_timestamp: 2026-09-09T00:00:00Z
+date: 2026-09-11
+updated: 2026-09-11
+last-updated: 2026-09-11
+last_updated_timestamp: 2026-09-11T00:00:00Z
 added_portfolio_math_tests: 2026-05-05
 added_import_pipeline_tests: 2026-05-05
 wired_real_db_harness: 2026-07-27
@@ -611,8 +611,8 @@ it("should return 201 on successful import", async () => {
 
   const req = {
     file: { path: "/tmp/test.csv", originalname: "test.csv" },
-    query: { bank_name: "belfius" },
-    body: {},
+    query: {},
+    body: { bank_name: "belfius" },
   };
   const res = mockResponse();
   await routeHandlers["post:/csv"](req, res);
@@ -629,7 +629,7 @@ it("should return 201 on successful import", async () => {
 
 ```javascript
 it("should return 400 when no file uploaded", async () => {
-  const req = { file: null, query: { bank_name: "belfius" }, body: {} };
+  const req = { file: null, query: {}, body: { bank_name: "belfius" } };
   const res = mockResponse();
 
   await expect(routeHandlers["post:/csv"](req, res)).rejects.toBeInstanceOf(
@@ -1167,7 +1167,7 @@ See [[docs/testing/frontend/e2e|E2E Test Guide]] for running, debugging, and upd
 - **MSW handlers expanded** to ~50 previously-unstubbed endpoints (admin, aggregations, AI chat, attachments, categories, imports, info, investments, recipients, reports, splits, transactions, watchlist, planned-transactions)
 - **Contract tests expanded** (`apps/frontend/src/test/msw/contracts.test.ts`): 16 → **120 tests** (E1: 10 list schemas, E2: 15 mutation contracts, E3: 4 error envelopes)
 - **Live-API contract tests** (`apps/frontend/src/test/live-contracts/live-contracts.test.ts`): 13 → **37 tests** (skipped locally unless `LIVE_API_BASE` set; run on CI against real backend)
-- **Playwright e2e specs:** `dialogs-edge.spec.ts` (focus/escape/backdrop), `critical-flows.spec.ts` (smoke + mutation roundtrips)
+- **Playwright e2e specs:** `dialogs-edge.spec.ts` (focus/escape/backdrop), `critical-flows.spec.ts` (page smoke + retired deep-link checks), and `mutations-parity.spec.ts` (mutation roundtrips)
 
 **Coverage delta:** 1147 → **1204 vitest** (+57 contract-level). +24 live-API tests. +9 Playwright tests.
 

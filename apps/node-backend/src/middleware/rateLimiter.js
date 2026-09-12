@@ -3,8 +3,8 @@
  * For production, consider redis-based rate limiting.
  */
 
-import { RateLimitedError } from './errorHandler.js';
-import settings from '../config/config.js';
+import { RateLimitedError } from "./errorHandler.js";
+import settings from "../config/config.js";
 
 const requestCounts = new Map();
 
@@ -14,12 +14,18 @@ const requestCounts = new Map();
  * @returns {number|undefined}
  */
 function ipv4ToInt(ip) {
-  const parts = ip.split('.');
+  const parts = ip.split(".");
   if (parts.length !== 4) return undefined;
   let n = 0;
   for (const part of parts) {
     const octet = Number(part);
-    if (!Number.isInteger(octet) || octet < 0 || octet > 255 || !/^\d+$/.test(part)) return undefined;
+    if (
+      !Number.isInteger(octet) ||
+      octet < 0 ||
+      octet > 255 ||
+      !/^\d+$/.test(part)
+    )
+      return undefined;
     n = n * 256 + octet;
   }
   return n >>> 0;
@@ -33,15 +39,21 @@ function ipv4ToInt(ip) {
  * @param {string} rule
  * @returns {boolean}
  */
- function ipMatchesRule(addr, rule) {
+function ipMatchesRule(addr, rule) {
   if (!addr || !rule) return false;
   if (addr === rule) return true;
-  const slash = rule.indexOf('/');
+  const slash = rule.indexOf("/");
   if (slash === -1) return false;
   const base = ipv4ToInt(rule.slice(0, slash));
   const bits = Number(rule.slice(slash + 1));
   const target = ipv4ToInt(addr);
-  if (base === undefined || target === undefined || !Number.isInteger(bits) || bits < 0 || bits > 32) {
+  if (
+    base === undefined ||
+    target === undefined ||
+    !Number.isInteger(bits) ||
+    bits < 0 ||
+    bits > 32
+  ) {
     return false;
   }
   if (bits === 0) return true;
@@ -62,8 +74,10 @@ function isTrustedProxyAddr(addr) {
   if (!addr) return false;
   const trusted = settings.security?.trustedProxies || [];
   if (trusted.length === 0) return false;
-  const a = addr.replace(/^::ffff:/i, '');
-  return trusted.some((rule) => ipMatchesRule(a, rule) || ipMatchesRule(addr, rule));
+  const a = addr.replace(/^::ffff:/i, "");
+  return trusted.some(
+    (rule) => ipMatchesRule(a, rule) || ipMatchesRule(addr, rule),
+  );
 }
 
 // Clean up old entries every 60 seconds.
@@ -84,7 +98,11 @@ setInterval(() => {
  * @param {number} [options.maxRequests] - Max requests per window (default: 100)
  * @param {string} [options.keyPrefix] - Prefix for rate limit key (default: 'global')
  */
-export function rateLimiter({ windowMs = 60_000, maxRequests = 100, keyPrefix = 'global' } = {}) {
+export function rateLimiter({
+  windowMs = 60_000,
+  maxRequests = 100,
+  keyPrefix = "global",
+} = {}) {
   /**
    * @param {import('../types/express.js').ExpressRequest} req
    * @param {import('../types/express.js').ExpressResponse} res
@@ -98,15 +116,16 @@ export function rateLimiter({ windowMs = 60_000, maxRequests = 100, keyPrefix = 
       return next();
     }
 
-    const remoteAddr = req.socket?.remoteAddress || req.connection?.remoteAddress || '';
+    const remoteAddr =
+      req.socket?.remoteAddress || req.connection?.remoteAddress || "";
     // x-forwarded-for is a single comma-joined header in practice (Node/Express
     // fold repeated headers into one string, except set-cookie); typed
     // string|string[] only because that's the general header-value shape.
-    const xff = /** @type {string} */ (req.headers?.['x-forwarded-for'] ?? '');
+    const xff = /** @type {string} */ (req.headers?.["x-forwarded-for"] ?? "");
     const forwarded = isTrustedProxyAddr(remoteAddr)
-      ? xff.split(',')[0].trim()
-      : '';
-    const ip = forwarded || remoteAddr || 'unknown';
+      ? xff.split(",")[0].trim()
+      : "";
+    const ip = forwarded || remoteAddr || "unknown";
     const key = `${keyPrefix}:${ip}`;
     const now = Date.now();
 
@@ -119,16 +138,24 @@ export function rateLimiter({ windowMs = 60_000, maxRequests = 100, keyPrefix = 
     entry.count++;
 
     // Set rate limit headers
-    res.setHeader('X-RateLimit-Limit', maxRequests);
-    res.setHeader('X-RateLimit-Remaining', Math.max(0, maxRequests - entry.count));
-    res.setHeader('X-RateLimit-Reset', Math.ceil((entry.windowStart + windowMs) / 1000));
+    res.setHeader("X-RateLimit-Limit", maxRequests);
+    res.setHeader(
+      "X-RateLimit-Remaining",
+      Math.max(0, maxRequests - entry.count),
+    );
+    res.setHeader(
+      "X-RateLimit-Reset",
+      Math.ceil((entry.windowStart + windowMs) / 1000),
+    );
 
     if (entry.count > maxRequests) {
       const retryAfter = Math.ceil((entry.windowStart + windowMs - now) / 1000);
-      res.setHeader('Retry-After', retryAfter);
-      return next(new RateLimitedError('Too many requests. Please try again later.', {
-        details: { retryAfter },
-      }));
+      res.setHeader("Retry-After", retryAfter);
+      return next(
+        new RateLimitedError("Too many requests. Please try again later.", {
+          details: { retry_after: retryAfter },
+        }),
+      );
     }
 
     next();
@@ -144,62 +171,98 @@ export function rateLimiter({ windowMs = 60_000, maxRequests = 100, keyPrefix = 
 export const globalRateLimiter = rateLimiter({
   windowMs: settings.rateLimit?.globalWindowMs ?? 60_000,
   maxRequests: settings.rateLimit?.globalMax ?? 1000,
-  keyPrefix: 'global',
+  keyPrefix: "global",
 });
 
 /**
  * Rate limiter for admin routes (read-heavy observability hub).
  * Single-user self-hosted app: admin page makes 5-6 parallel GETs on load.
  */
-export const adminRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 500, keyPrefix: 'admin' });
+export const adminRateLimiter = rateLimiter({
+  windowMs: 60_000,
+  maxRequests: 500,
+  keyPrefix: "admin",
+});
 
 /**
  * Stricter limiter for destructive/expensive admin mutations (vacuum, reset, probe).
  */
-export const adminMutateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'admin-mutate' });
+export const adminMutateLimiter = rateLimiter({
+  windowMs: 60_000,
+  maxRequests: 30,
+  keyPrefix: "admin-mutate",
+});
 
 /**
  * Rate limiter for import operations (expensive but single-user).
  */
-export const importRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 20, keyPrefix: 'import' });
+export const importRateLimiter = rateLimiter({
+  windowMs: 60_000,
+  maxRequests: 20,
+  keyPrefix: "import",
+});
 
 /**
  * Rate limiter for attachment upload/download endpoints.
  */
-export const attachmentRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 60, keyPrefix: 'attachments' });
+export const attachmentRateLimiter = rateLimiter({
+  windowMs: 60_000,
+  maxRequests: 60,
+  keyPrefix: "attachments",
+});
 
 /**
  * Permissive limiter for the SPA static-file fallback so that an unauthenticated
  * client cannot loop on index.html. Tuned generously for normal browsing.
  */
-export const spaRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 600, keyPrefix: 'spa' });
+export const spaRateLimiter = rateLimiter({
+  windowMs: 60_000,
+  maxRequests: 600,
+  keyPrefix: "spa",
+});
 
 /**
  * Strict limiter for report generation. Each POST forks a Puppeteer/Chromium
  * render (heavy CPU + memory); without a cap a single client on the LAN can
  * fork-bomb the host. 30/min is far above any human's "generate PDF" cadence.
  */
-export const reportRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'reports' });
+export const reportRateLimiter = rateLimiter({
+  windowMs: 60_000,
+  maxRequests: 30,
+  keyPrefix: "reports",
+});
 
 /**
  * Limiter for market-lookup endpoints, which proxy the external Yahoo Finance
  * API. Caps how hard a client can make us hammer the upstream (and how much of
  * its rate budget we burn). Search is debounced client-side; 90/min is ample.
  */
-export const marketRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 90, keyPrefix: 'market' });
+export const marketRateLimiter = rateLimiter({
+  windowMs: 60_000,
+  maxRequests: 90,
+  keyPrefix: "market",
+});
 
 /**
  * Limiter for the investments router. Mostly DB reads, but `refresh-prices`
  * reaches external providers — keep a generous per-client ceiling that still
  * bounds abuse while never tripping normal portfolio browsing.
  */
-export const investmentRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 300, keyPrefix: 'investments' });
+export const investmentRateLimiter = rateLimiter({
+  windowMs: 60_000,
+  maxRequests: 300,
+  keyPrefix: "investments",
+});
 
 /**
  * Limiter for the aggregations router. GET-heavy (dashboard + statistics fan
  * out many calls per page), but the Monte-Carlo forecast endpoints are real
  * CPU. Set high enough for rapid navigation, low enough to bound a fork-bomb.
  */
-export const aggregationRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 600, keyPrefix: 'aggregations' });
+export const aggregationRateLimiter = rateLimiter({
+  windowMs: 60_000,
+  maxRequests: 600,
+  keyPrefix: "aggregations",
+});
 
 export { ipMatchesRule as __ipMatchesRule };

@@ -3,9 +3,9 @@ title: Market Lookup Feature
 type: feature
 status: active
 date: 2026-06-05
-updated: 2026-09-03
+updated: 2026-09-11
 tags: [feature, market, lookup, stocks, search, frontend, research, security-detail, url-state]
-description: Market Lookup (/research/market) is the consolidated security-detail surface for the Research workspace. It provides symbol search, a live price chart, a tabbed Details card (Fundamentals / Analyst / News via the multi-provider research aggregator), a Trading info card, and a Map-provider dialog. It is the deep-link target from the Markets Overview heat-map, ResearchHomePage search/watchlist tiles, and the /research/symbol/:symbol redirect. Aug 2026: the Details card's active tab is mirrored to `?tab=` via useTabParam.
+description: Market Lookup (/research/market) is the consolidated security-detail surface for the Research workspace. It provides symbol search, a live price chart, a tabbed Details card (Fundamentals / Analyst / News via the multi-provider research aggregator), a Trading info card, and a Map-provider dialog. It is the canonical deep-link target from the Markets Overview heat-map and ResearchHomePage search/watchlist tiles. Aug 2026: the Details card's active tab is mirrored to `?tab=` via useTabParam.
 aliases: [stock lookup, market search, security search, ticker search, market lookup]
 related_code:
   - apps/frontend/src/pages/research/MarketLookupPage.tsx
@@ -23,14 +23,15 @@ neutral zero, matching Research Home, Watchlist, and comparison results.
 
 ## Overview
 
-Market Lookup (`/research/market`) is the **single security-detail surface** in the Research workspace. It replaced the retired `ResearchSymbolPage`: the route `/research/symbol/:symbol` now renders a redirect component (`RedirectSymbolToMarket` in `App.tsx`) that forwards to `/research/market?symbol=<symbol>`, preserving any `?investmentId=` query param.
+Market Lookup (`/research/market`) is the **single security-detail surface** in the Research
+workspace. Its canonical symbol link is `/research/market?symbol=<symbol>`; the retired
+`/research/symbol/:symbol` alias now renders Not Found.
 
 Users reach Market Lookup by:
 
 - Searching for a symbol on the Market Lookup page itself (`?symbol=` query param is pre-filled on arrival).
 - Clicking a heat-map tile on `MarketOverviewPage` (`/research/markets`) — tiles deep-link to `/research/market?symbol=<symbol>`.
 - Clicking a search result or watchlist tile on `ResearchHomePage` — `goToSymbol` navigates to `/research/market?symbol=<symbol>`.
-- Following a legacy `/research/symbol/:symbol` URL (redirected automatically).
 - Opening a holding's detail from the portfolio (double-click investment name) — passes `?investmentId=` alongside `?symbol=`.
 
 ## Architecture
@@ -131,13 +132,13 @@ When a user selects a security from search results:
 
 ## Deep-linking and Routing
 
-| Incoming URL                                   | Resolution                                                                    |
-| ---------------------------------------------- | ----------------------------------------------------------------------------- |
-| `/research/market?symbol=AAPL`                 | Market Lookup page; search pre-filled with `AAPL`                             |
-| `/research/market?symbol=AAPL&investmentId=42` | Market Lookup; holding #42's provider pre-seeded in Map-provider dialog       |
-| `/research/market?symbol=AAPL&tab=analyst`     | Market Lookup; Details card opens on the Analyst tab                          |
-| `/research/symbol/AAPL`                        | `RedirectSymbolToMarket` in `App.tsx` → 301 to `/research/market?symbol=AAPL` |
-| `/research/symbol/AAPL?investmentId=42`        | Same redirect; `investmentId` preserved                                       |
+| Incoming URL                                   | Resolution                                                              |
+| ---------------------------------------------- | ----------------------------------------------------------------------- |
+| `/research/market?symbol=AAPL`                 | Market Lookup page; search pre-filled with `AAPL`                       |
+| `/research/market?symbol=AAPL&investmentId=42` | Market Lookup; holding #42's provider pre-seeded in Map-provider dialog |
+| `/research/market?symbol=AAPL&tab=analyst`     | Market Lookup; Details card opens on the Analyst tab                    |
+| `/research/symbol/AAPL`                        | Not Found; use `/research/market?symbol=AAPL`                           |
+| `/research/symbol/AAPL?investmentId=42`        | Not Found; use the canonical Market Lookup query form                   |
 
 ## isActiveRoute Fix (AppSidebar)
 

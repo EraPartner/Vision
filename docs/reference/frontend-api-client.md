@@ -3,7 +3,7 @@ title: Frontend API Client Architecture
 type: reference
 status: active
 date: 2026-04-22
-updated: 2026-08-26
+updated: 2026-09-11
 tags: [reference, frontend, api-client, typescript, http, phase-1, phase-2, phase-q, client-side, environment, domain-split, openapi, recipient-groups, market-search]
 description: Architecture of the frontend HTTP client split into modular layers (transport, types, domain methods) with OpenAPI type generation. Phase Q: getTransactions supports recipient_group_id parameter. 2026-04-29: searchMarket wrapper added to market.ts module; AddToWatchlistDialog migrated to apiClient methods.
 aliases: [api-client, frontend-http, fetch-client, apiClient, lib/api]
@@ -26,11 +26,13 @@ related_code:
 The frontend HTTP client in `apps/frontend/src/lib/api/` implements a three-layer architecture:
 
 ### Phase 1 (2026-04-21) — Foundation
+
 - `client.ts` — Transport layer (fetch, envelope unwrapping, retry/timeout)
 - `types.ts` — Shared response types and error codes
 - `api.ts` — ApiClient facade
 
 ### Phase 2 (2026-04-22) — Domain Split + OpenAPI
+
 - Split monolithic `api.ts` (1553 lines) into domain modules
 - Added `openapi.yaml` as authoritative API spec
 - Added `openapi-typescript` codegen for type generation
@@ -57,7 +59,7 @@ implementations.
 Centralized environment variable validation via Zod. Imported at app boot time in `main.tsx`:
 
 ```typescript
-import env from '@/lib/env';
+import env from "@/lib/env";
 
 // env.VITE_API_URL :: string | undefined
 // env.VITE_LOG_LEVEL :: 'debug' | 'info' | 'warn' | 'error' | 'silent' | undefined
@@ -68,7 +70,7 @@ import env from '@/lib/env';
 
 ```typescript
 // In apps/frontend/src/lib/api/client.ts
-export const API_BASE_URL = env.VITE_API_URL || 'http://localhost:3002';
+export const API_BASE_URL = env.VITE_API_URL || "http://localhost:3002";
 ```
 
 If `VITE_API_URL` is malformed, Zod validation fails at boot with a clear error message, preventing silent misconfiguration. See [[docs/adr/030-frontend-environment-schema|ADR-030]] for validation rules.
@@ -110,18 +112,24 @@ apps/frontend/src/types/
 **Responsibility:** Low-level HTTP transport, response unwrapping, error handling.
 
 ```typescript
-import { env } from '@/lib/env';
+import { env } from "@/lib/env";
 
 // Exported utilities
-export const API_BASE_URL = env.VITE_API_URL || 'http://localhost:3002';
+export const API_BASE_URL = env.VITE_API_URL || "http://localhost:3002";
 export const DEFAULT_TIMEOUT_MS = 30_000;
 export const MAX_RETRIES = 2;
 export const RETRYABLE_STATUS_CODES = [408, 429, 502, 503, 504];
 
-export async function backoffDelay(attempt: number, baseMs: number = 500): Promise<void> {
+export async function backoffDelay(
+  attempt: number,
+  baseMs: number = 500,
+): Promise<void> {
   // Exponential backoff with jitter, capped at MAX_BACKOFF_MS (30s)
-  const ms = Math.min(baseMs * Math.pow(2, attempt) + Math.random() * 200, MAX_BACKOFF_MS);
-  await new Promise(r => setTimeout(r, ms));
+  const ms = Math.min(
+    baseMs * Math.pow(2, attempt) + Math.random() * 200,
+    MAX_BACKOFF_MS,
+  );
+  await new Promise((r) => setTimeout(r, ms));
 }
 
 export class ApiClientError extends Error {
@@ -132,8 +140,13 @@ export class ApiClientError extends Error {
   httpStatus: number;
 }
 
-export function parseEnvelopeError(body: ApiResponse<unknown>, status: number): ApiClientError {
-  // Extract error from { ok: false, error: { code, message, details } }
+export async function parseEnvelopeError(
+  response: Response,
+  fallbackMessage: string,
+): Promise<ApiClientError> {
+  // Accept { ok: false, error: { non-empty code, non-empty message, details? } }.
+  // Unknown codes map by status while preserving the canonical message/details.
+  // Malformed, retired, empty, and non-JSON bodies use the full status fallback.
 }
 
 export function unwrapEnvelope<T>(body: ApiResponse<T>, status: number): T {
@@ -143,12 +156,17 @@ export function unwrapEnvelope<T>(body: ApiResponse<T>, status: number): T {
 ```
 
 **Key features:**
+
 - Single `request<T>` function for all endpoint calls
 - Automatic retry on 408, 429, 502, 503, 504
 - Exponential backoff (base 500ms, doubled per attempt, jitter ±200ms) capped at 30s maximum
 - 30s timeout by default (per-call override supported)
 - AbortController support for cancellation
 - Envelope unwrapping: `{ ok, data/error }` → `data` or throws `ApiClientError`
+- Same-release frontend/backend support: canonical envelopes with additive server codes preserve
+  their message/details and map the code by status; retired `{ detail }`, `{ message }`,
+  Pydantic-array, and top-level `retry_after` failures are not parsed. See
+  [[docs/adr/136-same-release-http-import-and-navigation-contract|ADR-136]].
 
 ### Shared Types (`types.ts`)
 
@@ -156,8 +174,7 @@ export function unwrapEnvelope<T>(body: ApiResponse<T>, status: number): T {
 
 ```typescript
 export type ApiResponse<T> =
-  | { ok: true; data: T; meta?: ResponseMeta }
-  | { ok: false; error: ApiError };
+  { ok: true; data: T; meta?: ResponseMeta } | { ok: false; error: ApiError };
 
 export interface ResponseMeta {
   requestId?: string;
@@ -174,20 +191,20 @@ export interface ApiError {
 }
 
 export type ApiErrorCode =
-  | 'VALIDATION_ERROR'
-  | 'NOT_FOUND'
-  | 'CONFLICT'
-  | 'UNAUTHORIZED'
-  | 'FORBIDDEN'
-  | 'RATE_LIMITED'
-  | 'INTERNAL_SERVER_ERROR'
-  | 'BAD_GATEWAY'
-  | 'APP_ERROR';
+  | "VALIDATION_ERROR"
+  | "NOT_FOUND"
+  | "CONFLICT"
+  | "UNAUTHORIZED"
+  | "FORBIDDEN"
+  | "RATE_LIMITED"
+  | "INTERNAL_SERVER_ERROR"
+  | "BAD_GATEWAY"
+  | "APP_ERROR";
 
 export interface AggregationEnvelope<T> {
   ok: true;
   data: T;
-  meta: { source: 'mv' | 'live'; computedAt: string; requestId?: string };
+  meta: { source: "mv" | "live"; computedAt: string; requestId?: string };
 }
 
 export interface ImportProgress {
@@ -211,38 +228,36 @@ export interface ImportResult {
 
 Previous monolithic `api.ts` (1553 lines) split into 13 domain modules:
 
-| Module | Exports | Lines |
-|--------|---------|-------|
-| `transactions.ts` | getTransactions (with `recipient_group_id` support, Phase Q), getTransaction, createTransaction, updateTransaction, deleteTransaction | ~60 |
-| `categories.ts` | getCategories, getCategory, createCategory, updateCategory, deleteCategory | ~40 |
-| `recipients.ts` | getRecipients, getRecipient, createRecipient, updateRecipient, deleteRecipient, mergeRecipients, unmergeRecipient, getRecipientAliases | ~60 |
-| `planned.ts` | getPlannedTransactions, getPlannedTransaction, createPlannedTransaction, updatePlannedTransaction, deletePlannedTransaction, executePlannedTransaction | ~50 |
-| `investments.ts` | getInvestments, getInvestment, createInvestment, updateInvestment, deleteInvestment, refreshInvestmentPrices, getPriceProviders, getInvestmentPriceHistory | ~80 |
-| `imports.ts` | importCSV, importCSVWithProgress, importCSVCustom, importRecipients, importCategories | ~70 |
-| `settings.ts` | getSettings, getSetting, saveSetting, saveSettingsBulk | ~35 |
-| `aggregations.ts` | getCategoryAggregations, getRecipientAggregations, getMonthlyAggregations, getRecurringPatterns | ~60 |
-| `charts.ts` | getSavedCharts, getSavedChart, createSavedChart, updateSavedChart, deleteSavedChart | ~35 |
-| `market.ts` | searchMarket (2026-04-29), getMarketQuotes, getMarketNews, createWatchlistItem | ~40 |
-| `ai.ts` | chatMessage, createConversation, getConversations, updateConversation | ~90 |
-| `portfolio.ts` | getPortfolioTransactions, getPortfolioTransactionsBulk, createPortfolioTransaction, updatePortfolioTransaction, deletePortfolioTransaction | ~70 |
-| `info.ts` | getStatistics, getSupportedParsers, getBanks, getTransactionSummary, getNetWorth, refreshNetWorth | ~80 |
+| Module            | Exports                                                                                                                                                    | Lines |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| `transactions.ts` | getTransactions (with `recipient_group_id` support, Phase Q), getTransaction, createTransaction, updateTransaction, deleteTransaction                      | ~60   |
+| `categories.ts`   | getCategories, getCategory, createCategory, updateCategory, deleteCategory                                                                                 | ~40   |
+| `recipients.ts`   | getRecipients, getRecipient, createRecipient, updateRecipient, deleteRecipient, mergeRecipients, unmergeRecipient, getRecipientAliases                     | ~60   |
+| `planned.ts`      | getPlannedTransactions, getPlannedTransaction, createPlannedTransaction, updatePlannedTransaction, deletePlannedTransaction, executePlannedTransaction     | ~50   |
+| `investments.ts`  | getInvestments, getInvestment, createInvestment, updateInvestment, deleteInvestment, refreshInvestmentPrices, getPriceProviders, getInvestmentPriceHistory | ~80   |
+| `imports.ts`      | importCSV, importCSVWithProgress, importCSVCustom, importRecipients, importCategories                                                                      | ~70   |
+| `settings.ts`     | getSettings, getSetting, saveSetting, saveSettingsBulk                                                                                                     | ~35   |
+| `aggregations.ts` | getCategoryAggregations, getRecipientAggregations, getMonthlyAggregations, getRecurringPatterns                                                            | ~60   |
+| `charts.ts`       | getSavedCharts, getSavedChart, createSavedChart, updateSavedChart, deleteSavedChart                                                                        | ~35   |
+| `market.ts`       | searchMarket (2026-04-29), getMarketQuotes, getMarketNews, createWatchlistItem                                                                             | ~40   |
+| `ai.ts`           | chatMessage, createConversation, getConversations, updateConversation                                                                                      | ~90   |
+| `portfolio.ts`    | getPortfolioTransactions, getPortfolioTransactionsBulk, createPortfolioTransaction, updatePortfolioTransaction, deletePortfolioTransaction                 | ~70   |
+| `info.ts`         | getStatistics, getSupportedParsers, getBanks, getTransactionSummary, getNetWorth, refreshNetWorth                                                          | ~80   |
 
 **Example domain module (`transactions.ts`):**
 
 ```typescript
-import { request } from './client';
-import type { Transaction, TransactionQueryParams } from './types';
+import { request } from "./client";
+import type { Transaction, TransactionQueryParams } from "./types";
 
 export async function getTransactions(params?: TransactionQueryParams) {
   const query = new URLSearchParams(params).toString();
-  return request<Transaction[]>(
-    `/api/transactions${query ? '?' + query : ''}`,
-  );
+  return request<Transaction[]>(`/api/transactions${query ? "?" + query : ""}`);
 }
 
 export async function createTransaction(data: CreateTransactionRequest) {
-  return request<Transaction>('/api/transactions', {
-    method: 'POST',
+  return request<Transaction>("/api/transactions", {
+    method: "POST",
     body: JSON.stringify(data),
   });
 }
@@ -254,8 +269,8 @@ export async function createTransaction(data: CreateTransactionRequest) {
 
 ```typescript
 // Import all domain modules
-import * as txn from '@/lib/api/transactions';
-import * as cat from '@/lib/api/categories';
+import * as txn from "@/lib/api/transactions";
+import * as cat from "@/lib/api/categories";
 // ... 11 more domains
 
 // Re-export as single object
@@ -269,6 +284,7 @@ export const apiClient = {
 ```
 
 **Benefits of domain split:**
+
 - High cohesion: Each module handles one feature domain
 - Low coupling: Modules are independent
 - Lazy loading: Only load needed domain modules
@@ -277,6 +293,7 @@ export const apiClient = {
 - Reduced merge conflicts: Changes to one domain don't affect others
 
 **Current state:**
+
 - All methods call `request<T>()` from `client.ts` (unwrapping handled)
 - No mutation patterns — immutable updates return new objects
 - Pagination logic moved from frontend conditionals to the list body the server returns
@@ -302,6 +319,7 @@ bun run generate:types
 3. **Frontend imports types** → `import type { Transaction, Category } from '@/types/generated'`
 
 **Benefits:**
+
 - Single source of truth: `openapi.yaml` is authoritative
 - Type safety: All request/response types auto-generated
 - No manual sync: Types always match spec
@@ -310,23 +328,24 @@ bun run generate:types
 
 **Key endpoints covered in `openapi.yaml`:**
 
-| Resource | Methods |
-|----------|---------|
-| Transactions | GET, POST, PATCH, DELETE |
-| Categories | GET, POST, PATCH, DELETE |
-| Recipients | GET, POST, PATCH, DELETE |
+| Resource             | Methods                  |
+| -------------------- | ------------------------ |
+| Transactions         | GET, POST, PATCH, DELETE |
+| Categories           | GET, POST, PATCH, DELETE |
+| Recipients           | GET, POST, PATCH, DELETE |
 | Planned Transactions | GET, POST, PATCH, DELETE |
-| Investments | GET, POST, PATCH, DELETE |
-| Imports | GET, POST |
-| Saved Charts | GET, POST, PATCH, DELETE |
-| Settings | GET, PUT, DELETE |
-| Info & Net Worth | GET |
-| Aggregations | GET |
-| Market Lookup | GET |
+| Investments          | GET, POST, PATCH, DELETE |
+| Imports              | GET, POST                |
+| Saved Charts         | GET, POST, PATCH, DELETE |
+| Settings             | GET, PUT, DELETE         |
+| Info & Net Worth     | GET                      |
+| Aggregations         | GET                      |
+| Market Lookup        | GET                      |
 
 All responses use [[docs/adr/026-unified-api-response-envelope|ADR-026 Envelope]] schema: `{ ok: true, data: T, meta? }` or `{ ok: false, error: {...} }`
 
 **Migration path:**
+
 - Phase 2.4: Hand-written `openapi.yaml` + `generated.ts` (current)
 - Phase 3 (future): Generate OpenAPI spec from backend JSDoc/decorators, feed to codegen
 - Phase 4+ (future): Full OpenAPI SDK generation if needed
@@ -335,7 +354,8 @@ All responses use [[docs/adr/026-unified-api-response-envelope|ADR-026 Envelope]
 
 **Phase 1 (✓ Complete):** Foundation split (types, client, api.ts)
 
-**Phase 2 (✓ Complete):** 
+**Phase 2 (✓ Complete):**
+
 - Domain module split (13 modules)
 - OpenAPI spec + codegen (openapi.yaml + generated.ts)
 - Decimal utilities (parseDecimal)
@@ -357,23 +377,24 @@ try {
 } catch (error) {
   if (error instanceof ApiClientError) {
     switch (error.code) {
-      case 'VALIDATION_ERROR':
+      case "VALIDATION_ERROR":
         // Show form errors from error.details
         break;
-      case 'NOT_FOUND':
+      case "NOT_FOUND":
         // Show 404 toast
         break;
-      case 'RATE_LIMITED':
+      case "RATE_LIMITED":
         // Inform user to retry later
         break;
       default:
-        // Generic error toast
+      // Generic error toast
     }
   }
 }
 ```
 
 **Benefits over legacy sniffing:**
+
 - Single error type, no `instanceof` chains
 - Error code available for i18n message keys
 - Request ID in `error.requestId` for support logs
@@ -403,20 +424,25 @@ async getTransactions(params?: TransactionQueryParams): Promise<TransactionsList
 ## Related
 
 **Architecture & Design:**
+
 - [[docs/adr/030-frontend-environment-schema|ADR-030: Frontend Environment Schema Validation]] — Zod env validation on boot
 - [[docs/adr/026-unified-api-response-envelope|ADR-026: Unified API Response Envelope]] — backend envelope contract
 - [[docs/adr/027-alembic-single-source-of-schema|ADR-027: Alembic as Single Source of Schema Truth]] — schema management
 
 **Type-safe utilities:**
+
 - [[docs/reference/code-patterns#decimal-pattern-frontend-phase-22|Decimal Pattern]] — `parseDecimal()` for monetary values
 - [[docs/reference/code-patterns#timezone-safe-date-utilities-phase-23|Timezone Pattern]] — `parseYmd()`, `todayYmd()`, `daysBetween()`
 
 **Configuration & Environment:**
+
 - [[docs/reference/environment-variables|Environment Variables Reference]] — VITE_API_URL, VITE_LOG_LEVEL, VITE_ENABLE_LOGGING
 
 **Patterns & conventions:**
+
 - [[docs/reference/code-patterns|Code Patterns]] — error handling and state management patterns
 
 **API specifications:**
+
 - [[docs/api/index|API Documentation]] — all HTTP endpoint references
 - `openapi.yaml` — Hand-written OpenAPI 3.0.3 spec (source of truth for types)

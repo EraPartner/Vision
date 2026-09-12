@@ -122,17 +122,21 @@ const api = routeAgent(portfolioImportRouter, {
 /** Encode a path segment so ids with spaces survive the URL round-trip. */
 const seg = (v) => encodeURIComponent(String(v));
 
-const minimalQuery = {
+const minimalBody = {
   date_column: "D",
   name_column: "N",
   default_asset_class: "etf",
 };
 
-const runCustom = (query, body = {}) =>
-  api.post(`${BASE}/csv/custom`).query(query).send(body);
+const runCustom = (body = {}) => api.post(`${BASE}/csv/custom`).send(body);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  accountService.get.mockResolvedValue({
+    id: 7,
+    type: "brokerage",
+    is_active: true,
+  });
   runPortfolioImportPipeline.mockResolvedValue({
     requiresReview: false,
     batchId: 1,
@@ -143,6 +147,15 @@ beforeEach(() => {
     errors: 0,
   });
   customParserConfigRepository.create.mockResolvedValue({ id: 1 });
+});
+
+describe("multipart body parameters", () => {
+  it("rejects query-only mapping fields for one-shot and streaming imports", async () => {
+    await api.post(`${BASE}/csv/custom`).query(minimalBody).expect(400);
+    await api.post(`${BASE}/csv/stream`).query(minimalBody).expect(400);
+
+    expect(runPortfolioImportPipeline).not.toHaveBeenCalled();
+  });
 });
 
 describe("batch-id shape pins (validateId, bounded to MAX_SAFE_ID)", () => {
@@ -347,7 +360,7 @@ describe("override/commit body id shape", () => {
 describe("parseBrokerageParams pins (POST /csv/custom)", () => {
   it("coerces multipart strings: is_brokerage 'true'/'false', account_id '7'", async () => {
     await runCustom({
-      ...minimalQuery,
+      ...minimalBody,
       is_brokerage: "true",
       account_id: "7",
     }).expect(201);
@@ -356,7 +369,7 @@ describe("parseBrokerageParams pins (POST /csv/custom)", () => {
     );
 
     await runCustom({
-      ...minimalQuery,
+      ...minimalBody,
       is_brokerage: "false",
       account_id: "7",
     }).expect(201);
@@ -365,7 +378,7 @@ describe("parseBrokerageParams pins (POST /csv/custom)", () => {
     );
 
     await runCustom({
-      ...minimalQuery,
+      ...minimalBody,
       is_brokerage: true,
       account_id: 7,
     }).expect(201);
@@ -375,7 +388,7 @@ describe("parseBrokerageParams pins (POST /csv/custom)", () => {
   });
 
   it("treats an empty account_id as absent and defaults is_brokerage to false", async () => {
-    await runCustom({ ...minimalQuery, account_id: "" }).expect(201);
+    await runCustom({ ...minimalBody, account_id: "" }).expect(201);
     expect(runPortfolioImportPipeline).toHaveBeenLastCalledWith(
       expect.objectContaining({ isBrokerage: false, accountId: undefined }),
     );
@@ -400,21 +413,21 @@ describe("parseBrokerageParams pins (POST /csv/custom)", () => {
       "7.0",
       "12abc",
     ]) {
-      const res = await runCustom({ ...minimalQuery, account_id }).expect(400);
+      const res = await runCustom({ ...minimalBody, account_id }).expect(400);
       expect(
         res.body.error.message,
         `expected ${JSON.stringify(account_id)} to be rejected`,
       ).toContain("account_id must be a positive integer");
     }
     for (const account_id of [true, [7], {}]) {
-      const res = await runCustom(minimalQuery, { account_id }).expect(400);
+      const res = await runCustom({ ...minimalBody, account_id }).expect(400);
       expect(
         res.body.error.message,
         `expected ${JSON.stringify(account_id)} to be rejected`,
       ).toContain("account_id must be a positive integer");
     }
     const res = await runCustom({
-      ...minimalQuery,
+      ...minimalBody,
       is_brokerage: "true",
     }).expect(400);
     expect(res.body.error.message).toMatch(
@@ -473,7 +486,7 @@ describe("buildPortfolioConfig pins (POST /csv/custom)", () => {
   });
 
   it("applies defaults for a minimal config", async () => {
-    await runCustom(minimalQuery).expect(201);
+    await runCustom(minimalBody).expect(201);
     expect(runPortfolioImportPipeline).toHaveBeenCalledWith(
       expect.objectContaining({
         adapterName: "portfolio_generic",
@@ -492,7 +505,7 @@ describe("buildPortfolioConfig pins (POST /csv/custom)", () => {
 
   it('empty separator falls back to ","; malformed type_mapping falls back to {}', async () => {
     await runCustom({
-      ...minimalQuery,
+      ...minimalBody,
       separator: "",
       type_mapping: "not-json",
     }).expect(201);
@@ -527,26 +540,24 @@ describe("buildPortfolioConfig pins (POST /csv/custom)", () => {
     );
 
     res = await runCustom({
-      ...minimalQuery,
+      ...minimalBody,
       default_asset_class: "house",
     }).expect(400);
     expect(res.body.error.message).toContain(
       "default_asset_class is required and must be a valid asset class",
     );
 
-    res = await runCustom({ ...minimalQuery, default_type: "yolo" }).expect(
-      400,
-    );
+    res = await runCustom({ ...minimalBody, default_type: "yolo" }).expect(400);
     expect(res.body.error.message).toContain(
       'default_type "yolo" is not a valid transaction type',
     );
 
-    res = await runCustom({ ...minimalQuery, separator: ";;" }).expect(400);
+    res = await runCustom({ ...minimalBody, separator: ";;" }).expect(400);
     expect(res.body.error.message).toContain(
       "separator must be a single character",
     );
 
-    res = await runCustom({ ...minimalQuery, skip_rows: "-1" }).expect(400);
+    res = await runCustom({ ...minimalBody, skip_rows: "-1" }).expect(400);
     expect(res.body.error.message).toContain(
       "skip_rows must be zero or a positive integer",
     );
@@ -668,7 +679,7 @@ describe("batch_id wire type", () => {
       duplicates: 0,
       errors: 0,
     }));
-    const committed = await runCustom(minimalQuery, {}).expect(201);
+    const committed = await runCustom(minimalBody).expect(201);
     expect(typeof committed.body.data.batch_id).toBe("number");
     expect(committed.body.data.batch_id).toBe(BATCH_ID);
 
@@ -677,7 +688,7 @@ describe("batch_id wire type", () => {
       batchId: await realBatchId(),
       matchSourceCounts: { symbol: 1 },
     }));
-    const review = await runCustom(minimalQuery, {}).expect(202);
+    const review = await runCustom(minimalBody).expect(202);
     expect(typeof review.body.data.batch_id).toBe("number");
     expect(review.body.data.batch_id).toStrictEqual(
       committed.body.data.batch_id,
@@ -690,7 +701,7 @@ describe("batch_id wire type", () => {
       batchId: await realBatchId(),
       matchSourceCounts: {},
     }));
-    const started = await runCustom(minimalQuery, {}).expect(202);
+    const started = await runCustom(minimalBody).expect(202);
 
     getBatch.mockResolvedValue({ id: BATCH_ID, status: "awaiting_review" });
     commitReviewedPortfolioImport.mockResolvedValue({

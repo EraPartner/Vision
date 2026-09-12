@@ -3,8 +3,8 @@ title: Feature - Portfolio CSV Import
 type: feature
 status: active
 date: 2026-06-20
-updated: 2026-09-09
-last_modified: 2026-09-09
+updated: 2026-09-12
+last_modified: 2026-09-12
 tags:
   [
     feature,
@@ -39,6 +39,8 @@ related_code:
   - "apps/node-backend/src/services/portfolioImportPipeline/portfolioGenericAdapter.js"
   - "apps/node-backend/src/services/portfolioImportPipeline/ibkrTransactionHistoryAdapter.js"
   - "apps/node-backend/src/services/portfolioImportPipeline/kinesisTransactionHistoryAdapter.js"
+  - "apps/node-backend/src/services/portfolioImportPipeline/nexoTransactionHistoryAdapter.js"
+  - "apps/node-backend/src/services/portfolioImportPipeline/saxoTransactionHistoryAdapter.js"
   - "apps/node-backend/src/services/portfolioImportPipeline/portfolioTypeNormalizer.js"
   - "apps/node-backend/src/services/importIdentity.js"
   - "apps/node-backend/src/services/portfolioImportBatchService.js"
@@ -64,16 +66,17 @@ Portfolio CSV Import lets users bulk-load brokerage and exchange trade history f
 
 Key design points:
 
-- **Generic mapping plus maintained presets**: ordinary CSVs use the custom column mapper. The IBKR
-  and Kinesis Money transaction-history presets handle their format-specific framing and
-  mixed-currency semantics. Both require an active broker account because the reports contain trades
-  and cash movements.
-- **Maintained acceptance targets**: IBKR Transaction History and Kinesis Money Transactions are
-  validated against real exports and sanitized regression fixtures. Nexo and Saxo remain unverified
-  until their runtime-acceptance records are completed with sanitized real exports. Other brokers
-  may still work through user-defined mappings, but are not maintained compatibility targets.
+- **Generic mapping plus maintained presets**: ordinary CSVs use the custom column mapper. The IBKR,
+  Kinesis Money, Nexo, and Saxo transaction-history presets handle their format-specific framing,
+  linked rows, localization, and mixed-currency semantics. Each requires an active broker account.
+- **Maintained acceptance targets**: IBKR, Kinesis Money, Nexo, and Saxo are validated against
+  sanitized real exports and regression fixtures. Other brokers may still work through user-defined
+  mappings, but are not maintained compatibility targets.
+- **Brokerage review gate**: every maintained preset sets `is_brokerage` and always stops at staged
+  review, including exact symbol matches. No preset row reaches the ledger before user confirmation.
 - **Instrument matching by symbol then name** (exact, case-insensitive). No ISIN lookup, no fuzzy match.
-- **Conservative auto-commit**: only when every row matched exactly and there are zero errors/unresolved.
+- **Conservative generic auto-commit**: non-brokerage generic imports commit automatically only when
+  every row matched exactly and there are zero errors or unresolved rows.
 - **Review step for mismatches**: unresolved rows go to `awaiting_review`; the user links each symbol/name to an existing investment or creates a new one.
 - **Reuses `portfolioTransactionService.create`**: 2-of-3 unit math, oversell prevention, and asset-class routing shared with manual entry.
 - **Saved parser configs**: reuses `custom_parser_configs` table with `kind = 'portfolio'` discriminator (ADR-041 migration 0041) and remembers one optional file-level broker account in the existing JSON config.
@@ -87,10 +90,8 @@ Key design points:
 **Module:** [[apps/node-backend/src/services/portfolioImportPipeline/stage.js]]
 
 Parses an ordinary uploaded CSV using `portfolioGenericAdapter`, which reads `column_mapping` from
-the config. When `format = 'ibkr_transaction_history'`, that entry point delegates to
-`ibkrTransactionHistoryAdapter`; `format = 'kinesis_transaction_history'` delegates to
-`kinesisTransactionHistoryAdapter`. Raw rows from every path are stored in
-`portfolio_import_staging_rows`.
+the config. The four maintained `format` values delegate to the IBKR, Kinesis, Nexo, or Saxo
+transaction-history adapter. Raw rows from every path are stored in `portfolio_import_staging_rows`.
 
 The IBKR adapter locates the `Transaction History,Header` record instead of treating the statement's
 first metadata row as the CSV header. It trims the real column names, reads the Summary base
@@ -137,6 +138,30 @@ file preserving the real headers, UTC timestamp style, dot-decimal values, paire
 distributions, fiat rows, noisy currency-code cells, and unsupported transfer-out cases without
 retaining the supplied HIN or transaction identifiers.
 
+The Nexo adapter accepts the 11-column Transaction history export. It imports unambiguous conversion
+rows. Exchange-wallet and Pro-wallet lifecycle rows remain explicit review errors until they can be
+paired safely; the adapter never discards them merely because of their event type.
+Cash-like-to-asset conversions become buys, while the reverse direction becomes sells. Conversions
+use the exported USD equivalent as amount and unit-price basis; a conversion without one clear
+cash-like side remains a review error. A non-zero conversion fee outside USD also remains a review
+error rather than being silently discarded. Interest becomes linked income and gifted-unit rows;
+top-ups become gifts. Asset withdrawals and zero-output conversions remain visible review errors.
+The synthetic fixture was cross-checked against a sanitized real export and preserves its 11
+headers, currency-decorated USD values, decimal precision, event kinds, UTC timestamps, signs,
+linked-row structure, and fee-currency cases without retaining transaction data. See
+[[docs/audits/2026-09-12-nexo-saxo-real-export-acceptance]].
+
+The Saxo adapter accepts localized Transactions exports. It normalizes header whitespace because
+the exporter uses both ordinary and non-breaking spaces. Dutch and English trade actions provide
+type, units, price, and instrument currency. `ticker:venue` symbol cells are reduced to their ticker
+for exact holding matches. Total costs are converted from account currency when needed. Cash
+dividends keep their symbol and name; deposits and withdrawals are instrument-less. Unknown
+corporate actions remain visible review errors. The synthetic fixture was cross-checked against a
+sanitized real export and preserves the real 29-column schema, localized decimal boundary, header
+whitespace, instrument-less cash rows, noisy symbol structure, and event classes without retaining
+user, account, transaction, instrument, or amount data from the supplied export. See
+[[docs/audits/2026-09-12-nexo-saxo-real-export-acceptance]].
+
 The transaction and portfolio pipelines share `importStageLifecycle.js` for the staging status
 transition, BIGSERIAL batch-id normalization, 500-row chunk loop, persisted total, and progress
 sequence. Portfolio parsing and its INSERT column set stay in this module.
@@ -172,13 +197,15 @@ For each valid staged row, attempts to find an existing `investments` record:
 > [!info] No ISIN, no fuzzy
 > ISIN lookup and fuzzy/Levenshtein matching are explicitly out of scope for this iteration. The review step covers the long tail of unrecognized symbols.
 
-Auto-commit condition (checked after this phase):
+Auto-commit condition for non-brokerage generic imports (checked after this phase):
 
 - All rows matched (`unresolved == 0`)
 - No errors (`errors == 0`)
 
-If both are true → pipeline continues directly to commit (201 response or `complete` SSE event).  
-Otherwise → batch is set to `awaiting_review` (202 response or `review_required` SSE event).
+If both are true, the generic import continues directly to commit (201 response or `complete` SSE
+event). Otherwise, the batch is set to `awaiting_review` (202 response or `review_required` SSE
+event). Every maintained preset is a brokerage import and always enters `awaiting_review`, including
+when both conditions are true.
 
 Progress event: `{ phase: 'matching', current, total, percent }`
 

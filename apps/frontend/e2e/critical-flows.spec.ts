@@ -43,7 +43,7 @@ const SMOKE_PAGES: Array<{ title: string; path: string; heading?: RegExp }> = [
   { title: "Stocks page", path: "/portfolio/stocks" },
   {
     title: "Watchlist page",
-    path: "/portfolio/watchlist",
+    path: "/research/watchlist",
     heading: /watchlist/i,
   },
   {
@@ -66,6 +66,55 @@ test.describe("Page load smoke (catches backend ↔ frontend drift)", () => {
       } else {
         await page.waitForLoadState("networkidle");
       }
+    });
+  }
+});
+
+const RETIRED_DEEP_LINKS = [
+  "/portfolio/exchange-rates",
+  "/research/symbol/AAPL",
+  "/portfolio/market?symbol=AAPL",
+  "/portfolio/watchlist",
+];
+
+test.describe("Retired deep links", () => {
+  for (const path of RETIRED_DEEP_LINKS) {
+    test(`${path} renders Not Found without redirecting`, async ({ page }) => {
+      await page.goto(path);
+
+      await expect(
+        page.getByRole("heading", { level: 1, name: /page not found/i }),
+      ).toBeVisible();
+      expect(new URL(page.url()).pathname).toBe(
+        new URL(path, "http://vision").pathname,
+      );
+    });
+  }
+
+  test("the retired account query stays on the accounts hub", async ({
+    page,
+  }) => {
+    await page.goto("/accounts?account=2");
+
+    await expect(
+      page.getByRole("heading", { level: 1, name: /^accounts$/i }),
+    ).toBeVisible();
+    expect(new URL(page.url()).pathname).toBe("/accounts");
+  });
+
+  for (const settings of ["dashboard", "app"]) {
+    test(`retired settings=${settings} does not open settings`, async ({
+      page,
+    }) => {
+      await page.goto(`/transactions?settings=${settings}&from=bookmark`);
+
+      await expect(
+        page.getByRole("heading", { level: 1, name: /^transactions$/i }),
+      ).toBeVisible();
+      await expect(page.getByRole("dialog")).not.toBeVisible();
+      const url = new URL(page.url());
+      expect(url.searchParams.has("settings")).toBe(false);
+      expect(url.searchParams.get("from")).toBe("bookmark");
     });
   }
 });

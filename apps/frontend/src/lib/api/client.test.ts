@@ -78,13 +78,21 @@ describe("generateRequestId", () => {
 
 describe("ApiClientError", () => {
     it("is an instance of Error and ApiClientError", () => {
-        const err = new ApiClientError({ status: 404, code: ApiErrorCode.NOT_FOUND, message: "not found" });
+        const err = new ApiClientError({
+            status: 404,
+            code: ApiErrorCode.NOT_FOUND,
+            message: "not found",
+        });
         expect(err).toBeInstanceOf(Error);
         expect(err).toBeInstanceOf(ApiClientError);
     });
 
     it("has name 'ApiClientError'", () => {
-        const err = new ApiClientError({ status: 500, code: ApiErrorCode.INTERNAL_SERVER_ERROR, message: "boom" });
+        const err = new ApiClientError({
+            status: 500,
+            code: ApiErrorCode.INTERNAL_SERVER_ERROR,
+            message: "boom",
+        });
         expect(err.name).toBe("ApiClientError");
     });
 
@@ -129,39 +137,51 @@ describe("parseEnvelopeError", () => {
         expect(err.requestId).toBe("req-123");
     });
 
-    it("uses status fallback code when envelope omits code", async () => {
-        const response = mockResponse(404, { ok: false, error: { message: "not found" } });
+    it("falls back by status when the envelope omits its required code", async () => {
+        const response = mockResponse(404, {
+            ok: false,
+            error: { message: "not found" },
+        });
         const err = await parseEnvelopeError(response, "fallback");
         expect(err.code).toBe(ApiErrorCode.NOT_FOUND);
+        expect(err.message).toBe("fallback (status 404)");
     });
 
-    it("formats Pydantic 422 validation array into a readable message", async () => {
-        const response = mockResponse(422, { detail: [{ loc: ["body", "name"], msg: "required" }] });
+    it.each([
+        [422, { detail: [{ loc: ["body", "name"], msg: "required" }] }],
+        [429, { retry_after: 60 }],
+        [400, { detail: "bad stuff happened" }],
+        [500, { message: "server exploded" }],
+    ])(
+        "ignores retired or malformed error shape for status %d",
+        async (status, body) => {
+            const response = mockResponse(status, body);
+            const err = await parseEnvelopeError(response, "fallback");
+            expect(err.message).toBe(`fallback (status ${status})`);
+        },
+    );
+
+    it("keeps a canonical message while mapping an unrecognized code by status", async () => {
+        const response = mockResponse(504, {
+            ok: false,
+            error: { code: "QUERY_TIMEOUT", message: "Query timed out" },
+        });
         const err = await parseEnvelopeError(response, "fallback");
-        expect(err.status).toBe(422);
-        expect(err.code).toBe(ApiErrorCode.VALIDATION_ERROR);
-        expect(err.message).toContain("body.name");
-        expect(err.message).toContain("required");
+        expect(err.code).toBe(ApiErrorCode.GATEWAY_TIMEOUT);
+        expect(err.message).toBe("Query timed out");
     });
 
-    it("includes retry_after in 429 message", async () => {
-        const response = mockResponse(429, { retry_after: 60 });
+    it("preserves canonical rate-limit details", async () => {
+        const response = mockResponse(429, {
+            ok: false,
+            error: {
+                code: "RATE_LIMITED",
+                message: "Rate limit exceeded",
+                details: { retry_after: 60 },
+            },
+        });
         const err = await parseEnvelopeError(response, "fallback");
-        expect(err.status).toBe(429);
-        expect(err.code).toBe(ApiErrorCode.RATE_LIMITED);
-        expect(err.message).toContain("60");
-    });
-
-    it("uses legacy string detail field", async () => {
-        const response = mockResponse(400, { detail: "bad stuff happened" });
-        const err = await parseEnvelopeError(response, "fallback");
-        expect(err.message).toBe("bad stuff happened");
-    });
-
-    it("uses legacy string message field", async () => {
-        const response = mockResponse(500, { message: "server exploded" });
-        const err = await parseEnvelopeError(response, "fallback");
-        expect(err.message).toBe("server exploded");
+        expect(err.details).toEqual({ retry_after: 60 });
     });
 
     it("falls back to the fallback message when body is null", async () => {
@@ -179,11 +199,14 @@ describe("parseEnvelopeError", () => {
         [409, ApiErrorCode.CONFLICT],
         [502, ApiErrorCode.BAD_GATEWAY],
         [503, ApiErrorCode.SERVICE_UNAVAILABLE],
-    ] as const)("status %d maps to fallback code %s", async (status, expectedCode) => {
-        const response = mockResponse(status, {});
-        const err = await parseEnvelopeError(response, "x");
-        expect(err.code).toBe(expectedCode);
-    });
+    ] as const)(
+        "status %d maps to fallback code %s",
+        async (status, expectedCode) => {
+            const response = mockResponse(status, {});
+            const err = await parseEnvelopeError(response, "x");
+            expect(err.code).toBe(expectedCode);
+        },
+    );
 
     it("maps unknown 5xx to INTERNAL_SERVER_ERROR", async () => {
         const response = mockResponse(599, {});
@@ -198,7 +221,9 @@ describe("parseEnvelopeError", () => {
 
 describe("unwrapEnvelope", () => {
     it("extracts data from an ok=true envelope", () => {
-        expect(unwrapEnvelope({ ok: true, data: { id: 1 } })).toEqual({ id: 1 });
+        expect(unwrapEnvelope({ ok: true, data: { id: 1 } })).toEqual({
+            id: 1,
+        });
     });
 
     it("returns a non-envelope object unchanged", () => {
@@ -256,7 +281,11 @@ describe("buildQuery", () => {
     });
 
     it("omits null and undefined values", () => {
-        const q = buildQuery({ active: true, deleted: null, missing: undefined });
+        const q = buildQuery({
+            active: true,
+            deleted: null,
+            missing: undefined,
+        });
         expect(q).toContain("active=true");
         expect(q).not.toContain("deleted");
         expect(q).not.toContain("missing");
@@ -293,11 +322,16 @@ describe("buildExclusionQuery", () => {
     });
 
     it("sets currency param", () => {
-        expect(buildExclusionQuery({ currency: "USD" })).toContain("currency=USD");
+        expect(buildExclusionQuery({ currency: "USD" })).toContain(
+            "currency=USD",
+        );
     });
 
     it("omits empty arrays", () => {
-        const q = buildExclusionQuery({ excluded_category_ids: [], currency: "EUR" });
+        const q = buildExclusionQuery({
+            excluded_category_ids: [],
+            currency: "EUR",
+        });
         expect(q).not.toContain("excluded_category_ids");
         expect(q).toContain("currency=EUR");
     });
@@ -312,14 +346,18 @@ describe("apiRequest", () => {
 
     it("GET success returns unwrapped data", async () => {
         server.use(
-            http.get(TEST_URL, () => HttpResponse.json({ ok: true, data: { id: 1 } })),
+            http.get(TEST_URL, () =>
+                HttpResponse.json({ ok: true, data: { id: 1 } }),
+            ),
         );
         const result = await apiRequest<{ id: number }>("/api/client-test");
         expect(result).toEqual({ id: 1 });
     });
 
     it("204 returns undefined", async () => {
-        server.use(http.get(TEST_URL, () => new HttpResponse(null, { status: 204 })));
+        server.use(
+            http.get(TEST_URL, () => new HttpResponse(null, { status: 204 })),
+        );
         const result = await apiRequest("/api/client-test");
         expect(result).toBeUndefined();
     });
@@ -328,13 +366,20 @@ describe("apiRequest", () => {
         server.use(
             http.get(TEST_URL, () =>
                 HttpResponse.json(
-                    { ok: false, error: { message: "not found", code: "NOT_FOUND" } },
+                    {
+                        ok: false,
+                        error: { message: "not found", code: "NOT_FOUND" },
+                    },
                     { status: 404 },
                 ),
             ),
         );
-        await expect(apiRequest("/api/client-test", {}, 0)).rejects.toThrow(ApiClientError);
-        await expect(apiRequest("/api/client-test", {}, 0)).rejects.toMatchObject({
+        await expect(apiRequest("/api/client-test", {}, 0)).rejects.toThrow(
+            ApiClientError,
+        );
+        await expect(
+            apiRequest("/api/client-test", {}, 0),
+        ).rejects.toMatchObject({
             status: 404,
             code: ApiErrorCode.NOT_FOUND,
         });
@@ -348,7 +393,9 @@ describe("apiRequest", () => {
                 return new HttpResponse(null, { status: 502 });
             }),
         );
-        await expect(apiRequest("/api/client-test", { method: "POST" }, 2)).rejects.toThrow();
+        await expect(
+            apiRequest("/api/client-test", { method: "POST" }, 2),
+        ).rejects.toThrow();
         expect(calls).toBe(1);
     });
 
@@ -374,7 +421,10 @@ describe("apiRequest", () => {
         server.use(
             http.get(TEST_URL, () =>
                 HttpResponse.json(
-                    { ok: false, error: { message: "gateway down", code: "BAD_GATEWAY" } },
+                    {
+                        ok: false,
+                        error: { message: "gateway down", code: "BAD_GATEWAY" },
+                    },
                     { status: 502 },
                 ),
             ),
@@ -391,12 +441,17 @@ describe("apiRequest", () => {
             http.get(TEST_URL, () => {
                 calls++;
                 return HttpResponse.json(
-                    { ok: false, error: { message: "bad", code: "VALIDATION_ERROR" } },
+                    {
+                        ok: false,
+                        error: { message: "bad", code: "VALIDATION_ERROR" },
+                    },
                     { status: 400 },
                 );
             }),
         );
-        await expect(apiRequest("/api/client-test", {}, 2)).rejects.toThrow(ApiClientError);
+        await expect(apiRequest("/api/client-test", {}, 2)).rejects.toThrow(
+            ApiClientError,
+        );
         expect(calls).toBe(1);
     });
 });

@@ -195,7 +195,7 @@ describe("Import Routes", () => {
 
       const res = await api
         .post(`${BASE}/csv`)
-        .query({ bank_name: "belfius" })
+        .send({ bank_name: "belfius" })
         .expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
     });
@@ -215,7 +215,7 @@ describe("Import Routes", () => {
 
       const res = await api
         .post(`${BASE}/csv`)
-        .query({ bank_name: "belfius" })
+        .send({ bank_name: "belfius" })
         .expect(201);
 
       expect(res.body.data.total).toBe(5);
@@ -235,7 +235,7 @@ describe("Import Routes", () => {
 
       const res = await api
         .post(`${BASE}/csv`)
-        .query({ bank_name: "kbc" })
+        .send({ bank_name: "kbc" })
         .expect(201);
 
       expect(res.body.data.status).toBe("completed_with_errors");
@@ -255,7 +255,7 @@ describe("Import Routes", () => {
 
       const res = await api
         .post(`${BASE}/csv`)
-        .query({ bank_name: "belfius" })
+        .send({ bank_name: "belfius" })
         .expect(202);
 
       expect(res.body).toEqual(
@@ -278,7 +278,7 @@ describe("Import Routes", () => {
 
       const res = await api
         .post(`${BASE}/csv`)
-        .query({ bank_name: "UnknownBank" })
+        .send({ bank_name: "UnknownBank" })
         .expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
     });
@@ -288,7 +288,7 @@ describe("Import Routes", () => {
 
       const res = await api
         .post(`${BASE}/csv`)
-        .query({ bank_name: "belfius" })
+        .send({ bank_name: "belfius" })
         .expect(500);
       expect(res.body).toEqual(
         errEnvelope({ code: "INTERNAL_SERVER_ERROR", message: "Parse error" }),
@@ -305,7 +305,7 @@ describe("Import Routes", () => {
 
       const res = await apiProd
         .post(`${BASE}/csv`)
-        .query({ bank_name: "belfius" })
+        .send({ bank_name: "belfius" })
         .expect(500);
 
       expect(res.body).toEqual(
@@ -332,7 +332,7 @@ describe("Import Routes", () => {
     it("should return 400 for missing required params", async () => {
       const res = await api
         .post(`${BASE}/csv/custom`)
-        .query({ bank_name: "Custom" })
+        .send({ bank_name: "Custom" })
         .expect(400);
       expect(res.body.error.message).toContain("Missing required parameters");
     });
@@ -340,7 +340,7 @@ describe("Import Routes", () => {
     it("should return 400 for invalid separator", async () => {
       const res = await api
         .post(`${BASE}/csv/custom`)
-        .query({
+        .send({
           bank_name: "Custom",
           date_format: "%d/%m/%Y",
           date_column: "Date",
@@ -356,7 +356,7 @@ describe("Import Routes", () => {
       // csv-parse throws a raw error on a negative `from` — must 400 up front.
       const res = await api
         .post(`${BASE}/csv/custom`)
-        .query({
+        .send({
           bank_name: "Custom",
           date_format: "%d/%m/%Y",
           date_column: "Date",
@@ -380,7 +380,7 @@ describe("Import Routes", () => {
 
       await api
         .post(`${BASE}/csv/custom`)
-        .query({
+        .send({
           bank_name: "Custom",
           date_format: "%d/%m/%Y",
           date_column: "Date",
@@ -403,7 +403,7 @@ describe("Import Routes", () => {
 
       const res = await api
         .post(`${BASE}/csv/custom`)
-        .query({
+        .send({
           bank_name: "Custom",
           date_format: "%d/%m/%Y",
           date_column: "Date",
@@ -428,7 +428,7 @@ describe("Import Routes", () => {
 
       const res = await api
         .post(`${BASE}/csv/custom`)
-        .query({
+        .send({
           bank_name: "Custom",
           date_format: "%d/%m/%Y",
           date_column: "Date",
@@ -465,7 +465,7 @@ describe("Import Routes", () => {
 
       const res = await api
         .post(`${BASE}/csv/stream`)
-        .query({ bank_name: "belfius" })
+        .send({ bank_name: "belfius" })
         .expect(200);
 
       expect(res.headers["content-type"]).toMatch(/^text\/event-stream/);
@@ -499,7 +499,7 @@ describe("Import Routes", () => {
 
       const res = await api
         .post(`${BASE}/csv/stream`)
-        .query({ bank_name: "belfius" })
+        .send({ bank_name: "belfius" })
         .expect(200);
 
       const frames = parseSseFrames(res.text);
@@ -539,7 +539,7 @@ describe("Import Routes", () => {
 
       const test = api
         .post(`${BASE}/csv/stream`)
-        .query({ bank_name: "belfius" });
+        .send({ bank_name: "belfius" });
       test.end(() => {}); // fire-and-forget: an aborted request rejects the client promise
       await new Promise((resolve) => setTimeout(resolve, 15));
       test.abort();
@@ -588,8 +588,7 @@ describe("Import Routes", () => {
     it("should throw ValidationError for invalid separator", async () => {
       const res = await api
         .post(`${BASE}/recipients`)
-        .query({ separator: ";;" })
-        .send({})
+        .send({ separator: ";;" })
         .expect(400);
       expect(res.body.error.message).toMatch(
         /separator must be a single character/,
@@ -645,8 +644,7 @@ describe("Import Routes", () => {
     it("should throw ValidationError for invalid separator", async () => {
       const res = await api
         .post(`${BASE}/categories`)
-        .query({ separator: ";;" })
-        .send({})
+        .send({ separator: ";;" })
         .expect(400);
       expect(res.body.error.message).toMatch(
         /separator must be a single character/,
@@ -874,7 +872,7 @@ describe("Import Routes", () => {
 
       const res = await api
         .post(`${BASE}/csv`)
-        .query({ bank_name: "belfius" })
+        .send({ bank_name: "belfius" })
         .expect(400);
       expect(res.body).toEqual(
         errEnvelope({
@@ -891,7 +889,7 @@ describe("Import Routes", () => {
 
       const res = await api
         .post(`${BASE}/csv`)
-        .query({ bank_name: "belfius" })
+        .send({ bank_name: "belfius" })
         .expect(400);
       expect(res.body).toEqual(
         errEnvelope({
@@ -906,7 +904,7 @@ describe("Import Routes", () => {
 
       const res = await api
         .post(`${BASE}/csv`)
-        .query({ bank_name: "belfius" })
+        .send({ bank_name: "belfius" })
         .expect(400);
       expect(res.body).toEqual(
         errEnvelope({
@@ -921,7 +919,7 @@ describe("Import Routes", () => {
 
       const res = await api
         .post(`${BASE}/csv`)
-        .query({ bank_name: "belfius" })
+        .send({ bank_name: "belfius" })
         .expect(500);
       expect(res.body).toEqual(
         errEnvelope({ code: "INTERNAL_SERVER_ERROR", message: "unknown" }),

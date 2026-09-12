@@ -504,10 +504,13 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         ).not.toBeInTheDocument();
     });
 
-    it("forwards the legacy ?account= deep-link to the detail route", async () => {
+    it("ignores the retired ?account= deep-link on the accounts hub", async () => {
         mockAccounts();
         renderWithDetailRoute(["/accounts?account=2"]);
-        expect(await screen.findByText("detail route")).toBeInTheDocument();
+        expect(
+            await screen.findByRole("heading", { name: /^accounts$/i }),
+        ).toBeInTheDocument();
+        expect(screen.queryByText("detail route")).not.toBeInTheDocument();
     });
 
     // ── WP-B5 §3 F1: drift badge carries its statement date + a stale tone ───

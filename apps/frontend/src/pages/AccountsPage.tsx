@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
-import { Link, useNavigate, useSearchParams } from "react-router";
+import { Link } from "react-router";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageError } from "@/components/shared/PageError";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -58,8 +58,6 @@ import { getBrokerAccountMetrics } from "@/features/accounts/brokerAccountMetric
 
 export default function AccountsPage() {
     const { t } = useLanguage();
-    const navigate = useNavigate();
-    const [searchParams] = useSearchParams();
     // Archived is a (collapsed) group now, not a toggle (WP-B3) — always fetch
     // the full population.
     const { data, isLoading, isError, error, refetch } = useAccounts({
@@ -112,15 +110,6 @@ export default function AccountsPage() {
             ),
         [accounts],
     );
-
-    // Legacy deep link (?account=<id>) from before the /accounts/:id route:
-    // forward to the route (replace, so Back doesn't bounce through the hub).
-    // One concept, one detail code path (Accounts-rewrite Phase D → WP-B4).
-    const detailParam = searchParams.get("account");
-    useEffect(() => {
-        if (!detailParam) return;
-        navigate(`/accounts/${detailParam}`, { replace: true });
-    }, [detailParam, navigate]);
 
     // Filter by the account entity's id (ADR-088) — reads key on the FK, not
     // the retiring bank_account string.

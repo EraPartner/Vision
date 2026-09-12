@@ -2,11 +2,11 @@
 title: Testing Documentation Index
 type: testing-index
 status: active
-date: 2026-09-09
-updated: 2026-09-09
-last-updated: 2026-09-09
-modified: 2026-09-09
-last_updated_timestamp: 2026-09-09T00:00:00Z
+date: 2026-09-11
+updated: 2026-09-11
+last-updated: 2026-09-11
+modified: 2026-09-11
+last_updated_timestamp: 2026-09-11T00:00:00Z
 added_phase_f1_backend_drift_detection: 2026-05-02
 added_phase_f2_stale_refetch: 2026-05-02
 added_phase_f3_dialog_completeness: 2026-05-02
@@ -147,7 +147,7 @@ bun vitest run src/path/to/test.test.js
 
 4. **Playwright E2E Expanded** — Two new spec files:
    - `e2e/dialogs-edge.spec.ts` — backdrop click, Escape, focus-trap Tab/Shift-Tab, autofocus
-   - `e2e/critical-flows.spec.ts` — page-load smoke (catches pageerrors), mutation roundtrips (create category/recipient → list refetch)
+   - `e2e/critical-flows.spec.ts` — page-load smoke (catches pageerrors) and retired-route/settings-alias checks; mutation roundtrips live in `mutations-parity.spec.ts`
    - Now discovered automatically by the non-visual `chromium` project used by `test:e2e`
 
 **Test count delta:** 1147 → **1204 vitest tests** (+57 contract-level). +24 live-API. +9 Playwright specs (3 files total).
@@ -392,7 +392,7 @@ Added comprehensive unit test coverage for the frontend API client layer.
    - Backoff delay (3 tests) — minimum 500ms, exponential with 30,000ms cap
    - Request ID generation (2 tests) — UUID format or fallback when crypto unavailable
    - ApiClientError class (3 tests) — error prototype, name, field storage
-   - Envelope error parsing (9 tests) — unified/legacy formats, Pydantic 422, rate-limit 429, status code mapping
+   - Envelope error parsing — strict canonical envelope, malformed/retired-shape fallback, canonical rate-limit details, and status-code mapping
    - Envelope unwrapping (5 tests) — extract data, passthrough non-envelopes, no mutation
    - Retryable status codes (2 tests) — 408/429/502/503/504 retryable, 400/401/403/404/409/422/500 not
    - Query building (4 tests) — empty, encode, omit null/undefined, keep false/0

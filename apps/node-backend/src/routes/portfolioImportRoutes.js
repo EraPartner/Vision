@@ -324,7 +324,7 @@ router.post(
     if (!req.file) throw new ValidationError("No file uploaded.");
     let built;
     try {
-      built = buildPortfolioConfig({ ...req.query, ...req.body });
+      built = buildPortfolioConfig(req.body);
     } catch (err) {
       cleanup(req.file.path);
       throw err;
@@ -332,7 +332,7 @@ router.post(
 
     let brokerage;
     try {
-      brokerage = parseBrokerageParams({ ...req.query, ...req.body });
+      brokerage = parseBrokerageParams(req.body);
       assertPortfolioFormatBrokerage(built.customConfig, brokerage);
       await assertPortfolioImportAccount(brokerage.accountId);
     } catch (err) {
@@ -389,7 +389,7 @@ router.post(
     if (!req.file) throw new ValidationError("No file uploaded.");
     let built;
     try {
-      built = buildPortfolioConfig({ ...req.query, ...req.body });
+      built = buildPortfolioConfig(req.body);
     } catch (err) {
       cleanup(req.file.path);
       throw err;
@@ -401,7 +401,7 @@ router.post(
     // account_id).
     let brokerage;
     try {
-      brokerage = parseBrokerageParams({ ...req.query, ...req.body });
+      brokerage = parseBrokerageParams(req.body);
       assertPortfolioFormatBrokerage(built.customConfig, brokerage);
       await assertPortfolioImportAccount(brokerage.accountId);
     } catch (err) {

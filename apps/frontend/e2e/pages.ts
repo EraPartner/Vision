@@ -6,21 +6,25 @@
  * of truth for that list.
  */
 export interface PageEntry {
-    name: string;
-    path: string;
-    heading: RegExp;
+  name: string;
+  path: string;
+  heading: RegExp;
 }
 
 export const PAGES: PageEntry[] = [
-    { name: "Dashboard", path: "/", heading: /^(dashboard|good (morning|afternoon|evening))/i },
-    { name: "Transactions", path: "/transactions", heading: /^transactions$/i },
-    { name: "Import", path: "/import", heading: /import & export/i },
-    { name: "Categories", path: "/categories", heading: /categories/i },
-    { name: "Recipients", path: "/recipients", heading: /recipients/i },
-    { name: "Statistics", path: "/statistics", heading: /statistics|analytics/i },
-    { name: "Owes", path: "/owes", heading: /who owes/i },
-    { name: "TaxOverview", path: "/tax", heading: /tax overview/i },
-    { name: "PortfolioOverview", path: "/portfolio", heading: /portfolio/i },
-    { name: "Watchlist", path: "/portfolio/watchlist", heading: /watchlist/i },
-    { name: "Planned", path: "/planned", heading: /planned payments/i },
+  {
+    name: "Dashboard",
+    path: "/",
+    heading: /^(dashboard|good (morning|afternoon|evening))/i,
+  },
+  { name: "Transactions", path: "/transactions", heading: /^transactions$/i },
+  { name: "Import", path: "/import", heading: /import & export/i },
+  { name: "Categories", path: "/categories", heading: /categories/i },
+  { name: "Recipients", path: "/recipients", heading: /recipients/i },
+  { name: "Statistics", path: "/statistics", heading: /statistics|analytics/i },
+  { name: "Owes", path: "/owes", heading: /who owes/i },
+  { name: "TaxOverview", path: "/tax", heading: /tax overview/i },
+  { name: "PortfolioOverview", path: "/portfolio", heading: /portfolio/i },
+  { name: "Watchlist", path: "/research/watchlist", heading: /watchlist/i },
+  { name: "Planned", path: "/planned", heading: /planned payments/i },
 ];

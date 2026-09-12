@@ -32,7 +32,6 @@ import {
   csvUploadErrorTranslator,
 } from "../lib/csvUpload.js";
 import { streamImport } from "../lib/importProgress.js";
-import { bodyFirstParam } from "../lib/httpParams.js";
 import {
   listBatches,
   getBatch,
@@ -133,8 +132,7 @@ function parseImportInput(schema, input) {
   return result.data;
 }
 
-// Multipart/query fields arrive as strings; falsy values fall back to the
-// defaults exactly like the old `String(a || b || default)` chains.
+// Multipart fields arrive as strings; falsy values use the endpoint defaults.
 const csvImportOptionsSchema = z.object({
   separator: z
     .unknown()
@@ -161,8 +159,8 @@ const csvImportOptionsSchema = z.object({
 /** @param {ExpressRequest} req */
 function parseCsvImportOptions(req) {
   const result = csvImportOptionsSchema.safeParse({
-    separator: bodyFirstParam(req.body, req.query, "separator"),
-    encoding: bodyFirstParam(req.body, req.query, "encoding"),
+    separator: req.body?.separator,
+    encoding: req.body?.encoding,
   });
   if (!result.success) {
     if (req.file) cleanup(req.file.path);
@@ -293,14 +291,10 @@ router.post(
       );
     }
 
-    const bankName = /** @type {string | undefined} */ (
-      bodyFirstParam(req.body, req.query, "bank_name")
-    );
+    const bankName = /** @type {string | undefined} */ (req.body?.bank_name);
     if (!bankName) {
       cleanup(req.file.path);
-      throw new ValidationError(
-        "Missing required parameter: bank_name (query or body)",
-      );
+      throw new ValidationError("Missing required multipart field: bank_name");
     }
 
     try {
@@ -351,10 +345,10 @@ router.post(
 
     let adapterName, customConfig;
     try {
-      ({ adapterName, customConfig } = parseImportInput(customCsvImportSchema, {
-        ...req.query,
-        ...req.body,
-      }));
+      ({ adapterName, customConfig } = parseImportInput(
+        customCsvImportSchema,
+        req.body,
+      ));
     } catch (err) {
       cleanup(req.file.path);
       throw err;
@@ -465,9 +459,7 @@ router.post(
       throw new ValidationError("No file uploaded.");
     }
 
-    const bankName = /** @type {string | undefined} */ (
-      bodyFirstParam(req.body, req.query, "bank_name")
-    );
+    const bankName = /** @type {string | undefined} */ (req.body?.bank_name);
     if (!bankName) {
       cleanup(req.file.path);
       throw new ValidationError("Missing required parameter: bank_name");

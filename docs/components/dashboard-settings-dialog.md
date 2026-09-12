@@ -3,8 +3,27 @@ title: DashboardSettingsDialog
 type: component
 status: active
 date: 2026-04-23
-updated: 2026-08-27
-tags: [components, forms, dialogs, settings, refactor, sidebar, instant-apply, phase-3, memoization, backup, encrypt, passphrase-modal, phase-2, visual-effects-tiers, auto-adapt-display, adr-084, small-viewport-robustness]
+updated: 2026-09-11
+tags:
+  [
+    components,
+    forms,
+    dialogs,
+    settings,
+    refactor,
+    sidebar,
+    instant-apply,
+    phase-3,
+    memoization,
+    backup,
+    encrypt,
+    passphrase-modal,
+    phase-2,
+    visual-effects-tiers,
+    auto-adapt-display,
+    adr-084,
+    small-viewport-robustness,
+  ]
 description: Sidebar-navigated instant-apply settings dialog. Left rail of seven sections; each section is a self-contained component reading from hooks and writing directly to the store/API. Single "Done" close button replaces the old Save/Cancel footer. Shared SettingsPrimitives (SettingsSection, SettingsGroup, SettingRow) enforce a uniform visual language. (ADR-084)
 aliases: [settings-dialog, dashboard-settings, DashboardSettingsDialog]
 related_code:
@@ -49,34 +68,31 @@ DashboardSettingsDialog (sidebar orchestrator)
 
 Every control writes through on change — no staged local state in the orchestrator.
 
-| Setting category | Write path |
-|---|---|
-| Most app/dashboard settings | `updateAppSettings` / `updateDashboardSettings` → Zustand store → context providers debounce-persist (500 ms) |
-| `includeTransfers` (server-only) | `apiClient.saveSetting` → `queryClient.invalidateQueries()` (optimistic cache refresh) |
-| Visual-effects tier | Applied inline; capped display → `sessionTierOverride`; uncapped → synced `visualEffects` + clear override |
-| Theme / color mode | Already instant; no change in behavior |
-| Backup settings | Written directly by `BackupSection` only — no other section can clobber them |
-| Reset to defaults | Explicit confirm in `AboutSection` danger zone |
+| Setting category                 | Write path                                                                                                    |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Most app/dashboard settings      | `updateAppSettings` / `updateDashboardSettings` → Zustand store → context providers debounce-persist (500 ms) |
+| `includeTransfers` (server-only) | `apiClient.saveSetting` → `queryClient.invalidateQueries()` (optimistic cache refresh)                        |
+| Visual-effects tier              | Applied inline; capped display → `sessionTierOverride`; uncapped → synced `visualEffects` + clear override    |
+| Theme / color mode               | Already instant; no change in behavior                                                                        |
+| Backup settings                  | Written directly by `BackupSection` only — no other section can clobber them                                  |
+| Reset to defaults                | Explicit confirm in `AboutSection` danger zone                                                                |
 
 Because each section is self-contained, the orchestrator holds no staged state and no per-section prop threads. The old "backup settings clobber" guard is gone: only `BackupSection` ever writes backup settings.
 
 ### State Ownership
 
-| State | Owner | Purpose |
-|-------|-------|---------|
-| `activeSection` | DashboardSettingsDialog | Currently visible section |
-| All settings values | Zustand store (via hooks in each section) | Single source of truth; sections read + write directly |
-| Backup state (dir, passphrase, encrypt, showRestore) | BackupSection internal | Not propagated to orchestrator |
+| State                                                | Owner                                     | Purpose                                                |
+| ---------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------ |
+| `activeSection`                                      | DashboardSettingsDialog                   | Currently visible section                              |
+| All settings values                                  | Zustand store (via hooks in each section) | Single source of truth; sections read + write directly |
+| Backup state (dir, passphrase, encrypt, showRestore) | BackupSection internal                    | Not propagated to orchestrator                         |
 
-### Legacy Deep-Link Compatibility
+### Section Deep Links
 
-The Electron menu bridge and onboarding flows pass tab key strings. `DashboardSettingsDialog` maps legacy keys via `LEGACY_TAB_MAP`:
-
-| Legacy key | Maps to section |
-|-----------|----------------|
-| `dashboard` | `statistics` |
-| `app` | `about` |
-| `general`, `appearance`, `backup` | unchanged |
+The Electron menu bridge and onboarding pass canonical section identifiers. The accepted values are
+`general`, `appearance`, `statistics`, `behavior`, `ai`, `backup`, and `about`. Retired
+`dashboard` and `app` identifiers are not aliases; a direct component value falls back to General,
+while a URL using one of those values does not open the dialog.
 
 ---
 
@@ -93,7 +109,6 @@ interface DashboardSettingsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultTab?: string; // 'general' | 'appearance' | 'statistics' | 'behavior' | 'ai' | 'backup' | 'about'
-                       // Legacy keys 'dashboard' and 'app' are mapped via LEGACY_TAB_MAP
 }
 ```
 
@@ -134,11 +149,11 @@ Shared layout primitives used by every section to enforce a uniform visual langu
 
 ### Exports
 
-| Component | Purpose | Layout |
-|-----------|---------|--------|
-| `SettingsSection` | Title + description header for a section | Full-width heading block |
-| `SettingsGroup` | Bordered, hairline-divided card; optional label and description | Groups related rows |
-| `SettingRow` | Label + hint + control | `row` for switches/actions; `stack` for selects/lists |
+| Component         | Purpose                                                         | Layout                                                |
+| ----------------- | --------------------------------------------------------------- | ----------------------------------------------------- |
+| `SettingsSection` | Title + description header for a section                        | Full-width heading block                              |
+| `SettingsGroup`   | Bordered, hairline-divided card; optional label and description | Groups related rows                                   |
+| `SettingRow`      | Label + hint + control                                          | `row` for switches/actions; `stack` for selects/lists |
 
 `SettingRow` replaces the three inconsistent label-control patterns from the old tabs (bare rows with full-width `Separator`, bordered cards, button-cards). Every setting in every section now uses the same primitive.
 
@@ -317,12 +332,12 @@ interface AIChatSettingsSectionProps {
 
 New keys added in en + nl; no existing keys changed:
 
-| Key pattern | Purpose |
-|-------------|---------|
-| `settings.done` | Done button label |
-| `settings.section.{about,ai,behavior,statistics,...}` | Sidebar section labels |
-| `settings.section.*.desc` | Section description text |
-| `settings.group.{formatting,localeDisplay,colorMode,visualEffects}` | Group card labels |
+| Key pattern                                                         | Purpose                  |
+| ------------------------------------------------------------------- | ------------------------ |
+| `settings.done`                                                     | Done button label        |
+| `settings.section.{about,ai,behavior,statistics,...}`               | Sidebar section labels   |
+| `settings.section.*.desc`                                           | Section description text |
+| `settings.group.{formatting,localeDisplay,colorMode,visualEffects}` | Group card labels        |
 
 The old `settings.save` / `settings.cancel` strings remain in locale files (unused).
 
@@ -330,29 +345,29 @@ The old `settings.save` / `settings.cancel` strings remain in locale files (unus
 
 ## Testing Strategy
 
-| Component | Test Scope |
-|-----------|-----------|
-| DashboardSettingsDialog | Dialog open/close, section nav, Done button, legacy tab key mapping |
-| GeneralSection | Currency/format selection, instant write to store |
-| StatisticsSection | Category/recipient exclusion, scope selection, includeTransfers toggle |
-| BehaviorSection | Startup section select, auto-clear planned toggle, recurring reset confirmation |
-| AppearanceSection | Theme variant, tier routing (capped vs uncapped display) |
-| AiSection | Ollama status display, model selector |
-| BackupSection | Directory picker, backup creation, encrypted restore flow (`BackupSection.test.tsx`) |
-| AboutSection | Reset-all confirmation, onboarding restart |
+| Component               | Test Scope                                                                             |
+| ----------------------- | -------------------------------------------------------------------------------------- |
+| DashboardSettingsDialog | Dialog open/close, section nav, Done button, canonical and retired section-id behavior |
+| GeneralSection          | Currency/format selection, instant write to store                                      |
+| StatisticsSection       | Category/recipient exclusion, scope selection, includeTransfers toggle                 |
+| BehaviorSection         | Startup section select, auto-clear planned toggle, recurring reset confirmation        |
+| AppearanceSection       | Theme variant, tier routing (capped vs uncapped display)                               |
+| AiSection               | Ollama status display, model selector                                                  |
+| BackupSection           | Directory picker, backup creation, encrypted restore flow (`BackupSection.test.tsx`)   |
+| AboutSection            | Reset-all confirmation, onboarding restart                                             |
 
 ---
 
 ## Refactor History
 
-| Phase | Date | Change |
-|-------|------|--------|
-| Phase 3 | 2026-04-23 | Monolith (~1400 lines) split into thin orchestrator + 5 tab components |
-| April 25 | 2026-04-25 | `useCallback` + functional updater pattern for stable callbacks; `React.memo()` on all tabs |
-| ADR-075 addendum | 2026-06-12 | Visual-effects tier Select + auto-adapt Switch added to AppearanceTab; `tierSelection` staged state in orchestrator |
-| ADR-084 | 2026-06-18 | 5-tab Save/Cancel form → sidebar + instant-apply; `SettingsPrimitives`; section taxonomy rework; `tabs/` directory removed |
-| ADR-104 addendum | 2026-06-24 | Accessibility group added to AppearanceSection: Gain & loss colors Select (`colorblindGainLoss`) |
-| Small-viewport robustness | 2026-08-10 | Section nav collapses to a horizontal scrolling chip bar below `md`; `md+` unchanged (PR #156) |
+| Phase                     | Date       | Change                                                                                                                     |
+| ------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Phase 3                   | 2026-04-23 | Monolith (~1400 lines) split into thin orchestrator + 5 tab components                                                     |
+| April 25                  | 2026-04-25 | `useCallback` + functional updater pattern for stable callbacks; `React.memo()` on all tabs                                |
+| ADR-075 addendum          | 2026-06-12 | Visual-effects tier Select + auto-adapt Switch added to AppearanceTab; `tierSelection` staged state in orchestrator        |
+| ADR-084                   | 2026-06-18 | 5-tab Save/Cancel form → sidebar + instant-apply; `SettingsPrimitives`; section taxonomy rework; `tabs/` directory removed |
+| ADR-104 addendum          | 2026-06-24 | Accessibility group added to AppearanceSection: Gain & loss colors Select (`colorblindGainLoss`)                           |
+| Small-viewport robustness | 2026-08-10 | Section nav collapses to a horizontal scrolling chip bar below `md`; `md+` unchanged (PR #156)                             |
 
 ---
 

@@ -7988,30 +7988,20 @@ paths:
       summary: Import transactions from bank CSV
       operationId: importCsv
       tags: [Import]
-      parameters:
-        - in: query
-          name: bank_name
-          required: false
-          deprecated: true
-          schema:
-            type: string
-          description: Compatibility fallback; the multipart body key wins when present.
       requestBody:
         required: true
         content:
           multipart/form-data:
             schema:
               type: object
-              required: [file]
+              required: [file, bank_name]
               properties:
                 file:
                   type: string
                   format: binary
                 bank_name:
                   type: string
-                  description:
-                    Bank adapter identifier. The multipart body takes precedence.
-                    A query parameter remains as a compatibility fallback.
+                  description: Bank adapter identifier.
       responses:
         "201":
           description: All rows matched exactly — batch committed immediately
@@ -8047,11 +8037,8 @@ paths:
           multipart/form-data:
             schema:
               type: object
-              description: Flat form fields (customCsvImportSchema in
-                routes/importRoutes.js). The route merges query and body
-                (`{...req.query, ...req.body}`), so every field may also be sent
-                as a compatibility query parameter. A present multipart body
-                field is authoritative when both locations supply the field.
+              description: Flat multipart form fields (customCsvImportSchema in
+                routes/importRoutes.js).
               required:
                 [
                   file,
@@ -8118,30 +8105,20 @@ paths:
       summary: Stream-import large CSV file
       operationId: importCsvStream
       tags: [Import]
-      parameters:
-        - in: query
-          name: bank_name
-          required: false
-          deprecated: true
-          schema:
-            type: string
-          description: Compatibility fallback; the multipart body key wins when present.
       requestBody:
         required: true
         content:
           multipart/form-data:
             schema:
               type: object
-              required: [file]
+              required: [file, bank_name]
               properties:
                 file:
                   type: string
                   format: binary
                 bank_name:
                   type: string
-                  description:
-                    Bank adapter identifier. The multipart body takes precedence.
-                    A query parameter remains as a compatibility fallback.
+                  description: Bank adapter identifier.
       responses:
         "200":
           description: Server-Sent Events stream; events are progress /
@@ -8163,17 +8140,6 @@ paths:
       summary: Bulk-import recipients from CSV
       operationId: importRecipients
       tags: [Import]
-      parameters:
-        - in: query
-          name: separator
-          deprecated: true
-          schema: { type: string, minLength: 1, maxLength: 1 }
-          description: Compatibility fallback; the multipart body key wins when present.
-        - in: query
-          name: encoding
-          deprecated: true
-          schema: { type: string }
-          description: Compatibility fallback; the multipart body key wins when present.
       requestBody:
         required: true
         content:
@@ -8207,17 +8173,6 @@ paths:
       summary: Bulk-import categories from CSV
       operationId: importCategories
       tags: [Import]
-      parameters:
-        - in: query
-          name: separator
-          deprecated: true
-          schema: { type: string, minLength: 1, maxLength: 1 }
-          description: Compatibility fallback; the multipart body key wins when present.
-        - in: query
-          name: encoding
-          deprecated: true
-          schema: { type: string }
-          description: Compatibility fallback; the multipart body key wins when present.
       requestBody:
         required: true
         content:
@@ -8589,10 +8544,7 @@ paths:
   /api/portfolio/import/csv/custom:
     post:
       summary: One-shot portfolio CSV import with custom mapping or a supported format
-      description: >-
-        Every mapping field also accepts a compatibility query parameter. A
-        present multipart body field is authoritative when both locations
-        supply the same field.
+      description: Mapping and brokerage fields are accepted in the multipart body.
       operationId: portfolioImportCsvCustom
       tags: [PortfolioImport]
       requestBody:
@@ -8650,10 +8602,7 @@ paths:
   /api/portfolio/import/csv/stream:
     post:
       summary: SSE-streaming portfolio CSV import
-      description: >-
-        Every mapping field also accepts a compatibility query parameter. A
-        present multipart body field is authoritative when both locations
-        supply the same field.
+      description: Mapping and brokerage fields are accepted in the multipart body.
       operationId: portfolioImportCsvStream
       tags: [PortfolioImport]
       requestBody:

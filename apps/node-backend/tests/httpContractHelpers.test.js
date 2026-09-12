@@ -1,31 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  bodyFirstParam,
-  parseBooleanQueryParam,
-} from "../src/lib/httpParams.js";
+import { parseBooleanQueryParam } from "../src/lib/httpParams.js";
 import { withCreateOutcome } from "../src/lib/createOutcome.js";
-
-describe("bodyFirstParam", () => {
-  it("uses a present body value before a conflicting query value", () => {
-    expect(
-      bodyFirstParam(
-        { bank_name: "body" },
-        { bank_name: "query" },
-        "bank_name",
-      ),
-    ).toBe("body");
-  });
-
-  it.each([false, "", null])("preserves an explicit body value %j", (value) => {
-    expect(bodyFirstParam({ force: value }, { force: "true" }, "force")).toBe(
-      value,
-    );
-  });
-
-  it("falls back to the query when the body key is absent", () => {
-    expect(bodyFirstParam({}, { force: "true" }, "force")).toBe("true");
-  });
-});
 
 describe("parseBooleanQueryParam", () => {
   it.each([

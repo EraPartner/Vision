@@ -42,10 +42,30 @@ export function ok202<T>(data: T, meta?: EnvelopeMeta) {
     return okWithStatus(202, data, meta);
 }
 
-/** ADR-026 failure envelope: { ok: false, error: { message, code? } } */
+const ERROR_CODE_BY_STATUS: Record<number, string> = {
+    400: "VALIDATION_ERROR",
+    401: "UNAUTHORIZED",
+    403: "FORBIDDEN",
+    404: "NOT_FOUND",
+    409: "CONFLICT",
+    422: "VALIDATION_ERROR",
+    429: "RATE_LIMITED",
+    500: "INTERNAL_SERVER_ERROR",
+    502: "BAD_GATEWAY",
+    503: "SERVICE_UNAVAILABLE",
+    504: "GATEWAY_TIMEOUT",
+};
+
+/** ADR-026 failure envelope: { ok: false, error: { message, code } } */
 export function err(status: number, message: string, code?: string) {
     return HttpResponse.json(
-        { ok: false, error: { message, ...(code ? { code } : {}) } },
+        {
+            ok: false,
+            error: {
+                message,
+                code: code ?? ERROR_CODE_BY_STATUS[status] ?? "APP_ERROR",
+            },
+        },
         { status },
     );
 }

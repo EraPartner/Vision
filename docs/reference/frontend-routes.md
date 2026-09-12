@@ -2,8 +2,8 @@
 title: Frontend Routes Reference
 type: reference
 status: active
-date: 2026-04-25
-updated: 2026-09-05
+date: 2026-09-11
+updated: 2026-09-11
 tags: [reference, frontend, routing, pages, react-router, admin, workspace]
 description: Complete reference of all frontend routes and their page components, including admin routes and workspace-aware navigation
 aliases: [routes, pages, navigation, url paths, frontend routes, admin routes]
@@ -13,8 +13,8 @@ aliases: [routes, pages, navigation, url paths, frontend routes, admin routes]
 
 Lazy page paths, literal chunk loaders, and admin-gate flags have one source of truth in
 `apps/frontend/src/lib/routePreload.ts`'s ordered `appRouteManifest`. `App.tsx` derives route
-elements from it. Redirect aliases and the catch-all remain explicit in `App.tsx` because they
-transform URLs rather than load ordinary pages.
+elements from it. The wildcard catch-all remains explicit in `App.tsx` and renders `NotFound` for
+every path absent from the manifest.
 
 ## Shareable page state
 
@@ -92,17 +92,18 @@ Admin routes are workspace-agnostic and preserve the active workspace when navig
 
 > Settings is no longer a route — it is rendered as `DashboardSettingsDialog` opened from the layout. See [[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx\|DashboardSettingsDialog.tsx]] and [[docs/features/settings|Settings Feature]].
 
-## Special Routes
+## Unsupported Former Routes
 
-These routes stay explicit in `App.tsx`; they do not create manifest page records.
+The legacy aliases `/portfolio/exchange-rates`, `/research/symbol/:symbol`, `/portfolio/market`,
+and `/portfolio/watchlist` were retired on 2026-09-11. They now reach the wildcard and render
+`NotFound`; use `/admin/exchange-rates`, `/research/market?symbol=<symbol>`, `/research/market`, and
+`/research/watchlist` respectively. `/accounts?account=<id>` no longer forwards and instead opens
+the accounts hub. See
+[[docs/adr/136-same-release-http-import-and-navigation-contract|ADR-136]].
 
-| Route                       | Result                              |
-| --------------------------- | ----------------------------------- |
-| `/portfolio/exchange-rates` | Redirect to `/admin/exchange-rates` |
-| `/research/symbol/:symbol`  | Redirect to `/research/market`      |
-| `/portfolio/market`         | Redirect to `/research/market`      |
-| `/portfolio/watchlist`      | Redirect to `/research/watchlist`   |
-| `*`                         | Render `NotFound`                   |
+| Route | Result            |
+| ----- | ----------------- |
+| `*`   | Render `NotFound` |
 
 ## Route Configuration
 
@@ -161,3 +162,4 @@ Workspace switching is handled by the [[apps/frontend/src/hooks/useWorkspace.ts\
 - [[docs/features/views\|Views & Pages]] - Detailed page documentation
 - [[docs/components/layout\|Layout Components]] - AppLayout and AppSidebar
 - [[docs/architecture/frontend-architecture\|Frontend Architecture]] - Routes diagram
+- [[docs/adr/136-same-release-http-import-and-navigation-contract\|ADR-136: Same-Release HTTP, Import, and Navigation Contract]]

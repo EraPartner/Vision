@@ -314,18 +314,15 @@ end note
 
 note bottom of ResearchHomePage
   Market Lookup & Watchlist moved here from
-  Portfolio (ADR-079). Legacy /portfolio/market
-  and /portfolio/watchlist redirect here;
-  /portfolio/exchange-rates redirects to
-  /admin/exchange-rates.
+  Portfolio (ADR-079). The former /portfolio/market,
+  /portfolio/watchlist, /portfolio/exchange-rates,
+  and /research/symbol/:symbol aliases now render
+  Not Found (ADR-136).
   7 active routes: /research, /research/market,
   /research/watchlist, /research/compare,
   /research/charts, /research/forecast,
   /research/markets.
-  /research/symbol/:symbol is a redirect-only
-  route (RedirectSymbolToMarket in App.tsx)
-  that forwards to /research/market?symbol=.
-  ResearchSymbolPage retired 2026-06-17.
+  Use /research/market?symbol= for symbol links.
 end note
 
 @enduml

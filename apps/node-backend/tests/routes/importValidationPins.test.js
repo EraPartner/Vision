@@ -136,8 +136,8 @@ const api = routeAgent(importRouter, {
 /** Encode a path segment so ids with spaces survive the URL round-trip. */
 const seg = (v) => encodeURIComponent(String(v));
 
-describe("multipart parameter precedence", () => {
-  it("resolves CSV import options body-first without a listener", () => {
+describe("multipart body parameters", () => {
+  it("resolves CSV import options from the body without a listener", () => {
     expect(
       __parseCsvImportOptionsForTests({
         body: { separator: "|", encoding: "utf-8" },
@@ -157,10 +157,10 @@ describe("multipart parameter precedence", () => {
         body: {},
         query: { separator: ";", encoding: "latin1" },
       }),
-    ).toEqual({ separator: ";", encoding: "latin1" });
+    ).toEqual({ separator: ",", encoding: "utf-8" });
   });
 
-  it("uses a body bank_name before the legacy query fallback", async () => {
+  it("uses the multipart body bank_name", async () => {
     runImportPipeline.mockResolvedValue({
       batchId: 1,
       total: 1,
@@ -169,15 +169,36 @@ describe("multipart parameter precedence", () => {
       errors: 0,
     });
 
-    await api
-      .post(`${BASE}/csv`)
-      .query({ bank_name: "query-bank" })
-      .send({ bank_name: "body-bank" })
-      .expect(201);
+    await api.post(`${BASE}/csv`).send({ bank_name: "body-bank" }).expect(201);
 
     expect(runImportPipeline).toHaveBeenCalledWith(
       expect.objectContaining({ adapterName: "body-bank" }),
     );
+  });
+
+  it("rejects query-only bank names for one-shot and streaming imports", async () => {
+    await api.post(`${BASE}/csv`).query({ bank_name: "vision" }).expect(400);
+    await api
+      .post(`${BASE}/csv/stream`)
+      .query({ bank_name: "vision" })
+      .expect(400);
+
+    expect(runImportPipeline).not.toHaveBeenCalled();
+  });
+
+  it("rejects query-only custom mappings", async () => {
+    await api
+      .post(`${BASE}/csv/custom`)
+      .query({
+        bank_name: "Custom",
+        date_format: "%d/%m/%Y",
+        date_column: "Date",
+        recipient_column: "Recipient",
+        amount_column: "Amount",
+      })
+      .expect(400);
+
+    expect(runImportPipeline).not.toHaveBeenCalled();
   });
 });
 
@@ -431,8 +452,7 @@ describe("override-body id shape (parseOverrideId)", () => {
 });
 
 describe("parseCsvImportOptions pins (POST /recipients)", () => {
-  const run = (query, body = {}) =>
-    api.post(`${BASE}/recipients`).query(query).send(body);
+  const run = (body = {}) => api.post(`${BASE}/recipients`).send(body);
 
   it('defaults separator to "," and encoding to "utf-8"', async () => {
     await run({}).expect(201);
@@ -442,25 +462,16 @@ describe("parseCsvImportOptions pins (POST /recipients)", () => {
     });
   });
 
-  it("uses body values before compatibility query fallbacks", async () => {
-    await run({ separator: ";" }, { separator: "|" }).expect(201);
-    expect(importRecipientsCSV).toHaveBeenLastCalledWith("/tmp/pin.csv", {
-      separator: "|",
-      encoding: "utf-8",
-    });
-
-    await run({}, { separator: "|", encoding: "latin1" }).expect(201);
+  it("uses multipart body values", async () => {
+    await run({ separator: "|", encoding: "latin1" }).expect(201);
     expect(importRecipientsCSV).toHaveBeenLastCalledWith("/tmp/pin.csv", {
       separator: "|",
       encoding: "latin1",
     });
   });
 
-  it("preserves body-field presence before applying endpoint defaults", async () => {
-    await run(
-      { separator: ";", encoding: "latin1" },
-      { separator: "", encoding: null },
-    ).expect(201);
+  it("applies endpoint defaults to empty body fields", async () => {
+    await run({ separator: "", encoding: null }).expect(201);
 
     expect(importRecipientsCSV).toHaveBeenLastCalledWith("/tmp/pin.csv", {
       separator: ",",
@@ -469,7 +480,7 @@ describe("parseCsvImportOptions pins (POST /recipients)", () => {
   });
 
   it("stringifies a numeric separator (multipart/JSON tolerance)", async () => {
-    await run({}, { separator: 5 }).expect(201);
+    await run({ separator: 5 }).expect(201);
     expect(importRecipientsCSV).toHaveBeenLastCalledWith("/tmp/pin.csv", {
       separator: "5",
       encoding: "utf-8",
@@ -492,10 +503,9 @@ describe("parseCsvImportOptions pins (POST /recipients)", () => {
 });
 
 describe("parseCsvImportOptions pins (POST /categories)", () => {
-  it("uses body options before compatibility query fallbacks", async () => {
+  it("uses multipart body options", async () => {
     await api
       .post(`${BASE}/categories`)
-      .query({ separator: ";", encoding: "latin1" })
       .send({ separator: "|", encoding: "utf-8" })
       .expect(201);
 
@@ -507,10 +517,9 @@ describe("parseCsvImportOptions pins (POST /categories)", () => {
 });
 
 describe("POST /csv/custom config-build pins", () => {
-  const run = (query, body = {}) =>
-    api.post(`${BASE}/csv/custom`).query(query).send(body);
+  const run = (body = {}) => api.post(`${BASE}/csv/custom`).send(body);
 
-  const requiredQuery = {
+  const requiredBody = {
     bank_name: "Custom",
     date_format: "%d/%m/%Y",
     date_column: "Date",
@@ -551,7 +560,7 @@ describe("POST /csv/custom config-build pins", () => {
   });
 
   it('applies defaults: memo "", separator ",", encoding utf-8, skip_rows 0', async () => {
-    await run(requiredQuery).expect(201);
+    await run(requiredBody).expect(201);
     expect(runImportPipeline).toHaveBeenCalledWith(
       expect.objectContaining({
         customConfig: expect.objectContaining({
@@ -565,9 +574,7 @@ describe("POST /csv/custom config-build pins", () => {
   });
 
   it("coerces unparseable skip_rows to 0 and accepts an empty separator as default", async () => {
-    await run({ ...requiredQuery, skip_rows: "abc", separator: "" }).expect(
-      201,
-    );
+    await run({ ...requiredBody, skip_rows: "abc", separator: "" }).expect(201);
     expect(runImportPipeline).toHaveBeenCalledWith(
       expect.objectContaining({
         customConfig: expect.objectContaining({ skip_rows: 0, separator: "," }),
@@ -575,8 +582,8 @@ describe("POST /csv/custom config-build pins", () => {
     );
   });
 
-  it("body fields override query fields", async () => {
-    await run(requiredQuery, { amount_column: "BodyAmt" }).expect(201);
+  it("uses multipart body fields", async () => {
+    await run({ ...requiredBody, amount_column: "BodyAmt" }).expect(201);
     expect(runImportPipeline).toHaveBeenCalledWith(
       expect.objectContaining({
         customConfig: expect.objectContaining({
@@ -695,7 +702,7 @@ describe("batch_id wire type", () => {
 
     const res = await api
       .post(`${BASE}/csv`)
-      .query({ bank_name: "vision" })
+      .send({ bank_name: "vision" })
       .expect(201);
 
     expect(typeof res.body.data.batch_id).toBe("number");
@@ -711,7 +718,7 @@ describe("batch_id wire type", () => {
 
     const res = await api
       .post(`${BASE}/csv`)
-      .query({ bank_name: "vision" })
+      .send({ bank_name: "vision" })
       .expect(202);
 
     expect(typeof res.body.data.batch_id).toBe("number");
@@ -726,7 +733,7 @@ describe("batch_id wire type", () => {
     }));
     const started = await api
       .post(`${BASE}/csv`)
-      .query({ bank_name: "vision" })
+      .send({ bank_name: "vision" })
       .expect(202);
 
     getBatch.mockResolvedValue({ id: BATCH_ID, status: "awaiting_review" });

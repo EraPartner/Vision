@@ -346,19 +346,14 @@ Every control writes through on change — there is no global Save/Cancel footer
 
 Rejected `app_settings`, `dashboard_settings`, and `widget_visibility` saves all increment the shared `settingsSaveErrorNonce`. `SettingsSaveErrorToaster`, mounted under `LanguageProvider`, shows the existing localized `settings.saveFailed` message when it observes the nonce advance; React may coalesce simultaneous failures into one toast. The optimistic local state is deliberately not rolled back, so the user can keep working while being warned that the change may not survive a restart.
 
-### Legacy Deep-Link Compatibility
+### Section Deep Links
 
 Settings are addressable through `?settings=<section>`, where the canonical section ids are `general`, `appearance`, `statistics`, `behavior`, `ai`, `backup`, and `about`. Opening settings adds a browser-history entry, changing sections replaces that entry, and closing removes the parameter. Browser Back therefore closes a newly opened settings dialog without losing unrelated query parameters. The Electron menu and onboarding use the same route-backed entry point.
 
-Legacy tab keys (`general`, `appearance`, `dashboard`, `app`, `backup`) are mapped to new section ids by `resolveSettingsSection` inside `DashboardSettingsDialog.tsx`. Legacy URLs are replaced with their canonical form:
-
-| Legacy key                        | New section id |
-| --------------------------------- | -------------- |
-| `dashboard`                       | `statistics`   |
-| `app`                             | `about`        |
-| `general`, `appearance`, `backup` | unchanged      |
-
-Existing callers continue to work without modification. Unknown values are removed instead of opening an arbitrary section.
+`resolveSettingsSection` accepts only those seven canonical identifiers. The retired `dashboard`
+and `app` values are no longer mapped to `statistics` and `about`. A URL containing either retired
+value does not open settings; internal callers that provide an unknown section fall back to
+General. Electron menus and onboarding use canonical identifiers.
 
 ### i18n Keys (ADR-084)
 

@@ -2,11 +2,11 @@
 title: Test Inventory
 type: testing
 status: active
-date: 2026-09-09
-last_modified: 2026-09-09
-updated: 2026-09-09
-last-updated: 2026-09-09
-last_updated_timestamp: 2026-09-09T00:00:00Z
+date: 2026-09-12
+last_modified: 2026-09-12
+updated: 2026-09-12
+last-updated: 2026-09-12
+last_updated_timestamp: 2026-09-12T00:00:00Z
 added_portfolio_tax_pure_module_tests: 2026-05-29
 added_chart_aria_tests: 2026-05-29
 added_portfolio_math_tests: 2026-05-05
@@ -370,16 +370,16 @@ Complete resolution of all 34 integration test files (231 tests passing). Fixes 
 
 New comprehensive unit test coverage for the frontend API client layer:
 
-| File                                       | Type       | Tests | Coverage                                                                                                                                                                                                                 |
-| ------------------------------------------ | ---------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `apps/frontend/src/lib/api/client.test.ts` | Unit tests | 46    | Backoff delay (3), request ID generation (2), ApiClientError (3), error envelope parsing (9), envelope unwrapping (5), retryable status codes (2), query building (4), exclusion query (5), apiRequest orchestration (7) |
+| File                                       | Type       | Tests   | Coverage                                                                                                                                                                                                           |
+| ------------------------------------------ | ---------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `apps/frontend/src/lib/api/client.test.ts` | Unit tests | Current | Backoff delay, request ID generation, ApiClientError, strict canonical error-envelope parsing, status fallbacks, envelope unwrapping, retryable statuses, query building, exclusions, and apiRequest orchestration |
 
 **Test suite breakdown:**
 
 - **backoffDelay** (3 tests) — Resolves correctly with fake timers; enforces 500ms minimum; caps delay at 30,000ms for large attempt numbers
 - **generateRequestId** (2 tests) — Returns UUID format string; falls back to `req-<base36>-<random>` when `crypto.randomUUID` unavailable
 - **ApiClientError** (3 tests) — Instanceof checks (Error + ApiClientError); name property; all fields stored (status, code, message, details, requestId)
-- **parseEnvelopeError** (9 tests) — Unified envelope error parsing; status fallback code; Pydantic 422 validation array formatting; 429 rate-limit with retry_after; legacy detail/message fields; null body fallback; status-code fallback mapping (400/401/403/404/409/502/503 via it.each); unknown 5xx → INTERNAL_SERVER_ERROR
+- **parseEnvelopeError** — Canonical envelope parsing; required non-empty code and message; unknown canonical code mapped by HTTP status while its message/details survive; canonical rate-limit details; retired and malformed shape rejection; null-body fallback; status-code mapping; unknown 5xx → INTERNAL_SERVER_ERROR
 - **unwrapEnvelope** (5 tests) — Extracts data from `ok=true` envelope; passthrough non-envelopes; passthrough `ok=false` (no throw); null and array passthroughs
 - **RETRYABLE_STATUS_CODES** (2 tests) — Includes 408/429/502/503/504; excludes 400/401/403/404/409/422/500
 - **buildQuery** (4 tests) — Empty string for no params; URL encodes params; omits null/undefined; keeps false/0
@@ -727,7 +727,7 @@ New unit tests for the `chartAria.ts` accessibility helper module:
 - **Live-API contract tests expanded** (`src/test/live-contracts/live-contracts.test.ts`): reduced live checks derive validators from the strict shared resource schemas with `.pick().passthrough()`, so selected fields stay contract-checked while other valid fields in the full backend resource remain allowed. They hit the real backend on CI. Total live tests: 13 → **37**. Skipped automatically when `LIVE_API_BASE` is not set.
 - **Playwright e2e** for browser-only edges:
   - `e2e/dialogs-edge.spec.ts` — backdrop click, Escape (real browser), focus-trap Tab/Shift-Tab, autofocus on open
-  - `e2e/critical-flows.spec.ts` — page-load smoke for every major page (catches `pageerror`s); mutation roundtrip (create category / create recipient → list refetches new item)
+  - `e2e/critical-flows.spec.ts` — page-load smoke for major pages (catches `pageerror`s) plus checks that retired routes and settings aliases no longer redirect; mutation roundtrips live in `mutations-parity.spec.ts`
   - Discovered automatically by the non-visual `chromium` project used by `test:e2e`
 - **CI already wired:** `test-frontend` (vitest contract + integration) runs on every PR, `test-live-api-contracts` runs against Docker Compose on non-draft PRs, and the separate scheduled E2E workflow runs every non-visual spec nightly or on manual dispatch. The browser suite includes CSV upload → review → commit → transaction visibility and transaction create → edit → delete journeys. Visual snapshots stay in the manual `visual-chromium` project because Linux CI and local macOS rendering require different baselines; backup/restore remains covered by the Electron native smoke and frontend IPC component suites.
 
@@ -936,11 +936,14 @@ The Transaction Tags feature test suite is now **complete and passing**. All tes
 
 ### Recently Updated Backend Coverage (2026-04-26)
 
-| File                                                               | Area                             | Coverage Added                                                                                                                                 |
-| ------------------------------------------------------------------ | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/node-backend/tests/priceProviderRegistry.test.js`            | Price providers (Kinesis)        | Stale-run removal (≥ 8 identical prices), edge-point anomalies (first/last point 1.8x deviation), combined scenarios, immutability             |
-| `apps/node-backend/tests/kinesisTransactionHistoryAdapter.test.js` | Portfolio import (Kinesis Money) | Real 18-column schema, shared-ID trade/cash legs, fee conversion, distributions, fiat-symbol stripping, transfer-out review errors, provenance |
-| `apps/node-backend/tests/sseWriter.test.js`                        | SSE backpressure (Phase 3.2)     | `drainIfNeeded()` immediate return + full-buffer pause; `createSseWriter()` client tracking, async write, closed state, frame format           |
+| File                                                                              | Area                             | Coverage Added                                                                                                                                                                                        |
+| --------------------------------------------------------------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/node-backend/tests/priceProviderRegistry.test.js`                           | Price providers (Kinesis)        | Stale-run removal (≥ 8 identical prices), edge-point anomalies (first/last point 1.8x deviation), combined scenarios, immutability                                                                    |
+| `apps/node-backend/tests/kinesisTransactionHistoryAdapter.test.js`                | Portfolio import (Kinesis Money) | Real 18-column schema, shared-ID trade/cash legs, fee conversion, distributions, fiat-symbol stripping, transfer-out review errors, provenance                                                        |
+| `apps/node-backend/tests/nexoTransactionHistoryAdapter.test.js`                   | Portfolio import (Nexo)          | Sanitized-real-export 11-column schema, explicit lifecycle review, conversions including incomplete-row retention, interest income and units, top-ups, transfer-out and fee review errors, provenance |
+| `apps/node-backend/tests/saxoTransactionHistoryAdapter.test.js`                   | Portfolio import (Saxo)          | Sanitized-real-export 29-column localized schema, header whitespace, trade parsing, FX fee conversion, dividends, instrument-less cash rows, noisy symbols, unsupported actions, provenance           |
+| `apps/frontend/src/pages/portfolio/__tests__/PortfolioImportPage.presets.test.ts` | Portfolio import presets         | Nexo and Saxo source selection maps to the expected maintained format, columns, specialized hint, and fresh config object                                                                             |
+| `apps/node-backend/tests/sseWriter.test.js`                                       | SSE backpressure (Phase 3.2)     | `drainIfNeeded()` immediate return + full-buffer pause; `createSseWriter()` client tracking, async write, closed state, frame format                                                                  |
 
 ### Earlier Backend Coverage (2026-04-10)
 

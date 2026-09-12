@@ -3,6 +3,7 @@ title: API Client Unit Tests (E10)
 type: testing
 status: active
 date: 2026-05-01
+updated: 2026-09-11
 tags:
   - testing
   - frontend
@@ -11,7 +12,7 @@ tags:
   - vitest
   - msw
   - phase-e10
-description: Unit test coverage for the Vision frontend API client layer (46 tests)
+description: Unit test coverage for the Vision frontend API client transport, strict canonical error envelopes, retries, query helpers, and response unwrapping
 aliases:
   - api client tests
   - client layer tests
@@ -51,7 +52,9 @@ describe("backoffDelay", () => {
   it("does not resolve before 500ms on attempt 0", async () => {
     vi.useFakeTimers();
     let resolved = false;
-    backoffDelay(0).then(() => { resolved = true; });
+    backoffDelay(0).then(() => {
+      resolved = true;
+    });
     vi.advanceTimersByTime(499);
     await Promise.resolve();
     expect(resolved).toBe(false);
@@ -71,12 +74,14 @@ describe("backoffDelay", () => {
 ```
 
 **Key Patterns:**
+
 - `vi.useFakeTimers()` to control time advancement
 - `vi.advanceTimersByTime()` to test minimum delay enforcement
 - `vi.runAllTimersAsync()` to drain all pending timers and await promises
 - Cleanup: `afterEach(() => vi.useRealTimers())`
 
 **Coverage:**
+
 - Minimum 500ms delay enforced
 - Exponential backoff calculation correct
 - 30,000ms cap applied
@@ -106,11 +111,13 @@ describe("generateRequestId", () => {
 ```
 
 **Key Patterns:**
+
 - `vi.stubGlobal()` to mock missing globals in test environment
 - Regex matching for UUID and fallback formats
 - Cleanup: `afterEach(() => vi.unstubAllGlobals())`
 
 **Coverage:**
+
 - Crypto UUID generation preferred
 - Fallback generation works in absence of crypto API
 
@@ -122,10 +129,10 @@ Tests error class definition, prototype chain, and field storage.
 describe("ApiClientError", () => {
   // Test 1: Instanceof checks
   it("is an instance of Error and ApiClientError", () => {
-    const err = new ApiClientError({ 
-      status: 404, 
-      code: ApiErrorCode.NOT_FOUND, 
-      message: "not found" 
+    const err = new ApiClientError({
+      status: 404,
+      code: ApiErrorCode.NOT_FOUND,
+      message: "not found",
     });
     expect(err).toBeInstanceOf(Error);
     expect(err).toBeInstanceOf(ApiClientError);
@@ -133,10 +140,10 @@ describe("ApiClientError", () => {
 
   // Test 2: Error name
   it("has name 'ApiClientError'", () => {
-    const err = new ApiClientError({ 
-      status: 500, 
-      code: ApiErrorCode.INTERNAL_SERVER_ERROR, 
-      message: "boom" 
+    const err = new ApiClientError({
+      status: 500,
+      code: ApiErrorCode.INTERNAL_SERVER_ERROR,
+      message: "boom",
     });
     expect(err.name).toBe("ApiClientError");
   });
@@ -160,13 +167,16 @@ describe("ApiClientError", () => {
 ```
 
 **Coverage:**
+
 - Error class inheritance chain correct
 - Name property set correctly
 - All error fields accessible and stored
 
-### 4. Envelope Error Parsing (9 tests)
+### 4. Envelope Error Parsing
 
-Tests extraction and mapping of error information from various response formats per [[docs/adr/026-unified-api-response-envelope|ADR-026]].
+Tests the canonical failure contract from
+[[docs/adr/026-unified-api-response-envelope|ADR-026]] and the same-release cutoff in
+[[docs/adr/136-same-release-http-import-and-navigation-contract|ADR-136]].
 
 ```typescript
 describe("parseEnvelopeError", () => {
@@ -184,49 +194,35 @@ describe("parseEnvelopeError", () => {
     expect(err.requestId).toBe("req-123");
   });
 
-  // Test 2: Status fallback code
-  it("uses status fallback code when envelope omits code", async () => {
-    const response = mockResponse(404, { ok: false, error: { message: "not found" } });
-    const err = await parseEnvelopeError(response, "fallback");
-    expect(err.code).toBe(ApiErrorCode.NOT_FOUND);
-  });
-
-  // Test 3: Pydantic 422 validation array
-  it("formats Pydantic 422 validation array into a readable message", async () => {
-    const response = mockResponse(422, { 
-      detail: [{ loc: ["body", "name"], msg: "required" }] 
+  it("falls back by status when the envelope omits its required code", async () => {
+    const response = mockResponse(404, {
+      ok: false,
+      error: { message: "not found" },
     });
     const err = await parseEnvelopeError(response, "fallback");
-    expect(err.status).toBe(422);
+    expect(err.code).toBe(ApiErrorCode.NOT_FOUND);
+    expect(err.message).toBe("fallback (status 404)");
+  });
+
+  it("ignores retired error shapes", async () => {
+    const response = mockResponse(422, {
+      detail: [{ loc: ["body", "name"], msg: "required" }],
+    });
+    const err = await parseEnvelopeError(response, "fallback");
     expect(err.code).toBe(ApiErrorCode.VALIDATION_ERROR);
-    expect(err.message).toContain("body.name");
-    expect(err.message).toContain("required");
+    expect(err.message).toBe("fallback (status 422)");
   });
 
-  // Test 4: 429 Rate-Limit with retry_after
-  it("includes retry_after in 429 message", async () => {
-    const response = mockResponse(429, { retry_after: 60 });
+  it("maps an unknown canonical code by status while keeping its message", async () => {
+    const response = mockResponse(504, {
+      ok: false,
+      error: { code: "QUERY_TIMEOUT", message: "Query timed out" },
+    });
     const err = await parseEnvelopeError(response, "fallback");
-    expect(err.status).toBe(429);
-    expect(err.code).toBe(ApiErrorCode.RATE_LIMITED);
-    expect(err.message).toContain("60");
+    expect(err.code).toBe(ApiErrorCode.GATEWAY_TIMEOUT);
+    expect(err.message).toBe("Query timed out");
   });
 
-  // Test 5: Legacy detail field (string)
-  it("uses legacy string detail field", async () => {
-    const response = mockResponse(400, { detail: "bad stuff happened" });
-    const err = await parseEnvelopeError(response, "fallback");
-    expect(err.message).toBe("bad stuff happened");
-  });
-
-  // Test 6: Legacy message field
-  it("uses legacy string message field", async () => {
-    const response = mockResponse(500, { message: "server exploded" });
-    const err = await parseEnvelopeError(response, "fallback");
-    expect(err.message).toBe("server exploded");
-  });
-
-  // Test 7: Null body fallback
   it("falls back to the fallback message when body is null", async () => {
     const response = new Response(null, { status: 503 });
     const err = await parseEnvelopeError(response, "Service unavailable");
@@ -234,7 +230,6 @@ describe("parseEnvelopeError", () => {
     expect(err.message).toContain("503");
   });
 
-  // Test 8: Status code mapping (it.each)
   it.each([
     [400, ApiErrorCode.VALIDATION_ERROR],
     [401, ApiErrorCode.UNAUTHORIZED],
@@ -243,13 +238,15 @@ describe("parseEnvelopeError", () => {
     [409, ApiErrorCode.CONFLICT],
     [502, ApiErrorCode.BAD_GATEWAY],
     [503, ApiErrorCode.SERVICE_UNAVAILABLE],
-  ] as const)("status %d maps to fallback code %s", async (status, expectedCode) => {
-    const response = mockResponse(status, {});
-    const err = await parseEnvelopeError(response, "x");
-    expect(err.code).toBe(expectedCode);
-  });
+  ] as const)(
+    "status %d maps to fallback code %s",
+    async (status, expectedCode) => {
+      const response = mockResponse(status, {});
+      const err = await parseEnvelopeError(response, "x");
+      expect(err.code).toBe(expectedCode);
+    },
+  );
 
-  // Test 9: Unknown 5xx
   it("maps unknown 5xx to INTERNAL_SERVER_ERROR", async () => {
     const response = mockResponse(599, {});
     const err = await parseEnvelopeError(response, "x");
@@ -259,17 +256,18 @@ describe("parseEnvelopeError", () => {
 ```
 
 **Key Patterns:**
+
 - Helper: `mockResponse(status, body)` creates Response objects for testing
 - `it.each()` for parameterized status code mapping tests
-- Handles multiple error formats: unified envelope, Pydantic array, legacy detail/message
-- Rate-limit special case (retry_after extraction)
+- Preserves canonical messages/details while mapping additive unknown codes by HTTP status
+- Rejects retired top-level and Pydantic-style shapes
 
 **Coverage:**
-- All error envelope formats recognized
+
+- Canonical failure envelopes recognized
 - Status codes mapped to error codes
-- Fallback codes applied when envelope omits code
-- Pydantic validation errors formatted readably
-- Rate-limit metadata extracted
+- Missing code/message and retired shapes use generic status fallback
+- Canonical rate-limit details remain available
 - Null/empty response handled gracefully
 
 ### 5. Envelope Unwrapping (5 tests)
@@ -309,6 +307,7 @@ describe("unwrapEnvelope", () => {
 ```
 
 **Coverage:**
+
 - Envelope detection and unwrapping correct
 - Non-envelope values passed through unchanged
 - Error envelopes not unwrapped (left for caller)
@@ -337,6 +336,7 @@ describe("RETRYABLE_STATUS_CODES", () => {
 ```
 
 **Coverage:**
+
 - Retryable codes (transient): 408, 429, 502, 503, 504
 - Non-retryable codes (permanent): 400, 401, 403, 404, 409, 422, 500
 
@@ -377,6 +377,7 @@ describe("buildQuery", () => {
 ```
 
 **Coverage:**
+
 - Empty parameter handling
 - URL encoding of query strings
 - Null/undefined exclusion (but false/0 kept)
@@ -415,7 +416,10 @@ describe("buildExclusionQuery", () => {
 
   // Test 5: Omit empty arrays
   it("omits empty arrays", () => {
-    const q = buildExclusionQuery({ excluded_category_ids: [], currency: "EUR" });
+    const q = buildExclusionQuery({
+      excluded_category_ids: [],
+      currency: "EUR",
+    });
     expect(q).not.toContain("excluded_category_ids");
     expect(q).toContain("currency=EUR");
   });
@@ -423,6 +427,7 @@ describe("buildExclusionQuery", () => {
 ```
 
 **Coverage:**
+
 - Empty parameter handling
 - Array repetition for multi-value filters
 - Single value params (currency)
@@ -437,7 +442,9 @@ describe("apiRequest", () => {
   // Test 1: GET success with unwrap
   it("GET success returns unwrapped data", async () => {
     server.use(
-      http.get(TEST_URL, () => HttpResponse.json({ ok: true, data: { id: 1 } })),
+      http.get(TEST_URL, () =>
+        HttpResponse.json({ ok: true, data: { id: 1 } }),
+      ),
     );
     const result = await apiRequest<{ id: number }>("/api/client-test");
     expect(result).toEqual({ id: 1 });
@@ -446,7 +453,7 @@ describe("apiRequest", () => {
   // Test 2: 204 No Content
   it("204 returns undefined", async () => {
     server.use(
-      http.get(TEST_URL, () => new HttpResponse(null, { status: 204 }))
+      http.get(TEST_URL, () => new HttpResponse(null, { status: 204 })),
     );
     const result = await apiRequest("/api/client-test");
     expect(result).toBeUndefined();
@@ -462,7 +469,9 @@ describe("apiRequest", () => {
         ),
       ),
     );
-    await expect(apiRequest("/api/client-test", {}, 0)).rejects.toThrow(ApiClientError);
+    await expect(apiRequest("/api/client-test", {}, 0)).rejects.toThrow(
+      ApiClientError,
+    );
     await expect(apiRequest("/api/client-test", {}, 0)).rejects.toMatchObject({
       status: 404,
       code: ApiErrorCode.NOT_FOUND,
@@ -478,7 +487,9 @@ describe("apiRequest", () => {
         return new HttpResponse(null, { status: 502 });
       }),
     );
-    await expect(apiRequest("/api/client-test", { method: "POST" }, 2)).rejects.toThrow();
+    await expect(
+      apiRequest("/api/client-test", { method: "POST" }, 2),
+    ).rejects.toThrow();
     expect(calls).toBe(1);
   });
 
@@ -506,7 +517,10 @@ describe("apiRequest", () => {
     server.use(
       http.get(TEST_URL, () =>
         HttpResponse.json(
-          { ok: false, error: { message: "gateway down", code: "BAD_GATEWAY" } },
+          {
+            ok: false,
+            error: { message: "gateway down", code: "BAD_GATEWAY" },
+          },
           { status: 502 },
         ),
       ),
@@ -530,13 +544,16 @@ describe("apiRequest", () => {
         );
       }),
     );
-    await expect(apiRequest("/api/client-test", {}, 2)).rejects.toThrow(ApiClientError);
+    await expect(apiRequest("/api/client-test", {}, 2)).rejects.toThrow(
+      ApiClientError,
+    );
     expect(calls).toBe(1);
   });
 });
 ```
 
 **Key Patterns:**
+
 - MSW `server.use()` per-test overrides for HTTP interception
 - `http.get()` / `http.post()` to mock different methods
 - `HttpResponse.json()` for JSON responses; `new HttpResponse(null, { status })` for status-only
@@ -545,6 +562,7 @@ describe("apiRequest", () => {
 - Call counter pattern to verify retry attempts
 
 **Coverage:**
+
 - GET success path with envelope unwrap
 - 204 No Content (no body)
 - Non-OK response error handling
@@ -584,9 +602,7 @@ vi.stubGlobal("crypto", { randomUUID: undefined });
 Override MSW handlers per test with `server.use()`:
 
 ```typescript
-server.use(
-  http.get(URL, () => HttpResponse.json({ /* response */ })),
-);
+server.use(http.get(URL, () => HttpResponse.json({/* response */})));
 ```
 
 ### Error Verification
@@ -632,18 +648,18 @@ bun vitest run --coverage apps/frontend/src/lib/api/client.test.ts
 
 ## Coverage Summary
 
-| Component | Tests | Coverage | Status |
-|-----------|-------|----------|--------|
-| `backoffDelay` | 3 | Minimum delay, exponential, cap | ✓ Complete |
-| `generateRequestId` | 2 | UUID, fallback | ✓ Complete |
-| `ApiClientError` | 3 | Class, name, fields | ✓ Complete |
-| `parseEnvelopeError` | 9 | Unified, legacy, special cases | ✓ Complete |
-| `unwrapEnvelope` | 5 | Extract, passthrough | ✓ Complete |
-| `RETRYABLE_STATUS_CODES` | 2 | Retryable, non-retryable | ✓ Complete |
-| `buildQuery` | 4 | Empty, encode, filter | ✓ Complete |
-| `buildExclusionQuery` | 5 | Empty, arrays, currency | ✓ Complete |
-| `apiRequest` | 7 | Success, retry, errors | ✓ Complete |
-| **Total** | **46** | **API layer** | ✓ Complete |
+| Component                | Tests   | Coverage                                                                             | Status     |
+| ------------------------ | ------- | ------------------------------------------------------------------------------------ | ---------- |
+| `backoffDelay`           | 3       | Minimum delay, exponential, cap                                                      | ✓ Complete |
+| `generateRequestId`      | 2       | UUID, fallback                                                                       | ✓ Complete |
+| `ApiClientError`         | 3       | Class, name, fields                                                                  | ✓ Complete |
+| `parseEnvelopeError`     | Current | Canonical envelope, additive code mapping, retired-shape rejection, status fallbacks | ✓ Complete |
+| `unwrapEnvelope`         | 5       | Extract, passthrough                                                                 | ✓ Complete |
+| `RETRYABLE_STATUS_CODES` | 2       | Retryable, non-retryable                                                             | ✓ Complete |
+| `buildQuery`             | 4       | Empty, encode, filter                                                                | ✓ Complete |
+| `buildExclusionQuery`    | 5       | Empty, arrays, currency                                                              | ✓ Complete |
+| `apiRequest`             | 7       | Success, retry, errors                                                               | ✓ Complete |
+| **Total**                | **46**  | **API layer**                                                                        | ✓ Complete |
 
 **Execution time:** <2 seconds (no jsdom overhead, node environment)
 

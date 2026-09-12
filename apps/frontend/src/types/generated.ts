@@ -2419,7 +2419,7 @@ export interface paths {
         put?: never;
         /**
          * One-shot portfolio CSV import with custom mapping or a supported format
-         * @description Every mapping field also accepts a compatibility query parameter. A present multipart body field is authoritative when both locations supply the same field.
+         * @description Mapping and brokerage fields are accepted in the multipart body.
          */
         post: operations["portfolioImportCsvCustom"];
         delete?: never;
@@ -2439,7 +2439,7 @@ export interface paths {
         put?: never;
         /**
          * SSE-streaming portfolio CSV import
-         * @description Every mapping field also accepts a compatibility query parameter. A present multipart body field is authoritative when both locations supply the same field.
+         * @description Mapping and brokerage fields are accepted in the multipart body.
          */
         post: operations["portfolioImportCsvStream"];
         delete?: never;
@@ -4448,10 +4448,10 @@ export interface components {
             /** @description Display label for the import source */
             adapter_name?: string;
             /**
-             * @description Specialized portfolio statement parser; omit for generic column mapping. IBKR and Kinesis require is_brokerage=true and account_id because their transaction histories include cash movements.
+             * @description Specialized portfolio statement parser; omit for generic column mapping. Maintained IBKR, Kinesis, Nexo, and Saxo formats require is_brokerage=true and account_id because their transaction histories include or affect sleeve cash movements.
              * @enum {string}
              */
-            portfolio_format?: "ibkr_transaction_history" | "kinesis_transaction_history";
+            portfolio_format?: "ibkr_transaction_history" | "kinesis_transaction_history" | "nexo_transaction_history" | "saxo_transaction_history";
             /** @description Python strptime format, default: %Y-%m-%d */
             date_format?: string;
             /** @description Single-character CSV delimiter, default ',' */
@@ -9365,13 +9365,7 @@ export interface operations {
     };
     importCsv: {
         parameters: {
-            query?: {
-                /**
-                 * @deprecated
-                 * @description Compatibility fallback; the multipart body key wins when present.
-                 */
-                bank_name?: string;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -9381,8 +9375,8 @@ export interface operations {
                 "multipart/form-data": {
                     /** Format: binary */
                     file: string;
-                    /** @description Bank adapter identifier. The multipart body takes precedence. A query parameter remains as a compatibility fallback. */
-                    bank_name?: string;
+                    /** @description Bank adapter identifier. */
+                    bank_name: string;
                 };
             };
         };
@@ -9467,13 +9461,7 @@ export interface operations {
     };
     importCsvStream: {
         parameters: {
-            query?: {
-                /**
-                 * @deprecated
-                 * @description Compatibility fallback; the multipart body key wins when present.
-                 */
-                bank_name?: string;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -9483,8 +9471,8 @@ export interface operations {
                 "multipart/form-data": {
                     /** Format: binary */
                     file: string;
-                    /** @description Bank adapter identifier. The multipart body takes precedence. A query parameter remains as a compatibility fallback. */
-                    bank_name?: string;
+                    /** @description Bank adapter identifier. */
+                    bank_name: string;
                 };
             };
         };
@@ -9502,18 +9490,7 @@ export interface operations {
     };
     importRecipients: {
         parameters: {
-            query?: {
-                /**
-                 * @deprecated
-                 * @description Compatibility fallback; the multipart body key wins when present.
-                 */
-                separator?: string;
-                /**
-                 * @deprecated
-                 * @description Compatibility fallback; the multipart body key wins when present.
-                 */
-                encoding?: string;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -9547,18 +9524,7 @@ export interface operations {
     };
     importCategories: {
         parameters: {
-            query?: {
-                /**
-                 * @deprecated
-                 * @description Compatibility fallback; the multipart body key wins when present.
-                 */
-                separator?: string;
-                /**
-                 * @deprecated
-                 * @description Compatibility fallback; the multipart body key wins when present.
-                 */
-                encoding?: string;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;

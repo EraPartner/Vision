@@ -2,9 +2,9 @@
 title: Watchlist Feature
 type: feature
 status: active
-date: 2026-09-09
-last_modified: 2026-09-09
-updated: 2026-09-09
+date: 2026-09-11
+last_modified: 2026-09-11
+updated: 2026-09-11
 tags: [feature, watchlist, investments, tracking, alerts, phase-3.6, offline-resilience, online-status-detection, api-client-migration, validation, june-2026, backtest, added-price, adr-097, destructive-confirm]
 description: Investment watchlist for tracking securities not yet in the portfolio with target price alerts. June 2026: POST/PATCH return 400 ValidationError for invalid fields; what-if backtest shows return since add date using added_price (migration 0058, ADR-097).
 aliases: [watch list, price alerts, investment tracking]
@@ -23,7 +23,9 @@ related_code:
 
 ## Overview
 
-The Watchlist feature (`/portfolio/watchlist`) allows users to track securities they are interested in but haven't yet added to their portfolio. Users can set target prices and receive visual indicators when targets are met.
+The Watchlist feature (`/research/watchlist`) allows users to track securities they are interested
+in but have not yet added to their portfolio. Users can set target prices and receive visual
+indicators when targets are met. The retired `/portfolio/watchlist` alias now renders Not Found.
 
 ## Data Model
 

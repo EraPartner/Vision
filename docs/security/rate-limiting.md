@@ -3,7 +3,7 @@ title: Rate Limiting
 type: security
 status: active
 date: 2026-04-23
-updated: 2026-06-01
+updated: 2026-09-11
 tags:
   - security
   - rate-limiting
@@ -261,8 +261,12 @@ When exceeded, returns `429 Too Many Requests`:
 
 ```json
 {
-  "detail": "Too many requests. Please try again later.",
-  "retry_after": 45
+  "ok": false,
+  "error": {
+    "code": "RATE_LIMITED",
+    "message": "Too many requests. Please try again later.",
+    "details": { "retry_after": 45 }
+  }
 }
 ```
 

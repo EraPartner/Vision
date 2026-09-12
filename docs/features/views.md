@@ -3,7 +3,7 @@ title: Views & Pages
 type: feature
 status: active
 date: 2026-04-10
-updated: 2026-09-05
+updated: 2026-09-11
 tags:
   [
     feature,
@@ -459,8 +459,6 @@ Investment portfolio management across multiple asset classes.
 | **Performance**                 | `/portfolio/performance` | Performance analytics      |
 | **Net Worth**                   | `/portfolio/net-worth`   | Total net worth            |
 | **Exchange Rates** (admin mode) | `/admin/exchange-rates`  | Currency rates             |
-| **Watchlist**                   | `/portfolio/watchlist`   | Track symbols              |
-| **Market Lookup**               | `/portfolio/market`      | Search & lookup            |
 | **Tax**                         | `/portfolio/tax`         | Investment tax info        |
 
 ### Portfolio Overview Features
@@ -528,7 +526,7 @@ Code links: [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/fronten
 
 ---
 
-## Market Lookup (`/portfolio/market`)
+## Market Lookup (`/research/market`)
 
 Real-time market data search and quotes.
 
@@ -553,7 +551,7 @@ Powered by Yahoo Finance (yahoo-finance2)
 
 ---
 
-## Watchlist (`/portfolio/watchlist`)
+## Watchlist (`/research/watchlist`)
 
 Track symbols without owning them.
 

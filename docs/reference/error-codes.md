@@ -3,7 +3,7 @@ title: Error Codes Reference
 type: reference
 status: active
 date: 2026-03-31
-updated: 2026-05-16
+updated: 2026-09-11
 tags: [reference, errors, api, responses, status-codes, envelope, adr-026]
 description: Complete reference of all API error responses, status codes, and error formats used by the Vision backend. All responses use the unified envelope (ADR-026).
 aliases:
@@ -40,28 +40,32 @@ Every API response — success or failure — uses this envelope shape:
 - `meta.requestId` is always present when the request went through the `requestId` middleware (every API request does).
 - The same value is attached automatically to backend log entries created in that request's asynchronous context, so an envelope can be correlated with service and repository logs.
 
-> [!info] Legacy `{ "detail": "…" }` shape removed
-> Pre-ADR-026 endpoints returned `{ "detail": "…" }`. That shape no longer exists anywhere in the backend. The envelope is enforced by `middleware/envelope.js` (success) and `middleware/errorHandler.js` (failure); the unit `tests/contract/responseEnvelope.test.js` blocks regressions.
+> [!info] Canonical envelope is the only supported JSON error shape
+> Pre-ADR-026 `{ detail }`, `{ message }`, Pydantic-array, and top-level `retry_after` failures are
+> not accepted by the frontend. The envelope is enforced by `middleware/envelope.js` (success) and
+> `middleware/errorHandler.js` (failure); `tests/responseEnvelopeContract.test.js` blocks new JSON
+> writers outside those shared serializers. See
+> [[docs/adr/136-same-release-http-import-and-navigation-contract|ADR-136]].
 
 ## Status Codes
 
 ### Client Errors (4xx)
 
-| Code | Meaning              | When Returned                                                   | Example                                                                    |
-| ---- | -------------------- | --------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| 400  | Bad Request          | Validation failure, missing required fields, invalid data types | `{ detail: 'Missing required fields: date, amount' }`                      |
-| 404  | Not Found            | Resource does not exist or has been deleted                     | `{ detail: 'Transaction 42 not found' }`                                   |
-| 409  | Conflict             | Duplicate entry detected                                        | `{ detail: 'Duplicate transaction detected' }`                             |
-| 422  | Unprocessable Entity | Zod/validation schema failure (detailed field errors)           | `{ detail: 'Validation error: amount: Expected number, received string' }` |
-| 429  | Too Many Requests    | Rate limit exceeded                                             | `{ detail: 'Too many requests. Try again in 60 seconds' }`                 |
+| Code | Meaning              | When Returned                                                   | Canonical error code |
+| ---- | -------------------- | --------------------------------------------------------------- | -------------------- |
+| 400  | Bad Request          | Validation failure, missing required fields, invalid data types | `VALIDATION_ERROR`   |
+| 404  | Not Found            | Resource does not exist or has been deleted                     | `NOT_FOUND`          |
+| 409  | Conflict             | Duplicate entry detected                                        | `CONFLICT`           |
+| 422  | Unprocessable Entity | Zod/validation schema failure (detailed field errors)           | `VALIDATION_ERROR`   |
+| 429  | Too Many Requests    | Rate limit exceeded                                             | `RATE_LIMITED`       |
 
 ### Server Errors (5xx)
 
-| Code | Meaning               | When Returned                                                | Example                                         |
-| ---- | --------------------- | ------------------------------------------------------------ | ----------------------------------------------- |
-| 500  | Internal Server Error | Unhandled exception, database error                          | `{ detail: 'Failed to retrieve transactions' }` |
-| 502  | Bad Gateway           | External service failure (price provider, exchange rate API) | `{ detail: 'Price provider unavailable' }`      |
-| 503  | Service Unavailable   | Database connection lost, service starting up                | `{ detail: 'Database connection unavailable' }` |
+| Code | Meaning               | When Returned                                                | Canonical error code                   |
+| ---- | --------------------- | ------------------------------------------------------------ | -------------------------------------- |
+| 500  | Internal Server Error | Unhandled exception, database error                          | `INTERNAL_SERVER_ERROR` or `APP_ERROR` |
+| 502  | Bad Gateway           | External service failure (price provider, exchange rate API) | `BAD_GATEWAY`                          |
+| 503  | Service Unavailable   | Database connection lost, service starting up                | `SERVICE_UNAVAILABLE`                  |
 
 ## Common Error Messages by Resource
 
@@ -131,7 +135,13 @@ Every API response — success or failure — uses this envelope shape:
 
 ```json
 {
-  "detail": "Too many requests. Try again in 45 seconds."
+  "ok": false,
+  "error": {
+    "code": "RATE_LIMITED",
+    "message": "Rate limit exceeded",
+    "details": { "retry_after": 45 }
+  },
+  "meta": { "requestId": "req-12345" }
 }
 ```
 
@@ -139,13 +149,13 @@ Every API response — success or failure — uses this envelope shape:
 
 The API client (`apiClient`) handles errors automatically:
 
-| Scenario             | Behavior                                                                         |
-| -------------------- | -------------------------------------------------------------------------------- |
-| 422 validation error | Throws `Error` with formatted message: `"Validation error: field: message; ..."` |
-| 429 rate limit       | Throws `Error` with retry-after hint                                             |
-| Network error        | Retries up to 2 times for idempotent methods (GET, PUT, DELETE)                  |
-| Timeout (30s)        | Aborts request and throws `Error`                                                |
-| 204 No Content       | Returns `undefined`                                                              |
+| Scenario                   | Behavior                                                                       |
+| -------------------------- | ------------------------------------------------------------------------------ |
+| Canonical failure envelope | Throws `ApiClientError` with code, message, optional details, and request id   |
+| Malformed or retired body  | Throws `ApiClientError` using the HTTP-status code and call-site fallback text |
+| Network error              | Retries up to 2 times for idempotent methods (GET, PUT, DELETE)                |
+| Timeout (30s)              | Aborts request and throws `Error`                                              |
+| 204 No Content             | Returns `undefined`                                                            |
 
 ### Hook-Level Error Handling
 

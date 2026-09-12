@@ -61,20 +61,9 @@ const SECTIONS: SectionDef[] = [
     { id: "about", labelKey: "settings.section.about", icon: Info },
 ];
 
-// Map the legacy deep-link tab keys (used by the Electron menu bridge and
-// onboarding) onto the new section ids so existing callers keep working.
-const LEGACY_TAB_MAP: Record<string, SettingsSectionId> = {
-    general: "general",
-    appearance: "appearance",
-    dashboard: "statistics",
-    app: "about",
-    backup: "backup",
-};
-
 export function resolveSettingsSection(
     tab: string | undefined,
 ): SettingsSectionId | undefined {
-    if (tab && tab in LEGACY_TAB_MAP) return LEGACY_TAB_MAP[tab];
     if (SECTIONS.some((s) => s.id === tab)) return tab as SettingsSectionId;
     return undefined;
 }

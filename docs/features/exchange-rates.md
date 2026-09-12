@@ -3,9 +3,10 @@ title: Exchange Rates Feature
 type: feature
 status: active
 date: 2026-04-02
-updated: 2026-08-26
-tags: [feature, exchange-rates, currency, frontend, backend, ECB, admin, url-state]
-description: Exchange rate viewing and management with live ECB rates, fallback rates, and manual refresh capability. 2026-06-16 — moved from /portfolio/exchange-rates to /admin/exchange-rates (admin-mode section; it inspects the FX rate feed rather than being a per-user task). Old path redirects.
+updated: 2026-09-11
+tags:
+  [feature, exchange-rates, currency, frontend, backend, ECB, admin, url-state]
+description: Exchange rate viewing and management with live ECB rates, fallback rates, and manual refresh capability at the canonical /admin/exchange-rates route.
 aliases: [FX rates, currency rates, exchange rates page]
 related_code:
   - apps/frontend/src/pages/admin/ExchangeRatesPage.tsx
@@ -18,7 +19,12 @@ related_code:
 
 ## Overview
 
-The Exchange Rates page (`/admin/exchange-rates`, in the admin-mode section — the old `/portfolio/exchange-rates` path redirects) displays current exchange rates from the European Central Bank (ECB) and hardcoded fallback rates. It allows viewing, comparing, and manually refreshing the exchange rates used throughout the application for currency normalization. It lives under admin mode because it inspects/manages the FX rate feed rather than being a per-user portfolio task (conversion itself happens automatically everywhere).
+The Exchange Rates page (`/admin/exchange-rates`, in the admin-mode section) displays current
+exchange rates from the European Central Bank (ECB) and hardcoded fallback rates. It allows
+viewing, comparing, and manually refreshing the exchange rates used throughout the application for
+currency normalization. It lives under admin mode because it inspects/manages the FX rate feed
+rather than being a per-user portfolio task (conversion itself happens automatically everywhere).
+The retired `/portfolio/exchange-rates` alias now renders Not Found.
 
 ## Architecture
 
@@ -27,11 +33,13 @@ The Exchange Rates page (`/admin/exchange-rates`, in the admin-mode section — 
 Located at `[[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx]]` (gated by `RequireAdmin`), the page displays:
 
 #### Summary Cards
+
 1. **Stored Rates**: Total number of rates in the database
 2. **Fallback Currencies**: Number of hardcoded fallback currencies
 3. **Latest Fetch**: Date of the most recent rate fetch and timestamp
 
 #### Tabs
+
 - **Live Rates**: Table of current ECB rates with columns:
   - Currency code
   - Unit to EUR (rate_to_eur)
@@ -42,6 +50,7 @@ Located at `[[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx]]` (gated by `
 The active tab (`live` | `fallback`) is mirrored to `?tab=` via [[docs/components/hooks#usetabparam-aug-2026|useTabParam]] (Aug 2026), so reload/Back keep the tab the user was viewing.
 
 #### Refresh Button
+
 Triggers `POST /api/info/exchange-rates/refresh` to fetch fresh rates from ECB.
 
 #### Global stale-rate warning
@@ -73,6 +82,7 @@ Returns cached exchange rates from the database:
 #### POST /api/info/exchange-rates/refresh
 
 Forces a fresh fetch from the ECB API:
+
 1. Clears the memory cache
 2. Calls `warmCache()` to fetch from ECB
 3. Persists rates to the `exchange_rates` database table
@@ -90,6 +100,7 @@ Forces a fresh fetch from the ECB API:
 ### Fallback: Hardcoded Rates
 
 Defined in `FALLBACK_RATES` constant in `[[apps/node-backend/src/services/currency/currencyConversionService.js]]`:
+
 - Covers ~40 currencies
 - Used when ECB data is unavailable or for rare currencies
 - Updated manually when significant rate changes occur
@@ -98,13 +109,13 @@ Defined in `FALLBACK_RATES` constant in `[[apps/node-backend/src/services/curren
 
 ### Database Table: `exchange_rates`
 
-| Column | Type | Description |
-|--------|------|-------------|
-| `currency_code` | VARCHAR(3) | ISO 4217 currency code |
-| `rate_to_eur` | DECIMAL | Exchange rate to EUR |
-| `rate_date` | DATE | Date of the rate |
-| `fetched_at` | TIMESTAMP | When the rate was fetched |
-| `is_latest` | BOOLEAN | Whether this is the latest rate for this currency |
+| Column          | Type       | Description                                       |
+| --------------- | ---------- | ------------------------------------------------- |
+| `currency_code` | VARCHAR(3) | ISO 4217 currency code                            |
+| `rate_to_eur`   | DECIMAL    | Exchange rate to EUR                              |
+| `rate_date`     | DATE       | Date of the rate                                  |
+| `fetched_at`    | TIMESTAMP  | When the rate was fetched                         |
+| `is_latest`     | BOOLEAN    | Whether this is the latest rate for this currency |
 
 ## Frontend Implementation Details
 
@@ -115,7 +126,7 @@ useQuery<ExchangeRatesData>({
   queryKey: exchangeRateKeys.all,
   queryFn: () => apiClient.getExchangeRates({ dbOnly: true }),
   staleTime: 10 * 60_000,
-})
+});
 ```
 
 The admin page and conversion consumers share `exchangeRateKeys.all` (`["exchange-rates"]`). The global status banner keeps its legacy `exchangeRateKeys.fxStatus` key (`["exchangeRates", { dbOnly: true }]`) because it uses a shorter staleness policy and warning-specific lifecycle.
@@ -130,14 +141,15 @@ useMutation({
       queryClient.invalidateQueries({ queryKey: exchangeRateKeys.all }),
       queryClient.invalidateQueries({ queryKey: exchangeRateKeys.fxStatus }),
     ]);
-    toast.success(t('exchangeRates.refreshSuccess'));
+    toast.success(t("exchangeRates.refreshSuccess"));
   },
-})
+});
 ```
 
 ### Rate Display
 
 Each rate row shows four representations:
+
 1. **Currency code**: Monospace font for readability
 2. **Unit to EUR**: 6 decimal places (e.g., `0.920000`)
 3. **EUR to Unit**: 4 decimal places (e.g., `1.0870`)
@@ -146,6 +158,7 @@ Each rate row shows four representations:
 ## Usage Across the Application
 
 Exchange rates are consumed by:
+
 - **Portfolio pages**: Cross-currency display normalization
 - **Net Worth**: Currency-aware net worth computation
 - **Portfolio Tax**: Tax and fee conversion to target currency
