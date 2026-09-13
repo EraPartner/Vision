@@ -3,6 +3,7 @@ title: AI Data Access Policy
 type: security
 status: active
 date: 2026-09-09
+updated: 2026-09-13
 tags:
   [
     security,
@@ -26,6 +27,8 @@ related_code:
     "apps/node-backend/src/integrations/ollama/client.js",
     "apps/node-backend/tests/aiChatService.test.js",
     "apps/node-backend/tests/aiChatTools.test.js",
+    "apps/node-backend/src/services/aiEvaluation/localReliability.js",
+    "apps/node-backend/src/services/aiEvaluation/cloudPrivacy.js",
   ]
 ---
 
@@ -135,6 +138,15 @@ If an AI chat data leak is suspected:
 3. Review outbound HTTP logs (if DEBUG logging was on) for any call outside the Ollama host.
 4. Rotate any exposed credentials and purge affected conversations.
 
+## Evaluation Gates
+
+The fixed-oracle local reliability suite measures tool selection, scope, grounding, abstention,
+partial failures, follow-up preservation, latency, resident model memory, and prompt-injection
+resistance. The separate cloud privacy suite inspects exact serialized synthetic traffic and fails
+closed on unapproved destinations, redirects, identifiers, cross-scope state, telemetry, and
+post-cancellation requests. See [[docs/security/ai-assistance-evaluation|AI Assistance Evaluation]]
+for commands, thresholds, evidence, and unresolved release blockers.
+
 ## Out of Scope (v1)
 
 - Per-domain opt-in gating (all domains queryable; revisit if multi-user is introduced).
@@ -149,3 +161,4 @@ If an AI chat data leak is suspected:
 - [[docs/security/input-validation|Input Validation]]
 - [[docs/security/rate-limiting|Rate Limiting]]
 - [[docs/security/data-protection|Data Protection & CSP]]
+- [[docs/security/ai-assistance-evaluation|AI Assistance Evaluation]]

@@ -19,6 +19,14 @@ const testRoot = path.join(backendRoot, "tests");
 const PUBLIC_NAMED_EXPORTS = new Set([
   // Public facades, domain helpers, and contract types.
   "apps/node-backend/src/integrations/ollama/prompts.js:toOllamaMessage",
+  "apps/node-backend/src/services/aiEvaluation/cloudPrivacy.js:createInspectionFetch",
+  "apps/node-backend/src/services/aiEvaluation/cloudPrivacy.js:evaluateCloudPrivacyTrace",
+  "apps/node-backend/src/services/aiEvaluation/cloudPrivacyCases.js:CLOUD_PRIVACY_EVALUATION_CASES",
+  "apps/node-backend/src/services/aiEvaluation/cloudPrivacyCases.js:CLOUD_PRIVACY_SYNTHETIC_POLICY",
+  "apps/node-backend/src/services/aiEvaluation/localCases.js:LOCAL_AI_EVALUATION_CASES",
+  "apps/node-backend/src/services/aiEvaluation/localReliability.js:runLocalAiCase",
+  "apps/node-backend/src/services/aiEvaluation/localReliability.js:scoreLocalAiRun",
+  "apps/node-backend/src/services/aiEvaluation/localReliability.js:summarizeLocalAiEvaluation",
   "apps/node-backend/src/lib/importBatchIds.js:coercedIdSchema",
   // Named helpers mirrored by a stable runtime default object.
   "apps/node-backend/src/lib/calculations/splits.js:roundToCents",

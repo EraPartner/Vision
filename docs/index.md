@@ -2,9 +2,9 @@
 title: Vision Project Knowledge Base
 type: index
 status: active
-date: 2026-09-12
-updated: 2026-09-12
-last_modified: 2026-09-12
+date: 2026-09-13
+updated: 2026-09-13
+last_modified: 2026-09-13
 tags:
   [
     knowledge-base,
@@ -64,8 +64,10 @@ aliases: [KB, docs, documentation, knowledge base, home]
 Recent cross-cutting contracts: [[docs/reference/analysis-contract|Analysis Contract]],
 [[docs/reference/analysis-datasets|Analysis Datasets]],
 [[docs/reference/fund-holdings-import-contract|Fund Holdings Import Contract]], and
-[[docs/reference/openai-codex-assistance-profiles|OpenAI and Codex Assistance Profiles]]. Import
-history is defined by [[docs/reference/provider-neutral-transaction-provenance|Provider-Neutral Transaction Provenance]].
+[[docs/reference/openai-codex-assistance-profiles|OpenAI and Codex Assistance Profiles]]. The
+current evidence gates are in [[docs/security/ai-assistance-evaluation|AI Assistance Evaluation]].
+Import history is defined by
+[[docs/reference/provider-neutral-transaction-provenance|Provider-Neutral Transaction Provenance]].
 
 ## 🎯 Quick Navigation
 

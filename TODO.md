@@ -428,7 +428,7 @@ optional enhancement, not a prerequisite for the original six-stage local analys
     local history; UI distinguishes provider retention, training, advertising and onward processing.
 
 - [ ] **Evaluate cloud-assistance privacy boundaries and usefulness before release** ⏫
-  - Tracking: 🔎 decision-needed 2026-09-09 (depends on privacy contracts; establish adversarial and utility acceptance criteria before enabling either route)
+  - Tracking: 🔎 partial 2026-09-13 (the serialized synthetic suite passes 7 adversarial scenarios across 8 inspected requests, but release remains blocked until production OpenAI and isolated Codex adapters exist and receive independent route-specific traffic and utility review)
   - ↪ _from: User opt-in OpenAI/Codex plan 2026-09-09 · independent privacy validation_
   - Own a synthetic evaluation suite for direct/indirect identifiers, rare patterns, malicious
     documents/output, arbitrary outbound URLs, error/telemetry leakage, cumulative queries, restored
@@ -499,7 +499,7 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
     with synthetic provider responses before any claim that the feature stays within free allowances.
 
 - [ ] **Evaluate and improve local AI analysis reliability on representative questions** ⏫
-  - Tracking: 🔎 decision-needed 2026-09-08 (favored direction; agree synthetic evaluation set, hardware target, and latency/accuracy acceptance criteria)
+  - Tracking: 🔎 runtime-unverified 2026-09-13 (the 8-case fixed-oracle harness is implemented and its production-equivalent argument matching was corrected after the first host run; llama3.1:8b used 5.8 GB but reached 67.6 seconds p95 and failed unsupported-research abstention, so it is rejected as the M1/16 GB default and a smaller candidate remains to be tested)
   - ↪ _from: User product exploration 2026-09-08 · stronger local AI_
   - Own the synthetic evaluation harness, not the separate metric/planner/UI implementations below.
     Score tool/query/formula correctness, scope interpretation, numeric reconciliation, source

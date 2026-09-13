@@ -11,8 +11,8 @@
  *     onToken, returns the final aggregated message + usage.
  */
 
-import { logger } from '../../config/logger.js';
-import settings from '../../config/config.js';
+import { logger } from "../../config/logger.js";
+import settings from "../../config/config.js";
 
 export class OllamaError extends Error {
   /**
@@ -21,7 +21,7 @@ export class OllamaError extends Error {
    */
   constructor(message, { status, cause, code } = {}) {
     super(message);
-    this.name = 'OllamaError';
+    this.name = "OllamaError";
     this.status = status ?? null;
     this.code = code ?? null;
     if (cause) this.cause = cause;
@@ -45,7 +45,9 @@ function withTimeout(signal, timeoutMs) {
     if (signal.aborted) {
       controller.abort(signal.reason);
     } else {
-      signal.addEventListener('abort', () => controller.abort(signal.reason), { once: true });
+      signal.addEventListener("abort", () => controller.abort(signal.reason), {
+        once: true,
+      });
     }
   }
 
@@ -71,10 +73,10 @@ async function readJson(response) {
   try {
     return JSON.parse(text);
   } catch (err) {
-    throw new OllamaError('Ollama returned non-JSON response', {
+    throw new OllamaError("Ollama returned non-JSON response", {
       status: response.status,
       cause: err,
-      code: 'INVALID_JSON',
+      code: "INVALID_JSON",
     });
   }
 }
@@ -87,16 +89,26 @@ async function readJson(response) {
  * @param {{ isTimeout: boolean, aborted: boolean, timeoutMessage: string, failurePrefix: string }} ctx
  * @returns {OllamaError}
  */
-function normalizeFetchError(err, { isTimeout, aborted, timeoutMessage, failurePrefix }) {
+function normalizeFetchError(
+  err,
+  { isTimeout, aborted, timeoutMessage, failurePrefix },
+) {
   if (err instanceof OllamaError) return err;
-  if (isTimeout) return new OllamaError(timeoutMessage, { code: 'TIMEOUT', cause: err });
-  if (err?.name === 'AbortError' || aborted) {
-    return new OllamaError('Ollama request aborted', { code: 'ABORTED', cause: err });
+  if (isTimeout)
+    return new OllamaError(timeoutMessage, { code: "TIMEOUT", cause: err });
+  if (err?.name === "AbortError" || aborted) {
+    return new OllamaError("Ollama request aborted", {
+      code: "ABORTED",
+      cause: err,
+    });
   }
-  return new OllamaError(`${failurePrefix}: ${err.message}`, { code: 'NETWORK_ERROR', cause: err });
+  return new OllamaError(`${failurePrefix}: ${err.message}`, {
+    code: "NETWORK_ERROR",
+    cause: err,
+  });
 }
 
- function createOllamaClient({
+function createOllamaClient({
   baseUrl = settings.ollama.url,
   requestTimeoutMs = settings.ollama.requestTimeoutMs,
   healthTimeoutMs = settings.ollama.healthTimeoutMs,
@@ -104,7 +116,7 @@ function normalizeFetchError(err, { isTimeout, aborted, timeoutMessage, failureP
   fetchImpl = globalThis.fetch,
 } = {}) {
   if (!fetchImpl) {
-    throw new OllamaError('No fetch implementation available');
+    throw new OllamaError("No fetch implementation available");
   }
 
   /** @param {string} path */
@@ -114,21 +126,28 @@ function normalizeFetchError(err, { isTimeout, aborted, timeoutMessage, failureP
    * @param {string} path
    * @param {{ method?: string, body?: any, signal?: AbortSignal, timeoutMs?: number }} [options]
    */
-  async function request(path, { method = 'GET', body, signal, timeoutMs = requestTimeoutMs } = {}) {
-    const { signal: composedSignal, cancel, isTimeout } = withTimeout(signal, timeoutMs);
+  async function request(
+    path,
+    { method = "GET", body, signal, timeoutMs = requestTimeoutMs } = {},
+  ) {
+    const {
+      signal: composedSignal,
+      cancel,
+      isTimeout,
+    } = withTimeout(signal, timeoutMs);
     try {
       const response = await fetchImpl(url(path), {
         method,
-        headers: body ? { 'Content-Type': 'application/json' } : undefined,
+        headers: body ? { "Content-Type": "application/json" } : undefined,
         body: body ? JSON.stringify(body) : undefined,
         signal: composedSignal,
       });
 
       if (!response.ok) {
-        const _payload = await response.text().catch(() => '');
+        const _payload = await response.text().catch(() => "");
         throw new OllamaError(
           `Ollama ${method} ${path} failed with ${response.status}`,
-          { status: response.status, code: 'HTTP_ERROR' },
+          { status: response.status, code: "HTTP_ERROR" },
         );
       }
 
@@ -147,19 +166,22 @@ function normalizeFetchError(err, { isTimeout, aborted, timeoutMessage, failureP
 
   async function healthCheck() {
     try {
-      const data = await request('/api/tags', { timeoutMs: healthTimeoutMs });
+      const data = await request("/api/tags", { timeoutMs: healthTimeoutMs });
       return {
         reachable: true,
         baseUrl,
         modelCount: Array.isArray(data?.models) ? data.models.length : 0,
       };
     } catch (err) {
-      logger.debug?.('[ollama] healthCheck failed', { message: err.message, code: err.code });
+      logger.debug?.("[ollama] healthCheck failed", {
+        message: err.message,
+        code: err.code,
+      });
       return {
         reachable: false,
         baseUrl,
         error: err.message,
-        code: err.code || 'UNKNOWN',
+        code: err.code || "UNKNOWN",
       };
     }
   }
@@ -168,7 +190,10 @@ function normalizeFetchError(err, { isTimeout, aborted, timeoutMessage, failureP
    * @param {{ signal?: AbortSignal }} [options]
    */
   async function listModels({ signal } = {}) {
-    const data = await request('/api/tags', { signal, timeoutMs: healthTimeoutMs });
+    const data = await request("/api/tags", {
+      signal,
+      timeoutMs: healthTimeoutMs,
+    });
     const raw = Array.isArray(data?.models) ? data.models : [];
     return raw.map((/** @type {any} */ m) => ({
       name: m.name,
@@ -177,6 +202,27 @@ function normalizeFetchError(err, { isTimeout, aborted, timeoutMessage, failureP
       parameterSize: m.details?.parameter_size ?? null,
       quantization: m.details?.quantization_level ?? null,
       modifiedAt: m.modified_at ?? null,
+    }));
+  }
+
+  /**
+   * Read Ollama's resident-model inventory for evaluation telemetry. `sizeVram`
+   * is the provider-reported loaded memory, not the Vision process heap.
+   * @param {{ signal?: AbortSignal }} [options]
+   */
+  async function listRunningModels({ signal } = {}) {
+    const data = await request("/api/ps", {
+      signal,
+      timeoutMs: healthTimeoutMs,
+    });
+    const raw = Array.isArray(data?.models) ? data.models : [];
+    return raw.map((/** @type {any} */ model) => ({
+      name: model.name,
+      model: model.model ?? model.name,
+      size: model.size ?? null,
+      sizeVram: model.size_vram ?? null,
+      contextLength: model.context_length ?? null,
+      expiresAt: model.expires_at ?? null,
     }));
   }
 
@@ -191,7 +237,9 @@ function normalizeFetchError(err, { isTimeout, aborted, timeoutMessage, failureP
     signal,
   }) {
     if (!Array.isArray(messages) || messages.length === 0) {
-      throw new OllamaError('chat requires a non-empty messages array', { code: 'INVALID_INPUT' });
+      throw new OllamaError("chat requires a non-empty messages array", {
+        code: "INVALID_INPUT",
+      });
     }
 
     /** @type {Record<string, any>} */
@@ -203,23 +251,27 @@ function normalizeFetchError(err, { isTimeout, aborted, timeoutMessage, failureP
     if (tools && tools.length > 0) body.tools = tools;
     if (options) body.options = options;
 
-    const data = /** @type {any} */ (await request('/api/chat', {
-      method: 'POST',
-      body,
-      signal,
-    }));
+    const data = /** @type {any} */ (
+      await request("/api/chat", {
+        method: "POST",
+        body,
+        signal,
+      })
+    );
 
     const message = data?.message || {};
     return {
       model: data?.model || model,
-      role: message.role || 'assistant',
-      content: message.content || '',
+      role: message.role || "assistant",
+      content: message.content || "",
       toolCalls: Array.isArray(message.tool_calls) ? message.tool_calls : [],
       done: data?.done ?? true,
       doneReason: data?.done_reason ?? null,
       evalCount: data?.eval_count ?? null,
       promptEvalCount: data?.prompt_eval_count ?? null,
-      totalDurationMs: data?.total_duration ? Math.round(data.total_duration / 1e6) : null,
+      totalDurationMs: data?.total_duration
+        ? Math.round(data.total_duration / 1e6)
+        : null,
       raw: data,
     };
   }
@@ -236,8 +288,8 @@ function normalizeFetchError(err, { isTimeout, aborted, timeoutMessage, failureP
     onToken,
   } = {}) {
     if (!Array.isArray(messages) || messages.length === 0) {
-      throw new OllamaError('chatStream requires a non-empty messages array', {
-        code: 'INVALID_INPUT',
+      throw new OllamaError("chatStream requires a non-empty messages array", {
+        code: "INVALID_INPUT",
       });
     }
 
@@ -254,9 +306,14 @@ function normalizeFetchError(err, { isTimeout, aborted, timeoutMessage, failureP
     // until the first token, which on a cold model can take minutes). Once
     // chunks arrive, the window is re-armed per chunk (idle timeout) so a
     // healthy long generation is never cut off mid-stream.
-    const { signal: composedSignal, cancel, isTimeout, rearm } = withTimeout(signal, requestTimeoutMs);
-    logger.debug('[ollama] chatStream request', {
-      url: url('/api/chat'),
+    const {
+      signal: composedSignal,
+      cancel,
+      isTimeout,
+      rearm,
+    } = withTimeout(signal, requestTimeoutMs);
+    logger.debug("[ollama] chatStream request", {
+      url: url("/api/chat"),
       model,
       messageCount: messages.length,
       toolCount: tools?.length ?? 0,
@@ -265,15 +322,15 @@ function normalizeFetchError(err, { isTimeout, aborted, timeoutMessage, failureP
     });
     let response;
     try {
-      response = await fetchImpl(url('/api/chat'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      response = await fetchImpl(url("/api/chat"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
         signal: composedSignal,
       });
-      logger.debug('[ollama] chatStream response received', {
+      logger.debug("[ollama] chatStream response received", {
         status: response.status,
-        contentType: response.headers?.get?.('content-type') ?? null,
+        contentType: response.headers?.get?.("content-type") ?? null,
       });
     } catch (err) {
       cancel();
@@ -281,30 +338,33 @@ function normalizeFetchError(err, { isTimeout, aborted, timeoutMessage, failureP
         isTimeout: isTimeout(),
         aborted: composedSignal.aborted,
         timeoutMessage: `Ollama request timed out after ${requestTimeoutMs}ms`,
-        failurePrefix: 'Ollama POST /api/chat failed',
+        failurePrefix: "Ollama POST /api/chat failed",
       });
     }
 
     if (!response.ok) {
       cancel();
-      await response.text?.().catch(() => '');
-      throw new OllamaError(`Ollama POST /api/chat failed with ${response.status}`, {
-        status: response.status,
-        code: 'HTTP_ERROR',
-      });
+      await response.text?.().catch(() => "");
+      throw new OllamaError(
+        `Ollama POST /api/chat failed with ${response.status}`,
+        {
+          status: response.status,
+          code: "HTTP_ERROR",
+        },
+      );
     }
 
-    if (!response.body || typeof response.body.getReader !== 'function') {
+    if (!response.body || typeof response.body.getReader !== "function") {
       cancel();
-      throw new OllamaError('Ollama streaming response has no readable body', {
-        code: 'NO_BODY',
+      throw new OllamaError("Ollama streaming response has no readable body", {
+        code: "NO_BODY",
       });
     }
 
     const reader = response.body.getReader();
-    const decoder = new TextDecoder('utf-8');
-    let buffer = '';
-    let accumulatedContent = '';
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+    let accumulatedContent = "";
     // Tool calls can arrive spread across several NDJSON chunks; accumulate
     // them all. Some Ollama builds re-emit the complete list on the final
     // done chunk, so dedupe by call signature rather than trusting order.
@@ -343,21 +403,23 @@ function normalizeFetchError(err, { isTimeout, aborted, timeoutMessage, failureP
       try {
         parsed = JSON.parse(trimmed);
       } catch (err) {
-        throw new OllamaError('Ollama returned malformed NDJSON chunk', {
-          code: 'INVALID_JSON',
+        throw new OllamaError("Ollama returned malformed NDJSON chunk", {
+          code: "INVALID_JSON",
           cause: err,
         });
       }
 
       if (parsed.model) modelName = parsed.model;
       const msg = parsed.message || {};
-      const deltaContent = typeof msg.content === 'string' ? msg.content : '';
+      const deltaContent = typeof msg.content === "string" ? msg.content : "";
       if (deltaContent) {
         accumulatedContent += deltaContent;
         try {
           await onToken?.(deltaContent);
         } catch (err) {
-          logger.warn?.('[ollama] onToken handler threw', { error: err?.message });
+          logger.warn?.("[ollama] onToken handler threw", {
+            error: err?.message,
+          });
         }
       }
       if (Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
@@ -382,7 +444,7 @@ function normalizeFetchError(err, { isTimeout, aborted, timeoutMessage, failureP
         rearm(streamIdleTimeoutMs);
         buffer += decoder.decode(value, { stream: true });
         let newlineIndex;
-        while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
+        while ((newlineIndex = buffer.indexOf("\n")) !== -1) {
           const line = buffer.slice(0, newlineIndex);
           buffer = buffer.slice(newlineIndex + 1);
           await handleLine(line);
@@ -395,15 +457,18 @@ function normalizeFetchError(err, { isTimeout, aborted, timeoutMessage, failureP
       if (isTimeout()) {
         throw new OllamaError(
           `Ollama stream timed out (${requestTimeoutMs}ms to first chunk, then ${streamIdleTimeoutMs}ms idle between chunks)`,
-          { code: 'TIMEOUT', cause: err },
+          { code: "TIMEOUT", cause: err },
         );
       }
-      if (err?.name === 'AbortError' || composedSignal.aborted) {
-        throw new OllamaError('Ollama stream aborted', { code: 'ABORTED', cause: err });
+      if (err?.name === "AbortError" || composedSignal.aborted) {
+        throw new OllamaError("Ollama stream aborted", {
+          code: "ABORTED",
+          cause: err,
+        });
       }
       throw new OllamaError(`Ollama stream read failed: ${err.message}`, {
         cause: err,
-        code: 'STREAM_ERROR',
+        code: "STREAM_ERROR",
       });
     } finally {
       cancel();
@@ -416,14 +481,16 @@ function normalizeFetchError(err, { isTimeout, aborted, timeoutMessage, failureP
 
     return {
       model: modelName,
-      role: 'assistant',
+      role: "assistant",
       content: accumulatedContent,
       toolCalls,
       done: isDone,
       doneReason,
       evalCount,
       promptEvalCount,
-      totalDurationMs: totalDurationNs ? Math.round(totalDurationNs / 1e6) : null,
+      totalDurationMs: totalDurationNs
+        ? Math.round(totalDurationNs / 1e6)
+        : null,
     };
   }
 
@@ -431,6 +498,7 @@ function normalizeFetchError(err, { isTimeout, aborted, timeoutMessage, failureP
     baseUrl,
     healthCheck,
     listModels,
+    listRunningModels,
     chat,
     chatStream,
   };

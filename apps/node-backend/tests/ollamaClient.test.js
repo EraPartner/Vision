@@ -158,6 +158,41 @@ describe("ollama client", () => {
     });
   });
 
+  describe("listRunningModels", () => {
+    it("normalises resident memory and context telemetry", async () => {
+      const fetchImpl = vi.fn().mockResolvedValue(
+        jsonResponse({
+          models: [
+            {
+              name: "qwen3:4b",
+              model: "qwen3:4b",
+              size: 3_000_000_000,
+              size_vram: 3_500_000_000,
+              context_length: 8192,
+              expires_at: "2026-09-13T12:00:00Z",
+            },
+          ],
+        }),
+      );
+      const client = makeClient(fetchImpl);
+
+      await expect(client.listRunningModels()).resolves.toEqual([
+        {
+          name: "qwen3:4b",
+          model: "qwen3:4b",
+          size: 3_000_000_000,
+          sizeVram: 3_500_000_000,
+          contextLength: 8192,
+          expiresAt: "2026-09-13T12:00:00Z",
+        },
+      ]);
+      expect(fetchImpl).toHaveBeenCalledWith(
+        "http://localhost:11434/api/ps",
+        expect.objectContaining({ method: "GET" }),
+      );
+    });
+  });
+
   describe("chat", () => {
     it("posts messages and shapes the response", async () => {
       const fetchImpl = vi.fn().mockResolvedValue(
@@ -584,13 +619,11 @@ describe("ollama client", () => {
     });
 
     it("throws HTTP_ERROR on non-ok response", async () => {
-      const fetchImpl = vi
-        .fn()
-        .mockResolvedValue({
-          ok: false,
-          status: 503,
-          text: vi.fn().mockResolvedValue(""),
-        });
+      const fetchImpl = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 503,
+        text: vi.fn().mockResolvedValue(""),
+      });
       const client = makeClient(fetchImpl);
 
       await expect(
@@ -599,14 +632,12 @@ describe("ollama client", () => {
     });
 
     it("throws NO_BODY when response has no readable body", async () => {
-      const fetchImpl = vi
-        .fn()
-        .mockResolvedValue({
-          ok: true,
-          status: 200,
-          body: null,
-          text: vi.fn(),
-        });
+      const fetchImpl = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        body: null,
+        text: vi.fn(),
+      });
       const client = makeClient(fetchImpl);
 
       await expect(

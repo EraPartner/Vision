@@ -53,6 +53,8 @@
     "db:check": "bun run db:check-heads && VISION_TEST_DB_TASK=migration-fidelity scripts/with-test-db.sh",
     "quotes:densify": "bun run apps/node-backend/scripts/densify-asset-history.js",
     "calibrate:category-outliers": "bun scripts/category-outlier-calibration.js",
+    "evaluate:local-ai": "node apps/node-backend/scripts/evaluate-local-ai.js",
+    "evaluate:cloud-privacy": "node apps/node-backend/scripts/evaluate-cloud-privacy.js",
     "electron:dev": "npm run generate-locales-if-not-ci && VISION_RUNTIME_MODE=native VISION_DEVELOPMENT_PROFILE=true packaging/electron/node_modules/.bin/electron packaging/electron/main.js",
     "electron:prod": "npm run generate-locales-if-not-ci && packaging/electron/node_modules/.bin/electron packaging/electron/main.js",
     "native:prepare": "node packaging/electron/scripts/prepare-development-runtime.js",

@@ -2,7 +2,18 @@
 title: Scripts Reference
 type: reference
 date: 2026-09-13
-tags: [reference, scripts, bun, testing, database, electron, native-runtime]
+tags:
+  [
+    reference,
+    scripts,
+    bun,
+    testing,
+    database,
+    electron,
+    native-runtime,
+    ai,
+    privacy,
+  ]
 description: Authoritative guide to Vision package scripts and their intended use.
 aliases: [scripts reference, package scripts]
 related_code: [[package.json]]
@@ -69,6 +80,8 @@ Run root scripts with `bun run <name>`. Run workspace scripts with
 | `native:isolated-smoke`       | Full smoke with a disposable native cluster                      |
 | `native:smoke`                | Native backend and health smoke                                  |
 | `calibrate:category-outliers` | Privacy-preserving threshold backtest against a local Vision API |
+| `evaluate:local-ai`           | Score a live Ollama model with fixed synthetic tool oracles      |
+| `evaluate:cloud-privacy`      | Inspect deterministic synthetic cloud-assistance traffic         |
 
 `scripts/with-test-db.sh` uses caller-supplied `TEST_DATABASE_URL` when present. Otherwise it
 creates a private native PostgreSQL 18 cluster, enables required extensions, migrates it, runs the
