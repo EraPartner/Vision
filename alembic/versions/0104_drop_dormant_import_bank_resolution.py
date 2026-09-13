@@ -4,9 +4,10 @@ Revision ID: 0104_drop_dormant_import_bank_resolution
 Revises: 0103_import_identity_provenance
 Create Date: 2026-09-09
 
-The field has no runtime reader or writer. The upgrade locks staging and batch
-state, then refuses to proceed if any stored resolution or non-terminal batch
-could make removal unsafe. The downgrade restores the nullable foreign key and
+The field has no runtime reader or writer. The upgrade locks staging state,
+then refuses to proceed if any stored resolution would be lost. Import batches
+remain untouched regardless of status because the current pipeline does not use
+this field to resume them. The downgrade restores the nullable foreign key and
 its partial index, but no data needs reconstruction because the upgrade accepts
 only an entirely null column.
 
@@ -27,26 +28,20 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     op.execute(
         """
-        LOCK TABLE import_batches, import_staging_rows IN ACCESS EXCLUSIVE MODE;
+        LOCK TABLE import_staging_rows IN ACCESS EXCLUSIVE MODE;
 
         DO $$
         DECLARE
             resolved_rows bigint;
-            active_batches bigint;
         BEGIN
             SELECT count(*) INTO resolved_rows
               FROM import_staging_rows
              WHERE resolved_bank_account_id IS NOT NULL;
 
-            SELECT count(*) INTO active_batches
-              FROM import_batches AS batch
-             WHERE batch.status NOT IN ('complete', 'failed', 'aborted');
-
-            IF resolved_rows <> 0 OR active_batches <> 0 THEN
+            IF resolved_rows <> 0 THEN
                 RAISE EXCEPTION
-                    'dormant bank-account resolution retirement refused: % resolved rows and % active batches remain',
-                    resolved_rows,
-                    active_batches;
+                    'dormant bank-account resolution retirement refused: % resolved rows remain',
+                    resolved_rows;
             END IF;
         END $$;
 
@@ -54,7 +49,7 @@ def upgrade() -> None:
           DROP CONSTRAINT IF EXISTS fk_import_staging_rows_resolved_bank_account;
         DROP INDEX IF EXISTS idx_import_staging_rows_resolved_bank_account_id;
         -- destructive-ok: the locked preflight above requires the dormant
-        -- column to be empty and every import batch to be terminal.
+        -- column to be empty; import batch rows and statuses are untouched.
         ALTER TABLE import_staging_rows DROP COLUMN resolved_bank_account_id;
         """
     )

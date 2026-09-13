@@ -30,7 +30,6 @@ import {
   assertYmd,
   assertOptionalId,
   assertCurrency,
-  assertMaxLength,
   validateIntArray,
   MAX_MONEY_VALUE,
   assertIdParam,
@@ -82,21 +81,6 @@ function parseBulkExpectedCount(value, filter) {
 
 const tagsField = z
   .array(z.unknown(), { error: "tags must be an array of strings" })
-  .optional();
-
-// bank_account is TEXT on transactions but VARCHAR(100) on the raw mirror
-// (manual_raw_transactions); cap it up front so the mirror insert can't 500
-// *after* the main row already committed. null/short values pass untouched.
-const bankAccountField = z
-  .unknown()
-  .transform((value, ctx) => {
-    try {
-      return assertMaxLength(value, 100, "bank_account");
-    } catch (err) {
-      ctx.addIssue({ code: "custom", message: err.message });
-      return z.NEVER;
-    }
-  })
   .optional();
 
 // Normalise/validate currency (ISO-4217) so free text never reaches the
@@ -165,7 +149,8 @@ const createTransactionSchema = z
   .looseObject({
     tags: tagsField,
     currency: currencyField(),
-    bank_account: bankAccountField,
+    bank_account: z.never().optional(),
+    account_id: nullableFkField("account_id"),
     category_id: nullableFkField("category_id"),
     allow_duplicate: z.boolean().optional(),
   })
@@ -173,14 +158,14 @@ const createTransactionSchema = z
     const txDate = data.transaction_date || data.date;
     if (
       !txDate ||
-      !data.bank_account ||
+      data.account_id == null ||
       !data.recipient_id ||
       data.amount == null
     ) {
       ctx.addIssue({
         code: "custom",
         message:
-          "Missing required fields: date, bank_account, recipient_id, amount",
+          "Missing required fields: date, account_id, recipient_id, amount",
       });
       return;
     }
@@ -255,7 +240,8 @@ const patchTransactionSchema = z.looseObject({
     })
     .optional(),
   currency: currencyField({ rejectEmpty: true }),
-  bank_account: bankAccountField,
+  bank_account: z.never().optional(),
+  account_id: nullableFkField("account_id"),
   recipient_id: nullableFkField("recipient_id"),
   category_id: nullableFkField("category_id"),
 });
@@ -850,18 +836,18 @@ router.post(
   ) => {
     // Validated body: currency is coerced (uppercased / undefined → repo
     // default); everything else is forwarded raw, exactly as before the schema.
-    // The dup-check → insert → raw-mirror → auto-link → reconcile chain lives
+    // The duplicate check, insert, claim, auto-link, and reconcile chain lives
     // in the service; a duplicate surfaces as ConflictError (409) from there.
     const data = parseTransactionBody(createTransactionSchema, req.body);
 
     // createTransactionSchema is a loose passthrough object (see module doc) —
     // its zod-inferred type makes every field optional, but the schema's own
-    // superRefine already enforces date/bank_account/recipient_id/amount are
+    // superRefine already enforces date/account_id/recipient_id/amount are
     // present before this line runs (400s otherwise), matching
     // createManualTransaction's required-field param type.
     const { transaction, autoLink } =
       await transactionService.createManualTransaction(
-        /** @type {{ transaction_date?: string, date?: string, bank_account?: string|null, recipient_id?: number|null, amount: number|string, memo?: string|null, currency?: string|null, category_id?: number|null, comment?: string|null, tags?: string[]|null, allow_duplicate?: boolean }} */ (
+        /** @type {{ transaction_date?: string, date?: string, account_id?: number|null, recipient_id?: number|null, amount: number|string, memo?: string|null, currency?: string|null, category_id?: number|null, comment?: string|null, tags?: string[]|null, allow_duplicate?: boolean }} */ (
           data
         ),
       );

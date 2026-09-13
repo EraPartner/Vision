@@ -161,6 +161,9 @@ export default function PlannedPaymentForm({
         initial?.category_id,
     );
     const [bankAccount, setBankAccount] = useState(initial?.bank_account ?? "");
+    const [accountId, setAccountId] = useState<number | undefined>(
+        initial?.account_id,
+    );
     const [tags, setTags] = useState<string[]>(initial?.tags ?? []);
     const [notes, setNotes] = useState(initial?.notes ?? "");
     const [url, setUrl] = useState(initial?.url ?? "");
@@ -251,9 +254,8 @@ export default function PlannedPaymentForm({
         "pp-amount":
             !isLoan && !amount ? t("plannedForm.amountRequired") : undefined,
         "pp-due-date": !dueDate ? t("validation.required") : undefined,
-        "pp-bank": !bankAccount.trim()
-            ? t("portfolio.move.selectAccount")
-            : undefined,
+        "pp-bank":
+            accountId == null ? t("portfolio.move.selectAccount") : undefined,
         "pp-loan-principal":
             isLoan && !loanPrincipal ? t("validation.required") : undefined,
         "pp-loan-rate":
@@ -336,7 +338,7 @@ export default function PlannedPaymentForm({
             }),
             recipient_id: recipientId || undefined,
             category_id: categoryId,
-            bank_account: bankAccount || undefined,
+            account_id: accountId,
             tags: tags.length > 0 ? tags : undefined,
             notes: notes || undefined,
             ...(!isLoan &&
@@ -588,6 +590,7 @@ export default function PlannedPaymentForm({
                                 id="pp-bank"
                                 value={bankAccount}
                                 onChange={setBankAccount}
+                                onAccountIdChange={setAccountId}
                                 placeholder={t("plannedForm.bankPlaceholder")}
                                 {...fieldErrorProps(
                                     "pp-bank",

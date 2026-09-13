@@ -229,6 +229,7 @@ const BASE_PAYMENT: Omit<PlannedPayment, "id" | "created_at"> = {
     is_recurring: true,
     frequency: "monthly",
     bank_account: "BE12345678901234",
+    account_id: 4,
     recipient_id: 7,
     category_id: 3,
     notes: "pay by the 1st",
@@ -239,7 +240,7 @@ describe("mapToCreateAPI", () => {
     it("maps the view model to the create wire shape", () => {
         expect(mapToCreateAPI(BASE_PAYMENT)).toMatchObject({
             planned_date: "2025-02-01",
-            bank_account: "BE12345678901234",
+            account_id: 4,
             recipient_id: 7,
             memo: "Monthly rent",
             amount: 1200,
@@ -290,7 +291,7 @@ describe("mapToCreateAPI", () => {
         expect(cleared.max_occurrences).toBeUndefined();
     });
 
-    it("drops empty bank_account and forwards loan fields", () => {
+    it("uses account_id and forwards loan fields", () => {
         const result = mapToCreateAPI({
             ...BASE_PAYMENT,
             bank_account: "",
@@ -303,8 +304,8 @@ describe("mapToCreateAPI", () => {
             loan_payment_day: 1,
             tags: ["rent"],
         });
-        expect(result.bank_account).toBeUndefined();
         expect(result).toMatchObject({
+            account_id: 4,
             is_loan: true,
             loan_type: "amortizing",
             loan_principal: 12000,

@@ -49,6 +49,8 @@ const PUBLIC_NAMED_EXPORTS = new Set([
   "apps/node-backend/src/services/importPipeline/adapters/vision.js:detect",
   "apps/node-backend/src/services/importPipeline/adapters/wise.js:parse",
   "apps/node-backend/src/services/portfolioImportPipeline/index.js:prepareImport",
+  "apps/node-backend/src/services/plannedTransactionService.js:create",
+  "apps/node-backend/src/services/plannedTransactionService.js:update",
   "apps/node-backend/src/services/priceProviderService.js:getHistoricalPriceAt",
   "apps/node-backend/src/services/prices/priceCache.js:dateOnlyToTimestampMs",
   "apps/node-backend/src/services/quoteBackfillService.js:cleanupStaleQuotes",

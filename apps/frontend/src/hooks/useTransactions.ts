@@ -254,15 +254,14 @@ export function useDeleteTransaction() {
             if (
                 row?.recipient_id != null &&
                 row.transaction_date &&
-                row.bank_account
+                row.account_id != null
             ) {
+                const accountId = row.account_id;
                 const restore = async () => {
                     try {
                         await apiClient.createTransaction({
                             transaction_date: row.transaction_date,
-                            // Guarded truthy above; nullable wire fields map to
-                            // undefined for the create contract.
-                            bank_account: row.bank_account as string,
+                            account_id: accountId,
                             recipient_id: row.recipient_id as number,
                             memo: row.memo ?? undefined,
                             amount: row.amount,

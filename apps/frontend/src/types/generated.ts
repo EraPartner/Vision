@@ -228,7 +228,7 @@ export interface paths {
         put?: never;
         /**
          * Reconcile an account's drift
-         * @description Resolves the drift (statement_balance − reconcilable_balance) surfaced by the drift badge (ADR-094, Phase C). Both modes act on the reconciliation base — the one currency partition the statement figure is a statement for — so a multi-currency account resolves in its own currency and the other partitions are untouched. `mode: 'accept'` rewrites the stored statement figure to that base (no transaction created); `mode: 'adjustment'` stamps one server-side ledger row (amount=drift, in `reconcilable_currency`, balance-free, is_transfer=true, transfer_source='adjustment') so the base rises to meet the statement — preserving the ADR-094 descriptive-only default. Either way the drift collapses to 0.
+         * @description Resolves the drift (selected statement reading − reconcilable_balance) surfaced by the drift badge (ADR-094, Phase C). Both modes act on the reconciliation base — the one currency partition the statement figure is a statement for — so a multi-currency account resolves in its own currency and the other partitions are untouched. `mode: 'accept'` rewrites the stored statement figure to that base (no transaction created); `mode: 'adjustment'` stamps one server-side ledger row (amount=drift, in `reconcilable_currency`, balance-free, is_transfer=true, transfer_source='adjustment') so the base rises to meet the statement — preserving the ADR-094 descriptive-only default. Either way the drift collapses to 0.
          */
         post: operations["reconcileAccount"];
         delete?: never;
@@ -3748,9 +3748,6 @@ export interface components {
             multi_currency_cash: boolean;
             has_cash_sleeve: boolean;
             funding_account_id?: number | null;
-            statement_balance?: number | null;
-            /** Format: date */
-            statement_balance_date?: string | null;
             /** @description Authoritative statement readings per native currency (ADR-089 D2). */
             statement_balances?: {
                 currency: string;
@@ -3769,11 +3766,11 @@ export interface components {
             balance_incomplete?: boolean;
             /** @description Currency codes excluded from computed_balance because a conversion rate is unavailable; only returned by the list endpoint. */
             unconverted_currencies?: string[];
-            /** @description The reconciliation base: the computed balance of the single currency partition `statement_balance` is a statement for, in `reconcilable_currency` and NOT FX-converted. Equals `computed_balance` for a single-currency account and differs on a multi-currency one, so the reconcile dialog previews an entered reading against THIS figure — it is what `POST /accounts/{id}/reconcile` resolves against. The declared `currency` partition wins whenever it exists, including at exactly zero. Zero/sub-cent filtering applies only to the fallback when that partition is absent. Only returned by the list endpoint. */
+            /** @description The reconciliation base: the computed balance of the single currency partition the selected statement reading is a statement for, in `reconcilable_currency` and NOT FX-converted. Equals `computed_balance` for a single-currency account and differs on a multi-currency one, so the reconcile dialog previews an entered reading against THIS figure — it is what `POST /accounts/{id}/reconcile` resolves against. The declared `currency` partition wins whenever it exists, including at exactly zero. Zero/sub-cent filtering applies only to the fallback when that partition is absent. Only returned by the list endpoint. */
             reconcilable_balance?: number | null;
             /** @description Currency of `reconcilable_balance` and `drift` — normally `currency`, but the account's sole funded partition's code when the declared currency partition is absent and the ledger contains one funded foreign partition. Only returned by the list endpoint. */
             reconcilable_currency?: string;
-            /** @description statement_balance − reconcilable_balance, in `reconcilable_currency` (ADR-094); null if no statement balance. Native-currency by design — never statement_balance − computed_balance, which on a multi-currency account would make the badge move with the daily exchange rate. */
+            /** @description selected statement balance − reconcilable_balance, in `reconcilable_currency` (ADR-094); null if no statement balance. Native-currency by design — never statement balance − computed_balance, which on a multi-currency account would make the badge move with the daily exchange rate. */
             drift?: number | null;
             /**
              * Format: date
@@ -3817,9 +3814,6 @@ export interface components {
             multi_currency_cash?: boolean;
             has_cash_sleeve?: boolean;
             funding_account_id?: number | null;
-            statement_balance?: number | null;
-            /** Format: date */
-            statement_balance_date?: string | null;
         };
         AccountUpdate: {
             name?: string;
@@ -3839,9 +3833,6 @@ export interface components {
             multi_currency_cash?: boolean;
             has_cash_sleeve?: boolean;
             funding_account_id?: number | null;
-            statement_balance?: number | null;
-            /** Format: date */
-            statement_balance_date?: string | null;
             is_active?: boolean;
         };
         BulkTagRequest: {
@@ -3961,7 +3952,8 @@ export interface components {
         TransactionCreate: {
             /** Format: date */
             transaction_date: string;
-            bank_account: string;
+            /** @description Canonical account identity */
+            account_id: number;
             /** Format: int32 */
             recipient_id: number;
             memo?: string;
@@ -3983,7 +3975,7 @@ export interface components {
         TransactionUpdate: {
             /** Format: date */
             transaction_date?: string;
-            bank_account?: string | null;
+            account_id?: number | null;
             /** Format: int32 */
             recipient_id?: number | null;
             recipient_name?: string;
@@ -4026,6 +4018,8 @@ export interface components {
             /** Format: date */
             planned_date: string;
             bank_account: string;
+            /** @description Stable linked account identity */
+            account_id?: number | null;
             recipient_id?: number;
             recipient_name?: string;
             memo?: string;
@@ -4074,7 +4068,8 @@ export interface components {
         PlannedTransactionCreate: {
             /** Format: date */
             planned_date: string;
-            bank_account: string;
+            /** @description Canonical account identity */
+            account_id: number;
             recipient_id: number;
             memo?: string;
             amount: number;
@@ -4807,7 +4802,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description Invalid field (e.g. funding_account_id not a positive integer or not an existing account), or statement_balance set without statement_balance_date */
+            /** @description Invalid field (for example funding_account_id is not a positive integer or does not identify an existing account) */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -4914,7 +4909,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description Invalid field (e.g. funding_account_id not a positive integer, self-referencing, not an existing account, or closing a funding cycle), or an invalid statement_balance/statement_balance_date pairing */
+            /** @description Invalid field (for example funding_account_id is invalid, self-referencing, missing, or closes a funding cycle) */
             400: {
                 headers: {
                     [name: string]: unknown;

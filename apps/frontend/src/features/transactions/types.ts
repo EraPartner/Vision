@@ -9,6 +9,7 @@ export type TableTransaction = {
     recipient: string;
     recipientId?: number;
     bank: string;
+    accountId?: number;
     amount: number;
     currency: string;
     runningBalance?: number;
@@ -27,6 +28,7 @@ export interface RawApiTransaction {
     recipient_id?: number | null;
     recipient_name?: string | null;
     bank?: string;
+    account_id?: number | null;
     amount?: number;
     currency?: string | null;
     running_balance?: number | null;

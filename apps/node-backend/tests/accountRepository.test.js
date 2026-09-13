@@ -38,6 +38,16 @@ const listAccounts = async (opts = {}) =>
 describe("accountRepository", () => {
   beforeEach(() => vi.clearAllMocks());
 
+  it("resolves only active canonical account identities", async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: 17 }] });
+
+    expect(await accountRepository.findActiveId(17)).toBe(17);
+    expect(query).toHaveBeenCalledWith(
+      "SELECT id FROM accounts WHERE id = $1 AND is_active = true",
+      [17],
+    );
+  });
+
   it("takes the transaction-scoped funding-graph advisory lock", async () => {
     query.mockResolvedValueOnce({ rows: [] });
 
@@ -89,6 +99,7 @@ describe("accountRepository", () => {
           reconcilable_balance: 0,
           reconcilable_currency: "EUR",
           drift: null,
+          statement_balances: [],
           anchor_date: undefined,
           post_anchor_count: undefined,
         },
@@ -134,7 +145,7 @@ describe("accountRepository", () => {
             id: 1,
             name: "Wise",
             currency: "EUR",
-            statement_balance: null,
+            statement_balances: [],
             balance_parts: [
               { currency: "EUR", balance: "100.0000" },
               { currency: "USD", balance: "100.0000" },
@@ -162,7 +173,13 @@ describe("accountRepository", () => {
             id: 1,
             name: "Wise",
             currency: "EUR",
-            statement_balance: "120.00",
+            statement_balances: [
+              {
+                currency: "EUR",
+                balance: "120.00",
+                balance_date: "2026-07-01",
+              },
+            ],
             balance_parts: [
               { currency: "EUR", balance: "100.0000" },
               { currency: "USD", balance: "100.0000" },
@@ -179,7 +196,7 @@ describe("accountRepository", () => {
       expect(row.reconcilable_balance).toBe(100);
       expect(row.reconcilable_currency).toBe("EUR");
       expect(row.drift).toBe(
-        (row.statement_balance ?? 0) - row.reconcilable_balance,
+        row.statement_balances[0].balance - row.reconcilable_balance,
       );
     });
 
@@ -220,7 +237,13 @@ describe("accountRepository", () => {
             id: 1,
             name: "Wise",
             currency: "EUR",
-            statement_balance: "100.01",
+            statement_balances: [
+              {
+                currency: "EUR",
+                balance: "100.01",
+                balance_date: "2026-07-01",
+              },
+            ],
             balance_parts: [
               // NUMERIC(18,4) sums can carry a 4-dp tail; the wire rounds the
               // base to cents, and drift must be differenced against the SAME
@@ -235,7 +258,7 @@ describe("accountRepository", () => {
       expect(row.reconcilable_balance).toBe(100.02);
       expect(row.drift).toBe(-0.01);
       expect(row.drift).toBeCloseTo(
-        (row.statement_balance ?? 0) - row.reconcilable_balance,
+        row.statement_balances[0].balance - row.reconcilable_balance,
         10,
       );
     });
@@ -248,7 +271,9 @@ describe("accountRepository", () => {
             id: 1,
             name: "KBC",
             currency: "EUR",
-            statement_balance: "90.00",
+            statement_balances: [
+              { currency: "EUR", balance: "90.00", balance_date: "2026-07-01" },
+            ],
             balance_parts: [{ currency: "EUR", balance: "100.0000" }],
           },
         ],
@@ -270,7 +295,9 @@ describe("accountRepository", () => {
             id: 1,
             name: "GBP shell",
             currency: "GBP",
-            statement_balance: "50.00",
+            statement_balances: [
+              { currency: "GBP", balance: "50.00", balance_date: "2026-07-01" },
+            ],
             balance_parts: [
               { currency: "EUR", balance: "100.0000" },
               { currency: "USD", balance: "100.0000" },
@@ -293,7 +320,9 @@ describe("accountRepository", () => {
             id: 1,
             name: "Wise USD",
             currency: "EUR",
-            statement_balance: "90.00",
+            statement_balances: [
+              { currency: "USD", balance: "90.00", balance_date: "2026-07-01" },
+            ],
             balance_parts: [{ currency: "USD", balance: "100.0000" }],
           },
         ],
@@ -317,7 +346,13 @@ describe("accountRepository", () => {
             id: 1,
             name: "Noisy",
             currency: "EUR",
-            statement_balance: "100.00",
+            statement_balances: [
+              {
+                currency: "USD",
+                balance: "100.00",
+                balance_date: "2026-07-01",
+              },
+            ],
             balance_parts: [
               { currency: "GBP", balance: "0.0000" }, // offsetting pair, net 0
               { currency: "USD", balance: "100.0000" },

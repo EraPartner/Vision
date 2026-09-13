@@ -1047,8 +1047,6 @@ describe("Phase F1: extended mutation contracts", () => {
         multi_currency_cash: z.boolean(),
         has_cash_sleeve: z.boolean(),
         funding_account_id: z.number().int().positive().nullable(),
-        statement_balance: z.number().nullable(),
-        statement_balance_date: z.string().nullable(),
         is_active: z.boolean(),
         closed_at: z.string().nullable(),
         created_at: z.string(),

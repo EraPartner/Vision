@@ -104,6 +104,8 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
       /SELECT id FROM accounts WHERE id = \$1 FOR UPDATE/,
     );
     expect(lockParams).toEqual([5]);
+    expect(query.mock.calls[1][0]).toMatch(/s\.balance AS statement_balance/);
+    expect(query.mock.calls[1][0]).not.toMatch(/a\.statement_balance/);
   });
 
   it("accept mode rewrites the statement balance to the computed figure (drift → 0)", async () => {
@@ -118,7 +120,7 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
           },
         ],
       })
-      .mockResolvedValueOnce({ rows: [{ statement_balance: 100 }] });
+      .mockResolvedValueOnce({ rows: [{ balance: 100 }] });
 
     const result = await reconcileAccount(5, { mode: "accept" });
 
@@ -130,12 +132,10 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
       transaction: null,
     });
 
-    // Third call atomically upserts the authoritative currency row and mirrors
-    // the declared-currency compatibility projection.
+    // Third call atomically upserts the authoritative currency row.
     const [sql, params] = query.mock.calls[2];
     expect(sql).toMatch(/INSERT INTO account_statement_balances/);
-    expect(sql).toMatch(/UPDATE accounts/);
-    expect(sql).toMatch(/statement_balance = \$3/);
+    expect(sql).not.toMatch(/UPDATE accounts/);
     expect(params[0]).toBe(5);
     expect(params[1]).toBe("EUR");
     expect(params[2]).toBe(100);
@@ -343,7 +343,7 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
           },
         ],
       })
-      .mockResolvedValueOnce({ rows: [{ statement_balance: 0 }] });
+      .mockResolvedValueOnce({ rows: [{ balance: 0 }] });
 
     const result = await reconcileAccount(5, { mode: "accept" });
 

@@ -73,7 +73,11 @@ describe("ADR-109 operator-gated legacy cleanup", () => {
       expect(sql).toContain(`'${relation}'`);
     }
     expect(sql).toContain("residue_count = 0");
-    expect(sql).toContain("partial residue set");
+    expect(sql).toContain("partial required residue set");
+    expect(sql).toContain("optional_table_names");
+    expect(sql).not.toMatch(
+      /adr109_legacy_archive\.relation_name\s*=\s*relation_name/,
+    );
     expect(sql).toContain("DROP VIEW public.%I CASCADE");
     expect(sql).toContain("DROP TABLE public.%I CASCADE");
   });

@@ -21,31 +21,29 @@ import { sanitizeUpdateFields } from "../lib/validation.js";
 import { buildTransactionWhere } from "../lib/filterBuilder.js";
 import { buildSetClauses } from "../lib/sqlClauses.js";
 import { accountRepository } from "./accountRepository.js";
+import { ValidationError } from "../middleware/errorHandler.js";
 
 /**
- * ADR-088 contract-phase translation, shared by this repository and
- * plannedTransactionRepository. The HTTP contract still accepts the legacy
- * `bank_account` label, but persistence stores only `account_id`.
+ * Validate canonical account identity before dynamic SET clauses are built.
+ * A stray legacy label is discarded and never reaches persistence.
  *
- * Resolve the label through the account entity's lower(btrim) identity, then
- * remove the compatibility field before dynamic SET clauses are built. A
- * blank/null label resolves to NULL and detaches the row.
- *
- * Mutates and returns `sanitized`. Called AFTER sanitizeUpdateFields, so a
- * request body can never set account_id directly (it is not whitelisted).
+ * Mutates and returns `sanitized`. Called after sanitizeUpdateFields, which
+ * admits the canonical account_id only.
  *
  * @param {Record<string, any>} sanitized output of sanitizeUpdateFields
  * @param {import('../types/rows.js').QueryRunner} [client]
  * @returns {Promise<Record<string, any>>}
  */
 export async function stampAccountIdForUpdate(sanitized, client) {
-  if (Object.hasOwn(sanitized, "bank_account")) {
-    sanitized.account_id =
-      (await accountRepository.resolveOrCreateByName(sanitized.bank_account, {
-        client,
-      })) ?? null;
-    delete sanitized.bank_account;
+  if (Object.hasOwn(sanitized, "account_id")) {
+    if (
+      sanitized.account_id != null &&
+      !(await accountRepository.findActiveId(sanitized.account_id, { client }))
+    ) {
+      throw new ValidationError("account_id must reference an active account");
+    }
   }
+  delete sanitized.bank_account;
   return sanitized;
 }
 
@@ -279,7 +277,6 @@ async function attachTagsToRows(rows) {
   }
   return rows.map(
     ({
-      tx_hash: _txHash,
       source_record_hash: _sourceRecordHash,
       dedup_fingerprint: _dedupFingerprint,
       dedup_fingerprint_version: _dedupFingerprintVersion,
@@ -710,7 +707,7 @@ export const transactionRepository = {
    *
    * @param {object} input
    * @param {string} input.transaction_date 'YYYY-MM-DD'
-   * @param {string|null} [input.bank_account] Compatibility label resolved to account_id.
+   * @param {number|null} [input.account_id] Canonical account identity.
    * @param {number|null} [input.recipient_id]
    * @param {number|string} input.amount
    * @param {string|null} [input.memo] Upper-cased before insert.
@@ -722,7 +719,7 @@ export const transactionRepository = {
    */
   async create({
     transaction_date,
-    bank_account,
+    account_id,
     recipient_id,
     amount,
     memo,
@@ -751,11 +748,14 @@ export const transactionRepository = {
     const row = await withTransaction(async (client) => {
       // Resolve inside this transaction so a failed create cannot leave an
       // orphan account that the former INSERT trigger would have rolled back.
-      const accountId =
-        (await accountRepository.resolveOrCreateByName(
-          bank_account ? bank_account.toUpperCase() : null,
-          { client },
-        )) ?? null;
+      let accountId = account_id ?? null;
+      if (accountId != null) {
+        if (!(await accountRepository.findActiveId(accountId, { client }))) {
+          throw new ValidationError(
+            "account_id must reference an active account",
+          );
+        }
+      }
       const res = await client.query(sql, [
         transaction_date,
         accountId,
@@ -1302,74 +1302,6 @@ export const transactionRepository = {
   // Import commit (import-specific — deliberately NOT create()/getById())
   // ---------------------------------------------------------------------------
 
-  /**
-   * Field-based duplicate probe for the import commit path: date + amount +
-   * recipient + memo + currency, scoped to the same account, and skipped when
-   * both rows carry a tx_hash and the hashes DIFFER within this batch (the hash
-   * is the identity then). See commit.js for the full rationale — the predicate
-   * is load-bearing for import idempotency and is moved here verbatim.
-   *
-   * Currency is part of the identity because an account may hold several
-   * currencies (ADR-089 addendum: Revolut keeps ONE account whose rows carry
-   * their own currency), so the account no longer discriminates them the way
-   * it does for the one-account-per-currency banks. −25.00 EUR and −25.00 USD at
-   * the same merchant on the same day are two transactions, not one.
-   *
-   * The "same account" guard compares `t.account_id` (ADR-088): the caller
-   * resolves the staging label to an account id (commit.js, the same
-   * lower(btrim) mapping the sync trigger uses) and the probe never touches
-   * the retired bank_account string.
-   *
-   * @param {object} probe
-   * @param {string} probe.date 'YYYY-MM-DD'
-   * @param {number|string} probe.amount
-   * @param {number|null} probe.recipientId
-   * @param {string} probe.memo Already TRIM'd by the caller (compared to `COALESCE(TRIM(t.memo), '')`).
-   * @param {number|null} probe.accountId Resolved account id of the staging row's label (null when the row carries no label).
-   * @param {string} probe.currency Already trimmed and defaulted by the caller
-   *   (commit.js `currencyKeyOf`) to the same value the insert will store —
-   *   trimmed because VARCHAR(3) silently drops trailing spaces on write, so an
-   *   untrimmed probe would miss the stored row. `transactions.currency` is
-   *   NOT NULL, so plain `=` is safe.
-   * @param {string|null} probe.txHash
-   * @param {number|string} probe.batchId
-   * @returns {Promise<number|undefined>} the duplicate's id, or undefined
-   */
-  async findImportDuplicate({
-    date,
-    amount,
-    recipientId,
-    memo,
-    accountId,
-    currency,
-    txHash,
-    batchId,
-  }) {
-    const result = await query(
-      `SELECT t.id
-             FROM transactions t
-            WHERE t.date = $1
-              AND t.amount = $2
-              AND (
-                ($3::integer IS NOT NULL AND t.recipient_id = $3)
-                OR ($3::integer IS NULL AND t.recipient_id IS NULL)
-              )
-              AND COALESCE(BTRIM(t.memo, E' \\t\\n\\r\\f\\013'), '') = $4
-              AND t.account_id IS NOT DISTINCT FROM $5::integer
-              AND t.currency = $8
-              AND (
-                t.import_batch_id IS DISTINCT FROM $7
-                OR t.tx_hash IS NULL
-                OR $6::text IS NULL
-                OR t.tx_hash = $6
-              )
-              AND t.is_active = true
-            LIMIT 1`,
-      [date, amount, recipientId, memo, accountId, txHash, batchId, currency],
-    );
-    return result.rows[0]?.id ?? undefined;
-  },
-
   /** @returns {Promise<number|undefined>} */
   async findImportFingerprint(version, fingerprint) {
     if (version == null || !fingerprint) return undefined;
@@ -1394,25 +1326,19 @@ export const transactionRepository = {
     memo,
     accountId,
     currency,
-    sourceRecordHash,
   }) {
     const result = await query(
       `SELECT COUNT(*)::int AS n
          FROM transactions t
         WHERE t.dedup_fingerprint IS NULL
           AND t.is_active = true
-          AND (
-            ($7::text IS NOT NULL AND t.tx_hash = $7)
-            OR (
-              t.date = $1
-              AND t.amount = $2
-              AND t.recipient_id IS NOT DISTINCT FROM $3::integer
-              AND COALESCE(BTRIM(t.memo, E' \\t\\n\\r\\f\\013'), '') = $4
-              AND t.account_id IS NOT DISTINCT FROM $5::integer
-              AND t.currency = $6
-            )
-          )`,
-      [date, amount, recipientId, memo, accountId, currency, sourceRecordHash],
+          AND t.date = $1
+          AND t.amount = $2
+          AND t.recipient_id IS NOT DISTINCT FROM $3::integer
+          AND COALESCE(BTRIM(t.memo, E' \\t\\n\\r\\f\\013'), '') = $4
+          AND t.account_id IS NOT DISTINCT FROM $5::integer
+          AND t.currency = $6`,
+      [date, amount, recipientId, memo, accountId, currency],
     );
     return Number(result.rows[0]?.n) || 0;
   },
@@ -1420,9 +1346,8 @@ export const transactionRepository = {
   /**
    * Insert a committed import row. Distinct from create(): the import writes
    * `balance` (bank-stamped, anchors ADR-094), `import_batch_id`,
-   * `matched_pattern_id` and `tx_hash`, and relies on ON CONFLICT over the
-   * partial unique index on tx_hash to stay race-safe against a concurrent
-   * import. A conflict yields no row.
+   * `matched_pattern_id` and versioned fingerprint metadata. The partial
+   * fingerprint index is the concurrent-import race guard.
    *
    * ADR-088 contract phase: the import pipeline resolves the compatibility
    * label first and this INSERT persists only the canonical `account_id`.
@@ -1439,7 +1364,6 @@ export const transactionRepository = {
    * @param {string|null} row.comment
    * @param {number|string|null} row.importBatchId
    * @param {number|null} row.matchedPatternId
-   * @param {string|null} row.txHash
    * @param {string|null} [row.sourceRecordHash]
    * @param {string|null} [row.dedupFingerprint]
    * @param {number|null} [row.fingerprintVersion]
@@ -1457,7 +1381,6 @@ export const transactionRepository = {
     comment,
     importBatchId,
     matchedPatternId,
-    txHash,
     sourceRecordHash,
     dedupFingerprint,
     fingerprintVersion,
@@ -1465,9 +1388,9 @@ export const transactionRepository = {
     const result = await query(
       `INSERT INTO transactions
                 (date, account_id, recipient_id, category_id, amount, memo, currency, balance, comment,
-                 import_batch_id, matched_pattern_id, tx_hash, source_record_hash,
+                 import_batch_id, matched_pattern_id, source_record_hash,
                  dedup_fingerprint, dedup_fingerprint_version, is_active)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, true)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, true)
              ON CONFLICT DO NOTHING
              RETURNING id`,
       [
@@ -1482,7 +1405,6 @@ export const transactionRepository = {
         comment,
         importBatchId,
         matchedPatternId,
-        txHash,
         sourceRecordHash ?? null,
         dedupFingerprint ?? null,
         fingerprintVersion ?? null,

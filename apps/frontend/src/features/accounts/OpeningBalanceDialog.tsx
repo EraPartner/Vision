@@ -59,6 +59,10 @@ export function OpeningBalanceDialog({
     // the detail endpoint, which does not return it), which is also the exact
     // value on every single-currency account.
     const anchorCurrency = account.reconcilable_currency ?? account.currency;
+    const statementReading = account.statement_balances?.find(
+        (item) => item.currency === anchorCurrency,
+    );
+    const statementDate = statementReading?.balance_date;
 
     // Prefill from an existing statement balance when present, else the
     // reconciliation base — a sensible starting figure the user can override.
@@ -70,9 +74,9 @@ export function OpeningBalanceDialog({
     // `computed_balance` tail only fires when `reconcilable_balance` is absent,
     // where the two coincide anyway.
     const [balance, setBalance] = useState(
-        account.statement_balance != null
+        statementReading?.balance != null
             ? formatEditableNumber(
-                  account.statement_balance,
+                  statementReading.balance,
                   appSettings.numberFormat,
               )
             : account.reconcilable_balance != null
@@ -88,15 +92,13 @@ export function OpeningBalanceDialog({
                 : "",
     );
     const [date, setDate] = useState(
-        account.statement_balance_date
-            ? account.statement_balance_date.slice(0, 10)
-            : toYmd(new Date()),
+        statementDate ? statementDate.slice(0, 10) : toYmd(new Date()),
     );
 
     const reset = () => {
         setBalance(
             formatEditableNumber(
-                account.statement_balance,
+                statementReading?.balance,
                 appSettings.numberFormat,
             ),
         );

@@ -215,7 +215,7 @@ describe("banksRepository.getBankBalances", () => {
             display_name: "Cash",
             currency: "EUR",
             balance: "200",
-            statement_balance: null,
+            statement_balances: [],
             account_currency: "EUR",
             anchor_date: null,
             post_anchor_count: "3",
@@ -228,7 +228,13 @@ describe("banksRepository.getBankBalances", () => {
             display_name: "KBC Zichtrekening",
             currency: "EUR",
             balance: "5100",
-            statement_balance: "5087.5",
+            statement_balances: [
+              {
+                currency: "EUR",
+                balance: "5087.5",
+                balance_date: "2026-06-30",
+              },
+            ],
             account_currency: "EUR",
             anchor_date: "2026-06-30",
             post_anchor_count: "2",
@@ -248,7 +254,7 @@ describe("banksRepository.getBankBalances", () => {
           currency: "EUR",
           balance: "200",
           amount_eur: 200,
-          statement_balance: null,
+          statement_balances: [],
           account_currency: "EUR",
           anchor_date: null,
           post_anchor_count: "3",
@@ -262,7 +268,9 @@ describe("banksRepository.getBankBalances", () => {
           currency: "EUR",
           balance: "5100",
           amount_eur: 5100,
-          statement_balance: "5087.5",
+          statement_balances: [
+            { currency: "EUR", balance: "5087.5", balance_date: "2026-06-30" },
+          ],
           account_currency: "EUR",
           anchor_date: "2026-06-30",
           post_anchor_count: "2",
@@ -358,7 +366,8 @@ describe("banksRepository.getBankBalances", () => {
     expect(currentBalanceSql).not.toContain(
       "a.statement_balance - COALESCE(lb.balance, 0)",
     );
-    expect(currentBalanceSql).toContain("a.statement_balance");
+    expect(currentBalanceSql).toContain("account_statement_balances");
+    expect(currentBalanceSql).not.toContain("a.statement_balance");
     expect(currentBalanceSql).toContain(
       "COALESCE(a.currency, 'EUR') AS account_currency",
     );

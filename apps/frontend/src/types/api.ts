@@ -87,8 +87,6 @@ export interface Account {
     multi_currency_cash: boolean;
     has_cash_sleeve: boolean;
     funding_account_id?: number;
-    statement_balance?: number;
-    statement_balance_date?: string;
     /** Authoritative statement readings, one per native currency (ADR-089 D2). */
     statement_balances?: Array<{
         currency: string;
@@ -109,7 +107,7 @@ export interface Account {
     unconverted_currencies?: string[];
     /**
      * The reconciliation base: the computed balance of the ONE currency
-     * partition `statement_balance` is a statement for, in
+     * partition the selected collection reading is a statement for, in
      * `reconcilable_currency` and never FX-converted. Equal to
      * `computed_balance` on a single-currency account; on a multi-currency one
      * it is the figure the server reconciles against, so the reconcile dialog
@@ -119,7 +117,7 @@ export interface Account {
     /** Currency of `reconcilable_balance` and `drift`. List endpoint only. */
     reconcilable_currency?: string;
     /**
-     * statement_balance − reconcilable_balance, in `reconcilable_currency`;
+     * selected statement balance − reconcilable_balance, in `reconcilable_currency`;
      * null when no statement balance (ADR-094). Native-currency by design, so
      * the badge never moves with the daily exchange rate.
      */
@@ -157,28 +155,17 @@ export interface AccountCreate {
     multi_currency_cash?: boolean;
     has_cash_sleeve?: boolean;
     funding_account_id?: number;
-    statement_balance?: number;
-    statement_balance_date?: string;
 }
 
 // On PATCH, explicit null clears the field (the backend maps it to SQL NULL);
 // undefined/omitted leaves it untouched.
 export interface AccountUpdate extends Partial<
-    Omit<
-        AccountCreate,
-        | "display_name"
-        | "institution"
-        | "funding_account_id"
-        | "statement_balance"
-        | "statement_balance_date"
-    >
+    Omit<AccountCreate, "display_name" | "institution" | "funding_account_id">
 > {
     is_active?: boolean;
     display_name?: string | null;
     institution?: string | null;
     funding_account_id?: number | null;
-    statement_balance?: number | null;
-    statement_balance_date?: string | null;
 }
 
 // ==================== Recipient Types ====================
@@ -228,6 +215,7 @@ export interface Transaction {
     // Nullable on the wire: rows without a label exist (e.g. ADR-090 trade
     // cash legs), and a PATCH null-to-clear leaves NULL behind.
     bank_account: string | null;
+    account_id?: number | null;
     recipient_id?: number | null;
     recipient_name?: string; // Recipient name
     memo?: string | null;
@@ -256,7 +244,7 @@ export interface TransactionsListResponse {
 
 export interface TransactionCreate {
     transaction_date: string; // YYYY-MM-DD format
-    bank_account: string;
+    account_id: number;
     recipient_id: number;
     memo?: string;
     amount: number;
@@ -277,7 +265,7 @@ export interface TransactionCreate {
 // silent no-op that made the field look editable.
 export interface TransactionUpdate {
     transaction_date?: string;
-    bank_account?: string | null;
+    account_id?: number | null;
     recipient_id?: number | null;
     recipient_name?: string;
     memo?: string | null;
@@ -319,6 +307,7 @@ export interface PlannedTransaction {
     recurrence_end_date?: string | null;
     max_occurrences?: number | null;
     bank_account: string;
+    account_id?: number | null;
     recipient_id?: number;
     recipient_name?: string;
     memo?: string;
@@ -365,7 +354,7 @@ export interface PlannedTransactionCreate {
     /** Recurrence bounds: the series completes past this date / at this count. */
     recurrence_end_date?: string;
     max_occurrences?: number;
-    bank_account?: string;
+    account_id: number;
     recipient_id?: number;
     memo?: string;
     amount: number;
@@ -389,7 +378,7 @@ export interface PlannedTransactionUpdate {
     planned_date?: string;
     recurrence_end_date?: string | null;
     max_occurrences?: number | null;
-    bank_account?: string;
+    account_id?: number | null;
     recipient_id?: number;
     recipient_name?: string;
     memo?: string;

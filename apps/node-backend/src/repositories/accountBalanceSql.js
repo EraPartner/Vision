@@ -15,7 +15,7 @@ import { roundToCents } from "../lib/money.js";
  * stamped by bank-CSV adapters, so manual entries, trade cash legs, and
  * brokerage cash fan-out (which leave it NULL) never advanced the figure. That
  * stale balance then poisoned the accounts hub, the drift badge
- * (statement_balance − computed_balance), per-account net worth, and the
+ * (selected statement reading − computed balance), per-account net worth, and the
  * rebalance available-cash input.
  *
  * Switching wholesale to a plain Σ(amount) would instead drop the opening
@@ -228,10 +228,8 @@ export function computedBalanceByCurrencyAggLateral({
  * against, and what `reconcileService` actually stamps all read it, so the
  * number a user sees is by construction the number the server will write.
  *
- * `accounts.statement_balance` is one number carrying one date, and the column
- * next to it is `accounts.currency` — so it can only be read as the bank's
- * figure for the account's OWN currency. Drift is therefore that figure minus
- * that currency's partition, never minus a cross-currency sum (which added a
+ * Each statement reading names its currency. Drift is therefore that figure
+ * minus the matching currency partition, never minus a cross-currency sum (which added a
  * EUR amount to a USD amount as bare numbers) and never minus the FX-converted
  * total (which would make a reconciliation figure move with the daily rate,
  * and would size the reconcile 'adjustment' row by today's rate).

@@ -173,14 +173,13 @@ export async function validateBatch({ batchId, onProgress }) {
           SET status        = v.status,
               type          = v.type::portfolio_txn_type,
               route         = v.route,
-              tx_hash       = v.tx_hash,
               source_record_hash = v.source_record_hash,
-              dedup_fingerprint = v.tx_hash,
+              dedup_fingerprint = v.fingerprint,
               dedup_fingerprint_version = v.fingerprint_version,
               dedup_occurrence = v.occurrence,
               error_message = v.error_message
          FROM unnest($1::bigint[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::smallint[], $8::integer[], $9::text[])
-              AS v(id, status, type, route, tx_hash, source_record_hash, fingerprint_version, occurrence, error_message)
+              AS v(id, status, type, route, fingerprint, source_record_hash, fingerprint_version, occurrence, error_message)
         WHERE s.id = v.id`,
       [
         ids,

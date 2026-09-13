@@ -376,7 +376,38 @@ describe("getById", () => {
 });
 
 describe("create", () => {
-  it("resolves bank_account to account_id and normalizes memo/currency", async () => {
+  it("uses an active canonical account_id without creating an account label", async () => {
+    const client = { query: vi.fn() };
+    client.query
+      .mockResolvedValueOnce({ rows: [{ id: 7 }] })
+      .mockResolvedValueOnce({ rows: [{ id: 3 }] });
+    withTransaction.mockImplementation(async (fn) => fn(client));
+    query.mockResolvedValueOnce({ rows: [] });
+
+    await transactionRepository.create({
+      transaction_date: "2024-05-01",
+      account_id: 7,
+      recipient_id: 1,
+      amount: -10,
+      memo: "coffee",
+      currency: "usd",
+      category_id: 2,
+      comment: "c",
+    });
+
+    expect(client.query.mock.calls[0]).toEqual([
+      "SELECT id FROM accounts WHERE id = $1 AND is_active = true",
+      [7],
+    ]);
+    expect(client.query.mock.calls[1][1][1]).toBe(7);
+    expect(
+      client.query.mock.calls.some(([sql]) =>
+        String(sql).includes("INSERT INTO accounts"),
+      ),
+    ).toBe(false);
+  });
+
+  it("uses account_id and normalizes memo/currency", async () => {
     const client = { query: vi.fn() };
     client.query
       .mockResolvedValueOnce({ rows: [{ id: 7 }] })
@@ -385,7 +416,7 @@ describe("create", () => {
     query.mockResolvedValueOnce({ rows: [] }); // tag lookup
     const row = await transactionRepository.create({
       transaction_date: "2024-05-01",
-      bank_account: "kbc",
+      account_id: 7,
       recipient_id: 1,
       amount: -10,
       memo: "coffee",
@@ -395,7 +426,10 @@ describe("create", () => {
       comment: "c",
     });
     expect(row.id).toBe(3);
-    expect(client.query.mock.calls[0][1]).toEqual(["KBC", false]);
+    expect(client.query.mock.calls[0]).toEqual([
+      "SELECT id FROM accounts WHERE id = $1 AND is_active = true",
+      [7],
+    ]);
     const [sql, params] = client.query.mock.calls[1];
     expect(sql).toContain("INSERT INTO transactions (date, account_id");
     expect(sql).not.toContain("date, bank_account");

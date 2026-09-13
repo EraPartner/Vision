@@ -162,7 +162,7 @@ export function AddTransactionDialog() {
         if (!parsed.success) return null;
         return {
             transaction_date: form.transaction_date,
-            bank_account: form.bank_account.trim(),
+            account_id: parsed.data.account_id,
             recipient_id: Number(form.recipient_id),
             category_id: form.category_id
                 ? Number(form.category_id)
@@ -286,6 +286,12 @@ export function AddTransactionDialog() {
                                     setForm((f) => ({
                                         ...f,
                                         bank_account: name,
+                                    }))
+                                }
+                                onAccountIdChange={(accountId) =>
+                                    setForm((f) => ({
+                                        ...f,
+                                        account_id: accountId,
                                     }))
                                 }
                                 placeholder={t("addTxn.bankAccountPlaceholder")}

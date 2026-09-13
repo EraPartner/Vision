@@ -308,6 +308,7 @@ export default function TransactionsPage() {
             transactionId: number,
             field: InfoEditableField,
             value: string | number | undefined,
+            accountId?: number | null,
         ) => {
             setAllItems((prev) =>
                 prev.map((item) => {
@@ -349,6 +350,7 @@ export default function TransactionsPage() {
                                     value === undefined
                                         ? undefined
                                         : String(value),
+                                account_id: accountId,
                             };
                         case "comment":
                             return {
@@ -380,7 +382,11 @@ export default function TransactionsPage() {
                     case "currency":
                         return { ...prev, currency: String(value ?? "") };
                     case "bank":
-                        return { ...prev, bank: String(value ?? "") };
+                        return {
+                            ...prev,
+                            bank: String(value ?? ""),
+                            accountId: accountId ?? undefined,
+                        };
                     case "comment":
                         return { ...prev, comment: String(value ?? "") };
                     default:
@@ -412,15 +418,14 @@ export default function TransactionsPage() {
                 ((raw?.transaction_date as string | undefined) || row.date) ??
                 ""
             ).split("T")[0];
-            const bankAccount =
-                (raw?.bank_account as string | undefined) || row.bank;
+            const accountId = raw?.account_id ?? row.accountId;
             const recipientId =
                 raw?.recipient_id ?? (row.recipientId || undefined);
-            // Create contract: recipient_id, date and bank_account are required.
-            if (recipientId == null || !transactionDate || !bankAccount) return;
+            if (recipientId == null || !transactionDate || accountId == null)
+                return;
             createMutation.mutate({
                 transaction_date: transactionDate,
-                bank_account: bankAccount,
+                account_id: accountId,
                 recipient_id: recipientId,
                 memo: raw?.memo ?? (row.memo || undefined),
                 amount: raw?.amount ?? row.amount,
@@ -498,7 +503,6 @@ export default function TransactionsPage() {
                     transaction_date: updated.date,
                     memo: updated.memo,
                     amount: updated.amount,
-                    bank_account: updated.bank,
                     currency: updated.currency,
                     // balance deliberately not sent — bank-stamped import data
                     // (ADR-094); the backend PATCH whitelist drops it anyway.
@@ -598,6 +602,7 @@ export default function TransactionsPage() {
                     t("txPage.field.unknown"),
                 recipientId: tx.recipient_id ?? 0,
                 bank: (tx.bank_account as string | undefined) || tx.bank || "",
+                accountId: tx.account_id ?? undefined,
                 amount: tx.amount ?? 0,
                 // Matches the backend window's COALESCE(currency, 'EUR').
                 currency: tx.currency ?? "EUR",

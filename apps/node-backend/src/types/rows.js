@@ -79,7 +79,6 @@
  * @property {boolean} is_active
  * @property {string|null} [import_batch_id] BIGINT FK → import_batches — pg emits BIGINT as a string.
  * @property {number|null} [matched_pattern_id]
- * @property {string|null} [tx_hash]
  * @property {string|null} [source_record_hash] Internal SHA-256 of the staged literal record; omitted from API rows.
  * @property {string|null} [dedup_fingerprint] Internal versioned import identity; omitted from API rows.
  * @property {number|null} [dedup_fingerprint_version]
@@ -346,8 +345,8 @@
 
 /**
  * A row of `accounts` as projected by `accountRepository`'s shared `COLUMNS`
- * list. `statement_balance_date` is `to_char(...)`-formatted in SQL, so it is a
- * calendar-day string rather than a `Date` — unlike `closed_at` / the timestamps.
+ * list. Statement readings live in the currency-keyed collection and are not
+ * scalar account columns.
  *
  * @typedef {object} AccountRow
  * @property {number} id
@@ -364,8 +363,6 @@
  * @property {boolean} multi_currency_cash
  * @property {boolean} has_cash_sleeve
  * @property {number|null} funding_account_id
- * @property {string|null} statement_balance NUMERIC(18,4) since migration 0088 (ADR-060 D7).
- * @property {string|null} statement_balance_date 'YYYY-MM-DD' — `to_char`-formatted in the projection.
  * @property {boolean} is_active
  * @property {Date|null} closed_at
  * @property {Date} created_at
@@ -381,6 +378,7 @@
  *   has_transactions: boolean,
  *   anchor_date: string|null,
  *   post_anchor_count: string|null,
+ *   statement_balances: Array<{currency:string, balance:string, balance_date:string}>|null,
  * }} AccountBalanceQueryRow
  */
 
@@ -394,7 +392,7 @@
  * `drift` (statement figure − that base) are derived in JS from the partitions,
  * so they are `number`s — matching the OpenAPI schema — rather than pg NUMERIC
  * strings. The three native figures satisfy
- * `drift = statement_balance − reconcilable_balance`.
+ * `drift = selected statement reading − reconcilable_balance`.
  *
  * @typedef {AccountRow & {
  *   computed_balance: number,
@@ -404,6 +402,7 @@
  *   reconcilable_balance: number,
  *   reconcilable_currency: string,
  *   drift: number|null,
+ *   statement_balances: Array<{currency:string, balance:number, balance_date:string}>,
  *   has_transactions: boolean,
  *   anchor_date?: string,
  *   post_anchor_count?: number,
@@ -875,7 +874,6 @@
  * @property {string|null} recipient_bank_name
  * @property {string|null} comment
  * @property {string|null} raw_data
- * @property {string|null} tx_hash sha256 hex of raw_data (or the field fallback).
  * @property {string|null} [source_transaction_id]
  * @property {string|null} [source_account_identity]
  * @property {string|null} [source_record_hash]
@@ -945,7 +943,6 @@
  * @property {string|null} fx_rate_to_eur NUMERIC(20,10) — string.
  * @property {string|null} note
  * @property {string|null} raw_data
- * @property {string|null} tx_hash
  * @property {string|null} [source_transaction_id]
  * @property {string|null} [source_account_identity]
  * @property {string|null} [source_record_hash]

@@ -12,7 +12,7 @@
  * period merge, the stamps interleave in one partition and the anchor+delta
  * provenance computation (BALANCE_PROVENANCE_LATERAL) anchors on whichever source's latest
  * stamp is most recent — silently dropping the other bank's balance — while the
- * survivor's stored `statement_balance` keeps anchoring drift against the shifted
+ * survivor's stored statement reading keeps anchoring drift against the shifted
  * figure. The merge detects this (overlapping stamped-date ranges across >1
  * original account) and clears the survivor's now-invalidated statement anchor.
  * Historical per-row stamps are never rewritten (they are historical facts);

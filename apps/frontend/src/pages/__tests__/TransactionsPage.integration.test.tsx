@@ -281,6 +281,22 @@ describe("TransactionsPage (integration)", () => {
 
         // Return one recipient so the form guard passes
         server.use(
+            http.get(`${API_BASE}/api/accounts`, () =>
+                ok({
+                    items: [
+                        {
+                            id: 8,
+                            name: "IBAN001",
+                            display_name: "IBAN001",
+                            currency: "EUR",
+                            type: "checking",
+                            is_active: true,
+                        },
+                    ],
+                    total: 1,
+                    links: [],
+                }),
+            ),
             http.get(`${API_BASE}/api/recipients`, () =>
                 ok({
                     items: [{ id: 1, name: "Test Recipient", active: true }],
@@ -320,17 +336,17 @@ describe("TransactionsPage (integration)", () => {
         await user.clear(amountInput);
         await user.type(amountInput, "-25,50");
 
-        // Fill bank account via the AccountCombobox (Phase B2): type a new
-        // label and take the explicit-create escape hatch (D1) — the MSW
-        // accounts list is empty, so every label is "new".
+        // Select an existing canonical account.
         await user.click(
             screen.getByRole("combobox", { name: /bank account/i }),
         );
         await user.type(
-            screen.getByPlaceholderText(/search or type a new account/i),
+            screen.getByPlaceholderText(/search accounts/i),
             "IBAN001",
         );
-        await user.click(await screen.findByText(/create account "IBAN001"/i));
+        await user.click(
+            await screen.findByRole("option", { name: /IBAN001/i }),
+        );
 
         // Select recipient (required by form guard).
         await user.click(screen.getByRole("combobox", { name: /recipient/i }));

@@ -46,6 +46,7 @@ const emptyBalanceAccount = (id) => ({
   reconcilable_balance: 0,
   reconcilable_currency: "EUR",
   drift: null,
+  statement_balances: [],
   anchor_date: undefined,
   post_anchor_count: undefined,
 });
@@ -93,28 +94,14 @@ describe("accountService.create", () => {
     );
   });
 
-  it("rejects a statement_balance without its date", async () => {
+  it("rejects retired scalar statement fields", async () => {
     await expect(
       accountService.create({ name: "KBC", statement_balance: 120.5 }),
     ).rejects.toThrow(ValidationError);
-    expect(accountRepository.create).not.toHaveBeenCalled();
-  });
-
-  it("accepts a statement_balance with its date", async () => {
-    accountRepository.create.mockResolvedValueOnce({ id: 1 });
-    await accountService.create({
-      name: "KBC",
-      statement_balance: 120.5,
-      statement_balance_date: "2026-07-01",
-    });
-    expect(accountRepository.create).toHaveBeenCalled();
-  });
-
-  it("rejects an absurd statement_balance above the money-column ceiling", async () => {
     await expect(
       accountService.create({
         name: "KBC",
-        statement_balance: 1e15,
+        statement_balance: 120.5,
         statement_balance_date: "2026-07-01",
       }),
     ).rejects.toThrow(ValidationError);
@@ -229,26 +216,17 @@ describe("accountService.update", () => {
     expect(accountRepository.update).not.toHaveBeenCalled();
   });
 
-  it("forwards explicit null as SQL NULL for clearable fields (PATCH-to-clear)", async () => {
-    accountRepository.getById.mockResolvedValueOnce({
-      id: 1,
-      statement_balance: 99,
-      statement_balance_date: "2026-07-01",
-    });
+  it("forwards explicit null as SQL NULL for clearable metadata fields", async () => {
     accountRepository.update.mockResolvedValueOnce({ id: 1 });
     await accountService.update(1, {
       display_name: null,
       institution: null,
       funding_account_id: null,
-      statement_balance: null,
-      statement_balance_date: null,
     });
     expect(accountRepository.update).toHaveBeenCalledWith(1, {
       display_name: null,
       institution: null,
       funding_account_id: null,
-      statement_balance: null,
-      statement_balance_date: null,
     });
   });
 
@@ -260,40 +238,14 @@ describe("accountService.update", () => {
     });
   });
 
-  it("rejects setting a statement_balance when the stored date is NULL (merged-state check)", async () => {
-    accountRepository.getById.mockResolvedValueOnce({
-      id: 1,
-      statement_balance: null,
-      statement_balance_date: null,
-    });
+  it("rejects retired scalar statement fields on update", async () => {
     await expect(
       accountService.update(1, { statement_balance: 99 }),
     ).rejects.toThrow(ValidationError);
     expect(accountRepository.update).not.toHaveBeenCalled();
-  });
-
-  it("rejects clearing the date while a balance stays stored", async () => {
-    accountRepository.getById.mockResolvedValueOnce({
-      id: 1,
-      statement_balance: 99,
-      statement_balance_date: "2026-07-01",
-    });
     await expect(
       accountService.update(1, { statement_balance_date: null }),
     ).rejects.toThrow(ValidationError);
-  });
-
-  it("allows setting a balance when the stored date already exists", async () => {
-    accountRepository.getById.mockResolvedValueOnce({
-      id: 1,
-      statement_balance: 50,
-      statement_balance_date: "2026-07-01",
-    });
-    accountRepository.update.mockResolvedValueOnce({ id: 1 });
-    await accountService.update(1, { statement_balance: 99 });
-    expect(accountRepository.update).toHaveBeenCalledWith(1, {
-      statement_balance: 99,
-    });
   });
 
   it("stamps closed_at when archiving an active account (lifecycle D5)", async () => {
@@ -374,23 +326,6 @@ describe("accountService.update", () => {
     });
     const fields = accountRepository.update.mock.calls[0][1];
     expect("closed_at" in fields).toBe(false);
-  });
-
-  it("allows clearing balance and date together", async () => {
-    accountRepository.getById.mockResolvedValueOnce({
-      id: 1,
-      statement_balance: 99,
-      statement_balance_date: "2026-07-01",
-    });
-    accountRepository.update.mockResolvedValueOnce({ id: 1 });
-    await accountService.update(1, {
-      statement_balance: null,
-      statement_balance_date: null,
-    });
-    expect(accountRepository.update).toHaveBeenCalledWith(1, {
-      statement_balance: null,
-      statement_balance_date: null,
-    });
   });
 });
 
@@ -473,61 +408,16 @@ describe("accountService — funding chain cycles", () => {
   });
 });
 
-// Pins for the zod swap (ZOD-05): exact boundaries, coercions, and the strip
-// semantics of sanitize() must survive byte-identical.
+// Pins for the Zod-backed account metadata contract. Statement readings use
+// the dedicated currency-scoped endpoint and are rejected here.
 describe("accountService — sanitize pins (create)", () => {
-  it("accepts a statement_balance exactly at the +/- money-column ceiling", async () => {
-    accountRepository.create.mockResolvedValue({ id: 1 });
-    await accountService.create({
-      name: "A",
-      statement_balance: 1e12,
-      statement_balance_date: "2026-07-01",
-    });
-    await accountService.create({
-      name: "B",
-      statement_balance: -1e12,
-      statement_balance_date: "2026-07-01",
-    });
-    expect(accountRepository.create).toHaveBeenCalledTimes(2);
-  });
-
-  it("rejects a statement_balance just past the ceiling (either sign)", async () => {
-    await expect(
-      accountService.create({
-        name: "A",
-        statement_balance: 1e12 + 1,
-        statement_balance_date: "2026-07-01",
-      }),
-    ).rejects.toThrow(ValidationError);
-    await expect(
-      accountService.create({
-        name: "A",
-        statement_balance: -(1e12 + 1),
-        statement_balance_date: "2026-07-01",
-      }),
-    ).rejects.toThrow(ValidationError);
-    expect(accountRepository.create).not.toHaveBeenCalled();
-  });
-
-  it("coerces a numeric-string statement_balance via Number()", async () => {
-    accountRepository.create.mockResolvedValueOnce({ id: 1 });
-    await accountService.create({
-      name: "A",
-      statement_balance: "123.45",
-      statement_balance_date: "2026-07-01",
-    });
-    expect(accountRepository.create).toHaveBeenCalledWith(
-      expect.objectContaining({ statement_balance: 123.45 }),
-    );
-  });
-
-  it("rejects malformed statement_balance_date shapes (strict YYYY-MM-DD)", async () => {
-    for (const bad of ["2026-7-01", "01-07-2026", 20260701, "banana"]) {
+  it("rejects every legacy scalar statement payload", async () => {
+    for (const statement_balance of [1e12, -1e12, "123.45", null]) {
       await expect(
         accountService.create({
           name: "A",
-          statement_balance: 1,
-          statement_balance_date: bad,
+          statement_balance,
+          statement_balance_date: "2026-07-01",
         }),
       ).rejects.toThrow(ValidationError);
     }

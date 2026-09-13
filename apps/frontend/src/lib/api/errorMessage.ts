@@ -14,36 +14,38 @@
  * `ApiClientError`.
  *
  * Backend-authored 4xx text is deliberately preserved: the backend error
- * handler echoes 4xx messages verbatim by policy, and a message like
- * "statement_balance_date is required when a statement balance is set" is far
- * more useful than generic validation copy. Only the machine-generated shapes
+ * handler echoes 4xx messages verbatim by policy, which is more useful than
+ * generic validation copy. Only the machine-generated shapes
  * listed in `MACHINE_MESSAGE_PATTERNS` are swallowed.
  *
  * Raw `.message` stays untouched for logs and devtools — this is a
  * presentation-layer helper only.
  */
 
-import { ApiErrorCode } from '@vision/types';
+import { ApiErrorCode } from "@vision/types";
 
-import { ApiClientError } from '@/lib/api/client';
+import { ApiClientError } from "@/lib/api/client";
 
 /** The `t` from `useLanguage()`. Kept structural so this module stays React-free. */
-export type TranslateFn = (key: string, vars?: Record<string, string | number>) => string;
+export type TranslateFn = (
+    key: string,
+    vars?: Record<string, string | number>,
+) => string;
 
 /** i18n keys this module can return. Exported so tests assert on keys, not copy. */
 export const API_ERROR_KEYS = {
-    network: 'apiError.network',
-    timeout: 'apiError.timeout',
-    cancelled: 'apiError.cancelled',
-    server: 'apiError.server',
-    rateLimited: 'apiError.rateLimited',
-    rateLimitedIn: 'apiError.rateLimitedIn',
-    validation: 'apiError.validation',
-    notFound: 'apiError.notFound',
-    conflict: 'apiError.conflict',
-    unauthorized: 'apiError.unauthorized',
-    forbidden: 'apiError.forbidden',
-    unknown: 'apiError.unknown',
+    network: "apiError.network",
+    timeout: "apiError.timeout",
+    cancelled: "apiError.cancelled",
+    server: "apiError.server",
+    rateLimited: "apiError.rateLimited",
+    rateLimitedIn: "apiError.rateLimitedIn",
+    validation: "apiError.validation",
+    notFound: "apiError.notFound",
+    conflict: "apiError.conflict",
+    unauthorized: "apiError.unauthorized",
+    forbidden: "apiError.forbidden",
+    unknown: "apiError.unknown",
 } as const;
 
 /**
@@ -68,7 +70,8 @@ const MACHINE_MESSAGE_PATTERNS: RegExp[] = [
 
 const TIMEOUT_PATTERN = /^Request timed out$/i;
 const ABORT_PATTERN = /^signal is aborted|^The user aborted a request/i;
-const NETWORK_PATTERN = /^Failed to fetch$|^Load failed$|^NetworkError|^Network request failed$/i;
+const NETWORK_PATTERN =
+    /^Failed to fetch$|^Load failed$|^NetworkError|^Network request failed$/i;
 const RETRY_EXHAUSTED_PATTERN = /^Server returned (\d{3})$/i;
 
 const CODE_TO_KEY: Partial<Record<string, string>> = {
@@ -97,7 +100,7 @@ const NEVER_PASS_THROUGH: ReadonlySet<string> = new Set<string>([
  * app-thrown guard) rather than a transport sentinel.
  */
 export function isAuthoredMessage(message: unknown): boolean {
-    if (typeof message !== 'string') return false;
+    if (typeof message !== "string") return false;
     const trimmed = message.trim();
     if (!trimmed) return false;
     return !MACHINE_MESSAGE_PATTERNS.some((pattern) => pattern.test(trimmed));
@@ -109,17 +112,17 @@ export function isAuthoredMessage(message: unknown): boolean {
  * makes no promise about timing.
  */
 function readRetryAfter(details: unknown): number | null {
-    if (!details || typeof details !== 'object') return null;
+    if (!details || typeof details !== "object") return null;
     const raw = (details as Record<string, unknown>).retry_after;
-    const seconds = typeof raw === 'number' ? raw : Number(raw);
+    const seconds = typeof raw === "number" ? raw : Number(raw);
     return Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : null;
 }
 
 /** Read a string property off an unknown throwable without narrowing it first. */
-function readString(value: unknown, key: 'name' | 'message'): string {
-    if (!value || typeof value !== 'object') return '';
+function readString(value: unknown, key: "name" | "message"): string {
+    if (!value || typeof value !== "object") return "";
     const raw = (value as Record<string, unknown>)[key];
-    return typeof raw === 'string' ? raw.trim() : '';
+    return typeof raw === "string" ? raw.trim() : "";
 }
 
 /**
@@ -129,12 +132,18 @@ function readString(value: unknown, key: 'name' | 'message'): string {
  * Works off `name`/`message` rather than `instanceof` alone because a cancelled
  * `fetch` rejects with a `DOMException`, which does not extend `Error`.
  */
-function transportKey(err: unknown, name: string, message: string): string | null {
+function transportKey(
+    err: unknown,
+    name: string,
+    message: string,
+): string | null {
     if (TIMEOUT_PATTERN.test(message)) return API_ERROR_KEYS.timeout;
-    if (name === 'AbortError' || ABORT_PATTERN.test(message)) return API_ERROR_KEYS.cancelled;
+    if (name === "AbortError" || ABORT_PATTERN.test(message))
+        return API_ERROR_KEYS.cancelled;
     // `fetch` rejects with a TypeError when the backend is unreachable; the text
     // differs per browser ("Failed to fetch" / "Load failed" / "NetworkError…").
-    if (err instanceof TypeError || NETWORK_PATTERN.test(message)) return API_ERROR_KEYS.network;
+    if (err instanceof TypeError || NETWORK_PATTERN.test(message))
+        return API_ERROR_KEYS.network;
 
     const retryExhausted = RETRY_EXHAUSTED_PATTERN.exec(message);
     if (retryExhausted) {
@@ -167,13 +176,21 @@ export function apiErrorToMessage(err: unknown, t: TranslateFn): string {
             return t(API_ERROR_KEYS.rateLimitedIn, { seconds: retryAfter });
         }
         const passThroughAllowed =
-            !NEVER_PASS_THROUGH.has(err.code) && err.status >= 400 && err.status < 500;
-        if (passThroughAllowed && isAuthoredMessage(err.message)) return err.message.trim();
-        return t(CODE_TO_KEY[err.code] ?? (err.status >= 500 ? API_ERROR_KEYS.server : API_ERROR_KEYS.unknown));
+            !NEVER_PASS_THROUGH.has(err.code) &&
+            err.status >= 400 &&
+            err.status < 500;
+        if (passThroughAllowed && isAuthoredMessage(err.message))
+            return err.message.trim();
+        return t(
+            CODE_TO_KEY[err.code] ??
+                (err.status >= 500
+                    ? API_ERROR_KEYS.server
+                    : API_ERROR_KEYS.unknown),
+        );
     }
 
-    const name = readString(err, 'name');
-    const message = readString(err, 'message');
+    const name = readString(err, "name");
+    const message = readString(err, "message");
 
     const key = transportKey(err, name, message);
     if (key) return t(key);

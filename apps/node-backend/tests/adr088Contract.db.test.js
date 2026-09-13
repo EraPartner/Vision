@@ -55,16 +55,27 @@ describeDb("ADR-088 contract schema", () => {
        RETURNING id`,
     );
     const recipientId = recipientRows[0].id;
+    const cashId =
+      await accountRepository.resolveOrCreateByName("Contract Cash");
+    const movedId =
+      await accountRepository.resolveOrCreateByName("Contract Moved");
+    const detachId =
+      await accountRepository.resolveOrCreateByName("Contract Detach");
+    const plannedAccountId =
+      await accountRepository.resolveOrCreateByName("Contract Planned");
+    const plannedMovedId = await accountRepository.resolveOrCreateByName(
+      "Contract Planned Moved",
+    );
 
     const transaction = await transactionRepository.create({
       transaction_date: "2026-09-08",
-      bank_account: "Contract Cash",
+      account_id: cashId,
       recipient_id: recipientId,
       amount: -12.34,
       memo: "contract create",
       currency: "eur",
     });
-    expect(transaction.bank_account).toBe("CONTRACT CASH");
+    expect(transaction.bank_account).toBe("Contract Cash");
     expect(transaction.account_id).toEqual(expect.any(Number));
     await expect(
       isManualDuplicate({
@@ -74,7 +85,7 @@ describeDb("ADR-088 contract schema", () => {
         // create() normalizes memo to uppercase; use the stored form so this
         // assertion isolates the contract-schema account lookup.
         memo: "CONTRACT CREATE",
-        bankAccount: "Contract Cash",
+        accountId: cashId,
       }),
     ).resolves.toEqual({
       isDuplicate: true,
@@ -82,33 +93,33 @@ describeDb("ADR-088 contract schema", () => {
     });
 
     const moved = await transactionRepository.update(transaction.id, {
-      bank_account: "Contract Moved",
+      account_id: movedId,
     });
     expect(moved.bank_account).toBe("Contract Moved");
     expect(moved.account_id).not.toBe(transaction.account_id);
 
     const detached = await transactionRepository.create({
       transaction_date: "2026-09-08",
-      bank_account: "Contract Detach",
+      account_id: detachId,
       recipient_id: recipientId,
       amount: -1,
       currency: "EUR",
     });
     expect(
-      await transactionRepository.update(detached.id, { bank_account: null }),
+      await transactionRepository.update(detached.id, { account_id: null }),
     ).toMatchObject({ account_id: null, bank_account: null });
 
     const planned = await plannedTransactionService.create({
       planned_date: "2026-10-01",
-      bank_account: "Contract Planned",
+      account_id: plannedAccountId,
       recipient_id: recipientId,
       amount: -25,
       memo: "contract planned",
       currency: "eur",
     });
-    expect(planned.bank_account).toBe("CONTRACT PLANNED");
+    expect(planned.bank_account).toBe("Contract Planned");
     const plannedMoved = await plannedTransactionService.update(planned.id, {
-      bank_account: "Contract Planned Moved",
+      account_id: plannedMovedId,
     });
     expect(plannedMoved.bank_account).toBe("Contract Planned Moved");
 

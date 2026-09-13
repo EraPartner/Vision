@@ -10,7 +10,7 @@
  * semantics are activated in ADR-089.
  */
 
-import { query, withTransaction } from "../database/connection.js";
+import { query } from "../database/connection.js";
 import {
   balanceProvenanceLateral,
   computedBalanceByCurrencyAggLateral,
@@ -28,7 +28,7 @@ import { lockAccountFundingGraph } from "../lib/accountFundingGraphLock.js";
 
 const COLUMNS = `id, name, display_name, institution, currency, type, liquidity_class,
   spendable, in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve,
-  funding_account_id, statement_balance, to_char(statement_balance_date, 'YYYY-MM-DD') AS statement_balance_date, is_active, closed_at,
+  funding_account_id, is_active, closed_at,
   created_at, updated_at`;
 
 // Columns a caller may set on create/update. `name` is handled explicitly on
@@ -49,8 +49,6 @@ const WRITABLE = new Set([
   "multi_currency_cash",
   "has_cash_sleeve",
   "funding_account_id",
-  "statement_balance",
-  "statement_balance_date",
   "is_active",
   "closed_at",
 ]);
@@ -71,6 +69,20 @@ function sqlBtrim(s) {
 }
 
 export const accountRepository = {
+  /**
+   * Resolve a caller-supplied canonical identity without minting an account.
+   * @param {number} id
+   * @param {{ client?: import('../types/rows.js').QueryRunner }} [options]
+   */
+  async findActiveId(id, { client } = {}) {
+    const runQuery = client ? client.query.bind(client) : query;
+    const result = await runQuery(
+      "SELECT id FROM accounts WHERE id = $1 AND is_active = true",
+      [id],
+    );
+    return result.rows[0]?.id;
+  },
+
   /**
    * List raw account rows (optionally filtered by active status) with native
    * balance partitions, per-currency statement readings, provenance columns,
@@ -103,7 +115,7 @@ export const accountRepository = {
    * `computed_balance` (which is the converted all-currency total) and the
    * reconcile dialog must preview `typed reading − base`, not
    * `typed reading − computed_balance`. The three native figures on that dialog
-   * satisfy `drift = statement_balance − reconcilable_balance` by construction,
+   * satisfy `drift = statement reading − reconcilable_balance` by construction,
    * all denominated in `reconcilable_currency`.
    *
    * The repository returns the raw SQL rows, including `balance_parts`; the
@@ -226,32 +238,13 @@ export const accountRepository = {
       placeholders,
       params,
     } = buildInsert(fields, { allowed: WRITABLE, quote: true });
-    return withTransaction(async () => {
-      const result = await query(
-        `INSERT INTO accounts (${cols.join(", ")})
-         VALUES (${placeholders.join(", ")})
-         RETURNING ${COLUMNS}`,
-        params,
-      );
-      const created = result.rows[0];
-      if (
-        created.statement_balance != null &&
-        created.statement_balance_date != null
-      ) {
-        await query(
-          `INSERT INTO account_statement_balances
-             (account_id, currency, balance, balance_date)
-           VALUES ($1, $2, $3, $4)`,
-          [
-            created.id,
-            created.currency,
-            created.statement_balance,
-            created.statement_balance_date,
-          ],
-        );
-      }
-      return created;
-    });
+    const result = await query(
+      `INSERT INTO accounts (${cols.join(", ")})
+       VALUES (${placeholders.join(", ")})
+       RETURNING ${COLUMNS}`,
+      params,
+    );
+    return result.rows[0];
   },
 
   /**
@@ -271,100 +264,11 @@ export const accountRepository = {
     setClauses.push(`updated_at = NOW()`);
     params.push(id);
 
-    const touchesStatement =
-      Object.prototype.hasOwnProperty.call(fields, "statement_balance") ||
-      Object.prototype.hasOwnProperty.call(fields, "statement_balance_date");
-    const touchesCurrency =
-      Object.prototype.hasOwnProperty.call(fields, "currency") &&
-      fields.currency !== undefined;
-    if (!touchesStatement && !touchesCurrency) {
-      const result = await query(
-        `UPDATE accounts SET ${setClauses.join(", ")} WHERE id = $${i} RETURNING ${COLUMNS}`,
-        params,
-      );
-      return result.rows[0] ?? undefined;
-    }
-
-    // Statement compatibility and currency changes need the pre-update row
-    // and must commit atomically with the account mutation.
-    return withTransaction(async (client) => {
-      const prev = await client.query(
-        `SELECT name, currency, statement_balance,
-                to_char(statement_balance_date, 'YYYY-MM-DD') AS statement_balance_date
-           FROM accounts WHERE id = $1 FOR UPDATE`,
-        [id],
-      );
-      if (!prev.rows[0]) return undefined;
-      const result = await client.query(
-        `UPDATE accounts SET ${setClauses.join(", ")} WHERE id = $${i} RETURNING ${COLUMNS}`,
-        params,
-      );
-      const updated = result.rows[0];
-      if (!updated) return undefined;
-      const accountCurrency = updated.currency;
-      if (touchesStatement) {
-        const balance = Object.prototype.hasOwnProperty.call(
-          fields,
-          "statement_balance",
-        )
-          ? fields.statement_balance
-          : prev.rows[0].statement_balance;
-        const balanceDate = Object.prototype.hasOwnProperty.call(
-          fields,
-          "statement_balance_date",
-        )
-          ? fields.statement_balance_date
-          : prev.rows[0].statement_balance_date;
-        if (balance == null || balanceDate == null) {
-          await client.query(
-            `DELETE FROM account_statement_balances
-              WHERE account_id = $1 AND currency = $2`,
-            [id, accountCurrency],
-          );
-        } else {
-          await client.query(
-            `INSERT INTO account_statement_balances
-               (account_id, currency, balance, balance_date)
-             VALUES ($1, $2, $3, $4)
-             ON CONFLICT (account_id, currency) DO UPDATE
-               SET balance = EXCLUDED.balance,
-                   balance_date = EXCLUDED.balance_date`,
-            [id, accountCurrency, balance, balanceDate],
-          );
-        }
-      } else if (touchesCurrency && accountCurrency !== prev.rows[0].currency) {
-        // A currency-only PATCH changes which side-table row the legacy scalar
-        // projects. Never leave the previous currency's reading mislabeled.
-        await client.query(
-          `UPDATE accounts a
-              SET statement_balance = s.balance,
-                  statement_balance_date = s.balance_date,
-                  updated_at = NOW()
-             FROM (SELECT balance, balance_date
-                     FROM account_statement_balances
-                    WHERE account_id = $1 AND currency = $2) s
-            WHERE a.id = $1`,
-          [id, accountCurrency],
-        );
-        await client.query(
-          `UPDATE accounts
-              SET statement_balance = NULL,
-                  statement_balance_date = NULL,
-                  updated_at = NOW()
-            WHERE id = $1
-              AND NOT EXISTS (
-                SELECT 1 FROM account_statement_balances
-                 WHERE account_id = $1 AND currency = $2
-              )`,
-          [id, accountCurrency],
-        );
-      }
-      const refreshed = await client.query(
-        `SELECT ${COLUMNS} FROM accounts WHERE id = $1`,
-        [id],
-      );
-      return refreshed.rows[0] ?? undefined;
-    });
+    const result = await query(
+      `UPDATE accounts SET ${setClauses.join(", ")} WHERE id = $${i} RETURNING ${COLUMNS}`,
+      params,
+    );
+    return result.rows[0] ?? undefined;
   },
 
   /**
@@ -434,60 +338,36 @@ export const accountRepository = {
    * @returns {Promise<number>} rows affected
    */
   async clearStatementAnchor(id) {
-    return withTransaction(async () => {
-      await query(
-        "DELETE FROM account_statement_balances WHERE account_id = $1",
-        [id],
-      );
-      const result = await query(
-        `UPDATE accounts SET statement_balance = NULL, statement_balance_date = NULL, updated_at = NOW()
-           WHERE id = $1`,
-        [id],
-      );
-      return result.rowCount ?? 0;
-    });
+    const result = await query(
+      "DELETE FROM account_statement_balances WHERE account_id = $1",
+      [id],
+    );
+    return result.rowCount ?? 0;
   },
 
-  /** Store one authoritative statement reading, mirroring the legacy scalar
-   * projection only when it is in the account's declared currency. */
+  /** Store one authoritative statement reading. */
   async upsertStatementBalance(accountId, currency, balance, balanceDate) {
-    return withTransaction(async () => {
-      const result = await query(
-        `INSERT INTO account_statement_balances
-           (account_id, currency, balance, balance_date)
-         VALUES ($1, $2, $3, $4)
-         ON CONFLICT (account_id, currency) DO UPDATE
-           SET balance = EXCLUDED.balance, balance_date = EXCLUDED.balance_date
-         RETURNING account_id, currency, balance,
-                   to_char(balance_date, 'YYYY-MM-DD') AS balance_date`,
-        [accountId, currency, balance, balanceDate],
-      );
-      await query(
-        `UPDATE accounts
-            SET statement_balance = $3, statement_balance_date = $4, updated_at = NOW()
-          WHERE id = $1 AND currency = $2`,
-        [accountId, currency, balance, balanceDate],
-      );
-      return result.rows[0];
-    });
+    const result = await query(
+      `INSERT INTO account_statement_balances
+         (account_id, currency, balance, balance_date)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (account_id, currency) DO UPDATE
+         SET balance = EXCLUDED.balance, balance_date = EXCLUDED.balance_date
+       RETURNING account_id, currency, balance,
+                 to_char(balance_date, 'YYYY-MM-DD') AS balance_date`,
+      [accountId, currency, balance, balanceDate],
+    );
+    return result.rows[0];
   },
 
   async deleteStatementBalance(accountId, currency) {
-    return withTransaction(async () => {
-      const result = await query(
-        `DELETE FROM account_statement_balances
-          WHERE account_id = $1 AND currency = $2
-        RETURNING account_id`,
-        [accountId, currency],
-      );
-      await query(
-        `UPDATE accounts
-            SET statement_balance = NULL, statement_balance_date = NULL, updated_at = NOW()
-          WHERE id = $1 AND currency = $2`,
-        [accountId, currency],
-      );
-      return result.rowCount ?? 0;
-    });
+    const result = await query(
+      `DELETE FROM account_statement_balances
+        WHERE account_id = $1 AND currency = $2
+      RETURNING account_id`,
+      [accountId, currency],
+    );
+    return result.rowCount ?? 0;
   },
 
   /**

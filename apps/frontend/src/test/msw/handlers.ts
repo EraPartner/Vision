@@ -221,8 +221,6 @@ export const ACCOUNT_STUB = {
     multi_currency_cash: false,
     has_cash_sleeve: false,
     funding_account_id: null,
-    statement_balance: null,
-    statement_balance_date: null,
     is_active: true,
     // `closed_at` and `links` are on every accounts single-row body:
     // accountRepository's COLUMNS list (accountRepository.js:26-29) plus the

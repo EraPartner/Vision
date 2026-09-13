@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { ok } from "@/test/msw/handlers";
+import { ACCOUNT_LIST_ITEM_STUB, ok } from "@/test/msw/handlers";
 import { TransactionInfoDialog } from "@/features/transactions/components/TransactionInfoDialog";
 import type { TableTransaction } from "@/features/transactions/types";
 
@@ -199,6 +199,59 @@ describe("TransactionInfoDialog", () => {
         await user.click(editButtons[1]); // memo field uses editType="text"
 
         expect(screen.getByRole("textbox")).toBeInTheDocument();
+    });
+
+    it("updates an existing account by canonical account_id", async () => {
+        const user = userEvent.setup();
+        const onApplyLocal = vi.fn();
+        let receivedBody: Record<string, unknown> | undefined;
+        server.use(
+            http.get(`${API_BASE}/api/accounts`, () =>
+                ok({
+                    items: [ACCOUNT_LIST_ITEM_STUB],
+                    total: 1,
+                    links: [],
+                }),
+            ),
+            http.patch(
+                `${API_BASE}/api/transactions/42`,
+                async ({ request }) => {
+                    receivedBody = (await request.json()) as Record<
+                        string,
+                        unknown
+                    >;
+                    return ok({ ...TX, account_id: 1 });
+                },
+            ),
+        );
+
+        renderWithApp(
+            <TransactionInfoDialog
+                infoTransaction={TX}
+                onClose={vi.fn()}
+                onApplyLocal={onApplyLocal}
+            />,
+        );
+
+        const editButtons = await screen.findAllByRole("button", {
+            name: /^edit$/i,
+        });
+        await user.click(editButtons[4]);
+        const input = screen.getByRole("combobox", {
+            name: "Bank Account",
+        });
+        await user.clear(input);
+        await user.type(input, "Main Checking");
+        await user.click(screen.getByRole("button", { name: /^save$/i }));
+
+        await waitFor(() => expect(receivedBody).toEqual({ account_id: 1 }));
+        expect(receivedBody).not.toHaveProperty("bank_account");
+        expect(onApplyLocal).toHaveBeenCalledWith(
+            42,
+            "bank",
+            "Main Checking",
+            1,
+        );
     });
 
     it("Cancel button in edit mode exits edit mode", async () => {

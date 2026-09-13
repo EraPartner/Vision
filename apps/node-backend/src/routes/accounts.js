@@ -117,7 +117,7 @@ router.patch(
   ) => {
     const id = assertIdParam(req);
     const updated = await accountService.update(id, req.body);
-    // rename / in_net_worth / is_active / statement_balance all shift the
+    // rename / in_net_worth / is_active changes shift the
     // net-worth + bank-balances response caches; bust them (shared seam).
     invalidatePortfolioCaches();
     res.ok({ ...updated, links: [] });
@@ -265,7 +265,7 @@ router.post(
 );
 
 // Authoritative per-currency statement readings (ADR-089 D2). These routes
-// replace hand-editing the legacy scalar fields for multi-currency accounts.
+// provide the only statement-reading write surface for multi-currency accounts.
 router.put(
   "/:id/statement-balances/:currency",
   validateIdParam,
@@ -295,7 +295,7 @@ router.delete(
   },
 );
 
-// Resolve an account's drift (statement_balance − computed_balance) from the
+// Resolve an account's drift (statement reading − computed balance) from the
 // reconcile dialog (ADR-094, Phase C). Body: { mode: 'accept' | 'adjustment' }.
 // 'accept' rewrites the stored statement figures to the computed balance;
 // 'adjustment' stamps one server-side 'adjustment' ledger row so the computed

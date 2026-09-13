@@ -15,7 +15,7 @@
  * BankBalancesWidget cards can't drift apart in wording or colour.
  *
  * Date handling follows the app's YMD convention throughout. The accounts list
- * endpoint already emits `statement_balance_date` as a bare YYYY-MM-DD string
+ * endpoint emits each collection reading's `balance_date` as a bare YYYY-MM-DD string
  * (`to_char(...)` in accountRepository.js's COLUMNS), so the slice below is
  * defense-in-depth for any other path that hands us a full ISO timestamp — not
  * a correction of the list payload. The staleness comparison runs on two
@@ -46,9 +46,18 @@ const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
  * its calendar day rather than poisoning a comparison.
  */
 export function statementYmd(
-    account: Pick<Account, "statement_balance_date">,
+    account: Pick<
+        Account,
+        "currency" | "reconcilable_currency" | "statement_balances"
+    >,
 ): string | undefined {
-    const raw = account.statement_balance_date;
+    const statementCurrency = account.reconcilable_currency ?? account.currency;
+    const collectionDate = statementCurrency
+        ? account.statement_balances?.find(
+              (item) => item.currency === statementCurrency,
+          )?.balance_date
+        : undefined;
+    const raw = collectionDate;
     if (!raw) return undefined;
     const ymd = raw.slice(0, 10);
     return YMD_RE.test(ymd) ? ymd : undefined;
@@ -114,7 +123,7 @@ export function useDriftBadge(): (
 
             // Sign is explicit for a positive drift (the statement is ahead of
             // the ledger); the formatter already renders the minus otherwise.
-            // `drift` is statement_balance − reconcilable_balance, denominated
+            // `drift` is selected statement − reconcilable_balance, denominated
             // in `reconcilable_currency` (api.ts) — NOT in the account's
             // declared `currency`. Those differ on a mislabelled account (one
             // funded partition in a foreign currency), where stamping

@@ -43,6 +43,7 @@ export interface PlannedPayment {
     category?: string;
     category_id?: number;
     bank_account?: string;
+    account_id?: number;
     notes?: string;
     url?: string;
     is_executed?: boolean;
@@ -116,6 +117,7 @@ export function mapFromAPI(
         category: pt.category_name,
         category_id: pt.category_id,
         bank_account: pt.bank_account,
+        account_id: pt.account_id ?? undefined,
         notes: pt.comment,
         tags: pt.tags?.map((tag) => tag.slug) ?? [],
         is_active: pt.is_active,
@@ -149,7 +151,7 @@ export function mapToCreateAPI(
 
     return {
         planned_date: payment.due_date,
-        bank_account: payment.bank_account || undefined,
+        account_id: payment.account_id!,
         recipient_id: payment.recipient_id || undefined,
         memo: payment.name,
         amount: payment.amount,
@@ -181,8 +183,8 @@ export function mapToUpdateAPI(
     const result: PlannedTransactionUpdate = {};
 
     if (updates.due_date !== undefined) result.planned_date = updates.due_date;
-    if (updates.bank_account !== undefined)
-        result.bank_account = updates.bank_account;
+    if (updates.account_id !== undefined)
+        result.account_id = updates.account_id;
     if (updates.recipient_id !== undefined)
         result.recipient_id = updates.recipient_id;
     if (updates.name !== undefined) result.memo = updates.name;

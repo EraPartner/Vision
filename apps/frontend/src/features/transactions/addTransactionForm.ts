@@ -3,7 +3,6 @@ import { todayYmd } from "@/lib/timezone";
 import {
     moneyAmount,
     requiredString,
-    requiredTrimmedString,
     ymdDateString,
 } from "@/lib/forms/schemas";
 import type { NumberFormat } from "@/utils/currency";
@@ -11,6 +10,7 @@ import type { NumberFormat } from "@/utils/currency";
 export type AddTransactionFormState = {
     transaction_date: string;
     bank_account: string;
+    account_id: number | null;
     recipient_id: string;
     category_id: string;
     memo: string;
@@ -25,6 +25,7 @@ export function createAddTransactionFormState(
     return {
         transaction_date: todayYmd(),
         bank_account: "",
+        account_id: null,
         recipient_id: "",
         category_id: "",
         memo: "",
@@ -38,7 +39,7 @@ export function createAddTransactionFormState(
 export const ADD_TRANSACTION_FIELD_IDS: Record<string, string> = {
     transaction_date: "tx_date",
     amount: "tx_amount",
-    bank_account: "tx_bank",
+    account_id: "tx_bank",
     recipient_id: "tx_recipient",
 };
 
@@ -65,7 +66,11 @@ export const createAddTransactionSchema = (numberFormat: NumberFormat) =>
             },
             numberFormat,
         ),
-        bank_account: requiredTrimmedString("portfolio.move.selectAccount"),
+        bank_account: z.string(),
+        account_id: z
+            .number({ error: "portfolio.move.selectAccount" })
+            .int("portfolio.move.selectAccount")
+            .positive("portfolio.move.selectAccount"),
         recipient_id: requiredString("validation.required"),
         category_id: z.string(),
         memo: z.string(),

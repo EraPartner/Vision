@@ -57,8 +57,6 @@ export type AccountFormValues = {
     in_net_worth: boolean;
     multi_currency_cash: boolean;
     has_cash_sleeve: boolean;
-    statementBalance: string;
-    statementBalanceDate: string;
 };
 
 const ACCOUNT_TYPES: AccountType[] = [
@@ -104,8 +102,6 @@ const EMPTY: AccountFormValues = {
     in_net_worth: true,
     multi_currency_cash: false,
     has_cash_sleeve: true,
-    statementBalance: "",
-    statementBalanceDate: "",
 };
 
 // Type-driven flag suggestions (ADR-089) — selecting a type pre-fills sensible flags.
@@ -266,6 +262,10 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
         setForm((f) => ({ ...f, display_name }));
     };
 
+    const onCurrencyChange = (currency: string) => {
+        setForm((current) => ({ ...current, currency }));
+    };
+
     const onTypeChange = (type: AccountType) => {
         const defaults = flagsForType(type);
         const untouched = Object.fromEntries(
@@ -275,54 +275,27 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
             ]),
         ) as Partial<AccountFormValues>;
         const holdingsOnly = isHoldingsOnlyPortfolioType(type);
-        setForm((f) => ({
-            ...f,
-            type,
-            ...untouched,
-            ...(holdingsOnly
-                ? { statementBalance: "", statementBalanceDate: "" }
-                : {}),
-        }));
+        setForm((f) => ({ ...f, type, ...untouched }));
         if (holdingsOnly) setOpeningBalance("");
     };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         const holdingsOnly = isHoldingsOnlyPortfolioType(form.type);
-        const validationInput = holdingsOnly
-            ? { ...form, statementBalance: "", statementBalanceDate: "" }
-            : form;
         // Validation + string normalization live in accountFormSchema; the
         // presentation of each failure is unchanged.
-        const parsed = accountFormSchema(
-            isEditMode ? "edit" : "create",
-        ).safeParse(validationInput);
+        const parsed = accountFormSchema().safeParse(form);
         if (!parsed.success) {
             // Missing name: silent block, as always (the submit button is
             // disabled on it too — this is the keyboard-submit backstop).
             if (parsed.error.issues.some((issue) => issue.path[0] === "name"))
                 return;
-            // Statement balance without its as-of date (ADR-094, edit only).
-            // The date input is marked required, but it lives in the Advanced
-            // section which is unmounted while collapsed — so a bare `return`
-            // here would be a silent dead-end. Expand the section (revealing
-            // the required field) and surface a toast instead of failing
-            // invisibly.
-            setShowAdvanced(true);
-            toast.error(t("accounts.field.statementBalance"), {
-                description: t("accounts.field.statementBalanceDate"),
-            });
             return;
         }
 
         const values: AccountFormValues = {
             ...form,
             ...parsed.data,
-            // Belt-and-braces: a create payload must never carry a statement
-            // reading, whatever a stale form value says.
-            ...(!isEditMode || holdingsOnly
-                ? { statementBalance: "", statementBalanceDate: "" }
-                : {}),
         };
 
         if (isEditMode) {
@@ -457,7 +430,7 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
                         </Label>
                         <Select
                             value={form.currency}
-                            onValueChange={(v) => set("currency", v)}
+                            onValueChange={onCurrencyChange}
                         >
                             <SelectTrigger id="acct-currency">
                                 <SelectValue />
@@ -626,54 +599,6 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
                                 t("accounts.field.inNetWorth"),
                             )}
                         </div>
-                        {/* Statement reading — EDIT ONLY (§3 F1). On create these
-                            two raw fields only minted instant drift against an
-                            empty ledger; a new account records its starting
-                            figure through the opening-balance field above, and a
-                            later statement through the Reconcile dialog. */}
-                        {isEditMode &&
-                            !isHoldingsOnlyPortfolioType(form.type) && (
-                                <div className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-2">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="acct-stmt-bal">
-                                            {t(
-                                                "accounts.field.statementBalance",
-                                            )}
-                                        </Label>
-                                        <Input
-                                            id="acct-stmt-bal"
-                                            type="text"
-                                            inputMode="decimal"
-                                            value={form.statementBalance}
-                                            onChange={(e) =>
-                                                set(
-                                                    "statementBalance",
-                                                    e.target.value,
-                                                )
-                                            }
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="acct-stmt-date">
-                                            {t(
-                                                "accounts.field.statementBalanceDate",
-                                            )}
-                                        </Label>
-                                        <Input
-                                            id="acct-stmt-date"
-                                            type="date"
-                                            required={!!form.statementBalance}
-                                            value={form.statementBalanceDate}
-                                            onChange={(e) =>
-                                                set(
-                                                    "statementBalanceDate",
-                                                    e.target.value,
-                                                )
-                                            }
-                                        />
-                                    </div>
-                                </div>
-                            )}
                     </div>
                 )}
 

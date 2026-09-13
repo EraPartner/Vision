@@ -20,7 +20,7 @@ const ALLOWED_COLUMNS = {
   transactions: new Set([
     "date",
     "transaction_date",
-    "bank_account",
+    "account_id",
     "recipient_id",
     "amount",
     "memo",
@@ -33,7 +33,7 @@ const ALLOWED_COLUMNS = {
   recipients: new Set(["name", "default_category_id", "notes", "is_active"]),
   planned_transactions: new Set([
     "planned_date",
-    "bank_account",
+    "account_id",
     "recipient_id",
     "amount",
     "memo",

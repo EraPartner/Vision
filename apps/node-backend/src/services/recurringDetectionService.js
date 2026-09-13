@@ -56,6 +56,7 @@ import { median } from "../lib/math.js";
  * @property {number|null} categoryId
  * @property {string|null} categoryName
  * @property {string|null} bankAccount
+ * @property {number|null} accountId
  * @property {string|null} firstSeen 'YYYY-MM-DD'
  * @property {string|null} lastSeen 'YYYY-MM-DD'
  * @property {string} predictedNext 'YYYY-MM-DD'
@@ -211,7 +212,8 @@ export async function detectRecurringPatterns() {
     // must not report a null category_name here while the transactions list
     // shows it categorised.
     const result = await query(`
-      SELECT t.id, t.date, t.amount, t.currency, t.memo, acct.name AS bank_account,
+      SELECT t.id, t.date, t.amount, t.currency, t.memo, t.account_id,
+             acct.name AS bank_account,
              COALESCE(r.primary_recipient_id, t.recipient_id) AS recipient_id,
              COALESCE(pr.name, r.name) AS recipient_name,
              COALESCE(t.category_id, r.default_category_id, pr.default_category_id) AS effective_category_id,
@@ -347,6 +349,7 @@ export async function detectRecurringPatterns() {
         categoryId: txns[txns.length - 1].effective_category_id,
         categoryName: txns[txns.length - 1].category_name,
         bankAccount: txns[txns.length - 1].bank_account,
+        accountId: txns[txns.length - 1].account_id,
         // DATE columns: calendar-day strings, not raw pg Dates (which
         // toJSON to the previous day's ISO timestamp east of UTC).
         firstSeen: toWireDate(txns[0].date),

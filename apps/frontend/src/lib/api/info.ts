@@ -52,6 +52,7 @@ export async function getRecurringPatterns(): Promise<{
         categoryId: number | null;
         categoryName: string | null;
         bankAccount: string | null;
+        accountId: number | null;
         firstSeen: string;
         lastSeen: string;
         predictedNext: string;

@@ -242,59 +242,49 @@ describe("AddAccountDialog (integration, WP-B5 §3 F4+F7)", () => {
         expect(body.statement_balance_date).toBeUndefined();
     });
 
-    it("still offers (and validates) the statement-balance fields in edit mode", async () => {
+    it("keeps statement readings out of account editing when currency changes", async () => {
         const user = userEvent.setup();
-        const saved: unknown[] = [];
-        const initialValues = {
-            name: "KBC Checking",
-            display_name: "KBC Checking",
-            institution: "KBC",
-            currency: "EUR",
-            type: "checking" as const,
-            owner: "me" as const,
-            liquidity_class: "liquid" as const,
-            tax_wrapper: "none" as const,
-            spendable: true,
-            in_net_worth: true,
-            multi_currency_cash: false,
-            has_cash_sleeve: true,
-            // accountRepository.js emits the DATE as a bare YYYY-MM-DD (to_char),
-            // which is what <input type="date"> wants; accountToFormValues also
-            // slices defensively for any other source.
-            statementBalance: "1284.4",
-            statementBalanceDate: "2026-06-03",
-        };
+        const saved: AccountFormValues[] = [];
         renderWithApp(
             <AddAccountDialog
                 mode="edit"
                 open
                 onOpenChange={() => {}}
-                initialValues={initialValues}
-                onSave={(v) => saved.push(v)}
+                initialValues={{
+                    name: "KBC Checking",
+                    display_name: "KBC Checking",
+                    institution: "KBC",
+                    currency: "EUR",
+                    type: "checking",
+                    owner: "me",
+                    liquidity_class: "liquid",
+                    tax_wrapper: "none",
+                    spendable: true,
+                    in_net_worth: true,
+                    multi_currency_cash: false,
+                    has_cash_sleeve: true,
+                }}
+                onSave={(values) => saved.push(values)}
             />,
         );
 
-        // Advanced starts expanded in edit mode, statement fields populated.
-        expect(await screen.findByLabelText(/statement balance/i)).toHaveValue(
-            "1284.4",
-        );
-        expect(screen.getByLabelText(/^as of$/i)).toHaveValue("2026-06-03");
+        await user.click(await screen.findByLabelText(/^currency$/i));
+        await user.click(await screen.findByRole("option", { name: "USD" }));
 
-        // Clearing the date while a balance is set is still blocked (ADR-094).
-        await user.clear(screen.getByLabelText(/^as of$/i));
-        await user.click(screen.getByRole("button", { name: /^save$/i }));
-        expect(saved).toHaveLength(0);
+        expect(
+            screen.queryByLabelText(/statement balance/i),
+        ).not.toBeInTheDocument();
+        expect(screen.queryByLabelText(/^as of$/i)).not.toBeInTheDocument();
 
-        await user.type(screen.getByLabelText(/^as of$/i), "2026-07-20");
         await user.click(screen.getByRole("button", { name: /^save$/i }));
-        await waitFor(() => expect(saved).toHaveLength(1));
-        expect(saved[0]).toMatchObject({
-            statementBalance: "1284.4",
-            statementBalanceDate: "2026-07-20",
-        });
+        expect(saved).toEqual([
+            expect.objectContaining({
+                currency: "USD",
+            }),
+        ]);
     });
 
-    it("clears stale statement fields when editing a crypto exchange", async () => {
+    it("keeps statement fields absent when editing a crypto exchange", async () => {
         const user = userEvent.setup();
         const saved: AccountFormValues[] = [];
         renderWithApp(
@@ -315,8 +305,6 @@ describe("AddAccountDialog (integration, WP-B5 §3 F4+F7)", () => {
                     in_net_worth: true,
                     multi_currency_cash: false,
                     has_cash_sleeve: false,
-                    statementBalance: "999",
-                    statementBalanceDate: "",
                 }}
                 onSave={(values) => saved.push(values)}
             />,
@@ -330,8 +318,6 @@ describe("AddAccountDialog (integration, WP-B5 §3 F4+F7)", () => {
         expect(saved).toEqual([
             expect.objectContaining({
                 type: "crypto_exchange",
-                statementBalance: "",
-                statementBalanceDate: "",
             }),
         ]);
     });

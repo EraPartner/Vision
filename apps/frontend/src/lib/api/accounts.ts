@@ -7,9 +7,8 @@ import type {
 import { apiRequest } from "@/lib/api/client";
 import { requestWithQuery } from "@/lib/api/helpers";
 
-// Money fields the Account type declares as numbers. `statement_balance` is a
-// raw PostgreSQL NUMERIC column and still arrives as a string; the derived
-// balance figures (computed_balance / reconcilable_balance / drift) are summed
+// Money fields the Account type declares as numbers. Collection readings can
+// arrive from PostgreSQL NUMERIC values while derived balance figures are summed
 // server-side in JS and already arrive as JSON numbers. Coercing all of them
 // here — at the single fetch boundary — keeps the runtime shape honest for every
 // consumer (e.g. AccountsPage's drift.toFixed()) regardless of which side of
@@ -18,10 +17,6 @@ import { requestWithQuery } from "@/lib/api/helpers";
 function normalizeAccount(a: Account): Account {
     return {
         ...a,
-        statement_balance:
-            a.statement_balance == null
-                ? undefined
-                : Number(a.statement_balance),
         computed_balance:
             a.computed_balance == null ? undefined : Number(a.computed_balance),
         balance_parts: a.balance_parts?.map((part) => ({

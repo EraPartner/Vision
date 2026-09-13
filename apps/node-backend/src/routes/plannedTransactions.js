@@ -199,15 +199,10 @@ const createPlannedSchema = z
     tags: tagsField,
     reminder_days_before: reminderDaysBeforeField,
     currency: currencyField(),
+    account_id: z.number().int().positive(),
+    bank_account: z.never().optional(),
   })
   .superRefine((data, ctx) => {
-    if (!data.bank_account) {
-      ctx.addIssue({
-        code: "custom",
-        message: "Missing required field: bank_account",
-      });
-    }
-
     if (!data.is_loan) {
       if (!data.planned_date || data.amount == null) {
         ctx.addIssue({
@@ -309,6 +304,8 @@ const patchPlannedSchema = z.looseObject({
   recurrence_end_date: recurrenceEndDateField,
   max_occurrences: maxOccurrencesField,
   currency: currencyField({ rejectEmpty: true }),
+  account_id: z.number().int().positive().nullable().optional(),
+  bank_account: z.never().optional(),
   // amount is a NOT NULL money column; POST already rejects zero/non-finite/
   // absurd values but PATCH forwarded the raw value to the SET builder, so
   // `amount: 1e15` overflowed NUMERIC(15,2) → 500, `"Infinity"`/null 500'd at

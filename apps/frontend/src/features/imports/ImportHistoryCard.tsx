@@ -3,6 +3,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from "react";
+import { Link } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { importKeys } from "@/lib/queryKeys";
@@ -20,7 +21,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, RefreshCw, Undo2 } from "lucide-react";
+import { FileSearch, Loader2, RefreshCw, Undo2 } from "lucide-react";
 import type { ImportBatch } from "@/types/apiClient";
 import { cn } from "@/lib/utils";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
@@ -129,6 +130,7 @@ function BatchRow({
     batch: ImportBatch;
     onRolledBack: () => void;
 }) {
+    const { t } = useLanguage();
     const started = formatDate(parseISO(batch.started_at), "yyyy-MM-dd HH:mm");
     return (
         <div className="flex items-start justify-between gap-4 py-3 border-b last:border-0">
@@ -171,7 +173,24 @@ function BatchRow({
                     </p>
                 )}
             </div>
-            <RollbackButton batch={batch} onRolledBack={onRolledBack} />
+            <div className="flex shrink-0 items-center gap-1">
+                {batch.status === "awaiting_review" && (
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2"
+                        asChild
+                    >
+                        <Link to={`/import/${batch.id}/review`}>
+                            <FileSearch className="h-3.5 w-3.5" />
+                            <span className="ml-1 text-xs">
+                                {t("importHistory.resumeReview")}
+                            </span>
+                        </Link>
+                    </Button>
+                )}
+                <RollbackButton batch={batch} onRolledBack={onRolledBack} />
+            </div>
         </div>
     );
 }

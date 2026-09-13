@@ -41,7 +41,7 @@ import { classifyBrokerageRow } from "../importPipeline/brokerageRouting.js";
  * on `investments` (null for cash rows and unresolved instruments).
  *
  * @typedef {Pick<PortfolioImportStagingRow,
- *   'id'|'status'|'type'|'route'|'type_raw'|'units'|'price_per_unit'|'amount'|'fees'|'taxes'|'currency'|'fx_rate_to_eur'|'note'|'tx_hash'|'source_record_hash'|'dedup_fingerprint'|'dedup_fingerprint_version'|'dedup_occurrence'>
+ *   'id'|'status'|'type'|'route'|'type_raw'|'units'|'price_per_unit'|'amount'|'fees'|'taxes'|'currency'|'fx_rate_to_eur'|'note'|'source_record_hash'|'dedup_fingerprint'|'dedup_fingerprint_version'|'dedup_occurrence'>
  *   & {
  *     tx_date: string|null,
  *     investment_id: number|null,
@@ -124,7 +124,6 @@ export async function commitBatch({ batchId, onProgress }) {
             isr.currency,
             isr.fx_rate_to_eur,
             isr.note,
-            isr.tx_hash,
             isr.source_record_hash,
             isr.dedup_fingerprint,
             isr.dedup_fingerprint_version,
@@ -319,6 +318,12 @@ export async function commitBatch({ batchId, onProgress }) {
             row,
             Boolean(row.dedup_fingerprint),
           );
+          if (row.dedup_fingerprint && !fingerprintExists) {
+            logger.info(
+              "[portfolio-pipeline:commit] legacy cash identity fallback evaluated",
+              { batchId, stagingRowId: row.id, matches: ledgerMatches },
+            );
+          }
           if (
             fingerprintExists ||
             (row.dedup_fingerprint &&
@@ -357,13 +362,12 @@ export async function commitBatch({ batchId, onProgress }) {
               ? await query(
                   `INSERT INTO transactions
                      (date, amount, currency, memo, account_id, recipient_id, category_id,
-                      tx_hash, source_record_hash, dedup_fingerprint,
+                      source_record_hash, dedup_fingerprint,
                       dedup_fingerprint_version, is_active)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true)
                    ON CONFLICT DO NOTHING RETURNING id`,
                   [
                     ...baseParams,
-                    row.tx_hash || null,
                     row.source_record_hash || null,
                     row.dedup_fingerprint,
                     row.dedup_fingerprint_version,
@@ -438,6 +442,12 @@ export async function commitBatch({ batchId, onProgress }) {
           canonical,
           Boolean(row.dedup_fingerprint),
         );
+        if (row.dedup_fingerprint && !fingerprintExists) {
+          logger.info(
+            "[portfolio-pipeline:commit] legacy trade identity fallback evaluated",
+            { batchId, stagingRowId: row.id, matches: destinationMatches },
+          );
+        }
         if (
           fingerprintExists ||
           (row.dedup_fingerprint &&
@@ -483,7 +493,6 @@ export async function commitBatch({ batchId, onProgress }) {
               // own import_batch_id FKs to the BANK `import_batches` table, so a
               // portfolio batch id must never be written there.
               import_batch_id: batchId,
-              tx_hash: row.tx_hash || null,
               source_record_hash: row.source_record_hash || null,
               dedup_fingerprint: row.dedup_fingerprint || null,
               dedup_fingerprint_version: row.dedup_fingerprint_version ?? null,
@@ -612,8 +621,7 @@ function cashIdentityKey(row) {
   return `${row.tx_date}|${signedCashAmount(row)}|${row.currency || "EUR"}|${memo}`;
 }
 
-// Field-based dedup probe for a brokerage cash row (cash rows have no tx_hash
-// partial-unique of their own here). Returns the COUNT of matching ledger
+// Field-based dedup probe for a brokerage cash row. Returns the COUNT of matching ledger
 // rows, not a boolean: a statement can legitimately repeat one identity (two
 // identical custody fees on one date, distinguishable only by a description
 // the user didn't map into `note`), so the caller dedups by matching ledger

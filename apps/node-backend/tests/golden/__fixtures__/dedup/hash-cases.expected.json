@@ -38,31 +38,31 @@
     },
     {
       "label": "manual-full-fields",
-      "hash": "469f9b4292d58aa0afeecc05a223235172ffeb670d7e9d47a65be82c2897d17b"
+      "hash": "053467fc4582a2766d5b9ab34f6d6651e468ecf9ab987adf700cf96e2be18c3d"
     },
     {
       "label": "manual-lowercase-inputs-upper-normalized",
-      "hash": "469f9b4292d58aa0afeecc05a223235172ffeb670d7e9d47a65be82c2897d17b"
+      "hash": "053467fc4582a2766d5b9ab34f6d6651e468ecf9ab987adf700cf96e2be18c3d"
     },
     {
       "label": "manual-null-memo",
-      "hash": "8a4118ce491e43b950372433287c6727a2c3b23c429710952e302f1abfd18abc"
+      "hash": "7ba5f9dfff0df125c4802633f007b0bf922b525dfc885cd93f6c6a20cbc4d5b7"
     },
     {
       "label": "manual-undefined-memo-and-account",
-      "hash": "a1d67df0715a5ba1e9703cae16030b0b2cb271d7d1a436cda58de5b04a1093c3"
+      "hash": "2aa21bcca3ef5df7a56d4675db287a7c845cff08175fa999356683f6d1c1209f"
     },
     {
       "label": "manual-empty-strings",
-      "hash": "a1d67df0715a5ba1e9703cae16030b0b2cb271d7d1a436cda58de5b04a1093c3"
+      "hash": "2aa21bcca3ef5df7a56d4675db287a7c845cff08175fa999356683f6d1c1209f"
     },
     {
       "label": "manual-unicode-memo",
-      "hash": "36053da04c0a2db2d0c6e66c1e9c765515f7a6a1d967bfaf4599d45a36e3bfe5"
+      "hash": "9d87f69d367b79d5ba58899aebc3d1ba47b6ba6f8f5e7c7868ef2dfa2196945f"
     },
     {
       "label": "manual-negative-amount",
-      "hash": "62cb8fc20a09a5d5457a27993cda78d2189f0616a5b51fb3a6ba25f1a773e0cb"
+      "hash": "e9405ad21ac8e486cbf921e90a0747f40c4fc9d44d68c6895e87a4b3fb1b1b5f"
     }
   ]
 }

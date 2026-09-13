@@ -18,19 +18,20 @@ here as a **manually-run script**, applied in lockstep with the decoupled code.
 
 1. **Dual-write soak is clean** (the `up.sql` guard also enforces this, aborting if not):
    ```sql
-   -- Both queries must return 0.
+   -- Both queries must return 0. Canonical-only writers may leave the
+   -- compatibility label NULL; every row must still have a valid account_id.
    SELECT count(*) FROM transactions t
    LEFT JOIN accounts a ON a.id = t.account_id
-    WHERE (t.bank_account IS NULL) <> (t.account_id IS NULL)
-       OR (t.bank_account IS NOT NULL AND t.account_id IS NOT NULL
-           AND (a.id IS NULL
-                OR lower(btrim(t.bank_account)) <> lower(btrim(a.name))));
+    WHERE t.account_id IS NULL
+       OR a.id IS NULL
+       OR (t.bank_account IS NOT NULL
+           AND lower(btrim(t.bank_account)) <> lower(btrim(a.name)));
    SELECT count(*) FROM planned_transactions p
    LEFT JOIN accounts a ON a.id = p.account_id
-    WHERE (p.bank_account IS NULL) <> (p.account_id IS NULL)
-       OR (p.bank_account IS NOT NULL AND p.account_id IS NOT NULL
-           AND (a.id IS NULL
-                OR lower(btrim(p.bank_account)) <> lower(btrim(a.name))));
+    WHERE p.account_id IS NULL
+       OR a.id IS NULL
+       OR (p.bank_account IS NOT NULL
+           AND lower(btrim(p.bank_account)) <> lower(btrim(a.name)));
    ```
 2. **The contract-phase application build is ready** (see checklist below). Do not activate that
    build separately; switch the code and schema while every writer remains stopped.
@@ -47,7 +48,8 @@ apply `up.sql`, activate the coupled application build, then boot and run the sm
 
 ```bash
 # Apply (after the preconditions). Wrapped in a transaction; aborts if the soak guard fails.
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f alembic/manual/contract_drop_bank_account/up.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -v backup_verified=yes \
+  -f alembic/manual/contract_drop_bank_account/up.sql
 
 # Roll back (re-adds the column, re-derives from accounts.name, restores the trigger).
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f alembic/manual/contract_drop_bank_account/down.sql
@@ -114,9 +116,9 @@ free-text bank branch all resolve through `account_id` → `accounts.name`),
 `services/calculations/transfers.js` (pure; consumes rows, no SQL),
 `services/transferReconciliationService.js`, `services/recurringDetectionService.js`,
 `services/aiChat/tools/insights.js`, `routes/transactions.js`, `routes/plannedTransactions.js`,
-`routes/splits.js`. (`services/deduplication.js` reads/writes only the
-`manual_raw_transactions` raw mirror, which keeps its column; `middleware/validation.js` is a
-write-path whitelist — see the lockstep list above.)
+`routes/splits.js`. (`services/deduplication.js` uses the provider-neutral
+`manual_transaction_dedup_claims` table and an `accounts` join for its field fallback;
+`middleware/validation.js` is a write-path whitelist — see the lockstep list above.)
 
 ### 3. Writes — set `account_id` instead of the string — DONE (2026-09-08)
 

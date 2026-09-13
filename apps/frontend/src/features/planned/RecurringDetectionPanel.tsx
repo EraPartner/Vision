@@ -193,7 +193,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                         : -Math.abs(pattern.latestAmount),
                 currency: pattern.currency,
                 category_id: pattern.categoryId ?? undefined,
-                bank_account: pattern.bankAccount ?? undefined,
+                account_id: pattern.accountId!,
                 is_recurring: true,
                 recurrence_pattern:
                     pattern.detectedPattern === "custom"

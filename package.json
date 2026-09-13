@@ -47,6 +47,7 @@
     "db:revision": "node apps/node-backend/scripts/alembic-command.js revision --autogenerate -m",
     "db:index-stats": "bun run apps/node-backend/scripts/index-stats.js",
     "db:precision-drift": "bun run apps/node-backend/scripts/check-precision-drift.js",
+    "db:legacy-status": "bun run apps/node-backend/scripts/legacy-retirement-status.js",
     "db:check-destructive": "python3 scripts/check-destructive-migrations.py",
     "db:check-heads": "python3 scripts/check-alembic-heads.py",
     "db:check": "bun run db:check-heads && VISION_TEST_DB_TASK=migration-fidelity scripts/with-test-db.sh",

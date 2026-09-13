@@ -33,7 +33,7 @@ export function mockTransactionRepository() {
 export function mockDeduplication() {
   return {
     isManualDuplicate: vi.fn(async () => ({ isDuplicate: false })),
-    recordManualRawTransaction: vi.fn(async () => undefined),
+    recordManualTransactionDedupClaim: vi.fn(async () => undefined),
   };
 }
 

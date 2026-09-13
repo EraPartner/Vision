@@ -1,7 +1,7 @@
 /**
  * Drift reconciliation workflow (ADR-094, Phase C — accounts rewrite).
  *
- * The drift badge on an account card (statement_balance − reconcilable_balance)
+ * The drift badge on an account card (selected statement − reconcilable_balance)
  * used to be a dead-end `title` tooltip: the only way to clear a drift was Edit →
  * Advanced. This dialog, opened by clicking the badge, shows the statement figure,
  * the computed (ledger) figure and their difference, then offers two explicit
@@ -60,7 +60,6 @@ import { apiClient } from "@/lib/api";
 import type { ReconcileMode } from "@/lib/api/accounts";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { useBalanceProvenance } from "@/features/accounts/balanceProvenance";
-import { statementYmd } from "@/features/accounts/driftBadge";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
@@ -129,12 +128,7 @@ export function ReconcileDialog({
     const selectedPart = account.balance_parts?.find(
         (part) => part.currency === selectedCurrency,
     );
-    const statement =
-        selectedStatement?.balance ??
-        (selectedCurrency === defaultCurrency
-            ? account.statement_balance
-            : undefined) ??
-        0;
+    const statement = selectedStatement?.balance ?? 0;
     // The RECONCILIATION BASE: the balance of the one currency partition the
     // statement figure is a statement for (server: statementPartition). On a
     // single-currency account it IS `computed_balance`; on a multi-currency one it
@@ -194,11 +188,7 @@ export function ReconcileDialog({
 
     // The statement date in play for the ledger deep-link: the freshly entered one
     // when a reading is being recorded, otherwise the stored anchor.
-    const storedStatementDate =
-        selectedStatement?.balance_date ??
-        (selectedCurrency === defaultCurrency
-            ? statementYmd(account)
-            : undefined);
+    const storedStatementDate = selectedStatement?.balance_date;
     const sinceDate =
         (hasReading && readingDateValid ? readingDate : undefined) ??
         storedStatementDate;
@@ -283,7 +273,7 @@ export function ReconcileDialog({
     // that records the statement figure as the account's opening-balance anchor
     // (same POST /accounts/:id/opening-balance the OpeningBalanceDialog uses).
     const storedBackfillAvailable =
-        readingRaw === "" && account.statement_balance != null;
+        readingRaw === "" && selectedStatement != null;
     const canBackfillOpening =
         !account.anchor_date && (canSaveReading || storedBackfillAvailable);
     const backfillBalance = canSaveReading ? parsedReading : statement;

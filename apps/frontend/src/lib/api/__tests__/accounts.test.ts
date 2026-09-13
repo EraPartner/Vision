@@ -18,7 +18,7 @@ import {
 afterEach(() => server.resetHandlers());
 
 describe("accounts API client", () => {
-    it("getAccounts coerces NUMERIC string balances into numbers", async () => {
+    it("getAccounts coerces collection and derived NUMERIC balances", async () => {
         server.use(
             http.get(`${API_BASE}/api/accounts`, () =>
                 ok({
@@ -26,7 +26,13 @@ describe("accounts API client", () => {
                         {
                             id: 1,
                             name: "Checking",
-                            statement_balance: "100.50",
+                            statement_balances: [
+                                {
+                                    currency: "EUR",
+                                    balance: "100.50",
+                                    balance_date: "2026-09-13",
+                                },
+                            ],
                             computed_balance: "99.00",
                             drift: "1.50",
                         },
@@ -39,7 +45,7 @@ describe("accounts API client", () => {
         const res = await getAccounts({ active: "all" });
         const a = res.items[0];
 
-        expect(a.statement_balance).toBe(100.5);
+        expect(a.statement_balances?.[0].balance).toBe(100.5);
         expect(a.computed_balance).toBe(99);
         expect(a.drift).toBe(1.5);
         expect(typeof a.drift).toBe("number");
@@ -53,7 +59,7 @@ describe("accounts API client", () => {
                         {
                             id: 2,
                             name: "Savings",
-                            statement_balance: null,
+                            statement_balances: [],
                             computed_balance: null,
                             drift: null,
                         },
@@ -64,7 +70,7 @@ describe("accounts API client", () => {
         );
 
         const res = await getAccounts();
-        expect(res.items[0].statement_balance).toBeUndefined();
+        expect(res.items[0].statement_balances).toEqual([]);
         expect(res.items[0].computed_balance).toBeUndefined();
         expect(res.items[0].drift).toBeUndefined();
     });

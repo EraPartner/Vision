@@ -11,10 +11,13 @@
  */
 
 import transactionRepository from "../repositories/transactionRepository.js";
+import { accountRepository } from "../repositories/accountRepository.js";
 import {
   isManualDuplicate,
-  recordManualRawTransaction,
+  lockManualTransactionIdentity,
+  recordManualTransactionDedupClaim,
 } from "./deduplication.js";
+import { withTransaction } from "../database/connection.js";
 import { autoLinkTransactions } from "./plannedMatchService.js";
 import { scheduleReconcile } from "./transferReconciliationService.js";
 import {
@@ -26,7 +29,7 @@ import { resolveRecipientIdByName } from "./recipientService.js";
 import { resolveCategoryIdByName } from "./categoryService.js";
 import { attachmentRepository } from "./attachmentRecordService.js";
 import { removeAttachmentFilesBestEffort } from "./attachmentCleanup.js";
-import { ConflictError } from "../middleware/errorHandler.js";
+import { ConflictError, ValidationError } from "../middleware/errorHandler.js";
 import { logger } from "../config/logger.js";
 
 /**
@@ -44,7 +47,7 @@ import { logger } from "../config/logger.js";
  * @param {{
  *   transaction_date?: string,
  *   date?: string,
- *   bank_account?: string|null,
+ *   account_id?: number|null,
  *   recipient_id?: number|null,
  *   amount: number|string,
  *   memo?: string|null,
@@ -58,50 +61,67 @@ import { logger } from "../config/logger.js";
  */
 async function createManualTransaction(data) {
   const txDate = data.transaction_date || data.date;
-
-  const dupCheck = await isManualDuplicate({
+  const requestedIdentity = {
     date: txDate,
     amount: data.amount,
     recipientId: data.recipient_id,
     memo: data.memo || "",
-    bankAccount: data.bank_account,
-  });
+    accountId: data.account_id,
+  };
 
-  if (dupCheck.isDuplicate && data.allow_duplicate !== true) {
-    throw new ConflictError("Duplicate transaction detected", {
-      details: { existing_transaction_id: dupCheck.existingTransactionId },
+  const transaction = await withTransaction(async (client) => {
+    let accountId = data.account_id ?? null;
+    if (accountId != null) {
+      if (!(await accountRepository.findActiveId(accountId, { client }))) {
+        throw new ValidationError(
+          "account_id must reference an active account",
+        );
+      }
+    } else {
+      throw new ValidationError("account_id must reference an active account");
+    }
+    const identity = {
+      ...requestedIdentity,
+      // Manual writes serialize on the canonical account identity.
+      bankAccount: undefined,
+      accountId,
+    };
+    await lockManualTransactionIdentity(identity);
+    const dupCheck = await isManualDuplicate(identity);
+
+    if (dupCheck.isDuplicate && data.allow_duplicate !== true) {
+      throw new ConflictError("Duplicate transaction detected", {
+        details: { existing_transaction_id: dupCheck.existingTransactionId },
+      });
+    }
+    if (dupCheck.isDuplicate) {
+      logger.info("Manual duplicate explicitly allowed", {
+        existingTransactionId: dupCheck.existingTransactionId,
+      });
+    }
+
+    const created = await transactionRepository.create({
+      transaction_date: txDate,
+      account_id: accountId,
+      recipient_id: data.recipient_id,
+      amount: data.amount,
+      memo: data.memo,
+      currency: data.currency,
+      // `balance` intentionally not accepted: manual entries leave it NULL so the
+      // account balance (ADR-094) anchors only on imported, bank-stamped rows.
+      category_id: data.category_id,
+      comment: data.comment,
+      // Route schema guarantees array-or-absent; absent stays null as before.
+      tags: data.tags ?? null,
     });
-  }
-  if (dupCheck.isDuplicate) {
-    logger.info("Manual duplicate explicitly allowed", {
-      existingTransactionId: dupCheck.existingTransactionId,
+
+    await recordManualTransactionDedupClaim({
+      ...identity,
+      categoryId: data.category_id || null,
+      comment: data.comment || null,
+      transactionId: created.id,
     });
-  }
-
-  const transaction = await transactionRepository.create({
-    transaction_date: txDate,
-    bank_account: data.bank_account,
-    recipient_id: data.recipient_id,
-    amount: data.amount,
-    memo: data.memo,
-    currency: data.currency,
-    // `balance` intentionally not accepted: manual entries leave it NULL so the
-    // account balance (ADR-094) anchors only on imported, bank-stamped rows.
-    category_id: data.category_id,
-    comment: data.comment,
-    // Route schema guarantees array-or-absent; absent stays null as before.
-    tags: data.tags ?? null,
-  });
-
-  await recordManualRawTransaction({
-    date: txDate,
-    amount: data.amount,
-    recipientId: data.recipient_id,
-    memo: data.memo || "",
-    bankAccount: data.bank_account,
-    categoryId: data.category_id || null,
-    comment: data.comment || null,
-    transactionId: transaction.id,
+    return created;
   });
 
   // Auto-clear a matching planned payment if this transaction unambiguously

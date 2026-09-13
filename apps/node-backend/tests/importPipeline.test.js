@@ -391,8 +391,7 @@ describe("commitBatch", () => {
         return { rows: [] };
       if (sql.includes("COUNT(*)::int AS n")) return { rows: [{ n: 0 }] };
       if (sql.includes("INSERT INTO transactions")) {
-        expect(params.slice(11, 15)).toEqual([
-          "fingerprint-1",
+        expect(params.slice(11, 14)).toEqual([
           "source-hash-1",
           "fingerprint-1",
           1,
@@ -579,36 +578,21 @@ describe("commitBatch", () => {
     const insertCall = mockClient.query.mock.calls.find(([sql]) =>
       /INSERT INTO transactions\s+\(/.test(sql),
     );
-    // The chunk INSERT is multi-row (SELECT UNNEST(...)), so the date
-    // parameter is the column array — this chunk holds the one row.
-    expect(insertCall[1][0][0]).toBe("2026-06-15");
+    expect(insertCall[1][0]).toBe("2026-06-15");
   });
 
   it("marks a duplicate row and skips aggregation refresh", async () => {
-    // Drives the BATCHED path to the duplicate verdict: the chunk pre-load
-    // hands back a matching candidate, so the row never reaches an INSERT and
-    // the per-row `SELECT t.id` dup check is never issued. (Keying this
-    // fixture on the per-row SQL would only ever exercise the fallback — the
-    // batched planner does not issue that statement at all.)
-    setupCommit(matchedRow);
+    setupCommit({
+      ...matchedRow,
+      dedup_fingerprint: "fingerprint-1",
+      dedup_fingerprint_version: 1,
+      dedup_occurrence: 1,
+    });
     mockClient.query.mockImplementation(async (sql) => {
       if (sql.includes("INSERT INTO accounts"))
         return { rows: [{ id: BE12_ACCOUNT_ID }] };
-      if (sql.includes("FROM transactions t") && sql.includes("t.date = ANY")) {
-        return {
-          rows: [
-            {
-              date_key: "2024-01-15",
-              amount_key: "-5.0000",
-              recipient_id: 42,
-              memo_key: "coffee",
-              account_id: BE12_ACCOUNT_ID,
-              tx_hash: null,
-              import_batch_id: "2",
-            },
-          ],
-        };
-      }
+      if (sql.includes("WHERE dedup_fingerprint_version"))
+        return { rows: [{ id: 91 }] };
       return { rows: [] };
     });
     expect(await commitBatch({ batchId: 2 })).toEqual({
@@ -619,8 +603,6 @@ describe("commitBatch", () => {
     });
 
     const statements = mockClient.query.mock.calls.map(([sql]) => String(sql));
-    // Batched path only: no per-row dup check, no INSERT, no savepoint.
-    expect(statements.some((s) => s.includes("SELECT t.id"))).toBe(false);
     expect(statements.some((s) => s.includes("INSERT INTO transactions"))).toBe(
       false,
     );
@@ -628,278 +610,6 @@ describe("commitBatch", () => {
     expect(
       statements.filter((s) => s.includes("status = 'duplicate'")),
     ).toHaveLength(1);
-  });
-
-  it("field-dedup is scoped to the same account and never matches a differing-hash row", async () => {
-    // Two same-day card payments share date+amount+recipient+memo (Revolut
-    // stamps the identical "CARD_PAYMENT - CURRENT") but differ by tx_hash
-    // (running balance differs) — the second must NOT collapse into the first.
-    // Likewise an identical purchase on a DIFFERENT account is distinct.
-    //
-    // The dup check is now a per-chunk pre-load plus a JS verdict, so the
-    // fixture is the candidate row Postgres hands back rather than a bare id:
-    // the first card payment, already written by THIS batch under hash 'h1'.
-    setupCommit({ ...matchedRow, tx_hash: "h2" });
-    let dupSql, dupParams;
-    mockClient.query.mockImplementation(async (sql, params) => {
-      if (sql.includes("INSERT INTO accounts"))
-        return { rows: [{ id: BE12_ACCOUNT_ID }] };
-      if (sql.includes("FROM transactions t") && sql.includes("t.date = ANY")) {
-        dupSql = sql;
-        dupParams = params;
-        return {
-          rows: [
-            // Same field tuple, same account, same batch, DIFFERENT hash.
-            {
-              date_key: "2024-01-15",
-              amount_key: "-5.0000",
-              recipient_id: 42,
-              memo_key: "coffee",
-              account_id: BE12_ACCOUNT_ID,
-              tx_hash: "h1",
-              import_batch_id: "9",
-            },
-            // Identical purchase on a DIFFERENT account — never a duplicate.
-            {
-              date_key: "2024-01-15",
-              amount_key: "-5.0000",
-              recipient_id: 42,
-              memo_key: "coffee",
-              account_id: 88,
-              tx_hash: null,
-              import_batch_id: null,
-            },
-          ],
-        };
-      }
-      if (sql.includes("INSERT INTO transactions"))
-        return { rows: [{ id: 100, tx_hash: "h2" }] };
-      return { rows: [] };
-    });
-    expect(await commitBatch({ batchId: 9 })).toEqual({
-      imported: 1,
-      duplicates: 0,
-      errors: 0,
-      autoLinkedCount: 0,
-    });
-    // Pre-load scope must stay a strict superset of the old per-row WHERE:
-    // active rows on the chunk's dates, with every discriminating column read
-    // back so the JS verdict can apply the rest of the predicate.
-    expect(dupSql).toContain("t.is_active = true");
-    expect(dupSql).toContain("t.date = ANY($1::date[])");
-    // ADR-088: the account guard reads the FK, never the retired string.
-    expect(dupSql).toContain("t.account_id");
-    expect(dupSql).not.toContain("t.bank_account");
-    expect(dupSql).toContain("t.tx_hash");
-    expect(dupSql).toContain("t.import_batch_id");
-    expect(dupParams[0]).toEqual(["2024-01-15"]);
-  });
-
-  it("collapses a same-account same-hash-less field duplicate found by the pre-load", async () => {
-    // Same field tuple from a DIFFERENT batch: the hash exemption does not
-    // apply, so this is the ordinary "re-import is a no-op" duplicate.
-    setupCommit({ ...matchedRow, tx_hash: "h2" });
-    mockClient.query.mockImplementation(async (sql) => {
-      if (sql.includes("INSERT INTO accounts"))
-        return { rows: [{ id: BE12_ACCOUNT_ID }] };
-      if (sql.includes("FROM transactions t") && sql.includes("t.date = ANY")) {
-        return {
-          rows: [
-            {
-              date_key: "2024-01-15",
-              amount_key: "-5.0000",
-              recipient_id: 42,
-              memo_key: "coffee",
-              account_id: BE12_ACCOUNT_ID,
-              tx_hash: "other-hash",
-              import_batch_id: "4",
-            },
-          ],
-        };
-      }
-      if (sql.includes("INSERT INTO transactions"))
-        return { rows: [{ id: 100, tx_hash: "h2" }] };
-      return { rows: [] };
-    });
-    expect(await commitBatch({ batchId: 9 })).toEqual({
-      imported: 0,
-      duplicates: 1,
-      errors: 0,
-      autoLinkedCount: 0,
-    });
-  });
-
-  it("keeps an orphaned imported transaction visible to field dedup", async () => {
-    setupCommit({ ...matchedRow, tx_hash: "incoming-hash" });
-    mockClient.query.mockImplementation(async (sql) => {
-      if (sql.includes("INSERT INTO accounts"))
-        return { rows: [{ id: BE12_ACCOUNT_ID }] };
-      if (sql.includes("FROM transactions t") && sql.includes("t.date = ANY")) {
-        return {
-          rows: [
-            {
-              date_key: "2024-01-15",
-              amount_key: "-5.0000",
-              recipient_id: 42,
-              memo_key: "coffee",
-              account_id: BE12_ACCOUNT_ID,
-              tx_hash: "orphaned-source-hash",
-              import_batch_id: null,
-            },
-          ],
-        };
-      }
-      return { rows: [] };
-    });
-
-    expect(await commitBatch({ batchId: 9 })).toEqual({
-      imported: 0,
-      duplicates: 1,
-      errors: 0,
-      autoLinkedCount: 0,
-    });
-  });
-
-  it("deduplicates hashless tab-padded memos inside the batched planner", async () => {
-    const rows = [
-      { ...matchedRow, id: 1, row_index: 0, memo: "TEA\t", tx_hash: null },
-      { ...matchedRow, id: 2, row_index: 1, memo: "TEA\t", tx_hash: null },
-    ];
-    poolQuery
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows })
-      .mockResolvedValueOnce({ rows: [] });
-    mockClient.query.mockImplementation(async (sql) => {
-      if (sql.includes("INSERT INTO accounts"))
-        return { rows: [{ id: BE12_ACCOUNT_ID }] };
-      if (sql.includes("INSERT INTO transactions"))
-        return { rows: [{ id: 100, tx_hash: null }] };
-      return { rows: [] };
-    });
-
-    expect(await commitBatch({ batchId: 9 })).toEqual({
-      imported: 1,
-      duplicates: 1,
-      errors: 0,
-      autoLinkedCount: 0,
-    });
-    const statements = mockClient.query.mock.calls.map(([sql]) => String(sql));
-    expect(
-      statements.filter((sql) => sql.includes("INSERT INTO transactions")),
-    ).toHaveLength(1);
-    expect(
-      statements.some((sql) => sql.startsWith("ROLLBACK TO SAVEPOINT")),
-    ).toBe(false);
-    expect(statements.some((sql) => sql.includes("sp_commit_row"))).toBe(false);
-  });
-
-  it("still submits a hash-conflicting row to the INSERT so Postgres checks its tuple", async () => {
-    // Predicted conflicts are counted as duplicates but are NOT withheld from
-    // the INSERT: Postgres validates NOT NULL / CHECK / numeric overflow before
-    // it resolves the conflict, so a row that both conflicts AND violates one
-    // of those must still raise. Withholding it downgrades a real failure to
-    // 'duplicate'. ON CONFLICT DO NOTHING is what drops it — hence the empty
-    // RETURNING, which is the EXPECTED result here, not a plan mismatch.
-    setupCommit({ ...matchedRow, tx_hash: "h2" });
-    let hashSql;
-    let insertIssued = false;
-    mockClient.query.mockImplementation(async (sql) => {
-      if (sql.includes("SELECT tx_hash FROM transactions")) {
-        hashSql = sql;
-        return { rows: [{ tx_hash: "h2" }] };
-      }
-      if (sql.includes("INSERT INTO transactions")) {
-        insertIssued = true;
-        return { rows: [] };
-      }
-      return { rows: [] };
-    });
-    expect(await commitBatch({ batchId: 9 })).toEqual({
-      imported: 0,
-      duplicates: 1,
-      errors: 0,
-      autoLinkedCount: 0,
-    });
-    expect(insertIssued).toBe(true);
-    // The pre-load is deliberately unfiltered by is_active — the unique index
-    // has no is_active predicate, so a soft-deleted row still conflicts.
-    expect(hashSql).not.toContain("is_active");
-    // Dropped by ON CONFLICT ⇒ 'duplicate' staging only, never 'committed',
-    // and no fallback (the empty RETURNING matched the prediction exactly).
-    const statements = mockClient.query.mock.calls.map(([sql]) => String(sql));
-    expect(
-      statements.filter((s) => s.includes("status = 'duplicate'")),
-    ).toHaveLength(1);
-    expect(statements.some((s) => s.includes("status = 'committed'"))).toBe(
-      false,
-    );
-    expect(statements.some((s) => s.startsWith("ROLLBACK TO SAVEPOINT"))).toBe(
-      false,
-    );
-  });
-
-  it("replays the chunk per row when the bulk INSERT drops an unpredicted row", async () => {
-    // A concurrent import won a tx_hash race: the plan predicted no conflict,
-    // so a short RETURNING invalidates every verdict downstream of the missing
-    // row. The chunk must roll back to its savepoint and go row by row.
-    setupCommit({ ...matchedRow, tx_hash: "h2" });
-    mockClient.query.mockImplementation(async (sql) => {
-      // Pre-load says the hash is free; the INSERT then returns nothing.
-      if (sql.includes("INSERT INTO transactions")) return { rows: [] };
-      if (sql.includes("SELECT t.id")) return { rows: [{ id: 999 }] }; // per-row dup check
-      return { rows: [] };
-    });
-    expect(await commitBatch({ batchId: 9 })).toEqual({
-      imported: 0,
-      duplicates: 1,
-      errors: 0,
-      autoLinkedCount: 0,
-    });
-    const statements = mockClient.query.mock.calls.map(([sql]) => String(sql));
-    expect(statements).toContain("ROLLBACK TO SAVEPOINT sp_commit_chunk");
-    expect(statements.some((s) => s.includes("SELECT t.id"))).toBe(true);
-  });
-
-  it("issues one INSERT and one staging UPDATE per chunk, not per row", async () => {
-    // The finding this rewrite closes: five sequential statements per row.
-    const rows = Array.from({ length: 25 }, (_, i) => ({
-      ...matchedRow,
-      id: i + 1,
-      row_index: i,
-      memo: `coffee ${i}`,
-      tx_hash: `h${i}`,
-    }));
-    poolQuery
-      .mockResolvedValueOnce({ rows: [] }) // UPDATE status='committing'
-      .mockResolvedValueOnce({ rows }) // SELECT matched
-      .mockResolvedValueOnce({ rows: [] }); // UPDATE counters
-    mockClient.query.mockImplementation(async (sql) => {
-      if (sql.includes("INSERT INTO transactions")) {
-        return {
-          rows: rows.map((r, i) => ({ id: 1000 + i, tx_hash: r.tx_hash })),
-        };
-      }
-      return { rows: [] };
-    });
-    expect(await commitBatch({ batchId: 11 })).toEqual({
-      imported: 25,
-      duplicates: 0,
-      errors: 0,
-      autoLinkedCount: 0,
-    });
-
-    const statements = mockClient.query.mock.calls.map(([sql]) => String(sql));
-    const count = (needle) =>
-      statements.filter((s) => s.includes(needle)).length;
-    expect(count("INSERT INTO transactions")).toBe(1);
-    expect(count("UPDATE import_staging_rows")).toBe(1);
-    // One account resolution for the chunk's single distinct label (inside
-    // the chunk transaction — ADR-088), regardless of row count.
-    expect(count("INSERT INTO accounts")).toBe(1);
-    expect(statements.filter((s) => s.startsWith("SAVEPOINT"))).toHaveLength(1);
-    // Account resolve + two pre-loads + SAVEPOINT + INSERT + RELEASE + one
-    // staging UPDATE.
-    expect(statements).toHaveLength(7);
   });
 
   it("records an insert error via SAVEPOINT rollback", async () => {
@@ -924,7 +634,6 @@ describe("commitBatch", () => {
     });
 
     const statements = mockClient.query.mock.calls.map(([sql]) => String(sql));
-    expect(statements).toContain("ROLLBACK TO SAVEPOINT sp_commit_chunk");
     expect(statements).toContain("SAVEPOINT sp_commit_row");
     expect(statements).toContain("ROLLBACK TO SAVEPOINT sp_commit_row");
     expect(statements.some((s) => s.includes("status = 'error'"))).toBe(true);
@@ -986,8 +695,7 @@ describe("commitBatch", () => {
   it("keeps a chunk containing an unresolved row on the batched path", async () => {
     // Post-c1d6761 regression the up-front decision closes: an unresolved row
     // reaching the bulk INSERT used to fail the chunk to the per-row replay.
-    // With the decision made before planning, the rest of the chunk must stay
-    // on the batched path — one INSERT, no rollback, no per-row savepoints.
+    // With the decision made before commit, the remaining rows still commit.
     const rows = [
       { ...matchedRow, id: 1, row_index: 0, resolved_recipient_id: null },
       { ...matchedRow, id: 2, row_index: 1, memo: "coffee 1", tx_hash: "h1" },
@@ -1020,14 +728,16 @@ describe("commitBatch", () => {
     const statements = mockClient.query.mock.calls.map(([sql]) => String(sql));
     expect(
       statements.filter((s) => s.includes("INSERT INTO transactions")),
-    ).toHaveLength(1);
+    ).toHaveLength(2);
     expect(statements.some((s) => s.includes("ROLLBACK TO SAVEPOINT"))).toBe(
       false,
     );
-    expect(statements).not.toContain("SAVEPOINT sp_commit_row");
+    expect(
+      statements.filter((s) => s === "SAVEPOINT sp_commit_row"),
+    ).toHaveLength(2);
     expect(
       statements.filter((s) => s.includes("status = 'committed'")),
-    ).toHaveLength(1);
+    ).toHaveLength(2);
 
     // The unresolved row was written 'error' on the pool, before the chunk.
     const errorUpdate = poolQuery.mock.calls.find(([sql]) =>

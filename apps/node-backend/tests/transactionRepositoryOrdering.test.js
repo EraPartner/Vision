@@ -112,41 +112,6 @@ describe("transaction list ORDER BY tiebreaker", () => {
   });
 });
 
-describe("transaction import field dedup contract", () => {
-  it("normalizes ASCII memo whitespace and treats a deleted batch as a different batch", async () => {
-    query.mockResolvedValueOnce({ rows: [{ id: 77 }] });
-
-    await expect(
-      transactionRepository.findImportDuplicate({
-        date: "2026-08-31",
-        amount: "-5.0000",
-        recipientId: 4,
-        memo: "coffee",
-        accountId: 8,
-        currency: "EUR",
-        txHash: "incoming-hash",
-        batchId: 9,
-      }),
-    ).resolves.toBe(77);
-
-    const [sql, params] = query.mock.calls[0];
-    expect(sql).toContain("BTRIM(t.memo, E' \\t\\n\\r\\f\\013')");
-    expect(sql).not.toContain("\\v");
-    expect(sql).toContain("t.import_batch_id IS DISTINCT FROM $7");
-    expect(sql).not.toContain("NOT (t.import_batch_id = $7");
-    expect(params).toEqual([
-      "2026-08-31",
-      "-5.0000",
-      4,
-      "coffee",
-      8,
-      "incoming-hash",
-      9,
-      "EUR",
-    ]);
-  });
-});
-
 describe("transaction list count cache", () => {
   function stubListQueries(total = 7) {
     query.mockImplementation(async (sql) =>

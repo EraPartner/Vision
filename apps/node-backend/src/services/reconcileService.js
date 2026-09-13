@@ -1,8 +1,7 @@
 /**
  * Drift reconciliation (ADR-094, Phase C — accounts rewrite).
  *
- * The drift badge surfaces `statement_balance − computed_balance`. Historically
- * the only way to clear it was Edit → Advanced (hand-edit the statement figures).
+ * The drift badge surfaces the selected statement reading minus computed balance.
  * This service backs the reconcile dialog opened from the badge, resolving a drift
  * one of two explicit ways:
  *
@@ -20,9 +19,8 @@
  *                         (`recipient_id` is NOT NULL and the row has no payee).
  *                         computed rises to meet statement; drift collapses to 0.
  *
- * On a multi-currency account only the account's OWN currency partition is
- * reconciled — that is the only currency `accounts.statement_balance` can be a
- * statement for, and it is the currency both outcomes are denominated in. See
+ * On a multi-currency account only the selected currency partition is
+ * reconciled, and it is the currency both outcomes are denominated in. See
  * the comment at the drift read below.
  *
  * Both are opt-in: the caller must name the mode. 'adjustment' follows the
@@ -100,11 +98,7 @@ export async function reconcileAccount(accountId, body) {
     const res = await query(
       `SELECT a.currency AS account_currency,
               COALESCE($3::varchar(3), a.currency) AS reconcile_currency,
-              COALESCE(
-                s.balance,
-                CASE WHEN $3::varchar(3) IS NULL OR $3::varchar(3) = a.currency
-                     THEN a.statement_balance END
-              ) AS statement_balance,
+              s.balance AS statement_balance,
               bp.balance_parts
          FROM accounts a
          ${computedBalanceByCurrencyAggLateral({ account: "a.id", asOfDate: "$2::date" })}
@@ -126,9 +120,8 @@ export async function reconcileAccount(accountId, body) {
     // Multi-currency: reconcile ONE partition — the reconciliation base, which
     // is the shared definition the hub badge and the reconcile dialog's
     // `reconcilable_balance` also read, so the figure resolved here is the one
-    // the user was shown. `statement_balance` is a single figure sitting next to
-    // `accounts.currency` and carrying a single date, so that is the only
-    // currency it can be a statement for; measuring the drift against anything
+    // the user was shown. The selected collection reading names the currency it
+    // is a statement for; measuring the drift against anything
     // else — a cross-currency Σ of bare amounts, or an FX-converted total that
     // moves with the daily rate — would not actually clear the badge. Every
     // single-currency account keeps its previous figure exactly (see
@@ -171,28 +164,19 @@ export async function reconcileAccount(accountId, body) {
       // (The dialog shows that 0 as the base, so this is no longer a figure the
       // user never saw.)
       const upd = await query(
-        `WITH stored AS (
-           INSERT INTO account_statement_balances
-             (account_id, currency, balance, balance_date)
-           VALUES ($1, $2, $3, $4)
-           ON CONFLICT (account_id, currency) DO UPDATE
-             SET balance = EXCLUDED.balance, balance_date = EXCLUDED.balance_date
-           RETURNING balance
-         ), mirrored AS (
-           UPDATE accounts
-              SET statement_balance = $3, statement_balance_date = $4, updated_at = NOW()
-            WHERE id = $1 AND currency = $2
-         )
-         SELECT balance FROM stored`,
+        `INSERT INTO account_statement_balances
+           (account_id, currency, balance, balance_date)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (account_id, currency) DO UPDATE
+           SET balance = EXCLUDED.balance, balance_date = EXCLUDED.balance_date
+         RETURNING balance`,
         [accountId, reconcileCurrency, computed, today],
       );
       return {
         mode,
         drift: 0,
         currency: reconcileCurrency,
-        statement_balance: Number(
-          upd.rows[0].balance ?? upd.rows[0].statement_balance,
-        ),
+        statement_balance: Number(upd.rows[0].balance),
         computed_balance: computed,
         transaction: /** @type {object|null} */ (null),
       };

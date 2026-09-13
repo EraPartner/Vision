@@ -36,9 +36,9 @@ NATIVE_LOG=
 POSTGRES_BIN=
 
 case "$TASK" in
-  tests|migration-fidelity|legacy-retirements|adr090-retirement|adr088-contract) ;;
+  tests|migration-fidelity|legacy-retirements|adr090-retirement|adr088-contract|statement-contract) ;;
   *)
-    echo "[test-db] VISION_TEST_DB_TASK must be tests, migration-fidelity, legacy-retirements, adr090-retirement, or adr088-contract." >&2
+    echo "[test-db] VISION_TEST_DB_TASK must be tests, migration-fidelity, legacy-retirements, adr090-retirement, adr088-contract, or statement-contract." >&2
     exit 1
     ;;
 esac
@@ -59,7 +59,7 @@ if [ -n "${TEST_DATABASE_URL:-}" ]; then
     echo "[test-db] Caller-managed TEST_DATABASE_URL is available."
     exit 0
   fi
-  if [ "$TASK" = migration-fidelity ] || [ "$TASK" = legacy-retirements ] || [ "$TASK" = adr090-retirement ] || [ "$TASK" = adr088-contract ]; then
+  if [ "$TASK" = migration-fidelity ] || [ "$TASK" = legacy-retirements ] || [ "$TASK" = adr090-retirement ] || [ "$TASK" = adr088-contract ] || [ "$TASK" = statement-contract ]; then
     echo "[test-db] Destructive migration lifecycle tasks refuse a caller-managed TEST_DATABASE_URL." >&2
     echo "[test-db] Unset it so this script provisions a disposable database." >&2
     exit 1
@@ -249,7 +249,12 @@ fi
 
 if [ "$TASK" = adr088-contract ]; then
   echo "[test-db] Applying the ADR-088 contract to the disposable database."
+  # This database is created solely for this lifecycle test and is discarded by
+  # the EXIT trap. Acknowledge the production backup gate explicitly so the
+  # contract SQL exercises its real guarded path instead of stopping at psql's
+  # missing-variable refusal.
   "$POSTGRES_BIN/psql" "$TEST_DATABASE_URL" -X -v ON_ERROR_STOP=1 \
+    -v backup_verified=yes \
     -f alembic/manual/contract_drop_bank_account/up.sql >/dev/null
   (
     cd apps/node-backend
@@ -291,6 +296,33 @@ if [ "$TASK" = adr088-contract ]; then
     exit 1
   fi
   echo "[test-db] ADR-088 dropped-schema writes and rollback lifecycle passed."
+  exit 0
+fi
+
+if [ "$TASK" = statement-contract ]; then
+  echo "[test-db] Applying the statement-scalar contract to the disposable database."
+  "$POSTGRES_BIN/psql" "$TEST_DATABASE_URL" -X -v ON_ERROR_STOP=1 \
+    -v backup_verified=yes \
+    -f alembic/manual/contract_drop_statement_scalars/up.sql >/dev/null
+  (
+    cd apps/node-backend
+    bun vitest run tests/accountStatementScalarContract.db.test.js
+  )
+  echo "[test-db] Restoring the statement-scalar compatibility schema."
+  "$POSTGRES_BIN/psql" "$TEST_DATABASE_URL" -X -v ON_ERROR_STOP=1 \
+    -f alembic/manual/contract_drop_statement_scalars/down.sql >/dev/null
+  restored=$(
+    "$POSTGRES_BIN/psql" "$TEST_DATABASE_URL" -X -At -v ON_ERROR_STOP=1 -c "
+      SELECT count(*) FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = 'accounts'
+         AND column_name IN ('statement_balance', 'statement_balance_date');
+    "
+  )
+  if [ "$restored" != "2" ]; then
+    echo "[test-db] Statement-scalar rollback verification failed." >&2
+    exit 1
+  fi
+  echo "[test-db] Statement-scalar dropped-schema writes and rollback lifecycle passed."
   exit 0
 fi
 

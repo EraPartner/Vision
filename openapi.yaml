@@ -1068,13 +1068,6 @@ components:
         funding_account_id:
           type: integer
           nullable: true
-        statement_balance:
-          type: number
-          nullable: true
-        statement_balance_date:
-          type: string
-          format: date
-          nullable: true
         statement_balances:
           type: array
           description: Authoritative statement readings per native currency (ADR-089 D2).
@@ -1122,7 +1115,7 @@ components:
           nullable: true
           description: >-
             The reconciliation base: the computed balance of the single currency
-            partition `statement_balance` is a statement for, in
+            partition the selected statement reading is a statement for, in
             `reconcilable_currency` and NOT FX-converted. Equals
             `computed_balance` for a single-currency account and differs on a
             multi-currency one, so the reconcile dialog previews an entered
@@ -1142,9 +1135,9 @@ components:
           type: number
           nullable: true
           description: >-
-            statement_balance − reconcilable_balance, in `reconcilable_currency`
+            selected statement balance − reconcilable_balance, in `reconcilable_currency`
             (ADR-094); null if no statement balance. Native-currency by design —
-            never statement_balance − computed_balance, which on a multi-currency
+            never statement balance − computed_balance, which on a multi-currency
             account would make the badge move with the daily exchange rate.
         anchor_date:
           type: string
@@ -1231,13 +1224,6 @@ components:
         funding_account_id:
           type: integer
           nullable: true
-        statement_balance:
-          type: number
-          nullable: true
-        statement_balance_date:
-          type: string
-          format: date
-          nullable: true
 
     AccountUpdate:
       type: object
@@ -1283,13 +1269,6 @@ components:
           type: boolean
         funding_account_id:
           type: integer
-          nullable: true
-        statement_balance:
-          type: number
-          nullable: true
-        statement_balance_date:
-          type: string
-          format: date
           nullable: true
         is_active:
           type: boolean
@@ -1534,13 +1513,15 @@ components:
 
     TransactionCreate:
       type: object
-      required: [transaction_date, bank_account, recipient_id, amount]
+      required: [transaction_date, account_id, recipient_id, amount]
       properties:
         transaction_date:
           type: string
           format: date
-        bank_account:
-          type: string
+        account_id:
+          type: integer
+          minimum: 1
+          description: Canonical account identity
         recipient_id:
           type: integer
           format: int32
@@ -1584,8 +1565,9 @@ components:
         transaction_date:
           type: string
           format: date
-        bank_account:
-          type: string
+        account_id:
+          type: integer
+          minimum: 1
           nullable: true
         recipient_id:
           type: integer
@@ -1703,6 +1685,10 @@ components:
           format: date
         bank_account:
           type: string
+        account_id:
+          type: integer
+          nullable: true
+          description: Stable linked account identity
         recipient_id:
           type: integer
         recipient_name:
@@ -1799,13 +1785,15 @@ components:
 
     PlannedTransactionCreate:
       type: object
-      required: [planned_date, bank_account, recipient_id, amount]
+      required: [planned_date, account_id, recipient_id, amount]
       properties:
         planned_date:
           type: string
           format: date
-        bank_account:
-          type: string
+        account_id:
+          type: integer
+          minimum: 1
+          description: Canonical account identity
         recipient_id:
           type: integer
         memo:
@@ -3217,7 +3205,7 @@ paths:
                       data:
                         $ref: "#/components/schemas/Account"
         "400":
-          description: Invalid field (e.g. funding_account_id not a positive integer or not an existing account), or statement_balance set without statement_balance_date
+          description: Invalid field (for example funding_account_id is not a positive integer or does not identify an existing account)
         "409":
           description: An account with that name already exists
 
@@ -3271,7 +3259,7 @@ paths:
                       data:
                         $ref: "#/components/schemas/Account"
         "400":
-          description: Invalid field (e.g. funding_account_id not a positive integer, self-referencing, not an existing account, or closing a funding cycle), or an invalid statement_balance/statement_balance_date pairing
+          description: Invalid field (for example funding_account_id is invalid, self-referencing, missing, or closes a funding cycle)
         "404":
           description: Account not found
         "409":
@@ -3577,7 +3565,7 @@ paths:
     post:
       summary: Reconcile an account's drift
       description: >-
-        Resolves the drift (statement_balance − reconcilable_balance) surfaced by
+        Resolves the drift (selected statement reading − reconcilable_balance) surfaced by
         the drift badge (ADR-094, Phase C). Both modes act on the reconciliation
         base — the one currency partition the statement figure is a statement for
         — so a multi-currency account resolves in its own currency and the other

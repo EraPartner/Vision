@@ -38,6 +38,7 @@ describe("addTransactionSchema", () => {
         ...createAddTransactionFormState("EUR"),
         amount: "12,50",
         bank_account: "Main",
+        account_id: 3,
         recipient_id: "7",
     });
 
@@ -92,9 +93,12 @@ describe("addTransactionSchema", () => {
         ).toBe("validation.required");
     });
 
-    test("whitespace-only bank account reports the select-account key", () => {
+    test("missing account id reports the select-account key", () => {
         expect(
-            issueFor({ ...validForm(), bank_account: "  " }, "bank_account"),
+            issueFor(
+                { ...validForm(), account_id: null as unknown as number },
+                "account_id",
+            ),
         ).toBe("portfolio.move.selectAccount");
     });
 
@@ -126,7 +130,7 @@ describe("addTransactionSchema", () => {
             ...validForm(),
             transaction_date: "",
             amount: "abc",
-            bank_account: "",
+            account_id: null as unknown as number,
             recipient_id: "",
         });
         expect(result.success).toBe(false);

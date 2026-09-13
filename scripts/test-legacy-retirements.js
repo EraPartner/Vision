@@ -46,7 +46,22 @@ try {
   await client.query(
     "INSERT INTO import_batches (adapter_name, status) VALUES ('_retirement_active', 'pending')",
   );
-  migrate(["upgrade", "0104_drop_dormant_import_bank_resolution"], false);
+  migrate(["upgrade", "0104_drop_dormant_import_bank_resolution"], true);
+  expectCount(
+    await client.query(
+      "SELECT count(*) FROM import_batches WHERE adapter_name = '_retirement_active' AND status = 'pending'",
+    ),
+    1,
+    "Upgrade did not preserve the non-terminal import batch",
+  );
+  expectCount(
+    await client.query(
+      "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'import_staging_rows' AND column_name = 'resolved_bank_account_id'",
+    ),
+    0,
+    "Non-terminal batch prevented removal of the empty dormant column",
+  );
+  migrate(["downgrade", "0103_import_identity_provenance"], true);
   await client.query(
     "DELETE FROM import_batches WHERE adapter_name = '_retirement_active'",
   );

@@ -197,8 +197,8 @@ const accountUpdateSchema = z.object({
   has_cash_sleeve: boolField("has_cash_sleeve"),
   is_active: boolField("is_active"),
   funding_account_id: fundingAccountIdField,
-  statement_balance: statementBalanceField,
-  statement_balance_date: statementBalanceDateField,
+  statement_balance: z.never().optional(),
+  statement_balance_date: z.never().optional(),
 });
 
 const accountCreateSchema = accountUpdateSchema.extend({ name: nameField });
@@ -223,27 +223,6 @@ function sanitize(body, { requireName }) {
     throw new ValidationError(msg);
   }
   return result.data;
-}
-
-/**
- * A statement balance is only meaningful with its as-of date (ADR-094 drift
- * anchors on it). Enforced here for a friendly 4xx; migration 0065's CHECK
- * (chk_accounts_statement_balance_has_date) backstops at the DB.
- *
- * `balance` is `number|string` because callers pass either side of a "provided
- * vs. stored" ternary: a zod-sanitized incoming value (coerced to `number`) or
- * the value already on the row (`AccountRow.statement_balance`, pg NUMERIC —
- * a `string`). Only presence is checked here, so the numeric-vs-string
- * distinction doesn't matter to this function.
- * @param {number|string|null|undefined} balance
- * @param {string|null|undefined} date
- */
-function assertStatementBalanceHasDate(balance, date) {
-  if (balance != null && date == null) {
-    throw new ValidationError(
-      "statement_balance_date is required when statement_balance is set",
-    );
-  }
 }
 
 /**
@@ -362,31 +341,10 @@ const accountService = {
       const selectedStatement = statementBalances.find(
         (statement) => statement.currency === base.currency,
       );
-      const hasStatementCollection = rawStatements !== undefined;
-      const hasAnyStatements = statementBalances.length > 0;
-      const statementBalance =
-        selectedStatement?.balance ??
-        ((!hasAnyStatements || base.currency === accountCurrency) &&
-        row.statement_balance != null
-          ? toNumber(toDecimal(row.statement_balance))
-          : null);
+      const statementBalance = selectedStatement?.balance ?? null;
       return {
         ...rest,
-        ...(hasStatementCollection || row.statement_balance !== undefined
-          ? { statement_balance: statementBalance }
-          : {}),
-        ...(hasStatementCollection || row.statement_balance_date !== undefined
-          ? {
-              statement_balance_date:
-                selectedStatement?.balance_date ??
-                (!hasAnyStatements || base.currency === accountCurrency
-                  ? row.statement_balance_date
-                  : null),
-            }
-          : {}),
-        ...(hasStatementCollection
-          ? { statement_balances: statementBalances }
-          : {}),
+        statement_balances: statementBalances,
         computed_balance: toNumber(roundToCents(total)),
         balance_parts: partitions.map((part) => ({
           currency: (part.currency || "EUR").toUpperCase(),
@@ -432,10 +390,6 @@ const accountService = {
       if ("funding_account_id" in fields) {
         await accountRepository.lockFundingGraphForMutation();
       }
-      assertStatementBalanceHasDate(
-        fields.statement_balance,
-        fields.statement_balance_date,
-      );
       await assertFundingAccountValid(fields.funding_account_id, null);
       try {
         return await accountRepository.create(fields);
@@ -471,24 +425,10 @@ const accountService = {
         await accountRepository.lockFundingGraphForMutation();
       }
       await assertFundingAccountValid(fields.funding_account_id, id);
-      const touchesStatement =
-        "statement_balance" in fields || "statement_balance_date" in fields;
       let current;
-      if (touchesStatement || "is_active" in fields) {
+      if ("is_active" in fields) {
         current = await accountRepository.getById(id);
         if (!current) throw new NotFoundError(`Account ${id} not found`);
-      }
-      // Partial PATCH: validate the merged state, not just the provided keys —
-      // e.g. setting a balance while the stored date is NULL must still fail.
-      if (touchesStatement) {
-        assertStatementBalanceHasDate(
-          "statement_balance" in fields
-            ? fields.statement_balance
-            : current.statement_balance,
-          "statement_balance_date" in fields
-            ? fields.statement_balance_date
-            : current.statement_balance_date,
-        );
       }
       // Lifecycle (ADR-088 addendum, D5): closing stamps closed_at once (a
       // redundant re-archive keeps the original timestamp); reactivating clears

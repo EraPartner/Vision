@@ -41,6 +41,7 @@ interface TransactionInfoDialogProps {
         transactionId: number,
         field: InfoEditableField,
         value: string | number | undefined,
+        accountId?: number | null,
     ) => void;
 }
 
@@ -52,9 +53,9 @@ export function TransactionInfoDialog({
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
     const updateMutation = useUpdateTransaction();
-    // Account-name suggestions for the bank field (ADR-088). Writing the name keeps
-    // the dual-write trigger's account_id link intact; free entry still creates new.
-    const { data: accountsData } = useAccounts({ active: "all" });
+    // Inline edits may only select an existing active account. Account creation
+    // remains confined to the dedicated create form during the compatibility window.
+    const { data: accountsData } = useAccounts({ active: "true" });
 
     const [editingInfoField, setEditingInfoField] =
         useState<InfoEditableField | null>(null);
@@ -89,6 +90,7 @@ export function TransactionInfoDialog({
         const trimmed = editingInfoValue.trim();
         const payload: TransactionUpdate = {};
         let localValue: string | number | undefined = trimmed;
+        let localAccountId: number | null | undefined;
 
         if (editingInfoField === "amount") {
             const parsed = moneyAmount(
@@ -115,8 +117,19 @@ export function TransactionInfoDialog({
             // "no change", never "clear".
             payload.currency = trimmed || undefined;
         } else if (editingInfoField === "bank") {
-            // null clears the label (and the 0066 trigger clears account_id).
-            payload.bank_account = trimmed || null;
+            if (!trimmed) {
+                payload.account_id = null;
+                localAccountId = null;
+            } else {
+                const normalized = trimmed.toLowerCase();
+                const account = (accountsData?.items ?? []).find(
+                    (item) => item.name.trim().toLowerCase() === normalized,
+                );
+                if (!account) return;
+                payload.account_id = account.id;
+                localAccountId = account.id;
+                localValue = account.name;
+            }
         } else if (editingInfoField === "comment") {
             payload.comment = trimmed || null;
             localValue = trimmed || "";
@@ -126,7 +139,16 @@ export function TransactionInfoDialog({
             id: infoTransaction.id,
             data: payload,
         });
-        onApplyLocal(infoTransaction.id, editingInfoField, localValue);
+        if (editingInfoField === "bank") {
+            onApplyLocal(
+                infoTransaction.id,
+                editingInfoField,
+                localValue,
+                localAccountId,
+            );
+        } else {
+            onApplyLocal(infoTransaction.id, editingInfoField, localValue);
+        }
         cancelEdit();
     };
 

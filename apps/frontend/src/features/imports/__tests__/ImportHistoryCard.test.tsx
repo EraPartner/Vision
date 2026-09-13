@@ -75,6 +75,9 @@ describe("ImportHistoryCard", () => {
         expect(await screen.findByText("ing")).toBeInTheDocument();
         expect(await screen.findByText("belfius")).toBeInTheDocument();
         expect(await screen.findByText("awaiting_review")).toBeInTheDocument();
+        expect(
+            screen.getByRole("link", { name: /resume review/i }),
+        ).toHaveAttribute("href", "/import/3/review");
     });
 
     it("renders rollback button only for completed batches with remaining transactions", async () => {
@@ -139,9 +142,7 @@ describe("ImportHistoryCard", () => {
         expect(
             within(dialog).getByText(/roll back import/i),
         ).toBeInTheDocument();
-        expect(
-            within(dialog).getByText(/march\.csv/i),
-        ).toBeInTheDocument();
+        expect(within(dialog).getByText(/march\.csv/i)).toBeInTheDocument();
     });
 
     it("performs rollback and refreshes the list when confirmed", async () => {

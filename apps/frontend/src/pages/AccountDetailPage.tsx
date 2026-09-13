@@ -86,7 +86,7 @@ import {
     type AccountFormValues,
 } from "@/features/accounts/AddAccountDialog";
 import {
-    toAccountPayload,
+    toAccountEditPayload,
     accountToFormValues,
 } from "@/features/accounts/accountFormMapping";
 import { MergeAccountDialog } from "@/features/accounts/MergeAccountDialog";
@@ -132,7 +132,9 @@ export default function AccountDetailPage() {
 
     // The hub's cached population (active + archived) — the simplest source for
     // one account, and usually already warm from the hub navigation.
-    const { data, isLoading, isError, error } = useAccounts({ active: "all" });
+    const { data, isLoading, isError, error, refetch } = useAccounts({
+        active: "all",
+    });
     const accounts = useMemo(() => data?.items ?? [], [data]);
     const account = validId
         ? accounts.find((a) => a.id === accountId)
@@ -257,19 +259,22 @@ export default function AccountDetailPage() {
               : SPARK_COLOR_NEUTRAL;
     }, [sparkPoints]);
 
-    const handleSave = (values: AccountFormValues) => {
+    const handleSave = async (values: AccountFormValues) => {
         if (!account) return;
-        updateMutation.mutate(
-            {
+        try {
+            await updateMutation.mutateAsync({
                 id: account.id,
-                data: toAccountPayload(
+                data: toAccountEditPayload(
                     values,
-                    "update",
+                    account.currency,
                     appSettings.numberFormat,
                 ),
-            },
-            { onSuccess: () => setEditing(false) },
-        );
+            });
+            await refetch();
+            setEditing(false);
+        } catch {
+            return;
+        }
     };
 
     // Reopen a closed account. Note: the WP-A3 close semantics dropped it from

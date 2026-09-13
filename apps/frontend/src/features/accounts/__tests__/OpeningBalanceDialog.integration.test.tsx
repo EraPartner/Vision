@@ -155,13 +155,34 @@ describe("OpeningBalanceDialog (integration) — anchors in the partition's own 
         });
     });
 
-    it("still prefers a stored statement reading over either computed figure", async () => {
+    it("prefers a stored collection reading over either computed figure", async () => {
         mockOpeningBalanceApi();
         await renderDialog({
             ...MULTI_CURRENCY,
-            statement_balance: 120,
+            statement_balances: [
+                { currency: "EUR", balance: 120, balance_date: "2026-09-01" },
+            ],
         } as Account);
 
         expect(balanceInput().value).toBe("120");
+    });
+
+    it("prefers the currency collection over a conflicting scalar projection", async () => {
+        mockOpeningBalanceApi();
+        await renderDialog({
+            ...MULTI_CURRENCY,
+            statement_balances: [
+                {
+                    currency: "EUR",
+                    balance: 135,
+                    balance_date: "2026-09-10",
+                },
+            ],
+            statement_balance: 999,
+            statement_balance_date: "2020-01-01",
+        } as Account);
+
+        expect(balanceInput().value).toBe("135");
+        expect(screen.getByLabelText(/^As of date$/)).toHaveValue("2026-09-10");
     });
 });

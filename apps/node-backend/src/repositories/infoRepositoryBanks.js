@@ -35,7 +35,7 @@ export const banksRepository = {
    * Each account row additionally carries (WP-A1, additive — existing fields
    * are untouched):
    *   - `display_name`      — friendly label (falls back to `name`).
-   *   - `drift`             — statement_balance − the reconciliation base (the
+   *   - `drift`             — selected statement − the reconciliation base (the
    *                           computed balance of the partition the statement is
    *                           a statement for), in that native currency — the
    *                           same figure as the hub's drift badge, since both
@@ -78,17 +78,7 @@ export const banksRepository = {
                COALESCE(a.display_name, a.name) AS display_name,
                bal.currency,
                bal.balance,
-               -- Drift inputs, resolved in JS by the SAME shared helper the hub
-               -- badge uses (statementPartition) so the two surfaces
-               -- cannot disagree: the statement figure minus the partition it is
-               -- a statement FOR — the account's own currency's, since
-               -- a.statement_balance is one number carrying one date and sitting
-               -- next to a.currency. It used to read the cross-currency
-               -- lb.balance for hub parity, which put a Σ-of-bare-amounts drift
-               -- next to a per-currency converted balance on the same badge; the
-               -- hub now derives drift this way too, so parity holds on the
-               -- correct figure instead of the wrong one.
-               a.statement_balance,
+               COALESCE(sb.statement_balances, '[]'::json) AS statement_balances,
                COALESCE(a.currency, 'EUR') AS account_currency,
                lb.anchor_date,
                lb.post_anchor_count,
@@ -114,6 +104,17 @@ export const banksRepository = {
         -- history, not one currency's — matching the accounts hub, which reads
         -- the same lateral for the same two fields.
         ${computedBalanceByCurrencyLateral({ account: "a.id", asOfDate: "$1::date" })}
+        LEFT JOIN LATERAL (
+          SELECT json_agg(
+                   json_build_object(
+                     'currency', s.currency,
+                     'balance', s.balance,
+                     'balance_date', to_char(s.balance_date, 'YYYY-MM-DD')
+                   ) ORDER BY s.currency
+                 ) AS statement_balances
+            FROM account_statement_balances s
+           WHERE s.account_id = a.id
+        ) sb ON TRUE
         JOIN LATERAL (
           -- Per-account activity metadata over active rows.
           SELECT COUNT(*) AS transaction_count,
@@ -193,7 +194,7 @@ export const banksRepository = {
             (
               /** @type {{
             account_id: number, bank_account: string, display_name: string, currency: string|null,
-            balance: string, statement_balance: string|null, account_currency: string,
+            balance: string, statement_balances: Array<{currency:string,balance:string,balance_date:string}>, account_currency: string,
             anchor_date: string|null, post_anchor_count: string|null,
             date: Date|null, transaction_count: string,
             first_transaction: Date|null, last_transaction: Date|null,
@@ -243,7 +244,7 @@ export const banksRepository = {
      *   account: Record<string, any>,
      *   balance: import('decimal.js').Decimal,
      *   parts: Array<{ currency: string, balance: string }>,
-     *   statementBalance: string|null,
+     *   statementBalances: Array<{currency:string,balance:string,balance_date:string}>,
      *   accountCurrency: string,
      * }>} */
     const accountsByName = new Map();
@@ -272,7 +273,7 @@ export const banksRepository = {
           },
           balance: toDecimal(0),
           parts: [],
-          statementBalance: row.statement_balance,
+          statementBalances: row.statement_balances ?? [],
           accountCurrency: row.account_currency,
         };
         accountsByName.set(row.bank_account, entry);
@@ -288,12 +289,19 @@ export const banksRepository = {
       // currency's partition, resolved by the shared helper so this badge and
       // the hub's (accountRepository.getAll) are the same number by
       // construction. No statement balance → undefined, never null (convention).
+      const statementCurrency = statementPartition(
+        entry.parts,
+        entry.accountCurrency,
+      ).currency;
+      const statementBalance = entry.statementBalances.find(
+        (reading) => reading.currency === statementCurrency,
+      )?.balance;
       entry.account.drift =
-        entry.statementBalance == null
+        statementBalance == null
           ? undefined
           : roundToCents(
               toNumber(
-                toDecimal(entry.statementBalance).minus(
+                toDecimal(statementBalance).minus(
                   toDecimal(
                     statementPartition(entry.parts, entry.accountCurrency)
                       .balance,

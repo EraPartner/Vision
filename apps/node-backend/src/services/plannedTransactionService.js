@@ -19,7 +19,6 @@ import { stampAccountIdForUpdate } from "../repositories/transactionRepository.j
 export async function create(input) {
   const normalized = {
     ...input,
-    bank_account: input.bank_account ? input.bank_account.toUpperCase() : null,
     memo: input.memo ? input.memo.toUpperCase() : null,
     currency: input.currency ? input.currency.toUpperCase() : "EUR",
     url: input.url || null,
@@ -55,9 +54,7 @@ export async function create(input) {
   };
 
   const plannedId = await withTransaction(async (client) => {
-    // Resolve the compatibility label inside the create transaction, then
-    // persist only account_id. A later failure rolls back a newly minted
-    // account together with the planned row.
+    // Validate the canonical account identity inside the write transaction.
     await stampAccountIdForUpdate(normalized, client);
     const id = await insertPlannedTransactionInTransaction(client, normalized);
     if (

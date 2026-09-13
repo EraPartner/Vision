@@ -106,9 +106,6 @@ export async function validateBatch({ batchId, onProgress }) {
         errorMessages.push(issue);
       } else {
         statuses.push("validated");
-        // Compatibility write: the legacy unique tx_hash receives the new,
-        // occurrence-distinct fingerprint. Historical tx_hash rows are never
-        // rewritten or reinterpreted.
         txHashes.push(identity.fingerprint);
         sourceRecordHashes.push(identity.sourceRecordHash);
         fingerprintVersions.push(identity.version);
@@ -119,14 +116,13 @@ export async function validateBatch({ batchId, onProgress }) {
     await query(
       `UPDATE import_staging_rows s
           SET status        = v.status,
-              tx_hash       = v.tx_hash,
               source_record_hash = v.source_record_hash,
-              dedup_fingerprint = v.tx_hash,
+              dedup_fingerprint = v.fingerprint,
               dedup_fingerprint_version = v.fingerprint_version,
               dedup_occurrence = v.occurrence,
               error_message = v.error_message
          FROM unnest($1::bigint[], $2::text[], $3::text[], $4::text[], $5::smallint[], $6::integer[], $7::text[])
-              AS v(id, status, tx_hash, source_record_hash, fingerprint_version, occurrence, error_message)
+              AS v(id, status, fingerprint, source_record_hash, fingerprint_version, occurrence, error_message)
         WHERE s.id = v.id`,
       [
         ids,
