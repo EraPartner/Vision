@@ -121,10 +121,6 @@ test("Electron development cannot reuse packaged Vision data", () => {
     main,
     /NATIVE_RUNTIME_ID = __IS_DEMO[\s\S]{0,100}DEMO_RUNTIME_ID[\s\S]{0,120}__IS_DEVELOPMENT_PROFILE[\s\S]{0,80}["']vision_dev["'][\s\S]{0,40}["']vision["']/,
   );
-  assert.match(
-    main,
-    /readRuntimeSelectionState\(\s*app\.getPath\(["']userData["']\),\s*NATIVE_RUNTIME_ID/,
-  );
   assert.match(main, /runtimeId: NATIVE_RUNTIME_ID/);
 });
 

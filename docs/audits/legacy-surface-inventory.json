@@ -40,8 +40,8 @@
     "total": 53,
     "remove-now": 0,
     "migrate-then-remove": 0,
-    "retain-with-reason": 17,
-    "historical-record-only": 36,
+    "retain-with-reason": 15,
+    "historical-record-only": 38,
     "unknown": 0
   },
   "records": [
@@ -1021,39 +1021,38 @@
       "id": "LEG-ELEC-USERDATA-NAME",
       "title": "vision-desktop userData directory migration",
       "domain": "Electron/persistence",
-      "classification": "retain-with-reason",
-      "disposition": "Retained by explicit owner decision on 2026-09-12. The small startup guard protects skipped-version installations from stranding settings, attachments, or their only database, while its removal has no material runtime benefit.",
+      "classification": "historical-record-only",
+      "disposition": "Retired by ADR-142 on 2026-09-13 after the owner confirmed that the sole maintained installation uses the canonical Vision application-data directory and requires no legacy support.",
       "paths": [
-        "packaging/electron/main.js",
-        "docs/adr/045-electron-app-name-userData-migration.md"
+        "docs/adr/045-electron-app-name-userData-migration.md",
+        "docs/adr/142-retire-electron-legacy-install-guards.md"
       ],
-      "readers": "Electron startup checks the legacy and canonical userData paths.",
-      "writers": "Renames the old directory or archives it when the canonical target is populated.",
-      "persistedData": "Settings, native runtime state, attachments, or retired embedded-compose data.",
-      "supportWindow": "Indefinite recovery compatibility; reconsider only with a new evidence-backed retirement decision.",
+      "readers": "No current runtime reader; historical ADRs describe the retired path.",
+      "writers": "No current runtime writer moves or archives the old directory.",
+      "persistedData": "Any data left only in an old vision-desktop directory is outside the supported current-install boundary.",
+      "supportWindow": "Ended 2026-09-13; zero maintained legacy installs.",
       "replacement": "Canonical Vision userData directory.",
       "deletionDependencies": [],
-      "liveEvidence": "All 144 Electron contract tests pass. Source-runtime and packaged-payload PostgreSQL 18 smokes passed through revision 0106 on 2026-09-12, including API, encrypted backup/restore, and attachment readback; skipped-version population remains unknown, which is the reason to retain the guard.",
+      "liveEvidence": "ADR-142 records the sole-user cutoff. Electron startup no longer probes or mutates the legacy directory; canonical native runtime and packaged checks are the acceptance boundary.",
       "todoTitle": null
     },
     {
       "id": "LEG-ELEC-NATIVE-CUTOVER",
       "title": "Retired Docker runtime cutover guards",
       "domain": "Electron/runtime",
-      "classification": "retain-with-reason",
-      "disposition": "Retained by explicit owner decision on 2026-09-12. The fail-closed guard prevents a skipped-version installation with legacy Docker state from silently opening an empty native database.",
+      "classification": "historical-record-only",
+      "disposition": "Retired by ADR-142 on 2026-09-13. Persisted Docker selection and embedded-Compose residue no longer influence current native startup.",
       "paths": [
-        "packaging/electron/runtime/index.js",
-        "packaging/electron/runtime/native.js",
-        "packaging/release/README.md"
+        "docs/adr/133-native-only-runtime-and-delivery.md",
+        "docs/adr/142-retire-electron-legacy-install-guards.md"
       ],
-      "readers": "Runtime selection reads settings, native cutover marker, and embedded_compose residue.",
-      "writers": "Current native activation writes runtime-state markers.",
-      "persistedData": "Legacy Docker database and cutover state can represent the user's only financial data.",
-      "supportWindow": "Indefinite recovery compatibility; reconsider only with a new evidence-backed retirement decision.",
-      "replacement": "Canonical native runtime with a verified cutover marker.",
+      "readers": "Current startup reads no Docker selector or embedded-Compose residue.",
+      "writers": "Current native activation writes only the canonical native runtime marker.",
+      "persistedData": "Legacy Docker data is outside the supported current-install boundary.",
+      "supportWindow": "Ended 2026-09-13; zero maintained legacy installs.",
+      "replacement": "Canonical native runtime and its current ownership marker.",
       "deletionDependencies": [],
-      "liveEvidence": "The active guard is covered by Electron contract tests, and current source and packaged native-runtime restore smokes pass. Legacy-install population remains unknown, so fail-closed behavior remains the safe supported result.",
+      "liveEvidence": "Runtime tests prove stale legacy settings and embedded-Compose evidence do not change native selection; packaged native validation is the acceptance boundary.",
       "todoTitle": null
     },
     {

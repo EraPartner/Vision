@@ -767,12 +767,6 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
   - Wait for ADR-109 cleanup, use `pg_depend` to prove zero consumers, decide the supported downgrade
     boundary, and then remove the type in a reversible PostgreSQL migration.
 
-- [ ] **Retire Electron legacy-install migration guards after the support cutoff** 🔽
-  - Tracking: 🔎 decision-needed 2026-09-09 (the user-data move and native cutover guards still prevent skipped-version installs from stranding data or opening an empty database)
-  - ↪ _from: Legacy compatibility inventory LEG-ELEC-USERDATA-NAME and LEG-ELEC-NATIVE-CUTOVER_
-  - Establish zero maintained legacy installs or a published cutoff, preserve a recovery rule, and
-    run packaged migration smoke tests before removing both startup guards.
-
 ### 🏦 Accounts and portfolio features
 
 - [ ] **Build forward-only persisted per-broker history after current-point surfaces have soaked** 🔽

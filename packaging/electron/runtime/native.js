@@ -1686,29 +1686,9 @@ function createNativeRuntime(options) {
     });
   }
 
-  async function assertNativeActive({ allowUncutover = false } = {}) {
+  async function assertNativeActive() {
     const state = await readState();
-    if (allowUncutover) return state;
-    if (state?.activeRuntime === "docker") {
-      const error = new Error(
-        "A legacy runtime marker is active. Migrate with Vision 1.0.2 before installing this release.",
-      );
-      error.code = "RUNTIME_SPLIT_BRAIN_GUARD";
-      throw error;
-    }
     if (state?.activeRuntime === "native") return state;
-    const legacyEnv = path.join(userDataDir, "embedded_compose", ".env");
-    const legacyInstall = await fs.promises
-      .access(legacyEnv)
-      .then(() => true)
-      .catch(() => false);
-    if (legacyInstall) {
-      const error = new Error(
-        "Legacy Vision data was detected. Migrate with Vision 1.0.2 before installing this release.",
-      );
-      error.code = "NATIVE_CUTOVER_REQUIRED";
-      throw error;
-    }
     await writeState({ activeRuntime: "native", activation: "fresh-install" });
     return readState();
   }
@@ -1837,8 +1817,8 @@ function createNativeRuntime(options) {
     });
   }
 
-  async function start({ allowUncutover = false } = {}) {
-    await assertNativeActive({ allowUncutover });
+  async function start() {
+    await assertNativeActive();
     const config = await bootstrapDatabase();
     assertNativeChromeAvailable(tools?.chrome);
     const command = await backendCommand();
@@ -2236,13 +2216,9 @@ function createNativeRuntime(options) {
 
   async function activateRestoredDatabase(
     sourcePath,
-    {
-      format = "plain",
-      expectedSchemaHead = undefined,
-      allowUncutover = false,
-    } = {},
+    { format = "plain", expectedSchemaHead = undefined } = {},
   ) {
-    await assertNativeActive({ allowUncutover });
+    await assertNativeActive();
     const config = await bootstrapDatabase();
     const stagingDatabase = restoreDatabaseName(config.database, "restore");
     const previousDatabase = restoreDatabaseName(config.database, "previous");

@@ -155,7 +155,6 @@ test("activates, verifies, and finalizes a changed Demo seed", async (t) => {
   assert.deepEqual(runtime.calls.find((call) => Array.isArray(call))[1], {
     format: "custom",
     expectedSchemaHead: manifest.schemaRevision,
-    allowUncutover: true,
   });
   await finalizeNativeDemo(runtime, prepared);
   assert.ok(runtime.calls.includes("finalizeDatabaseSwitch"));

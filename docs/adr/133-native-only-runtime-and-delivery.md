@@ -14,7 +14,7 @@ tags:
     macos,
     apple-container,
   ]
-description: Vision retires active Docker and Compose support across product runtime, development, CI, and releases while preserving native PostgreSQL checks and a fail-closed legacy migration boundary.
+description: Vision retires active Docker and Compose support across product runtime, development, CI, and releases while preserving native PostgreSQL checks; ADR-142 later retires its legacy migration boundary.
 aliases: [native-only Vision, Docker retirement, Compose retirement]
 ---
 
@@ -25,6 +25,9 @@ aliases: [native-only Vision, Docker retirement, Compose retirement]
 Accepted — 2026-09-08. This supersedes [[docs/adr/039-docker-container-hardening|ADR-039]],
 [[docs/adr/051-docker-compose-sync-named-volumes|ADR-051]], and the optional-provider and importer
 parts of [[docs/adr/113-native-macos-runtime|ADR-113]].
+
+The legacy-install guard in this decision was superseded by
+[[docs/adr/142-retire-electron-legacy-install-guards|ADR-142]] on 2026-09-13.
 
 ## Context
 

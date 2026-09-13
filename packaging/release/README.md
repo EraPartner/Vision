@@ -68,10 +68,10 @@ Vision fails closed and records a diagnostic instead of connecting to the unknow
 
 ## Existing legacy installation
 
-This release no longer imports data from the retired container-backed runtime. Before installing
-it over such an installation, use Vision 1.0.2 to complete the native cutover, verify the native
-database and attachments, and create a `.visionbak` backup. This release fails closed when it sees
-a legacy runtime marker so it cannot silently open an empty database.
+Legacy Electron application-data and container-backed runtimes are unsupported as of 2026-09-13.
+This release does not discover, migrate, import, or block on their state. Recover any intentionally
+retained legacy data outside the current application before installing this release. Current
+encrypted backup and restore support applies to the canonical native runtime.
 
 ## Daily use
 
@@ -111,13 +111,12 @@ performing a rollback.
 
 ## Troubleshooting
 
-| Symptom                                                              | Action                                                                                                      |
-| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| **Vision cannot be opened because the developer cannot be verified** | Right-click `Vision.app`, select **Open**, then confirm **Open**.                                           |
-| **Vision reports a corrupt or wrong-version native runtime**         | Reinstall the same Vision release. Do not bypass the check with an unknown PostgreSQL server.               |
-| **Native PostgreSQL port is in use**                                 | Stop the unrelated listener on port `54329`, or use the documented development-only port override.          |
-| **Backend does not become ready**                                    | Open Vision logs from the recovery screen and inspect `postgres.log` and `backend.log`.                     |
-| **Vision reports a legacy runtime marker**                           | Reinstall Vision 1.0.2, complete and verify its native cutover, create a backup, then install this release. |
+| Symptom                                                              | Action                                                                                             |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| **Vision cannot be opened because the developer cannot be verified** | Right-click `Vision.app`, select **Open**, then confirm **Open**.                                  |
+| **Vision reports a corrupt or wrong-version native runtime**         | Reinstall the same Vision release. Do not bypass the check with an unknown PostgreSQL server.      |
+| **Native PostgreSQL port is in use**                                 | Stop the unrelated listener on port `54329`, or use the documented development-only port override. |
+| **Backend does not become ready**                                    | Open Vision logs from the recovery screen and inspect `postgres.log` and `backend.log`.            |
 
 ## Uninstall
 

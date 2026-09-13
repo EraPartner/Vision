@@ -18,10 +18,11 @@ related_code: [[TODO.md]], [[package.json]], [[scripts/check-legacy-inventory.js
 > live PostgreSQL gate passed on 2026-09-12. Accepted ADR-136 retires the HTTP-error and import-query
 > compatibility surfaces and removes the deep-link redirects under a same-release policy. The
 > deep-link source and contract checks pass; manual browser acceptance against the rebuilt synthetic
-> Demo was user-confirmed on 2026-09-12. Electron legacy-install guards remain retained recovery
-> compatibility and continue to fail closed for unknown skipped-version installs. On 2026-09-13,
-> all six staged database retirements below completed on the maintained installation. Their guarded
-> contracts remain available for other installations.
+> Demo was user-confirmed on 2026-09-12. On 2026-09-13, ADR-142 ended legacy Electron-install
+> support after the owner confirmed that the sole maintained installation uses canonical native
+> storage; current startup no longer discovers or migrates old application-data or Docker state.
+> Also on 2026-09-13, all six staged database retirements below completed on the maintained
+> installation. Their guarded contracts remain available for other installations.
 
 ## Outcome
 

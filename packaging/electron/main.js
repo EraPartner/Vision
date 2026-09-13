@@ -28,11 +28,7 @@ const {
 const backupRestore = require("./backup/restore");
 const { runBundleBackup, runBundleRestore, runRestore } = backupRestore;
 const updater = require("./updater");
-const {
-  resolveRuntimeMode,
-  readRuntimeSelectionState,
-  createRuntimeProvider,
-} = require("./runtime");
+const { createRuntimeProvider } = require("./runtime");
 const {
   DEMO_POSTGRES_PORT,
   DEMO_RUNTIME_ID,
@@ -155,10 +151,9 @@ const NATIVE_RUNTIME_ID = __IS_DEMO
     : "vision";
 
 // Acquire the single-instance lock as early as possible — immediately after
-// setName (the lock lives in userData, so it must run after that) and BEFORE the
-// legacy-userData migration and the rest of module eval. This means a second
-// launch quits here instead of evaluating the whole module first, and two
-// simultaneous first launches can't both enter the migration's renameSync.
+// setName (the lock lives in userData, so it must run after that) and before the
+// rest of module evaluation. This means a second launch quits here instead of
+// evaluating the whole module first.
 // The primary instance registers its second-instance/activate/launch handlers
 // at the bottom of the module, still gated on this same flag.
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
@@ -167,8 +162,8 @@ if (!gotSingleInstanceLock) {
 }
 
 // Persist main-process logs to a rotating file in userData. A double-clicked
-// .app discards stderr, so packaged-app startup failures (the migration below,
-// boot-phase timings, corrupt-settings quarantine, port selection, the startup
+// .app discards stderr, so packaged-app startup failures (boot-phase timings,
+// corrupt-settings quarantine, port selection, the startup
 // error dialogs) leave no trail to attach to a bug report. Installed here —
 // right after the single-instance lock, before the first console.* of module
 // eval — so migration/startup logs are captured. Best-effort: any failure
@@ -224,42 +219,6 @@ if (gotSingleInstanceLock)
       write("log", [`main-process logger started (pid ${process.pid})`]);
     } catch {
       /* logging is best-effort; never block boot */
-    }
-  })();
-
-// One-shot migration from the legacy "vision-desktop" userData dir to the
-// canonical "Vision" dir. Preserves existing settings and native runtime data.
-// Skipped for a second instance (it doesn't hold the lock and is about to quit).
-if (gotSingleInstanceLock)
-  (function migrateLegacyUserData() {
-    try {
-      if (__IS_DEMO || __IS_DEVELOPMENT_PROFILE) return;
-      const target = app.getPath("userData");
-      const legacy = path.join(path.dirname(target), "vision-desktop");
-      if (legacy === target) return;
-      if (!fs.existsSync(legacy)) return;
-      const targetExists = fs.existsSync(target);
-      const targetEmpty = targetExists
-        ? fs.readdirSync(target).filter((n) => n !== ".DS_Store").length === 0
-        : false;
-      if (!targetExists || targetEmpty) {
-        if (targetExists) fs.rmSync(target, { recursive: true, force: true });
-        fs.renameSync(legacy, target);
-        console.error(
-          '[migrate] Moved legacy userData "vision-desktop" → "Vision"',
-        );
-      } else {
-        const archived = `${legacy}.legacy-${Date.now()}`;
-        fs.renameSync(legacy, archived);
-        console.error(
-          `[migrate] "Vision" userData already populated; archived legacy dir to ${archived}`,
-        );
-      }
-    } catch (err) {
-      console.warn(
-        "[migrate] userData migration failed (non-fatal):",
-        err && err.message ? err.message : err,
-      );
     }
   })();
 
@@ -2350,27 +2309,6 @@ async function launch() {
   //     t() falls back to the key itself — survivable for startup paths.
   const endI18n = bootMark("init_i18n");
   const persistedSettings = await loadSettings();
-  try {
-    const runtimeState = await readRuntimeSelectionState(
-      app.getPath("userData"),
-      NATIVE_RUNTIME_ID,
-    );
-    resolveRuntimeMode({
-      settings: persistedSettings,
-      runtimeState,
-      isDemo: __IS_DEMO,
-    });
-  } catch (error) {
-    await dialog.showMessageBox({
-      type: "error",
-      buttons: ["OK"],
-      title: APP_NAME,
-      message: "Vision runtime configuration is invalid.",
-      detail: error && error.message ? error.message : String(error),
-    });
-    app.quit();
-    return;
-  }
   await initI18n(persistedSettings.nativeLanguage);
   endI18n();
 
@@ -2469,10 +2407,7 @@ async function launch() {
         type: "error",
         buttons: [t("common.ok", null, "OK")],
         title: APP_NAME,
-        message:
-          error?.code === "LEGACY_RUNTIME_MIGRATION_REQUIRED"
-            ? "Existing Vision data requires migration with Vision 1.0.2."
-            : t("app.failedStart", null, "Vision could not start."),
+        message: t("app.failedStart", null, "Vision could not start."),
         detail: error && error.message ? error.message : String(error),
       });
       app.quit();

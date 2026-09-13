@@ -3,7 +3,7 @@ title: Electron Desktop Architecture
 type: architecture-doc
 status: active
 date: 2026-08-31
-updated: 2026-09-11
+updated: 2026-09-13
 tags:
   [
     architecture,
@@ -178,16 +178,17 @@ This design choice means:
 - The frontend is a standard React app (deployable to web)
 - Electron is just the packaging layer
 
-### Native Runtime (ADR-113, ADR-114, and ADR-133)
+### Native Runtime (ADR-113, ADR-114, ADR-133, and ADR-142)
 
 The native runtime owns start, stop, restart, health, readiness, logs, database dump/restore, and
-attachment paths. A durable marker at `native/vision/runtime-state.json` prevents accidental
-database switching. A saved legacy runtime marker fails closed and directs the user to Vision
-1.0.2 for migration; the current release does not contain an importer. Vision Demo always uses a
-separate `vision_demo` runtime and deterministic seed. See
+attachment paths. A durable marker at `native/vision/runtime-state.json` records the current native
+owner. After the one maintained installation moved to this canonical runtime, Vision retired all
+legacy application-data and Docker-runtime discovery. Current releases neither migrate nor recover
+old installs. Vision Demo always uses a separate `vision_demo` runtime and deterministic seed. See
 [[docs/adr/113-native-macos-runtime|ADR-113]],
 [[docs/adr/114-native-deterministic-demo-runtime|ADR-114]], and
-[[docs/adr/133-native-only-runtime-and-delivery|ADR-133]], and
+[[docs/adr/133-native-only-runtime-and-delivery|ADR-133]],
+[[docs/adr/142-retire-electron-legacy-install-guards|ADR-142]], and
 [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]].
 
 ---
@@ -221,17 +222,10 @@ Electron configuration is in `packaging/electron/`.
   directory while the database remained elsewhere, causing authentication failure or an apparently
   empty app. This history explains why native state now has one canonical application-data root.
 
-See [[docs/adr/045-electron-app-name-userData-migration|ADR-045]] for the full problem statement and migration strategy.
-
-**One-shot userData migration (lines ~82–104):**
-
-The `migrateLegacyUserData()` IIFE detects and migrates any legacy `vision-desktop/` userData directory to the canonical `Vision/`:
-
-- **Fresh install:** No legacy dir → skip migration
-- **Existing install (legacy only):** Rename `vision-desktop/` to `Vision/` and preserve settings
-- **Migration conflict (both exist):** Archive legacy to `vision-desktop.legacy-<timestamp>` to avoid TCC visibility
-
-Migration is non-fatal; any error is logged and app continues.
+See [[docs/adr/045-electron-app-name-userData-migration|ADR-045]] for the historical problem and
+[[docs/adr/142-retire-electron-legacy-install-guards|ADR-142]] for the support cutoff. Current
+startup sets the canonical identity but does not inspect, rename, archive, or import an old
+`vision-desktop/` directory.
 
 ### Main Process Initialization
 
@@ -248,9 +242,9 @@ Migration is non-fatal; any error is logged and app continues.
    - `loadI18nAsync()` reads locale from `app.getLocale()`, tries resource path then fallback dir
    - Deferred from module-load init to support async `fs.promises` in preload/runtime (Phase 0)
 
-4. **Runtime selection** — Require the native runtime. The durable marker is authoritative. A saved
-   legacy marker raises `LEGACY_RUNTIME_MIGRATION_REQUIRED` and fails closed; it cannot be bypassed
-   with an environment variable. The seeded Demo always selects its isolated native runtime.
+4. **Runtime selection** — Select the native runtime. Explicit unsupported runtime values are
+   configuration errors. Persisted legacy settings and markers do not influence selection. The
+   seeded Demo always selects its isolated native runtime.
 
 5. **Native initialization**:
    - choose and persist an available loopback backend port;
@@ -277,9 +271,6 @@ Migration is non-fatal; any error is logged and app continues.
    unknown listener.
    Native migration children set `VISION_SKIP_CONFIG_ENV_LOCAL=true`, so a source checkout's
    local `config/.env.local` cannot override the generated native database URLs.
-
-   A legacy runtime marker raises `LEGACY_RUNTIME_MIGRATION_REQUIRED`; Electron exits without
-   creating or selecting an empty native database.
 
    For Vision Demo, the native branch verifies the packaged seed checksum and custom-format dump,
    creates Vision's required extensions in the fresh staging database as the private cluster

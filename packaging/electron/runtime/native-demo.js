@@ -182,7 +182,6 @@ async function prepareNativeDemo(runtime, { seedRoot, reset = false } = {}) {
   const activation = await runtime.activateRestoredDatabase(seed.dumpPath, {
     format: "custom",
     expectedSchemaHead: seed.manifest.schemaRevision,
-    allowUncutover: true,
   });
   const restored = await runtime.getDatabaseStats();
   try {

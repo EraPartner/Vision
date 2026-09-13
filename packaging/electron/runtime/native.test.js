@@ -1314,7 +1314,7 @@ test("detailed readiness requires the backend database connection", () => {
   assert.equal(isDetailedHealthReady({ database: true }), false);
 });
 
-test("native activation guard blocks a legacy installation without a cutover marker", async () => {
+test("native activation ignores retired legacy-install evidence", async () => {
   const temp = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision-native-guard-"),
   );
@@ -1330,10 +1330,9 @@ test("native activation guard blocks a legacy installation without a cutover mar
       repoRoot: path.resolve(__dirname, "..", "..", ".."),
       runtimeId: "vision_guard_test",
     });
-    await assert.rejects(
-      runtime.assertNativeActive(),
-      (error) => error.code === "NATIVE_CUTOVER_REQUIRED",
-    );
+    const state = await runtime.assertNativeActive();
+    assert.equal(state.activeRuntime, "native");
+    assert.equal(state.activation, "fresh-install");
   } finally {
     await fs.promises.rm(temp, { recursive: true, force: true });
   }
