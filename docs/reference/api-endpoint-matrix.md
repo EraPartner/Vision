@@ -8,7 +8,7 @@ last_modified: 2026-09-11
 adr-reference: 026
 # Authoritative HTTP-operation count, derived from openapi.yaml and enforced by
 # scripts/check-endpoint-matrix.js (CI verify-generated). Bump when routes change.
-api_operation_count: 220
+api_operation_count: 232
 tags:
   [
     reference,
@@ -72,7 +72,7 @@ tags:
     auto-link,
     planned-match,
   ]
-description: Complete matrix of all 220 HTTP API operations (authoritative count from openapi.yaml), 2 health endpoints, and 24 Electron IPC invoke channels. The Electron contract also defines 6 renderer event channels.
+description: Complete matrix of all 232 HTTP API operations (authoritative count from openapi.yaml), 2 health endpoints, and 24 Electron IPC invoke channels. The Electron contract also defines 6 renderer event channels.
 aliases:
   [api matrix, endpoint matrix, all endpoints, api overview, endpoint list]
 ---
@@ -80,7 +80,7 @@ aliases:
 # API Endpoint Matrix
 
 > [!abstract] Overview
-> **220 HTTP API operations** (authoritative count = operations in `openapi.yaml`, enforced by `scripts/check-endpoint-matrix.js` in CI), 2 unversioned `/health` endpoints, and 24 Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
+> **232 HTTP API operations** (authoritative count = operations in `openapi.yaml`, enforced by `scripts/check-endpoint-matrix.js` in CI), 2 unversioned `/health` endpoints, and 24 Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
 >
 > **Note:** As of Phase 2.4, `openapi.yaml` is the authoritative API specification. This matrix provides a quick lookup; see the OpenAPI spec for formal schemas and examples.
 >
@@ -158,6 +158,19 @@ aliases:
 | Method | Path                             | Description                                                                                                           | Rate Limit | Doc |
 | ------ | -------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ---------- | --- |
 | POST   | `/api/cross-workspace/rebalance` | Cash-aware rebalancing: deploy spendable cash into underweight sleeves toward a target allocation, no sells (ADR-098) | —          | —   |
+
+## Analysis Workspace (11 endpoints — ADR-144)
+
+| Method           | Path                              | Description                                        | Rate Limit  | Doc                             |
+| ---------------- | --------------------------------- | -------------------------------------------------- | ----------- | ------------------------------- |
+| GET              | `/api/analysis/catalog`           | Approved dataset, field, measure, and join catalog | 600 req/min | [[docs/api/analysis\|Analysis]] |
+| POST             | `/api/analysis/compile`           | Visual plan to inspectable generated SQL           | 600 req/min | [[docs/api/analysis\|Analysis]] |
+| POST             | `/api/analysis/execute`           | Bounded visual or custom SQL execution             | 600 req/min | [[docs/api/analysis\|Analysis]] |
+| POST             | `/api/analysis/cancel/:requestId` | Same-role PostgreSQL cancellation                  | 600 req/min | [[docs/api/analysis\|Analysis]] |
+| POST             | `/api/analysis/drill`             | Grouped row to bounded contributing records        | 600 req/min | [[docs/api/analysis\|Analysis]] |
+| GET, POST        | `/api/analysis/saved`             | List or create reusable analyses                   | 600 req/min | [[docs/api/analysis\|Analysis]] |
+| GET, PUT, DELETE | `/api/analysis/saved/:id`         | Read, version, or delete one analysis              | 600 req/min | [[docs/api/analysis\|Analysis]] |
+| POST             | `/api/analysis/saved/:id/run`     | Refresh and record success or failure              | 600 req/min | [[docs/api/analysis\|Analysis]] |
 
 ## Transactions (18 endpoints — incl. 4 Tags endpoints)
 
@@ -452,24 +465,25 @@ Server-computed aggregations with materialized-view/live/cache distinction. Prod
 
 Aggregation routes removed in Phase 9 as migration to `/api/aggregations/*` is complete. These endpoints remain for non-aggregation queries only: portfolio-performance, portfolio-summary (realtime totals, Phase 14), net-worth, exchange-rates, inflation-rates, and supporting refresh endpoints. Portfolio-summary endpoint added 2026-04-29 as single source of truth for dashboard and performance page headline metrics. 2026-06-11 (ADR-074): both portfolio-performance and portfolio-summary gain FX attribution fields (assetGain, fxGain, nativeCurrentValue, usedFallbackRate); flows now converted at transaction-date FX rates; no new endpoints added. Phase 9 cutover also removed `GET /api/info` (general statistics) and `GET /api/info/transaction-summary` (summary with filters).
 
-| Method | Path                                    | Description                                                                                                                                                                                                                                                                       | Rate Limit | Doc                                               |
-| ------ | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------- |
-| GET    | `/api/info/banks`                       | List bank accounts                                                                                                                                                                                                                                                                | —          | [[docs/api/info\|Info]]                           |
-| GET    | `/api/info/supported-adapters`          | List supported banks                                                                                                                                                                                                                                                              | —          | [[docs/api/info\|Info]]                           |
-| GET    | `/api/info/transaction-count`           | Total count                                                                                                                                                                                                                                                                       | —          | [[docs/api/info\|Info]]                           |
-| GET    | `/api/info/planned-expenses-next-month` | Next month expenses                                                                                                                                                                                                                                                               | —          | [[docs/api/info\|Info]]                           |
-| GET    | `/api/info/recurring-patterns`          | Recurring detection                                                                                                                                                                                                                                                               | —          | [[docs/api/info\|Info]]                           |
-| GET    | `/api/info/insights-digest`             | Deterministic Smart Insights digest; cash finding is zero-based month-end net cash flow, not an account balance                                                                                                                                                                   | —          | [[docs/api/info\|Info]]                           |
-| GET    | `/api/info/insights-count`              | Cheap versioned projection of the undismissed finding count; dirty or expired state returns pending without inline detection                                                                                                                                                      | —          | [[docs/api/info\|Info]]                           |
-| PUT    | `/api/info/insight-dismissals`          | Strict idempotent server-side subscription or category-outlier dismissal; outlier deviation is derived by the server                                                                                                                                                              | —          | [[docs/api/info\|Info]]                           |
-| GET    | `/api/info/net-worth`                   | Net worth (optional `limit`/`offset` paginate snapshots newest-first; omit both for full history)                                                                                                                                                                                 | 30 req/min | [[docs/api/info\|Info]]                           |
-| GET    | `/api/info/exchange-rates`              | Exchange rates                                                                                                                                                                                                                                                                    | 30 req/min | [[docs/api/info\|Info]]                           |
-| POST   | `/api/info/exchange-rates/refresh`      | Refresh exchange rates                                                                                                                                                                                                                                                            | admin      | [[docs/api/info\|Info]]                           |
-| GET    | `/api/info/inflation-rates`             | Inflation rates                                                                                                                                                                                                                                                                   | 30 req/min | [[docs/api/info\|Info]]                           |
-| POST   | `/api/info/inflation-rates/refresh`     | Refresh inflation                                                                                                                                                                                                                                                                 | admin      | [[docs/api/info\|Info]]                           |
-| POST   | `/api/info/refresh-views`               | Refresh materialized views                                                                                                                                                                                                                                                        | —          | [[docs/api/info\|Info]]                           |
-| GET    | `/api/info/portfolio-performance`       | Performance snapshots, metrics, heatmap, breakdownSummary. 2026-06-11 (ADR-074): snapshots gain optional `value_fx_neutral`; breakdownSummary entries gain `assetGain`, `fxGain`, `nativeCurrentValue`, `usedFallbackRate`                                                        | 30 req/min | [[docs/api/info\|Info]]                           |
-| GET    | `/api/info/portfolio-summary`           | Realtime portfolio totals (single source of truth for dashboard + performance). ADR-074: transaction-date FX attribution. ADR-108: partitioned `byAccount` P&L with machine-readable assignment identity and oversold repair state; per-investment `fullyAssigned` and `oversold` | 60 req/min | [[docs/api/portfolio-summary\|Portfolio Summary]] |
+| Method | Path                                        | Description                                                                                                                                                                                                                                                                       | Rate Limit | Doc                                               |
+| ------ | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------- |
+| GET    | `/api/info/banks`                           | List bank accounts                                                                                                                                                                                                                                                                | —          | [[docs/api/info\|Info]]                           |
+| GET    | `/api/info/supported-adapters`              | List supported banks                                                                                                                                                                                                                                                              | —          | [[docs/api/info\|Info]]                           |
+| GET    | `/api/info/transaction-count`               | Total count                                                                                                                                                                                                                                                                       | —          | [[docs/api/info\|Info]]                           |
+| GET    | `/api/info/planned-expenses-next-month`     | Next month expenses                                                                                                                                                                                                                                                               | —          | [[docs/api/info\|Info]]                           |
+| GET    | `/api/info/recurring-patterns`              | Recurring detection                                                                                                                                                                                                                                                               | —          | [[docs/api/info\|Info]]                           |
+| GET    | `/api/info/insights-digest`                 | Deterministic Smart Insights digest; cash finding is zero-based month-end net cash flow, not an account balance                                                                                                                                                                   | —          | [[docs/api/info\|Info]]                           |
+| GET    | `/api/info/insights-count`                  | Cheap versioned projection of the undismissed finding count; dirty or expired state returns pending without inline detection                                                                                                                                                      | —          | [[docs/api/info\|Info]]                           |
+| PUT    | `/api/info/insight-dismissals`              | Strict idempotent server-side subscription or category-outlier dismissal; outlier deviation is derived by the server                                                                                                                                                              | —          | [[docs/api/info\|Info]]                           |
+| GET    | `/api/info/net-worth`                       | Net worth (optional `limit`/`offset` paginate snapshots newest-first; omit both for full history)                                                                                                                                                                                 | 30 req/min | [[docs/api/info\|Info]]                           |
+| GET    | `/api/info/exchange-rates`                  | Exchange rates                                                                                                                                                                                                                                                                    | 30 req/min | [[docs/api/info\|Info]]                           |
+| POST   | `/api/info/exchange-rates/refresh`          | Refresh exchange rates                                                                                                                                                                                                                                                            | admin      | [[docs/api/info\|Info]]                           |
+| GET    | `/api/info/inflation-rates`                 | Inflation rates                                                                                                                                                                                                                                                                   | 30 req/min | [[docs/api/info\|Info]]                           |
+| POST   | `/api/info/inflation-rates/refresh`         | Refresh inflation                                                                                                                                                                                                                                                                 | admin      | [[docs/api/info\|Info]]                           |
+| POST   | `/api/info/refresh-views`                   | Refresh materialized views                                                                                                                                                                                                                                                        | —          | [[docs/api/info\|Info]]                           |
+| GET    | `/api/info/portfolio-performance`           | Performance snapshots, metrics, heatmap, breakdownSummary. 2026-06-11 (ADR-074): snapshots gain optional `value_fx_neutral`; breakdownSummary entries gain `assetGain`, `fxGain`, `nativeCurrentValue`, `usedFallbackRate`                                                        | 30 req/min | [[docs/api/info\|Info]]                           |
+| GET    | `/api/info/portfolio-performance/by-broker` | Forward-only daily account partitions with frozen names and an explicit unassigned series; no historical backfill (ADR-143)                                                                                                                                                       | 30 req/min | [[docs/api/info\|Info]]                           |
+| GET    | `/api/info/portfolio-summary`               | Realtime portfolio totals (single source of truth for dashboard + performance). ADR-074: transaction-date FX attribution. ADR-108: partitioned `byAccount` P&L with machine-readable assignment identity and oversold repair state; per-investment `fullyAssigned` and `oversold` | 60 req/min | [[docs/api/portfolio-summary\|Portfolio Summary]] |
 
 ## AI Chat (9 endpoints + 30 tool-calling tools)
 
@@ -532,6 +546,7 @@ equal the main senders and preload subscriptions.
 | Resource                             | Endpoints | Rate-Limited |
 | ------------------------------------ | --------- | ------------ |
 | Accounts (ADR-088)                   | 13        | 0            |
+| Analysis Workspace (ADR-144)         | 11        | 11           |
 | Cross-Workspace (ADR-098)            | 1         | 0            |
 | Transactions (incl. Tags)            | 18        | 2            |
 | Categories                           | 6         | 0            |
@@ -552,12 +567,12 @@ equal the main senders and preload subscriptions.
 | Health                               | 2         | 0            |
 | Aggregations (Phase 2/6/10/D)        | 15        | 0            |
 | Reports (Phase 3/7)                  | 3         | 0            |
-| Info/Statistics (Phase 14)           | 16        | 4            |
+| Info/Statistics (Phase 14)           | 17        | 5            |
 | AI Chat                              | 9         | 2            |
 | Electron IPC invoke channels         | 24        | 0            |
-| **Total**                            | **246**   | **14**       |
+| **Total**                            | **258**   | **26**       |
 
-> **220** versioned `/api` HTTP operations are declared in `openapi.yaml` and enforced by `scripts/check-endpoint-matrix.js`. The summary rows are a hand-maintained navigation aid and also list the 2 unversioned `/health` endpoints plus 24 Electron invoke channels. The 6 Electron event channels are documented separately and are not request endpoints. (The Rate-Limited column is approximate and not gate-checked.)
+> **232** versioned `/api` HTTP operations are declared in `openapi.yaml` and enforced by `scripts/check-endpoint-matrix.js`. The summary rows are a hand-maintained navigation aid and also list the 2 unversioned `/health` endpoints plus 24 Electron invoke channels. The 6 Electron event channels are documented separately and are not request endpoints. (The Rate-Limited column is approximate and not gate-checked.)
 
 ## Phase G Endpoint Consolidation (April 2026)
 

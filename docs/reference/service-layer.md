@@ -2,8 +2,8 @@
 title: Service Layer Reference
 type: reference
 status: active
-date: 2026-09-12
-last_modified: 2026-09-12
+date: 2026-09-13
+last_modified: 2026-09-13
 tags: [backend, services, reference, business-logic, phase-1, phase-c, import-pipeline, graceful-shutdown, bug-hunt-2026-05-05, error-handling, robustness, route-service-boundary, repo-service-boundary, layering, thin-seams, adr-067]
 description: Complete reference for backend service modules. June 2026 — all 15 route files now go through thin `services/<domain>Service.js` seams; the lint rule `vision-local/no-repo-direct-from-route` is enforced as ERROR. 14 new thin seam modules added. August 2026 — the inverse edge is enforced too: `vision-local/no-service-import-from-repo` is an ERROR on `src/repositories/**`, with a closed allowlist for the seven sanctioned currency-conversion importers.
 aliases: [services, service layer, business logic, backend services]
@@ -395,15 +395,16 @@ retains its adapter selection and domain-specific staging INSERT.
 ## 10. portfolioPerformanceSnapshotService.js
 
 **File:** [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]]  
-**Purpose:** Computes and stores daily portfolio performance snapshots with per-class breakdowns, including fixed-income investments.
+**Purpose:** Computes aggregate daily portfolio performance and a separate forward-only per-broker history, including an explicit unassigned series.
 
 ### Exported Functions
 
-| Function                   | Signature                                               | Returns                             |
-| -------------------------- | ------------------------------------------------------- | ----------------------------------- |
-| `computeAndStoreSnapshots` | `(targetCurrency) => Promise<void>`                     | Computes + persists daily snapshots |
-| `getSnapshots`             | `(startDate, endDate, currency) => Promise<Snapshot[]>` | Stored snapshots for date range     |
-| `getLatestSnapshot`        | `(currency) => Promise<Snapshot>`                       | Most recent snapshot                |
+| Function                     | Signature                                               | Returns                                      |
+| ---------------------------- | ------------------------------------------------------- | -------------------------------------------- |
+| `computeAndStoreSnapshots`   | `(targetCurrency) => Promise<void>`                     | Aggregate history plus today's broker rows   |
+| `storeCurrentBrokerSnapshot` | `(currency, summary) => Promise<void>`                  | Transactionally replaces today's broker rows |
+| `getSnapshots`               | `(startDate, endDate, currency) => Promise<Snapshot[]>` | Stored aggregate snapshots                   |
+| `getBrokerSnapshots`         | `(startDate, endDate, currency) => Promise<Snapshot[]>` | Frozen broker rows in the requested range    |
 
 ### Snapshot Fields
 
@@ -425,6 +426,10 @@ retains its adapter selection and domain-specific staging INSERT.
 - **Spike Sanitization:** `sanitizeIsolatedDailySpikes` detects "needle" anomalies using log-return analysis (18% jump + revert) and replaces with geometric mean of neighbors
 - **Cumulative Inflation Adjustment:** Compounds monthly Belgian inflation rates, divides portfolio value by cumulative factor
 - **Batch Upsert:** 500-row batches with `ON CONFLICT (snapshot_date) DO UPDATE SET`
+- **Forward-only broker writer:** Writes only the current application date. It never reconstructs
+  earlier broker rows. Each row copies the account identity and label, so later account retagging,
+  renaming, archival, or deletion does not rewrite an already-recorded day. Holdings without an
+  account are stored under the stable `unassigned` key.
 
 ### Dependencies
 
@@ -721,6 +726,30 @@ every other `OllamaError` incl. `TIMEOUT`/`NETWORK_ERROR` → 502; a 504 remap o
 
 ---
 
+## 19. Manual analysis services
+
+**Files:** [[apps/node-backend/src/services/analysisCatalog.js|analysisCatalog.js]],
+[[apps/node-backend/src/services/analysisExecutor.js|analysisExecutor.js]], and
+[[apps/node-backend/src/services/savedAnalysisService.js|savedAnalysisService.js]]
+
+**Purpose:** Compile allowlisted visual plans, execute bounded read-only SQL, and preserve reusable
+analysis definitions and run state.
+
+- `analysisCatalog` exposes four versioned datasets and compiles only declared fields, filters,
+  groups, measures, order terms, and the validated many-to-one account join.
+- `analysisExecutor` accepts one `SELECT` or `WITH` statement over declared approved views. It uses
+  the restricted `vision_analysis_executor` PostgreSQL role, a read-only transaction, statement,
+  lock and idle timeouts, a 1,000-row cap, a 2 MB response cap, and a reserved same-role connection
+  for cancellation even while both execution slots are occupied.
+- `savedAnalysisService` validates the shared analysis contract, appends immutable definition
+  versions, and stores charts, parameters, source references, refresh status, failures, and the last
+  usable result across budgeting, portfolio, research, and cross-workspace libraries.
+
+See [[docs/features/analysis-workspace|Analysis Workspace]] and
+[[docs/adr/144-isolated-manual-analysis-workspace|ADR-144]].
+
+---
+
 ## Dependency Graph
 
 ```
@@ -751,6 +780,7 @@ framework-free and do not depend on repositories or external APIs.
 | **Data Quality**            | `deduplication`, `recurringDetectionService`, `recipientClusterService`, `recipientPatternService`                                                                                                                 |
 | **Identity & Aggregations** | `recipientMergeService`, `aggregationRefresh`, `materializedViewService`                                                                                                                                           |
 | **Performance**             | `portfolioPerformanceSnapshotService`                                                                                                                                                                              |
+| **Manual analysis**         | `analysisCatalog`, `analysisExecutor`, `savedAnalysisService`                                                                                                                                                      |
 | **Storage**                 | `attachmentService`, `transactionExport`                                                                                                                                                                           |
 | **Selection**               | `bulkSelection` (resolves `ids[]` or `filter` for bulk endpoints)                                                                                                                                                  |
 | **Observability**           | `providerHealthService`, `routeManifest`                                                                                                                                                                           |

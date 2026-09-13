@@ -17,6 +17,7 @@ import {
   getPoolStats,
 } from "./database/connection.js";
 import { ensureAppRole } from "./database/roleBootstrap.js";
+import { ensureAnalysisRole } from "./database/analysisRoleBootstrap.js";
 import { runDatabaseAnalyze, runMigrations } from "./database/migrate.js";
 import {
   createErrorHandler,
@@ -75,6 +76,8 @@ import reportsRouter from "./routes/reports.js";
 import tagsRouter from "./routes/tags.js";
 import accountsRouter from "./routes/accounts.js";
 import crossWorkspaceRouter from "./routes/crossWorkspace.js";
+import analysisRouter from "./routes/analysis.js";
+import { closeAnalysisPool } from "./services/analysisExecutor.js";
 import {
   rateLimiter,
   globalRateLimiter,
@@ -300,6 +303,7 @@ mountRouter(app, "/api/reports", reportRateLimiter, reportsRouter);
 mountRouter(app, "/api/tags", tagsRouter);
 mountRouter(app, "/api/accounts", accountsRouter);
 mountRouter(app, "/api/cross-workspace", crossWorkspaceRouter);
+mountRouter(app, "/api/analysis", aggregationRateLimiter, analysisRouter);
 
 // AI chat: dedicated per-minute limit on /chat (Ollama calls are expensive);
 // other /api/ai/* endpoints fall back to the global limiter.
@@ -479,6 +483,11 @@ async function start() {
       databaseUrl: settings.database.url,
       migrationsUrl: settings.database.migrationsUrl,
     });
+    await ensureAnalysisRole({
+      databaseUrl: settings.database.url,
+      analysisUrl: settings.database.analysisUrl,
+      migrationsUrl: settings.database.migrationsUrl,
+    });
     endRoleBootstrap();
 
     // Wait for PostgreSQL to be fully ready. On a cold first-ever native start,
@@ -630,7 +639,11 @@ async function shutdown(signal) {
     });
   }
 
-  await Promise.allSettled([closePool(), closePuppeteerBrowser()]);
+  await Promise.allSettled([
+    closePool(),
+    closeAnalysisPool(),
+    closePuppeteerBrowser(),
+  ]);
   clearTimeout(forceExit);
   process.exit(0);
 }

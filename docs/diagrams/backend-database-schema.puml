@@ -263,6 +263,56 @@ entity "portfolio_performance_snapshots" as portfolio_performance_snapshots {
   INDEX(currency)
 }
 
+entity "portfolio_broker_snapshots" as portfolio_broker_snapshots {
+  * snapshot_date : date <<PK>>
+  * currency : varchar(3) <<PK>>
+  * account_key : text <<PK>>
+  account_id : integer
+  * account_name : text
+  * value : numeric(18,2)
+  * invested : numeric(18,2)
+  * gain_loss : numeric(18,2)
+  * computed_at : timestamptz
+  ---
+  no account FK; identity is frozen
+}
+
+entity "saved_analyses" as saved_analyses {
+  * id : text <<PK>>
+  * definition_id : text <<UQ>>
+  * name : text
+  * workspace : text
+  * current_version : integer
+  * parameters_json : jsonb
+  * charts_json : jsonb
+  * source_references_json : jsonb
+  * refresh_status : text
+  last_successful_run_id : text <<FK>>
+}
+
+entity "saved_analysis_definition_versions" as saved_analysis_versions {
+  * saved_analysis_id : text <<PK,FK>>
+  * version : integer <<PK>>
+  * definition_json : jsonb
+  * created_at : timestamptz
+  ---
+  UPDATE rejected by trigger
+}
+
+entity "saved_analysis_runs" as saved_analysis_runs {
+  * id : text <<PK>>
+  * saved_analysis_id : text <<FK>>
+  * definition_version : integer <<FK>>
+  * status : text
+  * parameters_json : jsonb
+  result_json : jsonb
+  error_json : jsonb
+}
+
+saved_analyses ||--|{ saved_analysis_versions
+saved_analyses ||--o{ saved_analysis_runs
+saved_analysis_versions ||--o{ saved_analysis_runs
+
 entity "belgian_inflation_rates" as belgian_inflation_rates {
   * id : serial <<PK>>
   * month_date : date <<UQ>>

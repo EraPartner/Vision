@@ -900,6 +900,34 @@ Migration 0091 normalizes dangling recipient ids to `NULL` and protects the acti
 
 ---
 
+## Analysis persistence (migrations 0109 and 0110)
+
+### portfolio_broker_snapshots
+
+Forward-only daily portfolio partitions keyed by `(snapshot_date, currency, account_key)`. The
+special `unassigned` key requires a null `account_id`; account keys otherwise use `account:<id>`.
+`account_name` is copied at write time and there is deliberately no account foreign key. Value,
+invested capital, gain/loss, and computation time are backed up. The table starts empty and receives
+only current-day writes.
+
+### saved_analyses
+
+Mutable library metadata for one reusable analysis: definition identity, current version, workspace,
+refresh mode, parameter values, chart bindings, source references, refresh state, last successful
+run, latest error, and timestamps.
+
+### saved_analysis_definition_versions
+
+Append-only strict ADR-137 definition JSON keyed by saved analysis and positive version. A database
+trigger rejects updates. Delete cascades only from its parent saved analysis.
+
+### saved_analysis_runs
+
+Execution records keyed by text UUID. Each row names an immutable definition version, effective
+parameters, lifecycle status, result or error, and timestamps. Completed/partial states require a
+result; failed/cancelled states require an error. The parent library's last-successful foreign key is
+set null if that run is removed.
+
 ## AI Chat Entities (Phase 10)
 
 ### AIConversation

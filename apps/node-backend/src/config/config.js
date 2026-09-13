@@ -34,6 +34,16 @@ function defaultOllamaUrl() {
   return "http://127.0.0.1:11434";
 }
 
+function defaultAnalysisDatabaseUrl(databaseUrl) {
+  try {
+    const parsed = new URL(databaseUrl);
+    parsed.username = "vision_analysis_executor";
+    return parsed.toString();
+  } catch {
+    return undefined;
+  }
+}
+
 const settings = deepFreeze({
   server: {
     host: env.SERVER_HOST || env.HOSTNAME || "localhost",
@@ -47,6 +57,8 @@ const settings = deepFreeze({
     // read by alembic/env.py directly from the environment. undefined in the
     // classic single-role setup.
     migrationsUrl: env.DATABASE_URL_MIGRATIONS,
+    analysisUrl:
+      env.DATABASE_URL_ANALYSIS || defaultAnalysisDatabaseUrl(env.DATABASE_URL),
     echo: env.DB_ECHO,
     poolSize: env.DB_POOL_SIZE,
     maxOverflow: env.DB_MAX_OVERFLOW,

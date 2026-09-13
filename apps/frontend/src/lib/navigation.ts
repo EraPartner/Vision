@@ -60,7 +60,16 @@ export const GLOBAL_NAV_ITEMS: NavItem[] = [
         icon: PAGE_ICONS["/ai-chat"],
         shortcutKey: "a",
     },
-    { titleKey: "nav.accounts", url: "/accounts", icon: PAGE_ICONS["/accounts"] },
+    {
+        titleKey: "nav.accounts",
+        url: "/accounts",
+        icon: PAGE_ICONS["/accounts"],
+    },
+    {
+        titleKey: "nav.analysisWorkspace",
+        url: "/analysis",
+        icon: PAGE_ICONS["/analysis"],
+    },
 ];
 
 const BUDGETING_SECTION: NavWorkspaceSection = {
@@ -117,8 +126,16 @@ const BUDGETING_SECTION: NavWorkspaceSection = {
                     url: "/planned",
                     icon: PAGE_ICONS["/planned"],
                 },
-                { titleKey: "nav.whoOwesYou", url: "/owes", icon: PAGE_ICONS["/owes"] },
-                { titleKey: "nav.taxOverview", url: "/tax", icon: PAGE_ICONS["/tax"] },
+                {
+                    titleKey: "nav.whoOwesYou",
+                    url: "/owes",
+                    icon: PAGE_ICONS["/owes"],
+                },
+                {
+                    titleKey: "nav.taxOverview",
+                    url: "/tax",
+                    icon: PAGE_ICONS["/tax"],
+                },
             ],
         },
         {
@@ -143,7 +160,8 @@ const PORTFOLIO_SECTION: NavWorkspaceSection = {
     groups: [
         {
             labelKey: "nav.overview",
-            items: [                {
+            items: [
+                {
                     titleKey: "nav.dashboard",
                     url: "/portfolio",
                     icon: PAGE_ICONS["/portfolio"],
@@ -171,7 +189,11 @@ const PORTFOLIO_SECTION: NavWorkspaceSection = {
                     url: "/portfolio/crypto",
                     icon: PAGE_ICONS["/portfolio/crypto"],
                 },
-                { titleKey: "nav.metals", url: "/portfolio/metals", icon: PAGE_ICONS["/portfolio/metals"] },
+                {
+                    titleKey: "nav.metals",
+                    url: "/portfolio/metals",
+                    icon: PAGE_ICONS["/portfolio/metals"],
+                },
             ],
         },
         {
@@ -298,10 +320,26 @@ export const NAV_WORKSPACES: ReadonlyArray<NavWorkspaceSection> = [
  * icons win and both surfaces now share them.
  */
 export const ADMIN_NAV_ITEMS: NavItem[] = [
-    { titleKey: "nav.adminOverview", url: "/admin", icon: PAGE_ICONS["/admin"] },
-    { titleKey: "nav.dbMaintenance", url: "/admin/db", icon: PAGE_ICONS["/admin/db"] },
-    { titleKey: "nav.adminProviders", url: "/admin/providers", icon: PAGE_ICONS["/admin/providers"] },
-    { titleKey: "nav.adminEndpoints", url: "/admin/endpoints", icon: PAGE_ICONS["/admin/endpoints"] },
+    {
+        titleKey: "nav.adminOverview",
+        url: "/admin",
+        icon: PAGE_ICONS["/admin"],
+    },
+    {
+        titleKey: "nav.dbMaintenance",
+        url: "/admin/db",
+        icon: PAGE_ICONS["/admin/db"],
+    },
+    {
+        titleKey: "nav.adminProviders",
+        url: "/admin/providers",
+        icon: PAGE_ICONS["/admin/providers"],
+    },
+    {
+        titleKey: "nav.adminEndpoints",
+        url: "/admin/endpoints",
+        icon: PAGE_ICONS["/admin/endpoints"],
+    },
     {
         titleKey: "nav.exchangeRates",
         url: "/admin/exchange-rates",
@@ -341,10 +379,10 @@ export const PALETTE_SECTIONS: ReadonlyArray<{
     pages: ReadonlyArray<NavItem>;
 }> = NAV_WORKSPACES.map((ws) => ({
     headingKey: ws.labelKey,
-    pages: (ws.id === "budgeting"
-        ? [...flattenGroups(ws), ...GLOBAL_NAV_ITEMS]
-        : flattenGroups(ws)
-    ),
+    pages:
+        ws.id === "budgeting"
+            ? [...flattenGroups(ws), ...GLOBAL_NAV_ITEMS]
+            : flattenGroups(ws),
 }));
 
 /** Gmail-style go-to sequences: press `g`, then a destination key. Derived

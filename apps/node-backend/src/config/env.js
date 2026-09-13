@@ -95,6 +95,10 @@ const envSchema = z
     // non-superuser app role on already-initialised databases. Unset = classic
     // single-role setup.
     DATABASE_URL_MIGRATIONS: optionalStringEnv,
+    // Optional dedicated login URL for the isolated analysis executor. When
+    // omitted, config.js derives the same host/database/password with the
+    // fixed vision_analysis_executor role.
+    DATABASE_URL_ANALYSIS: optionalStringEnv,
     DB_ECHO: booleanEnv(false),
     DB_POOL_SIZE: intEnv(5),
     DB_MAX_OVERFLOW: intEnv(10),

@@ -32,6 +32,11 @@ export const appRouteManifest = [
         admin: false,
     },
     {
+        path: "/analysis",
+        loader: () => import("@/pages/AnalysisWorkspacePage"),
+        admin: false,
+    },
+    {
         path: "/recipients",
         loader: () => import("@/pages/RecipientsPage"),
         admin: false,

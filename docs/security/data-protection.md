@@ -2,12 +2,12 @@
 title: Security - Data Protection & CSP
 type: security
 status: active
-date: 2026-08-30
-updated: 2026-08-26
+date: 2026-09-13
+updated: 2026-09-13
 tags: [security, csp, cors, data-protection, privacy, content-security-policy, xss, dangerouslySetInnerHTML, path-traversal, rfc-5987, backup-encryption, passphrase, phase-7, phase-c, pre-restore-confirmation, concurrent-backup-guard, watchdog-pause, bug-hunt-2026-05-05, bug-hunt-2026-05-06, electron-hardening, window-open-handler, will-navigate, checksum-verification, backup-directory-restrictions, csv-filename-sanitization, safe-storage, keychain, lazy-safeStorage, csrf-guard, sec-fetch-site, admin-auth, token-or-open, zip-bomb, response-cap, content-length]
 description: Content Security Policy, CORS, data protection, path traversal prevention, backup security, and privacy considerations for Vision. Phase 7 adds pre-restore confirmation dialog and concurrent-backup guard. May 2026 bug hunt hardens Electron with setWindowOpenHandler denial, will-navigate whitelist, mandatory installer checksum verification, and backup directory restrictions. safeStorage is now accessed lazily to avoid macOS Keychain prompts when no passphrase is configured. 2026-05-29: admin auth replaced with token-or-open + CSRF guard (ADR-063). June 2026: zip-bomb guard on restore, 5 MB Content-Length response cap on external fetches.
 aliases: [CSP, data protection, privacy, content security policy, security headers, XSS prevention, path traversal]
-related_code: ["apps/node-backend/src/main.js", "apps/frontend/src/lib/api.ts", "apps/node-backend/src/services/attachmentService.js", "apps/node-backend/src/middleware/adminAuth.js", "apps/node-backend/src/middleware/csrfGuard.js"]
+related_code: ["apps/node-backend/src/main.js", "apps/frontend/src/lib/api.ts", "apps/node-backend/src/services/attachmentService.js", "apps/node-backend/src/services/analysisExecutor.js", "apps/node-backend/src/database/analysisRoleBootstrap.js", "apps/node-backend/src/middleware/adminAuth.js", "apps/node-backend/src/middleware/csrfGuard.js"]
 ---
 
 # Security: Data Protection & CSP
@@ -183,6 +183,20 @@ The pure validation library defines:
 **Locations:** [[apps/node-backend/src/lib/validation.js|lib/validation.js]] owns the value rules;
 [[apps/node-backend/src/middleware/validation.js|middleware/validation.js]] contains the Express
 path-parameter adapters and route-compatible re-exports.
+
+### Manual analysis SQL isolation
+
+The manual analysis workspace never executes SQL with the application database role. Startup
+maintains a dedicated `vision_analysis_executor` login that cannot create databases or roles,
+inherit privileges, replicate, or bypass row-level security. The role receives schema usage and
+`SELECT` only on the four approved `vision_analysis.*_v1` views. The executor also requires a
+declared dataset set, opens a read-only transaction, applies statement, lock, idle, row and byte
+limits, and rejects write, catalog, file, extension, and multi-statement SQL before PostgreSQL sees
+it. Cancellation uses a reserved connection under that same restricted role.
+
+This boundary protects against accidental and adversarial editor input. It does not turn database
+results into public data: the analysis routes remain inside Vision's existing local-user boundary.
+See [[docs/adr/144-isolated-manual-analysis-workspace|ADR-144]].
 
 ---
 

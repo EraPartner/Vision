@@ -2,8 +2,8 @@
 title: Frontend Routes Reference
 type: reference
 status: active
-date: 2026-09-11
-updated: 2026-09-11
+date: 2026-09-13
+updated: 2026-09-13
 tags: [reference, frontend, routing, pages, react-router, admin, workspace]
 description: Complete reference of all frontend routes and their page components, including admin routes and workspace-aware navigation
 aliases: [routes, pages, navigation, url paths, frontend routes, admin routes]
@@ -86,9 +86,10 @@ Admin routes are workspace-agnostic and preserve the active workspace when navig
 
 ## Global Routes
 
-| Route      | Component    | Layout    | Description                                | Code                                                       |
-| ---------- | ------------ | --------- | ------------------------------------------ | ---------------------------------------------------------- |
-| `/ai-chat` | `AIChatPage` | AppLayout | Local AI chat for natural-language queries | [[apps/frontend/src/pages/AIChatPage.tsx\|AIChatPage.tsx]] |
+| Route       | Component               | Layout    | Description                                               | Code                                                                             |
+| ----------- | ----------------------- | --------- | --------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `/analysis` | `AnalysisWorkspacePage` | AppLayout | Manual visual, SQL, spreadsheet, and saved-analysis tools | [[apps/frontend/src/pages/AnalysisWorkspacePage.tsx\|AnalysisWorkspacePage.tsx]] |
+| `/ai-chat`  | `AIChatPage`            | AppLayout | Local AI chat for natural-language queries                | [[apps/frontend/src/pages/AIChatPage.tsx\|AIChatPage.tsx]]                       |
 
 > Settings is no longer a route — it is rendered as `DashboardSettingsDialog` opened from the layout. See [[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx\|DashboardSettingsDialog.tsx]] and [[docs/features/settings|Settings Feature]].
 

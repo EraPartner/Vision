@@ -176,6 +176,17 @@ package "Routes" {
     +DELETE /:id : delete chart
   }
 
+  class AnalysisRouter <<ADR-144>> {
+    +GET /catalog : approved fields, measures, joins
+    +POST /compile : visual plan to SQL
+    +POST /execute : bounded read-only query
+    +POST /cancel/:requestId : cancel query
+    +POST /drill : contributing records
+    +GET,POST /saved : list/create analyses
+    +GET,PUT,DELETE /saved/:id : read/version/delete
+    +POST /saved/:id/run : refresh and record state
+  }
+
   class SplitsRouter {
     +GET /owed : get owed summary
     +GET /owed/:id : get owed by recipient
@@ -347,6 +358,7 @@ Main --> PortfolioImportRouter
 Main --> SettingsRouter
 Main --> WatchlistRouter
 Main --> SavedChartsRouter
+Main --> AnalysisRouter
 Main --> SplitsRouter
 Main --> MarketLookupRouter
 Main --> InfoRouter
@@ -381,6 +393,7 @@ PortfolioImportRouter --> PortfolioImportBatchService
 SettingsRouter --> SR2
 WatchlistRouter --> WR
 SavedChartsRouter --> SCR
+AnalysisRouter --> Connection : isolated analysis pool
 SplitsRouter --> SR
 MarketLookupRouter --> PriceProviderService
 InfoRouter --> IFR

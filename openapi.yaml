@@ -3125,6 +3125,186 @@ paths:
         "404":
           description: Tag not found
 
+  # ─── Manual analysis workspace ─────────────────────────────────────────────
+  /api/analysis/catalog:
+    get:
+      summary: List approved analysis datasets, fields, measures, and joins
+      operationId: getAnalysisCatalog
+      tags: [Analysis]
+      responses:
+        "200":
+          description: Versioned analysis catalog
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /api/analysis/compile:
+    post:
+      summary: Compile a visual analysis plan to generated SQL
+      operationId: compileAnalysis
+      tags: [Analysis]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "200":
+          description: Generated SQL, result columns, datasets, and normalized plan
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "400": { description: Invalid or duplication-unsafe visual plan }
+
+  /api/analysis/execute:
+    post:
+      summary: Execute a bounded visual or custom-SQL analysis
+      operationId: executeAnalysis
+      tags: [Analysis]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "200":
+          description: Typed, paged or explicitly truncated analysis result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "400": { description: Query rejected by the analysis boundary }
+        "408": { description: Query cancelled or timed out }
+
+  /api/analysis/cancel/{requestId}:
+    parameters:
+      - in: path
+        name: requestId
+        required: true
+        schema: { type: string, minLength: 8, maxLength: 128 }
+    post:
+      summary: Cancel a running analysis query
+      operationId: cancelAnalysis
+      tags: [Analysis]
+      responses:
+        "200":
+          description: Cancellation result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /api/analysis/drill:
+    post:
+      summary: Resolve a grouped visual result row to contributing records
+      operationId: drillAnalysis
+      tags: [Analysis]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "200":
+          description: Bounded source-record result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "400": { description: Invalid drill-through request }
+
+  /api/analysis/saved:
+    get:
+      summary: List saved analyses, optionally by workspace
+      operationId: listSavedAnalyses
+      tags: [Analysis]
+      parameters:
+        - in: query
+          name: workspace
+          schema:
+            type: string
+            enum: [budgeting, portfolio, research, cross-workspace]
+      responses:
+        "200":
+          description: Saved analysis library
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+    post:
+      summary: Save the first immutable definition version of an analysis
+      operationId: createSavedAnalysis
+      tags: [Analysis]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "201":
+          description: Saved analysis
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "400": { description: Invalid analysis definition }
+
+  /api/analysis/saved/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      summary: Get the current definition and last usable result
+      operationId: getSavedAnalysis
+      tags: [Analysis]
+      responses:
+        "200":
+          description: Saved analysis
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "404": { description: Saved analysis not found }
+    put:
+      summary: Append a new immutable analysis definition version
+      operationId: updateSavedAnalysis
+      tags: [Analysis]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "200":
+          description: Updated saved analysis
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "400": { description: Invalid analysis definition }
+        "404": { description: Saved analysis not found }
+    delete:
+      summary: Delete a saved analysis and its private versions and runs
+      operationId: deleteSavedAnalysis
+      tags: [Analysis]
+      responses:
+        "204": { description: Saved analysis deleted }
+        "404": { description: Saved analysis not found }
+
+  /api/analysis/saved/{id}/run:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      summary: Refresh a saved analysis and record success or failure
+      operationId: runSavedAnalysis
+      tags: [Analysis]
+      responses:
+        "200":
+          description: Refreshed saved analysis
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "400": { description: Refresh failed }
+        "404": { description: Saved analysis not found }
+
   /api/cross-workspace/rebalance:
     post:
       summary: Cash-aware rebalancing plan (ADR-098)

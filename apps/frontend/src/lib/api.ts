@@ -46,6 +46,7 @@ import * as agg from "@/lib/api/aggregations";
 import * as ai from "@/lib/api/ai";
 import * as tags from "@/lib/api/tags";
 import * as crossWorkspace from "@/lib/api/crossWorkspace";
+import * as analysis from "@/lib/api/analysis";
 
 export const apiClient = {
     // Transactions
@@ -248,6 +249,17 @@ export const apiClient = {
 
     // Cross-workspace (ADR-098)
     computeRebalance: crossWorkspace.computeRebalance,
+
+    // Shared manual analysis workspace
+    getAnalysisCatalog: analysis.getAnalysisCatalog,
+    executeAnalysis: analysis.executeAnalysis,
+    cancelAnalysis: analysis.cancelAnalysis,
+    drillAnalysis: analysis.drillAnalysis,
+    listSavedAnalyses: analysis.listSavedAnalyses,
+    createSavedAnalysis: analysis.createSavedAnalysis,
+    updateSavedAnalysis: analysis.updateSavedAnalysis,
+    runSavedAnalysis: analysis.runSavedAnalysis,
+    deleteSavedAnalysis: analysis.deleteSavedAnalysis,
 
     // AI chat
     getOllamaStatus: ai.getOllamaStatus,

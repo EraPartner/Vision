@@ -247,6 +247,14 @@ package "Workspace-Agnostic Pages" {
     +Tool-augmented result cards
     +Conversation history
   }
+
+  class AnalysisWorkspacePage <<ADR-144>> {
+    +Visual fields, filters, groups, measures
+    +Generated SQL and custom SQL editor
+    +Paged grid and drill-through
+    +Complete-result pivot and chart
+    +Versioned saved-analysis library
+  }
 }
 
 package "Error Pages" {
@@ -278,6 +286,7 @@ ImportPage --> ImportReviewPage : "/import/:batchId/review"
 AppLayout --> OwesPage : "/owes"
 AppLayout --> TaxOverviewPage : "/tax"
 AppLayout --> AIChatPage : "/ai-chat"
+AppLayout --> AnalysisWorkspacePage : "/analysis"
 AppLayout --> PortfolioOverviewPage : "/portfolio"
 PortfolioOverviewPage --> StocksPage : "/portfolio/stocks"
 PortfolioOverviewPage --> CryptoPage : "/portfolio/crypto"

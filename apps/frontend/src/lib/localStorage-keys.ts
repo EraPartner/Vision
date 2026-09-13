@@ -55,6 +55,9 @@ export const LOCAL_STORAGE_KEYS = Object.freeze({
 
     /** Versioned Chart Builder draft and named-layout library. */
     CHART_BUILDER_LAYOUTS: "vision.research.chartBuilder.layouts.v2",
+
+    /** Recent custom SQL text from the manual analysis workspace. */
+    ANALYSIS_SQL_HISTORY: "vision.analysis.sqlHistory",
 } as const);
 
 export type LocalStorageKey =

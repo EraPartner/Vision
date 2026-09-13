@@ -3,7 +3,7 @@ title: Frontend API Client Architecture
 type: reference
 status: active
 date: 2026-04-22
-updated: 2026-09-11
+updated: 2026-09-13
 tags: [reference, frontend, api-client, typescript, http, phase-1, phase-2, phase-q, client-side, environment, domain-split, openapi, recipient-groups, market-search]
 description: Architecture of the frontend HTTP client split into modular layers (transport, types, domain methods) with OpenAPI type generation. Phase Q: getTransactions supports recipient_group_id parameter. 2026-04-29: searchMarket wrapper added to market.ts module; AddToWatchlistDialog migrated to apiClient methods.
 aliases: [api-client, frontend-http, fetch-client, apiClient, lib/api]
@@ -38,9 +38,12 @@ The frontend HTTP client in `apps/frontend/src/lib/api/` implements a three-laye
 - Added `openapi-typescript` codegen for type generation
 - All domain modules export their methods; `api.ts` re-exports as `apiClient` for backward compat
 
-### Current modules (`apps/frontend/src/lib/api/`, 18 domain modules as of 2026-05-16)
+### Current modules (`apps/frontend/src/lib/api/`)
 
-`admin`, `aggregations`, `ai`, `attachments`, `categories`, `charts`, `electron`, `helpers`, `imports`, `info`, `market`, `planned`, `portfolio`, `recipients`, `reports`, `settings`, `splits`, `sse`, `tags`, `transactions` — plus `client.ts` (transport) and `types.ts` (envelope / error types).
+Domain modules include `accounts`, `admin`, `aggregations`, `ai`, `analysis`, `attachments`,
+`categories`, `charts`, `crossWorkspace`, `dbEditor`, `electron`, `imports`, `info`, `market`,
+`planned`, `portfolio`, `portfolioImports`, `recipients`, `reports`, `research`, `settings`, `splits`,
+`tags`, and `transactions` — plus shared transport and helper modules.
 
 ### Import convention
 
@@ -98,6 +101,7 @@ apps/frontend/src/lib/
     ├── aggregations.ts  ← Aggregation query methods (Phase 2.2)
     ├── portfolio.ts     ← Portfolio overview methods (Phase 2.2)
     ├── info.ts          ← Statistics/info methods (Phase 2.2)
+    ├── analysis.ts      ← Catalog, execution, cancellation, drill, saved analyses
     ├── splits.ts        ← Split methods (Phase 2.2)
     ├── helpers.ts       ← Shared URL builders, query params (Phase 2.2)
     ├── electron.ts      ← Electron-specific methods (Phase 2.2)
@@ -243,6 +247,7 @@ Previous monolithic `api.ts` (1553 lines) split into 13 domain modules:
 | `ai.ts`           | chatMessage, createConversation, getConversations, updateConversation                                                                                      | ~90   |
 | `portfolio.ts`    | getPortfolioTransactions, getPortfolioTransactionsBulk, createPortfolioTransaction, updatePortfolioTransaction, deletePortfolioTransaction                 | ~70   |
 | `info.ts`         | getStatistics, getSupportedParsers, getBanks, getTransactionSummary, getNetWorth, refreshNetWorth                                                          | ~80   |
+| `analysis.ts`     | getAnalysisCatalog, executeAnalysis, cancelAnalysis, drillAnalysis, list/create/update/run/delete saved analyses                                           | ~160  |
 
 **Example domain module (`transactions.ts`):**
 

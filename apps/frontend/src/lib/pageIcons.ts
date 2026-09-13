@@ -48,6 +48,7 @@ export const PAGE_ICONS = {
     "/import": Import,
     "/ai-chat": Sparkles,
     "/accounts": WalletCards,
+    "/analysis": BarChart3,
     "/portfolio": PieChart,
     "/portfolio/net-worth": Wallet,
     "/portfolio/stocks": TrendingUp,

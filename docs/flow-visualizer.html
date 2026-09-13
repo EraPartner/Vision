@@ -1302,6 +1302,16 @@
             "y": 740
           },
           {
+            "id": "sv.analysis",
+            "label": "Manual analysis runtime",
+            "sub": "analysisCatalog · analysisExecutor · savedAnalysisService",
+            "kind": "service",
+            "x": 1120,
+            "y": 740,
+            "path": "apps/node-backend/src/services/analysisExecutor.js",
+            "desc": "ADR-144: compiles catalog plans, executes only approved views through the vision_analysis_executor role, and persists immutable definitions plus success/failure runs. Read-only transactions, timeouts, row/byte limits, and same-role cancellation are enforced independently of the UI."
+          },
+          {
             "id": "ex.fred",
             "label": "FRED \u00b7 St. Louis Fed",
             "sub": "Keyed (FRED_API_KEY) \u00b7 macro series \u00b7 ADR-082",
@@ -1343,6 +1353,8 @@
           ["be.routes", "sv.aichat"],
           ["be.routes", "sv.reports"],
           ["be.routes", "sv.transactiondomains"],
+          ["be.routes", "sv.analysis"],
+          ["sv.analysis", "db.postgres"],
           ["sv.import", "be.bankadapters"],
           ["sv.import", "be.repos"],
           ["sv.transactiondomains", "be.repos"],
@@ -1686,6 +1698,82 @@
                 "to": "fe.apiclient",
                 "payload": "{ metrics, heatmap, breakdown, snapshots[~400] }",
                 "annotation": "Single payload powers the whole Performance page."
+              }
+            ]
+          },
+          {
+            "id": "manual-analysis",
+            "name": "Build, run, and save a manual analysis",
+            "category": "Analysis",
+            "summary": "A visual or custom SQL query crosses one bounded API and restricted PostgreSQL role, then an immutable definition version and explicit run state can be saved.",
+            "steps": [
+              {
+                "from": "browser",
+                "to": "fe.pages",
+                "payload": "select fields, filters, groups, measures or edit SQL",
+                "annotation": "AnalysisWorkspacePage.tsx works without AI and keeps visual origin, typed scalar parameters, paging, drill-through, pivots, and charts explicit."
+              },
+              {
+                "from": "fe.pages",
+                "to": "fe.apiclient",
+                "payload": "visual plan or custom SQL plus declared dataset IDs",
+                "annotation": "lib/api/analysis.ts sends one request ID and the selected approved datasets."
+              },
+              {
+                "from": "fe.apiclient",
+                "to": "be.routes",
+                "payload": "POST /api/analysis/execute",
+                "annotation": "routes/analysis.js compiles visual plans or forwards custom SQL through the same executor."
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.analysis",
+                "payload": "catalog validation, SQL validation, row/byte/time limits",
+                "annotation": "analysisExecutor.js begins a read-only transaction on the dedicated vision_analysis_executor pool."
+              },
+              {
+                "from": "sv.analysis",
+                "to": "db.postgres",
+                "payload": "SELECT approved vision_analysis views only",
+                "annotation": "analysisRoleBootstrap.js revokes public and unapproved table grants before granting four version-1 views."
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.analysis",
+                "payload": "POST /api/analysis/saved or /saved/:id/run",
+                "annotation": "savedAnalysisService.js appends strict definition versions and records refresh success or failure without deleting the last usable result."
+              }
+            ]
+          },
+          {
+            "id": "broker-history",
+            "name": "Record and render forward-only broker history",
+            "category": "Portfolio",
+            "summary": "The snapshot job freezes today's canonical account partitions, and the Performance page reads them without replaying or backfilling older account assignments.",
+            "steps": [
+              {
+                "from": "be.jobs",
+                "to": "sv.snapshot",
+                "payload": "computeAndStoreSnapshots(currency)",
+                "annotation": "portfolioPerformanceSnapshotService.js runs the canonical aggregate builder before requesting the current byAccount summary."
+              },
+              {
+                "from": "sv.snapshot",
+                "to": "db.postgres",
+                "payload": "atomic current-day portfolio_broker_snapshots replacement",
+                "annotation": "Only CURRENT_DATE is replaced; frozen keys and names have no account foreign key, and partition value must reconcile to the global total."
+              },
+              {
+                "from": "fe.apiclient",
+                "to": "be.routes",
+                "payload": "GET /api/info/portfolio-performance/by-broker",
+                "annotation": "The API returns dates, frozen series identities, and daily rows including Unassigned."
+              },
+              {
+                "from": "be.routes",
+                "to": "fe.pages",
+                "payload": "broker value series",
+                "annotation": "PerformancePage.tsx renders the dedicated area chart from the first post-migration snapshot onward."
               }
             ]
           },

@@ -26,6 +26,12 @@ SORT date DESC
 
 ## Active Decisions
 
+[[docs/adr/144-isolated-manual-analysis-workspace|ADR-144]] (Accepted) isolates visual and SQL
+analysis behind a fixed read-only PostgreSQL role and persists immutable definitions and runs.
+
+[[docs/adr/143-forward-only-broker-performance-history|ADR-143]] (Accepted) starts a new daily
+per-broker portfolio history without synthesizing or rewriting earlier account assignments.
+
 [[docs/adr/142-retire-electron-legacy-install-guards|ADR-142]] (Accepted) ends support for legacy
 Electron application-data and Docker-runtime recovery after the sole maintained install completed
 the native cutover.

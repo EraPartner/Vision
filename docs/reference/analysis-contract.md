@@ -2,7 +2,7 @@
 title: Analysis Definition and Result Contract Reference
 type: reference
 status: active
-date: 2026-09-12
+date: 2026-09-13
 tags: [reference, analysis, contract, lineage, versioning, datasets, money]
 description: Exact version-1 shapes, invariants, compatibility rules, and acceptance fixtures for shared Vision financial analyses.
 aliases:
@@ -21,9 +21,9 @@ related_code:
 # Analysis Definition and Result Contract Reference
 
 > [!abstract] Purpose
-> `@vision/types/analysis` defines the neutral boundary shared by future manual, SQL,
-> spreadsheet, chart, and AI-assisted analysis surfaces. It validates data shape and compatibility;
-> it does not execute queries, calculate financial metrics, persist runs, or grant data access.
+> `@vision/types/analysis` defines the neutral boundary shared by manual, SQL, spreadsheet, chart,
+> and future AI-assisted analysis surfaces. It validates data shape and compatibility; execution,
+> persistence, and database authority remain separate runtime responsibilities.
 
 ## Exports
 
@@ -162,15 +162,17 @@ The fixture catalog covers ten acceptance questions:
 The fixtures use distinct budgeting, portfolio, holdings, filing, evidence, provider, and
 cross-workspace datasets. They assert comparison rows, missing-weight ratios, source passages,
 contradictory sources, unavailable providers, and paired visual/custom results. They prove the
-contract can represent and reject drift for the questions. They do not claim that an executor,
-dataset catalog, saved-analysis repository, or user interface is implemented.
+contract can represent and reject drift for the questions. The fixtures do not by themselves prove
+runtime behavior. ADR-144 adds the restricted executor, saved-analysis service, and first manual UI;
+their focused tests and database lifecycle checks are separate evidence.
 
 ## Ownership Boundaries
 
 - `@vision/types/analysis` owns vocabulary, runtime validation, and compatibility.
 - Dataset owners define and test financial meaning.
-- The future restricted executor owns authorization, resource limits, and query execution.
-- The future saved-analysis service owns definition and run persistence.
+- `analysisExecutor.js` and the `vision_analysis_executor` role own authorization, resource limits,
+  cancellation, and query execution.
+- `savedAnalysisService.js` owns immutable definition versions, run persistence, and last-usable-result state.
 - Presentations own rendering but cannot weaken completeness or compatibility checks.
 - AI can propose inspectable definitions but receives no privileged execution path.
 
@@ -184,3 +186,5 @@ dataset catalog, saved-analysis repository, or user interface is implemented.
 - [[docs/features/research|Research]]
 - [[docs/features/ai-chat|AI Chat]]
 - [[docs/security/ai-data-access|AI Data Access]]
+- [[docs/features/analysis-workspace|Analysis Workspace]]
+- [[docs/adr/144-isolated-manual-analysis-workspace|ADR-144]]

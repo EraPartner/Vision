@@ -117,6 +117,24 @@ package "External / Data" {
   class PortfolioPerformanceSnapshotService {
     +computeAndStoreSnapshots(currency): Promise<void>
     +getSnapshots(start, end, currency): Promise<Snapshot[]>
+    +storeCurrentBrokerSnapshot(currency, summary): Promise<Result>
+    +getBrokerSnapshots(start, end, currency): Promise<BrokerSnapshot[]>
+  }
+
+  class AnalysisCatalog <<ADR-144>> {
+    +getAnalysisCatalog(): Catalog
+    +compileVisualAnalysis(plan): CompiledQuery
+  }
+
+  class AnalysisExecutor <<ADR-144>> {
+    +executeAnalysisSql(request): Promise<Result>
+    +cancelAnalysisQuery(requestId): Promise<CancelResult>
+  }
+
+  class SavedAnalysisService <<ADR-144>> {
+    +createSavedAnalysis(input): Promise<SavedAnalysis>
+    +updateSavedAnalysis(id, input): Promise<SavedAnalysis>
+    +runSavedAnalysis(id): Promise<SavedAnalysis>
   }
 
   class QuoteBackfillService {
@@ -280,6 +298,11 @@ QuoteBackfillService --> PriceProviderService
 PortfolioPerformanceSnapshotService --> InvestmentRepository
 PortfolioPerformanceSnapshotService --> PriceProviderService
 PortfolioPerformanceSnapshotService --> CurrencyConversionService
+PortfolioPerformanceSnapshotService --> PortfolioSummaryService
+
+AnalysisExecutor --> AnalysisCatalog : validates approved relations
+SavedAnalysisService --> AnalysisCatalog : compiles visual definitions
+SavedAnalysisService --> AnalysisExecutor : refreshes saved runs
 
 AggregationRefreshService --> MaterializedViewService
 
