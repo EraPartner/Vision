@@ -769,8 +769,8 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
 
 ### 🏦 Accounts and portfolio features
 
-- [ ] **Build forward-only persisted per-broker history after current-point surfaces have soaked** 🔽
-  - Tracking: 🔎 verified-present 2026-09-08 (the current-point broker surfaces are still working-tree changes, not an installed real-data build; soak means at least one week of normal local use with checks on three separate days, no partition/global-total discrepancy, and no broker-assignment defect)
+- [ ] **Build forward-only persisted per-broker history** 🔽
+  - Tracking: 🔎 verified-present 2026-09-13 (the owner waived the elapsed-time soak; implementation may start once the current-point broker surfaces are present, with partition/global-total reconciliation and broker-assignment correctness enforced by tests instead of waiting for calendar time)
   - ↪ _from: ADR-108 implementation plan · WP-C7_
   - Add a dedicated snapshot-by-account table, writer, endpoint, chart, backup coverage, downgrade,
     and per-date sum invariant. Do not retroactively synthesize history.
