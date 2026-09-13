@@ -42,6 +42,18 @@
       "types": "./src/chartRanges.d.ts",
       "default": "./src/chartRanges.js"
     },
+    "./analysis": {
+      "types": "./src/analysis.d.ts",
+      "default": "./src/analysis.js"
+    },
+    "./analysis-datasets": {
+      "types": "./src/analysisDatasets.d.ts",
+      "default": "./src/analysisDatasets.js"
+    },
+    "./fund-holdings": {
+      "types": "./src/fundHoldings.d.ts",
+      "default": "./src/fundHoldings.js"
+    },
     "./electron": {
       "types": "./src/electron.d.ts",
       "default": "./src/electron.js"
@@ -50,5 +62,8 @@
   "types": "./src/index.d.ts",
   "files": [
     "src"
-  ]
+  ],
+  "dependencies": {
+    "zod": "^4.4.3"
+  }
 }
