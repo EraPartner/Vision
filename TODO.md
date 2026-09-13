@@ -61,8 +61,11 @@ Continue as follows:
 
 Important current hand-off facts:
 
-- Portfolio per-broker history is deliberately last. Do not start it before the current-point
-  broker surfaces have shipped and soaked.
+- Portfolio per-broker history is the last planned feature/schema change before migration
+  consolidation. Do not start it before the current-point broker surfaces have shipped and soaked.
+- The squashed fresh-install database baseline is the final queue item. Do not start it until every
+  earlier item that can change the schema is complete and the maintained installation is safely on
+  the selected bridge revision.
 - The queue includes real-export, live-database, and host-tool acceptance obligations. These are
   not reopened implementation defects; complete the named acceptance or leave the record open.
 - No publication was performed. Inspect the working-tree diff and preserve unrelated changes
@@ -78,8 +81,9 @@ Important current hand-off facts:
   destructive migration or live-data cleanup without the user's explicit approval.
 - Portfolio account work follows ADR-108: whole-lot broker tagging, global tax and cost-basis truth,
   and no synthetic trade cash legs.
-- Per-broker history stays last. Do not start it before the current-point broker surfaces have
-  shipped and soaked.
+- Per-broker history stays last among feature/schema changes. Do not start it before the
+  current-point broker surfaces have shipped and soaked. Migration consolidation follows it and is
+  the final item in the queue.
 
 ## Unified financial analysis plan — 2026-09-08
 
@@ -448,6 +452,20 @@ provisional; dependencies determine delivery order. Resolve each named design ch
 implementation; do not treat planned features as reproduced defects. Existing forecasting,
 chart layouts, alerts and admin tools remain starting points rather than duplicate implementations.
 
+- [ ] **Make category hierarchies depth-agnostic without changing existing financial results** ⏫
+  - Tracking: 🔎 decision-needed 2026-09-13 (choose the canonical hierarchy model, stable identity and compatibility contract before changing persisted categories or public APIs)
+  - ↪ _from: User request 2026-09-13 · flexible category depth_
+  - Replace the required `GENERAL:DETAIL` shape with an ordered hierarchy that supports a leaf at
+    depth 1 and deeper paths such as 3 or 4 levels without treating a display delimiter as the data
+    model. Preserve existing category identities, labels, assignments, imports, rules and API
+    behavior through an explicit compatibility layer and reversible migration. Reject cycles and
+    invalid parentage, and define rename, move, merge, delete and uncategorized behavior at every
+    depth. Update editors, filters and drill-downs so users can choose and understand any level.
+  - Prove that existing two-level databases produce unchanged totals, budgets, trends, forecasts,
+    graphs, statistics, exports and AI/analysis datasets before and after the migration. Add mixed
+    depth fixtures and verify leaf-level results plus rollups at every ancestor without double
+    counting. Document which consumers use a leaf, a full path or an ancestor aggregation.
+
 - [x] **Validate a supported fund-holdings data source and import contract** ⏫
   - Tracking: ✅ verified-contract 2026-09-12 (ADR-139 selects user-supplied files as the supported baseline; the runtime contract and tests cover identity, provenance, weights, coverage, staleness, cash, unsupported exposure, and row errors)
   - ↪ _from: User product exploration 2026-09-08 · portfolio exposure feasibility_
@@ -566,8 +584,8 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
     Acceptance: contract fixtures represent all reference questions, preserve non-convertible SQL,
     and let formula/chart consumers reject incompatible results without corrupting saved work.
 
-- [ ] **Build a visual financial query builder usable without AI or SQL** ⏫
-  - Tracking: 🔎 decision-needed 2026-09-08 (stage 2; depends on dataset/shared contracts and executor; choose initial measures and validated join paths)
+- [x] **Build a visual financial query builder usable without AI or SQL** ⏫
+  - Tracking: ✅ completed 2026-09-13 (the shared analysis page selects approved fields, typed filters, groups, measures, ordering and safe account joins, exposes generated SQL, runs without AI, supports keyboard drill-through, and passed its focused no-AI visual-query test)
   - ↪ _from: User unified analysis plan 2026-09-08 · accessible manual analysis_
   - Select datasets, fields, typed filters, measures, grouping and sorting; offer documented join
     paths with row-grain checks to prevent accidental duplication. Compile the structured plan to
@@ -575,8 +593,8 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
     excluding transfers, groups by category and drills to records with AI offline; equivalent SQL
     yields the same result. Unsupported joins/operations explain the limit and allow custom SQL.
 
-- [ ] **Build a SQL editor that interoperates with visual and spreadsheet analyses** ⏫
-  - Tracking: 🔎 decision-needed 2026-09-08 (stage 2; depends on restricted executor/shared contracts; select repository-compatible editor integration)
+- [x] **Build a SQL editor that interoperates with visual and spreadsheet analyses** ⏫
+  - Tracking: ✅ completed 2026-09-13 (the shared analysis page provides approved-schema insertion, typed positional parameters, generated-SQL handoff, custom-SQL preservation, local history, execution cancellation, grids, pivots, charts and saved definitions without requiring AI)
   - ↪ _from: User unified analysis plan 2026-09-08 · expert analysis and cross-mode editing_
   - Provide schema/metric help, completion, typed parameters, error locations, cancel and saved query
     history. Show generated SQL; editing it creates a custom-SQL definition without destroying the
@@ -622,8 +640,8 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
     Reconcile reference queries with existing reports; exclude secrets/admin internals and enforce
     authorized rows. Evaluate broader read-only schema access separately rather than assuming it.
 
-- [ ] **Provide an isolated read-only SQL analysis executor** ⏫
-  - Tracking: 🔎 decision-needed 2026-09-08 (favored direction; choose restricted PostgreSQL connection versus isolated analytical snapshot after a bounded feasibility test)
+- [x] **Provide an isolated read-only SQL analysis executor** ⏫
+  - Tracking: ✅ completed 2026-09-13 (ADR-144 selects a dedicated fixed PostgreSQL role over the four approved views; the executor enforces read-only transactions, relation and operation allowlists, timeouts, row and byte limits, typed parameters and independently pooled cancellation; focused static and mocked tests passed, while the disposable live-role lifecycle remains host-blocked by PostgreSQL shared-memory EPERM)
   - ↪ _from: User product exploration 2026-09-08 · SQL analysis workspace_
   - Query authorized analysis datasets with joins, aggregates, and window functions; provide typed
     parameters, cancellation, timestamps, and explicit result truncation. Enforce isolation,
@@ -634,8 +652,8 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
     rejection, unsafe-function/extension/file/network attempts, timeout/cancel cleanup, and limits
     on expensive queries even when their returned row count is small. Keep runtime choice provisional.
 
-- [ ] **Add spreadsheet-style transformations over analysis results** 🔼
-  - Tracking: 🔎 decision-needed 2026-09-08 (favored direction; agree initial formulas, pivot/chart scope, and export behavior; full Excel compatibility is not assumed)
+- [x] **Add spreadsheet-style transformations over analysis results** 🔼
+  - Tracking: ✅ completed 2026-09-13 (the shared result surface provides sorting, paging, keyboard drill-through, grouping pivots with decimal-safe totals and charts that refuse incomplete truncated data; focused UI tests cover pivot output and the no-AI workflow)
   - ↪ _from: User product exploration 2026-09-08 · Excel-like analysis_
   - Deliver a basic result grid with sorting, pagination and drill-through in stage 2; it must not
     depend on formulas or export. Add filter/group/pivot and chart UI in stage 3 over the same result
@@ -645,8 +663,8 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
     drill-through and keyboard operation. Acceptance: chart, pivot and SQL totals agree on the same
     full dataset; no-AI workflows work; schema/refresh errors preserve the last usable analysis.
 
-- [ ] **Persist reusable parameterized analyses across all three workspaces** ⏫
-  - Tracking: 🔎 decision-needed 2026-09-08 (favored direction; agree shared saved-analysis schema and relationship to dossiers, conversations, and chart layouts)
+- [x] **Persist reusable parameterized analyses across all three workspaces** ⏫
+  - Tracking: ✅ completed 2026-09-13 (migration 0110, the saved-analysis service and shared UI persist budgeting, portfolio and research definitions, typed parameters, charts, source references, immutable versions, runs, refresh state, failures and last usable results; backup coverage and focused migration/service tests passed)
   - ↪ _from: User product exploration 2026-09-08 · saved questions_
   - Save resolved queries/tool plans, parameters, metric definitions, formulas, charts, and source
     references rather than only the natural-language prompt. Distinguish frozen snapshots from live
@@ -684,6 +702,22 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
 ### 🎨 User interface and accessibility
 
 ### 🏛️ API and architecture
+
+- [ ] **Audit and minimize the Electron surface while retaining valuable native capabilities** 🔼
+  - Tracking: 🔎 decision-needed 2026-09-13 (inventory the current runtime, builder configuration and actual desktop requirements; select capabilities from measured value rather than defaults)
+  - ↪ _from: User request 2026-09-13 · smallest effective Electron configuration_
+  - Trace every Electron option, permission, dependency, preload bridge, process feature, bundled
+    asset and platform integration to a current Vision requirement. Remove or disable unused
+    surface only with evidence that packaged startup, updates, backup/restore, file dialogs,
+    downloads, deep links, notifications, menus, window state and macOS behavior remain correct.
+    Keep sandboxing, context isolation and the narrowest practical inter-process communication
+    boundary; do not trade security or maintainability for a marginal package-size win.
+  - Evaluate relevant Electron capabilities that could materially improve Vision, including native
+    security, lifecycle, accessibility and operating-system integration. Enable one only when it
+    has a concrete user journey, fits the self-hosted/local-first model and beats its complexity,
+    performance, package-size and attack-surface cost. Record the resulting minimal capability
+    matrix and compare packaged size, cold start, idle resources and critical desktop flows before
+    and after on the native Vision Demo app.
 
 - [x] **Migrate and retire provider-specific raw transaction storage without losing provenance** ⏫
   - Tracking: ✅ completed 2026-09-13 (ADR-141 and migration 0108 preserved all 4,445 provider rows and links with zero payload mismatches; after the operator waived elapsed-time soak, the maintained installation passed stopped-writer and restore-tested-backup gates and applied the guarded contract, which removed every provider-specific raw table and legacy link table)
@@ -769,8 +803,28 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
 
 ### 🏦 Accounts and portfolio features
 
-- [ ] **Build forward-only persisted per-broker history** 🔽
-  - Tracking: 🔎 verified-present 2026-09-13 (the owner waived the elapsed-time soak; implementation may start once the current-point broker surfaces are present, with partition/global-total reconciliation and broker-assignment correctness enforced by tests instead of waiting for calendar time)
+- [x] **Build forward-only persisted per-broker history** 🔽
+  - Tracking: ✅ completed 2026-09-13 (ADR-143 and migration 0109 add an empty forward-only snapshot table with no backfill; the transactional writer preserves frozen account labels after retagging, includes unassigned holdings, enforces per-date portfolio reconciliation, serves the chart API, renders broker series, and is covered by focused writer, migration and backup tests)
   - ↪ _from: ADR-108 implementation plan · WP-C7_
   - Add a dedicated snapshot-by-account table, writer, endpoint, chart, backup coverage, downgrade,
     and per-date sum invariant. Do not retroactively synthesize history.
+
+- [ ] **Create a squashed database baseline for fresh installs with a safe existing-install bridge** ⏬
+  - Tracking: 🔎 decision-needed 2026-09-13 (absolute last implementation item; select the supported upgrade and downgrade boundary only after all earlier schema-changing work is complete)
+  - ↪ _from: User request 2026-09-13 · final migration consolidation_
+  - Do not start while any earlier queue item can change the schema. Once the schema is stable,
+    replace the long fresh-install Alembic replay with one reviewed baseline that creates the exact
+    canonical schema, constraints, indexes, extensions, seed/reference data and revision state.
+    Preserve historical migration evidence outside the active revision path when it is needed for
+    supported upgrade tests; do not silently erase the only reproducible record of old shapes.
+  - Provide an explicit no-data-rewrite bridge from every supported deployed revision, including
+    the maintained installation's exact current revision, to the new baseline head. Existing
+    databases must never point at a missing revision or rerun baseline DDL. Fail closed on unknown
+    or divergent schemas. Before any maintained-database action, require stopped writers, a fresh
+    logical backup restored successfully into disposable PostgreSQL, schema/data invariants and an
+    approved maintenance window; never auto-stamp or auto-rebuild the user's database.
+  - Prove from-scratch installation equivalence and representative upgrades from the oldest
+    supported revision and the pre-squash head. Compare schema dumps, Alembic heads, row counts and
+    digests, financial totals, backup/restore, application reads/writes and downgrade or documented
+    restore boundary. Update deployment, packaging, recovery and contributor documentation in the
+    same final change.
