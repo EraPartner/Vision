@@ -6,7 +6,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockConnection } from "./helpers/repoMocks.js";
 
-vi.mock("../src/database/connection.js", () => mockConnection());
+vi.mock("../src/database/connection.js", () =>
+  mockConnection({
+    withSavepointIfInTransaction: vi.fn(async (_name, fn) => fn()),
+  }),
+);
 
 import {
   __createTransactionHash as createTransactionHash,
@@ -14,9 +18,11 @@ import {
   isDuplicate,
   __isDuplicateByFields as isDuplicateByFields,
   isManualDuplicate,
-  recordManualRawTransaction,
+  lockManualTransactionIdentity,
+  recordManualTransactionDedupClaim,
 } from "../src/services/deduplication.js";
 import { query } from "../src/database/connection.js";
+import { withSavepointIfInTransaction } from "../src/database/connection.js";
 
 describe("DeduplicationService", () => {
   beforeEach(() => {
@@ -187,14 +193,16 @@ describe("DeduplicationService", () => {
       bankAccount: "BE123",
     };
 
-    it("returns duplicate when hash exists in manual raw table", async () => {
+    it("returns duplicate when hash exists in the neutral claim table", async () => {
       query.mockResolvedValueOnce({ rows: [{ transaction_id: 345 }] });
 
       const result = await isManualDuplicate(manualTx);
 
       expect(result).toEqual({ isDuplicate: true, existingTransactionId: 345 });
       expect(query).toHaveBeenCalledTimes(1);
-      expect(query.mock.calls[0][0]).toContain("FROM manual_raw_transactions");
+      expect(query.mock.calls[0][0]).toContain(
+        "FROM manual_transaction_dedup_claims",
+      );
     });
 
     it("only a live, active transaction blocks — a dangling hash row (ON DELETE SET NULL) does not", async () => {
@@ -215,10 +223,12 @@ describe("DeduplicationService", () => {
       );
     });
 
-    it("falls back to field-based lookup when manual raw table is unavailable", async () => {
+    it("falls back to field-based lookup when the claim table is unavailable", async () => {
       query
         .mockRejectedValueOnce(
-          new Error('relation "manual_raw_transactions" does not exist'),
+          new Error(
+            'relation "manual_transaction_dedup_claims" does not exist',
+          ),
         )
         .mockResolvedValueOnce({ rows: [{ id: 901 }] });
 
@@ -227,6 +237,10 @@ describe("DeduplicationService", () => {
       expect(result).toEqual({ isDuplicate: true, existingTransactionId: 901 });
       expect(query).toHaveBeenCalledTimes(2);
       expect(query.mock.calls[1][0]).toContain("FROM transactions");
+      expect(withSavepointIfInTransaction).toHaveBeenCalledWith(
+        "sp_manual_dedup_claim_read",
+        expect.any(Function),
+      );
     });
 
     it("returns non-duplicate when both hash and field checks miss", async () => {
@@ -253,15 +267,48 @@ describe("DeduplicationService", () => {
         22,
         "Rent",
         "BE123",
+        null,
       ]);
     });
   });
 
-  describe("recordManualRawTransaction", () => {
-    it("inserts manual raw row with dedup hash", async () => {
+  describe("lockManualTransactionIdentity", () => {
+    it("takes a transaction-scoped advisory lock for the versioned hash", async () => {
       query.mockResolvedValueOnce({ rows: [] });
 
-      await recordManualRawTransaction({
+      await lockManualTransactionIdentity({
+        date: "2026-02-10",
+        amount: -50,
+        recipientId: 22,
+        memo: "Rent",
+        accountId: 7,
+      });
+
+      expect(query).toHaveBeenCalledWith(
+        "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+        [expect.stringMatching(/^[0-9a-f]{64}$/)],
+      );
+    });
+
+    it("uses the same lock identity after a legacy label resolves to its account id", async () => {
+      const shared = {
+        date: "2026-02-10",
+        amount: -50,
+        recipientId: 22,
+        memo: "Rent",
+        accountId: 7,
+      };
+      expect(
+        createManualTransactionHash({ ...shared, bankAccount: "MAIN" }),
+      ).toBe(createManualTransactionHash(shared));
+    });
+  });
+
+  describe("recordManualTransactionDedupClaim", () => {
+    it("upserts a provider-neutral manual dedup claim", async () => {
+      query.mockResolvedValueOnce({ rows: [] });
+
+      await recordManualTransactionDedupClaim({
         date: "2026-02-10",
         amount: -50,
         recipientId: 22,
@@ -274,20 +321,25 @@ describe("DeduplicationService", () => {
 
       expect(query).toHaveBeenCalledTimes(1);
       expect(query.mock.calls[0][0]).toContain(
-        "INSERT INTO manual_raw_transactions",
+        "INSERT INTO manual_transaction_dedup_claims",
       );
       // Upsert, so re-adding a deleted transaction re-claims its dangling hash row.
-      expect(query.mock.calls[0][0]).toContain(
-        "DO UPDATE SET transaction_id = EXCLUDED.transaction_id",
+      expect(query.mock.calls[0][0]).toMatch(
+        /DO UPDATE\s+SET transaction_id = EXCLUDED\.transaction_id/,
       );
-      expect(query.mock.calls[0][1][1]).toBe(777);
+      expect(query.mock.calls[0][1]).toEqual([
+        expect.stringMatching(/^[0-9a-f]{64}$/),
+        777,
+      ]);
     });
 
-    it("swallows insert errors when table does not exist", async () => {
-      query.mockRejectedValueOnce(new Error("relation does not exist"));
+    it("swallows only the rolling-deployment missing-table error", async () => {
+      query.mockRejectedValueOnce(
+        Object.assign(new Error("relation does not exist"), { code: "42P01" }),
+      );
 
       await expect(
-        recordManualRawTransaction({
+        recordManualTransactionDedupClaim({
           date: "2026-02-10",
           amount: -50,
           recipientId: 22,
@@ -298,6 +350,27 @@ describe("DeduplicationService", () => {
           transactionId: 777,
         }),
       ).resolves.toBeUndefined();
+      expect(withSavepointIfInTransaction).toHaveBeenCalledWith(
+        "sp_manual_dedup_claim_write",
+        expect.any(Function),
+      );
+    });
+
+    it("propagates unexpected claim failures so the create transaction rolls back", async () => {
+      query.mockRejectedValueOnce(
+        Object.assign(new Error("connection lost"), { code: "08006" }),
+      );
+
+      await expect(
+        recordManualTransactionDedupClaim({
+          date: "2026-02-10",
+          amount: -50,
+          recipientId: 22,
+          memo: "Rent",
+          accountId: 7,
+          transactionId: 777,
+        }),
+      ).rejects.toThrow("connection lost");
     });
   });
 });

@@ -3,7 +3,7 @@
  */
 
 import crypto from "crypto";
-import { query } from "../database/connection.js";
+import { query, withSavepointIfInTransaction } from "../database/connection.js";
 import { logger } from "../config/logger.js";
 import { epochMsToUtcYmd } from "../lib/dateFormat.js";
 
@@ -40,6 +40,7 @@ function createTransactionHash(transactionData) {
  * @property {number|string|null} [recipientId]
  * @property {string|null} [memo]
  * @property {string|null} [bankAccount]
+ * @property {number|string|null} [accountId]
  */
 
 /**
@@ -54,9 +55,25 @@ function createManualTransactionHash({
   recipientId,
   memo,
   bankAccount,
+  accountId,
 }) {
-  const raw = `manual|${date}|${amount}|${recipientId}|${(memo || "").toUpperCase()}|${(bankAccount || "").toUpperCase()}`;
+  const accountIdentity =
+    accountId == null ? (bankAccount || "").toUpperCase() : `id:${accountId}`;
+  const raw = `manual-v2|${date}|${amount}|${recipientId}|${(memo || "").toUpperCase()}|${accountIdentity}`;
   return crypto.createHash("sha256").update(raw, "utf-8").digest("hex");
+}
+
+/**
+ * Serialize manual creates with the same versioned identity for the duration
+ * of the caller's ambient transaction. This closes the check-then-insert race
+ * without retaining a session lock if the request fails.
+ *
+ * @param {ManualHashInput} input
+ * @returns {Promise<void>}
+ */
+export async function lockManualTransactionIdentity(input) {
+  const hash = createManualTransactionHash(input);
+  await query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [hash]);
 }
 
 /**
@@ -114,7 +131,7 @@ async function isDuplicateByFields(date, amount, recipientName, memo) {
 }
 
 /**
- * Check if a manually added transaction is a duplicate using the manual_raw_transactions table.
+ * Check if a manually added transaction is a duplicate using the neutral claim table.
  *
  * @param {ManualHashInput} input
  * @returns {Promise<{ isDuplicate: boolean, existingTransactionId: number|null }>}
@@ -125,6 +142,7 @@ export async function isManualDuplicate({
   recipientId,
   memo,
   bankAccount,
+  accountId,
 }) {
   const hash = createManualTransactionHash({
     date,
@@ -132,6 +150,7 @@ export async function isManualDuplicate({
     recipientId,
     memo,
     bankAccount,
+    accountId,
   });
 
   try {
@@ -140,13 +159,17 @@ export async function isManualDuplicate({
     // with transaction_id = NULL — without the join that dangling row would
     // block re-adding the identical transaction forever, with a ConflictError
     // pointing at nothing.
-    const result = await query(
-      `SELECT m.transaction_id
-         FROM manual_raw_transactions m
-         JOIN transactions t ON t.id = m.transaction_id AND t.is_active = true
-        WHERE m.deduplication_hash = $1
-        LIMIT 1`,
-      [hash],
+    const result = await withSavepointIfInTransaction(
+      "sp_manual_dedup_claim_read",
+      () =>
+        query(
+          `SELECT m.transaction_id
+             FROM manual_transaction_dedup_claims m
+             JOIN transactions t ON t.id = m.transaction_id AND t.is_active = true
+            WHERE m.deduplication_hash = $1
+            LIMIT 1`,
+          [hash],
+        ),
     );
     if (result.rows.length > 0) {
       return {
@@ -161,7 +184,7 @@ export async function isManualDuplicate({
         code: err.code,
       });
     }
-    // Table may not exist yet — fall through to field-based check
+    // The expand migration may not exist yet — fall through to field matching.
   }
 
   // Fallback: field-based duplicate check (includes memo for accurate match).
@@ -170,7 +193,10 @@ export async function isManualDuplicate({
      LEFT JOIN accounts acct ON acct.id = t.account_id
      WHERE t.date = $1 AND t.amount = $2 AND t.recipient_id = $3
        AND COALESCE(TRIM(t.memo), '') = $4
-       AND COALESCE(UPPER(acct.name), '') = $5
+       AND (
+         ($6::integer IS NOT NULL AND t.account_id = $6)
+         OR ($6::integer IS NULL AND COALESCE(UPPER(acct.name), '') = $5)
+       )
        AND t.is_active = true
      LIMIT 1`,
     [
@@ -179,6 +205,7 @@ export async function isManualDuplicate({
       recipientId,
       (memo || "").trim(),
       (bankAccount || "").toUpperCase(),
+      accountId ?? null,
     ],
   );
   if (fieldResult.rows.length > 0) {
@@ -189,19 +216,18 @@ export async function isManualDuplicate({
 }
 
 /**
- * Record a manually added transaction in the raw table for future dedup.
+ * Claim a manually added transaction hash in provider-neutral metadata.
  *
  * @param {ManualHashInput & { categoryId?: number|string|null, comment?: string|null, transactionId: number|string }} input
  * @returns {Promise<void>}
  */
-export async function recordManualRawTransaction({
+export async function recordManualTransactionDedupClaim({
   date,
   amount,
   recipientId,
   memo,
   bankAccount,
-  categoryId,
-  comment,
+  accountId,
   transactionId,
 }) {
   const hash = createManualTransactionHash({
@@ -210,26 +236,22 @@ export async function recordManualRawTransaction({
     recipientId,
     memo,
     bankAccount,
+    accountId,
   });
 
   try {
     // DO UPDATE (not DO NOTHING): re-adding a previously deleted transaction
     // re-claims its dangling hash row, so the hash points at the live row again.
-    await query(
-      `INSERT INTO manual_raw_transactions (deduplication_hash, transaction_id, date, bank_account, recipient_id, amount, memo, currency, category_id, comment)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, $8, $9)
-       ON CONFLICT (deduplication_hash) DO UPDATE SET transaction_id = EXCLUDED.transaction_id`,
-      [
-        hash,
-        transactionId,
-        date,
-        bankAccount,
-        recipientId,
-        amount,
-        memo,
-        categoryId,
-        comment,
-      ],
+    await withSavepointIfInTransaction("sp_manual_dedup_claim_write", () =>
+      query(
+        `INSERT INTO manual_transaction_dedup_claims
+           (deduplication_hash, transaction_id, updated_at)
+         VALUES ($1, $2, now())
+         ON CONFLICT (deduplication_hash) DO UPDATE
+           SET transaction_id = EXCLUDED.transaction_id,
+               updated_at = now()`,
+        [hash, transactionId],
+      ),
     );
   } catch (err) {
     if (err.code !== "42P01") {
@@ -237,8 +259,10 @@ export async function recordManualRawTransaction({
         error: err.message,
         code: err.code,
       });
+      throw err;
     }
-    // Table may not exist yet — silently skip
+    // The expand migration may not exist yet — field matching still protects
+    // the create path during a rolling application/database deployment.
   }
 }
 
