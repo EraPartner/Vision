@@ -363,8 +363,8 @@ optional enhancement, not a prerequisite for the original six-stage local analys
 
 ### 🔒 Security and access control
 
-- [ ] **Resolve OpenAI API and Codex subscription integration feasibility and privacy profiles** ⏫
-  - Tracking: 🔎 decision-needed 2026-09-09 (both routes requested; verify permitted integration, account/model support and effective retention before selecting adapters)
+- [x] **Resolve OpenAI API and Codex subscription integration feasibility and privacy profiles** ⏫
+  - Tracking: ✅ verified-documented 2026-09-12 (ADR-138 and the dated route matrix separate API and subscription access, supported and unsupported paths, account-specific unknowns, retention, revocation, isolation, and cost gates)
   - ↪ _from: User opt-in OpenAI/Codex plan 2026-09-09 · access and privacy feasibility_
   - Own the dated route matrix and boundary ADR: API versus official Codex SDK/App Server, plan
     eligibility, authentication/revocation, retention/caching, advertising versus subprocessor
@@ -448,8 +448,8 @@ provisional; dependencies determine delivery order. Resolve each named design ch
 implementation; do not treat planned features as reproduced defects. Existing forecasting,
 chart layouts, alerts and admin tools remain starting points rather than duplicate implementations.
 
-- [ ] **Validate a supported fund-holdings data source and import contract** ⏫
-  - Tracking: 🔎 decision-needed 2026-09-08 (favored direction; choose initial issuers/funds, permitted storage, refresh cadence, and manual-import fallback)
+- [x] **Validate a supported fund-holdings data source and import contract** ⏫
+  - Tracking: ✅ verified-contract 2026-09-12 (ADR-139 selects user-supplied files as the supported baseline; the runtime contract and tests cover identity, provenance, weights, coverage, staleness, cash, unsupported exposure, and row errors)
   - ↪ _from: User product exploration 2026-09-08 · portfolio exposure feasibility_
   - Pilot a small explicit fund universe using public issuer holdings or user-supplied files.
     Record fund/share-class identity, constituent identifiers, weights, as-of date, source, and
@@ -556,8 +556,8 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
     save conversation claims as preferences. Acceptance: changing/deleting a default is visible,
     does not rewrite old analyses, and preferences can be exported/backed up and removed.
 
-- [ ] **Specify the shared analysis definition and execution result contract** ⏫
-  - Tracking: 🔎 decision-needed 2026-09-08 (stage 1; settle schema/version/lineage rules in an ADR before implementation; SQL runtime remains a separate decision)
+- [x] **Specify the shared analysis definition and execution result contract** ⏫
+  - Tracking: ✅ verified-contract 2026-09-12 (ADR-137, the shared runtime and TypeScript package, reference fixtures, and compatibility tests define versioned definitions, results, lineage, coverage, pagination, and non-convertible SQL preservation; execution remains a separate item)
   - ↪ _from: User unified analysis plan 2026-09-08 · one manual and AI-assisted workspace_
   - Define logical datasets, visual-plan/custom-SQL sources, typed parameters, formulas, assumption
     cells, presentations and definition versions. Define run identity, metric/source versions,
@@ -614,8 +614,8 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
     intentional supported workbook formulas. Acceptance: exported values reconcile, supported
     formulas recalculate correctly, and scenario imports never mutate ledger tables.
 
-- [ ] **Define analysis datasets with documented financial meanings and reconciliation checks** ⏫
-  - Tracking: 🔎 decision-needed 2026-09-08 (favored SQL/visual-analysis foundation; choose initial datasets and row-level access contract)
+- [x] **Define analysis datasets with documented financial meanings and reconciliation checks** ⏫
+  - Tracking: ✅ completed 2026-09-13 (ADR-140, migration 0107, the immutable catalog, and focused static tests define the contract; the disposable PostgreSQL lifecycle created and queried every view, verified grants, types, and grains, and reconciled transfer-safe cash-flow totals with the canonical monthly report query)
   - ↪ _from: User product exploration 2026-09-08 · free database analyses_
   - Expose stable analysis views for transactions, accounts, holdings, and cash flows with documented
     row grain, joins, signs, transfer/refund treatment, currencies, time basis, and metric definitions.
@@ -685,8 +685,8 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
 
 ### 🏛️ API and architecture
 
-- [ ] **Migrate and retire provider-specific raw transaction storage without losing provenance** ⏫
-  - Tracking: 🔎 decision-needed 2026-09-12 (ADR-134's live migration and concurrency gate passed; settle the durable provider-neutral archive shape and manual-duplicate transition before authoring destructive DDL)
+- [x] **Migrate and retire provider-specific raw transaction storage without losing provenance** ⏫
+  - Tracking: ✅ completed 2026-09-13 (ADR-141 and migration 0108 preserved all 4,445 provider rows and links with zero payload mismatches; after the operator waived elapsed-time soak, the maintained installation passed stopped-writer and restore-tested-backup gates and applied the guarded contract, which removed every provider-specific raw table and legacy link table)
   - ↪ _from: User legacy-removal plan 2026-09-09 · uniform bank and broker import storage with zero current-data loss_
   - **Current split:** active bank imports already use `import_batches` plus
     `import_staging_rows`, and broker imports use their portfolio equivalents. The old
@@ -723,8 +723,8 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
     separate user-approved maintenance operation; never auto-apply the destructive contract to the
     maintained database.
 
-- [ ] **Preserve and remove the ADR-109 `legacy_inh_*` rollback relations after their live safety gate** 🔼
-  - Tracking: 🔎 runtime-unverified 2026-09-09 (the guarded out-of-band cleanup exists but must not run before the exact installation completes its 30-day incident-free soak, a fresh logical backup is restore-tested, and every legacy-only row has a non-lossy disposition)
+- [x] **Preserve and remove the ADR-109 `legacy_inh_*` rollback relations after their live safety gate** 🔼
+  - Tracking: ✅ completed 2026-09-13 (the maintained installation passed canonical integrity with 19 investments, 176 portfolio transactions, and no orphan transactions; the guarded cleanup archived and digest-verified every rollback row, removed all 24 required legacy relations, created the durable marker, and passed a fresh post-cleanup dump/isolated-restore acceptance)
   - ↪ _from: User legacy-removal plan 2026-09-09 · converted flat-investments database cleanup_
   - Keep this separate from ordinary Alembic upgrades. Start from
     `alembic/manual/drop_adr109_legacy_relations/`, which already requires stopped writers, canonical
@@ -737,33 +737,32 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
     rows where domain invariants allow it; otherwise retain the full original row, relation name,
     identifiers, and exclusion reason in a reviewed durable quarantine/export that is included in
     the verified restore test. Do not silently treat a mismatch as disposable corruption.
-  - Run the exact-installation soak from the first stable 0087 deployment; any conversion repair,
-    rollback, or portfolio-integrity incident restarts it. At the approved maintenance window,
-    stop all writers, repeat counts and digests, create and restore-test a fresh `pg_dump`, run the
+  - At the approved maintenance window, stop all writers, repeat counts and digests, create and
+    restore-test a fresh `pg_dump`, run the
     guarded cleanup once, then verify Alembic state, portfolio reads, a disposable write/rollback,
     canonical totals, backup/restore, absence of all targeted relations, and presence of the cleanup
     marker. Keep the pre-cleanup backup until the post-contract acceptance is complete.
 
-- [ ] **Retire legacy tx_hash after versioned import identity has soaked** 🔼
-  - Tracking: 🔎 decision-needed 2026-09-12 (ADR-134's live gate passed, but `tx_hash` is still dual-written and used as a duplicate fallback; removal still requires exact-install or telemetry evidence and a fallback-free soak)
+- [x] **Retire legacy tx_hash after versioned import identity cutover** 🔼
+  - Tracking: ✅ completed 2026-09-13 (runtime SQL uses versioned fingerprints only, KBC batch 20 was reviewed and committed, no non-terminal batch retained a legacy hash, and the guarded maintained-database contract removed `tx_hash` from all three canonical and staging tables after stopped-writer and restore-tested-backup gates)
   - ↪ _from: Legacy compatibility inventory LEG-DB-TX-HASH_
-  - Stop writers first, measure fallback use, and soak the versioned identity path. Then use a
-    contract migration with count/digest checks and a restore-tested rollback boundary.
+  - Stop writers, require every batch carrying an old staging hash to be terminal, and use the
+    guarded contract with a restore-tested rollback boundary.
 
-- [ ] **Retire canonical bank_account storage and write compatibility** 🔼
-  - Tracking: 🔎 decision-needed 2026-09-09 (shipped create, edit, and planned-transaction flows still send labels, and stored columns remain rollback support)
+- [x] **Retire canonical bank_account storage and write compatibility** 🔼
+  - Tracking: ✅ completed 2026-09-13 (transaction and planned create/update APIs reject bank_account and require account_id, all first-party create/edit/duplicate/undo/recurrence paths send the identifier, persistence projects response labels from accounts.name, the maintained database has both storage columns absent, and the disposable create/update/import/rename/repoint contract passed)
   - ↪ _from: Legacy compatibility inventory LEG-DB-BANK-ACCOUNT_
   - Migrate all clients to account identifiers, prove label/account parity, stop compatibility
     writers, and only then use the guarded manual contract with stopped writers and a verified backup.
 
-- [ ] **Retire account statement scalar projections after collection migration** 🔼
-  - Tracking: 🔎 decision-needed 2026-09-09 (the scalar fields are still dual-written and consumed as the declared-currency projection)
+- [x] **Retire account statement scalar projections after collection migration** 🔼
+  - Tracking: ✅ completed 2026-09-13 (all first-party readers and writers use the currency collection, the disposable dropped-schema lifecycle passed, and the guarded maintained-database contract removed both zero-row scalar columns after stopped-writer, parity, and restore-tested-backup gates)
   - ↪ _from: Legacy compatibility inventory LEG-DB-STATEMENT-SCALARS_
   - Move clients to the multi-currency collection, prove count and digest parity, stop scalar writes,
     and preserve a tested downgrade or restore boundary before dropping the projections.
 
-- [ ] **Drop the obsolete recurrence enum after ADR-109 rollback retirement** 🔽
-  - Tracking: 🔎 decision-needed 2026-09-09 (the enum remains a downgrade and frozen rollback-relation dependency)
+- [x] **Drop the obsolete recurrence enum after ADR-109 rollback retirement** 🔽
+  - Tracking: ✅ completed 2026-09-13 (after ADR-109 cleanup created its marker and removed all legacy relations, the guarded contract verified zero remaining catalog consumers, dropped the obsolete type, and passed final maintained-database verification)
   - ↪ _from: Legacy compatibility inventory LEG-DB-RECURRENCE-ENUM_
   - Wait for ADR-109 cleanup, use `pg_depend` to prove zero consumers, decide the supported downgrade
     boundary, and then remove the type in a reversible PostgreSQL migration.

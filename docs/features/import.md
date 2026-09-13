@@ -2,9 +2,9 @@
 title: Feature - CSV Import, Export, Attachments & Deduplication
 type: feature
 status: active
-date: 2026-09-09
-updated: 2026-09-09
-last_modified: 2026-09-09
+date: 2026-09-13
+updated: 2026-09-13
+last_modified: 2026-09-13
 tags:
   [
     feature,
@@ -350,10 +350,10 @@ sequence. Their adapters and staging INSERT schemas remain domain-specific.
 - Insert canonical transactions with per-row SAVEPOINT protection (if insert fails, transaction stays usable for remaining rows)
 - **BIGSERIAL Validation (2026-05-12):** [[apps/node-backend/src/services/importPipeline/commit.js]] (lines 101–105) validates staging row IDs via regex `/^\d+$/` instead of `Number.isInteger()`. Root cause: `import_staging_rows.id` is BIGSERIAL; the `pg` driver returns BIGINT values as strings to preserve int64 precision. The old `Number.isInteger("123")` check failed silently, counting all rows as errors before any INSERT. New regex accepts string-form bigints and is injection-safe for SAVEPOINT identifiers.
 - **Versioned import identity (2026-09-09):** migration 0103 adds a partial unique index over
-  `(dedup_fingerprint_version, dedup_fingerprint)`. Commit treats that index as the race guard. New
-  imports also copy the fingerprint into legacy `tx_hash`; historical `tx_hash` values are not
-  changed. Rows without a versioned fingerprint use the legacy occurrence-count compatibility
-  path.
+  `(dedup_fingerprint_version, dedup_fingerprint)`. Commit treats that index as the race guard.
+  Since the maintained-installation cutover on 2026-09-13, the active import path uses only this
+  versioned identity and canonical-field duplicate checks; it no longer reads or writes legacy
+  `tx_hash` columns.
 - **Deleted batch metadata (2026-08-31):** deleting an `import_batches` row sets its committed transactions' `import_batch_id` to NULL but does not delete the transactions. Those orphaned rows remain eligible for field dedup even when the incoming source hash differs, so deleting history metadata cannot make an existing transaction silently re-importable. The differing-hash exemption applies only to two rows still owned by the same batch.
 - **Poison-row fallback (decision 2026-08-31):** a failed speculative bulk INSERT rolls its chunk back and replays that chunk through per-row savepoints. Vision retains this bounded amplification because it preserves valid siblings and exact per-row error reporting. The chunk cap is 1,000 rows; optimize by subdivision only if production import profiles show this exceptional path is material.
 - Errors are captured and logged per row (the current pipeline does **not** write per-bank raw
@@ -362,6 +362,9 @@ sequence. Their adapters and staging INSERT schemas remain domain-specific.
 - Return final counts: `{ imported, duplicates, errors }`
 - Emit progress events: `{ phase: 'committing', current, total, imported, duplicates, errors }`
 - **Post-commit navigation (Aug 2026):** on success, `ImportReviewPage` navigates to `/import` with `{ replace: true }` instead of a normal push — the reviewed batch is consumed, so Back now skips the review URL entirely rather than re-inviting a commit of an already-committed batch. The replacement history entry carries a validated, transient receipt. `ImportPage` presents the imported count with the success-bounce and number reel, plus duplicate/error counts, then consumes the history state so a reload does not replay it. Same routing fix applies to `PortfolioImportReviewPage` → `/portfolio` (see [[docs/features/portfolio-import#5-commit|Portfolio CSV Import: Commit]]).
+- **Resume a parked review (Sep 2026):** an `awaiting_review` batch remains visible in Import
+  history. Its **Resume review** action reopens `/import/:batchId/review`, so a review interrupted by
+  an app restart can be completed without re-uploading the CSV.
 
 #### 5. **Aggregation Refresh** (post-pipeline)
 
@@ -531,10 +534,10 @@ CREATE UNIQUE INDEX uq_transactions_dedup_fingerprint
   WHERE dedup_fingerprint IS NOT NULL;
 ```
 
-The canonical input is owned by `importIdentity.js`, not by individual adapters. Existing
-`transactions.tx_hash` values are not rewritten or backfilled because older adapters mixed literal
-and reconstructed inputs. New budgeting imports write the fingerprint into `tx_hash` only as a
-compatibility value; the versioned fingerprint index is authoritative.
+The canonical input is owned by `importIdentity.js`, not by individual adapters. Legacy
+`transactions.tx_hash` values are deliberately not rewritten or backfilled because older adapters
+mixed literal and reconstructed inputs. The maintained import runtime no longer depends on that
+column; the versioned fingerprint index is authoritative.
 
 **Conflict handling:**
 
@@ -559,7 +562,7 @@ provided bank-specific duplicate detection:
 
 > [!warning] These tables are no longer written by the import pipeline
 > The current pipeline stages into `import_staging_rows` and dedups via the canonical
-> `transactions.tx_hash` (above); it never inserts into the `*_raw_transactions` tables. Their
+> versioned fingerprint fields (above); it never inserts into the `*_raw_transactions` tables. Their
 > repository (`repositories/rawTransactionRepository.js`) has **zero importers** in `src/`, and only
 > historical rows remain in the tables that still exist. `custom_raw_transactions` was dropped by
 > migration `0008_drop_custom_raw_transactions.py`.

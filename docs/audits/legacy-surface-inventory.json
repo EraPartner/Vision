@@ -39,9 +39,9 @@
   "summary": {
     "total": 53,
     "remove-now": 0,
-    "migrate-then-remove": 6,
+    "migrate-then-remove": 0,
     "retain-with-reason": 17,
-    "historical-record-only": 30,
+    "historical-record-only": 36,
     "unknown": 0
   },
   "records": [
@@ -49,56 +49,48 @@
       "id": "LEG-DB-RAW-PROVENANCE",
       "title": "Provider-specific and manual raw transaction relations",
       "domain": "database/imports",
-      "classification": "migrate-then-remove",
-      "disposition": "Seven provider relations have no runtime callers, but their rows and links may be unique provenance. The manual relation is still active.",
+      "classification": "historical-record-only",
+      "disposition": "Migration 0108 preserves all provider rows and links in the ADR-141 neutral model. The guarded maintenance contract removed the provider-specific and manual raw relations from the maintained installation; the contract remains for other installations.",
       "paths": [
         "alembic/versions/0001_initial_database_schema.py",
         "apps/node-backend/src/services/deduplication.js",
         "apps/node-backend/src/backup/coverage.js"
       ],
-      "readers": "Manual duplicate checks read manual_raw_transactions; backup and database tools enumerate all relations.",
-      "writers": "Manual transaction creation writes manual_raw_transactions; provider-specific relations have no current runtime writers.",
-      "persistedData": "Raw CSV, provider fields, hashes, timestamps, and transaction_raw_references links may exist on maintained databases.",
-      "supportWindow": "The ADR-134 live gate passed on 2026-09-12; contract removal still requires an installation-specific parity maintenance window.",
-      "replacement": "A durable provider-neutral provenance archive plus canonical manual duplicate identity.",
-      "deletionDependencies": [
-        "restart-safe backfill",
-        "stopped-writer delta check",
-        "restore-tested PostgreSQL 18 backup"
-      ],
-      "liveEvidence": "Static reachability is known; relation populations and orphan/link sets are unverified.",
-      "todoTitle": "Migrate and retire provider-specific raw transaction storage without losing provenance"
+      "readers": "Current runtime reads provider-neutral source records, links, and manual duplicate claims; no current reader requires the retired relations.",
+      "writers": "Current imports and manual creation write only the provider-neutral replacement relations.",
+      "persistedData": "Exact legacy rows and links are preserved in transaction_source_records and transaction_source_links.",
+      "supportWindow": "Maintained-installation retirement completed on 2026-09-13 after stopped-writer parity and restore checks.",
+      "replacement": "transaction_source_records, transaction_source_links, and manual_transaction_dedup_claims (ADR-141).",
+      "deletionDependencies": [],
+      "liveEvidence": "The maintained database preserved 4,445 source rows and 4,445 links with zero parity mismatches, then passed the guarded drop and post-cleanup dump/isolated-restore acceptance.",
+      "todoTitle": null
     },
     {
       "id": "LEG-DB-TX-HASH",
       "title": "Legacy import tx_hash identity",
       "domain": "database/imports",
-      "classification": "migrate-then-remove",
-      "disposition": "Still participates in dual-write, duplicate fallback, bulk planning, and concurrency behavior; historical values cannot be reinterpreted safely.",
+      "classification": "historical-record-only",
+      "disposition": "Budgeting and portfolio imports use versioned fingerprints only. The guarded maintenance contract removed legacy tx_hash columns from the maintained installation and remains available for other installations.",
       "paths": [
         "alembic/versions/0103_import_identity_provenance.py",
         "apps/node-backend/src/repositories/transactionRepository.js",
         "apps/node-backend/src/services/importPipeline/commit.js"
       ],
-      "readers": "Budgeting and portfolio import validation, commit, and repository paths read legacy hashes.",
-      "writers": "New import paths still populate tx_hash alongside versioned fingerprints.",
-      "persistedData": "Historical hashes were derived from adapter-specific and sometimes reconstructed records.",
-      "supportWindow": "ADR-134 live acceptance passed on 2026-09-12; removal still requires fallback telemetry or exact-install evidence and a no-fallback soak.",
+      "readers": "No current runtime reader.",
+      "writers": "No current import path writes tx_hash.",
+      "persistedData": "Historical mixed-semantics hashes were retired after every hash-bearing batch became terminal.",
+      "supportWindow": "Maintained-installation retirement completed on 2026-09-13 after the operator waived elapsed-time soak and the concrete terminal-batch, stopped-writer, and restore gates passed.",
       "replacement": "source_record_hash plus versioned dedup_fingerprint.",
-      "deletionDependencies": [
-        "stop tx_hash writes",
-        "fallback-free soak",
-        "contract migration and restore boundary"
-      ],
-      "liveEvidence": "The disposable PostgreSQL migration round-trip and budgeting/portfolio concurrency suites passed outside the restricted Codex runner on 2026-09-12.",
-      "todoTitle": "Retire legacy tx_hash after versioned import identity has soaked"
+      "deletionDependencies": [],
+      "liveEvidence": "KBC batch 20 was reviewed to a terminal state, no non-terminal hash-bearing batches remained, and the maintained database passed the guarded drop plus post-cleanup dump/isolated-restore acceptance.",
+      "todoTitle": null
     },
     {
       "id": "LEG-DB-RESOLVED-BANK-ACCOUNT",
       "title": "Dormant import_staging_rows.resolved_bank_account_id",
       "domain": "database/imports",
       "classification": "historical-record-only",
-      "disposition": "Removed by guarded migration 0104 after proving the staging column empty and all import batches terminal.",
+      "disposition": "Removed by guarded migration 0104 after proving the staging column empty. Import batch records and statuses are preserved.",
       "paths": [
         "alembic/versions/0091_import_staging_resolved_fks.py",
         "alembic/versions/0104_drop_dormant_import_bank_resolution.py",
@@ -108,11 +100,11 @@
       ],
       "readers": "No production readers.",
       "writers": "No production writers.",
-      "persistedData": "Migration 0104 refuses non-null staging values or active batches before dropping the dormant column.",
+      "persistedData": "Migration 0104 refuses non-null staging values before dropping the dormant column. A non-terminal batch alone does not block removal because current resume logic has no reader or writer for this field.",
       "supportWindow": "No runtime soak; the guarded disposable PostgreSQL 18 lifecycle passed on 2026-09-11.",
       "replacement": "The active budgeting pipeline resolves canonical account identity without this dormant staging field.",
       "deletionDependencies": [],
-      "liveEvidence": "The disposable PostgreSQL 18 legacy-retirement lifecycle passed its active-batch and non-null refusal cases, successful upgrade, downgrade restoration, and re-upgrade on 2026-09-11.",
+      "liveEvidence": "The disposable PostgreSQL 18 legacy-retirement lifecycle covers non-terminal batch preservation, non-null refusal, successful upgrade, downgrade restoration, and re-upgrade.",
       "todoTitle": null
     },
     {
@@ -141,49 +133,41 @@
       "id": "LEG-DB-ADR109-ROLLBACK",
       "title": "ADR-109 legacy_inh rollback relations",
       "domain": "database/portfolio",
-      "classification": "migrate-then-remove",
-      "disposition": "Not runtime data, but still the only exact rollback copy and may contain rows intentionally omitted from the flat conversion.",
+      "classification": "historical-record-only",
+      "disposition": "The maintained installation archived the exact ADR-109 rollback relations with counts and digests, then removed the original views, inheritance tables, and optional snapshots. The guarded contract remains for other installations.",
       "paths": [
         "alembic/versions/0087_flat_investments_conversion.py",
         "alembic/manual/drop_adr109_legacy_relations/up.sql",
         "apps/node-backend/tests/adr109Cleanup.test.js"
       ],
-      "readers": "Only migration, cleanup, downgrade, and verification paths.",
-      "writers": "Frozen after conversion; cleanup drops them.",
-      "persistedData": "Exact pre-conversion investment hierarchy, including legacy-only orphan transaction rows.",
-      "supportWindow": "Thirty incident-free days for the exact installation after stable 0087 deployment.",
-      "replacement": "Canonical flat tables plus a reviewed non-lossy disposition for every legacy-only row.",
-      "deletionDependencies": [
-        "zero-loss parity/quarantine design",
-        "30-day soak",
-        "stopped writers",
-        "restore-tested logical backup"
-      ],
-      "liveEvidence": "Static cleanup guards pass; exact-installation soak and restore evidence are unavailable.",
-      "todoTitle": "Preserve and remove the ADR-109 `legacy_inh_*` rollback relations after their live safety gate"
+      "readers": "Only the retained maintenance and verification history refers to the removed relation names.",
+      "writers": "No current writer targets the removed rollback relations.",
+      "persistedData": "adr109_legacy_archive and its cleanup marker preserve the exact rollback rows, relation metadata, counts, and digests.",
+      "supportWindow": "Maintained-installation retirement completed on 2026-09-13 under the operator-controlled timing decision.",
+      "replacement": "Canonical flat investments and portfolio_transactions, plus adr109_legacy_archive as the reviewed rollback record.",
+      "deletionDependencies": [],
+      "liveEvidence": "Canonical integrity passed with 19 investments, 176 portfolio transactions, and no orphans. The cleanup archived and removed 24 required residue relations, accepted two optional snapshots when present, and passed post-cleanup dump/isolated-restore acceptance.",
+      "todoTitle": null
     },
     {
       "id": "LEG-DB-RECURRENCE-ENUM",
       "title": "Old recurrence_interval enum after canonical text migration",
       "domain": "database/portfolio",
-      "classification": "migrate-then-remove",
-      "disposition": "Current canonical portfolio recurrence is checked text, but the enum remains a dependency of downgrade and frozen rollback relations.",
+      "classification": "historical-record-only",
+      "disposition": "The guarded maintenance contract dropped the obsolete recurrence_interval enum from the maintained installation after ADR-109 residue removal and a zero-dependency catalog check.",
       "paths": [
         "alembic/versions/0099_canonical_biweekly_recurrence.py",
-        "alembic/versions/0087_flat_investments_conversion.py"
+        "alembic/versions/0087_flat_investments_conversion.py",
+        "alembic/manual/drop_obsolete_recurrence_enum/up.sql"
       ],
-      "readers": "Migration downgrade and catalog dependency checks.",
+      "readers": "Only historical migration and retained maintenance text refers to the old enum.",
       "writers": "No current canonical writer.",
-      "persistedData": "Frozen legacy relations may retain enum-typed columns.",
-      "supportWindow": "After ADR-109 rollback relation cleanup and an explicit downgrade-boundary decision.",
+      "persistedData": "No maintained relation depends on the retired type.",
+      "supportWindow": "Maintained-installation retirement completed on 2026-09-13 after ADR-109 cleanup.",
       "replacement": "Canonical recurrence_interval checked text values.",
-      "deletionDependencies": [
-        "ADR-109 cleanup",
-        "pg_depend proves zero consumers",
-        "downgrade support decision"
-      ],
-      "liveEvidence": "Current-schema dependency state is unverified on the maintained database.",
-      "todoTitle": "Drop the obsolete recurrence enum after ADR-109 rollback retirement"
+      "deletionDependencies": [],
+      "liveEvidence": "The maintained database passed the zero-dependency precondition and applied the obsolete-enum contract after ADR-109 cleanup; the complete cleanup then passed dump/isolated-restore acceptance.",
+      "todoTitle": null
     },
     {
       "id": "LEG-DB-PORTFOLIO-ENUM",
@@ -209,50 +193,41 @@
       "id": "LEG-DB-BANK-ACCOUNT",
       "title": "Canonical transaction bank_account columns and request labels",
       "domain": "database/API/accounts",
-      "classification": "migrate-then-remove",
-      "disposition": "Canonical identity uses account_id, but shipped create/edit/planned flows still send labels and the stored compatibility columns support rollback.",
+      "classification": "historical-record-only",
+      "disposition": "Canonical APIs and every first-party create, edit, duplicate, undo, and recurrence path use account_id. The maintained schema has retired the compatibility columns; the guarded manual contract remains available for other installations.",
       "paths": [
         "alembic/manual/contract_drop_bank_account/up.sql",
         "apps/node-backend/src/repositories/transactionRepository.js",
         "apps/frontend/src/features/transactions/components/AddTransactionDialog.tsx"
       ],
-      "readers": "Backend request normalization and frontend forms read or emit compatibility labels.",
-      "writers": "Dual-era schema and request paths still handle bank_account.",
-      "persistedData": "transactions and planned_transactions may carry the compatibility string; staging/manual raw labels are separate valid fields.",
-      "supportWindow": "Migrate the shipped client to account_id, dual-accept for one supported-client window, then run the guarded contract.",
+      "readers": "Responses project the bank_account display label from accounts.name; request schemas reject bank_account.",
+      "writers": "Canonical first-party paths write account_id only.",
+      "persistedData": "transactions and planned_transactions reference accounts through account_id; staging and manual raw labels are separate valid import fields.",
+      "supportWindow": "First-party cutover and maintained-schema retirement are complete; the manual contract is retained for installations that still need the physical cleanup.",
       "replacement": "account_id for writes and accounts.name projection for display.",
-      "deletionDependencies": [
-        "client request migration",
-        "label/account parity",
-        "stopped writers",
-        "restore-tested backup"
-      ],
-      "liveEvidence": "Static callers are active; live divergence and orphan counts are unverified.",
-      "todoTitle": "Retire canonical bank_account storage and write compatibility"
+      "deletionDependencies": [],
+      "liveEvidence": "The maintained database reports both compatibility columns absent with zero parity mismatches. The disposable contract passed create, update, import, rename, and repoint behavior through account_id only.",
+      "todoTitle": null
     },
     {
       "id": "LEG-DB-STATEMENT-SCALARS",
       "title": "Account statement scalar projections",
       "domain": "database/API/accounts",
-      "classification": "migrate-then-remove",
-      "disposition": "statement_balance and statement_balance_date are actively dual-written and consumed as the declared-currency projection.",
+      "classification": "historical-record-only",
+      "disposition": "First-party readers and writers use account_statement_balances only. The guarded maintenance contract removed both redundant scalar columns from the maintained installation and remains available for other installations.",
       "paths": [
         "alembic/versions/0098_account_statement_balances.py",
         "apps/node-backend/src/repositories/accountRepository.js",
         "apps/frontend/src/lib/api/accounts.ts"
       ],
-      "readers": "Account service, repository, reconciliation, API normalization, and UI drift surfaces.",
-      "writers": "Account create/update/reconcile paths dual-write the scalar and side table.",
-      "persistedData": "The scalar preserves one declared-currency statement while account_statement_balances is authoritative for all currencies.",
-      "supportWindow": "Move every client to statement_balances, stop dual writes, prove parity, and soak one supported release.",
+      "readers": "Edit, reconcile, opening-balance, drift-date, and dashboard paths read statement_balances.",
+      "writers": "Dedicated set/delete statement endpoints are the only first-party write surface; account create/update reject scalar fields.",
+      "persistedData": "account_statement_balances is authoritative for every currency; the manual contract removes redundant scalar columns after exact parity.",
+      "supportWindow": "Maintained-installation retirement completed on 2026-09-13 after exact zero-row parity and restore checks.",
       "replacement": "account_statement_balances and dedicated set/delete statement endpoints.",
-      "deletionDependencies": [
-        "multi-currency client migration",
-        "count/digest parity",
-        "downgrade or restore boundary"
-      ],
-      "liveEvidence": "Active source use is confirmed; live cross-table parity is unverified.",
-      "todoTitle": "Retire account statement scalar projections after collection migration"
+      "deletionDependencies": [],
+      "liveEvidence": "The maintained database reported zero scalar rows and zero parity mismatches, applied the guarded column drop, and passed post-cleanup dump/isolated-restore acceptance.",
+      "todoTitle": null
     },
     {
       "id": "LEG-MIG-REVISION-BRIDGE",

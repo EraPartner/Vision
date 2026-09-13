@@ -80,6 +80,22 @@ Internal provenance and fingerprint columns are not exposed by transaction APIs.
   key becomes null. An explicit rollback removes the canonical rows, so those fingerprints may be
   imported again.
 
+## Addendum (2026-09-13): legacy hash cutoff
+
+Budgeting and portfolio import validation and commit SQL no longer reads or writes `tx_hash`.
+Versioned fingerprints are the only concurrent-import identity. Historical canonical rows without a
+fingerprint retain the bounded field-count fallback; the operator accepts that dropping `tx_hash`
+removes the old source-hash match for a later edited re-import.
+
+The operator waived an elapsed-time soak. The out-of-band contract may run once writers are stopped,
+every batch that still carries a staging hash is terminal, and a fresh logical backup has been
+restore-tested. Terminal batches may retain historical hashes until the columns are dropped.
+
+The maintained installation completed this retirement on 2026-09-13. KBC batch 20 was reviewed to
+a terminal state, no non-terminal hash-bearing batch remained, and the stopped-writer contract
+removed the legacy columns. The combined post-cleanup dump and isolated restore acceptance passed.
+The guarded contract remains available for other installations.
+
 ## Related
 
 - [[docs/adr/index|All ADRs]]

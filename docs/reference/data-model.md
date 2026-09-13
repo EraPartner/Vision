@@ -3,8 +3,8 @@ title: Data Model Reference
 type: reference
 status: active
 date: 2026-09-11
-updated: 2026-09-11
-last_modified: 2026-09-11
+updated: 2026-09-13
+last_modified: 2026-09-13
 tags:
   [
     reference,
@@ -130,29 +130,31 @@ related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 **Purpose:** The user's own account (ADR-088) — the spine tying budgeting cash, portfolio
 holdings, and liabilities together. Distinct from `recipient_bank_accounts` (counterparty IBANs).
 
-| Field                       | Type                    | Constraints                                        | Description                                                                                                         |
-| --------------------------- | ----------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `id`                        | SERIAL                  | PK                                                 | Unique identifier                                                                                                   |
-| `name`                      | TEXT                    | NOT NULL, UNIQUE                                   | Canonical account name (backfilled from `bank_account`)                                                             |
-| `import_identity`           | UUID                    | NOT NULL, DEFAULT random UUID, UNIQUE              | Stable internal destination identity used by import fingerprints when a provider has no account ID (migration 0103) |
-| `display_name`              | TEXT                    | NULLABLE                                           | Friendly label                                                                                                      |
-| `institution`               | TEXT                    | NULLABLE                                           | Bank / broker                                                                                                       |
-| `currency`                  | VARCHAR(3)              | NOT NULL, DEFAULT 'EUR', CHECK (`^[A-Z]{3}$`)      | ISO-4217 (ADR-086 convention)                                                                                       |
-| `type`                      | account_type            | NOT NULL, DEFAULT 'checking'                       | checking/savings/brokerage/crypto_exchange/wallet/pension/liability                                                 |
-| `liquidity_class`           | account_liquidity_class | NOT NULL, DEFAULT 'liquid'                         | liquid/semi_liquid/illiquid                                                                                         |
-| `spendable`                 | BOOLEAN                 | NOT NULL, DEFAULT true                             | Spendable vs earmarked                                                                                              |
-| `in_net_worth`              | BOOLEAN                 | NOT NULL, DEFAULT true                             | Counts toward net worth                                                                                             |
-| `tax_wrapper`               | account_tax_wrapper     | NOT NULL, DEFAULT 'none'                           | none/pension/tax_advantaged                                                                                         |
-| `owner`                     | account_owner           | NOT NULL, DEFAULT 'me'                             | me/partner/joint (feeds marital quotient)                                                                           |
-| `multi_currency_cash`       | BOOLEAN                 | NOT NULL, DEFAULT false                            | Holds cash in multiple currencies                                                                                   |
-| `has_cash_sleeve`           | BOOLEAN                 | NOT NULL, DEFAULT true                             | Dormant business flag; defaults, wire mapping, and persistence retained publicly per ADR-108                        |
-| `funding_account_id`        | INTEGER                 | FK → accounts ON DELETE SET NULL, NULLABLE         | Settlement account for sleeve-less trades                                                                           |
-| `statement_balance`         | NUMERIC(18,4)           | NULLABLE                                           | Declared-currency compatibility projection; authoritative data is in `account_statement_balances`                   |
-| `statement_balance_date`    | DATE                    | NULLABLE, required when `statement_balance` is set | Date of the compatibility projection                                                                                |
-| `is_active`                 | BOOLEAN                 | NOT NULL, DEFAULT true                             | Archived when false                                                                                                 |
-| `created_at` / `updated_at` | TIMESTAMPTZ             | NOT NULL, DEFAULT NOW()                            | Timestamps (`updated_at` trigger)                                                                                   |
+| Field                       | Type                    | Constraints                                   | Description                                                                                                         |
+| --------------------------- | ----------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `id`                        | SERIAL                  | PK                                            | Unique identifier                                                                                                   |
+| `name`                      | TEXT                    | NOT NULL, UNIQUE                              | Canonical account name (backfilled from `bank_account`)                                                             |
+| `import_identity`           | UUID                    | NOT NULL, DEFAULT random UUID, UNIQUE         | Stable internal destination identity used by import fingerprints when a provider has no account ID (migration 0103) |
+| `display_name`              | TEXT                    | NULLABLE                                      | Friendly label                                                                                                      |
+| `institution`               | TEXT                    | NULLABLE                                      | Bank / broker                                                                                                       |
+| `currency`                  | VARCHAR(3)              | NOT NULL, DEFAULT 'EUR', CHECK (`^[A-Z]{3}$`) | ISO-4217 (ADR-086 convention)                                                                                       |
+| `type`                      | account_type            | NOT NULL, DEFAULT 'checking'                  | checking/savings/brokerage/crypto_exchange/wallet/pension/liability                                                 |
+| `liquidity_class`           | account_liquidity_class | NOT NULL, DEFAULT 'liquid'                    | liquid/semi_liquid/illiquid                                                                                         |
+| `spendable`                 | BOOLEAN                 | NOT NULL, DEFAULT true                        | Spendable vs earmarked                                                                                              |
+| `in_net_worth`              | BOOLEAN                 | NOT NULL, DEFAULT true                        | Counts toward net worth                                                                                             |
+| `tax_wrapper`               | account_tax_wrapper     | NOT NULL, DEFAULT 'none'                      | none/pension/tax_advantaged                                                                                         |
+| `owner`                     | account_owner           | NOT NULL, DEFAULT 'me'                        | me/partner/joint (feeds marital quotient)                                                                           |
+| `multi_currency_cash`       | BOOLEAN                 | NOT NULL, DEFAULT false                       | Holds cash in multiple currencies                                                                                   |
+| `has_cash_sleeve`           | BOOLEAN                 | NOT NULL, DEFAULT true                        | Dormant business flag; defaults, wire mapping, and persistence retained publicly per ADR-108                        |
+| `funding_account_id`        | INTEGER                 | FK → accounts ON DELETE SET NULL, NULLABLE    | Settlement account for sleeve-less trades                                                                           |
+| `statement_balance`         | NUMERIC(18,4)           | NULLABLE                                      | Retired declared-currency projection; collection is authoritative                                                   |
+| `statement_balance_date`    | DATE                    | NULLABLE, paired with `statement_balance`     | Retired projection date                                                                                             |
+| `is_active`                 | BOOLEAN                 | NOT NULL, DEFAULT true                        | Archived when false                                                                                                 |
+| `created_at` / `updated_at` | TIMESTAMPTZ             | NOT NULL, DEFAULT NOW()                       | Timestamps (`updated_at` trigger)                                                                                   |
 
-The flag columns exist from migration 0050; active semantics are defined in ADR-089. The
+The scalar projection is retained only for the guarded manual downgrade boundary; first-party
+readers and writers use `account_statement_balances`. The flag columns exist from migration 0050;
+active semantics are defined in ADR-089. The
 `has_cash_sleeve` flag is a dormant compatibility field retained by ADR-108. Account-type defaults,
 form serialization and hydration, backend validation, persistence, and API exposure remain; there
 is no active UI control or business-rule consumer. Flag enum types: `account_type`,
@@ -608,7 +610,7 @@ is no active UI control or business-rule consumer. Flag enum types: `account_typ
 | `created_at`                 | TIMESTAMPTZ   | NOT NULL, DEFAULT NOW()                                    | Staging timestamp                                                         |
 | `updated_at`                 | TIMESTAMPTZ   | NOT NULL, DEFAULT NOW()                                    | Last matching, repair, or commit change; maintained by the shared trigger |
 
-Migration 0091 normalizes dangling recipient ids to `NULL` and protects the active recipient-resolution fields. Migration 0104 removes the dormant bank-account resolution column only after a locked preflight proves that every value is null and every import batch is terminal. Its downgrade recreates the nullable foreign key and partial index without reconstructing data.
+Migration 0091 normalizes dangling recipient ids to `NULL` and protects the active recipient-resolution fields. Migration 0104 removes the dormant bank-account resolution column only after a locked preflight proves that every value is null. Non-terminal import batches are preserved because the current resume path does not read or write this field. Its downgrade recreates the nullable foreign key and partial index without reconstructing data.
 
 **Related:** [[docs/features/import|Import Feature]], migrations [[alembic/versions/0091_import_staging_resolved_fks.py|0091]] and [[alembic/versions/0104_drop_dormant_import_bank_resolution.py|0104]]
 

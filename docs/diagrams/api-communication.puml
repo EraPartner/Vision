@@ -116,6 +116,9 @@ database "PostgreSQL" as DB {
     class transaction_splits
     class split_payments
     class transaction_raw_references
+    class transaction_source_records <<DurableProvenance>>
+    class transaction_source_links <<DurableProvenance>>
+    class manual_transaction_dedup_claims <<OperationalIdentity>>
   }
   
   package "Raw Transaction Tables" {

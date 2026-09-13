@@ -120,7 +120,7 @@ logical restore from that backup; no empty-table reconstruction is presented as 
 rollback copies are outside the head-schema backup coverage registry, but the required full
 `pg_dump` captures them before removal.
 
-### Retention decision (2026-09-08)
+### Retention decision (2026-09-08; superseded 2026-09-13)
 
 Do not use one repository-wide calendar date. Self-hosted installations convert when each operator
 upgrades, so a fixed date could erase a recent installation's only rename-based rollback copy. An
@@ -139,6 +139,28 @@ The cleanup remains a manual operation with an explicit `backup_verified=yes` ac
 not become an auto-applied contraction migration. Keep the verified backup until the post-cleanup
 portfolio and backup/restore checks pass. Fresh installations and converted installations with no
 legacy residue remain no-ops.
+
+### Addendum (2026-09-13): operator-controlled cleanup timing
+
+The maintained installation's operator explicitly accepts the loss of the elapsed-time observation
+window and may run the out-of-band cleanup without waiting 30 days. This changes timing only. The
+operation still requires stopped writers, explicit canonical-versus-legacy parity, complete archive
+count and digest verification, and a fresh logical backup that has been restored and smoke-tested.
+The SQL contract no longer accepts or checks `soak_verified`; it continues to fail closed on every
+concrete data and recovery precondition.
+
+### Maintained-installation retirement (2026-09-13)
+
+The maintained installation passed canonical integrity with 19 investments, 176 portfolio
+transactions, and no orphan transactions. The frozen rollback snapshot had the same aggregate
+counts, while 17 shared investment rows had changed and two portfolio transaction identifiers had
+been added and retired since conversion. The cleanup therefore treated the frozen relations as a
+rollback snapshot rather than requiring false current-row equality.
+
+The guarded contract archived and removed all 24 required residue relations. It also handles the
+two older optional snapshot relations when present. Archive counts and digests, the cleanup marker,
+the post-cleanup dump, and an isolated PostgreSQL 18 restore all passed. The manual contract remains
+available for other installations; it is not part of automatic startup migration.
 
 **Neutral**
 

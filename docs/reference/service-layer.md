@@ -2,8 +2,8 @@
 title: Service Layer Reference
 type: reference
 status: active
-date: 2026-09-09
-last_modified: 2026-09-09
+date: 2026-09-12
+last_modified: 2026-09-12
 tags: [backend, services, reference, business-logic, phase-1, phase-c, import-pipeline, graceful-shutdown, bug-hunt-2026-05-05, error-handling, robustness, route-service-boundary, repo-service-boundary, layering, thin-seams, adr-067]
 description: Complete reference for backend service modules. June 2026 — all 15 route files now go through thin `services/<domain>Service.js` seams; the lint rule `vision-local/no-repo-direct-from-route` is enforced as ERROR. 14 new thin seam modules added. August 2026 — the inverse edge is enforced too: `vision-local/no-service-import-from-repo` is an ERROR on `src/repositories/**`, with a closed allowlist for the seven sanctioned currency-conversion importers.
 aliases: [services, service layer, business logic, backend services]
@@ -226,14 +226,14 @@ directly. See [[docs/integrations/bank-adapters#adding-new-banks|Adding New Bank
 
 ### Exported Functions
 
-| Function                      | Signature                                                                                               | Returns                       |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------- |
-| `createTransactionHash`       | `(transactionData) => string`                                                                           | SHA-256 hex string            |
-| `createManualTransactionHash` | `({ date, amount, recipientId, memo, bankAccount }) => string`                                          | Hash with "manual\|" prefix   |
-| `isDuplicate`                 | `(transactionData) => Promise<boolean>`                                                                 | True if duplicate found       |
-| `isDuplicateByFields`         | `(date, amount, recipientName, memo) => Promise<boolean>`                                               | Field-based check             |
-| `isManualDuplicate`           | `({ date, amount, recipientId, memo, bankAccount }) => Promise<{ isDuplicate, existingTransactionId }>` | Manual dedup result           |
-| `recordManualRawTransaction`  | `(...) => Promise<void>`                                                                                | Records hash for future dedup |
+| Function                            | Signature                                                                                               | Returns                             |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `createTransactionHash`             | `(transactionData) => string`                                                                           | SHA-256 hex string                  |
+| `createManualTransactionHash`       | `({ date, amount, recipientId, memo, bankAccount }) => string`                                          | Hash with "manual\|" prefix         |
+| `isDuplicate`                       | `(transactionData) => Promise<boolean>`                                                                 | True if duplicate found             |
+| `isDuplicateByFields`               | `(date, amount, recipientName, memo) => Promise<boolean>`                                               | Field-based check                   |
+| `isManualDuplicate`                 | `({ date, amount, recipientId, memo, bankAccount }) => Promise<{ isDuplicate, existingTransactionId }>` | Manual dedup result                 |
+| `recordManualTransactionDedupClaim` | `(...) => Promise<void>`                                                                                | Records a neutral manual hash claim |
 
 ### Key Algorithms
 

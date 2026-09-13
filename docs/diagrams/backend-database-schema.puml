@@ -297,6 +297,36 @@ entity "saved_charts" as saved_charts {
 }
 
 ' Raw Import Tables
+entity "transaction_source_records" as transaction_source_records {
+  * id : bigserial <<PK>>
+  * source_type : text
+  * legacy_source_id : bigint
+  recorded_at : timestamptz
+  deduplication_hash : text
+  raw_csv_line : text
+  * native_payload : jsonb
+  * migration_status : text
+  migrated_at : timestamptz
+  ---
+  UNIQUE(source_type, legacy_source_id)
+}
+
+entity "transaction_source_links" as transaction_source_links {
+  * id : bigserial <<PK>>
+  * source_record_id : bigint <<FK>>
+  transaction_id : integer <<FK>>
+  legacy_transaction_id : integer
+  * link_status : text
+  created_at : timestamptz
+}
+
+entity "manual_transaction_dedup_claims" as manual_transaction_dedup_claims {
+  * deduplication_hash : char(64) <<PK>>
+  transaction_id : integer <<FK>>
+  created_at : timestamptz
+  updated_at : timestamptz
+}
+
 entity "transaction_raw_references" as transaction_raw_references {
   * id : serial <<PK>>
   * transaction_id : integer <<FK>>
@@ -395,6 +425,9 @@ transaction_splits }o--|| recipients
 split_payments }o--|| transaction_splits
 
 transaction_raw_references }o--|| transactions
+transaction_source_records ||--o{ transaction_source_links : source_record_id
+transaction_source_links }o--o| transactions : transaction_id
+manual_transaction_dedup_claims }o--o| transactions : transaction_id
 
 ' ───────────────────────────────────────────────────────────────
 ' Additions (May 2026)

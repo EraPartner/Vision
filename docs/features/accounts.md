@@ -3,7 +3,7 @@ title: Accounts
 type: feature
 status: active
 date: 2026-07-22
-updated: 2026-09-11
+updated: 2026-09-13
 tags:
   [
     feature,
@@ -41,8 +41,8 @@ related_code:
 # Accounts
 
 > [!note] ADR-088 contract phase
-> Transaction and planned-transaction account identity is now `account_id` only. The API still
-> accepts and returns `bank_account` as a compatibility label resolved through `accounts.name`.
+> Transaction and planned-transaction write identity is now `account_id` only. Responses still
+> return `bank_account` as a display label resolved through `accounts.name`.
 > The out-of-band column removal was applied to the maintained live database on 2026-09-08; fresh
 > Alembic-only installations still require the approved stopped-writer operation in the ADR-088
 > manual contract runbook.
@@ -55,11 +55,11 @@ related_code:
 > schema decision.
 
 > [!note] ADR-088 contract boundary
-> Transaction and planned-payment APIs still accept and return the
-> `bank_account` compatibility label. Contract-phase persistence resolves
-> request labels to `account_id` and derives response labels from
-> `accounts.name`; the canonical transaction tables no longer need their
-> legacy string columns. The maintained live database completed the out-of-band drop on
+> Transaction and planned-payment APIs require `account_id` on create and accept only
+> `account_id` for account changes. Responses derive their `bank_account` display label from
+> `accounts.name`; the canonical transaction tables no longer need their legacy string columns.
+> Free-text transaction account creation is no longer supported; create the account through the
+> Accounts surface first. The maintained live database completed the out-of-band drop on
 > 2026-09-08; the reusable maintenance workflow remains documented in
 > `alembic/manual/contract_drop_bank_account/README.md`.
 
@@ -149,7 +149,7 @@ fed by `anchor_date` / `post_anchor_count` from the accounts list endpoint. Show
 
 ## Reconcile
 
-The drift badge/chip (`statement_balance − reconcilable_balance`, ADR-094) opens the Reconcile dialog. `computed_balance` is the FX-converted reporting total; `reconcilable_balance` is one native currency partition. The declared `accounts.currency` partition wins whenever it exists, including at exactly zero. Only when it is absent can a sole funded foreign partition act as the compatibility fallback for a mislabelled single-currency account. The badge itself carries the statement's as-of date (_"Drift +€15,50 · statement 03/06/2026"_) and switches from destructive to **warning (amber) tone when the reading is older than 45 days** — an old anchor is age, not breakage (shared `useDriftBadge` helper; same text + tone on the hub cards, the detail header, and the dashboard `BankBalancesWidget` chips, so the surfaces cannot disagree).
+The drift badge/chip (`selected statement reading − reconcilable_balance`, ADR-094) opens the Reconcile dialog. `computed_balance` is the FX-converted reporting total; `reconcilable_balance` is one native currency partition. The declared `accounts.currency` partition wins whenever it exists, including at exactly zero. Only when it is absent can a sole funded foreign partition act as the compatibility fallback for a mislabelled single-currency account. The badge itself carries the statement's as-of date (_"Drift +€15,50 · statement 03/06/2026"_) and switches from destructive to **warning (amber) tone when the reading is older than 45 days** — an old anchor is age, not breakage (shared `useDriftBadge` helper; same text + tone on the hub cards, the detail header, and the dashboard `BankBalancesWidget` chips, so the surfaces cannot disagree).
 
 If a current exchange rate is missing, `computed_balance` is a partial converted total: the
 unsupported partition is excluded, its native amount remains visible on the account card, and the

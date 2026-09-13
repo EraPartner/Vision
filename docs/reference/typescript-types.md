@@ -2,8 +2,8 @@
 title: TypeScript Types Reference
 type: reference
 status: active
-date: 2026-04-02
-updated: 2026-09-04
+date: 2026-09-12
+updated: 2026-09-12
 tags:
   [
     reference,
@@ -28,6 +28,8 @@ related_code:
     "apps/frontend/src/lib/api/splits.ts",
     "packaging/electron/electron-api.d.ts",
     "packages/types/src/electron.d.ts",
+    "packages/types/src/analysis.js",
+    "packages/types/src/analysis.d.ts",
   ]
 ---
 
@@ -39,6 +41,14 @@ related_code:
 ---
 
 ## Contract Architecture (June 2026)
+
+The shared package also exposes `@vision/types/analysis`. Unlike generated HTTP types, it provides
+strict Zod runtime schemas plus paired TypeScript declarations for versioned analysis definitions and
+immutable execution results. The contract records scope, dataset and metric versions, exact decimal
+values, coverage, pagination or truncation, and row lineage. Its compatibility checker fails closed
+without mutating a saved definition or prior result. See
+[[docs/reference/analysis-contract|Analysis Contract Reference]] and
+[[docs/adr/137-shared-analysis-definition-and-result-contract|ADR-137]].
 
 Electron inter-process communication has a separate shared contract because it is not HTTP or
 OpenAPI. `packaging/electron/electron-api.d.ts`, beside the preload, owns all 24 invoke channels,

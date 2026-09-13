@@ -2,7 +2,7 @@
 title: ADR-088 Account Entity (replace the bank_account string)
 type: adr
 date: 2026-06-18
-updated: 2026-09-08
+updated: 2026-09-12
 tags: [adr, accounts, account-entity, data-model, migration, expand-contract, running-balance, transfers, import, net-worth, portfolio, trigger-lookup-only, phantom-account, split-guard, rename-propagation, migration-0062]
 description: Replace the implicit free-text bank_account column with a real accounts table via an expand/contract migration, giving accounts a stable identity that cash, holdings, liabilities, reconciliation, and owner/tax allocation can all hang off. 2026-06-25 addendum: migration 0062 hardens the dual-write trigger (lookup-only on UPDATE), adds a split-total guard trigger, and wires account rename propagation. 2026-09-08 addendum: the guarded contract drop was activated on the maintained live database.
 aliases: [account entity, accounts table, account_id, bank_account replacement]
@@ -339,11 +339,12 @@ Transaction responses project `bank_account` from `accounts.name`, so callers re
 canonical stored account spelling even when an older transaction row retained different casing.
 This is presentation normalization; `account_id` remains the stable identity.
 
-The manual-entry deduplication hash deliberately keeps its historical raw `bank_account` input.
-Changing that recipe in place would make every stored hash incomparable with a newly computed
-one. A future identity-based recipe therefore requires an explicit backfill or a versioned
-dual-hash compatibility window; this residue does not justify silently invalidating existing
-deduplication history.
+Manual-entry deduplication now uses the versioned `manual-v2` recipe in the provider-neutral
+claim table. The create service resolves a compatibility label to `account_id` before taking its
+transaction-scoped advisory lock, so an old label client and a canonical-ID client serialize on
+the same identity. Optional claim-table reads and writes run behind savepoints: a rolling deploy
+whose database has not reached migration 0108 can fall back without leaving PostgreSQL's ambient
+transaction in the failed `25P02` state.
 
 The backup round-trip dependency concern is resolved by workspace installation parity: the
 backend suite can resolve the Electron packaging workspace's `archiver` and `yauzl` dependencies
@@ -390,6 +391,33 @@ dual-write triggers, nor the three legacy transaction indexes. Fresh installatio
 the explicit out-of-band operation because the automatic Alembic chain intentionally retains the
 compatibility schema.
 
+### Addendum (2026-09-12): client account-ID migration
+
+Transaction and planned create/update schemas require `account_id` and reject `bank_account` as a
+write field. Account selection no longer creates an account from free text. Existing-account create,
+edit, duplicate, undo, and recurrence paths all send the stable identifier. The maintained database
+completed the physical contract on 2026-09-08; a disposable PostgreSQL lifecycle subsequently
+proved create, update, import, rename, and repoint behavior with both compatibility columns absent.
+
+Canonical-only writers are not required to synthesize a legacy label. The fresh-install contract
+guard requires every row to have a valid `account_id`; it compares a compatibility label with
+`accounts.name` only when that label is present. This keeps the gate satisfiable after canonical
+writes begin while still rejecting unresolved identities and divergent legacy labels on an
+installation that has not yet applied the manual contract.
+
 **Related:** the multi-currency decision that re-grains `mv_bank_balances` lives in
 [[docs/adr/089-account-typed-model|ADR-089 addendum]]; the enable decision for the holdings half
 in [[docs/adr/103-per-account-holdings-ui-flag|ADR-103 addendum]].
+
+### Addendum (2026-09-13): account-ID-only write cutoff
+
+The supported transaction and planned-transaction write contract now requires a canonical
+`account_id` on create and accepts only `account_id` for account changes. The first-party account
+combobox no longer offers implicit free-text account creation. Accounts must be created through
+the Accounts surface before they can be selected for a transaction or planned payment.
+
+Response `bank_account` fields remain display projections from `accounts.name`, and staging
+`bank_account` fields remain source data for imports. Query-side label filters also remain supported;
+this cutoff removes only canonical write compatibility. The maintained database had already dropped
+the two canonical storage columns, so this is an API/client compatibility cutoff rather than a new
+schema mutation.

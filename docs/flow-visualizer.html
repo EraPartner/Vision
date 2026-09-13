@@ -1389,7 +1389,7 @@
             "id": "create-tx",
             "name": "Create a manual transaction",
             "category": "Transactions",
-            "summary": "User adds a transaction from the UI; backend persists and asynchronously refreshes aggregations.",
+            "summary": "User selects an account and adds a transaction; the backend serializes duplicate identity, commits the row and neutral claim atomically, then refreshes derived state.",
             "steps": [
               {
                 "from": "browser",
@@ -1417,15 +1417,27 @@
               },
               {
                 "from": "be.routes",
+                "to": "sv.transactiondomains",
+                "payload": "transactionService.createManualTransaction({... account_id ...})",
+                "annotation": "routes/transactions.js delegates the validated canonical account identity to services/transactionService.js. The temporary bank_account field remains only for older clients during the compatibility soak."
+              },
+              {
+                "from": "sv.transactiondomains",
+                "to": "db.postgres",
+                "payload": "BEGIN · pg_advisory_xact_lock(manual-v2 hash) · duplicate lookup",
+                "annotation": "transactionService.js and services/deduplication.js hold one ambient transaction and serialize identical manual identities before checking active neutral claims or the rolling-deployment field fallback."
+              },
+              {
+                "from": "sv.transactiondomains",
                 "to": "be.repos",
-                "payload": "transactionRepository.create({...})",
-                "annotation": "Route delegates to the repository layer (Repository pattern enforced by ADR-006)."
+                "payload": "transactionRepository.create({... account_id ...})",
+                "annotation": "The repository validates an existing active account_id. A nested repository transaction becomes a savepoint on the same ambient PostgreSQL client."
               },
               {
                 "from": "be.repos",
                 "to": "db.postgres",
-                "payload": "INSERT INTO transactions (...) RETURNING *",
-                "annotation": "Single parameterised insert; triggers maintain `agg_*` tables atomically."
+                "payload": "INSERT transaction + tags; UPSERT manual_transaction_dedup_claims; COMMIT",
+                "annotation": "The canonical transaction and provider-neutral manual identity commit atomically. Unexpected claim failures roll back the row; only a missing claim table is tolerated during rolling deployment."
               },
               {
                 "from": "be.repos",

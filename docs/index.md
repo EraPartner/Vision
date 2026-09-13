@@ -2,9 +2,9 @@
 title: Vision Project Knowledge Base
 type: index
 status: active
-date: 2026-09-09
-updated: 2026-09-09
-last_modified: 2026-09-09
+date: 2026-09-12
+updated: 2026-09-12
+last_modified: 2026-09-12
 tags:
   [
     knowledge-base,
@@ -60,6 +60,12 @@ aliases: [KB, docs, documentation, knowledge base, home]
 > **Quick Open:** Press `Ctrl/Cmd+O` to quick-open any document
 > **Search:** Use the search bar or `Cmd+Shift+F` for full-text search
 > **Graph View:** Use `Cmd+G` to explore document relationships
+
+Recent cross-cutting contracts: [[docs/reference/analysis-contract|Analysis Contract]],
+[[docs/reference/analysis-datasets|Analysis Datasets]],
+[[docs/reference/fund-holdings-import-contract|Fund Holdings Import Contract]], and
+[[docs/reference/openai-codex-assistance-profiles|OpenAI and Codex Assistance Profiles]]. Import
+history is defined by [[docs/reference/provider-neutral-transaction-provenance|Provider-Neutral Transaction Provenance]].
 
 ## 🎯 Quick Navigation
 
@@ -186,6 +192,7 @@ LIMIT 20
 | [[docs/reference/code-patterns           | 💻 Code Patterns]]                    | Standard code patterns for all layers                            |
 | [[docs/reference/error-codes             | ❌ Error Codes]]                      | All API error responses and status codes                         |
 | [[docs/reference/typescript-types        | 🔢 TypeScript Types]]                 | All frontend type definitions                                    |
+| [[docs/reference/analysis-contract       | 🧩 Analysis Contract]]                | Shared definitions, results, lineage, and compatibility          |
 | [[docs/reference/algorithms              | 🧮 Algorithms]]                       | LTTB, deduplication, recurring detection, currency conversion    |
 | [[docs/reference/service-layer           | 🗂️ Service Layer]]                    | All 16 backend services reference                                |
 | [[docs/reference/database-query-patterns | 🗄️ Database Query Patterns]]          | PostgreSQL patterns, indexes, optimization                       |

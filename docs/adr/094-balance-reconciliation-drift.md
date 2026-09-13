@@ -2,7 +2,7 @@
 title: ADR-094 Balance Reconciliation & Drift Detection
 type: adr
 date: 2026-09-04
-updated: 2026-09-05
+updated: 2026-09-13
 tags: [adr, accounts, reconciliation, drift, statement-balance, adr-088, balance-write-protection, import-pipeline-only]
 description: Store an authoritative statement balance per account and diff it against the computed ledger balance to surface drift ("drifted €12.40 — missing a transaction"), now that accounts have identity. 2026-06-25 addendum: transactions.balance is now write-protected — only the import pipeline may stamp it.
 aliases: [reconciliation, drift detection, statement balance]
@@ -222,3 +222,26 @@ detail/reconcile flow (rewrite Phase C/D).
 The opening-balance and reconcile services lock the account before resolving the `SYSTEM`
 recipient. Recipient-owned flows do not acquire an account lock after a recipient lock. This
 account-to-recipient order is the only permitted cross-table lock edge for these system rows.
+
+---
+
+## Addendum (2026-09-12): statement collection client cutover
+
+The account editor now reads the declared-currency value from `statement_balances`. During the
+supported-client window it sends the scalar compatibility projection in the same account PATCH;
+the repository updates the authoritative collection and account metadata in one transaction. A
+currency change omits those fields, preserving the old-currency reading and selecting any existing
+target-currency reading instead of relabeling the displayed amount. Reconcile, opening-balance, and
+drift-date reads prefer the collection, and the reconcile service requires its selected currency
+row. Scalar response and write mirroring remain for one supported-client window. The out-of-band
+contract locks both tables, proves exact declared-currency parity, and has a collection-backed down
+path; it must not run before the exact-install compatibility soak and restore-tested backup.
+
+## Addendum (2026-09-13): first-party scalar cutover complete
+
+The supported first-party client now reads and writes only `account_statement_balances` through
+the dedicated currency-scoped endpoints. Account create and update reject the old scalar fields;
+repository reads, reconciliation, opening balance, drift badges, and dashboard balances all select
+the collection directly. The scalar columns remain an out-of-band contract operation: the guarded
+manual script fails closed unless a populated declared-currency scalar exactly matches its
+collection row, and its down script recreates the older projection from that collection.

@@ -261,6 +261,27 @@ package "Supporting Entities" {
     +raw_source_id: integer
     +created_at: timestamptz
   }
+
+  class TransactionSourceRecord {
+    +id: bigint
+    +source_type: text
+    +legacy_source_id: bigint
+    +native_payload: jsonb
+    +migration_status: text
+  }
+
+  class TransactionSourceLink {
+    +id: bigint
+    +source_record_id: bigint <<FK>>
+    +transaction_id: integer <<FK>>
+    +legacy_transaction_id: integer
+    +link_status: text
+  }
+
+  class ManualTransactionDedupClaim {
+    +deduplication_hash: char(64)
+    +transaction_id: integer <<FK>>
+  }
 }
 
 package "Storage & Observability (May 2026)" {
@@ -363,6 +384,9 @@ TransactionSplit "1" --> "1" Recipient : owed to
 TransactionSplit "1" o-- "*" SplitPayment : payments
 
 Transaction "1" --> "0..1" TransactionRawReference : references
+TransactionSourceRecord "1" o-- "*" TransactionSourceLink : preserves
+Transaction "0..1" <-- "*" TransactionSourceLink : links
+Transaction "0..1" <-- "0..1" ManualTransactionDedupClaim : claimed by
 
 Transaction "1" o-- "*" Attachment : "has receipts"
 ImportBatch "1" o-- "*" ImportRow : contains

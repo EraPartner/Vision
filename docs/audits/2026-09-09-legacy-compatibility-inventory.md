@@ -2,6 +2,7 @@
 title: Legacy and Compatibility Surface Inventory
 type: audit
 date: 2026-09-12
+updated: 2026-09-13
 tags: [audit, legacy, compatibility, database, api, frontend, electron]
 description: Repository-wide classification of legacy and compatibility surfaces, their consumers, retirement gates, and bounded TODO ownership.
 aliases: [legacy inventory, compatibility inventory]
@@ -18,7 +19,9 @@ related_code: [[TODO.md]], [[package.json]], [[scripts/check-legacy-inventory.js
 > compatibility surfaces and removes the deep-link redirects under a same-release policy. The
 > deep-link source and contract checks pass; manual browser acceptance against the rebuilt synthetic
 > Demo was user-confirmed on 2026-09-12. Electron legacy-install guards remain retained recovery
-> compatibility and continue to fail closed for unknown skipped-version installs.
+> compatibility and continue to fail closed for unknown skipped-version installs. On 2026-09-13,
+> all six staged database retirements below completed on the maintained installation. Their guarded
+> contracts remain available for other installations.
 
 ## Outcome
 
@@ -45,17 +48,17 @@ that persisted data or skipped-version installs are safe to discard.
 
 ## Confirmed removal candidates
 
-| ID                              | Surface                                        | Why it is irrelevant now                                                                              | Required boundary                                                                                      |
-| ------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `LEG-DB-RESOLVED-BANK-ACCOUNT`  | `import_staging_rows.resolved_bank_account_id` | No production reader or writer exists.                                                                | Guard non-null values and active batches; prove Alembic upgrade/downgrade on disposable PostgreSQL 18. |
-| `LEG-DB-EXCHANGE-RATE-CACHE`    | `exchange_rate_cache`                          | Current runtime uses `exchange_rates`; the old table is not in the fresh baseline or backup registry. | Guard relation shape and data; keep a fresh-install no-op and restore boundary.                        |
-| `LEG-BE-BANK-ADAPTER-SHIM`      | `services/bankAdapters.js`                     | Only tests and the test-only allowlist import it.                                                     | Repoint tests and remove stale docs/allowlist entries.                                                 |
-| `LEG-BE-INFO-HELPER-REEXPORTS`  | Repository helper re-exports                   | All callers import the seven helpers from their canonical modules.                                    | Run an exact import scan and repository tests.                                                         |
-| `LEG-PKG-ASSET-CLASS-SHIM`      | Shared-utils asset-class subpath               | It has zero repository importers; `@vision/types` owns the constants.                                 | Remove package exports and run typecheck/build.                                                        |
-| `LEG-FE-DEFAULT-SETTINGS-ALIAS` | `defaultAppSettings`                           | Zero callers; `DEFAULT_APP_SETTINGS` is canonical.                                                    | Preserve hydration tests.                                                                              |
-| `LEG-FE-ASSET-CLASS-GROUPS`     | `ASSET_CLASS_GROUPS`                           | Zero callers; translated `getAssetClassGroups` is canonical.                                          | Run exact symbol scan and portfolio tests.                                                             |
-| `LEG-FE-INSIGHT-DEAD-EXPORTS`   | Old insight dismissal helpers                  | Only their legacy unit tests use them; the migration gate needs a smaller storage surface.            | Preserve load/replace/types and rewrite focused tests.                                                 |
-| `LEG-ELEC-ARCHIVER7`            | Archiver v7 callable/tar/json branches         | Lockfiles resolve Archiver 8 and bundle creation only requests zip.                                   | Prove backup creation and restore round trips.                                                         |
+| ID                              | Surface                                        | Why it is irrelevant now                                                                              | Required boundary                                                                                                   |
+| ------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `LEG-DB-RESOLVED-BANK-ACCOUNT`  | `import_staging_rows.resolved_bank_account_id` | No production reader or writer exists.                                                                | Guard non-null values while preserving active batches; prove Alembic upgrade/downgrade on disposable PostgreSQL 18. |
+| `LEG-DB-EXCHANGE-RATE-CACHE`    | `exchange_rate_cache`                          | Current runtime uses `exchange_rates`; the old table is not in the fresh baseline or backup registry. | Guard relation shape and data; keep a fresh-install no-op and restore boundary.                                     |
+| `LEG-BE-BANK-ADAPTER-SHIM`      | `services/bankAdapters.js`                     | Only tests and the test-only allowlist import it.                                                     | Repoint tests and remove stale docs/allowlist entries.                                                              |
+| `LEG-BE-INFO-HELPER-REEXPORTS`  | Repository helper re-exports                   | All callers import the seven helpers from their canonical modules.                                    | Run an exact import scan and repository tests.                                                                      |
+| `LEG-PKG-ASSET-CLASS-SHIM`      | Shared-utils asset-class subpath               | It has zero repository importers; `@vision/types` owns the constants.                                 | Remove package exports and run typecheck/build.                                                                     |
+| `LEG-FE-DEFAULT-SETTINGS-ALIAS` | `defaultAppSettings`                           | Zero callers; `DEFAULT_APP_SETTINGS` is canonical.                                                    | Preserve hydration tests.                                                                                           |
+| `LEG-FE-ASSET-CLASS-GROUPS`     | `ASSET_CLASS_GROUPS`                           | Zero callers; translated `getAssetClassGroups` is canonical.                                          | Run exact symbol scan and portfolio tests.                                                                          |
+| `LEG-FE-INSIGHT-DEAD-EXPORTS`   | Old insight dismissal helpers                  | Only their legacy unit tests use them; the migration gate needs a smaller storage surface.            | Preserve load/replace/types and rewrite focused tests.                                                              |
+| `LEG-ELEC-ARCHIVER7`            | Archiver v7 callable/tar/json branches         | Lockfiles resolve Archiver 8 and bundle creation only requests zip.                                   | Prove backup creation and restore round trips.                                                                      |
 
 The two database candidates are irrelevant to current code, but deleting a database object is still
 destructive. Their TODOs require guarded migrations and disposable-database proof. This audit does
@@ -68,14 +71,14 @@ required migration or decision.
 
 ### Database and stored contracts
 
-| ID                         | Surface                                  | Current gate                                                                               |
-| -------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `LEG-DB-RAW-PROVENANCE`    | Provider raw transaction relations       | Preserve unique provenance, backfill links, stop writers, and prove backup/restore parity. |
-| `LEG-DB-TX-HASH`           | Legacy `tx_hash` identity                | ADR-134's live gate passed on 2026-09-12; a fallback-free soak still remains.              |
-| `LEG-DB-ADR109-ROLLBACK`   | `legacy_inh_*` relations                 | Zero-loss disposition, 30-day soak, stopped writers, and restore-tested backup.            |
-| `LEG-DB-RECURRENCE-ENUM`   | Old recurrence enum                      | ADR-109 retirement, zero `pg_depend` consumers, and downgrade-policy decision.             |
-| `LEG-DB-BANK-ACCOUNT`      | Transaction `bank_account` compatibility | Client identifier migration, parity proof, stopped writers, and guarded contract.          |
-| `LEG-DB-STATEMENT-SCALARS` | Statement scalar projections             | Multi-currency client migration and count/digest parity.                                   |
+| ID                         | Surface                                  | Current gate                                                                                |
+| -------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `LEG-DB-RAW-PROVENANCE`    | Provider raw transaction relations       | Complete: 4,445 sources and links preserved; guarded removal and restore acceptance passed. |
+| `LEG-DB-TX-HASH`           | Legacy `tx_hash` identity                | Complete: hash-bearing batches terminal; guarded removal and restore acceptance passed.     |
+| `LEG-DB-ADR109-ROLLBACK`   | `legacy_inh_*` relations                 | Complete: exact archive, canonical integrity, removal, and restore acceptance passed.       |
+| `LEG-DB-RECURRENCE-ENUM`   | Old recurrence enum                      | Complete: ADR-109 residue removed and the zero-dependency guarded drop passed.              |
+| `LEG-DB-BANK-ACCOUNT`      | Transaction `bank_account` compatibility | Complete: ID-only writes and the dropped-schema disposable lifecycle pass.                  |
+| `LEG-DB-STATEMENT-SCALARS` | Statement scalar projections             | Complete: collection-only access and the dropped-schema disposable lifecycle pass.          |
 
 ### API contracts
 

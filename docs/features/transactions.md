@@ -329,9 +329,9 @@ These shortcuts are shown in `ShortcutsOverlay` (`?` key).
 
 #### Duplicate
 
-`handleDuplicate` in `TransactionsPage` copies the focused row into a new transaction via `useCreateTransaction`. Fields copied: `transaction_date`, `bank_account`, `recipient_id`, `memo`, `amount`, `currency`, `category_id`, `comment`, `tags`. Field deliberately **not** copied: `balance` (running balance is write-protected and import-pipeline-only; the `create()` path ignores it regardless).
+`handleDuplicate` in `TransactionsPage` copies the focused row into a new transaction via `useCreateTransaction`. Fields copied: `transaction_date`, `account_id`, `recipient_id`, `memo`, `amount`, `currency`, `category_id`, `comment`, `tags`. Field deliberately **not** copied: `balance` (running balance is write-protected and import-pipeline-only; the `create()` path ignores it regardless).
 
-Gate: `recipient_id`, `transaction_date`, and `bank_account` must all be present (same contract as the create endpoint).
+Gate: `recipient_id`, `transaction_date`, and `account_id` must all be present (same contract as the create endpoint).
 
 #### Filter by Recipient
 
