@@ -140,7 +140,13 @@ export function usePerformanceQueries(currency: string, period: ChartPeriod) {
         staleTime: 300_000,
         gcTime: 10 * 60_000,
     });
-    return { performance, sparkline1m };
+    const brokerPerformance = useQuery({
+        queryKey: ["portfolio", "broker-performance", currency],
+        queryFn: () => apiClient.getBrokerPortfolioPerformance({ currency }),
+        staleTime: 300_000,
+        gcTime: 10 * 60_000,
+    });
+    return { performance, sparkline1m, brokerPerformance };
 }
 
 export function useRebalanceInputs(currency: string) {

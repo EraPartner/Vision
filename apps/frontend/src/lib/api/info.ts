@@ -283,6 +283,42 @@ export function getPortfolioPerformance(params?: {
     return requestWithQuery("/api/info/portfolio-performance", params);
 }
 
+export interface BrokerPerformanceRow {
+    date: string;
+    currency: string;
+    accountKey: string;
+    accountId: number | null;
+    accountName: string;
+    assignment: "account" | "unassigned";
+    value: number;
+    invested: number;
+    gainLoss: number;
+    computedAt: string;
+}
+
+export function getBrokerPortfolioPerformance(params?: {
+    currency?: string;
+    from?: string;
+    to?: string;
+}): Promise<{
+    currency: string;
+    startDate: string;
+    endDate: string;
+    dates: string[];
+    series: Array<
+        Pick<
+            BrokerPerformanceRow,
+            "accountKey" | "accountId" | "accountName" | "assignment"
+        >
+    >;
+    rows: BrokerPerformanceRow[];
+}> {
+    return requestWithQuery(
+        "/api/info/portfolio-performance/by-broker",
+        params,
+    );
+}
+
 export interface PortfolioSummaryTotals {
     totalPortfolioValue: number;
     totalInvested: number;

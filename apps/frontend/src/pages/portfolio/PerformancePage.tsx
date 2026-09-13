@@ -137,10 +137,8 @@ export default function PerformancePage() {
         booleanSearchParamCodec,
     );
 
-    const { performance, sparkline1m } = usePerformanceQueries(
-        defaultCurrency,
-        selectedPeriod,
-    );
+    const { performance, sparkline1m, brokerPerformance } =
+        usePerformanceQueries(defaultCurrency, selectedPeriod);
     const {
         data: portfolioPerformanceData,
         isLoading,
@@ -149,6 +147,7 @@ export default function PerformancePage() {
     } = performance;
 
     const { data: sparkline1mData } = sparkline1m;
+    const { data: brokerPerformanceData } = brokerPerformance;
 
     const PERIOD_LABELS: Record<ChartPeriod, string> = {
         "1m": t("performance.period.1m"),
@@ -223,6 +222,42 @@ export default function PerformancePage() {
             })),
         [snapshots],
     );
+
+    const brokerChart = useMemo(() => {
+        const rows = brokerPerformanceData?.rows ?? [];
+        const series = brokerPerformanceData?.series ?? [];
+        const byDate = new Map<
+            string,
+            Record<string, number | string | Date>
+        >();
+        for (const row of rows) {
+            const point = byDate.get(row.date) ?? {
+                day: row.date,
+                chartDate: parseISO(row.date),
+            };
+            point[row.accountKey] = row.value;
+            byDate.set(row.date, point);
+        }
+        const palette = [
+            "hsl(var(--primary))",
+            "hsl(280, 87%, 65%)",
+            "hsl(142, 76%, 36%)",
+            "hsl(30, 80%, 55%)",
+            "hsl(0, 72%, 51%)",
+            "hsl(45, 93%, 47%)",
+        ];
+        return {
+            data: [...byDate.values()],
+            series: series.map((entry, index) => ({
+                ...entry,
+                label:
+                    entry.assignment === "unassigned"
+                        ? t("portfolio.brokerFilter.unassigned")
+                        : entry.accountName,
+                color: palette[index % palette.length],
+            })),
+        };
+    }, [brokerPerformanceData, t]);
 
     const latestAssetSplit = useMemo(() => {
         if (snapshots.length === 0) return null;
@@ -780,6 +815,66 @@ export default function PerformancePage() {
                             )
                         }
                         height={360}
+                        margin={{ top: 16, right: 24, bottom: 28, left: 110 }}
+                    />
+                </ChartCard>
+            )}
+
+            {brokerChart.data.length > 0 && brokerChart.series.length > 0 && (
+                <ChartCard
+                    title={t("performance.byBrokerTitle")}
+                    description={t("performance.byBrokerDescription")}
+                    legend={brokerChart.series.map((entry) => ({
+                        label: entry.label,
+                        color: entry.color,
+                    }))}
+                >
+                    <VisxAreaChart
+                        scrubbable
+                        data={brokerChart.data}
+                        xAccessor={(d) => d.chartDate as Date}
+                        series={brokerChart.series.map((entry) => ({
+                            key: entry.accountKey,
+                            label: entry.label,
+                            accessor: (
+                                d: Record<string, number | string | Date>,
+                            ) => Number(d[entry.accountKey] ?? 0),
+                            color: entry.color,
+                            fillOpacity: 0.08,
+                            strokeWidth: 2,
+                        }))}
+                        xIsDate
+                        xTickFormat={(value) =>
+                            formatDate(
+                                value as Date,
+                                xTickPattern,
+                                monthLabelLocale,
+                            )
+                        }
+                        yTickFormat={(value) =>
+                            formatCurrency(
+                                value as number,
+                                defaultCurrency,
+                                locale,
+                                appSettings.showDecimalPlaces ?? 2,
+                            )
+                        }
+                        tooltipTitle={(point) =>
+                            formatDate(
+                                parseISO(String(point.day)),
+                                CHART_DATE_PATTERNS.detail,
+                                monthLabelLocale,
+                            )
+                        }
+                        tooltipValueFormat={(value) =>
+                            formatCurrency(
+                                value,
+                                defaultCurrency,
+                                locale,
+                                appSettings.showDecimalPlaces ?? 2,
+                            )
+                        }
+                        height={300}
                         margin={{ top: 16, right: 24, bottom: 28, left: 110 }}
                     />
                 </ChartCard>

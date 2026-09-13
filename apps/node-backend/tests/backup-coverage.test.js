@@ -209,6 +209,7 @@ describe("localStorage keys registry", () => {
       "dismissed_recurring_patterns",
       "vision.onboarding.draft.v1",
       "vision.research.chartBuilder.layouts.v2",
+      "vision.analysis.sqlHistory",
     ];
 
     for (const key of requiredKeys) {

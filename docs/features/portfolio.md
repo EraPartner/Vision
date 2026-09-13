@@ -2,9 +2,9 @@
 title: Feature - Portfolio & Investments
 type: feature
 status: active
-date: 2026-09-04
-last_modified: 2026-09-08
-updated: 2026-09-08
+date: 2026-09-13
+last_modified: 2026-09-13
+updated: 2026-09-13
 tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding, fx-attribution, asset-gain, fx-gain, purchase-date-rates, value-fx-neutral, adr-074, adr-091, adr-100, per-account, move-holding, close-account, brokerage-fanout, rebalancing, saved-plans, cash-aware, cross-workspace, adr-098, portfolio-ticker, marquee, live-quotes, ticker-manager, show-in-ticker, migration-0061, fx-aware-pnl, unified-detail-dialog, useFxAwarePnl]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections. 2026-05-29 adds historical FX in snapshots and loading/error states on all asset pages. June 2026 adds snapshotBuilder split/return_of_capital events, APP_TIMEZONE day-boundary fix, shared portfolioUnitMath.ts, and FX attribution UI (ADR-074): asset gain / FX effect decomposition on overview, performance, asset pages, and investment detail.
@@ -493,6 +493,20 @@ Holding names in Stocks, ETFs, Crypto, and Metals, watchlist names, and the Inve
 Code links: [[apps/frontend/src/hooks/useOnlineStatus.ts]], [[apps/frontend/src/utils/priceStaleness.ts]], [[apps/frontend/src/features/portfolio/StalePriceIndicator.tsx]], [[apps/frontend/src/features/portfolio/StalePricesBanner.tsx]], [[apps/frontend/src/features/portfolio/PortfolioNewsFeed.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/hooks/portfolio/useInvestments.ts]], [[apps/node-backend/src/services/reports/index.js]], [[apps/node-backend/src/repositories/investmentRepository.js]]
 
 ## Performance Page Rewrite (Server-Computed Response)
+
+### Forward-only broker history
+
+Migration 0109 starts an empty `portfolio_broker_snapshots` history. Each snapshot run appends or
+atomically replaces only the current application date from the canonical `byAccount` summary. The
+writer keeps an explicit Unassigned partition, verifies that broker values sum to the global value,
+and copies account identity into the row so later retagging or renaming does not rewrite recorded
+history. It never backfills earlier dates and does not expose the dormant replay-based
+`portfolio_snapshot_accounts` table.
+
+`GET /api/info/portfolio-performance/by-broker` supplies the Performance page's per-broker area
+chart. A new install or upgraded database therefore shows the chart only from its first post-upgrade
+snapshot day. The table is included in normal database backups. See
+[[docs/adr/143-forward-only-broker-performance-history|ADR-143]].
 
 The Performance page architecture was significantly refactored to move heavy computations from the client to the server:
 

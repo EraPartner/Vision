@@ -170,6 +170,7 @@ export const apiClient = {
         params?: Parameters<typeof agg.getAggregationRecipientInsights>[0],
     ) => agg.getAggregationRecipientInsights(params).then((r) => r.data),
     getPortfolioPerformance: info.getPortfolioPerformance,
+    getBrokerPortfolioPerformance: info.getBrokerPortfolioPerformance,
     getPortfolioSummary: info.getPortfolioSummary,
     getNetWorth: info.getNetWorth,
     getExchangeRates: info.getExchangeRates,

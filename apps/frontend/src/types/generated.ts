@@ -1170,6 +1170,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/info/portfolio-performance/by-broker": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get forward-only per-broker portfolio snapshots */
+        get: operations["getPortfolioPerformanceByBroker"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/info/portfolio-summary": {
         parameters: {
             query?: never;
@@ -7454,6 +7471,30 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Performance snapshots */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+        };
+    };
+    getPortfolioPerformanceByBroker: {
+        parameters: {
+            query?: {
+                currency?: string;
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Frozen account identities and daily broker values; no historical backfill */
             200: {
                 headers: {
                     [name: string]: unknown;

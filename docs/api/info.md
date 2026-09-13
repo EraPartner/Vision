@@ -2,8 +2,8 @@
 title: Info & Analytics API
 type: endpoint
 status: active
-date: 2026-04-25
-updated: 2026-09-08
+date: 2026-09-13
+updated: 2026-09-13
 tags: [api, analytics, statistics, dashboard, phase-g-deprecation, ing, bnp, supported-adapters]
 description: API endpoints for statistics, analytics, and dashboard data. Phase G removed 6 overlapping endpoints; see aggregations API for their replacements. May 2026: Added ING and BNP Paribas Fortis adapters (8 total banks supported).
 aliases: [info-api, analytics-api, statistics-api, dashboard-api]
@@ -13,6 +13,14 @@ related_code: ["apps/node-backend/src/routes/info.js", "apps/node-backend/src/re
 # Info & Analytics API
 
 Comprehensive analytics and statistics endpoints for dashboards and financial insights.
+
+## Forward-only broker performance
+
+`GET /api/info/portfolio-performance/by-broker?currency=EUR&from=YYYY-MM-DD&to=YYYY-MM-DD`
+returns `dates`, frozen `series` identities, and daily `rows`. An unassigned holding uses
+`accountKey: "unassigned"`, `accountId: null`, and `assignment: "unassigned"`. Account rows retain
+the name captured on their snapshot date. No endpoint call recomputes or backfills historical broker
+assignments; see [[docs/adr/143-forward-only-broker-performance-history|ADR-143]].
 
 > [!warning] Phase G Consolidation (April 2026)
 > Six endpoints were removed and migrated to `/api/aggregations/*` (see [[#removed-endpoints-phase-g|Removed Endpoints]] below). Remaining endpoints continue as the production API surface. Earlier phases (2-8) migrated new logic to aggregations (see [[docs/adr/010-phase1-aggregation-strategy]], [[docs/adr/011-phase2-aggregation-envelope-standard]], [[docs/adr/016-aggregation-shadow-mode]]). See [[docs/reference/api-endpoint-matrix#phase-g-endpoint-consolidation|API Endpoint Matrix Phase G]] for consolidation summary.

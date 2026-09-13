@@ -5865,6 +5865,28 @@ paths:
               schema:
                 $ref: "#/components/schemas/Envelope"
 
+  /api/info/portfolio-performance/by-broker:
+    get:
+      summary: Get forward-only per-broker portfolio snapshots
+      operationId: getPortfolioPerformanceByBroker
+      tags: [Info]
+      parameters:
+        - in: query
+          name: currency
+          schema: { type: string, pattern: "^[A-Z]{3}$" }
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Frozen account identities and daily broker values; no historical backfill
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
   /api/info/portfolio-summary:
     get:
       summary: Get portfolio summary per investment
