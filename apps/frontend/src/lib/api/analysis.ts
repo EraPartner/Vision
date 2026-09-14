@@ -155,3 +155,74 @@ export const deleteSavedAnalysis = (id: string) =>
     apiRequest<void>(`/api/analysis/saved/${encodeURIComponent(id)}`, {
         method: "DELETE",
     });
+
+export interface SavedAnalysisVersion {
+    version: number;
+    definition: Record<string, unknown>;
+    state: Record<string, unknown>;
+    createdAt: string;
+}
+
+export const listSavedAnalysisVersions = async (id: string) =>
+    (
+        await apiRequest<{ items: SavedAnalysisVersion[] }>(
+            `/api/analysis/saved/${encodeURIComponent(id)}/versions`,
+        )
+    ).items;
+
+export const restoreSavedAnalysisVersion = (
+    id: string,
+    version: number,
+    expectedVersion: number,
+) =>
+    apiRequest<SavedAnalysis>(
+        `/api/analysis/saved/${encodeURIComponent(id)}/restore`,
+        {
+            method: "POST",
+            body: JSON.stringify({ version, expectedVersion }),
+        },
+    );
+
+export interface AnalysisEditProposal {
+    schemaVersion: 1;
+    savedAnalysisId: string;
+    baseVersion: number;
+    rationale: string;
+    operations: Array<{
+        op: "add" | "replace" | "remove";
+        path: string;
+        value?: unknown;
+    }>;
+}
+
+export const previewAnalysisProposal = (proposal: AnalysisEditProposal) =>
+    apiRequest<{
+        proposal: AnalysisEditProposal;
+        before: Record<string, unknown>;
+        after: Record<string, unknown>;
+        baseVersion: number;
+    }>("/api/analysis/ai-proposals/preview", {
+        method: "POST",
+        body: JSON.stringify(proposal),
+    });
+
+export const applyAnalysisProposal = (proposal: AnalysisEditProposal) =>
+    apiRequest<SavedAnalysis>("/api/analysis/ai-proposals/apply", {
+        method: "POST",
+        body: JSON.stringify(proposal),
+    });
+
+export const generateAnalysisProposal = (
+    id: string,
+    instruction: string,
+    model?: string,
+) =>
+    apiRequest<{
+        proposal: AnalysisEditProposal;
+        before: Record<string, unknown>;
+        after: Record<string, unknown>;
+        baseVersion: number;
+    }>(`/api/analysis/saved/${encodeURIComponent(id)}/ai-proposal`, {
+        method: "POST",
+        body: JSON.stringify({ instruction, model }),
+    });

@@ -47,6 +47,7 @@ import * as ai from "@/lib/api/ai";
 import * as tags from "@/lib/api/tags";
 import * as crossWorkspace from "@/lib/api/crossWorkspace";
 import * as analysis from "@/lib/api/analysis";
+import * as aiResearch from "@/lib/api/aiResearch";
 
 export const apiClient = {
     // Transactions
@@ -260,6 +261,11 @@ export const apiClient = {
     updateSavedAnalysis: analysis.updateSavedAnalysis,
     runSavedAnalysis: analysis.runSavedAnalysis,
     deleteSavedAnalysis: analysis.deleteSavedAnalysis,
+    listSavedAnalysisVersions: analysis.listSavedAnalysisVersions,
+    restoreSavedAnalysisVersion: analysis.restoreSavedAnalysisVersion,
+    previewAnalysisProposal: analysis.previewAnalysisProposal,
+    applyAnalysisProposal: analysis.applyAnalysisProposal,
+    generateAnalysisProposal: analysis.generateAnalysisProposal,
 
     // AI chat
     getOllamaStatus: ai.getOllamaStatus,
@@ -270,6 +276,20 @@ export const apiClient = {
     renameConversation: ai.renameConversation,
     deleteConversation: ai.deleteConversation,
     streamChat: ai.streamChat,
+    createInvestigation: aiResearch.createInvestigation,
+    getInvestigation: aiResearch.getInvestigation,
+    deleteInvestigation: aiResearch.deleteInvestigation,
+    cancelInvestigation: aiResearch.cancelInvestigation,
+    resumeInvestigation: aiResearch.resumeInvestigation,
+    previewAiDisclosure: aiResearch.previewDisclosure,
+    createAiDisclosureGrant: aiResearch.createDisclosureGrant,
+    listAiDisclosureGrants: aiResearch.listDisclosureGrants,
+    revokeAiDisclosureGrant: aiResearch.revokeDisclosureGrant,
+    listAiDisclosureRecords: aiResearch.listDisclosureRecords,
+    deleteAiDisclosureRecords: aiResearch.deleteDisclosureRecords,
+    listResearchDocuments: aiResearch.listResearchDocuments,
+    uploadResearchDocument: aiResearch.uploadResearchDocument,
+    deleteResearchDocument: aiResearch.deleteResearchDocument,
 };
 
 // Type re-exports for call sites that import from '@/lib/api'

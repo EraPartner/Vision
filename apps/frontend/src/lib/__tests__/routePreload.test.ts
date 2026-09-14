@@ -13,6 +13,7 @@ const EXPECTED_PATHS = [
     "/categories",
     "/accounts",
     "/accounts/:id",
+    "/analysis",
     "/recipients",
     "/planned",
     "/statistics",

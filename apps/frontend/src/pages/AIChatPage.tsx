@@ -27,6 +27,7 @@ import type { ChatMessage } from "@/types/aiChat";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { PAGE_ICONS } from "@/lib/pageIcons";
+import { AIInvestigationPanel } from "@/features/ai-chat/AIInvestigationPanel";
 
 const SELECTED_PARAM = "c";
 
@@ -245,6 +246,7 @@ export default function AIChatPage() {
                 </header>
 
                 <OllamaStatusBanner status={status} isLoading={statusLoading} />
+                <AIInvestigationPanel />
 
                 <ChatMessageList
                     conversationId={selectedId}

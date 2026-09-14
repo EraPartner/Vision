@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Database, Play, Save, Square, Trash2 } from "lucide-react";
 import { apiClient } from "@/lib/api";
 import type {
+    AnalysisEditProposal,
     AnalysisResult,
     AnalysisValue,
     AnalysisWorkspace,
@@ -310,6 +311,15 @@ function PivotTable({
 export default function AnalysisWorkspacePage() {
     const { t } = useLanguage();
     const queryClient = useQueryClient();
+    const requestedSavedAnalysisId = useMemo(
+        () =>
+            typeof window === "undefined"
+                ? null
+                : new URLSearchParams(window.location.search).get(
+                      "savedAnalysis",
+                  ),
+        [],
+    );
     const [workspace, setWorkspace] = useState<AnalysisWorkspace>("budgeting");
     const [mode, setMode] = useState<"visual" | "sql">("visual");
     const [plan, setPlan] = useState<VisualAnalysisPlan>(EMPTY_PLAN);
@@ -335,6 +345,16 @@ export default function AnalysisWorkspacePage() {
     const [offset, setOffset] = useState(0);
     const [name, setName] = useState("");
     const [sourceReferences, setSourceReferences] = useState("");
+    const [formulasJson, setFormulasJson] = useState("[]");
+    const [assumptionsJson, setAssumptionsJson] = useState("[]");
+    const [assumptionValuesJson, setAssumptionValuesJson] = useState("{}");
+    const [proposalJson, setProposalJson] = useState("");
+    const [proposalPreview, setProposalPreview] = useState<{
+        proposal: AnalysisEditProposal;
+        before: Record<string, unknown>;
+        after: Record<string, unknown>;
+    } | null>(null);
+    const [versions, setVersions] = useState<number[]>([]);
     const [selectedSaved, setSelectedSaved] = useState<SavedAnalysis | null>(
         null,
     );
@@ -503,6 +523,9 @@ export default function AnalysisWorkspacePage() {
                     .split("\n")
                     .map((value) => value.trim())
                     .filter(Boolean),
+                formulas: JSON.parse(formulasJson || "[]"),
+                assumptions: JSON.parse(assumptionsJson || "[]"),
+                assumptionValues: JSON.parse(assumptionValuesJson || "{}"),
             };
             return selectedSaved
                 ? apiClient.updateSavedAnalysis(selectedSaved.id, input)
@@ -531,8 +554,33 @@ export default function AnalysisWorkspacePage() {
             setLastUsableResult(saved.lastResult);
         }
         setSourceReferences(saved.sourceReferences.map(String).join("\n"));
+        const formulaModel = saved.parameters.formulaModel as
+            | {
+                  formulas?: unknown[];
+                  assumptions?: unknown[];
+                  assumptionValues?: Record<string, unknown>;
+              }
+            | undefined;
+        setFormulasJson(JSON.stringify(formulaModel?.formulas ?? [], null, 2));
+        setAssumptionsJson(
+            JSON.stringify(formulaModel?.assumptions ?? [], null, 2),
+        );
+        setAssumptionValuesJson(
+            JSON.stringify(formulaModel?.assumptionValues ?? {}, null, 2),
+        );
+        setProposalPreview(null);
+        setVersions([]);
         setError(saved.lastError?.message ?? null);
     };
+
+    useEffect(() => {
+        const requestedId = requestedSavedAnalysisId;
+        if (!requestedId || selectedSaved?.id === requestedId) return;
+        const requested = savedQuery.data?.find(
+            (saved) => saved.id === requestedId,
+        );
+        if (requested) loadSaved(requested);
+    }, [requestedSavedAnalysisId, savedQuery.data, selectedSaved?.id]);
 
     const displayedResult = result ?? lastUsableResult;
     const completeForChart =
@@ -623,8 +671,11 @@ export default function AnalysisWorkspacePage() {
                             {mode === "visual" && dataset ? (
                                 <>
                                     <div>
-                                        <Label>{t("analysis.dataset")}</Label>
+                                        <Label htmlFor="analysis-dataset">
+                                            {t("analysis.dataset")}
+                                        </Label>
                                         <select
+                                            id="analysis-dataset"
                                             value={plan.datasetId}
                                             onChange={(event) =>
                                                 setPlan({
@@ -779,7 +830,9 @@ export default function AnalysisWorkspacePage() {
                                         </fieldset>
                                     </div>
                                     <div>
-                                        <Label>{t("analysis.groups")}</Label>
+                                        <p className="text-sm font-medium">
+                                            {t("analysis.groups")}
+                                        </p>
                                         <div className="mt-2 flex flex-wrap gap-2">
                                             {plan.fields.map((id) => (
                                                 <label
@@ -819,9 +872,9 @@ export default function AnalysisWorkspacePage() {
                                     </div>
                                     <div>
                                         <div className="flex items-center justify-between">
-                                            <Label>
+                                            <span className="text-sm font-medium">
                                                 {t("analysis.filters")}
-                                            </Label>
+                                            </span>
                                             <Button
                                                 size="sm"
                                                 variant="outline"
@@ -1053,10 +1106,10 @@ export default function AnalysisWorkspacePage() {
                                         }
                                         spellCheck={false}
                                     />
-                                    <div className="space-y-2 rounded-md border p-3">
-                                        <Label>
+                                    <fieldset className="space-y-2 rounded-md border p-3">
+                                        <legend className="text-sm font-medium">
                                             {t("analysis.approvedDatasets")}
-                                        </Label>
+                                        </legend>
                                         <div className="flex flex-wrap gap-3">
                                             {catalogQuery.data?.datasets.map(
                                                 (entry) => (
@@ -1130,7 +1183,7 @@ export default function AnalysisWorkspacePage() {
                                                     </Button>
                                                 ))}
                                         </div>
-                                    </div>
+                                    </fieldset>
                                     <div>
                                         <Label htmlFor="analysis-sql-values">
                                             {t("analysis.sqlParameters")}
@@ -1443,6 +1496,53 @@ export default function AnalysisWorkspacePage() {
                                 }
                                 placeholder={t("analysis.sourcesPlaceholder")}
                             />
+                            <details>
+                                <summary className="cursor-pointer text-sm font-medium">
+                                    {t("analysis.formulasAndAssumptions")}
+                                </summary>
+                                <div className="mt-2 space-y-2">
+                                    <Label htmlFor="analysis-formulas-json">
+                                        {t("analysis.formulasJson")}
+                                    </Label>
+                                    <Textarea
+                                        id="analysis-formulas-json"
+                                        className="font-mono text-xs"
+                                        value={formulasJson}
+                                        onChange={(event) =>
+                                            setFormulasJson(event.target.value)
+                                        }
+                                    />
+                                    <Label htmlFor="analysis-assumptions-json">
+                                        {t("analysis.assumptionsJson")}
+                                    </Label>
+                                    <Textarea
+                                        id="analysis-assumptions-json"
+                                        className="font-mono text-xs"
+                                        value={assumptionsJson}
+                                        onChange={(event) =>
+                                            setAssumptionsJson(
+                                                event.target.value,
+                                            )
+                                        }
+                                    />
+                                    <Label htmlFor="analysis-scenarios-json">
+                                        {t("analysis.scenarioValuesJson")}
+                                    </Label>
+                                    <Textarea
+                                        id="analysis-scenarios-json"
+                                        className="font-mono text-xs"
+                                        value={assumptionValuesJson}
+                                        onChange={(event) =>
+                                            setAssumptionValuesJson(
+                                                event.target.value,
+                                            )
+                                        }
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        {t("analysis.formulaSafety")}
+                                    </p>
+                                </div>
+                            </details>
                             <Button
                                 className="w-full"
                                 onClick={() => saveMutation.mutate()}
@@ -1456,11 +1556,174 @@ export default function AnalysisWorkspacePage() {
                                     : t("analysis.save")}
                             </Button>
                             {selectedSaved && (
-                                <p className="text-xs text-muted-foreground">
-                                    {t("analysis.version", {
-                                        version: selectedSaved.version,
-                                    })}
-                                </p>
+                                <div className="space-y-2">
+                                    <p className="text-xs text-muted-foreground">
+                                        {t("analysis.version", {
+                                            version: selectedSaved.version,
+                                        })}
+                                    </p>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() =>
+                                            void apiClient
+                                                .listSavedAnalysisVersions(
+                                                    selectedSaved.id,
+                                                )
+                                                .then((items) =>
+                                                    setVersions(
+                                                        items.map(
+                                                            (item) =>
+                                                                item.version,
+                                                        ),
+                                                    ),
+                                                )
+                                        }
+                                    >
+                                        {t("analysis.versionHistory")}
+                                    </Button>
+                                    {versions
+                                        .filter(
+                                            (version) =>
+                                                version !==
+                                                selectedSaved.version,
+                                        )
+                                        .map((version) => (
+                                            <Button
+                                                key={version}
+                                                size="sm"
+                                                variant="ghost"
+                                                onClick={() =>
+                                                    void apiClient
+                                                        .restoreSavedAnalysisVersion(
+                                                            selectedSaved.id,
+                                                            version,
+                                                            selectedSaved.version,
+                                                        )
+                                                        .then(loadSaved)
+                                                }
+                                            >
+                                                {t("analysis.restoreVersion", {
+                                                    version,
+                                                })}
+                                            </Button>
+                                        ))}
+                                </div>
+                            )}
+                            {selectedSaved && (
+                                <details>
+                                    <summary className="cursor-pointer text-sm font-medium">
+                                        {t("analysis.aiEditProposal")}
+                                    </summary>
+                                    <Textarea
+                                        className="mt-2 font-mono text-xs"
+                                        value={proposalJson}
+                                        onChange={(event) => {
+                                            setProposalJson(event.target.value);
+                                            setProposalPreview(null);
+                                        }}
+                                        placeholder={t(
+                                            "analysis.aiEditProposalPlaceholder",
+                                        )}
+                                    />
+                                    <div className="mt-2 flex gap-2">
+                                        <Button
+                                            size="sm"
+                                            onClick={() =>
+                                                void apiClient
+                                                    .generateAnalysisProposal(
+                                                        selectedSaved.id,
+                                                        proposalJson,
+                                                    )
+                                                    .then((value) => {
+                                                        setProposalPreview(
+                                                            value,
+                                                        );
+                                                        setProposalJson(
+                                                            JSON.stringify(
+                                                                value.proposal,
+                                                                null,
+                                                                2,
+                                                            ),
+                                                        );
+                                                    })
+                                                    .catch((cause) =>
+                                                        setError(
+                                                            apiErrorToMessage(
+                                                                cause,
+                                                                t,
+                                                            ),
+                                                        ),
+                                                    )
+                                            }
+                                            disabled={!proposalJson.trim()}
+                                        >
+                                            {t("analysis.generateProposal")}
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => {
+                                                try {
+                                                    const proposal = JSON.parse(
+                                                        proposalJson,
+                                                    ) as AnalysisEditProposal;
+                                                    void apiClient
+                                                        .previewAnalysisProposal(
+                                                            proposal,
+                                                        )
+                                                        .then(
+                                                            setProposalPreview,
+                                                        )
+                                                        .catch((cause) =>
+                                                            setError(
+                                                                apiErrorToMessage(
+                                                                    cause,
+                                                                    t,
+                                                                ),
+                                                            ),
+                                                        );
+                                                } catch (cause) {
+                                                    setError(
+                                                        cause instanceof Error
+                                                            ? cause.message
+                                                            : t(
+                                                                  "analysis.proposalInvalid",
+                                                              ),
+                                                    );
+                                                }
+                                            }}
+                                        >
+                                            {t("analysis.revalidateProposal")}
+                                        </Button>
+                                        {proposalPreview && (
+                                            <Button
+                                                size="sm"
+                                                onClick={() =>
+                                                    void apiClient
+                                                        .applyAnalysisProposal(
+                                                            proposalPreview.proposal,
+                                                        )
+                                                        .then(loadSaved)
+                                                }
+                                            >
+                                                {t("analysis.applyProposal")}
+                                            </Button>
+                                        )}
+                                    </div>
+                                    {proposalPreview && (
+                                        <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-muted p-2 text-xs">
+                                            {JSON.stringify(
+                                                {
+                                                    before: proposalPreview.before,
+                                                    after: proposalPreview.after,
+                                                },
+                                                null,
+                                                2,
+                                            )}
+                                        </pre>
+                                    )}
+                                </details>
                             )}
                         </CardContent>
                     </Card>
