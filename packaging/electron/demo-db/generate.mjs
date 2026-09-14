@@ -3,6 +3,7 @@
 // Persona: a Belgian dual-income household in Ghent, ~2.5 years of history.
 
 import { pathToFileURL } from "node:url";
+import { createHash } from "node:crypto";
 
 // ---- deterministic PRNG (mulberry32, fixed seed) ----
 function mulberry32(a) {
@@ -1113,6 +1114,98 @@ invId++;
   ptxId++;
   S(
     `INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,currency) VALUES (${ptxId},${id},'appreciation','${fmt(ymd(2025, 12, 31))}',27000.0000,'EUR');`,
+  );
+}
+
+// ===== Explicit portfolio exposure sources (ADR-150) =====
+// Synthetic mappings demonstrate direct + fund overlap without name, ticker,
+// country, or currency inference. VWCE intentionally has no document so its
+// full value remains visible in the uncovered bucket.
+S(
+  `INSERT INTO portfolio_exposure_classifications
+    (investment_id,issuer_id,issuer_name,sector,issuer_country_code,source_label)
+   VALUES (${aapl.id},'issuer:apple','Apple Inc.','Technology','US','Synthetic Demo classification');`,
+);
+S(
+  `INSERT INTO portfolio_exposure_classifications
+    (identifier_type,identifier_value,issuer_id,issuer_name,sector,issuer_country_code,source_label)
+   VALUES ('isin','US0378331005','issuer:apple','Apple Inc.','Technology','US','Synthetic Demo classification');`,
+);
+{
+  const asOf = addDaysUTC(TODAY, -13);
+  const fundDocument = {
+    contractVersion: 1,
+    fund: {
+      name: "iShares Core MSCI World UCITS ETF",
+      identifiers: [{ type: "proprietary", value: "demo:iwda" }],
+    },
+    shareClass: {
+      name: "IWDA EUR",
+      identifiers: [{ type: "isin", value: "IE00B4L5Y983" }],
+      currency: "EUR",
+    },
+    source: {
+      kind: "user-supplied-file",
+      providerName: "Vision Demo",
+      fileName: "synthetic-iwda-holdings.csv",
+      asOfDate: fmt(asOf),
+      retrievedAt: `${fmt(addDaysUTC(asOf, 1))}T09:00:00Z`,
+      license: { status: "user-provided", redistribution: "forbidden" },
+    },
+    holdings: [
+      {
+        provenance: { rowNumber: 2 },
+        name: "Apple Inc.",
+        identifiers: [{ type: "isin", value: "US0378331005" }],
+        instrumentType: "equity",
+        exposureKind: "direct",
+        exposureStatus: "supported",
+        weightPercent: "4",
+        currency: "USD",
+        countryCode: "US",
+      },
+      {
+        provenance: { rowNumber: 3 },
+        name: "Cash",
+        identifiers: [],
+        instrumentType: "cash",
+        exposureKind: "cash",
+        exposureStatus: "supported",
+        weightPercent: "2",
+        currency: "EUR",
+      },
+      {
+        provenance: { rowNumber: 4 },
+        name: "Nested synthetic demo fund",
+        identifiers: [{ type: "proprietary", value: "demo:nested-fund" }],
+        instrumentType: "fund",
+        exposureKind: "nested-fund",
+        exposureStatus: "unsupported",
+        unsupportedReason: "Recursive fund look-through is outside version 1",
+        weightPercent: "1",
+        currency: "EUR",
+      },
+    ],
+    coverage: {
+      status: "partial",
+      reportedWeightPercent: "7",
+      supportedWeightPercent: "6",
+      unsupportedWeightPercent: "1",
+      missingWeightPercent: "93",
+    },
+    staleness: {
+      evaluatedAt: fmt(TODAY),
+      maximumAgeDays: 30,
+      ageDays: 13,
+      status: "current",
+    },
+  };
+  const serialized = JSON.stringify(fundDocument);
+  const sourceSha256 = createHash("sha256").update(serialized).digest("hex");
+  S(
+    `INSERT INTO portfolio_fund_holdings_documents
+      (investment_id,share_class_identifier_json,document_json,source_as_of_date,source_sha256)
+     VALUES (${iwda.id},${q(JSON.stringify({ type: "isin", value: "IE00B4L5Y983" }))}::jsonb,${q(serialized)}::jsonb,'${fmt(asOf)}','${sourceSha256}');`,
   );
 }
 

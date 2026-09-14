@@ -60,6 +60,8 @@ const BACKUP_COVERED_TABLES = Object.freeze([
   "planned_transaction_tags",
   "planned_transactions",
   "portfolio_broker_snapshots",
+  "portfolio_exposure_classifications",
+  "portfolio_fund_holdings_documents",
   "portfolio_import_batches",
   "portfolio_import_staging_rows",
   "portfolio_performance_snapshots",

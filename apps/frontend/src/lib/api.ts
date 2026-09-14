@@ -48,6 +48,7 @@ import * as tags from "@/lib/api/tags";
 import * as crossWorkspace from "@/lib/api/crossWorkspace";
 import * as analysis from "@/lib/api/analysis";
 import * as aiResearch from "@/lib/api/aiResearch";
+import * as portfolioExposure from "@/lib/api/portfolioExposure";
 
 export const apiClient = {
     // Transactions
@@ -136,6 +137,9 @@ export const apiClient = {
     updatePortfolioTransaction: port.updatePortfolioTransaction,
     deletePortfolioTransaction: port.deletePortfolioTransaction,
     bulkRetagPortfolioTransactions: port.bulkRetagPortfolioTransactions,
+    getPortfolioExposure: portfolioExposure.getPortfolioExposure,
+    upsertPortfolioExposureSources:
+        portfolioExposure.upsertPortfolioExposureSources,
 
     // Portfolio imports
     importPortfolioCSVCustom: portImp.importPortfolioCSVCustom,

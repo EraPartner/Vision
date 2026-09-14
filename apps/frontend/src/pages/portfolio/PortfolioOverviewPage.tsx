@@ -75,6 +75,7 @@ import {
 import { useAccounts } from "@/hooks/useAccounts";
 import { accountLabel } from "@/features/accounts/groupAccounts";
 import { addAll, toNumber } from "@vision/shared-utils/money";
+import { PortfolioExposureCard } from "@/features/portfolio/PortfolioExposureCard";
 
 function getPortfolioWidgets(t: (key: string) => string): WidgetDefinition[] {
     return [
@@ -458,6 +459,8 @@ export default function PortfolioOverviewPage() {
                         onRefresh={refreshPrices}
                         isRefreshing={isRefreshingPrices}
                     />
+
+                    <PortfolioExposureCard currency={targetCurrency} />
 
                     {isVisible("ticker") && (
                         <PortfolioTicker items={summaries} />

@@ -2055,6 +2055,317 @@ components:
               items:
                 $ref: "#/components/schemas/Link"
 
+    PortfolioSecurityIdentifier:
+      type: object
+      additionalProperties: false
+      required: [type, value]
+      properties:
+        type:
+          { type: string, enum: [isin, ticker, sedol, cusip, lei, proprietary] }
+        value: { type: string, minLength: 1, maxLength: 128 }
+        exchange:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: Allowed only for ticker identifiers.
+
+    PortfolioExposureClassification:
+      type: object
+      additionalProperties: false
+      required: [issuerId, issuerName, sourceLabel]
+      description: Exactly one of investmentId or identifier must be present.
+      properties:
+        investmentId: { type: integer, minimum: 1 }
+        identifier: { $ref: "#/components/schemas/PortfolioSecurityIdentifier" }
+        issuerId: { type: string, minLength: 1, maxLength: 128 }
+        issuerName: { type: string, minLength: 1, maxLength: 256 }
+        sector: { type: string, minLength: 1, maxLength: 128 }
+        issuerCountryCode: { type: string, pattern: "^[A-Z]{2}$" }
+        sourceLabel: { type: string, minLength: 1, maxLength: 300 }
+
+    FundHoldingsIdentity:
+      type: object
+      additionalProperties: false
+      required: [name, identifiers]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 256 }
+        identifiers:
+          type: array
+          minItems: 1
+          maxItems: 16
+          items: { $ref: "#/components/schemas/PortfolioSecurityIdentifier" }
+        currency: { type: string, pattern: "^[A-Z]{3}$" }
+
+    FundHoldingsShareClass:
+      type: object
+      additionalProperties: false
+      required: [name, identifiers, currency]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 256 }
+        identifiers:
+          type: array
+          minItems: 1
+          maxItems: 16
+          items: { $ref: "#/components/schemas/PortfolioSecurityIdentifier" }
+        currency: { type: string, pattern: "^[A-Z]{3}$" }
+
+    FundHoldingRow:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          provenance,
+          name,
+          identifiers,
+          instrumentType,
+          exposureKind,
+          exposureStatus,
+          weightPercent,
+        ]
+      properties:
+        provenance:
+          type: object
+          additionalProperties: false
+          required: [rowNumber]
+          properties:
+            rowNumber: { type: integer, minimum: 1 }
+            sheetName: { type: string, minLength: 1, maxLength: 128 }
+        name: { type: string, minLength: 1, maxLength: 256 }
+        identifiers:
+          type: array
+          maxItems: 16
+          items: { $ref: "#/components/schemas/PortfolioSecurityIdentifier" }
+        instrumentType:
+          { type: string, enum: [equity, bond, cash, fund, derivative, other] }
+        exposureKind:
+          {
+            type: string,
+            enum: [direct, cash, nested-fund, derivative, synthetic, unknown],
+          }
+        exposureStatus: { type: string, enum: [supported, unsupported] }
+        unsupportedReason: { type: string, minLength: 1, maxLength: 500 }
+        weightPercent:
+          type: string
+          pattern: "^(?:0|[1-9][0-9]*)(?:\\.[0-9]*[1-9])?$"
+        currency: { type: string, pattern: "^[A-Z]{3}$" }
+        countryCode: { type: string, pattern: "^[A-Z]{2}$" }
+
+    FundHoldingsDocument:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          contractVersion,
+          fund,
+          shareClass,
+          source,
+          holdings,
+          coverage,
+          staleness,
+        ]
+      properties:
+        contractVersion: { type: integer, enum: [1] }
+        fund: { $ref: "#/components/schemas/FundHoldingsIdentity" }
+        shareClass: { $ref: "#/components/schemas/FundHoldingsShareClass" }
+        source:
+          type: object
+          additionalProperties: false
+          required: [kind, fileName, asOfDate, retrievedAt, license]
+          properties:
+            kind: { type: string, enum: [user-supplied-file] }
+            providerName: { type: string }
+            fileName: { type: string }
+            sourceUrl: { type: string, format: uri }
+            asOfDate: { type: string, format: date }
+            retrievedAt: { type: string, format: date-time }
+            license:
+              type: object
+              additionalProperties: false
+              required: [status, redistribution]
+              properties:
+                status:
+                  {
+                    type: string,
+                    enum:
+                      [
+                        user-provided,
+                        permission-confirmed,
+                        unknown,
+                        restricted,
+                      ],
+                  }
+                redistribution:
+                  { type: string, enum: [allowed, forbidden, unknown] }
+                termsUrl: { type: string, format: uri }
+                note: { type: string }
+        holdings:
+          type: array
+          items: { $ref: "#/components/schemas/FundHoldingRow" }
+        coverage:
+          type: object
+          additionalProperties: false
+          required:
+            [
+              status,
+              reportedWeightPercent,
+              supportedWeightPercent,
+              unsupportedWeightPercent,
+              missingWeightPercent,
+            ]
+          properties:
+            status: { type: string, enum: [complete, partial] }
+            reportedWeightPercent: { type: string }
+            supportedWeightPercent: { type: string }
+            unsupportedWeightPercent: { type: string }
+            missingWeightPercent: { type: string }
+        staleness:
+          type: object
+          additionalProperties: false
+          required: [evaluatedAt, maximumAgeDays, ageDays, status]
+          properties:
+            evaluatedAt: { type: string, format: date }
+            maximumAgeDays: { type: integer, minimum: 0 }
+            ageDays: { type: integer, minimum: 0 }
+            status: { type: string, enum: [current, stale] }
+
+    PortfolioExposureBundle:
+      type: object
+      additionalProperties: false
+      required: [classifications, fundDocuments]
+      properties:
+        classifications:
+          type: array
+          maxItems: 5000
+          items:
+            { $ref: "#/components/schemas/PortfolioExposureClassification" }
+        fundDocuments:
+          type: array
+          maxItems: 500
+          items:
+            type: object
+            additionalProperties: false
+            required: [investmentId, shareClassIdentifier, document]
+            properties:
+              investmentId: { type: integer, minimum: 1 }
+              shareClassIdentifier:
+                { $ref: "#/components/schemas/PortfolioSecurityIdentifier" }
+              document: { $ref: "#/components/schemas/FundHoldingsDocument" }
+
+    PortfolioExposureContribution:
+      type: object
+      required:
+        [
+          sourceType,
+          investmentId,
+          investmentName,
+          sourceFundName,
+          amount,
+          sourceAsOfDate,
+          stale,
+        ]
+      properties:
+        sourceType: { type: string, enum: [direct, fund] }
+        investmentId: { type: integer }
+        investmentName: { type: string }
+        sourceFundName: { type: string, nullable: true }
+        amount: { type: number }
+        sourceAsOfDate: { type: string, format: date, nullable: true }
+        stale: { type: boolean }
+
+    PortfolioExposureDimension:
+      type: object
+      required:
+        [
+          rows,
+          classifiedValue,
+          classifiedWeightPercent,
+          unclassifiedValue,
+          unclassifiedWeightPercent,
+        ]
+      properties:
+        rows:
+          type: array
+          items:
+            type: object
+            required: [id, label, amount, weightPercent, contributions]
+            properties:
+              id: { type: string }
+              label: { type: string }
+              amount: { type: number }
+              weightPercent: { type: number }
+              contributions:
+                type: array
+                items:
+                  { $ref: "#/components/schemas/PortfolioExposureContribution" }
+        classifiedValue: { type: number }
+        classifiedWeightPercent: { type: number }
+        unclassifiedValue: { type: number }
+        unclassifiedWeightPercent: { type: number }
+
+    PortfolioExposureFundSource:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          investmentId,
+          investmentName,
+          asOfDate,
+          evaluatedAt,
+          ageDays,
+          maximumAgeDays,
+          stale,
+          coverageStatus,
+        ]
+      properties:
+        investmentId: { type: integer }
+        investmentName: { type: string }
+        asOfDate: { type: string, format: date }
+        evaluatedAt: { type: string, format: date }
+        ageDays: { type: integer, minimum: 0 }
+        maximumAgeDays: { type: integer, minimum: 0 }
+        stale: { type: boolean }
+        coverageStatus: { type: string, enum: [complete, partial] }
+
+    PortfolioExposure:
+      type: object
+      required:
+        [
+          currency,
+          computedAt,
+          totalValue,
+          uncoveredValue,
+          uncoveredWeightPercent,
+          coveredCashValue,
+          coveredCashWeightPercent,
+          fundSources,
+          issuer,
+          sector,
+          issuerCountry,
+          warnings,
+          scopeNotes,
+        ]
+      properties:
+        currency: { type: string, pattern: "^[A-Z]{3}$" }
+        computedAt: { type: string, format: date-time }
+        totalValue: { type: number }
+        uncoveredValue: { type: number }
+        uncoveredWeightPercent: { type: number }
+        coveredCashValue: { type: number }
+        coveredCashWeightPercent: { type: number }
+        fundSources:
+          type: array
+          items: { $ref: "#/components/schemas/PortfolioExposureFundSource" }
+        issuer: { $ref: "#/components/schemas/PortfolioExposureDimension" }
+        sector: { $ref: "#/components/schemas/PortfolioExposureDimension" }
+        issuerCountry:
+          { $ref: "#/components/schemas/PortfolioExposureDimension" }
+        warnings:
+          type: array
+          items: { type: object, additionalProperties: true }
+        scopeNotes:
+          type: array
+          items: { type: string }
+
     PortfolioTransaction:
       type: object
       required:
@@ -7077,6 +7388,55 @@ paths:
                 $ref: "#/components/schemas/Envelope"
 
   # ─── Investments extra ───────────────────────────────────────────────────────
+  /api/investments/exposure:
+    get:
+      summary: Aggregate direct and supported fund holdings by issuer, sector, and issuer country
+      operationId: getPortfolioExposure
+      tags: [Portfolio]
+      parameters:
+        - in: query
+          name: currency
+          schema: { type: string, pattern: "^[A-Za-z]{3}$", default: EUR }
+      responses:
+        "200":
+          description: Deterministic exposure view with uncovered fund weight preserved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/PortfolioExposure" }
+        "400": { description: Invalid reporting currency }
+
+  /api/investments/exposure/sources:
+    put:
+      summary: Add or update explicit portfolio classifications and fund-holdings documents
+      operationId: upsertPortfolioExposureSources
+      tags: [Portfolio]
+      description: >-
+        Matches fund documents to investments by the supplied exact typed share-class identifier.
+        The operation updates matching sources and does not delete sources omitted from the bundle.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PortfolioExposureBundle" }
+      responses:
+        "200":
+          description: Persisted exposure sources
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "400":
+          {
+            description: Invalid classification,
+            identifier,
+            fund document,
+            or duplicate target,
+          }
+
   /api/investments/providers:
     get:
       summary: List supported price providers

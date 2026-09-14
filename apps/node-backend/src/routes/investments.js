@@ -23,6 +23,11 @@ import {
   getInvestmentSummary,
   bulkRetagTransactions,
 } from "../services/investmentService.js";
+import {
+  getPortfolioExposure,
+  upsertPortfolioExposureBundle,
+} from "../services/portfolio/portfolioExposureService.js";
+import { ValidationError } from "../middleware/errorHandler.js";
 
 const router = Router();
 
@@ -41,6 +46,24 @@ router.put(
   }),
   bulkRetagTransactions,
 );
+
+router.get("/exposure", async (req, res) => {
+  const currency = String(req.query.currency || "EUR").toUpperCase();
+  if (!/^[A-Z]{3}$/.test(currency))
+    throw new ValidationError("currency must be an ISO 4217 code");
+  res.ok(await getPortfolioExposure(currency));
+});
+router.put("/exposure/sources", async (req, res) => {
+  try {
+    res.ok(await upsertPortfolioExposureBundle(req.body));
+  } catch (error) {
+    if (error.code !== "INVALID_PORTFOLIO_EXPOSURE_SOURCE") throw error;
+    throw new ValidationError("The exposure source bundle is invalid", {
+      code: error.code,
+      issues: error.issues,
+    });
+  }
+});
 
 // Investments — by ID (validateIdParam must come before the handler)
 router.get("/:id/price-history", validateIdParam, getPriceHistory);

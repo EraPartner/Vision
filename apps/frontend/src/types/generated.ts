@@ -1964,6 +1964,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/investments/exposure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Aggregate direct and supported fund holdings by issuer, sector, and issuer country */
+        get: operations["getPortfolioExposure"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/investments/exposure/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Add or update explicit portfolio classifications and fund-holdings documents
+         * @description Matches fund documents to investments by the supplied exact typed share-class identifier. The operation updates matching sources and does not delete sources omitted from the bundle.
+         */
+        put: operations["upsertPortfolioExposureSources"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/investments/providers": {
         parameters: {
             query?: never;
@@ -4686,6 +4723,158 @@ export interface components {
         InvestmentList: components["schemas"]["PaginationFields"] & {
             items: components["schemas"]["Investment"][];
             links: components["schemas"]["Link"][];
+        };
+        PortfolioSecurityIdentifier: {
+            /** @enum {string} */
+            type: "isin" | "ticker" | "sedol" | "cusip" | "lei" | "proprietary";
+            value: string;
+            /** @description Allowed only for ticker identifiers. */
+            exchange?: string;
+        };
+        /** @description Exactly one of investmentId or identifier must be present. */
+        PortfolioExposureClassification: {
+            investmentId?: number;
+            identifier?: components["schemas"]["PortfolioSecurityIdentifier"];
+            issuerId: string;
+            issuerName: string;
+            sector?: string;
+            issuerCountryCode?: string;
+            sourceLabel: string;
+        };
+        FundHoldingsIdentity: {
+            name: string;
+            identifiers: components["schemas"]["PortfolioSecurityIdentifier"][];
+            currency?: string;
+        };
+        FundHoldingsShareClass: {
+            name: string;
+            identifiers: components["schemas"]["PortfolioSecurityIdentifier"][];
+            currency: string;
+        };
+        FundHoldingRow: {
+            provenance: {
+                rowNumber: number;
+                sheetName?: string;
+            };
+            name: string;
+            identifiers: components["schemas"]["PortfolioSecurityIdentifier"][];
+            /** @enum {string} */
+            instrumentType: "equity" | "bond" | "cash" | "fund" | "derivative" | "other";
+            /** @enum {string} */
+            exposureKind: "direct" | "cash" | "nested-fund" | "derivative" | "synthetic" | "unknown";
+            /** @enum {string} */
+            exposureStatus: "supported" | "unsupported";
+            unsupportedReason?: string;
+            weightPercent: string;
+            currency?: string;
+            countryCode?: string;
+        };
+        FundHoldingsDocument: {
+            /** @enum {integer} */
+            contractVersion: 1;
+            fund: components["schemas"]["FundHoldingsIdentity"];
+            shareClass: components["schemas"]["FundHoldingsShareClass"];
+            source: {
+                /** @enum {string} */
+                kind: "user-supplied-file";
+                providerName?: string;
+                fileName: string;
+                /** Format: uri */
+                sourceUrl?: string;
+                /** Format: date */
+                asOfDate: string;
+                /** Format: date-time */
+                retrievedAt: string;
+                license: {
+                    /** @enum {string} */
+                    status: "user-provided" | "permission-confirmed" | "unknown" | "restricted";
+                    /** @enum {string} */
+                    redistribution: "allowed" | "forbidden" | "unknown";
+                    /** Format: uri */
+                    termsUrl?: string;
+                    note?: string;
+                };
+            };
+            holdings: components["schemas"]["FundHoldingRow"][];
+            coverage: {
+                /** @enum {string} */
+                status: "complete" | "partial";
+                reportedWeightPercent: string;
+                supportedWeightPercent: string;
+                unsupportedWeightPercent: string;
+                missingWeightPercent: string;
+            };
+            staleness: {
+                /** Format: date */
+                evaluatedAt: string;
+                maximumAgeDays: number;
+                ageDays: number;
+                /** @enum {string} */
+                status: "current" | "stale";
+            };
+        };
+        PortfolioExposureBundle: {
+            classifications: components["schemas"]["PortfolioExposureClassification"][];
+            fundDocuments: {
+                investmentId: number;
+                shareClassIdentifier: components["schemas"]["PortfolioSecurityIdentifier"];
+                document: components["schemas"]["FundHoldingsDocument"];
+            }[];
+        };
+        PortfolioExposureContribution: {
+            /** @enum {string} */
+            sourceType: "direct" | "fund";
+            investmentId: number;
+            investmentName: string;
+            sourceFundName: string | null;
+            amount: number;
+            /** Format: date */
+            sourceAsOfDate: string | null;
+            stale: boolean;
+        };
+        PortfolioExposureDimension: {
+            rows: {
+                id: string;
+                label: string;
+                amount: number;
+                weightPercent: number;
+                contributions: components["schemas"]["PortfolioExposureContribution"][];
+            }[];
+            classifiedValue: number;
+            classifiedWeightPercent: number;
+            unclassifiedValue: number;
+            unclassifiedWeightPercent: number;
+        };
+        PortfolioExposureFundSource: {
+            investmentId: number;
+            investmentName: string;
+            /** Format: date */
+            asOfDate: string;
+            /** Format: date */
+            evaluatedAt: string;
+            ageDays: number;
+            maximumAgeDays: number;
+            stale: boolean;
+            /** @enum {string} */
+            coverageStatus: "complete" | "partial";
+        };
+        PortfolioExposure: {
+            currency: string;
+            /** Format: date-time */
+            computedAt: string;
+            totalValue: number;
+            uncoveredValue: number;
+            uncoveredWeightPercent: number;
+            coveredCashValue: number;
+            coveredCashWeightPercent: number;
+            fundSources: components["schemas"]["PortfolioExposureFundSource"][];
+            issuer: components["schemas"]["PortfolioExposureDimension"];
+            sector: components["schemas"]["PortfolioExposureDimension"];
+            issuerCountry: components["schemas"]["PortfolioExposureDimension"];
+            warnings: {
+                [key: string]: unknown;
+            }[];
+            scopeNotes: string[];
         };
         PortfolioTransaction: {
             id: number;
@@ -9496,6 +9685,68 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"];
                 };
+            };
+        };
+    };
+    getPortfolioExposure: {
+        parameters: {
+            query?: {
+                currency?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deterministic exposure view with uncovered fund weight preserved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["PortfolioExposure"];
+                    };
+                };
+            };
+            /** @description Invalid reporting currency */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    upsertPortfolioExposureSources: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PortfolioExposureBundle"];
+            };
+        };
+        responses: {
+            /** @description Persisted exposure sources */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description Invalid classification */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

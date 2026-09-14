@@ -53,4 +53,26 @@ describe("analysis and broker-history migrations", () => {
     expect(source).toContain("ADD COLUMN state_json");
     expect(source).toContain("DROP COLUMN IF EXISTS state_json");
   });
+
+  it("adds explicit portfolio exposure sources without rewriting holdings", () => {
+    const source = migration("0112_portfolio_exposure_sources.py");
+    const upgrade = source.slice(
+      source.indexOf("def upgrade"),
+      source.indexOf("def downgrade"),
+    );
+
+    expect(upgrade).toContain(
+      "CREATE TABLE portfolio_exposure_classifications",
+    );
+    expect(upgrade).toContain("CREATE TABLE portfolio_fund_holdings_documents");
+    expect(upgrade).toContain("share_class_identifier_json JSONB NOT NULL");
+    expect(upgrade).not.toMatch(/INSERT\s+INTO/i);
+    expect(upgrade).not.toMatch(/UPDATE\s+investments/i);
+    expect(source).toContain(
+      "DROP TABLE IF EXISTS portfolio_fund_holdings_documents",
+    );
+    expect(source).toContain(
+      "DROP TABLE IF EXISTS portfolio_exposure_classifications",
+    );
+  });
 });
