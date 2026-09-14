@@ -491,6 +491,8 @@ const en: Record<string, string> = {
   'aiResearch.researchProvidersProfile': 'Public research providers — Capability: retrieve public market facts. Privacy: only explicitly entered public symbols are sent to configured providers; never the private question or local evidence.',
   'aiResearch.researchWebProfile': 'Public web search — Capability: search public pages and retrieve bounded text from selected results. Privacy: the explicit query goes to the search provider and selected result URLs are fetched; never the private question or local evidence.',
   'aiResearch.resume': 'Resume',
+  'aiResearch.reversibleReferenceHint': 'Optional: wrap a value as [[vision-ref:type|value]] to send a random scoped token and restore the value locally. Types: account, recipient, investment, holding, category, document, subject, amount, or date.',
+  'aiResearch.reversibleReferenceWarning': '{count} scoped reference(s) will be pseudonymized in this payload and restored only in local display text. This does not make amounts, dates, holdings, or patterns anonymous.',
   'aiResearch.revoke': 'Revoke cloud consent',
   'aiResearch.route': 'Model route',
   'aiResearch.run': 'Start investigation',

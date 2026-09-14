@@ -67,6 +67,11 @@ export interface AiResearchStatus {
         enabled: boolean;
         model: string | null;
         models: OpenAiResearchModel[];
+        reversibleReferences?: {
+            configured: boolean;
+            markerSyntax: string;
+            classification: "pseudonymized-not-anonymous";
+        };
     };
 }
 export interface InvestigationInput {
@@ -93,6 +98,7 @@ export interface InvestigationInput {
     grantId: string | null;
     selectedSummary: string | null;
     selectedEvidence: string | null;
+    referenceScopeId: string | null;
     savedAnalysisId: null;
 }
 
@@ -134,6 +140,12 @@ export const previewDisclosure = (body: InvestigationInput) =>
         payloadBytes: number;
         fieldManifest: string[];
         disclosureUnits: string[];
+        referenceScope: {
+            id: string;
+            expiresAt: string;
+            count: number;
+        } | null;
+        outboundRequest: InvestigationInput;
     }>("/api/ai-research/disclosures/preview", {
         method: "POST",
         body: JSON.stringify(body),

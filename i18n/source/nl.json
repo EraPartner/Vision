@@ -489,6 +489,8 @@
   "aiResearch.researchProvidersProfile": "Openbare onderzoeksproviders — Mogelijkheid: openbare marktfeiten ophalen. Privacy: alleen expliciet ingevoerde openbare symbolen gaan naar ingestelde providers; nooit de privévraag of lokaal bewijs.",
   "aiResearch.researchWebProfile": "Openbaar zoeken op het web — Mogelijkheid: openbare pagina's zoeken en begrensde tekst uit gekozen resultaten ophalen. Privacy: de expliciete zoekopdracht gaat naar de zoekprovider en gekozen resultaat-URL's worden opgehaald; nooit de privévraag of lokaal bewijs.",
   "aiResearch.resume": "Hervatten",
+  "aiResearch.reversibleReferenceHint": "Optioneel: plaats een waarde tussen [[vision-ref:type|waarde]] om een willekeurig scoped token te verzenden en de waarde lokaal te herstellen. Types: account, recipient, investment, holding, category, document, subject, amount of date.",
+  "aiResearch.reversibleReferenceWarning": "{count} scoped referentie(s) worden in deze payload gepseudonimiseerd en alleen in lokale weergavetekst hersteld. Dit maakt bedragen, datums, posities of patronen niet anoniem.",
   "aiResearch.revoke": "Cloudtoestemming intrekken",
   "aiResearch.route": "Modelroute",
   "aiResearch.run": "Onderzoek starten",

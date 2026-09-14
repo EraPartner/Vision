@@ -219,6 +219,7 @@ export function AIInvestigationPanel() {
             disclosureMode === "cloud-synthesis-selected"
                 ? selectedEvidence.trim()
                 : null,
+        referenceScopeId: null,
         savedAnalysisId: null,
     });
     useEffect(() => {
@@ -290,7 +291,7 @@ export function AIInvestigationPanel() {
                     retainExactPayload: false,
                 });
                 setGrantId(grant.id);
-                request = { ...request, grantId: grant.id };
+                request = { ...preview.outboundRequest, grantId: grant.id };
             }
             setJob(await apiClient.createInvestigation(request));
         } catch (cause) {
@@ -629,12 +630,27 @@ export function AIInvestigationPanel() {
                                 : "aiResearch.cloudRetention",
                         )}
                     </p>
+                    {(disclosureMode === "selected-summary" ||
+                        disclosureMode === "cloud-synthesis-selected") && (
+                        <p className="text-xs text-muted-foreground">
+                            {t("aiResearch.reversibleReferenceHint")}
+                        </p>
+                    )}
                 </div>
             )}
             {route === "openai-api" && preview && (
-                <pre className="mt-2 max-h-40 overflow-auto rounded-md bg-muted p-2 text-xs">
-                    {JSON.stringify(preview.payload, null, 2)}
-                </pre>
+                <div className="mt-2 space-y-1">
+                    {preview.referenceScope && (
+                        <p className="text-xs text-warning">
+                            {t("aiResearch.reversibleReferenceWarning", {
+                                count: preview.referenceScope.count,
+                            })}
+                        </p>
+                    )}
+                    <pre className="max-h-40 overflow-auto rounded-md bg-muted p-2 text-xs">
+                        {JSON.stringify(preview.payload, null, 2)}
+                    </pre>
+                </div>
             )}
             <details className="mt-2 rounded-md border p-2 text-xs" open>
                 <summary className="cursor-pointer font-medium">
