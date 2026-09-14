@@ -745,8 +745,8 @@
           id="diagram"
           xmlns="http://www.w3.org/2000/svg"
           width="1520"
-          height="1240"
-          viewBox="0 0 1520 1240"
+          height="1420"
+          viewBox="0 0 1520 1420"
         >
           <defs>
             <marker
@@ -1328,6 +1328,32 @@
             "y": 1128
           },
           {
+            "id": "sv.airesearch",
+            "label": "AI research orchestration",
+            "sub": "investigation jobs · typed tools · disclosure policy",
+            "kind": "service",
+            "path": "apps/node-backend/src/services/aiInvestigationService.js",
+            "desc": "ADR-145 and ADR-146: serial, recoverable investigations compose bounded local tools and cited evidence. Optional OpenAI planning keeps synthesis local; the distinct selected-evidence mode sends only the previewed evidence for a cloud-written final answer.",
+            "x": 940,
+            "y": 960
+          },
+          {
+            "id": "ex.brave",
+            "label": "Brave Search API",
+            "sub": "public queries · hard daily ceiling",
+            "kind": "external",
+            "x": 1320,
+            "y": 1220
+          },
+          {
+            "id": "ex.openai",
+            "label": "OpenAI Responses API",
+            "sub": "opt-in · store:false · no hosted tools",
+            "kind": "external",
+            "x": 1320,
+            "y": 1310
+          },
+          {
             "id": "sv.dbeditor",
             "label": "DB data editor",
             "kind": "service",
@@ -1394,7 +1420,13 @@
           ["sv.research", "ex.yahoo"],
           ["sv.research", "ex.fred"],
           ["sv.research", "ex.dbnomics"],
-          ["sv.research", "sv.providerhealth"]
+          ["sv.research", "sv.providerhealth"],
+          ["be.routes", "sv.airesearch"],
+          ["sv.airesearch", "be.repos"],
+          ["sv.airesearch", "sv.research"],
+          ["sv.airesearch", "be.ollamaclient"],
+          ["sv.airesearch", "ex.brave"],
+          ["sv.airesearch", "ex.openai"]
         ],
         "flows": [
           {
@@ -3004,6 +3036,68 @@
                 "to": "sv.matview",
                 "payload": "scheduleRefresh() \u2014 debounced 2 s",
                 "annotation": "Only triggered when the committed table is a materialized-view base table (transactions, recipients, categories). Keeps dashboard MVs fresh after raw edits without synchronous overhead."
+              }
+            ]
+          },
+          {
+            "id": "ai-research-investigation",
+            "name": "Run a bounded AI research investigation",
+            "category": "AI and research",
+            "summary": "A user selects scope, evidence access, depth and a visible privacy profile; Vision either checkpoints bounded local work or sends only exact selected evidence for consent-bound cloud synthesis.",
+            "steps": [
+              {
+                "from": "browser",
+                "to": "fe.apiclient",
+                "payload": "POST /api/ai-research/investigations",
+                "annotation": "The request carries explicit scope, EN/NL language, quick/detailed depth, research mode and model route. Public questions, selected planning summaries, and selected cloud-synthesis evidence are mutually exclusive fields. The UI displays each capability and privacy profile. Local-only is the default."
+              },
+              {
+                "from": "fe.apiclient",
+                "to": "be.routes",
+                "payload": "strict aiInvestigationRequestSchema",
+                "annotation": "Unknown fields and unsupported route or scope values are rejected before persistence."
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.airesearch",
+                "payload": "bounded plan · serial execution queue",
+                "annotation": "The provider-neutral orchestrator creates a bounded baseline. A model may prioritize only those candidate ids; material ambiguity persists as waiting until typed date scope is supplied. Detailed mode may inspect failures and retry up to three local steps once. One investigation and tool run at a time to bound local CPU and RAM."
+              },
+              {
+                "from": "sv.airesearch",
+                "to": "db.postgres",
+                "payload": "job + step checkpoints",
+                "annotation": "Queued, running, waiting, partial, completed, failed and cancelled states survive navigation and backend restart. Startup reuses checkpoints; explicit retry refreshes local data while retaining external checkpoints."
+              },
+              {
+                "from": "sv.airesearch",
+                "to": "sv.research",
+                "payload": "bounded quote, fundamentals, news, macro or document tools",
+                "annotation": "Deterministic Vision services remain authoritative. Each result carries provenance, unavailable data and partial failures."
+              },
+              {
+                "from": "sv.airesearch",
+                "to": "ex.brave",
+                "payload": "optional public-only query",
+                "annotation": "Private-looking queries are rejected. Search and page fetches have destination, redirect, media-type, byte and per-run limits."
+              },
+              {
+                "from": "sv.airesearch",
+                "to": "ex.openai",
+                "payload": "optional preview-hash-bound payload",
+                "annotation": "Only an unexpired mode-specific grant matching the exact final request bytes and cumulative budgets can cross the short-lived Seatbelt sandbox. Planning output prioritizes candidate ids. The separate selected-evidence mode returns the final structured answer. Both set store:false and disable hosted tools."
+              },
+              {
+                "from": "sv.airesearch",
+                "to": "ex.ollama",
+                "payload": "local synthesis for local and planning profiles",
+                "annotation": "Local Ollama produces the final structured answer for the local route and both OpenAI planning profiles. The selected-evidence cloud-synthesis profile skips this hop and never silently falls back to it."
+              },
+              {
+                "from": "sv.airesearch",
+                "to": "fe.apiclient",
+                "payload": "structured facts, calculations, interpretations and evidence",
+                "annotation": "Missing or conflicting evidence remains visible. Invalid model output becomes a partial or abstained answer rather than an invented success."
               }
             ]
           }

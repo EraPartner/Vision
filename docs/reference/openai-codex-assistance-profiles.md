@@ -3,6 +3,7 @@ title: OpenAI and Codex Assistance Profiles
 type: reference
 status: active
 date: 2026-09-12
+updated: 2026-09-14
 tags:
   [
     reference,
@@ -26,10 +27,11 @@ aliases:
 
 # OpenAI and Codex Assistance Profiles
 
-> [!warning] No transmission authorization
-> This document defines feasibility and release boundaries. It does not enable an adapter, authorize
-> paid calls, or grant permission to transmit financial data. All prototypes remain synthetic-only
-> until a separate grant names the destination, route, purpose, fields, lifetime, and budget.
+> [!warning] Disabled by default
+> ADR-145 implements the OpenAI API route, but configuration keeps it disabled by default. No call is
+> authorized until the user inspects the exact payload and creates a grant naming the destination,
+> route, purpose, fields, lifetime, and budget. Live synthetic acceptance and account entitlement
+> verification remain release gates.
 
 ## Evidence Scope
 
@@ -121,14 +123,14 @@ legal, safety, or business-transfer disclosures described by the privacy policy
 
 ### P0 - Local only
 
-| Property                        | Decision                               |
-| ------------------------------- | -------------------------------------- |
-| Provider transmission           | No OpenAI or Codex cloud request       |
-| Authentication                  | Existing local Ollama configuration    |
-| Provider retention/training/ads | Not applicable                         |
-| Local retention                 | Existing Vision conversation controls  |
-| Cost                            | No OpenAI or Codex cost                |
-| Status                          | Supported current behavior and default |
+| Property                        | Decision                                              |
+| ------------------------------- | ----------------------------------------------------- |
+| Provider transmission           | No OpenAI or Codex cloud request                      |
+| Authentication                  | Existing local Ollama configuration                   |
+| Provider retention/training/ads | Not applicable                                        |
+| Local retention                 | Recoverable investigation until its explicit deletion |
+| Cost                            | No OpenAI or Codex cost                               |
+| Status                          | Supported current behavior and default                |
 
 Use P0 whenever no third-party processing is acceptable.
 
@@ -141,23 +143,32 @@ Use P0 whenever no third-party processing is acceptable.
 | Execution            | Cloud proposes a typed plan; Vision validates and executes locally                                            |
 | Retention assumption | Entire outbound payload may be retained under the active route's policy                                       |
 | Cost                 | Explicit per-route budget; no silent fallback                                                                 |
-| Status               | Synthetic-only candidate until egress controls and grant UI exist                                             |
+| Status               | Implemented behind disabled configuration; live synthetic and entitlement release gates remain                |
 
 P1 is the first useful cloud slice because it can improve planning while keeping financial results
 local. Schema labels and user-defined categories are private unless explicitly classified public.
 
 ### P2 - OpenAI API minimized summary
 
-| Property          | Decision                                                                                          |
-| ----------------- | ------------------------------------------------------------------------------------------------- |
-| Route             | Dedicated API project and selected endpoint/model                                                 |
-| Permitted payload | Explicitly reviewed aggregate or excerpt within a cumulative disclosure budget                    |
-| Storage           | Request minimum application state; enumerate cache, tool, file, and background-operation behavior |
-| Training          | Verify organization sharing remains off                                                           |
-| Retention         | Display documented abuse and application-state windows; never reduce them to `store: false`       |
-| Revocation        | Revoke Vision grant and provider credential separately                                            |
-| Cost              | Hard local spend ceiling and local usage accounting                                               |
-| Status            | Unsupported for real data until adapter, consent, lifecycle, and privacy evaluations pass         |
+| Property          | Decision                                                                                                |
+| ----------------- | ------------------------------------------------------------------------------------------------------- |
+| Route             | Dedicated API project and selected endpoint/model                                                       |
+| Permitted payload | Explicitly reviewed aggregate or excerpt within a cumulative disclosure budget                          |
+| Capability        | Either bounded plan ordering from a selected summary or final synthesis from distinct selected evidence |
+| Storage           | Request minimum application state; enumerate cache, tool, file, and background-operation behavior       |
+| Training          | Verify organization sharing remains off                                                                 |
+| Retention         | Display documented abuse and application-state windows; never reduce them to `store: false`             |
+| Revocation        | Revoke Vision grant and provider credential separately                                                  |
+| Cost              | Hard local spend ceiling and local usage accounting                                                     |
+| Status            | Implemented behind disabled configuration; release still requires live and privacy acceptance           |
+
+Final synthesis uses the separate `cloud-synthesis-selected` grant and `selectedEvidence` field.
+It skips local tools and local-model inference, supplies no OpenAI tools, and never falls back to
+local synthesis after a provider failure. This is intentional disclosure, not sanitization. The
+public-question and selected-summary planning profiles remain available and continue to synthesize
+locally. Every recoverable investigation retains its local input and result until deletion; for
+selected-evidence synthesis, this includes the exact evidence. The separate disclosure log keeps a
+digest and policy metadata rather than the exact payload.
 
 ### P3 - OpenAI API approved ZDR
 

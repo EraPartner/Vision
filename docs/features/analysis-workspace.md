@@ -3,9 +3,19 @@ title: Analysis Workspace
 type: feature
 status: active
 date: 2026-09-13
+updated: 2026-09-13
 tags:
-  [feature, analysis, query-builder, sql, spreadsheet, saved-analysis, no-ai]
-description: Manual visual and SQL analysis over approved financial datasets, with reusable versions, result grids, pivots, charts, and drill-through.
+  [
+    feature,
+    analysis,
+    query-builder,
+    sql,
+    spreadsheet,
+    formulas,
+    saved-analysis,
+    ai,
+  ]
+description: Visual and SQL analysis over approved financial datasets, with bounded formulas, isolated assumptions, inspectable optional AI edits, reusable versions, pivots, charts, and drill-through.
 aliases: [manual analysis, visual query builder, SQL workspace]
 related_code:
   - apps/frontend/src/pages/AnalysisWorkspacePage.tsx
@@ -53,8 +63,16 @@ compatible visual origin is retained when the result shape is unchanged.
 - A bar chart uses chosen result columns only when the complete result is loaded.
 - A failed run leaves the last usable result visible with an explicit error.
 
-These rules prevent a loaded page from being presented as a whole-population chart or pivot. Typed
-calculated columns and workbook export remain separate features.
+These rules prevent a loaded page from being presented as a whole-population chart or pivot.
+
+## Formulas and scenarios
+
+Saved analyses can add calculated row columns, summary formulas, named assumptions, and separate
+scenario values. Vision evaluates them with decimal arithmetic and a bounded expression language.
+Arithmetic, comparisons, conditionals, date operations, and conditional aggregates are supported.
+Dependencies are ordered explicitly; cycles, broken references, null/type errors, and resource caps
+produce visible formula errors. The language has no JavaScript, macros, file access, network access,
+or ledger writes. Scenario values remain analysis parameters and never mutate transactions.
 
 ## Saved analyses
 
@@ -63,6 +81,12 @@ stores the strict ADR-137 definition, scalar parameters, chart binding, source r
 mode, and a new immutable version. Refresh records a run and either advances the last-successful-run
 pointer or retains the old result with a failure state. Delete removes only that saved analysis and
 its private versions and runs.
+
+Definition versions also snapshot their formula model, scenario values, chart bindings, source
+references, and refresh mode. Restoring an older version creates a new version, so undo never erases
+history. A local model can propose a typed edit against the current version. The UI shows the exact
+before/after document; applying it requires a separate action and a stale base version is rejected.
+Users can continue editing and saving with AI unavailable.
 
 ## Operational boundary
 

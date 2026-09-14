@@ -2,9 +2,9 @@
 title: Feature - AI Chat
 type: feature
 status: active
-date: 2026-09-11
-updated: 2026-09-11
-last_modified: 2026-09-11
+date: 2026-09-14
+updated: 2026-09-14
+last_modified: 2026-09-14
 tags:
   [
     feature,
@@ -48,7 +48,9 @@ related_code:
 # Feature: AI Chat
 
 > [!abstract] Overview
-> Natural-language chat over the user's financial data. All processing is local via Ollama — no data leaves the machine. Responses include text, tables, and charts grounded in tool-call results against existing repositories.
+> Natural-language chat remains local via Ollama. The separate investigation panel adds recoverable,
+> evidence-backed local work and an optional consent-bound OpenAI API route. Nothing uses cloud
+> inference unless that route is enabled and the exact payload has been previewed and granted.
 
 ## Feature Overview
 
@@ -71,6 +73,33 @@ related_code:
 - Interrupted, stopped, and stalled streams retain their partial answer, label
   its state, and offer a one-click retry of the same request.
 - Graceful offline handling when Ollama is unreachable.
+- Quick or detailed EN/NL investigations across Budgeting, Portfolio, and Research.
+- Structured facts, deterministic calculations, interpretations, gaps, conflicts, and evidence.
+- Local documents plus separately enabled public-provider or public-web research.
+- Exact cloud-payload preview, revocable grants, and deletable local disclosure metadata.
+- Four visible model privacy profiles: fully local, public-question cloud planning, selected-summary
+  cloud planning, and final cloud synthesis from exact selected evidence.
+- Each profile states its capability, exact cloud data, privacy boundary, and local retention. A
+  visible delete action removes the recoverable investigation and its selected evidence.
+- Quick and detailed depth profiles state their compute/output difference and explicitly do not
+  widen the selected model or research disclosure boundary.
+- Durable partial jobs that resume without repeating completed tool steps.
+
+## Investigation resource profile
+
+Only one investigation executes at a time. It receives bounded tool results and passages, not the
+complete database. Local work reuses the backend and Ollama. Optional cloud work creates one
+short-lived macOS Seatbelt-sandboxed process and removes its empty temporary directory afterward.
+Public web queries and provider symbols are entered separately. The two cloud-planning profiles keep
+evidence and final synthesis local. The distinct selected-evidence profile skips local planning,
+retrieval, and model inference, then asks OpenAI for the final structured answer using only the exact
+manually selected evidence shown in the consent preview. Containers are not required for the accepted
+realistic threat model; see [[docs/adr/145-bounded-ai-research-orchestration|ADR-145]] and
+[[docs/adr/146-explicit-selected-evidence-cloud-synthesis|ADR-146]].
+Investigation inputs, checkpoints, and results remain in the recoverable local job until it is
+deleted. Disclosure history is separate and retains only the payload digest and policy metadata.
+Quick local investigations use the deterministic plan and one synthesis call. Detailed local work
+adds one bounded planning call. This avoids doubling local model CPU for routine questions.
 
 ## Architecture
 
@@ -335,6 +364,8 @@ See [[docs/security/ai-data-access|AI Data Access Policy]] for the full security
 - [[docs/integrations/ollama|Ollama Integration]] — HTTP client and patterns
 - [[docs/security/ai-data-access|AI Data Access Policy]] — tool allowlist, rate limits
 - [[docs/api/ai|AI API]] — endpoint contracts
+- [[docs/api/ai-research|AI Research API]] — investigations, documents, and disclosure records
+- [[docs/adr/145-bounded-ai-research-orchestration|ADR-145: Bounded AI Research Orchestration]]
 - [[docs/features/transactions|Transactions]] — data surfaced by expense tools
 - [[docs/features/portfolio|Portfolio & Investments]] — data surfaced by portfolio tools
 - [[docs/features/plannedTransactions|Planned Transactions]] — data surfaced by planned tools

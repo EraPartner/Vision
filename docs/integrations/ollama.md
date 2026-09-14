@@ -3,7 +3,7 @@ title: Ollama Integration
 type: integration
 status: active
 date: 2026-09-09
-updated: 2026-09-09
+updated: 2026-09-13
 tags: [integration, ollama, llm, local-ai, streaming, tool-calling, idle-timeout, tool-call-accumulation]
 description: HTTP client wrapper around local Ollama for AI chat — health, model discovery, chat/stream, abort support. June 2026: per-chunk idle timeout replaces single total budget; tool calls accumulated and deduped across NDJSON chunks; request/response logs downgraded to debug.
 aliases: [ollama, ollama-client, local-llm]
@@ -22,17 +22,19 @@ related_code: ["apps/node-backend/src/integrations/ollama/client.js", "apps/node
 - Run a chat turn against `/api/chat` with tools declared and history supplied.
 - Stream tokens for progressive UI rendering.
 - Cancel in-flight requests on client disconnect.
+- Generate optional local embeddings for the user-selected research document index.
 
 ## Client API
 
 Singleton factory: `getOllamaClient()` — creates and caches a client using `settings.ollama.url` on first use.
 
-| Method                                                             | Returns                                                                        | Notes                                                                 |
-| ------------------------------------------------------------------ | ------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
-| `healthCheck()`                                                    | `{ reachable, baseUrl, modelCount? }` or `{ reachable, baseUrl, error, code }` | Never throws — returns `reachable:false` on failure                   |
-| `listModels({ signal })`                                           | normalized model array                                                         | Throws a coded `OllamaError` on failure                               |
-| `chat({ model, messages, tools, options, signal })`                | normalized content, tool calls, and usage fields                               | Non-streaming — full response in one shot, with raw response attached |
-| `chatStream({ model, messages, tools, options, signal, onToken })` | normalized content, tool calls, and usage fields                               | Streams token callbacks; resolves with the assembled response         |
+| Method                                                             | Returns                                                                        | Notes                                                                  |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| `healthCheck()`                                                    | `{ reachable, baseUrl, modelCount? }` or `{ reachable, baseUrl, error, code }` | Never throws — returns `reachable:false` on failure                    |
+| `listModels({ signal })`                                           | normalized model array                                                         | Throws a coded `OllamaError` on failure                                |
+| `chat({ model, messages, tools, options, signal })`                | normalized content, tool calls, and usage fields                               | Non-streaming — full response in one shot, with raw response attached  |
+| `chatStream({ model, messages, tools, options, signal, onToken })` | normalized content, tool calls, and usage fields                               | Streams token callbacks; resolves with the assembled response          |
+| `embed({ model, input, signal })`                                  | normalized model name and embedding vectors                                    | Bounded batches use `/api/embed`; absence falls back to keyword search |
 
 `listModels`, `chat`, and `chatStream` accept an `AbortSignal` so callers can cancel in-flight work. `healthCheck` uses its fixed health timeout and accepts no options.
 
@@ -130,6 +132,7 @@ See [[docs/security/ai-data-access|AI Data Access]] for the allowlist policy and
 | `OLLAMA_REQUEST_TIMEOUT_MS`     | `600000`                 | Time-to-first-chunk budget (connect + prompt-eval phase)                                   |
 | `OLLAMA_STREAM_IDLE_TIMEOUT_MS` | `120000`                 | Max inactivity between chunks; timer re-arms per chunk; total generation time is unbounded |
 | `OLLAMA_HEALTH_TIMEOUT_MS`      | `3000`                   | `healthCheck()` connection timeout                                                         |
+| `OLLAMA_EMBEDDING_MODEL`        | empty                    | Optional local embedding model for hybrid document retrieval                               |
 
 Native macOS mode fixes the default to `http://127.0.0.1:11434` in the backend child environment.
 Custom source deployments set `OLLAMA_URL` explicitly when Ollama is not on the same host.

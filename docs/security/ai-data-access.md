@@ -3,7 +3,7 @@ title: AI Data Access Policy
 type: security
 status: active
 date: 2026-09-09
-updated: 2026-09-13
+updated: 2026-09-14
 tags:
   [
     security,
@@ -38,11 +38,37 @@ Security policies governing the AI chat feature introduced by [[docs/adr/024-loc
 
 ## Core Guarantees
 
-1. **No external LLM providers.** The service layer contacts only the configured Ollama host. No code path reaches OpenAI, Anthropic, Google, or any other external AI API.
+1. **Ordinary chat is local.** `/api/ai` contacts only configured Ollama. The separate
+   `/api/ai-research` OpenAI route is disabled by default and requires the boundary below.
 2. **No raw SQL from LLM output.** The LLM cannot emit SQL. It selects from a fixed tool registry; every tool is backed by existing parameterized repository queries.
 3. **Parameterized queries only.** All tool dispatch goes through `query(text, params)` / `queryPrepared()` in [apps/node-backend/src/database/connection.js](apps/node-backend/src/database/connection.js). No string concatenation.
 4. **Audit trail.** Every `tool_call` and `tool_result` persists in `ai_messages` (role `tool`, with `tool_name`, `tool_args`, `tool_result` JSONB columns). Forensic review is possible per-conversation.
-5. **Local data stays local.** Data flows from repository → tool → `ai_messages` → Ollama (local) → user browser. No step crosses the machine boundary.
+5. **Local mode stays local.** Data flows from repository → tool → local persistence → Ollama →
+   browser. Only a separately previewed and granted typed payload can cross the optional egress path.
+
+## Optional investigation egress
+
+The server reserves request, character, token, cost, monthly, and cumulative disclosure-unit budgets
+transactionally before every attempt. Revocation blocks retries and resume. The short-lived helper
+runs inside a default-deny macOS Seatbelt profile with no application-data access. It has one fixed
+Responses API destination, rejects redirects, receives a scrubbed environment, requests `store:
+false`, and enables neither hosted tools nor background state. Non-macOS cloud egress fails closed.
+Records keep the payload digest and policy metadata, not payload text or credentials. The exact final
+HTTP request bytes, rather than an earlier inner object, are bound to the consent digest.
+This describes disclosure records only. Recoverable investigation jobs retain their local inputs,
+checkpoints, and results. In selected-evidence synthesis, that includes the exact selected evidence
+until the user deletes the investigation through the UI or API.
+
+In both planning profiles, cloud output can only prioritize locally generated plan identifiers and
+final synthesis remains local. The distinct selected-evidence synthesis profile sends only the exact
+manually selected evidence and accepts a schema-validated final answer; it has no tools or implicit
+local context. Public web queries and provider symbols are entered separately and are never derived
+from the private investigation question. This addresses normal model/tool overreach and adapter
+defects. It does not defend against a compromised operating system or malicious signed runtime.
+Retrieved document and web text is untrusted evidence, never executable instruction. See
+[[docs/adr/145-bounded-ai-research-orchestration|ADR-145]] and
+[[docs/adr/146-explicit-selected-evidence-cloud-synthesis|ADR-146]].
+
 6. **Canonical financial math where shared.** Portfolio metrics and monthly cash-flow tools delegate currency conversion, transfer treatment, cost basis, partial-sale basis, and totals to the same calculation services used by Vision's screens. Tool names are not permission to redefine a metric.
 
 ## Threat Model
@@ -147,6 +173,16 @@ closed on unapproved destinations, redirects, identifiers, cross-scope state, te
 post-cancellation requests. See [[docs/security/ai-assistance-evaluation|AI Assistance Evaluation]]
 for commands, thresholds, evidence, and unresolved release blockers.
 
+The optional OpenAI investigation route has three distinct grants. Public-question planning passes a
+typed private-data classifier. Selected-summary planning sends the exact summary but omits the
+original question and constraints. Selected-evidence synthesis sends the exact manually selected
+evidence and lets OpenAI write the final answer without hosted tools. Planning grants cannot authorize
+synthesis. The exact final request bytes are digest-bound to an expiring grant. Network timeouts and
+connection failures remain in a `sent` uncertain state and are not replayed automatically. Definite
+cloud-synthesis failures become explicit partial results and do not trigger local-model fallback.
+Deleting disclosure history removes both usage records and grants.
+Deleting an investigation separately removes its persisted selected evidence, steps, and result.
+
 ## Out of Scope (v1)
 
 - Per-domain opt-in gating (all domains queryable; revisit if multi-user is introduced).
@@ -162,3 +198,5 @@ for commands, thresholds, evidence, and unresolved release blockers.
 - [[docs/security/rate-limiting|Rate Limiting]]
 - [[docs/security/data-protection|Data Protection & CSP]]
 - [[docs/security/ai-assistance-evaluation|AI Assistance Evaluation]]
+- [[docs/api/ai-research|AI Research API]]
+- [[docs/adr/145-bounded-ai-research-orchestration|ADR-145]]

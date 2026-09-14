@@ -1,0 +1,78 @@
+@startuml
+title Bounded AI Research Investigation
+
+actor User
+participant "Investigation panel" as UI
+participant "AI research routes" as API
+participant "Investigation service\n(serial queue)" as Orchestrator
+database "PostgreSQL\njobs, passages, disclosure metadata" as DB
+participant "Bounded typed tools" as Tools
+participant "Local Ollama" as Ollama
+participant "Egress helper\n(short-lived process)" as Egress
+participant "OpenAI Responses API" as OpenAI
+
+User -> UI: Select scope, depth, language,\nresearch mode, and model route
+UI -> API: POST /investigations
+API -> Orchestrator: Strict typed request
+Orchestrator -> DB: Persist queued job
+alt Material ambiguity
+  Orchestrator -> DB: Persist waiting plan
+  UI --> User: Request clarification and typed date scope
+else Scope is sufficient
+  alt Selected-evidence cloud synthesis
+    User -> UI: Enter exact task and evidence
+    User -> UI: Inspect exact synthesis payload
+    UI -> API: Create dedicated digest-bound grant
+    API -> DB: Reserve disclosure and spend budgets
+    Orchestrator -> DB: Checkpoint selected evidence
+  else Local planning
+    Orchestrator -> Ollama: Candidate step identifiers
+    Ollama --> Orchestrator: Prioritized identifiers
+  else Opt-in OpenAI planning
+    User -> UI: Inspect exact outbound planning payload
+    UI -> API: Create digest-bound grant
+    API -> DB: Reserve disclosure and spend budgets
+    Orchestrator -> Egress: Canonical allowlisted planning payload
+    Egress -> OpenAI: POST /v1/responses\nstore=false, tools=[]
+    OpenAI --> Egress: Prioritized identifiers and usage
+    Egress --> Orchestrator: Bounded response
+  end
+  Orchestrator -> DB: Persist constrained plan
+end
+alt Selected-evidence cloud synthesis
+  Orchestrator -> Egress: Canonical selected-evidence payload
+  Egress -> OpenAI: POST /v1/responses\nstore=false, tools=[]
+  OpenAI --> Egress: Structured final answer and usage
+  Egress --> Orchestrator: Bounded response
+else Local evidence workflow
+  loop Each incomplete step
+    Orchestrator -> Tools: Dispatch allowlisted tool with caps
+    Tools --> Orchestrator: Evidence or explicit partial failure
+    Orchestrator -> DB: Checkpoint step result
+  end
+
+  opt Detailed mode has failed local steps
+    Orchestrator -> Ollama: Inspect partial evidence and failed local candidates
+    Ollama --> Orchestrator: Select up to three retry identifiers
+    Orchestrator -> Tools: One serial local retry pass
+    Orchestrator -> DB: Checkpoint revised plan and retry results
+  end
+
+  Orchestrator -> Ollama: Selected local evidence only
+  Ollama --> Orchestrator: Structured answer candidate
+end
+
+Orchestrator -> Orchestrator: Validate citations and answer schema
+Orchestrator -> DB: Complete, partial, failed, or cancelled
+API --> UI: Facts, calculations, interpretations,\ngaps, conflicts, and evidence
+UI --> User: Inspectable evidence-backed answer
+
+note right of Orchestrator
+One active job bounds CPU and RAM.
+External checkpoints are never replayed by the retry loop.
+No automatic cloud fallback.
+Financial calculations use deterministic services.
+Cloud synthesis receives only manually selected evidence.
+end note
+
+@enduml

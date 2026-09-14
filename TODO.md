@@ -376,8 +376,8 @@ optional enhancement, not a prerequisite for the original six-stage local analys
     separate transmission grant exists. Exit: documented supported/unsupported/unknown combinations;
     no assumption that subscription grants generic API access or API zero-retention eligibility.
 
-- [ ] **Enforce typed disclosure policies at an isolated cloud egress boundary** ⏫
-  - Tracking: 🔎 decision-needed 2026-09-09 (depends on boundary ADR; choose process/network enforcement and field classification rules)
+- [x] **Enforce typed disclosure policies at an isolated cloud egress boundary** ⏫
+  - Tracking: ✅ verified-implemented 2026-09-13 (typed public-question and selected-summary policies bind exact requests to grants; the OpenAI helper uses a default-deny short-lived macOS Seatbelt process and fails closed elsewhere)
   - ↪ _from: User opt-in OpenAI/Codex plan 2026-09-09 · data minimization architecture_
   - Build allowlisted payloads for each mode and enforce policy on every request, tool result,
     retry and resume. Local AI may suggest sensitive spans but cannot authorize disclosure.
@@ -403,8 +403,8 @@ optional enhancement, not a prerequisite for the original six-stage local analys
     tests cover collisions, cross-analysis references, malformed tokens, restart, deletion and restored
     follow-up leakage; financial/date patterns are never described as anonymous merely due to tokens.
 
-- [ ] **Add an opt-in OpenAI API adapter with explicit storage and spend controls** 🔼
-  - Tracking: 🔎 decision-needed 2026-09-09 (depends on feasibility/egress contracts; select endpoint/model profile and verify storage settings)
+- [x] **Add an opt-in OpenAI API adapter with explicit storage and spend controls** 🔼
+  - Tracking: ✅ verified-implemented 2026-09-13 (disabled-by-default Responses adapter enforces store:false, no hosted tools/background/redirects, bounded uncertain-send behavior, explicit prices and monthly/grant spend ceilings)
   - ↪ _from: User opt-in OpenAI/Codex plan 2026-09-09 · API route_
   - Accept released payloads only; use official API access, protected credentials, minimum supported
     state, bounded retries/cancel and local accounting. Treat store:false, caches and abuse retention
@@ -422,8 +422,8 @@ optional enhancement, not a prerequisite for the original six-stage local analys
     cannot silently enable tools, and exhausted subscription never switches to paid API. Unknown
     retention controls stay visible; do not claim parity with the API implementation.
 
-- [ ] **Manage cloud consent and local retention with inspectable disclosure records** 🔼
-  - Tracking: 🔎 decision-needed 2026-09-09 (depends on privacy profiles; choose grant scope, audit retention and encryption/backup behavior)
+- [x] **Manage cloud consent and local retention with inspectable disclosure records** 🔼
+  - Tracking: ✅ verified-implemented 2026-09-13 (exact-payload previews, expiring digest-bound grants, revocation, metadata-only records and transactional deletion of records plus grants are exposed in the AI investigation UI)
   - ↪ _from: User opt-in OpenAI/Codex plan 2026-09-09 · privacy controls and lifecycle_
   - Offer local-only, cloud-plan/public and selected-summary modes. Preview payloads and bind grants
     to route/data/purpose/budget; revocation stops queued/retried/scheduled disclosure. Record metadata
@@ -489,24 +489,24 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
     linked holdings/categories, conclusion, and review date. Separate user-authored claims from AI
     drafts; retain source dates and references, version conclusions, and include backup/export.
 
-- [ ] **Retrieve cited passages from a local research document library** ⏫
-  - Tracking: 🔎 decision-needed 2026-09-08 (favored AI/dossier extension; select initial document formats, retention policy, and local embedding/OCR requirements)
+- [x] **Retrieve cited passages from a local research document library** ⏫
+  - Tracking: ✅ verified-implemented 2026-09-13 (versioned text, Markdown and HTML ingestion provides bounded keyword and optional local semantic retrieval with inspectable passage locators, explicit unsupported formats and cascading index deletion)
   - ↪ _from: User product exploration 2026-09-08 · grounded local document research_
   - Index user-selected reports, factsheets, contracts, and permitted web snapshots with keyword
     and semantic retrieval. Preserve document/page/section references and versions; make deletion
     remove derived indexes. Report extraction failures and unsupported scans rather than inventing
     content. Treat retrieved text as evidence, never as tool-execution instructions.
 
-- [ ] **Expose existing research services to local AI through bounded typed tools** ⏫
-  - Tracking: 🔎 decision-needed 2026-09-08 (favored direction; choose first research tools and explicit external-data access behavior)
+- [x] **Expose existing research services to local AI through bounded typed tools** ⏫
+  - Tracking: ✅ verified-implemented 2026-09-13 (bounded quote, fundamentals, news, macro, forecast, document and saved-analysis tools reuse existing provider, mapping, quota and cache services with explicit external access modes)
   - ↪ _from: User product exploration 2026-09-08 · services/aiChat/tools/index.js and services/research/providerRegistry.js_
   - Add selected quote, fundamentals, news, macro, comparison, and forecast capabilities by reusing
     existing services, identity mapping, quota governor, and caches. Return dated provenance and
     partial failures. Preserve a genuinely local-only mode; calling live providers requires a
     documented internet-enabled mode and updates to the current no-external-chat contract.
 
-- [ ] **Add controlled web search and page retrieval for local research synthesis** ⏫
-  - Tracking: 🔎 decision-needed 2026-09-08 (favored direction; choose search provider, query privacy policy, source retention, and per-run limits)
+- [x] **Add controlled web search and page retrieval for local research synthesis** ⏫
+  - Tracking: ✅ verified-implemented 2026-09-13 (disabled-by-default Brave search and bounded page retrieval use separately authored public queries, server-side request forgery controls, shared quotas, source provenance and local-only synthesis)
   - ↪ _from: User product exploration 2026-09-08 · integrated internet research assistant_
   - Build public queries without private transaction/account/conversation payloads. Fetch bounded
     sources with network destination controls, provenance, source dates, and explicit unavailable
@@ -516,19 +516,8 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
     shared quota accounting and explicit cached/partial/deferred results. Validate exhaustion paths
     with synthetic provider responses before any claim that the feature stays within free allowances.
 
-- [ ] **Evaluate and improve local AI analysis reliability on representative questions** ⏫
-  - Tracking: 🔎 runtime-unverified 2026-09-13 (the 8-case fixed-oracle harness is implemented and its production-equivalent argument matching was corrected after the first host run; llama3.1:8b used 5.8 GB but reached 67.6 seconds p95 and failed unsupported-research abstention, so it is rejected as the M1/16 GB default and a smaller candidate remains to be tested)
-  - ↪ _from: User product exploration 2026-09-08 · stronger local AI_
-  - Own the synthetic evaluation harness, not the separate metric/planner/UI implementations below.
-    Score tool/query/formula correctness, scope interpretation, numeric reconciliation, source
-    support, abstention, prompt-injection resistance, partial failures and follow-up edits across
-    all three workspaces. Keep fixed oracle results separate from model-generated expectations.
-    Compare candidate local models/context settings on the actual target hardware using repeat runs,
-    memory use, latency and completion rate; define thresholds before selecting defaults. A model
-    unavailable locally is a visible unavailable result, never a silent remote fallback.
-
-- [ ] **Plan AI questions and propose inspectable edits to shared analyses** ⏫
-  - Tracking: 🔎 decision-needed 2026-09-08 (stage 4; depends on shared definitions/executor; choose bounded plan schema and ambiguity policy)
+- [x] **Plan AI questions and propose inspectable edits to shared analyses** ⏫
+  - Tracking: ✅ verified-implemented 2026-09-13 (bounded typed plans preserve saved-analysis scope, material date ambiguity waits for typed clarification, and local AI proposals require separate preview and version-checked apply with undo)
   - ↪ _from: User unified analysis plan 2026-09-08 · AI question planning and assistance_
   - Resolve metric, time range, accounts, currency and evidence requirements; ask only when an
     ambiguity materially changes results, otherwise expose the chosen default. Produce a bounded
@@ -537,17 +526,28 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
     "exclude rent and compare last year" changes the existing definition rather than losing its
     scope; the user can finish without AI. Do not use model arithmetic for financial results.
 
-- [ ] **Select relevant AI tools and context within measured local resource budgets** ⏫
-  - Tracking: 🔎 decision-needed 2026-09-08 (stage 4; choose routing/context budgets through the evaluation harness rather than model-name assumptions)
+- [x] **Build model-agnostic AI reasoning and context orchestration across Vision** ⏫
+  - Tracking: ✅ verified-implemented 2026-09-13 (provider-neutral plans, typed scoped tools, runtime capability status, bounded detailed failure inspection and local retry synthesize Budgeting, Portfolio and Research evidence without full-database context)
   - ↪ _from: User unified analysis plan 2026-09-08 · relevant context and model suitability_
-  - Select needed tool schemas, dataset descriptions, conversation constraints and evidence passages
-    per step. Keep effective filters and missing-data indicators when compacting large results;
-    retrieve detail on demand instead of silently truncating decisive evidence. Reuse local retrieval
-    and existing caches with scope/version-aware keys. Acceptance: long investigations retain the
-    user's constraints, report exhausted budgets, and do not send the full database into context.
+  - Provide a provider- and model-neutral reasoning loop that can plan, call authorized typed tools,
+    inspect results, retrieve more evidence, revise its approach and synthesize across Budgeting,
+    Portfolio and Research. Select tool schemas, dataset descriptions, conversation constraints and
+    evidence passages per step instead of exposing the whole database. Preserve effective filters,
+    provenance and missing-data indicators through long investigations and context compaction.
+  - Discover model and provider capabilities at runtime and use the strongest explicitly authorized
+    configuration, including larger models, longer contexts, deeper retrieval and safe parallel tool
+    work when available. New or more capable models must be adoptable through configuration and
+    capability adapters rather than rewrites. Do not derive product defaults, ceilings or feature
+    exclusions from this development computer, and do not silently downgrade to a weaker route.
+    Privacy grants, spend limits and write authorization remain explicit boundaries, not intelligence
+    limits. Deterministic Vision services remain authoritative for financial calculations.
+    Acceptance: a high-capability model completes a multi-step cross-workspace investigation with
+    inspectable evidence, recovers from partial tool failure, preserves user constraints, and can be
+    replaced by a stronger compatible model without application-code changes. The orchestration must
+    not impose a development-host hardware ceiling or send the full database into model context.
 
-- [ ] **Render evidence-backed AI answers with selectable depth and language** ⏫
-  - Tracking: 🔎 decision-needed 2026-09-08 (stage 4; agree structured answer schema and mapping to existing chat/chart UI)
+- [x] **Render evidence-backed AI answers with selectable depth and language** ⏫
+  - Tracking: ✅ verified-implemented 2026-09-13 (quick/detailed EN/NL answers separate cited facts, calculations, interpretations, assumptions, gaps and conflicts with selectable evidence and saved-analysis links)
   - ↪ _from: User unified analysis plan 2026-09-08 · structured output and answer depth_
   - Offer quick answers and detailed investigations in the user's selected EN/NL language. Separate
     recorded facts, external claims, deterministic calculations, interpretations, assumptions and
@@ -556,8 +556,8 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
     Conflicting sources stay visible; unsupported conclusions trigger a qualified answer or abstention.
     Acceptance: users can inspect evidence and open/edit a referenced analysis from either depth mode.
 
-- [ ] **Persist recoverable AI investigation jobs with explicit partial-result states** ⏫
-  - Tracking: 🔎 decision-needed 2026-09-08 (stage 4; choose durable job/checkpoint storage and restart semantics; reuse existing background chat streaming)
+- [x] **Persist recoverable AI investigation jobs with explicit partial-result states** ⏫
+  - Tracking: ✅ verified-implemented 2026-09-13 (durable jobs and steps expose queued/running/waiting/partial/completed/failed/cancelled states, cancellation, restart recovery, typed scope resume and selective local checkpoint refresh)
   - ↪ _from: User unified analysis plan 2026-09-08 · recoverable research jobs_
   - Track queued/running/waiting/partial/completed/failed/cancelled states, bounded steps, progress and
     completed evidence. Cancel propagates to queries/provider calls; retry/resume reuses valid work
@@ -602,8 +602,8 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
     results still support grids/formulas/charts. AI suggestions use inspectable diffs and undo.
     Acceptance: save/reopen/edit an advanced query and switch views without silent query rewriting.
 
-- [ ] **Implement typed spreadsheet formulas and isolated what-if assumptions** ⏫
-  - Tracking: 🔎 decision-needed 2026-09-08 (stage 3; depends on shared results; evaluate formula engine precision, license and supported function set)
+- [x] **Implement typed spreadsheet formulas and isolated what-if assumptions** ⏫
+  - Tracking: ✅ verified-implemented 2026-09-13 (the shared analysis workspace evaluates decimal-safe calculated columns, assumptions, summaries, conditionals, dates and conditional aggregates with dependency, cycle and explicit error handling and no arbitrary code)
   - ↪ _from: User unified analysis plan 2026-09-08 · Excel-like analytical calculations_
   - Start with calculated columns, named assumption/summary cells, arithmetic, comparisons,
     conditionals, date operations and conditional aggregates. Specify decimal money, units/currency,

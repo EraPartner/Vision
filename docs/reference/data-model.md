@@ -3,8 +3,8 @@ title: Data Model Reference
 type: reference
 status: active
 date: 2026-09-11
-updated: 2026-09-13
-last_modified: 2026-09-13
+updated: 2026-09-14
+last_modified: 2026-09-14
 tags:
   [
     reference,
@@ -1392,6 +1392,19 @@ pt }|---|| cat
 
 ---
 
+## AI research and investigations
+
+Migration 0111 adds local `ai_research_documents` and cascading `ai_research_passages`; deleting a
+document removes every derived keyword and embedding row. `ai_investigation_jobs` owns durable state
+and result/checkpoint JSON, while `ai_investigation_steps` makes completed tool work reusable.
+`ai_disclosure_grants` stores scoped budgets, the inspected payload digest, and one of the
+`cloud-plan-public`, `selected-summary`, or `cloud-synthesis-selected` modes. The third mode cannot
+reuse a planning grant because its dedicated grant is bound to the selected-evidence payload.
+`ai_disclosure_records` stores policy, digest, field/unit manifests, reservations, and actual usage;
+it never stores API credentials or exact outbound payload text. See
+[[docs/adr/145-bounded-ai-research-orchestration|ADR-145]] and
+[[docs/adr/146-explicit-selected-evidence-cloud-synthesis|ADR-146]].
+
 ## Query Patterns
 
 ### Transaction with Recipient and Category
@@ -1429,3 +1442,4 @@ GROUP BY i.asset_class;
 - [[docs/reference/database-triggers|Database Triggers]]
 - [[docs/performance/materialized-views|Materialized Views]]
 - [[docs/architecture/backend-architecture|Backend Architecture]]
+- [[docs/api/ai-research|AI Research API]]

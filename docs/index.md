@@ -65,7 +65,8 @@ Recent cross-cutting implementation: [[docs/features/analysis-workspace|Analysis
 [[docs/api/analysis|Analysis API]], [[docs/reference/analysis-contract|Analysis Contract]],
 [[docs/reference/analysis-datasets|Analysis Datasets]],
 [[docs/reference/fund-holdings-import-contract|Fund Holdings Import Contract]], and
-[[docs/reference/openai-codex-assistance-profiles|OpenAI and Codex Assistance Profiles]]. The
+[[docs/reference/openai-codex-assistance-profiles|OpenAI and Codex Assistance Profiles]], plus
+[[docs/features/ai-chat|AI Investigations]] and [[docs/api/ai-research|AI Research API]]. The
 current evidence gates are in [[docs/security/ai-assistance-evaluation|AI Assistance Evaluation]].
 Import history is defined by
 [[docs/reference/provider-neutral-transaction-provenance|Provider-Neutral Transaction Provenance]].
@@ -175,7 +176,7 @@ LIMIT 20
 **View all diagrams:** [[docs/diagrams/index|Diagrams Index]] | [[docs/architecture/index|Architecture Overview]] | [Interactive Flow Visualizer](flow-visualizer.html)
 
 > [!tip] Interactive Flow Visualizer
-> `docs/flow-visualizer.html` is a single-page, interactive map of all packages (58 components) + 28 end-to-end flows (create-transaction, CSV import, manual analysis, forward-only broker history, AI chat, AES-256-GCM backup, native Demo seed activation, app update, macro-series-fetch, close-account, db-data-edit, …). Open it directly in any browser — click a flow on the left, watch the path light up, and read the payload at each hop. Add new flows by editing the JSON block at the bottom of the file.
+> `docs/flow-visualizer.html` is a single-page, interactive map of all packages (61 components) + 29 end-to-end flows (create-transaction, CSV import, manual analysis, bounded AI research, forward-only broker history, AI chat, AES-256-GCM backup, native Demo seed activation, app update, macro-series-fetch, close-account, db-data-edit, …). Open it directly in any browser — click a flow on the left, watch the path light up, and read the payload at each hop. Add new flows by editing the JSON block at the bottom of the file.
 
 | Resource                                 | Description                           |
 | ---------------------------------------- | ------------------------------------- |
