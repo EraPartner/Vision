@@ -35,7 +35,7 @@ package "Server" {
 
 database "PostgreSQL 18" as DB {
   node "Schema (Alembic migrations)" as SchemaInit
-  node "User-data tables\ntransactions · recipients · planning · portfolio\nimports · attachments · AI · provider health · settings" as Tables
+  node "User-data tables\ntransactions · recipients · planning · portfolio + exposure sources\nimports · attachments · AI · provider health · settings" as Tables
   node "Materialized Views\nmonthly summary · category totals\ncashflow daily · bank balances" as MatViews
   node "Aggregation tables (trigger-maintained)\nrecipient totals · split outstanding" as AggTables
   node "Indexes (incl. covering partial)" as Indexes
@@ -51,6 +51,7 @@ cloud "External Services" as External {
   node "FRED / St. Louis Fed (macro series, ADR-082)" as FRED
   node "DBnomics (ECB/OECD/IMF macro, keyless, ADR-082)" as DBnomics
   node "Local Ollama (LLM, 127.0.0.1:11434)" as Ollama
+  node "OpenAI Responses API\nopt-in planning or selected-evidence synthesis" as OpenAI
 }
 
 cloud "Build & Distribution" as DevToolsCloud {
@@ -104,6 +105,8 @@ note right of External
     DBnomics (keyless) — provider-pinned, in-memory cache,
     never persisted to asset_price_history
   - Ollama is local-only (privacy non-negotiable)
+  - OpenAI egress is explicit and digest-bound. Planning receives
+    public catalog identifiers only; private analysis results stay local (ADR-149)
 end note
 
 note right of Tables

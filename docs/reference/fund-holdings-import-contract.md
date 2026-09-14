@@ -2,7 +2,7 @@
 title: Fund Holdings Import Contract Reference
 type: reference
 status: active
-date: 2026-09-12
+date: 2026-09-14
 tags: [reference, portfolio, funds, holdings, import, provenance]
 description: Version-1 source document and parser result rules for user-supplied fund holdings.
 aliases: [fund holdings source contract, holdings file contract]
@@ -15,9 +15,10 @@ related_code:
 # Fund Holdings Import Contract Reference
 
 > [!abstract] Purpose
-> `@vision/types/fund-holdings` is the strict normalization boundary for future fund-holdings
-> importers. Version 1 supports user-supplied files. It does not download issuer data, persist
-> imports, aggregate exposure, or grant permission to copy or redistribute source material.
+> `@vision/types/fund-holdings` is the strict normalization boundary for fund-holdings importers.
+> Version 1 supports user-supplied files. Vision can now persist a validated document and aggregate
+> supported look-through exposure, but it does not download issuer data or grant permission to copy
+> or redistribute source material.
 
 ## Supported Source Boundary
 
@@ -102,6 +103,15 @@ and totals, stale or partial data, unsupported exposure, license restrictions, u
 and unsupported formats. An issue can retain the source row, field, and bounded raw value. Raw
 values must not contain secrets or unrelated personal data.
 
+## Portfolio exposure consumer
+
+The portfolio exposure service persists a document only when its supplied exact typed share-class
+identifier occurs in the validated document. It multiplies supported direct or cash row weights by
+the attached fund position value. Unsupported and missing weights remain uncovered and are never
+renormalized. Constituent classifications must be supplied explicitly by investment or identifier.
+Stale source state and provenance remain available in drill-through. See
+[[docs/adr/150-explicit-portfolio-look-through-exposure|ADR-150]].
+
 ## Version 1 Non-goals
 
 - automatic issuer retrieval or scheduled refresh;
@@ -110,7 +120,7 @@ values must not contain secrets or unrelated personal data.
 - recursive nested-fund expansion;
 - derivative or synthetic look-through;
 - inferred cash or renormalized partial coverage; and
-- persistence, portfolio matching, or exposure aggregation.
+- automatic classification, recursive portfolio matching, or inferred economic foreign-exchange exposure.
 
 These need separate design and acceptance work. A source becoming technically reachable does not
 change this boundary.
@@ -118,6 +128,7 @@ change this boundary.
 ## Related
 
 - [[docs/adr/139-fund-holdings-source-and-import-contract|ADR-139: Fund Holdings Source and Import Contract]]
+- [[docs/adr/150-explicit-portfolio-look-through-exposure|ADR-150: Explicit Portfolio Look-through Exposure]]
 - [[docs/features/portfolio|Portfolio]]
 - [[docs/features/portfolio-import|Portfolio Import]]
 - [[docs/reference/analysis-contract|Analysis Contract Reference]]

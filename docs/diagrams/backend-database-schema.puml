@@ -201,6 +201,28 @@ entity "portfolio_transactions" as portfolio_transactions {
   * updated_at : timestamptz
 }
 
+entity "portfolio_exposure_classifications" as portfolio_exposure_classifications {
+  * id : uuid <<PK>>
+  investment_id : integer <<FK>>
+  identifier_type : text
+  identifier_value : text
+  identifier_exchange : text
+  * issuer_id : text
+  * issuer_name : text
+  sector : text
+  issuer_country_code : char(2)
+  * source_label : text
+}
+
+entity "portfolio_fund_holdings_documents" as portfolio_fund_holdings_documents {
+  * id : uuid <<PK>>
+  * investment_id : integer <<FK, UNIQUE>>
+  * share_class_identifier_json : jsonb
+  * document_json : jsonb
+  * source_as_of_date : date
+  * source_sha256 : char(64)
+}
+
 entity "watchlist" as watchlist {
   * id : serial <<PK>>
   * name : varchar(200)
@@ -468,6 +490,8 @@ pte }o--|| transactions
 ptls }o--|| planned_transactions
 
 investments ||--o{ portfolio_transactions : investment_id
+investments ||--o| portfolio_exposure_classifications : explicit classification
+investments ||--o| portfolio_fund_holdings_documents : fund source
 asset_price_history }o--|| investments : investment_id
 
 transaction_splits }o--|| transactions

@@ -59,15 +59,20 @@ This describes disclosure records only. Recoverable investigation jobs retain th
 checkpoints, and results. In selected-evidence synthesis, that includes the exact selected evidence
 until the user deletes the investigation through the UI or API.
 
-In both planning profiles, cloud output can only prioritize locally generated plan identifiers and
-final synthesis remains local. The distinct selected-evidence synthesis profile sends only the exact
+In both planning profiles, cloud output can prioritize locally generated plan identifiers and may
+propose up to three strict analysis plans using only public catalog identifiers. Vision rejects SQL,
+relation names, private scope identifiers, unknown fields, stale catalog versions, and plans outside
+the selected workspace. It adds account, investment, and date restrictions locally as parameters,
+runs the plan through the dedicated read-only executor, and keeps all rows and formula results local.
+The distinct selected-evidence synthesis profile sends only the exact
 manually selected evidence and accepts a schema-validated final answer; it has no tools or implicit
 local context. Public web queries and provider symbols are entered separately and are never derived
 from the private investigation question. This addresses normal model/tool overreach and adapter
 defects. It does not defend against a compromised operating system or malicious signed runtime.
 Retrieved document and web text is untrusted evidence, never executable instruction. See
 [[docs/adr/145-bounded-ai-research-orchestration|ADR-145]] and
-[[docs/adr/146-explicit-selected-evidence-cloud-synthesis|ADR-146]].
+[[docs/adr/146-explicit-selected-evidence-cloud-synthesis|ADR-146]]. The identifier-only analysis
+extension is recorded in [[docs/adr/149-cloud-authored-catalog-analysis-plans|ADR-149]].
 
 6. **Canonical financial math where shared.** Portfolio metrics and monthly cash-flow tools delegate currency conversion, transfer treatment, cost basis, partial-sale basis, and totals to the same calculation services used by Vision's screens. Tool names are not permission to redefine a metric.
 
@@ -83,6 +88,7 @@ Retrieved document and web text is untrusted evidence, never executable instruct
 | Resource exhaustion (LLM requests huge result sets)                                | Result cap (default 500 rows) on every tool; `meta.truncated` flag surfaced to LLM                                                                                                      |
 | Abuse/rate (script hammering `/api/ai/chat`)                                       | 30 req/min rate limit; standard limits on CRUD endpoints                                                                                                                                |
 | Context overflow exposing unintended history                                       | Service trims history to last N turns; summaries generated server-side, never pass raw unbounded history to the LLM                                                                     |
+| Cloud planner emits SQL or requests private rows                                   | Strict identifier-only plan schema, public catalog without relations, local trusted-scope injection, isolated local execution, and local-only result synthesis                          |
 | Aborted stream leaves orphaned state                                               | `req.on('close')` handler marks in-flight assistant message aborted; no dangling transactions                                                                                           |
 | Ollama host pointed at a malicious server                                          | `OLLAMA_URL` validated at startup (localhost or RFC1918 private only by default); warning surfaced if user overrides to a public IP                                                     |
 

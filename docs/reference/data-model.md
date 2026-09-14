@@ -377,6 +377,28 @@ is no active UI control or business-rule consumer. Flag enum types: `account_typ
 
 ---
 
+### PortfolioExposureClassification
+
+**Table:** `portfolio_exposure_classifications` (migration 0112, ADR-150)
+
+Stores a user-supplied issuer, sector, and issuer-country classification. Each row targets exactly
+one `investment_id` or one typed identifier tuple. Partial unique indexes prevent duplicate targets.
+Vision does not infer ticker, name, country, sector, or foreign-exchange exposure.
+
+### PortfolioFundHoldingsDocument
+
+**Table:** `portfolio_fund_holdings_documents` (migration 0112, ADR-150)
+
+Stores one validated version-1 fund-holdings document per investment together with the exact typed
+share-class identifier, source date, and SHA-256 document digest. The foreign key cascades when its
+investment is deleted. Unsupported and missing document weight remains in the source and is not
+renormalized by the exposure service.
+
+**Related:** [[docs/adr/150-explicit-portfolio-look-through-exposure|ADR-150]],
+[[docs/reference/fund-holdings-import-contract|Fund Holdings Import Contract]]
+
+---
+
 ### investment_ticker_prefs (June 2026, migration 0061)
 
 **Purpose:** Side table that persists per-investment opt-out preferences for the Portfolio Overview ticker tape. An absent row means the holding is visible (default `true`); only explicit `false` rows need to be stored.

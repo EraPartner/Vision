@@ -137,6 +137,12 @@ package "External / Data" {
     +runSavedAnalysis(id): Promise<SavedAnalysis>
   }
 
+  class CloudAnalysisPlanService <<ADR-149>> {
+    +getPublicCloudAnalysisCatalog(): PublicCatalog
+    +parseCloudAnalysisPlans(text, scope): Plan[]
+    +executeCloudAnalysisPlan(plan, trustedScope): Promise<Result>
+  }
+
   class QuoteBackfillService {
     +backfillPortfolioHistoricalRates(): Promise<void>
     +backfillQuotes(symbols, range): Promise<void>
@@ -252,6 +258,10 @@ package "Thin Route Seams (ADR-067, June 2026)" {
     +getPortfolioSummary(currency, options?): Promise<Summary>
     ' Returns totals + summaries[] + byAccount[] (per-account holdings, parity-locked)
   }
+  class PortfolioExposureService <<ADR-150>> {
+    +upsertPortfolioExposureBundle(input): Promise<Sources>
+    +getPortfolioExposure(currency): Promise<Exposure>
+  }
   class MoveHoldingService <<ADR-091>> {
     +move(investmentId, fromAccountId, toAccountId, units?, strategy?): Promise<MoveResult>
     ' strategy: 'fifo' (default) | 'proportional'
@@ -303,6 +313,8 @@ PortfolioPerformanceSnapshotService --> PortfolioSummaryService
 AnalysisExecutor --> AnalysisCatalog : validates approved relations
 SavedAnalysisService --> AnalysisCatalog : compiles visual definitions
 SavedAnalysisService --> AnalysisExecutor : refreshes saved runs
+CloudAnalysisPlanService --> AnalysisCatalog : validates identifier-only plans
+CloudAnalysisPlanService --> AnalysisExecutor : executes with locally injected scope
 
 AggregationRefreshService --> MaterializedViewService
 
@@ -318,6 +330,8 @@ PortfolioTransactionService --> PortfolioTransactionRules
 PortfolioTransactionService --> PortfolioTransactionRepository
 PortfolioImportPipelineService --> PortfolioTransactionService
 PortfolioImportPipelineService --> ImportIdentity
+PortfolioExposureService --> PortfolioSummaryService : current position values
+PortfolioExposureService --> PortfolioExposureRepository : explicit sources
 
 AiChatService --> AiChatRepository
 AiChatService --> "Ollama client"

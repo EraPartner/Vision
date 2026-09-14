@@ -2,8 +2,8 @@
 title: Analysis Workspace
 type: feature
 status: active
-date: 2026-09-13
-updated: 2026-09-13
+date: 2026-09-14
+updated: 2026-09-14
 tags:
   [
     feature,
@@ -42,6 +42,12 @@ The default example groups non-transfer active cash flow by month and category. 
 the catalog; raw join expressions are not accepted. Sorting reruns the server query rather than
 sorting only the loaded page.
 
+The start panel also offers three ordinary, editable templates over the same synthetic-data-safe
+catalog: category spending, monthly cash flow, and portfolio activity. Applying a template copies
+its visual plan into the normal builder. It does not create a special execution mode or lock fields.
+The SQL editor and run-preference overrides live under progressive advanced controls; loading,
+failure, and empty catalog states are explicit.
+
 ## SQL workflow
 
 The SQL editor accepts one PostgreSQL `SELECT` or `WITH` statement. Users declare the approved
@@ -74,6 +80,32 @@ Dependencies are ordered explicitly; cycles, broken references, null/type errors
 produce visible formula errors. The language has no JavaScript, macros, file access, network access,
 or ledger writes. Scenario values remain analysis parameters and never mutate transactions.
 
+Version 1 tabular scenario inputs accept CSV files up to 1 MB, 1,000 rows, and 32 columns. Vision
+stores the inferred column types, normalized values, file digest, and one explicit result-column to
+input-column left join per attachment in saved-analysis parameters. It never evaluates imported
+cells as formulas. Unsafe integers remain exact text. Duplicate input join keys and multiple joins
+for one attachment are rejected. Save and execution both require the result join column to exist
+with a compatible declared type. Joined columns use the attachment ID as a prefix and are applied
+before bounded analysis formulas during saved refresh.
+
+Safe CSV export contains the current result values plus definition and run identity, workspace and
+dataset scope, source references, source-date columns, column types, timezone, and truncation
+metadata. It labels column units as unavailable when the executor did not return them. It preserves
+values as returned and does not relabel or convert them to the preferred reporting currency.
+Vision snapshots this export context when a result is produced or loaded, so later editor changes
+cannot relabel an older result.
+Spreadsheet-formula prefixes are neutralized. Version 1 intentionally does not export XLSX or
+round-trip formulas.
+
+## Preference precedence
+
+Reporting currency, benchmark, answer depth, and language resolve per field in this order:
+run parameters, saved-analysis settings, application defaults, then product defaults. The effective
+values are visible in the analysis and investigation interfaces. Reporting timezone remains an
+explicit run and saved-analysis parameter, with the browser timezone used for a new analysis.
+Benchmarks are optional and explicit; Vision does not infer a benchmark or risk preference from
+holdings.
+
 ## Saved analyses
 
 The library is filtered by Budgeting, Portfolio, Research, or explicit cross-workspace scope. Save
@@ -100,4 +132,5 @@ URL by replacing the username. Provisioning uses `DATABASE_URL_MIGRATIONS` when 
 - [[docs/reference/analysis-contract|Analysis Contract Reference]]
 - [[docs/reference/analysis-datasets|Analysis Datasets]]
 - [[docs/adr/144-isolated-manual-analysis-workspace|ADR-144]]
+- [[docs/adr/149-cloud-authored-catalog-analysis-plans|ADR-149]]
 - [[docs/features/portfolio|Portfolio]]

@@ -53,7 +53,7 @@ Located in `docs/diagrams/`:
 
 ## Interactive Flow Visualizer
 
-For an interactive companion to these diagrams, open `docs/flow-visualizer.html` — a single-page HTML map of all packages (61 components) and 29 end-to-end flows, including the restricted manual analysis runtime, bounded AI research and optional egress, forward-only broker history, native runtime, and atomic native Demo seed activation. Click a flow to highlight the path, step through it, and inspect the payload at every hop. Data lives in an embedded JSON block; extending it is a copy-paste.
+For an interactive companion to these diagrams, open `docs/flow-visualizer.html` — a single-page HTML map of all packages (62 components) and 31 end-to-end flows, including the restricted manual and cloud-authored analysis runtime, explicit portfolio look-through exposure, bounded AI research and optional egress, forward-only broker history, native runtime, and atomic native Demo seed activation. Click a flow to highlight the path, step through it, and inspect the payload at every hop. Data lives in an embedded JSON block; extending it is a copy-paste.
 
 ## Frontend Diagrams
 

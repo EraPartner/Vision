@@ -4,9 +4,9 @@ type: endpoint
 method: GET, POST, PUT, PATCH, DELETE
 path: /api/investments
 description: Investment portfolio management (stocks, crypto, real estate, savings)
-date: 2026-06-18
-last_modified: 2026-09-11
-updated: 2026-09-11
+date: 2026-09-14
+last_modified: 2026-09-14
+updated: 2026-09-14
 tags: [api, investments, portfolio, stocks, crypto, metals, phase-9, decimal, money, offline-fallback, per-account, adr-091, show-in-ticker, portfolio-ticker]
 status: active
 aliases: [investments-api, portfolio-api, holdings, stocks, crypto, real-estate, savings, bonds, metals]
@@ -97,6 +97,35 @@ Notes:
 - Internal route refactor consolidated shared query/ID parsing helpers (`parseDefaultListOptions`, `parseBulkTransactionsOptions`, `parseInvestmentTransactionsOptions`, `parseDbOnlyQueryValue`, `parseRequestId`, `parseTxnRequestId`) to reduce duplication while preserving all defaults, clamping rules, and endpoint response semantics ([[apps/node-backend/src/routes/investments.js]]).
 - Follow-up route refactor extracted shared transaction-id validation for transaction mutation endpoints via `parseAndValidateTxnRequestId(req, res)` and centralized validation-error response mapping via `handleValidationError(res, err)`; status codes and error payloads remain unchanged ([[apps/node-backend/src/routes/investments.js]]).
 - Investment list (`GET /api/investments`) and per-investment transaction list (`GET /api/investments/:id/transactions`) now use repository one-query pagination helpers (`getAllWithCount`) instead of separate list/count route calls, preserving filters, totals, ordering, and response payload shape ([[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/repositories/investmentRepository.js]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).
+
+### GET /api/investments/exposure
+
+Returns deterministic issuer, sector, and issuer-country exposure for the requested three-letter
+reporting `currency` (default `EUR`). Direct classified positions are combined with supported rows
+from attached version-1 fund-holdings documents. Each row includes its direct or fund contribution
+drill-through. Each exposure row reports its value and effective percentage of total portfolio
+value. The dimension totals and the uncovered and explicit-cash totals report both values and
+percentages, alongside stale-source warnings and scope notes.
+The `fundSources` list reports every attached fund's as-of date, read-time age, maximum age, stale
+state, and coverage state even when the fund has no classified constituent contribution.
+
+Unsupported rows and missing fund weight remain uncovered. They are not scaled to 100 percent.
+Missing classifications remain unclassified. Vision does not infer economic foreign-exchange
+exposure.
+
+### PUT /api/investments/exposure/sources
+
+Adds or updates an explicit source bundle. `classifications` target exactly one investment ID or
+typed identifier and supply issuer plus optional sector and issuer-country values. `fundDocuments`
+attach the strict [[docs/reference/fund-holdings-import-contract|version-1 holdings document]] to an
+investment. The supplied `shareClassIdentifier` must exactly occur in the document's share-class
+identity, the investment must exist, and a fund document may target only an ETF investment.
+Matching targets are updated atomically; sources omitted from the bundle are not deleted.
+
+Invalid shapes, duplicate targets, mismatched share classes, or invalid holdings documents return
+`400 INVALID_PORTFOLIO_EXPOSURE_SOURCE`. Unexpected persistence failures remain server errors. This
+is an additive, non-breaking API change. See
+[[docs/adr/150-explicit-portfolio-look-through-exposure|ADR-150]].
 
 ### GET /api/investments/providers
 

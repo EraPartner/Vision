@@ -26,6 +26,14 @@ SORT date DESC
 
 ## Active Decisions
 
+[[docs/adr/150-explicit-portfolio-look-through-exposure|ADR-150]] (Accepted) combines direct and
+supported fund holdings only through explicit classifications and exact share-class identifiers,
+while preserving uncovered weight and excluding inferred economic foreign-exchange exposure.
+
+[[docs/adr/149-cloud-authored-catalog-analysis-plans|ADR-149]] (Accepted) lets the cloud planner
+propose strict identifier-only analysis plans while trusted scope injection, SQL compilation,
+execution, private results, and final synthesis remain local.
+
 [[docs/adr/148-user-default-openai-model|ADR-148]] (Accepted) persists a user-selected default
 OpenAI API model in AI settings. Per-investigation selection still overrides it, while removed or
 unapproved models fall back to the operator-approved catalog.

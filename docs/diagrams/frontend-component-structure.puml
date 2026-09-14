@@ -205,6 +205,7 @@ package "Feature Components - Forms" {
 
 package "Feature Components - Portfolio" {
   class PortfolioOverview
+  class PortfolioExposureCard <<ADR-150>>
   class PortfolioTaxAdjustmentsDialog
   class PortfolioNewsFeed
   class InvestmentDetailDialog <<ADR-091>> {
@@ -219,6 +220,8 @@ package "Feature Components - Portfolio" {
     ' Lists account holdings, transfers in-specie, then archives account
   }
 }
+
+PortfolioOverview --> PortfolioExposureCard : issuer, sector, country views
 
 package "Feature Components - Statistics" {
   class RecipientInsightsTab

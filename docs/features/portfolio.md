@@ -2,9 +2,9 @@
 title: Feature - Portfolio & Investments
 type: feature
 status: active
-date: 2026-09-13
-last_modified: 2026-09-13
-updated: 2026-09-13
+date: 2026-09-14
+last_modified: 2026-09-14
+updated: 2026-09-14
 tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding, fx-attribution, asset-gain, fx-gain, purchase-date-rates, value-fx-neutral, adr-074, adr-091, adr-100, per-account, move-holding, close-account, brokerage-fanout, rebalancing, saved-plans, cash-aware, cross-workspace, adr-098, portfolio-ticker, marquee, live-quotes, ticker-manager, show-in-ticker, migration-0061, fx-aware-pnl, unified-detail-dialog, useFxAwarePnl]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections. 2026-05-29 adds historical FX in snapshots and loading/error states on all asset pages. June 2026 adds snapshotBuilder split/return_of_capital events, APP_TIMEZONE day-boundary fix, shared portfolioUnitMath.ts, and FX attribution UI (ADR-074): asset gain / FX effect decomposition on overview, performance, asset pages, and investment detail.
@@ -1066,9 +1066,29 @@ Code links: [[apps/frontend/src/pages/portfolio/RebalancePage.tsx]], [[apps/fron
 
 See also: [[docs/api/settings|Settings API — `rebalance_plans` key]], [[docs/adr/098-cross-workspace-features|ADR-098]]
 
+## Explicit look-through exposure (2026-09-14, ADR-150)
+
+The Portfolio Overview shows issuer, sector, and issuer-country exposure across direct positions
+and supported constituent rows from user-supplied fund-holdings documents. Source bundles use
+explicit investment or typed security identifiers. Fund attachments require an exact typed
+share-class identifier match; ticker, name, and currency guesses are not allowed.
+
+Supported constituent weight is multiplied by the fund's current value with decimal arithmetic.
+Unsupported and missing fund weight remains visible as uncovered, missing classifications remain
+unclassified, and explicit fund cash stays separate. Rows and coverage totals show reporting-
+currency values plus percentages of total portfolio value. Rows drill through to direct positions
+or the source fund and show stale-source state. The view does not infer economic foreign-exchange exposure.
+Fund freshness is re-evaluated against the portfolio computation date on every read, using the
+document's explicit as-of date and maximum age. Fund drill-through rows display that as-of date.
+The synthetic Demo includes an explicit Apple direct-plus-IWDA overlap, separate cash, partial
+coverage, and an entirely uncovered VWCE position for manual walkthroughs.
+See [[docs/api/investments#GET /api/investments/exposure|Investments API]] and
+[[docs/reference/fund-holdings-import-contract|Fund Holdings Import Contract]].
+
 ## Related
 
 - [[docs/api/investments|API: Investments]]
+- [[docs/adr/150-explicit-portfolio-look-through-exposure|ADR-150]]
 - [[docs/api/watchlist|API: Watchlist]]
 - [[docs/api/portfolio-summary|Portfolio Summary API]] — FX attribution response fields; `byAccount` breakdown
 - [[docs/integrations/price-providers|Price Providers]] — Live and historical price data
@@ -1105,3 +1125,4 @@ See also: [[docs/api/settings|Settings API — `rebalance_plans` key]], [[docs/a
 - `0061_investments_show_in_ticker.py` — Historically created the `investment_ticker_prefs` side
   table without altering the then-variable `investments` relation. The side table remains part of
   the canonical schema after migration 0087. Absent row = visible; downgrade drops the table.
+- `0112_portfolio_exposure_sources.py` — Adds explicit classifications and one validated fund-holdings document per investment for ADR-150 look-through exposure (**authored, not applied to user data in this session**).

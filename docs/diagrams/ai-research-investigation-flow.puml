@@ -7,6 +7,7 @@ participant "AI research routes" as API
 participant "Investigation service\n(serial queue)" as Orchestrator
 database "PostgreSQL\njobs, passages, disclosure metadata" as DB
 participant "Bounded typed tools" as Tools
+participant "Restricted analysis runtime" as Analysis
 participant "Local Ollama" as Ollama
 participant "Egress helper\n(short-lived process)" as Egress
 participant "OpenAI Responses API" as OpenAI
@@ -34,7 +35,7 @@ else Scope is sufficient
     API -> DB: Reserve disclosure and spend budgets
     Orchestrator -> Egress: Canonical allowlisted planning payload\nwith selected model and its price
     Egress -> OpenAI: POST /v1/responses\nstore=false, tools=[]
-    OpenAI --> Egress: Prioritized identifiers and usage
+    OpenAI --> Egress: Prioritized identifiers, catalog plans, and usage
     Egress --> Orchestrator: Bounded response
   end
   Orchestrator -> DB: Persist constrained plan
@@ -46,8 +47,13 @@ alt Selected-evidence cloud synthesis
   Egress --> Orchestrator: Bounded response
 else Local evidence workflow
   loop Each incomplete step
-    Orchestrator -> Tools: Dispatch allowlisted tool with caps
-    Tools --> Orchestrator: Evidence or explicit partial failure
+    alt Cloud-authored catalog analysis step
+      Orchestrator -> Analysis: Validate catalog and workspace; inject trusted scope
+      Analysis --> Orchestrator: Private local rows or explicit failure
+    else Locally authored tool step
+      Orchestrator -> Tools: Dispatch allowlisted tool with caps
+      Tools --> Orchestrator: Evidence or explicit partial failure
+    end
     Orchestrator -> DB: Checkpoint step result
   end
 
@@ -73,6 +79,8 @@ External checkpoints are never replayed by the retry loop.
 No automatic cloud fallback.
 Financial calculations use deterministic services.
 Cloud synthesis receives only manually selected evidence.
+Cloud planning receives identifiers, never relations, SQL, private scope IDs, or rows.
+Cloud-authored analysis rows remain private and are synthesized locally.
 Selected models come from the server allowlist.
 Per-model prices drive spend reservation.
 end note

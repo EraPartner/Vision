@@ -385,8 +385,8 @@ optional enhancement, not a prerequisite for the original six-stage local analys
     fields cannot reach the adapter through normal/error/stream/tool paths; unknown scope blocks;
     adapter cannot read the DB, raw transcript, mappings or unapproved local files.
 
-- [ ] **Execute cloud-authored analysis plans locally without exporting private results** ⏫
-  - Tracking: 🔎 decision-needed 2026-09-09 (depends on shared analysis executor and disclosure boundary; define safe plan/tool result contracts)
+- [x] **Execute cloud-authored analysis plans locally without exporting private results** ⏫
+  - Tracking: ✅ verified-implemented 2026-09-14 (strict public catalog identifiers compile into the restricted local executor; private rows and synthesis stay local, while SQL, private schema details, and disclosure expansion are rejected)
   - ↪ _from: User opt-in OpenAI/Codex plan 2026-09-09 · cloud planning local execution_
   - Send approved schema/questions, validate returned query/formula plans and execute with the same
     restrictions as manual analysis. Keep values and final private synthesis local; public research
@@ -474,8 +474,8 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
     coverage; validate matching, stale/partial inputs, cash, and unsupported synthetic exposures.
     A visible download is evidence of availability, not permission for unrestricted redistribution.
 
-- [ ] **Aggregate direct and supported fund holdings into portfolio exposure views** ⏫
-  - Tracking: 🔎 decision-needed 2026-09-08 (favored direction; depends on fund-holdings contract and agreement on supported exposure dimensions)
+- [x] **Aggregate direct and supported fund holdings into portfolio exposure views** ⏫
+  - Tracking: ✅ verified-implemented 2026-09-14 (explicit typed classifications and exact share-class fund documents feed issuer, sector, and issuer-country views with direct/fund drill-through, read-time freshness, cash, unclassified, and uncovered weight preserved)
   - ↪ _from: User product exploration 2026-09-08 · portfolio exposure analysis_
   - Show effective issuer weights, direct/fund contributions, overlap, sector and issuer-country
     breakdowns with drill-through. Keep uncovered weight visible rather than renormalizing it away.
@@ -565,8 +565,8 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
     not turn incomplete work into success or duplicate persisted outputs. Acceptance: interrupted
     synthetic research resumes with original scope and visible partial evidence; quotas still apply.
 
-- [ ] **Manage visible local AI preferences without hidden financial assumptions** 🔼
-  - Tracking: 🔎 decision-needed 2026-09-08 (stage 4; define preference precedence and storage/backup scope)
+- [x] **Manage visible local AI preferences without hidden financial assumptions** 🔼
+  - Tracking: ✅ verified-implemented 2026-09-14 (visible reporting currency, optional benchmark, answer-depth, and language settings resolve per field as run, saved analysis, application, then product defaults; explicit clearing is supported and no risk preference is inferred)
   - ↪ _from: User unified analysis plan 2026-09-08 · editable durable preferences_
   - Let users view/edit/delete saved reporting currency, benchmark, answer depth and language defaults;
     reuse existing settings instead of conflicting copies. Explicit per-analysis parameters override
@@ -612,8 +612,8 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
     equivalent SQL/canonical/formula calculations agree; refresh preserves assumptions and explicit
     formula errors identify broken references. Expand compatibility only after this subset works.
 
-- [ ] **Add guided analysis templates and progressive controls across workspaces** 🔼
-  - Tracking: 🔎 decision-needed 2026-09-08 (stage 3; depends on first manual slice; choose initial templates and task-based usability acceptance)
+- [x] **Add guided analysis templates and progressive controls across workspaces** 🔼
+  - Tracking: ✅ verified-implemented 2026-09-14 (three synthetic-data-ready spending, cash-flow, and portfolio templates become ordinary editable visual analyses; blank entry, loading/error/empty states, and advanced SQL/formula controls remain progressively disclosed)
   - ↪ _from: User unified analysis plan 2026-09-08 · anyone can investigate their finances_
   - Provide entry points from datasets, records/charts, a blank analysis, or examples for spending
     changes, recurring costs, portfolio returns and evidence comparison. Start with understandable
@@ -622,8 +622,8 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
     expert task walkthroughs on synthetic Demo data complete without AI; disabling AI loses no
     manual capability, and templates save as ordinary editable definitions, not special dashboards.
 
-- [ ] **Export reproducible analyses and attach user-selected tabular scenario inputs** 🔼
-  - Tracking: 🔎 decision-needed 2026-09-08 (stage 3; choose CSV/XLSX support, formula export subset and analysis-only import limits)
+- [x] **Export reproducible analyses and attach user-selected tabular scenario inputs** 🔼
+  - Tracking: ✅ verified-implemented 2026-09-14 (safe value-only CSV exports bind immutable run scope, lineage availability, types, source dates, and truncation metadata; bounded typed CSV inputs use explicit fail-closed joins and never mutate ledger data; XLSX and formula round-tripping remain deferred)
   - ↪ _from: User unified analysis plan 2026-09-08 · spreadsheet interoperability_
   - Export chosen results and supported formulas/assumptions with scope, units, source dates and
     truncation labels; disclose unsupported formulas as values rather than pretending full Excel

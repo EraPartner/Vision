@@ -8,7 +8,7 @@ last_modified: 2026-09-14
 adr-reference: 026
 # Authoritative HTTP-operation count, derived from openapi.yaml and enforced by
 # scripts/check-endpoint-matrix.js (CI verify-generated). Bump when routes change.
-api_operation_count: 256
+api_operation_count: 258
 tags:
   [
     reference,
@@ -252,7 +252,7 @@ aliases:
 | GET    | `/api/planned-transactions/due-soon`          | Upcoming bills within N days (Phase 6)                                                     | —          | [[docs/api/plannedTransactions\|Planned Transactions]] |
 | GET    | `/api/planned-transactions/match-suggestions` | Ambiguous auto-link candidates for user confirmation (June 2026; registered before `/:id`) | —          | [[docs/api/plannedTransactions\|Planned Transactions]] |
 
-## Investments (15 endpoints)
+## Investments (17 endpoints)
 
 | Method | Path                                   | Description                                                        | Rate Limit | Doc                                   |
 | ------ | -------------------------------------- | ------------------------------------------------------------------ | ---------- | ------------------------------------- |
@@ -260,6 +260,8 @@ aliases:
 | POST   | `/api/investments`                     | Create                                                             | —          | [[docs/api/investments\|Investments]] |
 | GET    | `/api/investments/providers`           | List price providers                                               | —          | [[docs/api/investments\|Investments]] |
 | POST   | `/api/investments/refresh-prices`      | Refresh all prices                                                 | —          | [[docs/api/investments\|Investments]] |
+| GET    | `/api/investments/exposure`            | Issuer, sector, and issuer-country exposure with uncovered weight  | —          | [[docs/api/investments\|Investments]] |
+| PUT    | `/api/investments/exposure/sources`    | Upsert explicit classifications and typed fund-holdings documents  | —          | [[docs/api/investments\|Investments]] |
 | GET    | `/api/investments/transactions`        | Bulk portfolio transactions                                        | —          | [[docs/api/investments\|Investments]] |
 | PUT    | `/api/investments/transactions/broker` | Audited idempotent bulk broker re-tag                              | 30 req/min | [[docs/api/investments\|Investments]] |
 | GET    | `/api/investments/:id/price-history`   | Historical price data (db_only=true by default for offline safety) | —          | [[docs/api/investments\|Investments]] |
@@ -563,7 +565,7 @@ equal the main senders and preload subscriptions.
 | Categories                           | 6         | 0            |
 | Recipients                           | 14        | 0            |
 | Planned Transactions                 | 8         | 1            |
-| Investments                          | 15        | 0            |
+| Investments                          | 17        | 0            |
 | Watchlist                            | 5         | 0            |
 | Market Lookup                        | 4         | 0            |
 | Research (ADR-079/081/082)           | 18        | 0            |
@@ -581,7 +583,7 @@ equal the main senders and preload subscriptions.
 | Info/Statistics (Phase 14)           | 17        | 5            |
 | AI Chat                              | 9         | 2            |
 | Electron IPC invoke channels         | 24        | 0            |
-| **Total**                            | **258**   | **26**       |
+| **Total**                            | **260**   | **26**       |
 
 > **232** versioned `/api` HTTP operations are declared in `openapi.yaml` and enforced by `scripts/check-endpoint-matrix.js`. The summary rows are a hand-maintained navigation aid and also list the 2 unversioned `/health` endpoints plus 24 Electron invoke channels. The 6 Electron event channels are documented separately and are not request endpoints. (The Rate-Limited column is approximate and not gate-checked.)
 

@@ -108,6 +108,8 @@ package "Routes" {
     +GET / : list investments
     +GET /providers : list price providers
     +POST /refresh-prices : bulk refresh prices
+    +GET /exposure : aggregate explicit look-through exposure
+    +PUT /exposure/sources : upsert classifications and fund documents
     +GET /:id/price-history : provider-backed historical prices
     +GET /:id : get investment
     +POST / : create investment
@@ -312,6 +314,7 @@ package "Repositories" {
   class "PlannedTransactionRepository" as PTR
   class "InvestmentRepository" as IR
   class "PortfolioTransactionRepository" as PTR2
+  class "PortfolioExposureRepository" as PER
   class "WatchlistRepository" as WR
   class "SavedChartsRepository" as SCR
   class "SplitRepository" as SR
@@ -334,6 +337,7 @@ package "Services" {
   class DataImportService
   class PortfolioImportPipelineService <<ADR-078>>
   class PortfolioImportBatchService <<ADR-078>>
+  class PortfolioExposureService <<ADR-150>>
   class LoanRepaymentService
   class CurrencyConversionService
   class PriceProviderService
@@ -381,6 +385,8 @@ RecipientBankAccountsRouter --> RBAR
 PlannedTransactionsRouter --> PTR
 InvestmentsRouter --> IR
 InvestmentsRouter --> PTR2
+InvestmentsRouter --> PortfolioExposureService
+PortfolioExposureService --> PER
 ImportRouter --> ImportService
 ImportRouter --> RawTransactionImportService
 ImportRouter --> StreamingImportService

@@ -1299,17 +1299,27 @@
             "path": "apps/node-backend/src/services/",
             "desc": "Owns split lifecycle validation, owed projections, transactional audit writes, atomic planned parent/tag/loan-schedule updates, and portfolio transaction domain rules. Repositories provide parameterized persistence and transaction-client primitives.",
             "x": 400,
-            "y": 740
+            "y": 960
           },
           {
             "id": "sv.analysis",
-            "label": "Manual analysis runtime",
-            "sub": "analysisCatalog · analysisExecutor · savedAnalysisService",
+            "label": "Restricted analysis runtime",
+            "sub": "catalog · executor · saved analysis · cloud plan adapter",
             "kind": "service",
             "x": 1120,
             "y": 740,
             "path": "apps/node-backend/src/services/analysisExecutor.js",
-            "desc": "ADR-144: compiles catalog plans, executes only approved views through the vision_analysis_executor role, and persists immutable definitions plus success/failure runs. Read-only transactions, timeouts, row/byte limits, and same-role cancellation are enforced independently of the UI."
+            "desc": "ADR-144 and ADR-149: compiles manual or cloud-authored identifier-only catalog plans, injects trusted scope locally, executes only approved views through the vision_analysis_executor role, and persists immutable definitions plus success/failure runs. Read-only transactions, timeouts, row/byte limits, and same-role cancellation are enforced independently of the UI."
+          },
+          {
+            "id": "sv.portfolioexposure",
+            "label": "Portfolio exposure",
+            "sub": "explicit classifications · supported fund look-through",
+            "kind": "service",
+            "x": 760,
+            "y": 960,
+            "path": "apps/node-backend/src/services/portfolio/portfolioExposureService.js",
+            "desc": "ADR-150: combines direct positions with exact-identifier matched, supported fund constituents. Decimal weights preserve unclassified and uncovered value; no economic FX exposure is inferred."
           },
           {
             "id": "ex.fred",
@@ -1333,7 +1343,7 @@
             "sub": "investigation jobs · typed tools · disclosure policy",
             "kind": "service",
             "path": "apps/node-backend/src/services/aiInvestigationService.js",
-            "desc": "ADR-145 and ADR-146: serial, recoverable investigations compose bounded local tools and cited evidence. Optional OpenAI planning keeps synthesis local; the distinct selected-evidence mode sends only the previewed evidence for a cloud-written final answer.",
+            "desc": "ADR-145, ADR-146, and ADR-149: serial, recoverable investigations compose bounded local tools and cited evidence. Optional OpenAI planning may propose identifier-only catalog plans while execution and results remain local; the distinct selected-evidence mode sends only the previewed evidence for a cloud-written final answer.",
             "x": 940,
             "y": 960
           },
@@ -1380,7 +1390,11 @@
           ["be.routes", "sv.reports"],
           ["be.routes", "sv.transactiondomains"],
           ["be.routes", "sv.analysis"],
+          ["be.routes", "sv.portfolioexposure"],
           ["sv.analysis", "db.postgres"],
+          ["sv.airesearch", "sv.analysis"],
+          ["sv.portfolioexposure", "be.repos"],
+          ["sv.portfolioexposure", "db.postgres"],
           ["sv.import", "be.bankadapters"],
           ["sv.import", "be.repos"],
           ["sv.transactiondomains", "be.repos"],
@@ -1774,6 +1788,82 @@
                 "to": "sv.analysis",
                 "payload": "POST /api/analysis/saved or /saved/:id/run",
                 "annotation": "savedAnalysisService.js appends strict definition versions and records refresh success or failure without deleting the last usable result."
+              }
+            ]
+          },
+          {
+            "id": "cloud-catalog-analysis",
+            "name": "Execute a cloud-authored catalog analysis locally",
+            "category": "AI",
+            "summary": "OpenAI receives public catalog identifiers only; Vision validates, scopes, executes, stores, and synthesizes the private result locally.",
+            "steps": [
+              {
+                "from": "sv.airesearch",
+                "to": "ex.openai",
+                "payload": "public question or selected summary plus identifier-only analysis catalog",
+                "annotation": "aiProviderAdapters.js omits relation names, private account or investment IDs, local rows, SQL, and result callbacks from the digest-bound planning payload."
+              },
+              {
+                "from": "ex.openai",
+                "to": "sv.airesearch",
+                "payload": "up to three strict CloudAnalysisPlan objects",
+                "annotation": "aiInvestigationService.js accepts only the shared schema and keeps the deterministic local plan when parsing fails."
+              },
+              {
+                "from": "sv.airesearch",
+                "to": "sv.analysis",
+                "payload": "catalog identifiers plus trusted local account, investment, and date scope",
+                "annotation": "cloudAnalysisPlan.js checks catalog version and workspace, compiles through analysisCatalog.js, and adds trusted scope as SQL parameters."
+              },
+              {
+                "from": "sv.analysis",
+                "to": "db.postgres",
+                "payload": "read-only SELECT on approved vision_analysis views",
+                "annotation": "analysisExecutor.js enforces the dedicated role, timeout, row, byte, and cancellation boundaries."
+              },
+              {
+                "from": "sv.analysis",
+                "to": "sv.airesearch",
+                "payload": "private local rows and bounded formula output",
+                "annotation": "The investigation step is marked private and undisclosed; final synthesis uses the local model and never returns rows to the planning provider."
+              }
+            ]
+          },
+          {
+            "id": "portfolio-look-through-exposure",
+            "name": "Aggregate explicit portfolio look-through exposure",
+            "category": "Portfolio",
+            "summary": "Exact typed sources combine direct holdings with supported fund constituents while uncovered and unclassified value remains visible.",
+            "steps": [
+              {
+                "from": "browser",
+                "to": "fe.pages",
+                "payload": "Portfolio Overview exposure card and optional typed JSON source bundle",
+                "annotation": "PortfolioExposureCard.tsx switches issuer, sector, and issuer-country dimensions and shows stale, uncovered, and unclassified values."
+              },
+              {
+                "from": "fe.apiclient",
+                "to": "be.routes",
+                "payload": "GET /api/investments/exposure or PUT /api/investments/exposure/sources",
+                "annotation": "routes/investments.js validates the reporting currency and delegates source validation and aggregation."
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.portfolioexposure",
+                "payload": "explicit classifications, exact share-class identifiers, validated fund documents",
+                "annotation": "portfolioExposureService.js rejects duplicate targets and share-class mismatches before persistence."
+              },
+              {
+                "from": "sv.portfolioexposure",
+                "to": "db.postgres",
+                "payload": "upsert portfolio_exposure_classifications and portfolio_fund_holdings_documents",
+                "annotation": "portfolioExposureRepository.js updates matching sources atomically and does not delete omitted sources."
+              },
+              {
+                "from": "sv.portfolioexposure",
+                "to": "fe.apiclient",
+                "payload": "issuer, sector, country rows plus uncovered cash and warnings",
+                "annotation": "Supported weights use Decimal multiplication; unsupported and missing weight is not renormalized, and economic FX exposure is not inferred."
               }
             ]
           },

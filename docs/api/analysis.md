@@ -2,7 +2,7 @@
 title: Analysis API
 type: endpoint
 status: active
-date: 2026-09-13
+date: 2026-09-14
 tags: [api, analysis, sql, query-builder, saved-analysis]
 description: Catalog, compile, bounded execution, cancellation, drill-through, and versioned saved-analysis operations under /api/analysis.
 path: /api/analysis
@@ -52,6 +52,12 @@ version and advances the library pointer. `expectedVersion` prevents overwriting
 edit. Formula refresh uses decimal arithmetic and preserves explicit formula errors as a partial
 result. Each version snapshots the matching parameters, formula assumptions, chart bindings, source
 references, and refresh mode. Restore and AI apply also append versions; neither mutates history.
+
+`parameters.scenarioModel` may hold up to five typed CSV attachments. Each attachment is limited to
+1 MB, 1,000 rows, and 32 columns and records normalized values plus a SHA-256 digest. Joins name one
+result column and one scenario column explicitly. Saved refresh applies deterministic left joins
+before formulas and rejects duplicate scenario keys. Safe CSV export is a client-side value export
+of the current result window; it is not a new API operation.
 
 ## Related
 
