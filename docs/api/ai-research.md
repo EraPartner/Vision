@@ -4,7 +4,7 @@ type: api
 status: active
 date: 2026-09-14
 tags: [api, ai, research, jobs, documents, disclosure, openai]
-description: Recoverable AI investigations, local research documents, and consent-bound cloud disclosure endpoints.
+description: Recoverable AI investigations, local research documents, consent-bound cloud disclosure, and scoped reversible-reference endpoints.
 aliases: [AI investigation API, research document API, disclosure API]
 ---
 
@@ -16,24 +16,24 @@ aliases: [AI investigation API, research document API, disclosure API]
 
 ## Endpoints
 
-| Method        | Path                                             | Purpose                                                  |
-| ------------- | ------------------------------------------------ | -------------------------------------------------------- |
-| `GET`         | `/api/ai-research/status`                        | Effective local, web, and OpenAI capabilities and limits |
-| `GET, POST`   | `/api/ai-research/investigations`                | List or start bounded jobs                               |
-| `GET, DELETE` | `/api/ai-research/investigations/:id`            | Inspect evidence/steps or delete local history           |
-| `POST`        | `/api/ai-research/investigations/:id/resume`     | Reuse completed checkpoints                              |
-| `POST`        | `/api/ai-research/investigations/:id/cancel`     | Stop queued or active work                               |
-| `POST`        | `/api/ai-research/disclosures/preview`           | Canonical exact cloud payload and digest                 |
-| `GET, POST`   | `/api/ai-research/disclosures/grants`            | Inspect or create a digest-bound grant                   |
-| `POST`        | `/api/ai-research/disclosures/grants/:id/revoke` | Stop later sends and retries                             |
-| `GET, DELETE` | `/api/ai-research/disclosures/records`           | Inspect metadata or delete all records and grants        |
-| `GET, POST`   | `/api/ai-research/documents`                     | List or upload a text, Markdown, or HTML document        |
-| `GET, DELETE` | `/api/ai-research/documents/:id`                 | Inspect metadata or delete it and derived passages       |
-| `POST`        | `/api/ai-research/documents/search/passages`     | Keyword, semantic, or hybrid passage retrieval           |
+| Method        | Path                                             | Purpose                                                                   |
+| ------------- | ------------------------------------------------ | ------------------------------------------------------------------------- |
+| `GET`         | `/api/ai-research/status`                        | Effective local, web, OpenAI, and reversible-reference capabilities       |
+| `GET, POST`   | `/api/ai-research/investigations`                | List or start bounded jobs                                                |
+| `GET, DELETE` | `/api/ai-research/investigations/:id`            | Inspect evidence/steps or delete local history                            |
+| `POST`        | `/api/ai-research/investigations/:id/resume`     | Reuse completed checkpoints                                               |
+| `POST`        | `/api/ai-research/investigations/:id/cancel`     | Stop queued or active work                                                |
+| `POST`        | `/api/ai-research/disclosures/preview`           | Canonical exact cloud payload, digest, and optional local reference scope |
+| `GET, POST`   | `/api/ai-research/disclosures/grants`            | Inspect or create a digest-bound grant                                    |
+| `POST`        | `/api/ai-research/disclosures/grants/:id/revoke` | Stop later sends and retries                                              |
+| `GET, DELETE` | `/api/ai-research/disclosures/records`           | Inspect metadata or delete all records and grants                         |
+| `GET, POST`   | `/api/ai-research/documents`                     | List or upload a text, Markdown, or HTML document                         |
+| `GET, DELETE` | `/api/ai-research/documents/:id`                 | Inspect metadata or delete it and derived passages                        |
+| `POST`        | `/api/ai-research/documents/search/passages`     | Keyword, semantic, or hybrid passage retrieval                            |
 
 Investigation input includes `question`, `route`, `researchMode`, `model`, `depth`, `language`, typed scope
 with separate bank `accountIds` and portfolio `investmentIds`,
-optional `grantId`, optional selected summary or selected evidence, and optional saved-analysis reference. Public web mode
+optional `grantId`, optional selected summary or selected evidence, optional `referenceScopeId`, and optional saved-analysis reference. Public web mode
 requires a separately authored `publicWebQuery`. Public-provider mode requires explicit
 `publicSymbols` or `publicMacroQueries`; it never extracts identifiers from the private question.
 Local-only is the default. The states are `queued`, `running`, `waiting`, `partial`, `completed`,
@@ -70,6 +70,43 @@ preview and consent digest, and its own prices drive spend reservation and final
 request contract accepts exactly one of `publicQuestion`, `selectedSummary`, or `selectedEvidence`
 for the OpenAI route; mixed modes are rejected. These API additions are backward-compatible.
 
+## Scoped reversible references
+
+For `selected-summary` and `cloud-synthesis-selected`, callers may wrap a literal inside
+`selectedSummary` or `selectedEvidence` as `[[vision-ref:type|value]]`. Allowed types are `account`,
+`recipient`, `investment`, `holding`, `category`, `document`, `subject`, `amount`, and `date`.
+The marker is explicit: Vision does not infer private values or scan the question and public-query
+fields for replacements.
+
+`POST /api/ai-research/disclosures/preview` accepts the full `AiInvestigationRequest`. Its response
+adds:
+
+- `outboundRequest`: the request that must be used for grant creation and investigation creation;
+  marked literals are replaced with typed `[[VR1:type:<24 base64url characters>]]` tokens;
+- `referenceScope`: either `null`, or `{ id, expiresAt, count }` for the encrypted local mapping;
+- the existing exact payload, SHA-256 digest, byte count, field manifest, and disclosure units,
+  computed from that tokenized outbound request.
+
+When markers are present, `AI_REFERENCE_MAPPING_KEY` must decode to exactly 32 bytes. Missing or
+invalid key material returns `503 REFERENCE_KEY_UNAVAILABLE`. Unsupported or malformed markers
+return `400`. The unclaimed scope is usable for 15 minutes. Investigation creation rejects raw
+markers, malformed or unknown tokens, a token from another scope, and an expired or already claimed
+scope. A successful create atomically claims the scope for that one job and extends its restoration
+window to 30 days. Reusing the preview returns `409 REFERENCE_SCOPE_INACTIVE`.
+
+The provider-form structured answer is checkpointed locally before restoration. Restart validates
+and restores that checkpoint without another model or provider call. Vision restores tokens only in
+summary; fact, calculation, and interpretation text; assumptions; missing-information strings;
+conflict descriptions; and evidence excerpts. It never rewrites evidence identifiers, labels,
+locators, kinds, dates, availability, or answer structure. Unknown, cross-job, malformed, expired,
+or undecryptable response tokens fail the job visibly; no partly restored answer is returned.
+
+This feature is **pseudonymization, not anonymity**. It hides only explicitly marked literals. The
+surrounding disclosure can still reveal amounts, dates, holdings, writing style, and behavioral
+patterns. See [[docs/adr/151-scoped-reversible-ai-references|ADR-151]]. The API change is additive
+and backward-compatible; clients that do not use markers receive `referenceScope: null` and an
+equivalent `outboundRequest`.
+
 ## Analysis extensions
 
 `POST /api/analysis/formulas/evaluate` evaluates the supported formula language. Saved analysis
@@ -82,6 +119,7 @@ operations. Generation is local and read-only; applying the inspected proposal i
 
 - [[docs/adr/145-bounded-ai-research-orchestration|ADR-145]]
 - [[docs/adr/147-allowlisted-openai-model-selection|ADR-147]]
+- [[docs/adr/151-scoped-reversible-ai-references|ADR-151]]
 - [[docs/api/analysis|Analysis API]]
 - [[docs/features/ai-chat|AI Chat and Investigations]]
 - [[docs/security/ai-data-access|AI Data Access Policy]]

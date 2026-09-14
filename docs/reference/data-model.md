@@ -2,7 +2,7 @@
 title: Data Model Reference
 type: reference
 status: active
-date: 2026-09-11
+date: 2026-09-14
 updated: 2026-09-14
 last_modified: 2026-09-14
 tags:
@@ -1426,6 +1426,20 @@ reuse a planning grant because its dedicated grant is bound to the selected-evid
 it never stores API credentials or exact outbound payload text. See
 [[docs/adr/145-bounded-ai-research-orchestration|ADR-145]] and
 [[docs/adr/146-explicit-selected-evidence-cloud-synthesis|ADR-146]].
+
+Migration 0113 adds `ai_reference_scopes` and `ai_reference_entries`. A scope begins unclaimed with
+a 15-minute use window. Investigation creation atomically assigns it to at most one
+`ai_investigation_jobs` row and sets a 30-day expiry. The job foreign key is unique and uses
+`ON DELETE CASCADE`, so deleting a job deletes its scope; deleting a scope cascades to every entry.
+Each entry has a globally unique typed token plus AES-256-GCM ciphertext, a 12-byte nonce, and a
+16-byte authentication tag. Scope ID, token, and type are authenticated additional data in the
+service layer. PostgreSQL never stores the plaintext mapping or `AI_REFERENCE_MAPPING_KEY`.
+
+`ai_investigation_jobs.checkpoint_json.providerResult` stores the validated provider-form answer
+before local token restoration. It can contain scoped tokens but not the plaintext mapping. After
+successful restoration, `result_json` stores the local answer with allowlisted display text
+restored. Startup reuses the provider-form checkpoint without a second model call. See
+[[docs/adr/151-scoped-reversible-ai-references|ADR-151]].
 
 ## Query Patterns
 

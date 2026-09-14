@@ -161,27 +161,27 @@ aliases:
 
 ## Analysis Workspace (11 endpoints — ADR-144)
 
-| Method            | Path                                         | Description                                                       | Rate Limit          | Doc                                   |
-| ----------------- | -------------------------------------------- | ----------------------------------------------------------------- | ------------------- | ------------------------------------- |
-| GET               | `/api/analysis/catalog`                      | Approved dataset, field, measure, and join catalog                | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
-| POST              | `/api/analysis/compile`                      | Visual plan to inspectable generated SQL                          | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
-| POST              | `/api/analysis/execute`                      | Bounded visual or custom SQL execution                            | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
-| POST              | `/api/analysis/cancel/:requestId`            | Same-role PostgreSQL cancellation                                 | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
-| POST              | `/api/analysis/drill`                        | Grouped row to bounded contributing records                       | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
-| GET, POST         | `/api/analysis/saved`                        | List or create reusable analyses                                  | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
-| GET, PUT, DELETE  | `/api/analysis/saved/:id`                    | Read, version, or delete one analysis                             | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
-| POST              | `/api/analysis/saved/:id/run`                | Refresh and record success or failure                             | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
-| POST              | `/api/analysis/formulas/evaluate`            | Evaluate bounded spreadsheet-style formulas                       | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
-| POST              | `/api/analysis/ai-proposals/preview`         | Preview a version-bound AI edit                                   | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
-| POST              | `/api/analysis/ai-proposals/apply`           | Apply an inspected version-bound AI edit                          | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
-| GET               | `/api/analysis/saved/:id/versions`           | List immutable definition versions                                | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
-| POST              | `/api/analysis/saved/:id/restore`            | Restore a prior definition as a new version                       | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
-| GET, POST         | `/api/ai-research/investigations`            | List or start recoverable investigations                          | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
-| GET, DELETE       | `/api/ai-research/investigations/:id`        | Inspect or delete one investigation                               | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
-| POST              | `/api/ai-research/investigations/:id/resume` | Resume completed checkpoints                                      | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
-| POST              | `/api/ai-research/investigations/:id/cancel` | Cancel queued or active work                                      | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
-| GET, POST, DELETE | `/api/ai-research/disclosures/*`             | Preview and govern planning or selected-evidence synthesis egress | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
-| GET, POST, DELETE | `/api/ai-research/documents/*`               | Manage documents and retrieve cited passages                      | attachment/standard | [[docs/api/ai-research\|AI Research]] |
+| Method            | Path                                         | Description                                                        | Rate Limit          | Doc                                   |
+| ----------------- | -------------------------------------------- | ------------------------------------------------------------------ | ------------------- | ------------------------------------- |
+| GET               | `/api/analysis/catalog`                      | Approved dataset, field, measure, and join catalog                 | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
+| POST              | `/api/analysis/compile`                      | Visual plan to inspectable generated SQL                           | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
+| POST              | `/api/analysis/execute`                      | Bounded visual or custom SQL execution                             | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
+| POST              | `/api/analysis/cancel/:requestId`            | Same-role PostgreSQL cancellation                                  | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
+| POST              | `/api/analysis/drill`                        | Grouped row to bounded contributing records                        | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
+| GET, POST         | `/api/analysis/saved`                        | List or create reusable analyses                                   | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
+| GET, PUT, DELETE  | `/api/analysis/saved/:id`                    | Read, version, or delete one analysis                              | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
+| POST              | `/api/analysis/saved/:id/run`                | Refresh and record success or failure                              | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
+| POST              | `/api/analysis/formulas/evaluate`            | Evaluate bounded spreadsheet-style formulas                        | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
+| POST              | `/api/analysis/ai-proposals/preview`         | Preview a version-bound AI edit                                    | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
+| POST              | `/api/analysis/ai-proposals/apply`           | Apply an inspected version-bound AI edit                           | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
+| GET               | `/api/analysis/saved/:id/versions`           | List immutable definition versions                                 | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
+| POST              | `/api/analysis/saved/:id/restore`            | Restore a prior definition as a new version                        | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
+| GET, POST         | `/api/ai-research/investigations`            | List or start recoverable jobs; create may claim one preview scope | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
+| GET, DELETE       | `/api/ai-research/investigations/:id`        | Inspect or delete one investigation                                | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
+| POST              | `/api/ai-research/investigations/:id/resume` | Resume completed checkpoints                                       | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
+| POST              | `/api/ai-research/investigations/:id/cancel` | Cancel queued or active work                                       | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
+| GET, POST, DELETE | `/api/ai-research/disclosures/*`             | Preview exact/tokenized payloads and govern digest-bound egress    | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
+| GET, POST, DELETE | `/api/ai-research/documents/*`               | Manage documents and retrieve cited passages                       | attachment/standard | [[docs/api/ai-research\|AI Research]] |
 
 ## Transactions (18 endpoints — incl. 4 Tags endpoints)
 

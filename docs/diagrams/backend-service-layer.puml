@@ -184,6 +184,19 @@ package "AI & Observability" {
     +dispatchTool(name, args): ToolResult
   }
 
+  class AiInvestigationService <<ADR-145, ADR-151>> {
+    +createInvestigation(input): Promise<Job>
+    +runInvestigationJob(id): Promise<Job>
+    +resumeRecoverableInvestigations(): Promise<number>
+  }
+
+  class AiReferenceService <<ADR-151>> {
+    +prepareReferencePreview(request): Promise<PreparedPreview>
+    +validateReferenceRequest(request): Promise<Scope>
+    +claimReferenceScope(scopeId, jobId): Promise<Scope>
+    +restoreAnswerForJob(jobId, answer): Promise<AiAnswer>
+  }
+
   class ProviderHealthService {
     +recordSuccess(provider, latency): void
     +recordError(provider, err): void
@@ -338,6 +351,10 @@ AiChatService --> "Ollama client"
 AiChatService --> TransactionRepository
 AiChatService --> InfoRepository : canonical cash flow
 AiChatService --> PortfolioSummaryService : canonical portfolio metrics
+
+AiInvestigationService --> AiReferenceService : claim and local restoration
+AiInvestigationService --> AiInvestigationRepository : provider-form checkpoint
+AiReferenceService --> AiReferenceRepository : encrypted scoped mappings
 
 ProviderHealthService --> ProviderHealthRepository
 

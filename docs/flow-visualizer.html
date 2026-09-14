@@ -1340,11 +1340,21 @@
           {
             "id": "sv.airesearch",
             "label": "AI research orchestration",
-            "sub": "investigation jobs · typed tools · disclosure policy",
+            "sub": "jobs · typed tools · disclosure · local restoration",
             "kind": "service",
             "path": "apps/node-backend/src/services/aiInvestigationService.js",
-            "desc": "ADR-145, ADR-146, and ADR-149: serial, recoverable investigations compose bounded local tools and cited evidence. Optional OpenAI planning may propose identifier-only catalog plans while execution and results remain local; the distinct selected-evidence mode sends only the previewed evidence for a cloud-written final answer.",
+            "desc": "ADR-145, ADR-146, ADR-149, and ADR-151: serial, recoverable investigations compose bounded local tools and cited evidence. Optional OpenAI planning may propose identifier-only catalog plans while execution and results remain local; the distinct selected-evidence mode sends only the previewed evidence for a cloud-written final answer. Provider-form answers are checkpointed before local reversible-reference restoration.",
             "x": 940,
+            "y": 960
+          },
+          {
+            "id": "sv.aireference",
+            "label": "AI reference boundary",
+            "sub": "typed tokens · AES-256-GCM · allowlisted restore",
+            "kind": "service",
+            "path": "apps/node-backend/src/services/aiReferenceService.js",
+            "desc": "ADR-151: converts explicit selected-text markers to one-job CSPRNG tokens, stores only authenticated ciphertext, validates scope claims, and restores known tokens only in allowlisted answer text. The installation key stays outside PostgreSQL and database backup. This is pseudonymization, not anonymity.",
+            "x": 1120,
             "y": 960
           },
           {
@@ -1436,7 +1446,10 @@
           ["sv.research", "ex.dbnomics"],
           ["sv.research", "sv.providerhealth"],
           ["be.routes", "sv.airesearch"],
+          ["be.routes", "sv.aireference"],
           ["sv.airesearch", "be.repos"],
+          ["sv.airesearch", "sv.aireference"],
+          ["sv.aireference", "be.repos"],
           ["sv.airesearch", "sv.research"],
           ["sv.airesearch", "be.ollamaclient"],
           ["sv.airesearch", "ex.brave"],
@@ -3133,31 +3146,61 @@
             "id": "ai-research-investigation",
             "name": "Run a bounded AI research investigation",
             "category": "AI and research",
-            "summary": "A user selects scope, evidence access, depth, a visible privacy profile, and an approved API model; Vision either checkpoints bounded local work or sends only exact selected evidence for consent-bound cloud synthesis.",
+            "summary": "A user selects scope, evidence access, depth, a visible privacy profile, and an approved API model; explicitly marked literals can cross the exact consent boundary as one-job pseudonymous tokens and are restored only in local allowlisted answer text.",
             "steps": [
               {
                 "from": "browser",
                 "to": "fe.apiclient",
-                "payload": "POST /api/ai-research/investigations",
-                "annotation": "The request carries explicit scope, EN/NL language, quick/detailed depth, research mode, model route, and an optional server-approved OpenAI model. Public questions, selected planning summaries, and selected cloud-synthesis evidence are mutually exclusive fields. The UI displays each capability and privacy profile. Local-only is the default."
+                "payload": "POST /api/ai-research/disclosures/preview · optional [[vision-ref:type|value]] markers",
+                "annotation": "AIInvestigationPanel.tsx sends the full selected disclosure request for exact preview. Only selectedSummary and selectedEvidence support explicit reversible markers. The UI warns that replacement is pseudonymization, not anonymity."
               },
               {
                 "from": "fe.apiclient",
                 "to": "be.routes",
-                "payload": "strict aiInvestigationRequestSchema",
-                "annotation": "Unknown fields and unsupported route or scope values are rejected before persistence."
+                "payload": "strict AiInvestigationRequest preview",
+                "annotation": "routes/aiResearch.js validates the cloud-only preview request, then delegates reference preparation before computing the digest-bound disclosure payload."
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.aireference",
+                "payload": "selected text with explicit typed markers",
+                "annotation": "aiReferenceService.js accepts account, recipient, investment, holding, category, document, subject, amount, and date markers; malformed or unsupported markers fail explicitly."
+              },
+              {
+                "from": "sv.aireference",
+                "to": "db.postgres",
+                "payload": "15-minute scope + typed token + AES-256-GCM ciphertext, nonce, and tag",
+                "annotation": "aiReferenceRepository.js stores a random scope UUID and 18-byte CSPRNG token payloads. Scope, token, and type are authenticated additional data; AI_REFERENCE_MAPPING_KEY stays outside PostgreSQL and database backup."
+              },
+              {
+                "from": "sv.aireference",
+                "to": "fe.apiclient",
+                "payload": "tokenized outboundRequest + referenceScope { id, expiresAt, count }",
+                "annotation": "previewDisclosure() returns the exact request that must be used for the grant and job. A request without markers has a null scope."
+              },
+              {
+                "from": "fe.apiclient",
+                "to": "be.routes",
+                "payload": "POST /api/ai-research/investigations · preview outboundRequest",
+                "annotation": "The request carries explicit scope, EN/NL language, quick/detailed depth, research mode, model route, optional approved OpenAI model, grant, and optional one-use referenceScopeId."
               },
               {
                 "from": "be.routes",
                 "to": "sv.airesearch",
-                "payload": "bounded plan · serial execution queue",
-                "annotation": "The provider-neutral orchestrator creates a bounded baseline. A model may prioritize only those candidate ids; material ambiguity persists as waiting until typed date scope is supplied. Detailed mode may inspect failures and retry up to three local steps once. One investigation and tool run at a time to bound local CPU and RAM."
+                "payload": "strict request · bounded plan · serial execution queue",
+                "annotation": "aiInvestigationService.js rejects raw markers and unknown, cross-scope, expired, or already used tokens before persistence. It creates a bounded baseline and keeps one investigation and tool run active at a time."
+              },
+              {
+                "from": "sv.airesearch",
+                "to": "sv.aireference",
+                "payload": "atomically claim optional preview scope for one job",
+                "annotation": "claimReferenceScope() extends a valid unclaimed scope to a 30-day claimed expiry. A unique job relationship prevents reuse by another investigation."
               },
               {
                 "from": "sv.airesearch",
                 "to": "db.postgres",
                 "payload": "job + step checkpoints",
-                "annotation": "Queued, running, waiting, partial, completed, failed and cancelled states survive navigation and backend restart. Startup reuses checkpoints; explicit retry refreshes local data while retaining external checkpoints."
+                "annotation": "Queued, running, waiting, partial, completed, failed and cancelled states survive navigation and backend restart. Job deletion cascades to its claimed reference scope and entries."
               },
               {
                 "from": "sv.airesearch",
@@ -3174,8 +3217,8 @@
               {
                 "from": "sv.airesearch",
                 "to": "ex.openai",
-                "payload": "optional preview-hash-bound payload",
-                "annotation": "Only an unexpired mode-specific grant matching the exact final request bytes and cumulative budgets can cross the short-lived Seatbelt sandbox. The selected model must be in the server catalog, is included in the preview digest, and uses its own configured prices for spend reservation. Planning output prioritizes candidate ids. The separate selected-evidence mode returns the final structured answer. Both set store:false and disable hosted tools."
+                "payload": "optional preview-hash-bound payload with scoped tokens, never marked literals",
+                "annotation": "Only an unexpired mode-specific grant matching the exact final request bytes and cumulative budgets can cross the short-lived Seatbelt sandbox. Reversible tokens hide only explicitly marked literals; surrounding amounts, dates, holdings, prose, and patterns can still identify the subject."
               },
               {
                 "from": "sv.airesearch",
@@ -3185,9 +3228,27 @@
               },
               {
                 "from": "sv.airesearch",
+                "to": "db.postgres",
+                "payload": "schema-validated provider-form answer checkpoint",
+                "annotation": "aiInvestigationRepository.setProviderResult() persists checkpoint_json.providerResult before restoration. Startup reuses and validates it without another cloud or local model call."
+              },
+              {
+                "from": "sv.airesearch",
+                "to": "sv.aireference",
+                "payload": "restore same-job tokens only in allowlisted answer text",
+                "annotation": "restoreAnswerForJob() can replace summary, fact/calculation/interpretation text, assumptions, missing information, conflict descriptions, and evidence excerpts. It never replaces evidence IDs, labels, locators, kinds, dates, availability, or schema structure."
+              },
+              {
+                "from": "sv.aireference",
+                "to": "sv.airesearch",
+                "payload": "locally restored answer or explicit restoration failure",
+                "annotation": "Unknown, malformed, expired, cross-job, fabricated, or undecryptable tokens fail the job visibly. The provider-form checkpoint is never exposed as a partly restored success."
+              },
+              {
+                "from": "sv.airesearch",
                 "to": "fe.apiclient",
-                "payload": "structured facts, calculations, interpretations and evidence",
-                "annotation": "Missing or conflicting evidence remains visible. Invalid model output becomes a partial or abstained answer rather than an invented success."
+                "payload": "local structured result or visible failed state",
+                "annotation": "result_json stores the restored answer on success. A completed result remains readable after backup restore; an in-flight token-bearing checkpoint additionally needs the original installation key and unexpired map."
               }
             ]
           }

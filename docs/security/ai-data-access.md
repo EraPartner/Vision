@@ -2,7 +2,7 @@
 title: AI Data Access Policy
 type: security
 status: active
-date: 2026-09-09
+date: 2026-09-14
 updated: 2026-09-14
 tags:
   [
@@ -29,6 +29,9 @@ related_code:
     "apps/node-backend/tests/aiChatTools.test.js",
     "apps/node-backend/src/services/aiEvaluation/localReliability.js",
     "apps/node-backend/src/services/aiEvaluation/cloudPrivacy.js",
+    "apps/node-backend/src/services/aiReferenceService.js",
+    "apps/node-backend/src/repositories/aiReferenceRepository.js",
+    "apps/node-backend/tests/aiReferenceService.test.js",
   ]
 ---
 
@@ -74,6 +77,32 @@ Retrieved document and web text is untrusted evidence, never executable instruct
 [[docs/adr/146-explicit-selected-evidence-cloud-synthesis|ADR-146]]. The identifier-only analysis
 extension is recorded in [[docs/adr/149-cloud-authored-catalog-analysis-plans|ADR-149]].
 
+### Explicit reversible-reference boundary
+
+The two selected-text profiles accept explicit `[[vision-ref:type|value]]` markers in the selected
+summary or selected evidence. Preview changes them to fresh typed tokens. Each token contains 18
+cryptographically secure random bytes encoded as 24 base64url characters and belongs to one random
+preview UUID. Equal type/value pairs reuse a token only inside that preview.
+
+The value map is local authenticated ciphertext. AES-256-GCM uses a fresh 12-byte nonce and binds
+the scope UUID, complete token, and declared type as authenticated additional data. The
+base64-encoded 32-byte `AI_REFERENCE_MAPPING_KEY` stays outside PostgreSQL and outside the database
+backup. An unclaimed preview is valid for 15 minutes; claiming is atomic and binds it to one job for
+30 days. Raw markers, unknown tokens, malformed tokens, cross-scope tokens, expired scopes, token
+collisions, key mismatch, and fabricated response tokens fail closed.
+
+The token-bearing provider-form answer is stored locally before restoration. After a restart,
+Vision schema-validates that checkpoint and performs local restoration without repeating model or
+cloud generation. Replacement is allowlisted to display text: summary; fact, calculation, and
+interpretation text; assumptions; missing information; conflict descriptions; and evidence
+excerpts. Structural fields and evidence IDs, labels, locators, kinds, dates, and availability are
+not replaced. Restoration failure is visible as a failed job, never a partially restored success.
+
+This is **pseudonymization, not anonymity**. A token discloses its declared type, and unmarked
+amounts, dates, holdings, prose, and cross-field patterns can still identify the underlying subject.
+Users must inspect the complete preview, not treat markers as a general privacy filter. See
+[[docs/adr/151-scoped-reversible-ai-references|ADR-151]].
+
 6. **Canonical financial math where shared.** Portfolio metrics and monthly cash-flow tools delegate currency conversion, transfer treatment, cost basis, partial-sale basis, and totals to the same calculation services used by Vision's screens. Tool names are not permission to redefine a metric.
 
 ## Threat Model
@@ -89,6 +118,9 @@ extension is recorded in [[docs/adr/149-cloud-authored-catalog-analysis-plans|AD
 | Abuse/rate (script hammering `/api/ai/chat`)                                       | 30 req/min rate limit; standard limits on CRUD endpoints                                                                                                                                |
 | Context overflow exposing unintended history                                       | Service trims history to last N turns; summaries generated server-side, never pass raw unbounded history to the LLM                                                                     |
 | Cloud planner emits SQL or requests private rows                                   | Strict identifier-only plan schema, public catalog without relations, local trusted-scope injection, isolated local execution, and local-only result synthesis                          |
+| Reversible token is reused or moved across jobs                                    | Preview scope expires after 15 minutes, is atomically claimed by one job, and validates every token and type against that scope                                                         |
+| Provider invents or corrupts a reversible token                                    | Local restoration replaces only known same-job tokens in allowlisted text fields; unknown or malformed tokens fail the job visibly                                                      |
+| Database backup exposes the reversible-reference key                               | Backup contains authenticated ciphertext rows but never `AI_REFERENCE_MAPPING_KEY`; the key is deployment state and must be protected separately                                        |
 | Aborted stream leaves orphaned state                                               | `req.on('close')` handler marks in-flight assistant message aborted; no dangling transactions                                                                                           |
 | Ollama host pointed at a malicious server                                          | `OLLAMA_URL` validated at startup (localhost or RFC1918 private only by default); warning surfaced if user overrides to a public IP                                                     |
 
@@ -190,7 +222,11 @@ digest-bound to an expiring grant. Network timeouts and
 connection failures remain in a `sent` uncertain state and are not replayed automatically. Definite
 cloud-synthesis failures become explicit partial results and do not trigger local-model fallback.
 Deleting disclosure history removes both usage records and grants.
-Deleting an investigation separately removes its persisted selected evidence, steps, and result.
+Deleting an investigation separately removes its persisted selected evidence, steps, result, and
+claimed reference scope with all encrypted entries. A database restore on the same installation can
+resume an in-flight token-bearing answer only while the 30-day scope and original installation key
+remain available. Restoring elsewhere without that key fails visibly. Completed local `result_json`
+already contains the restored answer and does not need the map for display.
 
 ## Out of Scope (v1)
 
@@ -209,3 +245,4 @@ Deleting an investigation separately removes its persisted selected evidence, st
 - [[docs/security/ai-assistance-evaluation|AI Assistance Evaluation]]
 - [[docs/api/ai-research|AI Research API]]
 - [[docs/adr/145-bounded-ai-research-orchestration|ADR-145]]
+- [[docs/adr/151-scoped-reversible-ai-references|ADR-151]]

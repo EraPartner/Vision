@@ -394,8 +394,8 @@ optional enhancement, not a prerequisite for the original six-stage local analys
     Exit: synthetic spending analysis matches canonical totals with no raw values sent; malformed
     plans, malicious SQL and attempted follow-up extraction cannot expand privileges or disclosure.
 
-- [ ] **Implement scoped reversible references and safe local response restoration** 🔼
-  - Tracking: 🔎 decision-needed 2026-09-09 (depends on disclosure contract; settle token lifetime, resume storage and deletion semantics)
+- [x] **Implement scoped reversible references and safe local response restoration** 🔼
+  - Tracking: ✅ verified-implemented 2026-09-14 (one-job encrypted typed mappings, separate provider checkpoints, allowlisted local restoration, expiry/deletion handling, and fail-closed restart behavior)
   - ↪ _from: User opt-in OpenAI/Codex plan 2026-09-09 · local placeholder mapping_
   - Own random per-analysis references and mapping lifecycle; keep mappings out of provider payloads
     and credentials. Restore only recognized typed references, with safe rendering and clear errors.

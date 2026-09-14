@@ -5,7 +5,8 @@ actor User
 participant "Investigation panel" as UI
 participant "AI research routes" as API
 participant "Investigation service\n(serial queue)" as Orchestrator
-database "PostgreSQL\njobs, passages, disclosure metadata" as DB
+participant "Reference service\n(scoped local restoration)" as References
+database "PostgreSQL\njobs, passages, disclosure metadata,\nencrypted reference maps" as DB
 participant "Bounded typed tools" as Tools
 participant "Restricted analysis runtime" as Analysis
 participant "Local Ollama" as Ollama
@@ -13,9 +14,22 @@ participant "Egress helper\n(short-lived process)" as Egress
 participant "OpenAI Responses API" as OpenAI
 
 User -> UI: Select scope, depth, language,\nresearch mode, route, and approved API model
-UI -> API: POST /investigations
+opt Selected summary or evidence contains explicit private literals
+  User -> UI: Wrap literals as\n[[vision-ref:type|value]]
+  UI -> API: POST /disclosures/preview\nwith full investigation request
+  API -> References: Parse supported typed markers
+  References -> References: Create scope UUID and\n18-byte CSPRNG tokens
+  References -> DB: Store 15-minute unclaimed scope +\nAES-256-GCM ciphertext, nonce, and tag
+  References --> API: Tokenized outboundRequest +\nscope id, expiry, and count
+  API --> UI: Exact tokenized payload and warning
+end
+UI -> API: POST /investigations\nwith preview outboundRequest
 API -> Orchestrator: Strict typed request
 Orchestrator -> DB: Persist queued job
+opt Request has a reference scope
+  Orchestrator -> References: Validate every token; claim scope
+  References -> DB: Bind scope atomically to one job;\nset 30-day expiry
+end
 alt Material ambiguity
   Orchestrator -> DB: Persist waiting plan
   UI --> User: Request clarification and typed date scope
@@ -68,6 +82,16 @@ else Local evidence workflow
   Ollama --> Orchestrator: Structured answer candidate
 end
 
+Orchestrator -> DB: Persist validated provider-form answer\nin checkpoint_json before restoration
+Orchestrator -> References: Restore only allowlisted answer text
+References -> DB: Load same-job encrypted map
+References -> References: Authenticate and decrypt with\ninstallation-held key
+alt Unknown, malformed, expired, cross-job, or undecryptable token
+  References --> Orchestrator: Explicit restoration failure
+  Orchestrator -> DB: Mark job failed; do not expose\npartly restored provider answer
+else Safe local answer
+  References --> Orchestrator: Locally restored display text
+end
 Orchestrator -> Orchestrator: Validate citations and answer schema
 Orchestrator -> DB: Complete, partial, failed, or cancelled
 API --> UI: Facts, calculations, interpretations,\ngaps, conflicts, and evidence
@@ -83,6 +107,10 @@ Cloud planning receives identifiers, never relations, SQL, private scope IDs, or
 Cloud-authored analysis rows remain private and are synthesized locally.
 Selected models come from the server allowlist.
 Per-model prices drive spend reservation.
+Explicit markers become typed one-job tokens; this is pseudonymization, not anonymity.
+The AES-256-GCM key is installation state outside PostgreSQL and database backup.
+Restart validates the provider-form checkpoint and restores locally without another model call.
+Job deletion cascades to its claimed scope and encrypted entries.
 end note
 
 @enduml

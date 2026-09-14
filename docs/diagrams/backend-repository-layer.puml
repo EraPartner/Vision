@@ -185,6 +185,21 @@ package "Repositories" {
     +delete(id): Promise<boolean>
   }
 
+  class AiInvestigationRepository {
+    +createJob(request): Promise<Job>
+    +setProviderResult(id, result): Promise<Id>
+    +finishJob(id, state, result, error): Promise<Job>
+    +deleteJob(id): Promise<boolean>
+  }
+
+  class AiReferenceRepository <<ADR-151>> {
+    +createScope(scope): Promise<Scope>
+    +getScope(id): Promise<Scope | null>
+    +getScopeForJob(jobId): Promise<Scope | null>
+    +claimScope(id, jobId, expiresAt): Promise<Id | null>
+    +deleteExpiredUnclaimed(): Promise<number>
+  }
+
   class ProviderHealthRepository {
     +record({ provider, ok, latencyMs, statusCode }): Promise<void>
     +getSummary(): Promise<Summary[]>
@@ -320,6 +335,8 @@ DB <.. TagRepository
 DB <.. AttachmentRepository
 DB <.. ImportBatchRepository
 DB <.. AiChatRepository
+DB <.. AiInvestigationRepository
+DB <.. AiReferenceRepository
 DB <.. ProviderHealthRepository
 DB <.. CashflowForecastMcRepository
 DB <.. CashflowForecastMcRollingRepository
@@ -355,5 +372,9 @@ DeduplicationService --> TransactionRepository
 CurrencyConversionService --> TransactionRepository
 
 PriceProviderService --> InvestmentRepository
+
+AiInvestigationService --> AiInvestigationRepository
+AiInvestigationService --> AiReferenceService
+AiReferenceService --> AiReferenceRepository
 
 @enduml

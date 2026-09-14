@@ -304,6 +304,30 @@ package "Storage & Observability (May 2026)" {
     +updated_at: timestamptz
   }
 
+  class AiInvestigationJob {
+    +id: uuid
+    +state: text
+    +scope_json: jsonb
+    +checkpoint_json: jsonb
+    +result_json: jsonb
+  }
+
+  class AiReferenceScope <<ADR-151>> {
+    +id: uuid
+    +job_id: uuid <<FK, UNIQUE>>
+    +expires_at: timestamptz
+    +claimed_at: timestamptz
+  }
+
+  class AiReferenceEntry <<ADR-151>> {
+    +scope_id: uuid <<FK, PK>>
+    +token: text <<PK, UNIQUE>>
+    +reference_type: text
+    +ciphertext: bytea
+    +nonce: bytea
+    +auth_tag: bytea
+  }
+
   class ProviderHealth {
     +id: bigint
     +provider: text
@@ -389,6 +413,8 @@ Transaction "0..1" <-- "*" TransactionSourceLink : links
 Transaction "0..1" <-- "0..1" ManualTransactionDedupClaim : claimed by
 
 Transaction "1" o-- "*" Attachment : "has receipts"
+AiInvestigationJob "1" o-- "0..1" AiReferenceScope : one-job claim
+AiReferenceScope "1" o-- "*" AiReferenceEntry : encrypted map
 ImportBatch "1" o-- "*" ImportRow : contains
 ImportRow "*" --> "0..1" Recipient : resolved / overridden recipient
 ImportRow "*" --> "0..1" RecipientBankAccount : resolved bank account

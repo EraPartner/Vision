@@ -26,6 +26,10 @@ SORT date DESC
 
 ## Active Decisions
 
+[[docs/adr/151-scoped-reversible-ai-references|ADR-151]] (Accepted) replaces explicitly marked
+private literals with one-job cryptographic tokens for cloud disclosure, then restores allowlisted
+answer text locally under an installation-held key. It is pseudonymization, not anonymity.
+
 [[docs/adr/150-explicit-portfolio-look-through-exposure|ADR-150]] (Accepted) combines direct and
 supported fund holdings only through explicit classifications and exact share-class identifiers,
 while preserving uncovered weight and excluding inferred economic foreign-exchange exposure.

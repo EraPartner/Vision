@@ -77,6 +77,8 @@ related_code:
 - Structured facts, deterministic calculations, interpretations, gaps, conflicts, and evidence.
 - Local documents plus separately enabled public-provider or public-web research.
 - Exact cloud-payload preview, revocable grants, and deletable local disclosure metadata.
+- Optional scoped reversible references replace explicitly marked selected-text literals with
+  one-job random tokens and restore allowlisted answer text locally.
 - Four visible model privacy profiles: fully local, public-question cloud planning, selected-summary
   cloud planning, and final cloud synthesis from exact selected evidence.
 - Each profile states its capability, exact cloud data, privacy boundary, and local retention. A
@@ -108,6 +110,28 @@ The AI settings page stores a preferred OpenAI model for new investigations. An 
 the investigation panel overrides that preference. If the saved model is no longer in the server
 catalog, Vision falls back to the operator default and never sends the stale identifier. See
 [[docs/adr/148-user-default-openai-model|ADR-148]].
+
+### Scoped reversible references
+
+Selected-summary planning and selected-evidence synthesis show an optional marker hint. A user can
+write `[[vision-ref:type|value]]` in the selected summary or selected evidence. Types are `account`,
+`recipient`, `investment`, `holding`, `category`, `document`, `subject`, `amount`, and `date`.
+Preview replaces each marker with a typed random token, warns with the number of scoped references,
+and returns the tokenized `outboundRequest` used for both the grant and investigation.
+
+The mapping stays in PostgreSQL as AES-256-GCM ciphertext under the installation's
+`AI_REFERENCE_MAPPING_KEY`. An unclaimed preview is usable for 15 minutes and can be claimed by one
+job only; a claimed map expires after 30 days. The provider-form answer is checkpointed before local
+restoration. If Vision restarts at that point, it validates the checkpoint and restores from it
+without repeating cloud or local generation. Successful `result_json` contains the restored local
+answer. Deleting the investigation also deletes its reference scope and encrypted entries.
+
+Only answer display text is restored. Evidence IDs, labels, locators, kinds, dates, availability,
+and schema structure stay provider-authored and token-free. An unknown, malformed, expired,
+cross-job, or undecryptable token fails the job visibly. Vision never shows a partly restored answer.
+The feature is pseudonymization, not anonymity: unmarked amounts, dates, holdings, and behavioral
+patterns still cross the exact selected disclosure boundary. See
+[[docs/adr/151-scoped-reversible-ai-references|ADR-151]].
 
 ## Architecture
 
@@ -376,6 +400,7 @@ See [[docs/security/ai-data-access|AI Data Access Policy]] for the full security
 - [[docs/api/ai-research|AI Research API]] — investigations, documents, and disclosure records
 - [[docs/adr/145-bounded-ai-research-orchestration|ADR-145: Bounded AI Research Orchestration]]
 - [[docs/adr/147-allowlisted-openai-model-selection|ADR-147: Allowlisted OpenAI Model Selection]]
+- [[docs/adr/151-scoped-reversible-ai-references|ADR-151: Scoped Reversible AI References]]
 - [[docs/features/transactions|Transactions]] — data surfaced by expense tools
 - [[docs/features/portfolio|Portfolio & Investments]] — data surfaced by portfolio tools
 - [[docs/features/plannedTransactions|Planned Transactions]] — data surfaced by planned tools

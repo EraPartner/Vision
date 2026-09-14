@@ -3,8 +3,8 @@ title: Backup Coverage Audit
 type: feature
 status: active
 date: 2026-08-30
-updated: 2026-09-13
-last_modified: 2026-09-13
+updated: 2026-09-14
+last_modified: 2026-09-14
 tags: [feature, backup, restore, database, filesystem, localStorage, bundle, encryption, schema-migration, phase-1, phase-2, phase-7, passphrase-modal, ux, aead, aes-256-gcm, rolling-cache, concurrent-backup-guard, pre-restore-confirmation, watchdog-pause, safe-storage, keychain, lazy-safeStorage, settings-dialog-fix, backup-path-revert-fix]
 description: Authoritative audit of every persistence surface in Vision and its backup/restore coverage status. Phase 1+2 implements .visionbak bundle format with optional AES-256-CBC encryption (v1) or AES-256-GCM (v2, 2026-04-28), schema-safe restore, and localStorage hydration. Phase 7 (May 2026) hardens restore with user confirmation, concurrent-backup guard, and health watchdog pause. safeStorage is now accessed lazily to avoid macOS Keychain prompts for users without a stored passphrase. 2026-06-11: fixes "backup path keeps reverting to default" — settings dialog now loads backup settings on open; Electron IPC handlers correctly unwrap the response envelope.
 aliases: [backup audit, coverage audit, backup coverage, visionbak, bundle format]
@@ -50,10 +50,18 @@ All user-data tables are included in the `pg_dump` SQL artifact inside every `.v
 
 #### AI & Conversations
 
-| Table              | Domain  | Backup      | Notes |
-| ------------------ | ------- | ----------- | ----- |
-| `ai_conversations` | AI Chat | ✅ Included |       |
-| `ai_messages`      | AI Chat | ✅ Included |       |
+| Table                    | Domain      | Backup      | Notes                                                |
+| ------------------------ | ----------- | ----------- | ---------------------------------------------------- |
+| `ai_conversations`       | AI Chat     | ✅ Included |                                                      |
+| `ai_messages`            | AI Chat     | ✅ Included |                                                      |
+| `ai_research_documents`  | AI Research | ✅ Included | Local document metadata                              |
+| `ai_research_passages`   | AI Research | ✅ Included | Local extracted text and embeddings                  |
+| `ai_investigation_jobs`  | AI Research | ✅ Included | Inputs, provider-form checkpoints, and local results |
+| `ai_investigation_steps` | AI Research | ✅ Included | Reusable step checkpoints                            |
+| `ai_disclosure_grants`   | AI Research | ✅ Included | Digest-bound consent and budgets; no exact payload   |
+| `ai_disclosure_records`  | AI Research | ✅ Included | Disclosure metadata and usage; no exact payload      |
+| `ai_reference_scopes`    | AI Research | ✅ Included | One-job scope and expiry; ciphertext only            |
+| `ai_reference_entries`   | AI Research | ✅ Included | Typed token, AES-256-GCM ciphertext, nonce, and tag  |
 
 #### Attachments & Reference
 
@@ -178,7 +186,15 @@ Captured as `frontend-state.json` in the bundle. Restored after DB load triggers
 | Materialised views                | ❌ Excluded | Re-built at runtime by `materializedViewService.js`                                                                                                                                                           |
 | Price provider caches (HTTP)      | ❌ Excluded | Re-fetched on demand                                                                                                                                                                                          |
 | Electron `safeStorage` passphrase | ❌ Excluded | User re-enters passphrase post-restore. safeStorage is accessed lazily — only when a passphrase blob is already stored — to avoid macOS Keychain prompts for users who have not configured backup encryption. |
+| `AI_REFERENCE_MAPPING_KEY`        | ❌ Excluded | Installation-held reversible-reference key. It is not PostgreSQL data and is never written into the bundle. Preserve it separately to recover an in-flight token-bearing investigation after restore.         |
 | `settings.json` (Electron-local)  | ❌ Excluded | Contains backup dir config + deviceId; meaningless on new machine                                                                                                                                             |
+
+The encrypted reference tables are backed up to preserve job and checkpoint consistency. On the
+same installation, a restored in-flight job can restore its provider-form checkpoint while the
+original key and 30-day claimed scope remain valid. A backup moved without that key still contains
+only authenticated ciphertext; restoration fails visibly instead of returning token text or a
+partly restored answer. A completed job already has its locally restored answer in `result_json`.
+Deleting the job cascades to the scope and entries.
 
 ---
 

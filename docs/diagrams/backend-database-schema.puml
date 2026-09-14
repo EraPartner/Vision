@@ -544,6 +544,38 @@ entity "ai_conversations" as ai_conversations {
   updated_at : timestamptz
 }
 
+entity "ai_investigation_jobs" as ai_investigation_jobs {
+  * id : uuid <<PK>>
+  * state : text
+  * scope_json : jsonb
+  * checkpoint_json : jsonb
+  result_json : jsonb
+  error_json : jsonb
+}
+
+entity "ai_reference_scopes" as ai_reference_scopes {
+  * id : uuid <<PK>>
+  job_id : uuid <<FK, UNIQUE, ON DELETE CASCADE>>
+  * expires_at : timestamptz
+  claimed_at : timestamptz
+  * created_at : timestamptz
+  ---
+  CHECK job_id and claimed_at are both null or both set
+}
+
+entity "ai_reference_entries" as ai_reference_entries {
+  * scope_id : uuid <<FK, PK, ON DELETE CASCADE>>
+  * token : text <<PK, UNIQUE>>
+  * reference_type : text
+  * ciphertext : bytea
+  * nonce : bytea
+  * auth_tag : bytea
+  * created_at : timestamptz
+  ---
+  CHECK nonce length = 12
+  CHECK auth_tag length = 16
+}
+
 entity "provider_health" as provider_health {
   * id : bigserial <<PK>>
   * provider : text
@@ -743,6 +775,8 @@ note as MV_NOTE
 end note
 
 attachments }o--|| transactions
+ai_reference_scopes }o--|| ai_investigation_jobs : one claimed scope per job
+ai_reference_entries }o--|| ai_reference_scopes : encrypted typed values
 transaction_tags }o--|| transactions
 transaction_tags }o--|| tags
 provider_health ..> "external\nproviders" : observes
