@@ -33,4 +33,24 @@ describe("analysis and broker-history migrations", () => {
     expect(source).toContain("DROP TABLE IF EXISTS saved_analysis_runs");
     expect(source).toContain("DROP TABLE IF EXISTS saved_analyses");
   });
+
+  it("creates recoverable AI research and disclosure state with a reversible downgrade", () => {
+    const source = migration("0111_ai_research_investigations.py");
+    for (const table of [
+      "ai_research_documents",
+      "ai_research_passages",
+      "ai_investigation_jobs",
+      "ai_investigation_steps",
+      "ai_disclosure_grants",
+      "ai_disclosure_records",
+    ]) {
+      expect(source).toContain(`CREATE TABLE ${table}`);
+      expect(source).toContain(`DROP TABLE IF EXISTS ${table}`);
+    }
+    expect(source).toContain("preview_payload_sha256");
+    expect(source).toContain("max_disclosure_units");
+    expect(source).toContain("cloud-synthesis-selected");
+    expect(source).toContain("ADD COLUMN state_json");
+    expect(source).toContain("DROP COLUMN IF EXISTS state_json");
+  });
 });

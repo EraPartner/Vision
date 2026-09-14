@@ -19,12 +19,16 @@
  * fetches and mapping calls.
  */
 
-import { resolveProviderChain } from './capabilityMap.js';
-import { isProviderKeyed } from './providerKeys.js';
-import { ADAPTERS, defaultGovernor, adapterSupports } from './providerRegistry.js';
-import * as providerHealth from '../providerHealthService.js';
-import * as mapRepo from '../../repositories/instrumentProviderMapRepository.js';
-import investmentRepo from '../../repositories/investmentRepository.js';
+import { resolveProviderChain } from "./capabilityMap.js";
+import { isProviderKeyed } from "./providerKeys.js";
+import {
+  ADAPTERS,
+  defaultGovernor,
+  adapterSupports,
+} from "./providerRegistry.js";
+import * as providerHealth from "../providerHealthService.js";
+import * as mapRepo from "../../repositories/instrumentProviderMapRepository.js";
+import investmentRepo from "../../repositories/investmentRepository.js";
 
 /** Relative price agreement tolerance for the self-audit (5%). */
 const AUDIT_PRICE_TOLERANCE = 0.05;
@@ -42,7 +46,7 @@ const errMessage = (err) => (err instanceof Error ? err.message : String(err));
  * @param {(provider: string) => unknown} [deps.recordSuccess]
  * @param {(provider: string, error: unknown) => unknown} [deps.recordError]
  */
- function createResearchMappingService({
+function createResearchMappingService({
   repo = mapRepo,
   investments = investmentRepo,
   adapters = ADAPTERS,
@@ -57,7 +61,15 @@ const errMessage = (err) => (err instanceof Error ? err.message : String(err));
    * @param {string} p
    * @param {unknown} e
    */
-  const noteError = (p, e) => Promise.resolve(recordError(p, e)).catch(() => {});
+  const noteError = (p, e) =>
+    Promise.resolve(recordError(p, e)).catch(() => {});
+  async function reserveProvider(provider) {
+    if (typeof governor.reserve === "function")
+      return governor.reserve(provider);
+    if (!(await governor.canSpend(provider))) return false;
+    await governor.spend(provider);
+    return true;
+  }
 
   /**
    * @param {string} instrumentKey
@@ -78,7 +90,13 @@ const errMessage = (err) => (err instanceof Error ? err.message : String(err));
    *
    * @param {{ instrumentKey: string, keyType: string, assetClass?: string, query: string, investmentId?: number }} params
    */
-  async function resolve({ instrumentKey, keyType, assetClass, query, investmentId }) {
+  async function resolve({
+    instrumentKey,
+    keyType,
+    assetClass,
+    query,
+    investmentId,
+  }) {
     const existing = await repo.listByInstrument(instrumentKey, keyType);
     const existingByProvider = new Map(existing.map((r) => [r.provider, r]));
 
@@ -94,7 +112,7 @@ const errMessage = (err) => (err instanceof Error ? err.message : String(err));
       if (holding && holding.price_provider && holding.price_provider_id) {
         holdingByProvider.set(holding.price_provider, {
           provider: holding.price_provider,
-          status: 'confirmed',
+          status: "confirmed",
           providerSymbol: holding.price_provider_id,
           resolvedName: holding.name,
           currency: holding.currency,
@@ -104,17 +122,19 @@ const errMessage = (err) => (err instanceof Error ? err.message : String(err));
     }
 
     // Search-capable providers first, then any already-mapped or held provider not in that chain.
-    const searchChain = resolveProviderChain('search', assetClass);
+    const searchChain = resolveProviderChain("search", assetClass);
     const providerOrder = [...searchChain];
-    for (const r of existing) if (!providerOrder.includes(r.provider)) providerOrder.push(r.provider);
-    for (const p of holdingByProvider.keys()) if (!providerOrder.includes(p)) providerOrder.push(p);
+    for (const r of existing)
+      if (!providerOrder.includes(r.provider)) providerOrder.push(r.provider);
+    for (const p of holdingByProvider.keys())
+      if (!providerOrder.includes(p)) providerOrder.push(p);
 
     const proposals = [];
     for (const provider of providerOrder) {
       const ex = existingByProvider.get(provider);
 
-      if (ex && ex.status === 'confirmed') {
-        proposals.push(fromStore(provider, ex, 'confirmed'));
+      if (ex && ex.status === "confirmed") {
+        proposals.push(fromStore(provider, ex, "confirmed"));
         continue;
       }
       // A held provider is known-good: pre-seed it confirmed and skip the live search.
@@ -122,34 +142,40 @@ const errMessage = (err) => (err instanceof Error ? err.message : String(err));
         proposals.push(holdingByProvider.get(provider));
         continue;
       }
-      if (!adapterSupports(provider, 'search', adapters) || !isKeyed(provider)) {
-        proposals.push(ex ? fromStore(provider, ex, ex.status) : { provider, status: 'unavailable' });
+      if (
+        !adapterSupports(provider, "search", adapters) ||
+        !isKeyed(provider)
+      ) {
+        proposals.push(
+          ex
+            ? fromStore(provider, ex, ex.status)
+            : { provider, status: "unavailable" },
+        );
         continue;
       }
-      if (!(await governor.canSpend(provider))) {
-        proposals.push({ provider, status: 'skipped', reason: 'quota' });
+      if (!(await reserveProvider(provider))) {
+        proposals.push({ provider, status: "skipped", reason: "quota" });
         continue;
       }
       try {
         const { items = [] } = await adapters[provider].search(query);
-        await governor.spend(provider);
         noteSuccess(provider);
         const top = items[0];
         proposals.push(
           top
             ? {
                 provider,
-                status: 'auto',
+                status: "auto",
                 providerSymbol: top.symbol,
                 resolvedName: top.name,
                 exchange: top.exchange,
                 candidates: items.slice(0, 5),
               }
-            : { provider, status: 'none' },
+            : { provider, status: "none" },
         );
       } catch (err) {
         noteError(provider, err);
-        proposals.push({ provider, status: 'error', error: errMessage(err) });
+        proposals.push({ provider, status: "error", error: errMessage(err) });
       }
     }
 
@@ -175,7 +201,7 @@ const errMessage = (err) => (err instanceof Error ? err.message : String(err));
         resolvedName: m.resolvedName ?? m.resolved_name,
         exchange: m.exchange,
         currency: m.currency,
-        status: m.status ?? 'confirmed',
+        status: m.status ?? "confirmed",
       });
     }
     return repo.listByInstrument(instrumentKey, keyType);
@@ -196,16 +222,23 @@ const errMessage = (err) => (err instanceof Error ? err.message : String(err));
 
     const quotes = [];
     for (const r of mapped) {
-      if (!adapterSupports(r.provider, 'quote', adapters) || !isKeyed(r.provider)) continue;
-      if (!(await governor.canSpend(r.provider))) {
-        quotes.push({ provider: r.provider, skipped: 'quota' });
+      if (
+        !adapterSupports(r.provider, "quote", adapters) ||
+        !isKeyed(r.provider)
+      )
+        continue;
+      if (!(await reserveProvider(r.provider))) {
+        quotes.push({ provider: r.provider, skipped: "quota" });
         continue;
       }
       try {
         const q = await adapters[r.provider].quote(r.provider_symbol);
-        await governor.spend(r.provider);
         noteSuccess(r.provider);
-        quotes.push({ provider: r.provider, currency: q.currency, price: q.price });
+        quotes.push({
+          provider: r.provider,
+          currency: q.currency,
+          price: q.price,
+        });
       } catch (err) {
         noteError(r.provider, err);
         quotes.push({ provider: r.provider, error: errMessage(err) });
@@ -242,13 +275,15 @@ function fromStore(provider, row, status) {
  * @param {Array<{ provider: string, currency?: string, price?: number, error?: string, skipped?: string }>} quotes
  * @returns {object[]} discrepancies
  */
- function analyzeQuotes(quotes) {
+function analyzeQuotes(quotes) {
   const discrepancies = [];
   const priced = quotes.filter((q) => Number.isFinite(q.price));
 
-  const currencies = [...new Set(priced.map((q) => q.currency).filter(Boolean))];
+  const currencies = [
+    ...new Set(priced.map((q) => q.currency).filter(Boolean)),
+  ];
   if (currencies.length > 1) {
-    discrepancies.push({ type: 'currency_mismatch', currencies });
+    discrepancies.push({ type: "currency_mismatch", currencies });
   }
 
   if (priced.length >= 2) {
@@ -257,7 +292,12 @@ function fromStore(provider, row, status) {
     if (median > 0) {
       for (const q of priced) {
         if (Math.abs(q.price - median) / median > AUDIT_PRICE_TOLERANCE) {
-          discrepancies.push({ type: 'price_outlier', provider: q.provider, price: q.price, median });
+          discrepancies.push({
+            type: "price_outlier",
+            provider: q.provider,
+            price: q.price,
+            median,
+          });
         }
       }
     }
@@ -269,4 +309,7 @@ function fromStore(provider, row, status) {
 /** Process-wide singleton used by the research routes. */
 export const researchMappingService = createResearchMappingService();
 
-export { createResearchMappingService as __createResearchMappingService, analyzeQuotes as __analyzeQuotes };
+export {
+  createResearchMappingService as __createResearchMappingService,
+  analyzeQuotes as __analyzeQuotes,
+};

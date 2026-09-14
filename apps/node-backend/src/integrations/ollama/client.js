@@ -67,8 +67,52 @@ function withTimeout(signal, timeoutMs) {
  * @param {Response} response
  * @returns {Promise<any>}
  */
-async function readJson(response) {
-  const text = await response.text();
+async function readJson(response, maxBytes = 8 * 1024 * 1024) {
+  const declaredBytes = Number(response.headers?.get?.("content-length"));
+  if (Number.isFinite(declaredBytes) && declaredBytes > maxBytes)
+    throw new OllamaError(
+      "Ollama response exceeds the configured memory bound",
+      {
+        status: response.status,
+        code: "RESPONSE_TOO_LARGE",
+      },
+    );
+  const reader = response.body?.getReader?.();
+  if (!reader) {
+    const fallbackText = await response.text();
+    if (Buffer.byteLength(fallbackText) > maxBytes)
+      throw new OllamaError(
+        "Ollama response exceeds the configured memory bound",
+        { status: response.status, code: "RESPONSE_TOO_LARGE" },
+      );
+    if (!fallbackText) return null;
+    try {
+      return JSON.parse(fallbackText);
+    } catch (err) {
+      throw new OllamaError("Ollama returned non-JSON response", {
+        status: response.status,
+        cause: err,
+        code: "INVALID_JSON",
+      });
+    }
+  }
+  const decoder = new TextDecoder();
+  let bytes = 0;
+  let text = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    bytes += value.byteLength;
+    if (bytes > maxBytes) {
+      await reader.cancel().catch(() => {});
+      throw new OllamaError(
+        "Ollama response exceeds the configured memory bound",
+        { status: response.status, code: "RESPONSE_TOO_LARGE" },
+      );
+    }
+    text += decoder.decode(value, { stream: true });
+  }
+  text += decoder.decode();
   if (!text) return null;
   try {
     return JSON.parse(text);
@@ -124,11 +168,17 @@ function createOllamaClient({
 
   /**
    * @param {string} path
-   * @param {{ method?: string, body?: any, signal?: AbortSignal, timeoutMs?: number }} [options]
+   * @param {{ method?: string, body?: any, signal?: AbortSignal, timeoutMs?: number, maxResponseBytes?: number }} [options]
    */
   async function request(
     path,
-    { method = "GET", body, signal, timeoutMs = requestTimeoutMs } = {},
+    {
+      method = "GET",
+      body,
+      signal,
+      timeoutMs = requestTimeoutMs,
+      maxResponseBytes = 8 * 1024 * 1024,
+    } = {},
   ) {
     const {
       signal: composedSignal,
@@ -151,7 +201,7 @@ function createOllamaClient({
         );
       }
 
-      return await readJson(response);
+      return await readJson(response, maxResponseBytes);
     } catch (err) {
       throw normalizeFetchError(err, {
         isTimeout: isTimeout(),
@@ -205,6 +255,52 @@ function createOllamaClient({
     }));
   }
 
+  /** Generate local L2-normalized embeddings for bounded retrieval input. */
+  /** @param {{model?:string,input?:string|string[],signal?:AbortSignal}} [params] */
+  async function embed({
+    model = settings.ollama.embeddingModel,
+    input,
+    signal,
+  } = {}) {
+    if (!model) {
+      throw new OllamaError("No local embedding model is configured", {
+        code: "EMBEDDING_MODEL_UNAVAILABLE",
+      });
+    }
+    const values = Array.isArray(input) ? input : [input];
+    if (
+      values.length === 0 ||
+      values.length > 64 ||
+      values.some((value) => typeof value !== "string" || !value.trim())
+    ) {
+      throw new OllamaError("embed requires 1 to 64 non-empty strings", {
+        code: "INVALID_INPUT",
+      });
+    }
+    const data = await request("/api/embed", {
+      method: "POST",
+      body: { model, input: values, truncate: false },
+      signal,
+      maxResponseBytes: 4 * 1024 * 1024,
+    });
+    if (
+      !Array.isArray(data?.embeddings) ||
+      data.embeddings.length !== values.length ||
+      data.embeddings.some(
+        (vector) =>
+          !Array.isArray(vector) ||
+          vector.length === 0 ||
+          vector.length > 8192 ||
+          vector.some((number) => !Number.isFinite(number)),
+      )
+    ) {
+      throw new OllamaError("Ollama returned invalid embeddings", {
+        code: "INVALID_EMBEDDING_RESPONSE",
+      });
+    }
+    return { model: data.model || model, embeddings: data.embeddings };
+  }
+
   /**
    * Read Ollama's resident-model inventory for evaluation telemetry. `sizeVram`
    * is the provider-reported loaded memory, not the Vision process heap.
@@ -227,13 +323,14 @@ function createOllamaClient({
   }
 
   /**
-   * @param {{ model?: string, messages: any[], tools?: any[], options?: any, signal?: AbortSignal }} params
+   * @param {{ model?: string, messages: any[], tools?: any[], options?: any, format?: any, signal?: AbortSignal }} params
    */
   async function chat({
     model = settings.ollama.defaultModel,
     messages,
     tools,
     options,
+    format,
     signal,
   }) {
     if (!Array.isArray(messages) || messages.length === 0) {
@@ -250,6 +347,7 @@ function createOllamaClient({
     };
     if (tools && tools.length > 0) body.tools = tools;
     if (options) body.options = options;
+    if (format) body.format = format;
 
     const data = /** @type {any} */ (
       await request("/api/chat", {
@@ -498,6 +596,7 @@ function createOllamaClient({
     baseUrl,
     healthCheck,
     listModels,
+    embed,
     listRunningModels,
     chat,
     chatStream,

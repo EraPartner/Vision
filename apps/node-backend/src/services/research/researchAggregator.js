@@ -15,21 +15,25 @@
  * actually views. All dependencies are injectable for testing.
  */
 
-import { resolveProviderChain } from './capabilityMap.js';
-import { isProviderKeyed } from './providerKeys.js';
-import { researchCache, ttlForType } from './researchCache.js';
-import * as providerHealth from '../providerHealthService.js';
-import { ADAPTERS, defaultGovernor, adapterSupports } from './providerRegistry.js';
-import { MACRO_PROVIDERS } from './adapters/macroCatalog.js';
+import { resolveProviderChain } from "./capabilityMap.js";
+import { isProviderKeyed } from "./providerKeys.js";
+import { researchCache, ttlForType } from "./researchCache.js";
+import * as providerHealth from "../providerHealthService.js";
+import {
+  ADAPTERS,
+  defaultGovernor,
+  adapterSupports,
+} from "./providerRegistry.js";
+import { MACRO_PROVIDERS } from "./adapters/macroCatalog.js";
 
 /** Research data type → adapter method name. */
 const METHOD_BY_TYPE = Object.freeze({
-  search: 'search',
-  quote: 'quote',
-  chart: 'chart',
-  fundamentals: 'fundamentals',
-  analyst: 'analyst',
-  news: 'news',
+  search: "search",
+  quote: "quote",
+  chart: "chart",
+  fundamentals: "fundamentals",
+  analyst: "analyst",
+  news: "news",
 });
 
 /**
@@ -41,7 +45,7 @@ const METHOD_BY_TYPE = Object.freeze({
  * @param {(provider: string) => unknown} [deps.recordSuccess]
  * @param {(provider: string, error: unknown) => unknown} [deps.recordError]
  */
- function createResearchAggregator({
+function createResearchAggregator({
   adapters = ADAPTERS,
   governor = defaultGovernor,
   cache = researchCache,
@@ -54,6 +58,14 @@ const METHOD_BY_TYPE = Object.freeze({
   // quota). Keyed by the same cache key; cleared in `finally`.
   /** @type {Map<string, Promise<any>>} */
   const inFlight = new Map();
+
+  async function reserveProvider(provider) {
+    if (typeof governor.reserve === "function")
+      return governor.reserve(provider);
+    if (!(await governor.canSpend(provider))) return false;
+    await governor.spend(provider);
+    return true;
+  }
 
   /**
    * @param {string} provider
@@ -84,41 +96,55 @@ const METHOD_BY_TYPE = Object.freeze({
    * @returns {Promise<{ provider?: string, data?: unknown, source: 'cache'|'live'|'unavailable', attempted?: object[] }>}
    */
   async function fetch(dataType, params = {}) {
-    const method = METHOD_BY_TYPE[/** @type {keyof typeof METHOD_BY_TYPE} */ (dataType)];
+    const method =
+      METHOD_BY_TYPE[/** @type {keyof typeof METHOD_BY_TYPE} */ (dataType)];
     if (!method) throw new Error(`Unknown research data type: ${dataType}`);
 
     const { symbol, assetClass, range, count, cacheKey } = params;
-    const key = cacheKey ?? `${dataType}:${assetClass ?? ''}:${symbol ?? ''}:${range ?? ''}`;
+    const key =
+      cacheKey ??
+      `${dataType}:${assetClass ?? ""}:${symbol ?? ""}:${range ?? ""}`;
 
-    const cached = /** @type {{ provider?: string, data?: unknown } | undefined} */ (cache.get(key));
-    if (cached !== undefined) return { ...cached, source: 'cache' };
+    const cached =
+      /** @type {{ provider?: string, data?: unknown } | undefined} */ (
+        cache.get(key)
+      );
+    if (cached !== undefined) return { ...cached, source: "cache" };
 
     const existing = inFlight.get(key);
     if (existing) return existing;
 
-    const work = /** @type {Promise<{ provider?: string, data?: unknown, source: 'live'|'cache'|'unavailable', attempted?: any[] }>} */ ((async () => {
-      /** @type {Array<{ provider: string, skipped?: string, error?: string }>} */
-      const attempted = [];
-      for (const provider of usableChain(dataType, assetClass)) {
-        if (!(await governor.canSpend(provider))) {
-          attempted.push({ provider, skipped: 'quota' });
-          continue;
-        }
-        try {
-          const data = await adapters[provider][method](symbol, { range, count });
-          await governor.spend(provider);
-          Promise.resolve(recordSuccess(provider)).catch(() => {});
-          const result = { provider, data };
-          cache.set(key, result, ttlForType(dataType));
-          return { ...result, source: 'live' };
-        } catch (err) {
-          Promise.resolve(recordError(provider, err)).catch(() => {});
-          attempted.push({ provider, error: err instanceof Error ? err.message : String(err) });
-        }
-      }
+    const work =
+      /** @type {Promise<{ provider?: string, data?: unknown, source: 'live'|'cache'|'unavailable', attempted?: any[] }>} */ (
+        (async () => {
+          /** @type {Array<{ provider: string, skipped?: string, error?: string }>} */
+          const attempted = [];
+          for (const provider of usableChain(dataType, assetClass)) {
+            if (!(await reserveProvider(provider))) {
+              attempted.push({ provider, skipped: "quota" });
+              continue;
+            }
+            try {
+              const data = await adapters[provider][method](symbol, {
+                range,
+                count,
+              });
+              Promise.resolve(recordSuccess(provider)).catch(() => {});
+              const result = { provider, data, attempted: [...attempted] };
+              cache.set(key, result, ttlForType(dataType));
+              return { ...result, source: "live" };
+            } catch (err) {
+              Promise.resolve(recordError(provider, err)).catch(() => {});
+              attempted.push({
+                provider,
+                error: err instanceof Error ? err.message : String(err),
+              });
+            }
+          }
 
-      return { source: 'unavailable', attempted };
-    })().finally(() => inFlight.delete(key)));
+          return { source: "unavailable", attempted };
+        })().finally(() => inFlight.delete(key))
+      );
 
     inFlight.set(key, work);
     return work;
@@ -138,9 +164,11 @@ const METHOD_BY_TYPE = Object.freeze({
     const merged = {};
     // Overlay lowest → highest so the highest-precedence present value lands last.
     for (const snap of [...snapshots].reverse()) {
-      if (!snap || typeof snap !== 'object') continue;
+      if (!snap || typeof snap !== "object") continue;
       for (const [field, value] of Object.entries(snap)) {
-        const missing = value == null || (typeof value === 'number' && !Number.isFinite(value));
+        const missing =
+          value == null ||
+          (typeof value === "number" && !Number.isFinite(value));
         if (!missing) merged[field] = value;
       }
     }
@@ -157,30 +185,37 @@ const METHOD_BY_TYPE = Object.freeze({
    * @returns {Promise<{ provider?: string, data?: unknown, source: 'cache'|'live'|'unavailable', attempted?: object[] }>}
    */
   async function fetchFundamentals({ symbol, assetClass } = {}) {
-    const key = `fundamentals:merged:${assetClass ?? ''}:${symbol ?? ''}`;
-    const cached = /** @type {{ provider?: string, data?: unknown } | undefined} */ (cache.get(key));
-    if (cached !== undefined) return { ...cached, source: 'cache' };
+    const key = `fundamentals:merged:${assetClass ?? ""}:${symbol ?? ""}`;
+    const cached =
+      /** @type {{ provider?: string, data?: unknown } | undefined} */ (
+        cache.get(key)
+      );
+    if (cached !== undefined) return { ...cached, source: "cache" };
 
     // Precedence order: FMP first (richest US fundamentals), Yahoo as the keyless
     // fallback. Drop any provider without an adapter method or key.
-    const order = ['fmp', 'yahoo'].filter((p) => supports(p, 'fundamentals') && isKeyed(p));
+    const order = ["fmp", "yahoo"].filter(
+      (p) => supports(p, "fundamentals") && isKeyed(p),
+    );
 
     /** @type {Array<{ provider: string, skipped?: string, error?: string }>} */
     const attempted = [];
     const settled = await Promise.all(
       order.map(async (provider) => {
-        if (!(await governor.canSpend(provider))) {
-          attempted.push({ provider, skipped: 'quota' });
+        if (!(await reserveProvider(provider))) {
+          attempted.push({ provider, skipped: "quota" });
           return undefined;
         }
         try {
           const data = await adapters[provider].fundamentals(symbol, {});
-          await governor.spend(provider);
           Promise.resolve(recordSuccess(provider)).catch(() => {});
           return { provider, data };
         } catch (err) {
           Promise.resolve(recordError(provider, err)).catch(() => {});
-          attempted.push({ provider, error: err instanceof Error ? err.message : String(err) });
+          attempted.push({
+            provider,
+            error: err instanceof Error ? err.message : String(err),
+          });
           return undefined;
         }
       }),
@@ -188,14 +223,14 @@ const METHOD_BY_TYPE = Object.freeze({
 
     // `settled` preserves `order`, so filtering keeps FMP ahead of Yahoo.
     const contributions = settled.filter(Boolean);
-    if (contributions.length === 0) return { source: 'unavailable', attempted };
+    if (contributions.length === 0) return { source: "unavailable", attempted };
 
     const result = {
-      provider: contributions.map((c) => c.provider).join('+'),
+      provider: contributions.map((c) => c.provider).join("+"),
       data: mergeFundamentals(contributions.map((c) => c.data)),
     };
-    cache.set(key, result, ttlForType('fundamentals'));
-    return { ...result, source: 'live' };
+    cache.set(key, result, ttlForType("fundamentals"));
+    return { ...result, source: "live" };
   }
 
   /**
@@ -207,40 +242,44 @@ const METHOD_BY_TYPE = Object.freeze({
    * @returns {Promise<{ items: object[], source: 'cache'|'live', attempted?: object[] }>}
    */
   async function searchMacro(query) {
-    const q = String(query ?? '').trim();
-    if (!q) return { items: [], source: 'live' };
+    const q = String(query ?? "").trim();
+    if (!q) return { items: [], source: "live" };
 
     const key = `macro_search::${q.toLowerCase()}`;
-    const cached = /** @type {{ items: object[] } | undefined} */ (cache.get(key));
-    if (cached !== undefined) return { ...cached, source: 'cache' };
+    const cached = /** @type {{ items: object[] } | undefined} */ (
+      cache.get(key)
+    );
+    if (cached !== undefined) return { ...cached, source: "cache" };
 
     const providers = MACRO_PROVIDERS.filter(
-      (p) => adapterSupports(p, 'macroSearch', adapters) && isKeyed(p),
+      (p) => adapterSupports(p, "macroSearch", adapters) && isKeyed(p),
     );
     /** @type {Array<{ provider: string, skipped?: string, error?: string }>} */
     const attempted = [];
     const settled = await Promise.all(
       providers.map(async (provider) => {
-        if (!(await governor.canSpend(provider))) {
-          attempted.push({ provider, skipped: 'quota' });
+        if (!(await reserveProvider(provider))) {
+          attempted.push({ provider, skipped: "quota" });
           return [];
         }
         try {
           const res = await adapters[provider].macroSearch(q);
-          await governor.spend(provider);
           Promise.resolve(recordSuccess(provider)).catch(() => {});
           return Array.isArray(res?.items) ? res.items : [];
         } catch (err) {
           Promise.resolve(recordError(provider, err)).catch(() => {});
-          attempted.push({ provider, error: err instanceof Error ? err.message : String(err) });
+          attempted.push({
+            provider,
+            error: err instanceof Error ? err.message : String(err),
+          });
           return [];
         }
       }),
     );
 
     const result = { items: settled.flat() };
-    cache.set(key, result, ttlForType('macro_search'));
-    return { ...result, source: 'live', attempted };
+    cache.set(key, result, ttlForType("macro_search"));
+    return { ...result, source: "live", attempted };
   }
 
   /**
@@ -250,38 +289,58 @@ const METHOD_BY_TYPE = Object.freeze({
    * @returns {Promise<{ provider?: string, data?: unknown, source: 'cache'|'live'|'unavailable', attempted?: object[] }>}
    */
   async function fetchMacroSeries({ provider, seriesId, range } = {}) {
-    if (!provider || !seriesId) throw new Error('provider and seriesId required');
+    if (!provider || !seriesId)
+      throw new Error("provider and seriesId required");
 
-    const key = `macro_series::${provider}::${seriesId}::${range ?? ''}`;
-    const cached = /** @type {{ provider?: string, data?: unknown } | undefined} */ (cache.get(key));
-    if (cached !== undefined) return { ...cached, source: 'cache' };
+    const key = `macro_series::${provider}::${seriesId}::${range ?? ""}`;
+    const cached =
+      /** @type {{ provider?: string, data?: unknown } | undefined} */ (
+        cache.get(key)
+      );
+    if (cached !== undefined) return { ...cached, source: "cache" };
 
-    if (!adapterSupports(provider, 'macroSeries', adapters)) {
-      return { source: 'unavailable', attempted: [{ provider, skipped: 'unsupported' }] };
+    if (!adapterSupports(provider, "macroSeries", adapters)) {
+      return {
+        source: "unavailable",
+        attempted: [{ provider, skipped: "unsupported" }],
+      };
     }
     if (!isKeyed(provider)) {
-      return { source: 'unavailable', attempted: [{ provider, skipped: 'no_key' }] };
+      return {
+        source: "unavailable",
+        attempted: [{ provider, skipped: "no_key" }],
+      };
     }
-    if (!(await governor.canSpend(provider))) {
-      return { source: 'unavailable', attempted: [{ provider, skipped: 'quota' }] };
+    if (!(await reserveProvider(provider))) {
+      return {
+        source: "unavailable",
+        attempted: [{ provider, skipped: "quota" }],
+      };
     }
     try {
       const data = await adapters[provider].macroSeries(seriesId, { range });
-      await governor.spend(provider);
       Promise.resolve(recordSuccess(provider)).catch(() => {});
       const result = { provider, data };
-      cache.set(key, result, ttlForType('macro_series'));
-      return { ...result, source: 'live' };
+      cache.set(key, result, ttlForType("macro_series"));
+      return { ...result, source: "live" };
     } catch (err) {
       Promise.resolve(recordError(provider, err)).catch(() => {});
       return {
-        source: 'unavailable',
-        attempted: [{ provider, error: err instanceof Error ? err.message : String(err) }],
+        source: "unavailable",
+        attempted: [
+          { provider, error: err instanceof Error ? err.message : String(err) },
+        ],
       };
     }
   }
 
-  return { fetch, fetchFundamentals, searchMacro, fetchMacroSeries, usableChain };
+  return {
+    fetch,
+    fetchFundamentals,
+    searchMacro,
+    fetchMacroSeries,
+    usableChain,
+  };
 }
 
 /** Process-wide singleton used by the research routes. */

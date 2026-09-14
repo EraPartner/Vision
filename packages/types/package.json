@@ -34,6 +34,10 @@
       "types": "./src/aiChat.d.ts",
       "default": "./src/aiChat.js"
     },
+    "./aiResearch": {
+      "types": "./src/aiResearch.d.ts",
+      "default": "./src/aiResearch.js"
+    },
     "./reportThemeDefaults": {
       "types": "./src/reportThemeDefaults.d.ts",
       "default": "./src/reportThemeDefaults.js"

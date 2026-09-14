@@ -33,16 +33,26 @@ export const getBankBalances = {
    * @param {Record<string, unknown>} _args
    * @param {import('./_validate.js').ToolContext} [context]
    */
-  async run(_args, { maxRows = settings.aiChat.maxToolRows } = {}) {
-    const result = await infoRepository.getBankBalances("EUR");
+  async run(_args, { maxRows = settings.aiChat.maxToolRows, scope = {} } = {}) {
+    const currency = scope.currency || "EUR";
+    const result = await infoRepository.getBankBalances(currency);
+    const allowedAccountIds = new Set(scope.accountIds || []);
+    const scopedAccounts = (result.accounts ?? []).filter(
+      (account) =>
+        allowedAccountIds.size === 0 ||
+        allowedAccountIds.has(Number(account.account_id)),
+    );
 
-    const accounts = (result.accounts ?? []).map((a) => ({
+    const accounts = scopedAccounts.map((a) => ({
+      ...(Number.isInteger(Number(a.account_id))
+        ? { accountId: Number(a.account_id) }
+        : {}),
       account: a.bank_account,
       balance:
         typeof a.balance === "number"
           ? a.balance
           : roundToCents(toDecimal(a.balance ?? 0)).toNumber(),
-      currency: "EUR",
+      currency,
       transactionCount: a.transaction_count ?? null,
       // toYmd uses local getters for pg's local-midnight DATE values —
       // toISOString() shifted these one day back on a UTC+ server.
@@ -54,14 +64,15 @@ export const getBankBalances = {
       ok: true,
       data: accounts.slice(0, maxRows),
       meta: {
-        totalNetPosition:
-          typeof result.total_net_position === "number"
-            ? result.total_net_position
-            : roundToCents(
-                toDecimal(result.total_net_position ?? 0),
-              ).toNumber(),
+        totalNetPosition: roundToCents(
+          accounts.reduce(
+            (sum, account) => sum.plus(toDecimal(account.balance)),
+            toDecimal(0),
+          ),
+        ).toNumber(),
         accountCount: accounts.length,
-        currency: "EUR",
+        currency,
+        scopedAccountIds: [...allowedAccountIds],
         renderAs: "table",
       },
     };

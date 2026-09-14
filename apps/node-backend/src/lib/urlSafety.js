@@ -118,6 +118,8 @@ export async function assertPublicHttpUrl(rawUrl, opts = {}) {
       `Blocked URL scheme "${url.protocol}" — only http and https are allowed`,
     );
   }
+  if (url.username || url.password)
+    throw new BlockedUrlError("URLs with embedded credentials are blocked");
 
   const host = url.hostname;
   if (!host) throw new BlockedUrlError("URL has no host");

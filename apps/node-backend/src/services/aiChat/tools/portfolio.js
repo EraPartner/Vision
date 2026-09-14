@@ -83,14 +83,24 @@ export const getPortfolioHoldings = {
    */
   async run(
     args,
-    { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {},
+    {
+      maxRows = settings.aiChat.maxToolRows,
+      cache = undefined,
+      scope = {},
+    } = {},
   ) {
     const assetClass = parseEnum(args.assetClass, "assetClass", ASSET_CLASSES, {
       defaultValue: null,
     });
 
     const summary = await loadCanonicalPortfolioSummary(cache);
+    const allowedInvestmentIds = new Set(scope.investmentIds || []);
     const holdings = summary.summaries
+      .filter(
+        (item) =>
+          allowedInvestmentIds.size === 0 ||
+          allowedInvestmentIds.has(Number(item.id)),
+      )
       .filter((item) => !assetClass || item.asset_class === assetClass)
       .filter((item) => toDecimal(item.currentValue).gt(0))
       .map((item) => ({
@@ -113,6 +123,7 @@ export const getPortfolioHoldings = {
       meta: {
         assetClass: assetClass || "all",
         totalPositions: holdings.length,
+        scopedInvestmentIds: [...allowedInvestmentIds],
         currency: summary.currency,
         renderAs: "pie",
         labelField: "name",
@@ -149,7 +160,11 @@ export const getReturnsForRange = {
    */
   async run(
     args,
-    { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {},
+    {
+      maxRows = settings.aiChat.maxToolRows,
+      cache = undefined,
+      scope = {},
+    } = {},
   ) {
     const from = requireDate(args.from, "from");
     const to = requireDate(args.to, "to");
@@ -159,7 +174,13 @@ export const getReturnsForRange = {
     });
 
     const range = await loadRangeDeltas(cache, from, to);
+    const allowedInvestmentIds = new Set(scope.investmentIds || []);
     const rows = range.rows
+      .filter(
+        ({ current }) =>
+          allowedInvestmentIds.size === 0 ||
+          allowedInvestmentIds.has(Number(current.id)),
+      )
       .filter(
         ({ current }) => !assetClass || current.asset_class === assetClass,
       )
@@ -190,6 +211,7 @@ export const getReturnsForRange = {
         to,
         assetClass: assetClass || "all",
         positionsWithFlows: rows.length,
+        scopedInvestmentIds: [...allowedInvestmentIds],
         metric: "netIncome",
         currency: range.currency,
         renderAs: "bar",

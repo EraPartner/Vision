@@ -26,7 +26,7 @@ import {
   getYearOverYearComparison,
   getUncategorisedTransactions,
   getNetCashflow,
-} from './expenses.js';
+} from "./expenses.js";
 import {
   getPortfolioHoldings,
   getReturnsForRange,
@@ -34,18 +34,18 @@ import {
   getAssetAllocation,
   getUnrealizedGains,
   getBestWorstPerformers,
-} from './portfolio.js';
+} from "./portfolio.js";
 import {
   getUpcomingPlanned,
   getSubscriptionTotal,
   getLoanSchedule,
   getProjectedBalance,
-} from './planned.js';
+} from "./planned.js";
 import {
   getTaxableIncomeSummary,
   getCapitalGainsForYear,
   getDeductibles,
-} from './tax.js';
+} from "./tax.js";
 import {
   getBankBalances,
   getSpendingPace,
@@ -54,8 +54,20 @@ import {
   getCategories,
   getRecurringDetected,
   insightsDigest,
-} from './insights.js';
-import { ToolValidationError } from './_validate.js';
+} from "./insights.js";
+import { ToolValidationError } from "./_validate.js";
+import {
+  getResearchQuote,
+  getResearchFundamentals,
+  getResearchNews,
+  searchMacroResearch,
+  getMacroResearchSeries,
+  getPortfolioResearchForecast,
+  searchLocalResearchDocuments,
+  searchPublicResearchWeb,
+  fetchPublicResearchPage,
+  getSavedAnalysisContext,
+} from "./research.js";
 
 /**
  * @typedef {object} Tool
@@ -66,7 +78,7 @@ import { ToolValidationError } from './_validate.js';
  */
 
 /** @type {Record<string, Tool>} */
- const TOOLS = Object.freeze({
+const TOOLS = Object.freeze({
   [getSpendByCategory.name]: getSpendByCategory,
   [getMonthlySpend.name]: getMonthlySpend,
   [getTopRecipients.name]: getTopRecipients,
@@ -98,6 +110,16 @@ import { ToolValidationError } from './_validate.js';
   [getRecurringDetected.name]: getRecurringDetected,
   [insightsDigest.name]: insightsDigest,
   [getNetCashflow.name]: getNetCashflow,
+  [getResearchQuote.name]: getResearchQuote,
+  [getResearchFundamentals.name]: getResearchFundamentals,
+  [getResearchNews.name]: getResearchNews,
+  [searchMacroResearch.name]: searchMacroResearch,
+  [getMacroResearchSeries.name]: getMacroResearchSeries,
+  [getPortfolioResearchForecast.name]: getPortfolioResearchForecast,
+  [searchLocalResearchDocuments.name]: searchLocalResearchDocuments,
+  [searchPublicResearchWeb.name]: searchPublicResearchWeb,
+  [fetchPublicResearchPage.name]: fetchPublicResearchPage,
+  [getSavedAnalysisContext.name]: getSavedAnalysisContext,
 });
 
 /**
@@ -105,7 +127,7 @@ import { ToolValidationError } from './_validate.js';
  */
 export function getToolSchemas() {
   return Object.values(TOOLS).map((tool) => ({
-    type: 'function',
+    type: "function",
     function: {
       name: tool.name,
       description: tool.description,
@@ -124,20 +146,23 @@ export function getToolNames() {
  */
 function coerceArguments(rawArgs) {
   if (rawArgs == null) return {};
-  if (typeof rawArgs === 'object') return /** @type {Record<string, unknown>} */ (rawArgs);
-  if (typeof rawArgs === 'string') {
+  if (typeof rawArgs === "object")
+    return /** @type {Record<string, unknown>} */ (rawArgs);
+  if (typeof rawArgs === "string") {
     const trimmed = rawArgs.trim();
     if (!trimmed) return {};
     try {
       const parsed = JSON.parse(trimmed);
-      if (parsed && typeof parsed === 'object') return parsed;
-      throw new ToolValidationError('arguments must be a JSON object');
+      if (parsed && typeof parsed === "object") return parsed;
+      throw new ToolValidationError("arguments must be a JSON object");
     } catch (err) {
       if (err instanceof ToolValidationError) throw err;
-      throw new ToolValidationError(`arguments is not valid JSON: ${err.message}`);
+      throw new ToolValidationError(
+        `arguments is not valid JSON: ${err.message}`,
+      );
     }
   }
-  throw new ToolValidationError('arguments must be an object or JSON string');
+  throw new ToolValidationError("arguments must be an object or JSON string");
 }
 
 // Errors are of genuinely arbitrary shape here — anything a tool's `run()` can
@@ -149,7 +174,7 @@ function formatError(err) {
     return {
       ok: false,
       error: {
-        code: 'VALIDATION_ERROR',
+        code: "VALIDATION_ERROR",
         field: err.field,
         message: err.message,
       },
@@ -158,8 +183,8 @@ function formatError(err) {
   return {
     ok: false,
     error: {
-      code: 'TOOL_ERROR',
-      message: err?.message || 'Tool execution failed',
+      code: "TOOL_ERROR",
+      message: err?.message || "Tool execution failed",
     },
   };
 }
@@ -192,7 +217,7 @@ export async function dispatchTool(name, rawArgs, context = {}) {
       result: {
         ok: false,
         error: {
-          code: 'UNKNOWN_TOOL',
+          code: "UNKNOWN_TOOL",
           message: `Unknown tool: ${name}`,
           availableTools: Object.keys(TOOLS),
         },

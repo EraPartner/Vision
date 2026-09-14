@@ -7,7 +7,7 @@
  * (ADR-079). All mutations use parameterised queries.
  */
 
-import { query } from '../database/connection.js';
+import { query } from "../database/connection.js";
 
 /**
  * Current request count for a provider on a given UTC day. 0 if no row yet.
@@ -39,10 +39,25 @@ export async function addDayCount(provider, windowDate, delta) {
   );
 }
 
+/** Atomically reserve quota without crossing a hard daily ceiling. */
+export async function tryReserveDay(provider, windowDate, limit, delta = 1) {
+  if (delta < 1 || delta > limit) return null;
+  const result = await query(
+    `INSERT INTO provider_quota (provider, window_date, count, updated_at)
+          VALUES ($1,$2,$3,NOW())
+     ON CONFLICT (provider, window_date) DO UPDATE
+        SET count = provider_quota.count + EXCLUDED.count, updated_at=NOW()
+      WHERE provider_quota.count + EXCLUDED.count <= $4
+      RETURNING count`,
+    [provider, windowDate, delta, limit],
+  );
+  return result.rows[0]?.count ?? null;
+}
+
 /**
  * Build a {@link QuotaStore} backed by this repository, for the quota governor.
- * @returns {{ getDayCount: typeof getDayCount, addDayCount: typeof addDayCount }}
+ * @returns {{ getDayCount: typeof getDayCount, addDayCount: typeof addDayCount, tryReserveDay: typeof tryReserveDay }}
  */
 export function createDbQuotaStore() {
-  return { getDayCount, addDayCount };
+  return { getDayCount, addDayCount, tryReserveDay };
 }

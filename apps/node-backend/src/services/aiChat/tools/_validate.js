@@ -8,7 +8,7 @@
  * dispatcher can feed the error back to the model for retry.
  */
 
-import { validateId } from '../../../lib/validation.js';
+import { validateId } from "../../../lib/validation.js";
 
 /**
  * Per-turn context threaded through every tool's `run(args, context)` by
@@ -17,6 +17,12 @@ import { validateId } from '../../../lib/validation.js';
  * @typedef {object} ToolContext
  * @property {number} [maxRows]
  * @property {Map<string, Promise<any>>} [cache]
+ * @property {boolean} [allowExternalResearch]
+ * @property {boolean} [allowWebResearch]
+ * @property {boolean} [allowSavedAnalysis]
+ * @property {{searches:number,pages:number}} [researchBudget]
+ * @property {AbortSignal} [signal]
+ * @property {{accountIds?:number[],investmentIds?:number[],dateFrom?:string|null,dateTo?:string|null,currency?:string}} [scope]
  */
 
 export class ToolValidationError extends Error {
@@ -26,7 +32,7 @@ export class ToolValidationError extends Error {
    */
   constructor(message, field) {
     super(message);
-    this.name = 'ToolValidationError';
+    this.name = "ToolValidationError";
     this.field = field || null;
   }
 }
@@ -40,8 +46,11 @@ const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
  */
 export function parseDate(value, field) {
   if (value == null) return null;
-  if (typeof value !== 'string' || !ISO_DATE_RE.test(value)) {
-    throw new ToolValidationError(`${field} must be an ISO date (YYYY-MM-DD)`, field);
+  if (typeof value !== "string" || !ISO_DATE_RE.test(value)) {
+    throw new ToolValidationError(
+      `${field} must be an ISO date (YYYY-MM-DD)`,
+      field,
+    );
   }
   const d = new Date(`${value}T00:00:00Z`);
   // `new Date('2025-02-30T00:00:00Z')` silently rolls to Mar 2 instead of
@@ -84,7 +93,11 @@ export function requireDate(value, field) {
  * @param {{ min?: number, max?: number, defaultValue?: number|null }} [opts]
  * @returns {number|null}
  */
-export function parsePositiveInt(value, field, { min = 1, max = 1000, defaultValue = null } = {}) {
+export function parsePositiveInt(
+  value,
+  field,
+  { min = 1, max = 1000, defaultValue = null } = {},
+) {
   if (value == null) return defaultValue;
   const result = validateId(value, field, max);
   if (!result.valid || result.value < min) {
@@ -92,7 +105,11 @@ export function parsePositiveInt(value, field, { min = 1, max = 1000, defaultVal
     // the model (dispatchTool's formatError): "must be an integer between 1 and
     // 500" alone does not tell it what was wrong with "12.9".
     let received;
-    try { received = JSON.stringify(value); } catch { received = String(value); }
+    try {
+      received = JSON.stringify(value);
+    } catch {
+      received = String(value);
+    }
     throw new ToolValidationError(
       `${field} must be an integer between ${min} and ${max} — received ${received.slice(0, 60)}`,
       field,
@@ -108,14 +125,19 @@ export function parsePositiveInt(value, field, { min = 1, max = 1000, defaultVal
  * @param {{ defaultValue?: string|null, required?: boolean }} [opts]
  * @returns {string|null}
  */
-export function parseEnum(value, field, allowed, { defaultValue = null, required = false } = {}) {
+export function parseEnum(
+  value,
+  field,
+  allowed,
+  { defaultValue = null, required = false } = {},
+) {
   if (value == null) {
     if (required) throw new ToolValidationError(`${field} is required`, field);
     return defaultValue;
   }
-  if (typeof value !== 'string' || !allowed.includes(value)) {
+  if (typeof value !== "string" || !allowed.includes(value)) {
     throw new ToolValidationError(
-      `${field} must be one of: ${allowed.join(', ')}`,
+      `${field} must be one of: ${allowed.join(", ")}`,
       field,
     );
   }
@@ -129,6 +151,6 @@ export function parseEnum(value, field, allowed, { defaultValue = null, required
  */
 export function assertDateOrder(from, to) {
   if (from && to && from > to) {
-    throw new ToolValidationError('`from` must be on or before `to`', 'from');
+    throw new ToolValidationError("`from` must be on or before `to`", "from");
   }
 }

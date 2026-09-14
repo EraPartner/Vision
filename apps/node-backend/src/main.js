@@ -36,6 +36,7 @@ import { requestId } from "./middleware/requestId.js";
 import { requestMetrics } from "./middleware/requestMetrics.js";
 import { cancelPendingAggregationRefresh } from "./services/aggregationRefresh.js";
 import { runWarmupTasks } from "./startup/warmup.js";
+import { resumeRecoverableInvestigations } from "./services/aiInvestigationService.js";
 
 /**
  * @typedef {import('./types/express.js').ExpressRequest} ExpressRequest
@@ -77,6 +78,8 @@ import tagsRouter from "./routes/tags.js";
 import accountsRouter from "./routes/accounts.js";
 import crossWorkspaceRouter from "./routes/crossWorkspace.js";
 import analysisRouter from "./routes/analysis.js";
+import aiResearchDocumentsRouter from "./routes/aiResearchDocuments.js";
+import aiResearchRouter from "./routes/aiResearch.js";
 import { closeAnalysisPool } from "./services/analysisExecutor.js";
 import {
   rateLimiter,
@@ -276,6 +279,7 @@ mountRouter(
   aggregationRateLimiter,
   aggregationsRouter,
 );
+mountRouter(app, "/api/ai-research", aggregationRateLimiter, aiResearchRouter);
 mountRouter(
   app,
   "/api/admin",
@@ -304,6 +308,12 @@ mountRouter(app, "/api/tags", tagsRouter);
 mountRouter(app, "/api/accounts", accountsRouter);
 mountRouter(app, "/api/cross-workspace", crossWorkspaceRouter);
 mountRouter(app, "/api/analysis", aggregationRateLimiter, analysisRouter);
+mountRouter(
+  app,
+  "/api/ai-research/documents",
+  attachmentRateLimiter,
+  aiResearchDocumentsRouter,
+);
 
 // AI chat: dedicated per-minute limit on /chat (Ollama calls are expensive);
 // other /api/ai/* endpoints fall back to the global limiter.
@@ -511,6 +521,19 @@ async function start() {
         const endMig = bootMark("run_migrations");
         await runMigrations();
         endMig();
+        resumeRecoverableInvestigations()
+          .then((count) => {
+            if (count)
+              logger.info("Resumed recoverable AI investigations", { count });
+          })
+          .catch((err) =>
+            logger.warn(
+              "AI investigation recovery failed; jobs remain resumable",
+              {
+                error: err.message,
+              },
+            ),
+          );
         // One database-wide ANALYZE at boot so small, rarely-mutated tables
         // (which no migration or trigger ever ANALYZEs) still hand the planner
         // fresh statistics. Fire-and-forget: ANALYZE only refreshes planner

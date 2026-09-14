@@ -47,10 +47,10 @@ const report = {
   syntheticDetectorPassed: cases.every((testCase) => testCase.detectorPassed),
   releaseAccepted: false,
   releaseBlockers: [
-    "No production OpenAI API adapter exists to inspect.",
+    "Live OpenAI API traffic, account entitlement, and current retention controls have not been verified.",
+    "The enclosing managed sandbox blocks a nested macOS Seatbelt runtime smoke test.",
     "No isolated Codex subscription adapter exists to inspect.",
     "Synthetic utility parity is contract evidence, not a live model comparison.",
-    "Independent boundary review remains required once either route exists.",
   ],
   utility,
   cases,

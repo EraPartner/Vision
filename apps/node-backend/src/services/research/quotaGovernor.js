@@ -20,12 +20,12 @@
  * governed instead by cache TTLs and providerHealthService.
  */
 
-import { epochMsToUtcYmd } from '../../lib/dateFormat.js';
+import { epochMsToUtcYmd } from "../../lib/dateFormat.js";
 
 const ONE_MINUTE_MS = 60_000;
 
 /** Documented free-tier ceilings. Absent provider = unmetered by this governor. */
- const PROVIDER_LIMITS = Object.freeze({
+const PROVIDER_LIMITS = Object.freeze({
   twelve_data: { perMinute: 8, perDay: 800 },
   finnhub: { perMinute: 60 },
   fmp: { perDay: 250 },
@@ -40,7 +40,7 @@ const ONE_MINUTE_MS = 60_000;
  * @param {number} ms
  * @returns {string}
  */
- function dayKeyUtc(ms) {
+function dayKeyUtc(ms) {
   return epochMsToUtcYmd(ms);
 }
 
@@ -48,6 +48,7 @@ const ONE_MINUTE_MS = 60_000;
  * @typedef {Object} QuotaStore
  * @property {(provider: string, dayKey: string) => Promise<number>} getDayCount
  * @property {(provider: string, dayKey: string, delta: number) => Promise<void>} addDayCount
+ * @property {(provider: string, dayKey: string, limit: number, delta: number) => Promise<number|null>} [tryReserveDay]
  */
 
 /**
@@ -57,9 +58,13 @@ const ONE_MINUTE_MS = 60_000;
  * @param {Record<string, {perMinute?: number, perDay?: number}>} [opts.limits]
  * @param {QuotaStore} [opts.store]  Persistence for per-day counters; omit for in-memory only.
  * @param {() => number} [opts.now]  Clock (ms); injectable for tests.
- * @returns {{ canSpend: (p: string) => Promise<boolean>, spend: (p: string, n?: number) => Promise<void>, snapshot: () => object }}
+ * @returns {{ canSpend: (p: string) => Promise<boolean>, spend: (p: string, n?: number) => Promise<void>, reserve: (p: string, n?: number) => Promise<boolean>, snapshot: () => object }}
  */
-export function createQuotaGovernor({ limits = PROVIDER_LIMITS, store, now = () => Date.now() } = {}) {
+export function createQuotaGovernor({
+  limits = PROVIDER_LIMITS,
+  store,
+  now = () => Date.now(),
+} = {}) {
   /** @type {Map<string, {startMs: number, count: number}>} */
   const minuteBuckets = new Map();
   /** @type {Map<string, number>} mirror keyed `${provider}:${dayKey}` */
@@ -115,12 +120,41 @@ export function createQuotaGovernor({ limits = PROVIDER_LIMITS, store, now = () 
     const lim = limitFor(provider);
     if (lim.perMinute == null && lim.perDay == null) return true; // unmetered
     const t = now();
-    if (lim.perMinute != null && minuteBucket(provider, t).count >= lim.perMinute) {
+    if (
+      lim.perMinute != null &&
+      minuteBucket(provider, t).count >= lim.perMinute
+    ) {
       return false;
     }
-    if (lim.perDay != null && (await dayCount(provider, dayKeyUtc(t))) >= lim.perDay) {
+    if (
+      lim.perDay != null &&
+      (await dayCount(provider, dayKeyUtc(t))) >= lim.perDay
+    ) {
       return false;
     }
+    return true;
+  }
+
+  /** Atomically reserve a request before issuing it. Persistent daily limits fail closed. */
+  async function reserve(provider, n = 1) {
+    const lim = limitFor(provider);
+    if (lim.perMinute == null && lim.perDay == null) return true;
+    const t = now();
+    const minute = minuteBucket(provider, t);
+    if (lim.perMinute != null && minute.count + n > lim.perMinute) return false;
+    const dk = dayKeyUtc(t);
+    if (lim.perDay != null) {
+      if (!store?.tryReserveDay) return false;
+      let reserved;
+      try {
+        reserved = await store.tryReserveDay(provider, dk, lim.perDay, n);
+      } catch {
+        return false;
+      }
+      if (reserved == null) return false;
+      dayMirror.set(`${provider}:${dk}`, reserved);
+    }
+    if (lim.perMinute != null) minute.count += n;
     return true;
   }
 
@@ -157,7 +191,7 @@ export function createQuotaGovernor({ limits = PROVIDER_LIMITS, store, now = () 
     return { minute, day };
   }
 
-  return { canSpend, spend, snapshot };
+  return { canSpend, spend, reserve, snapshot };
 }
 
 export { PROVIDER_LIMITS as __PROVIDER_LIMITS, dayKeyUtc as __dayKeyUtc };

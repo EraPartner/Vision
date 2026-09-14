@@ -85,14 +85,20 @@ function bucketKey(ymd, groupBy = "month") {
  * Load and shape the application's canonical monthly cash-flow calculation.
  * It owns transfer inclusion and historical currency conversion.
  */
-async function loadCanonicalCashflow(cache, from, to, groupBy) {
+async function loadCanonicalCashflow(
+  cache,
+  from,
+  to,
+  groupBy,
+  accountIds = [],
+) {
   const currency = await getAiDisplayCurrency(cache);
   const result = await memoizeAsync(
     cache,
-    `monthly-summary:${currency}:${from}:${to}`,
+    `monthly-summary:${currency}:${from}:${to}:${accountIds.join(",")}`,
     () =>
       infoRepository.getMonthlyFinancialSummary(
-        [],
+        accountIds,
         currency,
         [],
         false,
@@ -259,7 +265,11 @@ export const getMonthlySpend = {
    */
   async run(
     args,
-    { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {},
+    {
+      maxRows = settings.aiChat.maxToolRows,
+      cache = undefined,
+      scope = {},
+    } = {},
   ) {
     const from = requireDate(args.from, "from");
     const to = requireDate(args.to, "to");
@@ -268,7 +278,13 @@ export const getMonthlySpend = {
       defaultValue: "month",
     });
 
-    const canonical = await loadCanonicalCashflow(cache, from, to, groupBy);
+    const canonical = await loadCanonicalCashflow(
+      cache,
+      from,
+      to,
+      groupBy,
+      scope.accountIds || [],
+    );
 
     return {
       ok: true,
@@ -278,6 +294,7 @@ export const getMonthlySpend = {
         to,
         groupBy,
         currency: canonical.currency,
+        scopedAccountIds: scope.accountIds || [],
         renderAs: "line",
         xField: "bucket",
         yFields: ["income", "spend", "net"],
@@ -987,7 +1004,11 @@ export const getNetCashflow = {
    */
   async run(
     args,
-    { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {},
+    {
+      maxRows = settings.aiChat.maxToolRows,
+      cache = undefined,
+      scope = {},
+    } = {},
   ) {
     const from = requireDate(args.from, "from");
     const to = requireDate(args.to, "to");
@@ -996,7 +1017,13 @@ export const getNetCashflow = {
       defaultValue: "month",
     });
 
-    const canonical = await loadCanonicalCashflow(cache, from, to, groupBy);
+    const canonical = await loadCanonicalCashflow(
+      cache,
+      from,
+      to,
+      groupBy,
+      scope.accountIds || [],
+    );
     const shaped = canonical.rows.map((row) => ({
       period: row.bucket,
       income: row.income,
@@ -1020,6 +1047,7 @@ export const getNetCashflow = {
           toDecimal(totalIncome - totalExpenses),
         ).toNumber(),
         currency: canonical.currency,
+        scopedAccountIds: scope.accountIds || [],
         renderAs: "bar",
         xField: "period",
         yField: "net",

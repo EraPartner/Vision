@@ -62,6 +62,78 @@ components:
         status:
           type: integer
 
+    AiInvestigationRequest:
+      type: object
+      additionalProperties: false
+      required: [question, scope]
+      properties:
+        question: { type: string, minLength: 1, maxLength: 8000 }
+        route: { type: string, enum: [local, openai-api], default: local }
+        researchMode:
+          type: string
+          enum: [local-only, public-providers, public-web]
+          default: local-only
+        publicQuestion:
+          type: string
+          minLength: 1
+          maxLength: 1000
+          nullable: true
+          description: Separately authored public-only cloud planning question; never derived from question.
+        publicWebQuery:
+          type: string
+          minLength: 1
+          maxLength: 300
+          nullable: true
+          description: Explicit public-only search text; never derived from question.
+        publicSymbols:
+          type: array
+          maxItems: 3
+          items: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9._:-]{0,19}$" }
+        publicMacroQueries:
+          type: array
+          maxItems: 3
+          items: { type: string, minLength: 1, maxLength: 120 }
+        clarification:
+          { type: string, minLength: 1, maxLength: 1000, nullable: true }
+        model: { type: string, minLength: 1, maxLength: 200, nullable: true }
+        depth: { type: string, enum: [quick, detailed], default: quick }
+        language: { type: string, enum: [en, nl], default: en }
+        scope:
+          type: object
+          additionalProperties: false
+          required: [workspaces]
+          properties:
+            workspaces:
+              type: array
+              minItems: 1
+              maxItems: 4
+              items:
+                type: string
+                enum: [budgeting, portfolio, research, cross-workspace]
+            accountIds:
+              type: array
+              maxItems: 100
+              items: { type: integer, minimum: 1 }
+            investmentIds:
+              type: array
+              maxItems: 100
+              items: { type: integer, minimum: 1 }
+            dateFrom: { type: string, format: date, nullable: true }
+            dateTo: { type: string, format: date, nullable: true }
+            currency: { type: string, pattern: "^[A-Z]{3}$", default: EUR }
+            constraints:
+              type: array
+              maxItems: 30
+              items: { type: string, minLength: 1, maxLength: 500 }
+        grantId: { type: string, format: uuid, nullable: true }
+        selectedSummary: { type: string, maxLength: 8000, nullable: true }
+        selectedEvidence:
+          type: string
+          maxLength: 24000
+          nullable: true
+          description: Exact manually selected task and evidence for consent-bound cloud final synthesis; never populated from local records by the server.
+        savedAnalysisId: { type: string, format: uuid, nullable: true }
+
     UpdateCheck:
       type: object
       required: [up_to_date, current_version, latest_version, update_mode]
@@ -3210,6 +3282,62 @@ paths:
               schema: { $ref: "#/components/schemas/Envelope" }
         "400": { description: Invalid drill-through request }
 
+  /api/analysis/formulas/evaluate:
+    post:
+      summary: Evaluate bounded typed formulas and isolated assumptions
+      operationId: evaluateAnalysisFormulas
+      tags: [Analysis]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "200":
+          description: Formula rows, summaries, and explicit errors
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "400": { description: Invalid or over-limit formula request }
+
+  /api/analysis/ai-proposals/preview:
+    post:
+      summary: Validate and preview a typed AI edit without changing the analysis
+      operationId: previewAnalysisProposal
+      tags: [Analysis]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "200":
+          description: Inspectable before and after definitions
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "400": { description: Invalid edit proposal }
+        "409": { description: Base analysis version changed }
+
+  /api/analysis/ai-proposals/apply:
+    post:
+      summary: Apply a previously inspected typed edit as a new version
+      operationId: applyAnalysisProposal
+      tags: [Analysis]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "200":
+          description: Newly versioned saved analysis
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "400": { description: Invalid edit proposal }
+        "409": { description: Base analysis version changed }
+
   /api/analysis/saved:
     get:
       summary: List saved analyses, optionally by workspace
@@ -3304,6 +3432,384 @@ paths:
               schema: { $ref: "#/components/schemas/Envelope" }
         "400": { description: Refresh failed }
         "404": { description: Saved analysis not found }
+
+  /api/analysis/saved/{id}/versions:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      summary: List immutable definition and scenario versions
+      operationId: listSavedAnalysisVersions
+      tags: [Analysis]
+      responses:
+        "200":
+          description: Version history
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /api/analysis/saved/{id}/ai-proposal:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      summary: Ask the configured local model for a typed inspectable edit proposal
+      operationId: generateAnalysisProposal
+      tags: [Analysis]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [instruction]
+              properties:
+                instruction: { type: string, minLength: 1, maxLength: 2000 }
+                model: { type: string, maxLength: 200 }
+      responses:
+        "200":
+          description: Schema-valid before and after preview; no edit has been applied
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "400": { description: Invalid model output or proposal }
+        "404": { description: Saved analysis not found }
+
+  /api/analysis/saved/{id}/restore:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      summary: Restore an earlier definition and scenario as a new version
+      operationId: restoreSavedAnalysisVersion
+      tags: [Analysis]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version, expectedVersion]
+              properties:
+                version: { type: integer, minimum: 1 }
+                expectedVersion: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Restored saved analysis
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "404": { description: Saved analysis or version not found }
+        "409": { description: Current version changed }
+
+  # ─── Bounded AI research ──────────────────────────────────────────────────
+  /api/ai-research/status:
+    get:
+      summary: Inspect local, web, and optional cloud route capabilities
+      operationId: getAiResearchStatus
+      tags: [AIResearch]
+      responses:
+        "200":
+          description: Configured capabilities without credentials
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /api/ai-research/investigations:
+    get:
+      summary: List recoverable AI investigation jobs
+      operationId: listAiInvestigations
+      tags: [AIResearch]
+      responses:
+        "200":
+          description: Investigation jobs and explicit states
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+    post:
+      summary: Start a bounded evidence-backed investigation
+      operationId: createAiInvestigation
+      tags: [AIResearch]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AiInvestigationRequest" }
+      responses:
+        "202":
+          description: Persisted queued job
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "400": { description: Invalid scope, route, or limits }
+
+  /api/ai-research/investigations/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      summary: Get a job, checkpoints, partial evidence, and answer
+      operationId: getAiInvestigation
+      tags: [AIResearch]
+      responses:
+        "200":
+          description: Investigation state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "404": { description: Investigation not found }
+    delete:
+      summary: Delete a local investigation and its checkpoints
+      operationId: deleteAiInvestigation
+      tags: [AIResearch]
+      responses:
+        "204": { description: Investigation deleted }
+        "404": { description: Investigation not found }
+
+  /api/ai-research/investigations/{id}/resume:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      summary: Resume a recoverable job while reusing completed steps
+      operationId: resumeAiInvestigation
+      tags: [AIResearch]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                clarification: { type: string, minLength: 1, maxLength: 1000 }
+                scope:
+                  type: object
+                  additionalProperties: false
+                  required: [workspaces]
+                  properties:
+                    workspaces:
+                      type: array
+                      minItems: 1
+                      maxItems: 4
+                      items:
+                        type: string
+                        enum: [budgeting, portfolio, research, cross-workspace]
+                    accountIds:
+                      type: array
+                      maxItems: 100
+                      items: { type: integer, minimum: 1 }
+                    investmentIds:
+                      type: array
+                      maxItems: 100
+                      items: { type: integer, minimum: 1 }
+                    dateFrom: { type: string, format: date, nullable: true }
+                    dateTo: { type: string, format: date, nullable: true }
+                    currency:
+                      { type: string, pattern: "^[A-Z]{3}$", default: EUR }
+                    constraints:
+                      type: array
+                      maxItems: 30
+                      items: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        "202":
+          description: Resume accepted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "404": { description: Investigation not found }
+
+  /api/ai-research/investigations/{id}/cancel:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      summary: Request cancellation and abort an active provider call
+      operationId: cancelAiInvestigation
+      tags: [AIResearch]
+      responses:
+        "200":
+          description: Cancellation requested
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "404": { description: Investigation not found }
+
+  /api/ai-research/documents:
+    get:
+      summary: List locally indexed user-selected research documents
+      operationId: listAiResearchDocuments
+      tags: [AIResearch]
+      responses:
+        "200":
+          description: Local document versions and extraction states
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+    post:
+      summary: Index one bounded text, Markdown, or HTML document locally
+      operationId: createAiResearchDocument
+      tags: [AIResearch]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+                title: { type: string, maxLength: 300 }
+                source_name: { type: string, maxLength: 500 }
+      responses:
+        "201":
+          description: Indexed document or explicit unsupported state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "400":
+          { description: Unsupported, empty, unreadable, or oversized file }
+
+  /api/ai-research/documents/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      summary: Get a local document and passage metadata
+      operationId: getAiResearchDocument
+      tags: [AIResearch]
+      responses:
+        "200":
+          description: Document details
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "404": { description: Document not found }
+    delete:
+      summary: Delete a document and all derived passages and embeddings
+      operationId: deleteAiResearchDocument
+      tags: [AIResearch]
+      responses:
+        "204": { description: Document and derived indexes deleted }
+        "404": { description: Document not found }
+
+  /api/ai-research/documents/search/passages:
+    post:
+      summary: Retrieve cited keyword, semantic, or hybrid local passages
+      operationId: searchAiResearchPassages
+      tags: [AIResearch]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false }
+      responses:
+        "200":
+          description: Bounded passages with document, version, page, and section locators
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "400": { description: Invalid search }
+
+  /api/ai-research/disclosures/preview:
+    post:
+      summary: Preview the exact canonical payload proposed for cloud egress
+      operationId: previewAiDisclosure
+      tags: [AIResearch]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false }
+      responses:
+        "200":
+          description: Payload, digest, field manifest, bytes, and disclosure units
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "400": { description: Invalid or non-cloud request }
+
+  /api/ai-research/disclosures/grants:
+    get:
+      summary: List local disclosure grants and revocation state
+      operationId: listAiDisclosureGrants
+      tags: [AIResearch]
+      responses:
+        "200":
+          description: Disclosure grants without payloads or credentials
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+    post:
+      summary: Grant bounded egress for one inspected payload digest
+      operationId: createAiDisclosureGrant
+      tags: [AIResearch]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false }
+      responses:
+        "201":
+          description: Persisted, expiring grant
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "400": { description: Invalid grant or retention request }
+
+  /api/ai-research/disclosures/grants/{id}/revoke:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      summary: Revoke a grant before any queued request or retry
+      operationId: revokeAiDisclosureGrant
+      tags: [AIResearch]
+      responses:
+        "200":
+          description: Grant revoked
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "404": { description: Grant not found }
+
+  /api/ai-research/disclosures/records:
+    get:
+      summary: Inspect minimal local disclosure metadata and usage
+      operationId: listAiDisclosureRecords
+      tags: [AIResearch]
+      responses:
+        "200":
+          description: Metadata-only disclosure records
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+    delete:
+      summary: Delete all local disclosure records and grants
+      operationId: deleteAiDisclosureRecords
+      tags: [AIResearch]
+      responses:
+        "200":
+          description: Deleted record and grant counts; deleting grants revokes unused consent
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
 
   /api/cross-workspace/rebalance:
     post:

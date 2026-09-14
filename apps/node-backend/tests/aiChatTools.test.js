@@ -430,6 +430,34 @@ describe("getPortfolioHoldings", () => {
     expect(result.data).toHaveLength(1);
   });
 
+  it("filters the canonical snapshot by explicit investment scope", async () => {
+    loadCanonicalPortfolioSummary.mockResolvedValueOnce({
+      currency: "EUR",
+      summaries: [
+        {
+          id: 1,
+          name: "First",
+          asset_class: "stock",
+          currentValue: 10,
+        },
+        {
+          id: 2,
+          name: "Second",
+          asset_class: "stock",
+          currentValue: 20,
+        },
+      ],
+    });
+    const result = await getPortfolioHoldings.run(
+      {},
+      { scope: { investmentIds: [2] } },
+    );
+    expect(result.data).toEqual([
+      expect.objectContaining({ id: 2, name: "Second" }),
+    ]);
+    expect(result.meta.scopedInvestmentIds).toEqual([2]);
+  });
+
   it("rejects unknown assetClass", async () => {
     await expect(
       getPortfolioHoldings.run({ assetClass: "nft" }),

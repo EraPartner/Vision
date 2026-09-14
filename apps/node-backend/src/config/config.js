@@ -99,6 +99,7 @@ const settings = deepFreeze({
     healthTimeoutMs: env.OLLAMA_HEALTH_TIMEOUT_MS,
     streamIdleTimeoutMs: env.OLLAMA_STREAM_IDLE_TIMEOUT_MS,
     numCtx: env.OLLAMA_NUM_CTX,
+    embeddingModel: env.OLLAMA_EMBEDDING_MODEL,
   },
 
   aiChat: {
@@ -108,6 +109,24 @@ const settings = deepFreeze({
     contextBudgetChars: env.AI_CHAT_CONTEXT_BUDGET_CHARS,
     maxToolResultChars: env.AI_CHAT_MAX_TOOL_RESULT_CHARS,
     maxToolRows: env.AI_CHAT_MAX_TOOL_ROWS,
+  },
+
+  aiResearch: {
+    web: {
+      enabled: env.AI_WEB_RESEARCH_ENABLED,
+      maxSearches: env.AI_WEB_RESEARCH_MAX_SEARCHES,
+      maxPages: env.AI_WEB_RESEARCH_MAX_PAGES,
+      braveApiKey: env.BRAVE_SEARCH_API_KEY,
+    },
+    openai: {
+      enabled: env.OPENAI_API_ENABLED,
+      model: env.OPENAI_API_MODEL,
+      maxRetries: env.OPENAI_API_MAX_RETRIES,
+      timeoutMs: env.OPENAI_API_TIMEOUT_MS,
+      monthlyBudgetMicros: env.OPENAI_API_MONTHLY_BUDGET_MICROS,
+      inputMicrosPerMillion: env.OPENAI_API_INPUT_MICROS_PER_MILLION,
+      outputMicrosPerMillion: env.OPENAI_API_OUTPUT_MICROS_PER_MILLION,
+    },
   },
 
   isProduction() {

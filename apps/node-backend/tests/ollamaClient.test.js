@@ -158,6 +158,40 @@ describe("ollama client", () => {
     });
   });
 
+  describe("embed", () => {
+    it("sends bounded non-truncating embedding input and validates vectors", async () => {
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse({ model: "nomic-embed-text", embeddings: [[0.1, 0.2]] }),
+        );
+      const client = makeClient(fetchImpl);
+      await expect(
+        client.embed({ model: "nomic-embed-text", input: ["passage"] }),
+      ).resolves.toEqual({
+        model: "nomic-embed-text",
+        embeddings: [[0.1, 0.2]],
+      });
+      expect(JSON.parse(fetchImpl.mock.calls[0][1].body)).toEqual({
+        model: "nomic-embed-text",
+        input: ["passage"],
+        truncate: false,
+      });
+    });
+    it("rejects oversized embedding vectors before persistence", async () => {
+      const fetchImpl = vi.fn().mockResolvedValue(
+        jsonResponse({
+          model: "bad-model",
+          embeddings: [Array.from({ length: 8193 }, () => 0.1)],
+        }),
+      );
+      const client = makeClient(fetchImpl);
+      await expect(
+        client.embed({ model: "bad-model", input: ["passage"] }),
+      ).rejects.toMatchObject({ code: "INVALID_EMBEDDING_RESPONSE" });
+    });
+  });
+
   describe("listRunningModels", () => {
     it("normalises resident memory and context telemetry", async () => {
       const fetchImpl = vi.fn().mockResolvedValue(

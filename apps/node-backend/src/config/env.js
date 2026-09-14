@@ -138,6 +138,7 @@ const envSchema = z
     // (time to FIRST chunk); total generation time is unbounded by design.
     OLLAMA_STREAM_IDLE_TIMEOUT_MS: intEnv(120000),
     OLLAMA_NUM_CTX: intEnv(8192),
+    OLLAMA_EMBEDDING_MODEL: optionalStringEnv,
 
     AI_CHAT_ENABLED: booleanEnv(true),
     AI_CHAT_RATE_LIMIT: intEnv(30),
@@ -145,6 +146,20 @@ const envSchema = z
     AI_CHAT_CONTEXT_BUDGET_CHARS: intEnv(24000),
     AI_CHAT_MAX_TOOL_RESULT_CHARS: intEnv(6000),
     AI_CHAT_MAX_TOOL_ROWS: intEnv(500),
+
+    AI_WEB_RESEARCH_ENABLED: booleanEnv(false),
+    AI_WEB_RESEARCH_MAX_SEARCHES: intEnv(3),
+    AI_WEB_RESEARCH_MAX_PAGES: intEnv(5),
+    BRAVE_SEARCH_API_KEY: optionalStringEnv,
+
+    OPENAI_API_ENABLED: booleanEnv(false),
+    OPENAI_API_KEY: optionalStringEnv,
+    OPENAI_API_MODEL: optionalStringEnv,
+    OPENAI_API_MAX_RETRIES: intEnv(2),
+    OPENAI_API_TIMEOUT_MS: intEnv(60000),
+    OPENAI_API_MONTHLY_BUDGET_MICROS: intEnv(0),
+    OPENAI_API_INPUT_MICROS_PER_MILLION: intEnv(0),
+    OPENAI_API_OUTPUT_MICROS_PER_MILLION: intEnv(0),
 
     APP_TIMEZONE: stringEnv("Europe/Brussels"),
 
