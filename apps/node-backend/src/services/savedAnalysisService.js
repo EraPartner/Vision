@@ -6,6 +6,7 @@ import { assertAnalysisDatasetReference } from "@vision/types/analysis-datasets"
 import { query, withTransaction } from "../database/connection.js";
 import { compileVisualAnalysis } from "./analysisCatalog.js";
 import { executeAnalysisSql } from "./analysisExecutor.js";
+import { evaluateAnalysisFormulas } from "./analysisFormulaEngine.js";
 
 const WORKSPACES = new Set([
   "budgeting",
@@ -95,6 +96,8 @@ function buildDefinition({
   workspace,
   querySpec,
   parameters,
+  formulas = [],
+  assumptions = [],
 }) {
   if (!WORKSPACES.has(workspace))
     throw new Error("Unsupported analysis workspace");
@@ -191,6 +194,32 @@ function buildDefinition({
     throw new Error("Unsupported analysis query mode");
   }
 
+  const formulaCalculations = formulas.map((formula) => ({
+    id: formula.id,
+    label: formula.label || formula.id,
+    kind: "formula",
+    expression: formula.expression,
+    resultType: formula.resultType || "decimal",
+    languageVersion: "vision-formula-v1",
+    dependencies: formula.dependencies || [],
+    ...(formula.unit ? { unit: formula.unit } : {}),
+    ...(formula.rounding ? { rounding: formula.rounding } : {}),
+  }));
+  calculations.push(...formulaCalculations);
+  columns.push(
+    ...formulas
+      .filter((formula) => formula.scope === "row")
+      .map((formula) => ({
+        id: formula.id,
+        label: formula.label || formula.id,
+        type: formula.resultType || "decimal",
+        nullable: true,
+        calculationId: formula.id,
+        calculationVersion: "vision-formula-v1",
+        ...(formula.unit ? { unit: formula.unit } : {}),
+      })),
+  );
+
   const definition = {
     contractVersion: 1,
     definitionId,
@@ -201,7 +230,7 @@ function buildDefinition({
     source,
     parameters: standardParameters(parameters),
     calculations,
-    assumptions: [],
+    assumptions,
     presentations: [],
     expectedResult: { columns },
     reporting: {
@@ -232,6 +261,37 @@ function mapSaved(row) {
     updatedAt: row.updated_at,
     definition: row.definition_json,
     lastResult: row.result_json ?? null,
+  };
+}
+
+function versionState({
+  parameters,
+  formulaModel,
+  charts,
+  sourceReferences,
+  refreshMode,
+}) {
+  return {
+    parameters: { ...(parameters || {}), formulaModel },
+    charts: charts || [],
+    sourceReferences: sourceReferences || [],
+    refreshMode: refreshMode || "live",
+  };
+}
+
+function resolveFormulaModel(input, currentFormulaModel) {
+  const nested = input.parameters?.formulaModel;
+  return {
+    formulas:
+      input.formulas ?? nested?.formulas ?? currentFormulaModel.formulas,
+    assumptions:
+      input.assumptions ??
+      nested?.assumptions ??
+      currentFormulaModel.assumptions,
+    assumptionValues:
+      input.assumptionValues ??
+      nested?.assumptionValues ??
+      currentFormulaModel.assumptionValues,
   };
 }
 
@@ -272,7 +332,17 @@ export async function getSavedAnalysis(id) {
 export async function createSavedAnalysis(input) {
   const id = randomUUID();
   const definitionId = `analysis:${randomUUID()}`;
-  const definition = buildDefinition({ ...input, definitionId, version: 1 });
+  const formulaModel = {
+    formulas: input.formulas || [],
+    assumptions: input.assumptions || [],
+    assumptionValues: input.assumptionValues || {},
+  };
+  const definition = buildDefinition({
+    ...input,
+    ...formulaModel,
+    definitionId,
+    version: 1,
+  });
   await withTransaction(async (client) => {
     await client.query(
       `INSERT INTO saved_analyses
@@ -285,15 +355,28 @@ export async function createSavedAnalysis(input) {
         input.name,
         input.workspace,
         input.refreshMode || "live",
-        JSON.stringify(input.parameters || {}),
+        JSON.stringify({ ...(input.parameters || {}), formulaModel }),
         JSON.stringify(input.charts || []),
         JSON.stringify(input.sourceReferences || []),
       ],
     );
     await client.query(
       `INSERT INTO saved_analysis_definition_versions
-        (saved_analysis_id, version, definition_json) VALUES ($1,1,$2::jsonb)`,
-      [id, JSON.stringify(definition)],
+        (saved_analysis_id, version, definition_json, state_json)
+       VALUES ($1,1,$2::jsonb,$3::jsonb)`,
+      [
+        id,
+        JSON.stringify(definition),
+        JSON.stringify(
+          versionState({
+            parameters: input.parameters,
+            formulaModel,
+            charts: input.charts,
+            sourceReferences: input.sourceReferences,
+            refreshMode: input.refreshMode,
+          }),
+        ),
+      ],
     );
   });
   return getSavedAnalysis(id);
@@ -310,18 +393,42 @@ export async function updateSavedAnalysis(id, input) {
         status: 404,
       });
     const current = locked.rows[0];
+    if (
+      input.expectedVersion != null &&
+      Number(input.expectedVersion) !== Number(current.current_version)
+    )
+      throw Object.assign(
+        new Error("Saved analysis changed since this edit was prepared"),
+        { status: 409, code: "ANALYSIS_VERSION_CONFLICT" },
+      );
     const version = Number(current.current_version) + 1;
+    const currentFormulaModel = current.parameters_json?.formulaModel || {
+      formulas: [],
+      assumptions: [],
+      assumptionValues: {},
+    };
+    const formulaModel = resolveFormulaModel(input, currentFormulaModel);
     const definition = buildDefinition({
       ...input,
       name: input.name ?? current.name,
       workspace: input.workspace ?? current.workspace,
       definitionId: current.definition_id,
       version,
+      ...formulaModel,
+    });
+    const state = versionState({
+      parameters: input.parameters || current.parameters_json,
+      formulaModel,
+      charts: input.charts || current.charts_json,
+      sourceReferences:
+        input.sourceReferences || current.source_references_json,
+      refreshMode: input.refreshMode || current.refresh_mode,
     });
     await client.query(
       `INSERT INTO saved_analysis_definition_versions
-        (saved_analysis_id, version, definition_json) VALUES ($1,$2,$3::jsonb)`,
-      [id, version, JSON.stringify(definition)],
+        (saved_analysis_id, version, definition_json, state_json)
+       VALUES ($1,$2,$3::jsonb,$4::jsonb)`,
+      [id, version, JSON.stringify(definition), JSON.stringify(state)],
     );
     await client.query(
       `UPDATE saved_analyses SET name=$2, workspace=$3, current_version=$4,
@@ -334,7 +441,10 @@ export async function updateSavedAnalysis(id, input) {
         definition.workspace,
         version,
         input.refreshMode || current.refresh_mode,
-        JSON.stringify(input.parameters || current.parameters_json),
+        JSON.stringify({
+          ...(input.parameters || current.parameters_json),
+          formulaModel,
+        }),
         JSON.stringify(input.charts || current.charts_json),
         JSON.stringify(
           input.sourceReferences || current.source_references_json,
@@ -409,14 +519,39 @@ export async function runSavedAnalysis(id) {
       requestId: runId,
       ...runtimeRequest(saved),
     });
+    const formulaModel = saved.parameters.formulaModel || {
+      formulas: [],
+      assumptions: [],
+      assumptionValues: {},
+    };
+    const assumptions = Object.fromEntries(
+      (formulaModel.assumptions || []).map((item) => [
+        item.id,
+        formulaModel.assumptionValues?.[item.id] ?? item.defaultValue,
+      ]),
+    );
+    const formulaResult = evaluateAnalysisFormulas({
+      rows: result.rows || [],
+      formulas: formulaModel.formulas || [],
+      assumptions,
+    });
+    const completedResult = {
+      ...result,
+      rows: formulaResult.rows,
+      formulaSummaries: formulaResult.summaries,
+      formulaErrors: formulaResult.errors,
+      formulaLanguageVersion: formulaResult.languageVersion,
+    };
     const status =
-      result.window.hasMore || result.window.kind === "truncated"
+      result.window.hasMore ||
+      result.window.kind === "truncated" ||
+      !formulaResult.complete
         ? "partial"
         : "completed";
     await withTransaction(async (client) => {
       await client.query(
         `UPDATE saved_analysis_runs SET status=$2, result_json=$3::jsonb, completed_at=now() WHERE id=$1`,
-        [runId, status, JSON.stringify(result)],
+        [runId, status, JSON.stringify(completedResult)],
       );
       await client.query(
         `UPDATE saved_analyses SET refresh_status='succeeded', last_successful_run_id=$2,
@@ -445,6 +580,82 @@ export async function runSavedAnalysis(id) {
   }
 }
 
+export async function listSavedAnalysisVersions(id) {
+  return (
+    await query(
+      `SELECT version,definition_json AS definition,state_json AS state,created_at AS "createdAt" FROM saved_analysis_definition_versions WHERE saved_analysis_id=$1 ORDER BY version DESC`,
+      [id],
+    )
+  ).rows;
+}
+
+export async function restoreSavedAnalysisVersion(
+  id,
+  version,
+  expectedVersion,
+) {
+  await withTransaction(async (client) => {
+    const locked = (
+      await client.query(
+        `SELECT * FROM saved_analyses WHERE id=$1 FOR UPDATE`,
+        [id],
+      )
+    ).rows[0];
+    if (!locked)
+      throw Object.assign(new Error("Saved analysis not found"), {
+        status: 404,
+      });
+    if (Number(locked.current_version) !== Number(expectedVersion))
+      throw Object.assign(
+        new Error("Saved analysis changed since this restore was prepared"),
+        { status: 409, code: "ANALYSIS_VERSION_CONFLICT" },
+      );
+    const source = (
+      await client.query(
+        `SELECT definition_json,state_json FROM saved_analysis_definition_versions WHERE saved_analysis_id=$1 AND version=$2`,
+        [id, version],
+      )
+    ).rows[0];
+    if (!source)
+      throw Object.assign(new Error("Saved analysis version not found"), {
+        status: 404,
+      });
+    if (source.state_json == null)
+      throw Object.assign(
+        new Error(
+          "This legacy version does not contain enough state for a safe restore",
+        ),
+        { status: 409, code: "ANALYSIS_LEGACY_VERSION_STATE_UNAVAILABLE" },
+      );
+    const next = Number(locked.current_version) + 1;
+    const restored = { ...source.definition_json, definitionVersion: next };
+    const state = source.state_json;
+    await client.query(
+      `INSERT INTO saved_analysis_definition_versions
+        (saved_analysis_id,version,definition_json,state_json)
+       VALUES ($1,$2,$3::jsonb,$4::jsonb)`,
+      [id, next, JSON.stringify(restored), JSON.stringify(state)],
+    );
+    await client.query(
+      `UPDATE saved_analyses SET current_version=$2,name=$3,workspace=$4,
+         parameters_json=$5::jsonb,charts_json=$6::jsonb,
+         source_references_json=$7::jsonb,refresh_mode=$8,updated_at=NOW()
+       WHERE id=$1`,
+      [
+        id,
+        next,
+        restored.name,
+        restored.workspace,
+        JSON.stringify(state.parameters || locked.parameters_json),
+        JSON.stringify(state.charts || locked.charts_json),
+        JSON.stringify(state.sourceReferences || locked.source_references_json),
+        state.refreshMode || locked.refresh_mode,
+      ],
+    );
+  });
+  return getSavedAnalysis(id);
+}
+
 export async function deleteSavedAnalysis(id) {
   const result = await query(
     "DELETE FROM saved_analyses WHERE id = $1 RETURNING id",
@@ -453,4 +664,7 @@ export async function deleteSavedAnalysis(id) {
   return result.rows.length > 0;
 }
 
-export { buildDefinition as __buildDefinition };
+export {
+  buildDefinition as __buildDefinition,
+  resolveFormulaModel as __resolveFormulaModel,
+};

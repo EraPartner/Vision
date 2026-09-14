@@ -16,14 +16,31 @@ import {
   updateSavedAnalysis,
   runSavedAnalysis,
   deleteSavedAnalysis,
+  listSavedAnalysisVersions,
+  restoreSavedAnalysisVersion,
 } from "../services/savedAnalysisService.js";
+import { evaluateAnalysisFormulas } from "../services/analysisFormulaEngine.js";
+import {
+  previewAnalysisProposal,
+  applyAnalysisProposal,
+  generateAnalysisProposal,
+} from "../services/aiAnalysisProposalService.js";
+import {
+  AppError,
+  NotFoundError,
+  ValidationError,
+} from "../middleware/errorHandler.js";
 
 const router = Router();
 
-function inputError(res, error) {
-  return res.status(error.status || 400).json({
-    ok: false,
-    error: { code: "INVALID_ANALYSIS_REQUEST", message: error.message },
+function inputError(_res, error) {
+  if (error.status && error.status !== 400)
+    throw new AppError(error.message, {
+      status: error.status,
+      code: error.code || "INVALID_ANALYSIS_REQUEST",
+    });
+  throw new ValidationError(error.message, {
+    code: error.code || "INVALID_ANALYSIS_REQUEST",
   });
 }
 
@@ -70,15 +87,12 @@ router.post("/execute", async (req, res) => {
   } catch (error) {
     const status = error.code === "57014" ? 408 : 400;
     const location = error.position ? ` (SQL character ${error.position})` : "";
-    res.status(status).json({
-      ok: false,
-      error: {
-        code:
-          error.code === "57014"
-            ? "ANALYSIS_CANCELLED_OR_TIMED_OUT"
-            : "ANALYSIS_EXECUTION_REJECTED",
-        message: `${error.message}${location}`,
-      },
+    throw new AppError(`${error.message}${location}`, {
+      status,
+      code:
+        error.code === "57014"
+          ? "ANALYSIS_CANCELLED_OR_TIMED_OUT"
+          : "ANALYSIS_EXECUTION_REJECTED",
     });
   }
 });
@@ -86,6 +100,41 @@ router.post("/execute", async (req, res) => {
 router.post("/cancel/:requestId", async (req, res) => {
   try {
     res.ok(await cancelAnalysisQuery(req.params.requestId));
+  } catch (error) {
+    inputError(res, error);
+  }
+});
+
+router.post("/formulas/evaluate", (req, res) => {
+  try {
+    res.ok(evaluateAnalysisFormulas(req.body || {}));
+  } catch (error) {
+    inputError(res, error);
+  }
+});
+router.post("/ai-proposals/preview", async (req, res) => {
+  try {
+    res.ok(await previewAnalysisProposal(req.body));
+  } catch (error) {
+    inputError(res, error);
+  }
+});
+router.post("/ai-proposals/apply", async (req, res) => {
+  try {
+    res.ok(await applyAnalysisProposal(req.body));
+  } catch (error) {
+    inputError(res, error);
+  }
+});
+router.post("/saved/:id/ai-proposal", async (req, res) => {
+  try {
+    res.ok(
+      await generateAnalysisProposal({
+        savedAnalysisId: req.params.id,
+        instruction: req.body.instruction,
+        model: req.body.model,
+      }),
+    );
   } catch (error) {
     inputError(res, error);
   }
@@ -164,12 +213,25 @@ router.post("/saved", async (req, res) => {
 });
 router.get("/saved/:id", async (req, res) => {
   const saved = await getSavedAnalysis(req.params.id);
-  if (!saved)
-    return res.status(404).json({
-      ok: false,
-      error: { code: "NOT_FOUND", message: "Saved analysis not found" },
-    });
+  if (!saved) throw new NotFoundError("Saved analysis not found");
   res.ok(saved);
+});
+router.get("/saved/:id/versions", async (req, res) => {
+  const items = await listSavedAnalysisVersions(req.params.id);
+  res.ok({ items, total: items.length });
+});
+router.post("/saved/:id/restore", async (req, res) => {
+  try {
+    res.ok(
+      await restoreSavedAnalysisVersion(
+        req.params.id,
+        req.body.version,
+        req.body.expectedVersion,
+      ),
+    );
+  } catch (error) {
+    inputError(res, error);
+  }
 });
 router.put("/saved/:id", async (req, res) => {
   try {
@@ -187,10 +249,7 @@ router.post("/saved/:id/run", async (req, res) => {
 });
 router.delete("/saved/:id", async (req, res) => {
   if (!(await deleteSavedAnalysis(req.params.id)))
-    return res.status(404).json({
-      ok: false,
-      error: { code: "NOT_FOUND", message: "Saved analysis not found" },
-    });
+    throw new NotFoundError("Saved analysis not found");
   res.status(204).end();
 });
 
