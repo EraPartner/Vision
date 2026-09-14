@@ -6,6 +6,7 @@ import {
   __planInvestigation,
   __shouldReuseStep,
   __usesCloudSynthesis,
+  __applyPlannerOrdering,
   resumeRecoverableInvestigations,
 } from "../src/services/aiInvestigationService.js";
 
@@ -97,6 +98,43 @@ describe("AI investigation orchestration", () => {
         selectedEvidence: null,
       }),
     ).toBe(false);
+  });
+
+  it("adds only validated cloud catalog plans to the local execution queue", () => {
+    const cloudRequest = {
+      ...request,
+      route: "openai-api",
+      scope: { ...request.scope, workspaces: ["budgeting"] },
+    };
+    const baseline = __planInvestigation(cloudRequest);
+    const plan = __applyPlannerOrdering(
+      JSON.stringify({
+        stepIds: [],
+        analysisPlans: [
+          {
+            schemaVersion: 1,
+            catalogVersion: 1,
+            datasetId: "cash-flows",
+            fields: ["month"],
+            filters: [],
+            groups: ["month"],
+            measures: ["sum_spending"],
+            joins: [],
+            orderBy: [{ id: "month", direction: "asc" }],
+            limit: 100,
+            formulas: [],
+          },
+        ],
+      }),
+      baseline,
+      "openai",
+      cloudRequest,
+    );
+    expect(plan.steps.at(-1)).toMatchObject({
+      tool: "executeCatalogAnalysis",
+      args: { analysisPlan: { datasetId: "cash-flows" } },
+    });
+    expect(plan.steps.at(-1).args).not.toHaveProperty("sql");
   });
 
   it("pauses a materially ambiguous comparison plan", () => {

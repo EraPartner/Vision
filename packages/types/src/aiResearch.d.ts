@@ -79,6 +79,41 @@ export interface AiInvestigationPlan {
   language: "en" | "nl";
 }
 export declare const aiInvestigationPlanSchema: z.ZodType<AiInvestigationPlan>;
+export interface AiCloudAnalysisPlan {
+  schemaVersion: 1;
+  catalogVersion: number;
+  datasetId: "transactions" | "accounts" | "holdings" | "cash-flows";
+  fields: string[];
+  filters: Array<{
+    fieldId: string;
+    operator:
+      | "eq"
+      | "neq"
+      | "lt"
+      | "lte"
+      | "gt"
+      | "gte"
+      | "contains"
+      | "starts-with"
+      | "is-null"
+      | "is-not-null";
+    value?: string | number | boolean;
+  }>;
+  groups: string[];
+  measures: string[];
+  joins: string[];
+  orderBy: Array<{ id: string; direction: "asc" | "desc" }>;
+  limit: number;
+  formulas: Array<{
+    id: string;
+    label: string;
+    expression: string;
+    scope: "row" | "summary";
+    resultType: "decimal" | "integer" | "boolean" | "string";
+    dependencies: string[];
+  }>;
+}
+export declare const aiCloudAnalysisPlanSchema: z.ZodType<AiCloudAnalysisPlan>;
 export interface AiAnalysisEditProposal {
   schemaVersion: 1;
   savedAnalysisId: string;

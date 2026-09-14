@@ -10,6 +10,10 @@ import {
   generateLocalSynthesis,
 } from "./aiProviderAdapters.js";
 import * as jobs from "../repositories/aiInvestigationRepository.js";
+import {
+  executeCloudAnalysisPlan,
+  parseCloudAnalysisPlans,
+} from "./cloudAnalysisPlan.js";
 
 const active = new Map();
 let executionTail = Promise.resolve();
@@ -196,7 +200,7 @@ function planInvestigation(request) {
   });
 }
 
-function applyPlannerOrdering(text, baseline, provider) {
+function applyPlannerOrdering(text, baseline, provider, request) {
   try {
     const start = text.indexOf("{");
     const end = text.lastIndexOf("}");
@@ -213,13 +217,28 @@ function applyPlannerOrdering(text, baseline, provider) {
     for (const step of baseline.steps) {
       if (!seen.has(step.id)) selected.push(step);
     }
+    const analysisPlans =
+      request.route === "openai-api"
+        ? parseCloudAnalysisPlans(text, {
+            workspaces: request.scope.workspaces,
+          })
+        : [];
+    const analysisSteps = analysisPlans.map((analysisPlan, index) => ({
+      id: `cloud-analysis-${index + 1}`,
+      tool: "executeCatalogAnalysis",
+      args: { analysisPlan },
+      purpose:
+        "Execute a cloud-authored typed catalog plan inside Vision's local restricted analysis boundary",
+      dependsOn: [],
+      canRunInParallel: false,
+    }));
     return aiInvestigationPlanSchema.parse({
       ...baseline,
       assumptions: [
         ...baseline.assumptions,
         `Step priority was proposed by ${provider} and constrained to the locally generated candidate plan.`,
       ],
-      steps: selected,
+      steps: [...selected, ...analysisSteps].slice(0, 24),
     });
   } catch {
     return baseline;
@@ -336,6 +355,23 @@ async function executeSteps({
           ok: true,
           data: { text: request.selectedEvidence },
           meta: { source: "user-selected", disclosed: true },
+        });
+        continue;
+      }
+      if (step.tool === "executeCatalogAnalysis") {
+        const data = await executeCloudAnalysisPlan(
+          step.args.analysisPlan,
+          request.scope,
+          { requestId: `${id}-${step.id}`.slice(0, 128) },
+        );
+        await jobs.finishStep(id, step.id, {
+          ok: true,
+          data,
+          meta: {
+            source: "vision-local-analysis-executor",
+            private: true,
+            disclosed: false,
+          },
         });
         continue;
       }
@@ -589,7 +625,7 @@ export async function runInvestigationJob(
                 {
                   role: "system",
                   content:
-                    "Return JSON only as {stepIds:string[]}. Prioritize the supplied candidate step ids for answering the question. Do not answer the question and do not invent tools.",
+                    "Return JSON only as {stepIds:string[],analysisPlans:CloudAnalysisPlan[]}. Prioritize supplied candidate step ids and optionally propose typed catalog plans that match the supplied public schema. Do not answer the question, emit SQL, or invent tools.",
                 },
                 {
                   role: "user",
@@ -608,6 +644,7 @@ export async function runInvestigationJob(
               planning.text,
               baseline,
               planning.provider,
+              request,
             );
           } catch (error) {
             plan = aiInvestigationPlanSchema.parse({
@@ -854,4 +891,5 @@ export {
   buildRetryPlan as __buildRetryPlan,
   shouldReuseStep as __shouldReuseStep,
   usesCloudSynthesis as __usesCloudSynthesis,
+  applyPlannerOrdering as __applyPlannerOrdering,
 };

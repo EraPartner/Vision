@@ -214,6 +214,89 @@ export const aiInvestigationPlanSchema = z.strictObject({
   language: z.enum(["en", "nl"]),
 });
 
+const cloudAnalysisValueSchema = z.union([
+  z.string().max(500),
+  z.number().finite(),
+  z.boolean(),
+]);
+const cloudAnalysisFilterSchema = z
+  .strictObject({
+    fieldId: z.string().regex(/^[a-z][a-z0-9_.-]{0,63}$/),
+    operator: z.enum([
+      "eq",
+      "neq",
+      "lt",
+      "lte",
+      "gt",
+      "gte",
+      "contains",
+      "starts-with",
+      "is-null",
+      "is-not-null",
+    ]),
+    value: cloudAnalysisValueSchema.optional(),
+  })
+  .superRefine((filter, ctx) => {
+    const unary = ["is-null", "is-not-null"].includes(filter.operator);
+    if (unary === (filter.value !== undefined))
+      ctx.addIssue({
+        code: "custom",
+        path: ["value"],
+        message: unary
+          ? "Unary filters cannot carry a value"
+          : "This filter requires a scalar value",
+      });
+  });
+
+export const aiCloudAnalysisPlanSchema = z.strictObject({
+  schemaVersion: z.literal(1),
+  catalogVersion: z.number().int().positive(),
+  datasetId: z.enum(["transactions", "accounts", "holdings", "cash-flows"]),
+  fields: z
+    .array(z.string().regex(/^[a-z][a-z0-9_.-]{0,63}$/))
+    .max(24)
+    .default([]),
+  filters: z.array(cloudAnalysisFilterSchema).max(24).default([]),
+  groups: z
+    .array(z.string().regex(/^[a-z][a-z0-9_.-]{0,63}$/))
+    .max(12)
+    .default([]),
+  measures: z
+    .array(z.string().regex(/^[a-z][a-z0-9_.-]{0,63}$/))
+    .max(12)
+    .default([]),
+  joins: z
+    .array(z.string().regex(/^[a-z][a-z0-9_.-]{0,63}$/))
+    .max(4)
+    .default([]),
+  orderBy: z
+    .array(
+      z.strictObject({
+        id: z.string().regex(/^[a-z][a-z0-9_.-]{0,63}$/),
+        direction: z.enum(["asc", "desc"]),
+      }),
+    )
+    .max(8)
+    .default([]),
+  limit: z.number().int().min(1).max(500).default(100),
+  formulas: z
+    .array(
+      z.strictObject({
+        id: z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/),
+        label: z.string().min(1).max(120),
+        expression: z.string().min(1).max(1000),
+        scope: z.enum(["row", "summary"]).default("row"),
+        resultType: z.enum(["decimal", "integer", "boolean", "string"]),
+        dependencies: z
+          .array(z.string().regex(/^[a-z][a-z0-9_.-]{0,63}$/))
+          .max(24)
+          .default([]),
+      }),
+    )
+    .max(12)
+    .default([]),
+});
+
 export const aiAnalysisEditProposalSchema = z.strictObject({
   schemaVersion: z.literal(1),
   savedAnalysisId: z.string().min(1),

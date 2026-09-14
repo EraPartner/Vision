@@ -11,6 +11,7 @@ import {
   findUncertainDisclosure,
   updateDisclosureRecord,
 } from "../repositories/aiDisclosureRepository.js";
+import { getPublicCloudAnalysisCatalog } from "./cloudAnalysisPlan.js";
 
 function outputText(response) {
   return String(response?.content ?? response?.outputText ?? "").trim();
@@ -85,9 +86,7 @@ export function disclosurePayload(request) {
         }),
     publicSchema: selectedEvidenceMode
       ? "Vision selected-evidence synthesis v1. Use only the explicitly selected evidence. Return JSON only matching the Vision AI answer schema: {schemaVersion:1,status:'complete'|'qualified'|'abstained'|'partial',depth:'quick'|'detailed',language:'en'|'nl',summary:string,facts:{text:string,evidenceIds:string[]}[],calculations:{text:string,evidenceIds:string[]}[],interpretations:{text:string,evidenceIds:string[]}[],assumptions:string[],missingInformation:string[],conflicts:{description:string,evidenceIds:string[]}[],evidence:[],analysisReference:null}. Every fact, calculation, and interpretation must cite evidence id 'selected-evidence'. Do not request tools or additional data."
-      : selectedSummaryMode
-        ? "Vision investigation planner v1. Use only the explicitly selected summary. Return JSON only: {stepIds:string[]}. Select and order only candidate step ids supplied by the local orchestrator. Do not answer the question."
-        : "Vision investigation planner v1. Return JSON only: {stepIds:string[]}. Select and order only candidate step ids supplied by the local orchestrator. Do not answer the question.",
+      : `${selectedSummaryMode ? "Use only the explicitly selected summary. " : ""}Vision investigation planner v2. Return JSON only as {stepIds:string[],analysisPlans:CloudAnalysisPlan[]}. Select and order only supplied candidate step ids. You may add at most three CloudAnalysisPlan objects using only the catalog identifiers below. Never emit SQL, relation names, account or investment identifiers, URLs, code, result callbacks, disclosure instructions, or a final answer. CloudAnalysisPlan is {schemaVersion:1,catalogVersion:number,datasetId:string,fields:string[],filters:{fieldId:string,operator:string,value?:string|number|boolean}[],groups:string[],measures:string[],joins:string[],orderBy:{id:string,direction:'asc'|'desc'}[],limit:1..500,formulas:{id:string,label:string,expression:string,scope:'row'|'summary',resultType:'decimal'|'integer'|'boolean'|'string',dependencies:string[]}[]}. Formula expressions use Vision's bounded formula language and cannot access files, network, SQL, or tools. Catalog: ${JSON.stringify(getPublicCloudAnalysisCatalog())}`,
     language: request.language,
     depth: request.depth,
     citations: selectedEvidenceMode ? ["selected-evidence"] : candidates,
