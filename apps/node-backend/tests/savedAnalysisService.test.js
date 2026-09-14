@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   __buildDefinition as buildDefinition,
   __resolveFormulaModel,
+  __finalizeSavedAnalysisResult,
 } from "../src/services/savedAnalysisService.js";
 
 describe("saved analysis definitions", () => {
@@ -198,6 +199,56 @@ describe("saved analysis definitions", () => {
       formulas: [{ id: "edited" }],
       assumptions: [{ id: "rate" }],
       assumptionValues: { rate: "0.03" },
+    });
+  });
+
+  it("joins typed scenario values before evaluating formulas", () => {
+    const finalized = __finalizeSavedAnalysisResult(
+      {
+        rows: [{ plan: "A", actual_cost: "38" }],
+        columns: [
+          { id: "plan", type: "string" },
+          { id: "actual_cost", type: "decimal" },
+        ],
+        window: { kind: "page", hasMore: false },
+      },
+      {
+        scenarioModel: {
+          attachments: [
+            {
+              id: "options",
+              fileName: "options.csv",
+              importedAt: "2026-09-14T10:00:00Z",
+              sha256: "a".repeat(64),
+              columns: [
+                { id: "plan", label: "Plan", type: "string" },
+                { id: "cost", label: "Cost", type: "decimal" },
+              ],
+              rows: [{ plan: "A", cost: "40.5" }],
+            },
+          ],
+          joins: [
+            { inputId: "options", resultColumn: "plan", inputColumn: "plan" },
+          ],
+        },
+        formulaModel: {
+          assumptions: [],
+          assumptionValues: {},
+          formulas: [
+            {
+              id: "difference",
+              scope: "row",
+              expression: "options.cost - actual_cost",
+            },
+          ],
+        },
+      },
+    );
+
+    expect(finalized.complete).toBe(true);
+    expect(finalized.result.rows[0]).toMatchObject({
+      "options.cost": "40.5",
+      difference: "2.5",
     });
   });
 });

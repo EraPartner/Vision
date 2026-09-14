@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { resolveOpenAiModel } from "@/features/ai-chat/openAiModelSelection";
 import { useAiResearchStatus } from "@/hooks/useAiResearchStatus";
+import { resolveAnalysisPreferences } from "@/lib/analysisPreferences";
 
 const EMPTY_OPENAI_MODELS: OpenAiResearchModel[] = [];
 
@@ -124,7 +125,9 @@ export function AIInvestigationPanel() {
     const { appSettings } = useAppSettings();
     const { data: aiResearchStatus } = useAiResearchStatus();
     const [question, setQuestion] = useState("");
-    const [depth, setDepth] = useState<"quick" | "detailed">("quick");
+    const [depthOverride, setDepthOverride] = useState<
+        "quick" | "detailed" | null
+    >(null);
     const [route, setRoute] = useState<"local" | "openai-api">("local");
     const [openAiModelOverride, setOpenAiModelOverride] = useState<
         string | null
@@ -159,6 +162,8 @@ export function AIInvestigationPanel() {
     >([]);
     const [documents, setDocuments] = useState<ResearchDocument[]>([]);
     const openAiEnabled = Boolean(aiResearchStatus?.openai.enabled);
+    const resolvedPreferences = resolveAnalysisPreferences({ appSettings });
+    const depth = depthOverride ?? resolvedPreferences.answerDepth;
     const openAiModels = aiResearchStatus?.openai.models ?? EMPTY_OPENAI_MODELS;
     const openAiServerDefault = aiResearchStatus?.openai.model ?? "";
     const openAiModel = resolveOpenAiModel({
@@ -199,8 +204,10 @@ export function AIInvestigationPanel() {
             investmentIds: [],
             dateFrom: dateFrom || null,
             dateTo: dateTo || null,
-            currency: "EUR",
-            constraints: [],
+            currency: resolvedPreferences.currency,
+            constraints: resolvedPreferences.benchmark
+                ? [`benchmark:${resolvedPreferences.benchmark}`]
+                : [],
         },
         grantId: null,
         selectedSummary:
@@ -423,7 +430,9 @@ export function AIInvestigationPanel() {
                     className="rounded-md border bg-background px-2 text-sm"
                     value={depth}
                     onChange={(event) =>
-                        setDepth(event.target.value as typeof depth)
+                        setDepthOverride(
+                            event.target.value as "quick" | "detailed",
+                        )
                     }
                 >
                     <option value="quick">{t("aiResearch.quick")}</option>
@@ -466,6 +475,14 @@ export function AIInvestigationPanel() {
                     <option value="openai-api">{t("aiResearch.openAi")}</option>
                 </select>
             </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+                {t("aiResearch.effectivePreferences", {
+                    currency: resolvedPreferences.currency,
+                    benchmark:
+                        resolvedPreferences.benchmark ??
+                        t("aiResearch.noBenchmark"),
+                })}
+            </p>
             <div className="mt-2 flex flex-wrap gap-2">
                 <label className="text-xs">
                     {t("aiResearch.dateFrom")}

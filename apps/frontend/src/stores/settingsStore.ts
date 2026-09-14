@@ -66,6 +66,10 @@ export interface AppSettings {
     language: Language;
     aiDefaultModel?: string;
     openAiDefaultModel?: string;
+    /** Explicit local analysis answer preference; absence uses the product default. */
+    aiAnswerDepth?: "quick" | "detailed";
+    /** Explicit comparison symbol or catalog identifier; never inferred. */
+    analysisBenchmark?: string;
     costBasisMethod: CostBasisMethod;
     adminMode: boolean;
     visualEffects: VisualEffectsTier;
@@ -174,6 +178,14 @@ const storedAppSettingsSchema = z.looseObject({
         .catch(DEFAULT_APP_SETTINGS.language),
     aiDefaultModel: z.string().optional().catch(undefined),
     openAiDefaultModel: z.string().min(1).max(200).optional().catch(undefined),
+    aiAnswerDepth: z.enum(["quick", "detailed"]).optional().catch(undefined),
+    analysisBenchmark: z
+        .string()
+        .trim()
+        .toUpperCase()
+        .regex(/^[A-Z0-9][A-Z0-9._:-]{0,31}$/)
+        .optional()
+        .catch(undefined),
     costBasisMethod: z
         .enum([
             "weighted_avg",
@@ -219,11 +231,20 @@ const storedAppSettingsSchema = z.looseObject({
 export function migrateAppSettings(raw: unknown): AppSettings {
     const parsed = storedAppSettingsSchema.safeParse(raw);
     if (!parsed.success) return DEFAULT_APP_SETTINGS;
-    const { aiDefaultModel, openAiDefaultModel, ...rest } = parsed.data;
+    const {
+        aiDefaultModel,
+        openAiDefaultModel,
+        aiAnswerDepth,
+        analysisBenchmark,
+        ...rest
+    } = parsed.data;
     const merged: AppSettings = { ...DEFAULT_APP_SETTINGS, ...rest };
     if (aiDefaultModel !== undefined) merged.aiDefaultModel = aiDefaultModel;
     if (openAiDefaultModel !== undefined)
         merged.openAiDefaultModel = openAiDefaultModel;
+    if (aiAnswerDepth !== undefined) merged.aiAnswerDepth = aiAnswerDepth;
+    if (analysisBenchmark !== undefined)
+        merged.analysisBenchmark = analysisBenchmark;
     return merged;
 }
 

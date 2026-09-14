@@ -6,7 +6,10 @@ import { render } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router";
 import { apiClient } from "@/lib/api";
+import { downloadBlob } from "@/lib/downloadBlob";
 import AnalysisWorkspacePage from "@/pages/AnalysisWorkspacePage";
+
+vi.mock("@/lib/downloadBlob", () => ({ downloadBlob: vi.fn() }));
 
 vi.mock("@/stores/hydration/LanguageHydration", async (importOriginal) => {
     const actual =
@@ -100,6 +103,7 @@ const result = {
 
 describe("AnalysisWorkspacePage", () => {
     beforeEach(() => {
+        vi.clearAllMocks();
         vi.spyOn(apiClient, "getAnalysisCatalog").mockResolvedValue(
             catalog as never,
         );
@@ -132,6 +136,7 @@ describe("AnalysisWorkspacePage", () => {
             screen.getByText(/FROM vision_analysis\.cash_flows_v1/),
         ).toBeInTheDocument();
 
+        await user.click(screen.getByText("Advanced controls"));
         await user.click(screen.getByRole("button", { name: "SQL editor" }));
         fireEvent.change(screen.getByLabelText("Typed SQL parameters"), {
             target: { value: "not-json" },
@@ -142,5 +147,98 @@ describe("AnalysisWorkspacePage", () => {
             "SQL parameters must be a JSON array",
         );
         expect(apiClient.executeAnalysis).toHaveBeenCalledTimes(1);
+    });
+
+    it("applies a guided template as an editable ordinary analysis", async () => {
+        const user = userEvent.setup();
+        renderPage();
+
+        await screen.findByText("Cash flows");
+        await user.click(
+            screen.getByRole("button", { name: /Category spending/ }),
+        );
+        await user.click(screen.getByRole("button", { name: "Run" }));
+
+        await waitFor(() =>
+            expect(apiClient.executeAnalysis).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    mode: "visual",
+                    plan: expect.objectContaining({
+                        datasetId: "cash-flows",
+                        fields: ["month", "category_general"],
+                        measures: ["sum_spending"],
+                    }),
+                }),
+            ),
+        );
+    });
+
+    it("persists an explicit no-benchmark override", async () => {
+        const user = userEvent.setup();
+        const create = vi
+            .spyOn(apiClient, "createSavedAnalysis")
+            .mockResolvedValue({
+                id: "saved-1",
+                definitionId: "analysis:saved-1",
+                name: "No benchmark",
+                workspace: "budgeting",
+                version: 1,
+                refreshMode: "live",
+                parameters: { benchmark: null },
+                charts: [],
+                sourceReferences: [],
+                refreshStatus: "never-run",
+                lastSuccessfulRunId: null,
+                lastError: null,
+                definition: {},
+                lastResult: result,
+                createdAt: "2026-09-14T10:00:00Z",
+                updatedAt: "2026-09-14T10:00:00Z",
+            } as never);
+        renderPage();
+
+        await screen.findByText("Cash flows");
+        await user.click(screen.getByRole("button", { name: "Run" }));
+        await screen.findAllByText("Food");
+        await user.type(
+            screen.getByPlaceholderText("Analysis name"),
+            "No benchmark",
+        );
+        await user.click(screen.getByText("Run preferences"));
+        await user.click(
+            screen.getByRole("checkbox", {
+                name: "Use no benchmark for this analysis",
+            }),
+        );
+        await user.click(screen.getByRole("button", { name: "Save analysis" }));
+
+        await waitFor(() =>
+            expect(create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    parameters: expect.objectContaining({ benchmark: null }),
+                }),
+            ),
+        );
+    });
+
+    it("keeps export metadata bound to the result-producing run", async () => {
+        const user = userEvent.setup();
+        renderPage();
+
+        await screen.findByText("Cash flows");
+        const nameInput = screen.getByPlaceholderText("Analysis name");
+        await user.type(nameInput, "Original scope");
+        await user.click(screen.getByRole("button", { name: "Run" }));
+        await screen.findAllByText("Food");
+        await user.clear(nameInput);
+        await user.type(nameInput, "Changed after run");
+        await user.click(
+            screen.getByRole("button", { name: "Export safe CSV" }),
+        );
+
+        expect(downloadBlob).toHaveBeenCalledWith(
+            expect.any(Blob),
+            "original-scope.csv",
+        );
     });
 });

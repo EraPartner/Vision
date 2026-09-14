@@ -7,6 +7,11 @@ import { query, withTransaction } from "../database/connection.js";
 import { compileVisualAnalysis } from "./analysisCatalog.js";
 import { executeAnalysisSql } from "./analysisExecutor.js";
 import { evaluateAnalysisFormulas } from "./analysisFormulaEngine.js";
+import {
+  analysisScenarioModelSchema,
+  applyScenarioInputs,
+  validateScenarioBindings,
+} from "./analysisScenarioInputs.js";
 
 const WORKSPACES = new Set([
   "budgeting",
@@ -337,12 +342,21 @@ export async function createSavedAnalysis(input) {
     assumptions: input.assumptions || [],
     assumptionValues: input.assumptionValues || {},
   };
+  const scenarioModel = analysisScenarioModelSchema.parse(
+    input.parameters?.scenarioModel ?? { attachments: [], joins: [] },
+  );
   const definition = buildDefinition({
     ...input,
     ...formulaModel,
     definitionId,
     version: 1,
   });
+  validateScenarioBindings(
+    scenarioModel,
+    definition.expectedResult.columns.filter(
+      ({ calculationVersion }) => calculationVersion !== "vision-formula-v1",
+    ),
+  );
   await withTransaction(async (client) => {
     await client.query(
       `INSERT INTO saved_analyses
@@ -355,7 +369,11 @@ export async function createSavedAnalysis(input) {
         input.name,
         input.workspace,
         input.refreshMode || "live",
-        JSON.stringify({ ...(input.parameters || {}), formulaModel }),
+        JSON.stringify({
+          ...(input.parameters || {}),
+          formulaModel,
+          scenarioModel,
+        }),
         JSON.stringify(input.charts || []),
         JSON.stringify(input.sourceReferences || []),
       ],
@@ -369,7 +387,7 @@ export async function createSavedAnalysis(input) {
         JSON.stringify(definition),
         JSON.stringify(
           versionState({
-            parameters: input.parameters,
+            parameters: { ...(input.parameters || {}), scenarioModel },
             formulaModel,
             charts: input.charts,
             sourceReferences: input.sourceReferences,
@@ -408,6 +426,13 @@ export async function updateSavedAnalysis(id, input) {
       assumptionValues: {},
     };
     const formulaModel = resolveFormulaModel(input, currentFormulaModel);
+    const scenarioModel = analysisScenarioModelSchema.parse(
+      input.parameters?.scenarioModel ??
+        current.parameters_json?.scenarioModel ?? {
+          attachments: [],
+          joins: [],
+        },
+    );
     const definition = buildDefinition({
       ...input,
       name: input.name ?? current.name,
@@ -416,8 +441,17 @@ export async function updateSavedAnalysis(id, input) {
       version,
       ...formulaModel,
     });
+    validateScenarioBindings(
+      scenarioModel,
+      definition.expectedResult.columns.filter(
+        ({ calculationVersion }) => calculationVersion !== "vision-formula-v1",
+      ),
+    );
     const state = versionState({
-      parameters: input.parameters || current.parameters_json,
+      parameters: {
+        ...(input.parameters || current.parameters_json),
+        scenarioModel,
+      },
       formulaModel,
       charts: input.charts || current.charts_json,
       sourceReferences:
@@ -444,6 +478,7 @@ export async function updateSavedAnalysis(id, input) {
         JSON.stringify({
           ...(input.parameters || current.parameters_json),
           formulaModel,
+          scenarioModel,
         }),
         JSON.stringify(input.charts || current.charts_json),
         JSON.stringify(
@@ -497,6 +532,40 @@ function runtimeRequest(saved) {
   };
 }
 
+function finalizeSavedAnalysisResult(result, parameters) {
+  const formulaModel = parameters.formulaModel || {
+    formulas: [],
+    assumptions: [],
+    assumptionValues: {},
+  };
+  const assumptions = Object.fromEntries(
+    (formulaModel.assumptions || []).map((item) => [
+      item.id,
+      formulaModel.assumptionValues?.[item.id] ?? item.defaultValue,
+    ]),
+  );
+  const scenarioRows = applyScenarioInputs(
+    result.rows || [],
+    parameters.scenarioModel,
+    result.declaredColumns?.length ? result.declaredColumns : result.columns,
+  );
+  const formulaResult = evaluateAnalysisFormulas({
+    rows: scenarioRows,
+    formulas: formulaModel.formulas || [],
+    assumptions,
+  });
+  return {
+    complete: formulaResult.complete,
+    result: {
+      ...result,
+      rows: formulaResult.rows,
+      formulaSummaries: formulaResult.summaries,
+      formulaErrors: formulaResult.errors,
+      formulaLanguageVersion: formulaResult.languageVersion,
+    },
+  };
+}
+
 export async function runSavedAnalysis(id) {
   const saved = await getSavedAnalysis(id);
   if (!saved)
@@ -519,33 +588,12 @@ export async function runSavedAnalysis(id) {
       requestId: runId,
       ...runtimeRequest(saved),
     });
-    const formulaModel = saved.parameters.formulaModel || {
-      formulas: [],
-      assumptions: [],
-      assumptionValues: {},
-    };
-    const assumptions = Object.fromEntries(
-      (formulaModel.assumptions || []).map((item) => [
-        item.id,
-        formulaModel.assumptionValues?.[item.id] ?? item.defaultValue,
-      ]),
-    );
-    const formulaResult = evaluateAnalysisFormulas({
-      rows: result.rows || [],
-      formulas: formulaModel.formulas || [],
-      assumptions,
-    });
-    const completedResult = {
-      ...result,
-      rows: formulaResult.rows,
-      formulaSummaries: formulaResult.summaries,
-      formulaErrors: formulaResult.errors,
-      formulaLanguageVersion: formulaResult.languageVersion,
-    };
+    const finalized = finalizeSavedAnalysisResult(result, saved.parameters);
+    const completedResult = finalized.result;
     const status =
       result.window.hasMore ||
       result.window.kind === "truncated" ||
-      !formulaResult.complete
+      !finalized.complete
         ? "partial"
         : "completed";
     await withTransaction(async (client) => {
@@ -667,4 +715,5 @@ export async function deleteSavedAnalysis(id) {
 export {
   buildDefinition as __buildDefinition,
   resolveFormulaModel as __resolveFormulaModel,
+  finalizeSavedAnalysisResult as __finalizeSavedAnalysisResult,
 };

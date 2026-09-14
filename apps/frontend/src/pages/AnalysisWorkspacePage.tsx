@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Database, Play, Save, Square, Trash2 } from "lucide-react";
 import { apiClient } from "@/lib/api";
@@ -25,6 +25,14 @@ import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
 import { addAll } from "@vision/shared-utils/money";
 import { useAnalysisWorkspaceQueries } from "@/hooks/useAnalysisQueries";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
+import { resolveAnalysisPreferences } from "@/lib/analysisPreferences";
+import { AnalysisInterchangePanel } from "@/features/analysis/AnalysisInterchangePanel";
+import type { AnalysisScenarioModel } from "@/features/analysis/analysisInterchange";
+import {
+    ANALYSIS_TEMPLATES,
+    cloneAnalysisPlan,
+} from "@/features/analysis/analysisTemplates";
 
 const EMPTY_PLAN: VisualAnalysisPlan = {
     datasetId: "cash-flows",
@@ -59,6 +67,24 @@ const OPERATORS = [
     "is-not-null",
 ];
 const requestId = () => `analysis-${crypto.randomUUID()}`;
+
+interface AnalysisExportContext {
+    name: string;
+    timezone: string;
+    workspace: AnalysisWorkspace;
+    definitionId?: string;
+    definitionVersion?: number;
+    datasetIds: string[];
+    sourceReferences: string[];
+}
+
+const savedDatasetIds = (saved: SavedAnalysis) =>
+    (
+        saved.definition.datasets as
+            Array<{ id?: string; datasetId?: string }> | undefined
+    )
+        ?.map(({ id, datasetId }) => id ?? datasetId)
+        .filter((datasetId): datasetId is string => Boolean(datasetId)) ?? [];
 
 function visualPlanFromSource(
     source: Record<string, unknown>,
@@ -310,6 +336,7 @@ function PivotTable({
 
 export default function AnalysisWorkspacePage() {
     const { t } = useLanguage();
+    const { appSettings } = useAppSettings();
     const queryClient = useQueryClient();
     const requestedSavedAnalysisId = useMemo(
         () =>
@@ -340,6 +367,8 @@ export default function AnalysisWorkspacePage() {
     const [result, setResult] = useState<AnalysisResult | null>(null);
     const [lastUsableResult, setLastUsableResult] =
         useState<AnalysisResult | null>(null);
+    const [exportContext, setExportContext] =
+        useState<AnalysisExportContext | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [activeRequest, setActiveRequest] = useState<string | null>(null);
     const [offset, setOffset] = useState(0);
@@ -348,6 +377,15 @@ export default function AnalysisWorkspacePage() {
     const [formulasJson, setFormulasJson] = useState("[]");
     const [assumptionsJson, setAssumptionsJson] = useState("[]");
     const [assumptionValuesJson, setAssumptionValuesJson] = useState("{}");
+    const [scenarioModel, setScenarioModel] = useState<AnalysisScenarioModel>({
+        attachments: [],
+        joins: [],
+    });
+    const [runCurrency, setRunCurrency] = useState("");
+    const [runBenchmark, setRunBenchmark] = useState("");
+    const [runWithoutBenchmark, setRunWithoutBenchmark] = useState(false);
+    const [runAnswerDepth, setRunAnswerDepth] = useState("");
+    const [runLanguage, setRunLanguage] = useState("");
     const [proposalJson, setProposalJson] = useState("");
     const [proposalPreview, setProposalPreview] = useState<{
         proposal: AnalysisEditProposal;
@@ -370,6 +408,17 @@ export default function AnalysisWorkspacePage() {
     const dataset = catalogQuery.data?.datasets.find(
         (entry) => entry.id === plan.datasetId,
     );
+    const effectivePreferences = resolveAnalysisPreferences({
+        run: {
+            currency: runCurrency || undefined,
+            benchmark: runWithoutBenchmark ? null : runBenchmark || undefined,
+            answerDepth: runAnswerDepth || undefined,
+            language: runLanguage || undefined,
+        },
+        saved: selectedSaved?.parameters,
+        appSettings,
+    });
+    const reportingTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
     useEffect(() => {
         if (!dataset) return;
@@ -440,6 +489,19 @@ export default function AnalysisWorkspacePage() {
             );
             setResult(next);
             setLastUsableResult(next);
+            setExportContext({
+                name: name.trim() || "analysis",
+                timezone: reportingTimezone,
+                workspace,
+                datasetIds:
+                    mode === "visual"
+                        ? [planOverride.datasetId]
+                        : [...sqlDatasets],
+                sourceReferences: sourceReferences
+                    .split("\n")
+                    .map((value) => value.trim())
+                    .filter(Boolean),
+            });
             setOffset(pageOffset);
             if (mode === "visual") setSql(next.generatedSql);
             else
@@ -508,12 +570,16 @@ export default function AnalysisWorkspacePage() {
                 querySpec,
                 refreshMode: "live",
                 parameters: {
-                    currency: "EUR",
-                    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    currency: effectivePreferences.currency,
+                    benchmark: effectivePreferences.benchmark,
+                    answerDepth: effectivePreferences.answerDepth,
+                    language: effectivePreferences.language,
+                    timezone: reportingTimezone,
                     sqlValues: parseSqlValues(
                         sqlValues,
                         t("analysis.sqlParametersInvalid"),
                     ),
+                    scenarioModel,
                 },
                 charts:
                     chartX && chartY
@@ -538,40 +604,71 @@ export default function AnalysisWorkspacePage() {
         onError: (cause) => setError(apiErrorToMessage(cause, t)),
     });
 
-    const loadSaved = (saved: SavedAnalysis) => {
-        const source = sourceFromSaved(saved);
-        setSelectedSaved(saved);
-        setName(saved.name);
-        setWorkspace(saved.workspace);
-        setMode(source.mode);
-        if (source.plan) setPlan(source.plan);
-        if (source.sql !== undefined) setSql(source.sql);
-        if (source.datasetIds?.length) setSqlDatasets(source.datasetIds);
-        if (source.visualOrigin) setVisualOrigin(source.visualOrigin);
-        setSqlValues(JSON.stringify(saved.parameters.sqlValues ?? []));
-        if (saved.lastResult) {
+    const loadSaved = useCallback(
+        (saved: SavedAnalysis) => {
+            const source = sourceFromSaved(saved);
+            setSelectedSaved(saved);
+            setName(saved.name);
+            setWorkspace(saved.workspace);
+            setMode(source.mode);
+            if (source.plan) setPlan(source.plan);
+            if (source.sql !== undefined) setSql(source.sql);
+            if (source.datasetIds?.length) setSqlDatasets(source.datasetIds);
+            if (source.visualOrigin) setVisualOrigin(source.visualOrigin);
+            setSqlValues(JSON.stringify(saved.parameters.sqlValues ?? []));
+            setScenarioModel(
+                (saved.parameters.scenarioModel as
+                    AnalysisScenarioModel | undefined) ?? {
+                    attachments: [],
+                    joins: [],
+                },
+            );
+            setRunCurrency("");
+            setRunBenchmark("");
+            setRunWithoutBenchmark(false);
+            setRunAnswerDepth("");
+            setRunLanguage("");
             setResult(saved.lastResult);
             setLastUsableResult(saved.lastResult);
-        }
-        setSourceReferences(saved.sourceReferences.map(String).join("\n"));
-        const formulaModel = saved.parameters.formulaModel as
-            | {
-                  formulas?: unknown[];
-                  assumptions?: unknown[];
-                  assumptionValues?: Record<string, unknown>;
-              }
-            | undefined;
-        setFormulasJson(JSON.stringify(formulaModel?.formulas ?? [], null, 2));
-        setAssumptionsJson(
-            JSON.stringify(formulaModel?.assumptions ?? [], null, 2),
-        );
-        setAssumptionValuesJson(
-            JSON.stringify(formulaModel?.assumptionValues ?? {}, null, 2),
-        );
-        setProposalPreview(null);
-        setVersions([]);
-        setError(saved.lastError?.message ?? null);
-    };
+            setExportContext(
+                saved.lastResult
+                    ? {
+                          name: saved.name,
+                          timezone:
+                              typeof saved.parameters.timezone === "string"
+                                  ? saved.parameters.timezone
+                                  : reportingTimezone,
+                          workspace: saved.workspace,
+                          definitionId: saved.definitionId,
+                          definitionVersion: saved.version,
+                          datasetIds: savedDatasetIds(saved),
+                          sourceReferences: saved.sourceReferences.map(String),
+                      }
+                    : null,
+            );
+            setSourceReferences(saved.sourceReferences.map(String).join("\n"));
+            const formulaModel = saved.parameters.formulaModel as
+                | {
+                      formulas?: unknown[];
+                      assumptions?: unknown[];
+                      assumptionValues?: Record<string, unknown>;
+                  }
+                | undefined;
+            setFormulasJson(
+                JSON.stringify(formulaModel?.formulas ?? [], null, 2),
+            );
+            setAssumptionsJson(
+                JSON.stringify(formulaModel?.assumptions ?? [], null, 2),
+            );
+            setAssumptionValuesJson(
+                JSON.stringify(formulaModel?.assumptionValues ?? {}, null, 2),
+            );
+            setProposalPreview(null);
+            setVersions([]);
+            setError(saved.lastError?.message ?? null);
+        },
+        [reportingTimezone],
+    );
 
     useEffect(() => {
         const requestedId = requestedSavedAnalysisId;
@@ -580,7 +677,12 @@ export default function AnalysisWorkspacePage() {
             (saved) => saved.id === requestedId,
         );
         if (requested) loadSaved(requested);
-    }, [requestedSavedAnalysisId, savedQuery.data, selectedSaved?.id]);
+    }, [
+        loadSaved,
+        requestedSavedAnalysisId,
+        savedQuery.data,
+        selectedSaved?.id,
+    ]);
 
     const displayedResult = result ?? lastUsableResult;
     const completeForChart =
@@ -617,10 +719,75 @@ export default function AnalysisWorkspacePage() {
                 <div className="space-y-4">
                     <Card>
                         <CardHeader>
+                            <CardTitle>{t("analysis.startTitle")}</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            <div className="grid gap-2 md:grid-cols-3">
+                                {ANALYSIS_TEMPLATES.map((template) => (
+                                    <button
+                                        key={template.id}
+                                        type="button"
+                                        className="rounded-lg border border-border bg-card/60 p-3 text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                        onClick={() => {
+                                            setWorkspace(template.workspace);
+                                            setMode("visual");
+                                            setPlan(
+                                                cloneAnalysisPlan(
+                                                    template.plan,
+                                                ),
+                                            );
+                                            setName(t(template.titleKey));
+                                            setSelectedSaved(null);
+                                            setResult(null);
+                                            setLastUsableResult(null);
+                                            setExportContext(null);
+                                            setError(null);
+                                        }}
+                                    >
+                                        <span className="block text-sm font-medium">
+                                            {t(template.titleKey)}
+                                        </span>
+                                        <span className="mt-1 block text-xs text-muted-foreground">
+                                            {t(template.descriptionKey)}
+                                        </span>
+                                    </button>
+                                ))}
+                            </div>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => {
+                                    setMode("visual");
+                                    setPlan({
+                                        datasetId:
+                                            catalogQuery.data?.datasets[0]
+                                                ?.id ?? "cash-flows",
+                                        fields: [],
+                                        filters: [],
+                                        groups: [],
+                                        measures: [],
+                                        joins: [],
+                                        orderBy: [],
+                                        limit: 500,
+                                    });
+                                    setName("");
+                                    setSelectedSaved(null);
+                                    setResult(null);
+                                    setLastUsableResult(null);
+                                    setExportContext(null);
+                                    setError(null);
+                                }}
+                            >
+                                {t("analysis.blank")}
+                            </Button>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader>
                             <CardTitle>{t("analysis.build")}</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <div className="flex flex-wrap gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
                                 <Button
                                     variant={
                                         mode === "visual"
@@ -631,25 +798,33 @@ export default function AnalysisWorkspacePage() {
                                 >
                                     {t("analysis.visual")}
                                 </Button>
-                                <Button
-                                    variant={
-                                        mode === "sql" ? "default" : "outline"
-                                    }
-                                    onClick={() => {
-                                        if (!sql && result?.generatedSql)
-                                            setSql(result.generatedSql);
-                                        setVisualOrigin(plan);
-                                        setSqlDatasets([
-                                            plan.datasetId,
-                                            ...(plan.joins.length
-                                                ? ["accounts"]
-                                                : []),
-                                        ]);
-                                        setMode("sql");
-                                    }}
-                                >
-                                    {t("analysis.sql")}
-                                </Button>
+                                <details>
+                                    <summary className="cursor-pointer rounded-md border px-3 py-2 text-sm">
+                                        {t("analysis.advanced")}
+                                    </summary>
+                                    <Button
+                                        className="mt-2"
+                                        variant={
+                                            mode === "sql"
+                                                ? "default"
+                                                : "outline"
+                                        }
+                                        onClick={() => {
+                                            if (!sql && result?.generatedSql)
+                                                setSql(result.generatedSql);
+                                            setVisualOrigin(plan);
+                                            setSqlDatasets([
+                                                plan.datasetId,
+                                                ...(plan.joins.length
+                                                    ? ["accounts"]
+                                                    : []),
+                                            ]);
+                                            setMode("sql");
+                                        }}
+                                    >
+                                        {t("analysis.sql")}
+                                    </Button>
+                                </details>
                                 <select
                                     aria-label={t("analysis.workspace")}
                                     value={workspace}
@@ -668,7 +843,17 @@ export default function AnalysisWorkspacePage() {
                                     ))}
                                 </select>
                             </div>
-                            {mode === "visual" && dataset ? (
+                            {catalogQuery.isLoading ? (
+                                <p role="status">
+                                    {t("analysis.catalogLoading")}
+                                </p>
+                            ) : catalogQuery.isError ? (
+                                <p role="alert" className="text-destructive">
+                                    {t("analysis.catalogError")}
+                                </p>
+                            ) : catalogQuery.data?.datasets.length === 0 ? (
+                                <p>{t("analysis.catalogEmpty")}</p>
+                            ) : mode === "visual" && dataset ? (
                                 <>
                                     <div>
                                         <Label htmlFor="analysis-dataset">
@@ -1495,6 +1680,140 @@ export default function AnalysisWorkspacePage() {
                                     setSourceReferences(event.target.value)
                                 }
                                 placeholder={t("analysis.sourcesPlaceholder")}
+                            />
+                            <details>
+                                <summary className="cursor-pointer text-sm font-medium">
+                                    {t("analysis.runPreferences")}
+                                </summary>
+                                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                                    <div>
+                                        <Label htmlFor="analysis-run-currency">
+                                            {t("analysis.reportingCurrency")}
+                                        </Label>
+                                        <Input
+                                            id="analysis-run-currency"
+                                            value={runCurrency}
+                                            maxLength={3}
+                                            placeholder={
+                                                effectivePreferences.currency
+                                            }
+                                            onChange={(event) =>
+                                                setRunCurrency(
+                                                    event.target.value.toUpperCase(),
+                                                )
+                                            }
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label htmlFor="analysis-run-benchmark">
+                                            {t("analysis.benchmark")}
+                                        </Label>
+                                        <Input
+                                            id="analysis-run-benchmark"
+                                            value={runBenchmark}
+                                            disabled={runWithoutBenchmark}
+                                            maxLength={32}
+                                            placeholder={
+                                                effectivePreferences.benchmark ??
+                                                t("analysis.none")
+                                            }
+                                            onChange={(event) =>
+                                                setRunBenchmark(
+                                                    event.target.value.toUpperCase(),
+                                                )
+                                            }
+                                        />
+                                        <div className="mt-1 flex items-center gap-2">
+                                            <Checkbox
+                                                id="analysis-run-no-benchmark"
+                                                checked={runWithoutBenchmark}
+                                                onCheckedChange={(checked) =>
+                                                    setRunWithoutBenchmark(
+                                                        checked === true,
+                                                    )
+                                                }
+                                            />
+                                            <Label htmlFor="analysis-run-no-benchmark">
+                                                {t(
+                                                    "analysis.noBenchmarkForRun",
+                                                )}
+                                            </Label>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <Label htmlFor="analysis-run-depth">
+                                            {t("analysis.answerDepth")}
+                                        </Label>
+                                        <select
+                                            id="analysis-run-depth"
+                                            value={runAnswerDepth}
+                                            onChange={(event) =>
+                                                setRunAnswerDepth(
+                                                    event.target.value,
+                                                )
+                                            }
+                                            className="w-full rounded-md border bg-background px-3 py-2"
+                                        >
+                                            <option value="">
+                                                {t("analysis.useDefault")}
+                                            </option>
+                                            <option value="quick">
+                                                {t("aiResearch.quick")}
+                                            </option>
+                                            <option value="detailed">
+                                                {t("aiResearch.detailed")}
+                                            </option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <Label htmlFor="analysis-run-language">
+                                            {t("analysis.language")}
+                                        </Label>
+                                        <select
+                                            id="analysis-run-language"
+                                            value={runLanguage}
+                                            onChange={(event) =>
+                                                setRunLanguage(
+                                                    event.target.value,
+                                                )
+                                            }
+                                            className="w-full rounded-md border bg-background px-3 py-2"
+                                        >
+                                            <option value="">
+                                                {t("analysis.useDefault")}
+                                            </option>
+                                            <option value="en">
+                                                {t("settings.general.lang.en")}
+                                            </option>
+                                            <option value="nl">
+                                                {t("settings.general.lang.nl")}
+                                            </option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <p className="mt-2 text-xs text-muted-foreground">
+                                    {t("analysis.preferencePrecedence")}
+                                </p>
+                            </details>
+                            <AnalysisInterchangePanel
+                                result={displayedResult}
+                                name={exportContext?.name ?? "analysis"}
+                                timezone={
+                                    exportContext?.timezone ?? reportingTimezone
+                                }
+                                workspace={
+                                    exportContext?.workspace ?? workspace
+                                }
+                                definitionId={exportContext?.definitionId}
+                                definitionVersion={
+                                    exportContext?.definitionVersion
+                                }
+                                datasetIds={exportContext?.datasetIds ?? []}
+                                sourceReferences={
+                                    exportContext?.sourceReferences ?? []
+                                }
+                                scenarioModel={scenarioModel}
+                                onScenarioModelChange={setScenarioModel}
                             />
                             <details>
                                 <summary className="cursor-pointer text-sm font-medium">
