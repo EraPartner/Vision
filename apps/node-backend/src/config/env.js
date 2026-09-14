@@ -155,6 +155,7 @@ const envSchema = z
     OPENAI_API_ENABLED: booleanEnv(false),
     OPENAI_API_KEY: optionalStringEnv,
     OPENAI_API_MODEL: optionalStringEnv,
+    OPENAI_API_MODELS_JSON: optionalStringEnv,
     OPENAI_API_MAX_RETRIES: intEnv(2),
     OPENAI_API_TIMEOUT_MS: intEnv(60000),
     OPENAI_API_MONTHLY_BUDGET_MICROS: intEnv(0),

@@ -16,7 +16,21 @@ function outputText(response) {
   return String(response?.content ?? response?.outputText ?? "").trim();
 }
 
+function configuredOpenAiModel(requestedModel) {
+  const modelId = requestedModel || settings.aiResearch.openai.model;
+  const model = settings.aiResearch.openai.models.find(
+    (candidate) => candidate.id === modelId,
+  );
+  if (!model)
+    throw Object.assign(
+      new Error("The selected OpenAI model is not in the configured allowlist"),
+      { code: "OPENAI_MODEL_NOT_ALLOWED", status: 400 },
+    );
+  return model;
+}
+
 export function disclosurePayload(request) {
+  const selectedModel = configuredOpenAiModel(request.model);
   const candidates = [
     request.savedAnalysisId ? "saved-analysis" : null,
     request.scope.workspaces.some((item) =>
@@ -89,7 +103,7 @@ export function disclosurePayload(request) {
     32000,
   );
   return bindDisclosureToRequest(disclosed, {
-    model: request.model || settings.aiResearch.openai.model,
+    model: selectedModel.id,
     input: disclosed.serialized,
     store: false,
     background: false,
@@ -98,19 +112,17 @@ export function disclosurePayload(request) {
   });
 }
 
-function costMicros(inputTokens, outputTokens) {
+function costMicros(inputTokens, outputTokens, model) {
   return Math.ceil(
-    (inputTokens * settings.aiResearch.openai.inputMicrosPerMillion) /
-      1_000_000 +
-      (outputTokens * settings.aiResearch.openai.outputMicrosPerMillion) /
-        1_000_000,
+    (inputTokens * model.inputMicrosPerMillion) / 1_000_000 +
+      (outputTokens * model.outputMicrosPerMillion) / 1_000_000,
   );
 }
 
-function estimatedCostMicros(inputText, outputTokens) {
+function estimatedCostMicros(inputText, outputTokens, model) {
   // A UTF-8 byte is a conservative upper bound for tokenizer units across
   // compatible byte-level tokenizers. This intentionally over-reserves.
-  return costMicros(Buffer.byteLength(String(inputText)), outputTokens);
+  return costMicros(Buffer.byteLength(String(inputText)), outputTokens, model);
 }
 
 /** @param {{jobId:string,request:any,messages:any[],signal?:AbortSignal}} input */
@@ -140,15 +152,15 @@ export async function generateWithProvider({
     throw Object.assign(new Error("OpenAI API route is disabled"), {
       code: "OPENAI_DISABLED",
     });
+  const selectedModel = configuredOpenAiModel(request.model);
   if (
-    !(request.model || settings.aiResearch.openai.model) ||
     settings.aiResearch.openai.monthlyBudgetMicros <= 0 ||
-    settings.aiResearch.openai.inputMicrosPerMillion <= 0 ||
-    settings.aiResearch.openai.outputMicrosPerMillion <= 0
+    selectedModel.inputMicrosPerMillion <= 0 ||
+    selectedModel.outputMicrosPerMillion <= 0
   )
     throw Object.assign(
       new Error(
-        "OpenAI model and positive storage-independent spend controls must be configured",
+        "The selected OpenAI model requires positive per-model prices and a monthly spend limit",
       ),
       { code: "OPENAI_CONFIGURATION_INCOMPLETE" },
     );
@@ -158,7 +170,11 @@ export async function generateWithProvider({
     });
   const preview = disclosurePayload(request);
   const maxOutputTokens = preview.payload.max_output_tokens;
-  const cost = estimatedCostMicros(preview.serialized, maxOutputTokens);
+  const cost = estimatedCostMicros(
+    preview.serialized,
+    maxOutputTokens,
+    selectedModel,
+  );
   if (await findUncertainDisclosure(jobId))
     throw Object.assign(
       new Error(
@@ -216,7 +232,11 @@ export async function generateWithProvider({
         status: "completed",
         inputTokens,
         outputTokens,
-        costMicros: costMicros(inputTokens ?? 0, outputTokens ?? 0),
+        costMicros: costMicros(
+          inputTokens ?? 0,
+          outputTokens ?? 0,
+          selectedModel,
+        ),
         providerRequestId: response.requestId,
       });
       return {

@@ -51,6 +51,7 @@ Primary sources:
 - [OpenAI privacy policy](https://openai.com/policies/privacy-policy/)
 - [OpenAI subprocessor list](https://openai.com/policies/sub-processor-list/)
 - [API pricing](https://developers.openai.com/api/docs/pricing)
+- [ChatGPT and API billing](https://help.openai.com/en/articles/9039756-managing-billing-settings-on-the-chatgpt-web-and-api-platform)
 
 ## Status Vocabulary
 
@@ -169,6 +170,11 @@ public-question and selected-summary planning profiles remain available and cont
 locally. Every recoverable investigation retains its local input and result until deletion; for
 selected-evidence synthesis, this includes the exact evidence. The separate disclosure log keeps a
 digest and policy metadata rather than the exact payload.
+
+The UI model picker contains only the API models configured by the Vision operator. Each entry has
+its own input/output price, and the server rejects an identifier outside the catalog before preview
+or transmission. The selected model is part of the digest-bound request. This picker cannot spend a
+ChatGPT subscription or ChatGPT usage credits because ChatGPT and API billing are separate.
 
 ### P3 - OpenAI API approved ZDR
 

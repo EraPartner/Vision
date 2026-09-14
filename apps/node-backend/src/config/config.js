@@ -7,6 +7,7 @@
  */
 
 import { env } from "./env.js";
+import { parseOpenAiModelCatalog } from "./openAiModelCatalog.js";
 
 /**
  * @template {object} T
@@ -43,6 +44,14 @@ function defaultAnalysisDatabaseUrl(databaseUrl) {
     return undefined;
   }
 }
+
+const openAiModels = parseOpenAiModelCatalog({
+  catalogJson: env.OPENAI_API_MODELS_JSON,
+  legacyModel: env.OPENAI_API_MODEL,
+  legacyInputMicrosPerMillion: env.OPENAI_API_INPUT_MICROS_PER_MILLION,
+  legacyOutputMicrosPerMillion: env.OPENAI_API_OUTPUT_MICROS_PER_MILLION,
+});
+const defaultOpenAiModel = env.OPENAI_API_MODEL || openAiModels[0]?.id;
 
 const settings = deepFreeze({
   server: {
@@ -120,7 +129,8 @@ const settings = deepFreeze({
     },
     openai: {
       enabled: env.OPENAI_API_ENABLED,
-      model: env.OPENAI_API_MODEL,
+      model: defaultOpenAiModel,
+      models: openAiModels,
       maxRetries: env.OPENAI_API_MAX_RETRIES,
       timeoutMs: env.OPENAI_API_TIMEOUT_MS,
       monthlyBudgetMicros: env.OPENAI_API_MONTHLY_BUDGET_MICROS,

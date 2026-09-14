@@ -31,7 +31,7 @@ aliases: [AI investigation API, research document API, disclosure API]
 | `GET, DELETE` | `/api/ai-research/documents/:id`                 | Inspect metadata or delete it and derived passages       |
 | `POST`        | `/api/ai-research/documents/search/passages`     | Keyword, semantic, or hybrid passage retrieval           |
 
-Investigation input includes `question`, `route`, `researchMode`, `depth`, `language`, typed scope
+Investigation input includes `question`, `route`, `researchMode`, `model`, `depth`, `language`, typed scope
 with separate bank `accountIds` and portfolio `investmentIds`,
 optional `grantId`, optional selected summary or selected evidence, and optional saved-analysis reference. Public web mode
 requires a separately authored `publicWebQuery`. Public-provider mode requires explicit
@@ -63,9 +63,12 @@ falls back to local synthesis. The recoverable investigation stores its input, i
 evidence, until `DELETE /api/ai-research/investigations/:id`. Deleting disclosure history separately
 removes records and grants together; those records contain metadata and a digest, not payload text.
 
-`GET /api/ai-research/status` exposes each disclosure-mode ID, capability, and disclosed field. The
+`GET /api/ai-research/status` exposes each disclosure-mode ID, capability, and disclosed field. It
+also returns the server-approved OpenAI API model catalog, configured per-model prices, and default.
+An OpenAI investigation may select only one of those IDs. The selected model is part of the exact
+preview and consent digest, and its own prices drive spend reservation and final accounting. The
 request contract accepts exactly one of `publicQuestion`, `selectedSummary`, or `selectedEvidence`
-for the OpenAI route; mixed modes are rejected. This API addition is backward-compatible.
+for the OpenAI route; mixed modes are rejected. These API additions are backward-compatible.
 
 ## Analysis extensions
 
@@ -78,6 +81,7 @@ operations. Generation is local and read-only; applying the inspected proposal i
 ## Related
 
 - [[docs/adr/145-bounded-ai-research-orchestration|ADR-145]]
+- [[docs/adr/147-allowlisted-openai-model-selection|ADR-147]]
 - [[docs/api/analysis|Analysis API]]
 - [[docs/features/ai-chat|AI Chat and Investigations]]
 - [[docs/security/ai-data-access|AI Data Access Policy]]

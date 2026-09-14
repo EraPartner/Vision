@@ -177,7 +177,10 @@ The optional OpenAI investigation route has three distinct grants. Public-questi
 typed private-data classifier. Selected-summary planning sends the exact summary but omits the
 original question and constraints. Selected-evidence synthesis sends the exact manually selected
 evidence and lets OpenAI write the final answer without hosted tools. Planning grants cannot authorize
-synthesis. The exact final request bytes are digest-bound to an expiring grant. Network timeouts and
+synthesis. The UI can select only server-allowlisted API models. The selected identifier is part of
+the digest-bound request, and its own configured prices drive reservation and usage accounting so a
+more expensive model cannot inherit a cheaper model's limits. The exact final request bytes are
+digest-bound to an expiring grant. Network timeouts and
 connection failures remain in a `sent` uncertain state and are not replayed automatically. Definite
 cloud-synthesis failures become explicit partial results and do not trigger local-model fallback.
 Deleting disclosure history removes both usage records and grants.

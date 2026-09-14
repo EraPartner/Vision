@@ -3699,6 +3699,7 @@ export interface components {
             publicSymbols?: string[];
             publicMacroQueries?: string[];
             clarification?: string | null;
+            /** @description OpenAI model selected from the server-configured allowlist, or the configured default when omitted. */
             model?: string | null;
             /**
              * @default quick

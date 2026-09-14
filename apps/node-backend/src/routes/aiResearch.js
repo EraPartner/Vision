@@ -48,6 +48,15 @@ router.get("/status", async (_req, res) => {
   } catch {
     localStatus = "unavailable";
   }
+  const selectableOpenAiModels = settings.aiResearch.openai.models.filter(
+    (model) =>
+      model.inputMicrosPerMillion > 0 && model.outputMicrosPerMillion > 0,
+  );
+  const defaultOpenAiModel = selectableOpenAiModels.some(
+    (model) => model.id === settings.aiResearch.openai.model,
+  )
+    ? settings.aiResearch.openai.model
+    : null;
   res.ok({
     defaultRoute: "local",
     providers: [
@@ -63,17 +72,28 @@ router.get("/status", async (_req, res) => {
       {
         id: "openai-api",
         route: "openai-api",
-        status: settings.aiResearch.openai.enabled ? "configured" : "disabled",
-        models: settings.aiResearch.openai.model
-          ? [{ name: settings.aiResearch.openai.model }]
-          : [],
+        status:
+          settings.aiResearch.openai.enabled && selectableOpenAiModels.length
+            ? "configured"
+            : "disabled",
+        models: selectableOpenAiModels.map((model) => ({
+          name: model.id,
+          label: model.label,
+        })),
         supportsTools: false,
         supportsEmbeddings: false,
       },
     ],
     openai: {
       enabled: settings.aiResearch.openai.enabled,
-      model: settings.aiResearch.openai.model || null,
+      model: defaultOpenAiModel,
+      models: selectableOpenAiModels.map((model) => ({
+        id: model.id,
+        label: model.label,
+        inputMicrosPerMillion: model.inputMicrosPerMillion,
+        outputMicrosPerMillion: model.outputMicrosPerMillion,
+        isDefault: model.id === defaultOpenAiModel,
+      })),
       storageRequested: false,
       hostedToolsEnabled: false,
       disclosureModes: [

@@ -1,4 +1,33 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("../src/config/config.js", () => ({
+  default: {
+    database: {
+      url: "postgresql://synthetic.invalid/vision_test",
+      poolSize: 1,
+      maxOverflow: 1,
+    },
+    aiResearch: {
+      openai: {
+        model: "synthetic-model",
+        models: [
+          {
+            id: "synthetic-model",
+            label: "Synthetic model",
+            inputMicrosPerMillion: 100,
+            outputMicrosPerMillion: 200,
+          },
+          {
+            id: "synthetic-model-pro",
+            label: "Synthetic model pro",
+            inputMicrosPerMillion: 300,
+            outputMicrosPerMillion: 600,
+          },
+        ],
+      },
+    },
+  },
+}));
 import {
   buildDisclosurePreview,
   __canonicalJson,
@@ -52,6 +81,51 @@ describe("cloud disclosure policy", () => {
     );
     expect(preview.serialized).toBe(__canonicalJson(preview.payload));
     expect(preview.inputCharacters).toBe(preview.serialized.length);
+  });
+  it("rejects a model outside the configured allowlist", () => {
+    expect(() =>
+      disclosurePayload({
+        question: "Public inflation outlook?",
+        route: "openai-api",
+        publicQuestion: "Public inflation outlook?",
+        model: "unapproved-model",
+        depth: "quick",
+        language: "en",
+        researchMode: "local-only",
+        scope: { workspaces: ["research"], constraints: [] },
+        publicSymbols: [],
+        publicMacroQueries: [],
+        selectedSummary: null,
+        selectedEvidence: null,
+        savedAnalysisId: null,
+      }),
+    ).toThrow(/allowlist/);
+  });
+  it("binds a model change to a different consent digest", () => {
+    const request = {
+      question: "Public inflation outlook?",
+      route: "openai-api",
+      publicQuestion: "Public inflation outlook?",
+      depth: "quick",
+      language: "en",
+      researchMode: "local-only",
+      scope: { workspaces: ["research"], constraints: [] },
+      publicSymbols: [],
+      publicMacroQueries: [],
+      selectedSummary: null,
+      selectedEvidence: null,
+      savedAnalysisId: null,
+    };
+    const standard = disclosurePayload({
+      ...request,
+      model: "synthetic-model",
+    });
+    const pro = disclosurePayload({
+      ...request,
+      model: "synthetic-model-pro",
+    });
+    expect(pro.payload.model).toBe("synthetic-model-pro");
+    expect(pro.payloadSha256).not.toBe(standard.payloadSha256);
   });
   it("does not allow a private selected summary under the public-plan mode", () => {
     expect(() =>

@@ -11,7 +11,7 @@ participant "Local Ollama" as Ollama
 participant "Egress helper\n(short-lived process)" as Egress
 participant "OpenAI Responses API" as OpenAI
 
-User -> UI: Select scope, depth, language,\nresearch mode, and model route
+User -> UI: Select scope, depth, language,\nresearch mode, route, and approved API model
 UI -> API: POST /investigations
 API -> Orchestrator: Strict typed request
 Orchestrator -> DB: Persist queued job
@@ -32,7 +32,7 @@ else Scope is sufficient
     User -> UI: Inspect exact outbound planning payload
     UI -> API: Create digest-bound grant
     API -> DB: Reserve disclosure and spend budgets
-    Orchestrator -> Egress: Canonical allowlisted planning payload
+    Orchestrator -> Egress: Canonical allowlisted planning payload\nwith selected model and its price
     Egress -> OpenAI: POST /v1/responses\nstore=false, tools=[]
     OpenAI --> Egress: Prioritized identifiers and usage
     Egress --> Orchestrator: Bounded response
@@ -40,7 +40,7 @@ else Scope is sufficient
   Orchestrator -> DB: Persist constrained plan
 end
 alt Selected-evidence cloud synthesis
-  Orchestrator -> Egress: Canonical selected-evidence payload
+  Orchestrator -> Egress: Canonical selected-evidence payload\nwith selected model and its price
   Egress -> OpenAI: POST /v1/responses\nstore=false, tools=[]
   OpenAI --> Egress: Structured final answer and usage
   Egress --> Orchestrator: Bounded response
@@ -73,6 +73,8 @@ External checkpoints are never replayed by the retry loop.
 No automatic cloud fallback.
 Financial calculations use deterministic services.
 Cloud synthesis receives only manually selected evidence.
+Selected models come from the server allowlist.
+Per-model prices drive spend reservation.
 end note
 
 @enduml

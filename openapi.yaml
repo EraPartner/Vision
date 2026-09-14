@@ -95,7 +95,12 @@ components:
           items: { type: string, minLength: 1, maxLength: 120 }
         clarification:
           { type: string, minLength: 1, maxLength: 1000, nullable: true }
-        model: { type: string, minLength: 1, maxLength: 200, nullable: true }
+        model:
+          type: string
+          minLength: 1
+          maxLength: 200
+          nullable: true
+          description: OpenAI model selected from the server-configured allowlist, or the configured default when omitted.
         depth: { type: string, enum: [quick, detailed], default: quick }
         language: { type: string, enum: [en, nl], default: en }
         scope:

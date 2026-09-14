@@ -3043,13 +3043,13 @@
             "id": "ai-research-investigation",
             "name": "Run a bounded AI research investigation",
             "category": "AI and research",
-            "summary": "A user selects scope, evidence access, depth and a visible privacy profile; Vision either checkpoints bounded local work or sends only exact selected evidence for consent-bound cloud synthesis.",
+            "summary": "A user selects scope, evidence access, depth, a visible privacy profile, and an approved API model; Vision either checkpoints bounded local work or sends only exact selected evidence for consent-bound cloud synthesis.",
             "steps": [
               {
                 "from": "browser",
                 "to": "fe.apiclient",
                 "payload": "POST /api/ai-research/investigations",
-                "annotation": "The request carries explicit scope, EN/NL language, quick/detailed depth, research mode and model route. Public questions, selected planning summaries, and selected cloud-synthesis evidence are mutually exclusive fields. The UI displays each capability and privacy profile. Local-only is the default."
+                "annotation": "The request carries explicit scope, EN/NL language, quick/detailed depth, research mode, model route, and an optional server-approved OpenAI model. Public questions, selected planning summaries, and selected cloud-synthesis evidence are mutually exclusive fields. The UI displays each capability and privacy profile. Local-only is the default."
               },
               {
                 "from": "fe.apiclient",
@@ -3085,7 +3085,7 @@
                 "from": "sv.airesearch",
                 "to": "ex.openai",
                 "payload": "optional preview-hash-bound payload",
-                "annotation": "Only an unexpired mode-specific grant matching the exact final request bytes and cumulative budgets can cross the short-lived Seatbelt sandbox. Planning output prioritizes candidate ids. The separate selected-evidence mode returns the final structured answer. Both set store:false and disable hosted tools."
+                "annotation": "Only an unexpired mode-specific grant matching the exact final request bytes and cumulative budgets can cross the short-lived Seatbelt sandbox. The selected model must be in the server catalog, is included in the preview digest, and uses its own configured prices for spend reservation. Planning output prioritizes candidate ids. The separate selected-evidence mode returns the final structured answer. Both set store:false and disable hosted tools."
               },
               {
                 "from": "sv.airesearch",
