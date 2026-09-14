@@ -83,6 +83,8 @@ related_code:
   visible delete action removes the recoverable investigation and its selected evidence.
 - Quick and detailed depth profiles state their compute/output difference and explicitly do not
   widen the selected model or research disclosure boundary.
+- The OpenAI route offers a server-approved API model picker. Each model has its own configured
+  prices, and the selected identifier is visible in the payload preview and consent digest.
 - Durable partial jobs that resume without repeating completed tool steps.
 
 ## Investigation resource profile
@@ -100,6 +102,12 @@ Investigation inputs, checkpoints, and results remain in the recoverable local j
 deleted. Disclosure history is separate and retains only the payload digest and policy metadata.
 Quick local investigations use the deterministic plan and one synthesis call. Detailed local work
 adds one bounded planning call. This avoids doubling local model CPU for routine questions.
+The picker is API-only. ChatGPT subscriptions and ChatGPT usage credits do not fund Responses API
+requests and are not reused as authentication.
+The AI settings page stores a preferred OpenAI model for new investigations. An explicit choice in
+the investigation panel overrides that preference. If the saved model is no longer in the server
+catalog, Vision falls back to the operator default and never sends the stale identifier. See
+[[docs/adr/148-user-default-openai-model|ADR-148]].
 
 ## Architecture
 
@@ -278,7 +286,8 @@ Tools are declared with JSON Schema params. Backend validates args before dispat
 
 | Setting                     | Type   | Default                  | Description                                              |
 | --------------------------- | ------ | ------------------------ | -------------------------------------------------------- |
-| `aiChat.defaultModel`       | string | `llama3.1:8b`            | Model pre-selected on new conversations                  |
+| `aiDefaultModel`            | string | Operator Ollama default  | Model pre-selected on new local conversations            |
+| `openAiDefaultModel`        | string | Operator OpenAI default  | Approved model pre-selected on new OpenAI investigations |
 | `aiChat.ollamaUrl`          | string | `http://localhost:11434` | Ollama host (read from `OLLAMA_URL` env; editable in UI) |
 | `ollama.numCtx`             | number | `8192`                   | Ollama context window passed to every chat request       |
 | `aiChat.contextBudgetChars` | number | `24000`                  | Approximate prompt-history character budget              |
@@ -366,6 +375,7 @@ See [[docs/security/ai-data-access|AI Data Access Policy]] for the full security
 - [[docs/api/ai|AI API]] — endpoint contracts
 - [[docs/api/ai-research|AI Research API]] — investigations, documents, and disclosure records
 - [[docs/adr/145-bounded-ai-research-orchestration|ADR-145: Bounded AI Research Orchestration]]
+- [[docs/adr/147-allowlisted-openai-model-selection|ADR-147: Allowlisted OpenAI Model Selection]]
 - [[docs/features/transactions|Transactions]] — data surfaced by expense tools
 - [[docs/features/portfolio|Portfolio & Investments]] — data surfaced by portfolio tools
 - [[docs/features/plannedTransactions|Planned Transactions]] — data surfaced by planned tools

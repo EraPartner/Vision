@@ -276,6 +276,7 @@ export const apiClient = {
     renameConversation: ai.renameConversation,
     deleteConversation: ai.deleteConversation,
     streamChat: ai.streamChat,
+    getAiResearchStatus: aiResearch.getAiResearchStatus,
     createInvestigation: aiResearch.createInvestigation,
     getInvestigation: aiResearch.getInvestigation,
     deleteInvestigation: aiResearch.deleteInvestigation,

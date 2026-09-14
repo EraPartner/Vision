@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AIChatSettingsSection } from "@/features/settings/AIChatSettingsSection";
+import { OpenAiSettingsSection } from "@/features/settings/OpenAiSettingsSection";
 import { ResearchKeysSection } from "@/features/settings/ResearchKeysSection";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
@@ -13,10 +14,14 @@ const ollama = vi.hoisted(() => ({
     useStatus: vi.fn(),
     useModels: vi.fn(),
 }));
+const openAi = vi.hoisted(() => ({ useStatus: vi.fn() }));
 
 vi.mock("@/hooks/useOllamaStatus", () => ({
     useOllamaStatus: ollama.useStatus,
     useOllamaModels: ollama.useModels,
+}));
+vi.mock("@/hooks/useAiResearchStatus", () => ({
+    useAiResearchStatus: openAi.useStatus,
 }));
 
 const API_BASE = "http://localhost:3002";
@@ -24,6 +29,7 @@ const API_BASE = "http://localhost:3002";
 beforeEach(() => {
     ollama.useStatus.mockReturnValue({ data: undefined, isLoading: false });
     ollama.useModels.mockReturnValue({ data: [], isLoading: false });
+    openAi.useStatus.mockReturnValue({ data: undefined, isLoading: false });
 });
 
 describe("AI settings behavior", () => {
@@ -91,5 +97,44 @@ describe("AI settings behavior", () => {
 
         await waitFor(() => expect(savedKey).toBe("secret-key"));
         expect(input).toHaveValue("");
+    });
+
+    it("shows a persisted OpenAI default from the approved catalog", async () => {
+        openAi.useStatus.mockReturnValue({
+            data: {
+                openai: {
+                    enabled: true,
+                    model: "synthetic-model",
+                    models: [
+                        {
+                            id: "synthetic-model",
+                            label: "Standard",
+                            inputMicrosPerMillion: 1_000_000,
+                            outputMicrosPerMillion: 2_000_000,
+                            isDefault: true,
+                        },
+                        {
+                            id: "synthetic-model-pro",
+                            label: "More capable",
+                            inputMicrosPerMillion: 2_000_000,
+                            outputMicrosPerMillion: 8_000_000,
+                            isDefault: false,
+                        },
+                    ],
+                },
+            },
+            isLoading: false,
+        });
+        renderWithApp(
+            <OpenAiSettingsSection
+                value="synthetic-model-pro"
+                onChange={vi.fn()}
+            />,
+        );
+
+        const select = await screen.findByRole("combobox", {
+            name: /default OpenAI model/i,
+        });
+        expect(select).toHaveTextContent("More capable");
     });
 });

@@ -65,6 +65,7 @@ export interface AppSettings {
     showDecimalPlaces: number;
     language: Language;
     aiDefaultModel?: string;
+    openAiDefaultModel?: string;
     costBasisMethod: CostBasisMethod;
     adminMode: boolean;
     visualEffects: VisualEffectsTier;
@@ -172,6 +173,7 @@ const storedAppSettingsSchema = z.looseObject({
         .enum(["en", "nl"] as const satisfies readonly Language[])
         .catch(DEFAULT_APP_SETTINGS.language),
     aiDefaultModel: z.string().optional().catch(undefined),
+    openAiDefaultModel: z.string().min(1).max(200).optional().catch(undefined),
     costBasisMethod: z
         .enum([
             "weighted_avg",
@@ -217,9 +219,11 @@ const storedAppSettingsSchema = z.looseObject({
 export function migrateAppSettings(raw: unknown): AppSettings {
     const parsed = storedAppSettingsSchema.safeParse(raw);
     if (!parsed.success) return DEFAULT_APP_SETTINGS;
-    const { aiDefaultModel, ...rest } = parsed.data;
+    const { aiDefaultModel, openAiDefaultModel, ...rest } = parsed.data;
     const merged: AppSettings = { ...DEFAULT_APP_SETTINGS, ...rest };
     if (aiDefaultModel !== undefined) merged.aiDefaultModel = aiDefaultModel;
+    if (openAiDefaultModel !== undefined)
+        merged.openAiDefaultModel = openAiDefaultModel;
     return merged;
 }
 

@@ -26,6 +26,14 @@ SORT date DESC
 
 ## Active Decisions
 
+[[docs/adr/148-user-default-openai-model|ADR-148]] (Accepted) persists a user-selected default
+OpenAI API model in AI settings. Per-investigation selection still overrides it, while removed or
+unapproved models fall back to the operator-approved catalog.
+
+[[docs/adr/147-allowlisted-openai-model-selection|ADR-147]] (Accepted) exposes a server-approved
+OpenAI API model picker with per-model prices. The selected model is bound into the exact preview,
+consent digest, and spend reservation; ChatGPT subscriptions remain a separate unsupported route.
+
 [[docs/adr/146-explicit-selected-evidence-cloud-synthesis|ADR-146]] (Accepted) adds a separate
 consent profile where OpenAI writes the final answer from only the exact user-selected evidence in
 the approved payload, without tools, hidden context, or automatic local fallback.

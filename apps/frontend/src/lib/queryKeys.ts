@@ -428,6 +428,7 @@ export const aiKeys = {
     ollamaAll: ["ai", "ollama"] as const,
     ollamaStatus: ["ai", "ollama", "status"] as const,
     ollamaModels: ["ai", "ollama", "models"] as const,
+    openAiResearchStatus: ["ai", "openai", "research-status"] as const,
 };
 
 // ── Imports ─────────────────────────────────────────────────────────────────

@@ -55,6 +55,20 @@ export interface AiInvestigation {
     error?: { code?: string; message?: string } | null;
     steps?: Array<{ stepId: string; state: string }>;
 }
+export interface OpenAiResearchModel {
+    id: string;
+    label: string;
+    inputMicrosPerMillion: number;
+    outputMicrosPerMillion: number;
+    isDefault: boolean;
+}
+export interface AiResearchStatus {
+    openai: {
+        enabled: boolean;
+        model: string | null;
+        models: OpenAiResearchModel[];
+    };
+}
 export interface InvestigationInput {
     question: string;
     route: "local" | "openai-api";
@@ -64,6 +78,7 @@ export interface InvestigationInput {
     publicSymbols: string[];
     publicMacroQueries: string[];
     clarification: string | null;
+    model: string | null;
     depth: "quick" | "detailed";
     language: "en" | "nl";
     scope: {
@@ -80,6 +95,9 @@ export interface InvestigationInput {
     selectedEvidence: string | null;
     savedAnalysisId: null;
 }
+
+export const getAiResearchStatus = () =>
+    apiRequest<AiResearchStatus>("/api/ai-research/status");
 
 export const createInvestigation = (body: InvestigationInput) =>
     apiRequest<AiInvestigation>("/api/ai-research/investigations", {

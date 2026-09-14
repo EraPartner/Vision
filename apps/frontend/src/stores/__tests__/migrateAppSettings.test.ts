@@ -35,7 +35,7 @@ describe("migrateAppSettings — blob validation", () => {
         });
     });
 
-    it("keeps a full valid blob byte-for-byte, aiDefaultModel included", () => {
+    it("keeps a full valid blob byte-for-byte, AI defaults included", () => {
         const blob = {
             defaultCurrency: "USD",
             dateFormat: "MM/DD/YYYY",
@@ -45,6 +45,7 @@ describe("migrateAppSettings — blob validation", () => {
             showDecimalPlaces: 3,
             language: "nl",
             aiDefaultModel: "claude-sonnet",
+            openAiDefaultModel: "synthetic-model-pro",
             costBasisMethod: "fifo",
             adminMode: true,
             visualEffects: "enhanced",
@@ -175,6 +176,13 @@ describe("migrateAppSettings — blob validation", () => {
             migrateAppSettings({ aiDefaultModel: "claude-haiku" })
                 .aiDefaultModel,
         ).toBe("claude-haiku");
+        expect(
+            migrateAppSettings({ openAiDefaultModel: 123 }).openAiDefaultModel,
+        ).toBeUndefined();
+        expect(
+            migrateAppSettings({ openAiDefaultModel: "synthetic-model-pro" })
+                .openAiDefaultModel,
+        ).toBe("synthetic-model-pro");
     });
 
     it("a malformed visualEffects falls back to the canonical default", () => {

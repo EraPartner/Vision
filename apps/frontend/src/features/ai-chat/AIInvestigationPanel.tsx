@@ -4,11 +4,17 @@ import type {
     AiAnswer,
     AiInvestigation,
     InvestigationInput,
+    OpenAiResearchModel,
     ResearchDocument,
 } from "@/lib/api/aiResearch";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
+import { resolveOpenAiModel } from "@/features/ai-chat/openAiModelSelection";
+import { useAiResearchStatus } from "@/hooks/useAiResearchStatus";
+
+const EMPTY_OPENAI_MODELS: OpenAiResearchModel[] = [];
 
 function EvidenceAnswer({ answer }: { answer: AiAnswer }) {
     const { t } = useLanguage();
@@ -115,9 +121,14 @@ function EvidenceAnswer({ answer }: { answer: AiAnswer }) {
 
 export function AIInvestigationPanel() {
     const { t, language } = useLanguage();
+    const { appSettings } = useAppSettings();
+    const { data: aiResearchStatus } = useAiResearchStatus();
     const [question, setQuestion] = useState("");
     const [depth, setDepth] = useState<"quick" | "detailed">("quick");
     const [route, setRoute] = useState<"local" | "openai-api">("local");
+    const [openAiModelOverride, setOpenAiModelOverride] = useState<
+        string | null
+    >(null);
     const [disclosureMode, setDisclosureMode] = useState<
         "cloud-plan-public" | "selected-summary" | "cloud-synthesis-selected"
     >("cloud-plan-public");
@@ -147,6 +158,18 @@ export function AIInvestigationPanel() {
         Array<Record<string, unknown>>
     >([]);
     const [documents, setDocuments] = useState<ResearchDocument[]>([]);
+    const openAiEnabled = Boolean(aiResearchStatus?.openai.enabled);
+    const openAiModels = aiResearchStatus?.openai.models ?? EMPTY_OPENAI_MODELS;
+    const openAiServerDefault = aiResearchStatus?.openai.model ?? "";
+    const openAiModel = resolveOpenAiModel({
+        override: openAiModelOverride,
+        userDefault: appSettings.openAiDefaultModel,
+        serverDefault: openAiServerDefault,
+        models: openAiModels,
+    });
+    const selectedOpenAiModel = openAiModels.find(
+        (model) => model.id === openAiModel,
+    );
     const input = (): InvestigationInput => ({
         question: question.trim(),
         route,
@@ -167,6 +190,7 @@ export function AIInvestigationPanel() {
                 : [],
         publicMacroQueries: [],
         clarification: null,
+        model: route === "openai-api" ? openAiModel || null : null,
         depth,
         language: language === "nl" ? "nl" : "en",
         scope: {
@@ -222,6 +246,7 @@ export function AIInvestigationPanel() {
         depth,
         disclosureMode,
         language,
+        openAiModel,
         publicSymbols,
         publicQuestion,
         publicWebQuery,
@@ -463,6 +488,61 @@ export function AIInvestigationPanel() {
             </div>
             {route === "openai-api" && (
                 <div className="mt-2 space-y-2">
+                    <div>
+                        <label
+                            className="text-xs font-medium"
+                            htmlFor="ai-openai-model"
+                        >
+                            {t("aiResearch.openAiModel")}
+                        </label>
+                        <select
+                            id="ai-openai-model"
+                            className="mt-1 w-full rounded-md border bg-background px-2 py-1 text-sm"
+                            value={openAiModel}
+                            disabled={
+                                !openAiEnabled || openAiModels.length === 0
+                            }
+                            onChange={(event) => {
+                                setOpenAiModelOverride(event.target.value);
+                                setPreview(null);
+                            }}
+                        >
+                            {openAiModels.length === 0 && (
+                                <option value="">
+                                    {t("aiResearch.noOpenAiModels")}
+                                </option>
+                            )}
+                            {openAiModels.map((model) => (
+                                <option key={model.id} value={model.id}>
+                                    {model.label} ({model.id})
+                                    {model.isDefault
+                                        ? ` — ${t("aiResearch.defaultModel")}`
+                                        : ""}
+                                </option>
+                            ))}
+                        </select>
+                        {selectedOpenAiModel && (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                                {t("aiResearch.modelRates", {
+                                    input: (
+                                        selectedOpenAiModel.inputMicrosPerMillion /
+                                        1_000_000
+                                    ).toLocaleString(language, {
+                                        maximumFractionDigits: 6,
+                                    }),
+                                    output: (
+                                        selectedOpenAiModel.outputMicrosPerMillion /
+                                        1_000_000
+                                    ).toLocaleString(language, {
+                                        maximumFractionDigits: 6,
+                                    }),
+                                })}
+                            </p>
+                        )}
+                        <p className="mt-1 text-xs text-muted-foreground">
+                            {t("aiResearch.apiOnlyBilling")}
+                        </p>
+                    </div>
                     <select
                         aria-label={t("aiResearch.disclosureMode")}
                         className="rounded-md border bg-background px-2 py-1 text-sm"
@@ -582,6 +662,8 @@ export function AIInvestigationPanel() {
                             !publicWebQuery.trim()) ||
                         (researchMode === "public-providers" &&
                             !publicSymbols.trim()) ||
+                        (route === "openai-api" &&
+                            (!openAiEnabled || !openAiModel)) ||
                         (route === "openai-api" &&
                             disclosureMode === "cloud-plan-public" &&
                             !publicQuestion.trim()) ||

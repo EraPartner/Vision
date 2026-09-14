@@ -549,6 +549,15 @@ export const defaultHandlers = [
     http.get(`${API_BASE}/api/ai/status`, () =>
         ok({ ok: false, baseUrl: "", defaultModel: "", enabled: false }),
     ),
+    http.get(`${API_BASE}/api/ai-research/status`, () =>
+        ok({
+            openai: {
+                enabled: false,
+                model: null,
+                models: [],
+            },
+        }),
+    ),
     http.get(`${API_BASE}/api/ai/conversations`, () =>
         ok({ items: [], total: 0 }),
     ),
