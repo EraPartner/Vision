@@ -152,6 +152,8 @@ const envSchema = z
     AI_WEB_RESEARCH_MAX_PAGES: intEnv(5),
     BRAVE_SEARCH_API_KEY: optionalStringEnv,
 
+    AI_REFERENCE_MAPPING_KEY: optionalStringEnv,
+
     OPENAI_API_ENABLED: booleanEnv(false),
     OPENAI_API_KEY: optionalStringEnv,
     OPENAI_API_MODEL: optionalStringEnv,

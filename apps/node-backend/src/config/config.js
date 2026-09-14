@@ -121,6 +121,7 @@ const settings = deepFreeze({
   },
 
   aiResearch: {
+    referenceMappingKey: env.AI_REFERENCE_MAPPING_KEY,
     web: {
       enabled: env.AI_WEB_RESEARCH_ENABLED,
       maxSearches: env.AI_WEB_RESEARCH_MAX_SEARCHES,

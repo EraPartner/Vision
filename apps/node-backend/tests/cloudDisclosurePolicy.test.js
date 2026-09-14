@@ -187,6 +187,28 @@ describe("cloud disclosure policy", () => {
     expect(preview.disclosedPayload).not.toHaveProperty("question");
     expect(preview.disclosedPayload).not.toHaveProperty("constraints");
   });
+  it("sends a scoped token without its local reference value", () => {
+    const token = "[[VR1:recipient:AAAAAAAAAAAAAAAAAAAAAAAA]]";
+    const preview = disclosurePayload({
+      question: "Private recipient name",
+      route: "openai-api",
+      publicQuestion: null,
+      model: "synthetic-model",
+      depth: "quick",
+      language: "en",
+      researchMode: "local-only",
+      scope: { workspaces: ["research"], constraints: [] },
+      publicSymbols: [],
+      publicMacroQueries: [],
+      selectedSummary: `Compare ${token}`,
+      selectedEvidence: null,
+      referenceScopeId: "11111111-1111-4111-8111-111111111111",
+      savedAnalysisId: null,
+    });
+    expect(preview.serialized).toContain(token);
+    expect(preview.serialized).not.toContain("Private recipient name");
+    expect(preview.serialized).not.toContain("referenceScopeId");
+  });
   it("builds a distinct final-synthesis payload from selected evidence", () => {
     const preview = disclosurePayload({
       question: "Private question with account: 123",

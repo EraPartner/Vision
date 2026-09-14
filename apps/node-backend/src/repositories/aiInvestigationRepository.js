@@ -1,38 +1,60 @@
-import { query } from "../database/connection.js";
+import { query, withTransaction } from "../database/connection.js";
 
 const COLUMNS = `id,conversation_id AS "conversationId",question,route,model,depth,language,state,
  scope_json AS scope,plan_json AS plan,checkpoint_json AS checkpoint,result_json AS result,
  error_json AS error,grant_id AS "grantId",cancel_requested_at AS "cancelRequestedAt",
  started_at AS "startedAt",completed_at AS "completedAt",created_at AS "createdAt",updated_at AS "updatedAt"`;
 
-export async function createJob(request) {
-  return (
-    await query(
-      `INSERT INTO ai_investigation_jobs (conversation_id,question,route,model,depth,language,state,scope_json,grant_id)
+export async function createJob(request, referenceExpiresAt = null) {
+  return withTransaction(async (client) => {
+    const job = (
+      await client.query(
+        `INSERT INTO ai_investigation_jobs (conversation_id,question,route,model,depth,language,state,scope_json,grant_id)
      VALUES ($1,$2,$3,$4,$5,$6,'queued',$7::jsonb,$8) RETURNING ${COLUMNS}`,
-      [
-        request.conversationId ?? null,
-        request.question,
-        request.route,
-        request.model,
-        request.depth,
-        request.language,
-        JSON.stringify({
-          scope: request.scope,
-          researchMode: request.researchMode,
-          publicQuestion: request.publicQuestion,
-          publicWebQuery: request.publicWebQuery,
-          publicSymbols: request.publicSymbols,
-          publicMacroQueries: request.publicMacroQueries,
-          clarification: request.clarification,
-          selectedSummary: request.selectedSummary,
-          selectedEvidence: request.selectedEvidence,
-          savedAnalysisId: request.savedAnalysisId,
-        }),
-        request.grantId,
-      ],
-    )
-  ).rows[0];
+        [
+          request.conversationId ?? null,
+          request.question,
+          request.route,
+          request.model,
+          request.depth,
+          request.language,
+          JSON.stringify({
+            scope: request.scope,
+            researchMode: request.researchMode,
+            publicQuestion: request.publicQuestion,
+            publicWebQuery: request.publicWebQuery,
+            publicSymbols: request.publicSymbols,
+            publicMacroQueries: request.publicMacroQueries,
+            clarification: request.clarification,
+            selectedSummary: request.selectedSummary,
+            selectedEvidence: request.selectedEvidence,
+            referenceScopeId: request.referenceScopeId,
+            savedAnalysisId: request.savedAnalysisId,
+          }),
+          request.grantId,
+        ],
+      )
+    ).rows[0];
+    if (request.referenceScopeId) {
+      const claimed = (
+        await client.query(
+          `UPDATE ai_reference_scopes
+           SET job_id=$2,claimed_at=NOW(),expires_at=$3
+           WHERE id=$1 AND job_id IS NULL AND expires_at > NOW()
+           RETURNING id`,
+          [request.referenceScopeId, job.id, referenceExpiresAt],
+        )
+      ).rows[0];
+      if (!claimed)
+        throw Object.assign(
+          new Error(
+            "The reversible reference preview expired or was already used",
+          ),
+          { code: "REFERENCE_SCOPE_INACTIVE", status: 409 },
+        );
+    }
+    return job;
+  });
 }
 export async function listJobs() {
   return (
@@ -149,6 +171,28 @@ export async function finishJob(id, state, result, error = null) {
         result == null ? null : JSON.stringify(result),
         error == null ? null : JSON.stringify(error),
       ],
+    )
+  ).rows[0];
+}
+
+export async function setProviderResult(id, result) {
+  return (
+    await query(
+      `UPDATE ai_investigation_jobs
+       SET checkpoint_json=jsonb_set(checkpoint_json,'{providerResult}',$2::jsonb,true),updated_at=NOW()
+       WHERE id=$1 RETURNING id`,
+      [id, JSON.stringify(result)],
+    )
+  ).rows[0];
+}
+
+export async function clearProviderResult(id) {
+  return (
+    await query(
+      `UPDATE ai_investigation_jobs
+       SET checkpoint_json=checkpoint_json - 'providerResult',updated_at=NOW()
+       WHERE id=$1 RETURNING id`,
+      [id],
     )
   ).rows[0];
 }

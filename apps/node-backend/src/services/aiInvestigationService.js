@@ -14,6 +14,11 @@ import {
   executeCloudAnalysisPlan,
   parseCloudAnalysisPlans,
 } from "./cloudAnalysisPlan.js";
+import {
+  claimedReferenceExpiry,
+  restoreAnswerForJob,
+  validateReferenceRequest,
+} from "./aiReferenceService.js";
 
 const active = new Map();
 let executionTail = Promise.resolve();
@@ -552,6 +557,33 @@ function parseModelAnswer(text, request, steps) {
   }
 }
 
+function shouldPreserveProviderCheckpoint(job) {
+  return (
+    job.state === "failed" &&
+    typeof job.error?.code === "string" &&
+    job.error.code.startsWith("REFERENCE_")
+  );
+}
+
+async function resolveProviderAnswer({
+  job,
+  request,
+  stepRows,
+  synthesisInput,
+  generateProvider = generateWithProvider,
+  generateLocal = generateLocalSynthesis,
+  store = jobs.setProviderResult,
+}) {
+  if (job?.checkpoint?.providerResult)
+    return aiAnswerSchema.parse(job.checkpoint.providerResult);
+  const response = usesCloudSynthesis(request)
+    ? await generateProvider(synthesisInput)
+    : await generateLocal(synthesisInput);
+  const answer = parseModelAnswer(response.text, request, stepRows);
+  await store(job.id, answer);
+  return answer;
+}
+
 export async function runInvestigationJob(
   id,
   { skipAttemptedExternal = false } = {},
@@ -576,6 +608,7 @@ export async function runInvestigationJob(
             clarification: null,
             selectedSummary: null,
             selectedEvidence: null,
+            referenceScopeId: null,
             savedAnalysisId: null,
           };
       const request = aiInvestigationRequestSchema.parse({
@@ -594,6 +627,7 @@ export async function runInvestigationJob(
         grantId: job.grantId,
         selectedSummary: stored.selectedSummary ?? null,
         selectedEvidence: stored.selectedEvidence ?? null,
+        referenceScopeId: stored.referenceScopeId ?? null,
         savedAnalysisId: stored.savedAnalysisId ?? null,
       });
       let plan = job.plan;
@@ -768,10 +802,27 @@ export async function runInvestigationJob(
             },
           ],
         };
-        const response = usesCloudSynthesis(request)
-          ? await generateWithProvider(synthesisInput)
-          : await generateLocalSynthesis(synthesisInput);
-        const answer = parseModelAnswer(response.text, request, stepRows);
+        const providerAnswer = await resolveProviderAnswer({
+          job: await jobs.getJob(id),
+          request,
+          stepRows,
+          synthesisInput,
+        });
+        let answer;
+        try {
+          answer = await restoreAnswerForJob(id, providerAnswer);
+        } catch (restoreError) {
+          return jobs.finishJob(
+            id,
+            "failed",
+            fallbackAnswer(request, [], restoreError),
+            {
+              code: restoreError.code || "REFERENCE_RESTORE_FAILED",
+              message:
+                "The cloud response could not be safely restored from local references.",
+            },
+          );
+        }
         return jobs.finishJob(
           id,
           stepRows.some((step) => step.state === "failed") ||
@@ -801,7 +852,11 @@ export async function runInvestigationJob(
 
 export async function createInvestigation(input) {
   const request = aiInvestigationRequestSchema.parse(input);
-  const job = await jobs.createJob(request);
+  await validateReferenceRequest(request);
+  const job = await jobs.createJob(
+    request,
+    request.referenceScopeId ? claimedReferenceExpiry() : null,
+  );
   void runInvestigationJob(job.id);
   return job;
 }
@@ -866,10 +921,13 @@ export async function resumeInvestigation(
   )
     return job;
   if (["partial", "failed"].includes(job.state) && job.plan) {
-    const refreshIds = job.plan.steps
-      .filter((step) => LOCALLY_RETRYABLE_TOOLS.has(step.tool))
-      .map((step) => step.id);
-    await jobs.resetSteps(id, refreshIds);
+    if (!shouldPreserveProviderCheckpoint(job)) {
+      const refreshIds = job.plan.steps
+        .filter((step) => LOCALLY_RETRYABLE_TOOLS.has(step.tool))
+        .map((step) => step.id);
+      await jobs.resetSteps(id, refreshIds);
+      await jobs.clearProviderResult(id);
+    }
   }
   void runInvestigationJob(id, { skipAttemptedExternal: true });
   return job;
@@ -892,4 +950,6 @@ export {
   shouldReuseStep as __shouldReuseStep,
   usesCloudSynthesis as __usesCloudSynthesis,
   applyPlannerOrdering as __applyPlannerOrdering,
+  resolveProviderAnswer as __resolveProviderAnswer,
+  shouldPreserveProviderCheckpoint as __shouldPreserveProviderCheckpoint,
 };

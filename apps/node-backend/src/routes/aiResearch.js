@@ -24,6 +24,11 @@ import {
   revokeDisclosureGrant,
   deleteDisclosureHistory,
 } from "../services/aiDisclosureService.js";
+import {
+  mappingKey,
+  prepareReferencePreview,
+  validateReferenceRequest,
+} from "../services/aiReferenceService.js";
 
 const router = Router();
 const uuid = z.string().uuid();
@@ -114,6 +119,11 @@ router.get("/status", async (_req, res) => {
         },
       ],
       monthlyBudgetMicros: settings.aiResearch.openai.monthlyBudgetMicros,
+      reversibleReferences: {
+        configured: Boolean(mappingKey()),
+        markerSyntax: "[[vision-ref:type|value]]",
+        classification: "pseudonymized-not-anonymous",
+      },
     },
     web: {
       enabled: settings.aiResearch.web.enabled,
@@ -136,13 +146,15 @@ router.get("/status", async (_req, res) => {
   });
 });
 
-router.post("/disclosures/preview", (req, res) => {
+router.post("/disclosures/preview", async (req, res) => {
   const request = parse(aiInvestigationRequestSchema, req.body);
   if (request.route !== "openai-api")
     throw new ValidationError(
       "Preview is only needed for the OpenAI API route",
     );
-  const preview = disclosurePayload(request);
+  const prepared = await prepareReferencePreview(request);
+  await validateReferenceRequest(prepared.request);
+  const preview = disclosurePayload(prepared.request);
   res.ok({
     payload: preview.payload,
     payloadSha256: preview.payloadSha256,
@@ -150,6 +162,8 @@ router.post("/disclosures/preview", (req, res) => {
     inputCharacters: preview.inputCharacters,
     fieldManifest: preview.fieldManifest,
     disclosureUnits: preview.disclosureUnits,
+    referenceScope: prepared.scope,
+    outboundRequest: prepared.request,
   });
 });
 router.post("/disclosures/grants", async (req, res) => {

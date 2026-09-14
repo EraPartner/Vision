@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   __evidenceFromSteps,
   __fallbackAnswer,
@@ -7,6 +7,8 @@ import {
   __shouldReuseStep,
   __usesCloudSynthesis,
   __applyPlannerOrdering,
+  __resolveProviderAnswer,
+  __shouldPreserveProviderCheckpoint,
   resumeRecoverableInvestigations,
 } from "../src/services/aiInvestigationService.js";
 
@@ -212,6 +214,51 @@ describe("AI investigation orchestration", () => {
     });
     expect(count).toBe(2);
     expect(resumed).toEqual(["oldest", "newest"]);
+  });
+
+  it("restores a checkpointed provider-form answer after restart without another model call", async () => {
+    const checkpointed = __fallbackAnswer(request, []);
+    const generateProvider = vi.fn();
+    const generateLocal = vi.fn();
+    const store = vi.fn();
+    const resolved = await __resolveProviderAnswer({
+      job: { id: "job-1", checkpoint: { providerResult: checkpointed } },
+      request: {
+        ...request,
+        route: "openai-api",
+        selectedEvidence: "[[VR1:account:AAAAAAAAAAAAAAAAAAAAAAAA]]",
+      },
+      stepRows: [],
+      synthesisInput: {},
+      generateProvider,
+      generateLocal,
+      store,
+    });
+    expect(resolved).toEqual(checkpointed);
+    expect(generateProvider).not.toHaveBeenCalled();
+    expect(generateLocal).not.toHaveBeenCalled();
+    expect(store).not.toHaveBeenCalled();
+  });
+
+  it("preserves a provider checkpoint when retrying local reference restoration", () => {
+    expect(
+      __shouldPreserveProviderCheckpoint({
+        state: "failed",
+        error: { code: "REFERENCE_KEY_UNAVAILABLE" },
+      }),
+    ).toBe(true);
+    expect(
+      __shouldPreserveProviderCheckpoint({
+        state: "failed",
+        error: { code: "SYNTHESIS_FAILED" },
+      }),
+    ).toBe(false);
+    expect(
+      __shouldPreserveProviderCheckpoint({
+        state: "partial",
+        error: { code: "REFERENCE_KEY_UNAVAILABLE" },
+      }),
+    ).toBe(false);
   });
 
   it("adds at most one bounded retry pass for failed local tools", () => {

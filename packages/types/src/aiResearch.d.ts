@@ -14,6 +14,17 @@ export declare const AI_DISCLOSURE_MODES: readonly [
   "selected-summary",
   "cloud-synthesis-selected",
 ];
+export declare const AI_REVERSIBLE_REFERENCE_TYPES: readonly [
+  "account",
+  "recipient",
+  "investment",
+  "holding",
+  "category",
+  "document",
+  "subject",
+  "amount",
+  "date",
+];
 export declare const aiEvidenceReferenceSchema: z.ZodTypeAny;
 export interface AiAnswer {
   schemaVersion: 1;
@@ -58,6 +69,7 @@ export interface AiInvestigationRequest {
   grantId: string | null;
   selectedSummary: string | null;
   selectedEvidence: string | null;
+  referenceScopeId: string | null;
   savedAnalysisId: string | null;
 }
 export declare const aiInvestigationRequestSchema: z.ZodType<AiInvestigationRequest>;

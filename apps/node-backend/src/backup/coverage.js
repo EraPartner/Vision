@@ -30,6 +30,8 @@ const BACKUP_COVERED_TABLES = Object.freeze([
   "ai_investigation_jobs",
   "ai_investigation_steps",
   "ai_messages",
+  "ai_reference_entries",
+  "ai_reference_scopes",
   "ai_research_documents",
   "ai_research_passages",
   "asset_price_history",

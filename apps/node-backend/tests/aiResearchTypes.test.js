@@ -79,6 +79,25 @@ describe("AI research contracts", () => {
       }).success,
     ).toBe(false);
   });
+  it("binds a reversible reference scope to a selected cloud representation", () => {
+    const scopeId = "11111111-1111-4111-8111-111111111111";
+    expect(
+      aiInvestigationRequestSchema.safeParse({
+        question: "Local question",
+        scope: { workspaces: ["research"] },
+        referenceScopeId: scopeId,
+      }).success,
+    ).toBe(false);
+    expect(
+      aiInvestigationRequestSchema.safeParse({
+        question: "Private question",
+        route: "openai-api",
+        selectedSummary: "[[VR1:subject:AAAAAAAAAAAAAAAAAAAAAAAA]]",
+        referenceScopeId: scopeId,
+        scope: { workspaces: ["research"] },
+      }).success,
+    ).toBe(true);
+  });
   it("rejects impossible and reversed scope dates", () => {
     const base = {
       question: "What changed?",

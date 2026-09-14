@@ -17,6 +17,18 @@ export const AI_DISCLOSURE_MODES = Object.freeze([
   "cloud-synthesis-selected",
 ]);
 
+export const AI_REVERSIBLE_REFERENCE_TYPES = Object.freeze([
+  "account",
+  "recipient",
+  "investment",
+  "holding",
+  "category",
+  "document",
+  "subject",
+  "amount",
+  "date",
+]);
+
 export const aiEvidenceReferenceSchema = z.strictObject({
   id: z.string().min(1).max(160),
   kind: z.enum([
@@ -151,6 +163,7 @@ export const aiInvestigationRequestSchema = z
     grantId: z.string().uuid().nullable().default(null),
     selectedSummary: z.string().max(8000).nullable().default(null),
     selectedEvidence: z.string().max(24000).nullable().default(null),
+    referenceScopeId: z.string().uuid().nullable().default(null),
     savedAnalysisId: z.string().max(100).nullable().default(null),
   })
   .superRefine((request, ctx) => {
@@ -171,6 +184,17 @@ export const aiInvestigationRequestSchema = z
         code: "custom",
         path: ["selectedEvidence"],
         message: "Select exactly one OpenAI disclosure mode",
+      });
+    if (
+      request.referenceScopeId &&
+      (request.route !== "openai-api" ||
+        (!request.selectedSummary && !request.selectedEvidence))
+    )
+      ctx.addIssue({
+        code: "custom",
+        path: ["referenceScopeId"],
+        message:
+          "A reversible reference scope belongs to one selected-summary or selected-evidence cloud request",
       });
     if (request.researchMode === "public-web" && !request.publicWebQuery)
       ctx.addIssue({

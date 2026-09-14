@@ -186,7 +186,9 @@ export function evaluateCloudPrivacyTrace(
       );
     }
 
-    for (const token of body.match(/REF_[A-Z0-9]{8,}/g) ?? []) {
+    for (const token of body.match(
+      /\[\[VR1:(?:account|recipient|investment|holding|category|document|subject|amount|date):[A-Za-z0-9_-]{24}\]\]/g,
+    ) ?? []) {
       const owner = tokenOwners.get(token);
       const currentOwner = `${exchange.sessionId}:${exchange.analysisId}`;
       if (owner && owner !== currentOwner) {

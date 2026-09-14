@@ -137,6 +137,11 @@ components:
           maxLength: 24000
           nullable: true
           description: Exact manually selected task and evidence for consent-bound cloud final synthesis; never populated from local records by the server.
+        referenceScopeId:
+          type: string
+          format: uuid
+          nullable: true
+          description: One-use local scope returned by disclosure preview for typed reversible references.
         savedAnalysisId: { type: string, format: uuid, nullable: true }
 
     UpdateCheck:
@@ -4050,14 +4055,15 @@ paths:
         required: true
         content:
           application/json:
-            schema: { type: object, additionalProperties: false }
+            schema: { $ref: "#/components/schemas/AiInvestigationRequest" }
       responses:
         "200":
-          description: Payload, digest, field manifest, bytes, and disclosure units
+          description: Payload, digest, field manifest, disclosure units, and any encrypted local reference scope
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Envelope" }
         "400": { description: Invalid or non-cloud request }
+        "503": { description: Reversible-reference key unavailable }
 
   /api/ai-research/disclosures/grants:
     get:

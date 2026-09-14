@@ -100,11 +100,19 @@ export const CLOUD_PRIVACY_EVALUATION_CASES = Object.freeze([
     trace: {
       mode: "approved-summary",
       exchanges: [
-        exchange({ body: { ...safePlan, subject: "REF_ABCDEF12" } }),
+        exchange({
+          body: {
+            ...safePlan,
+            subject: "[[VR1:account:AAAAAAAAAAAAAAAAAAAAAAAA]]",
+          },
+        }),
         exchange({
           sessionId: "session-b",
           analysisId: "analysis-b",
-          body: { ...safePlan, subject: "REF_ABCDEF12" },
+          body: {
+            ...safePlan,
+            subject: "[[VR1:account:AAAAAAAAAAAAAAAAAAAAAAAA]]",
+          },
         }),
       ],
     },

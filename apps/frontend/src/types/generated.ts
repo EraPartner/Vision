@@ -3765,6 +3765,11 @@ export interface components {
             selectedSummary?: string | null;
             /** @description Exact manually selected task and evidence for consent-bound cloud final synthesis; never populated from local records by the server. */
             selectedEvidence?: string | null;
+            /**
+             * Format: uuid
+             * @description One-use local scope returned by disclosure preview for typed reversible references.
+             */
+            referenceScopeId?: string | null;
             /** Format: uuid */
             savedAnalysisId?: string | null;
         };
@@ -6360,11 +6365,11 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": Record<string, never>;
+                "application/json": components["schemas"]["AiInvestigationRequest"];
             };
         };
         responses: {
-            /** @description Payload, digest, field manifest, bytes, and disclosure units */
+            /** @description Payload, digest, field manifest, disclosure units, and any encrypted local reference scope */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -6375,6 +6380,13 @@ export interface operations {
             };
             /** @description Invalid or non-cloud request */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reversible-reference key unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
