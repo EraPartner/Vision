@@ -76,13 +76,6 @@ export interface ElectronInvokeContract {
     args: [];
     result: InstallUpdateResult;
   };
-  "update:get-mode": {
-    args: [];
-    result: {
-      mode: ElectronUpdateMode;
-      is_packaged: boolean;
-    };
-  };
   "update:pre-update-backup": { args: []; result: BackupResult };
   "backup:run": {
     args: [destDir: string, frontendStateJson?: string | null];
@@ -174,7 +167,6 @@ export type ElectronSubscription<C extends ElectronEventChannel> = (
 export interface ElectronUpdaterBridge {
   checkRelease?: ElectronInvoke<"update:check-github">;
   installShellUpdate?: ElectronInvoke<"update:install-shell">;
-  getMode?: ElectronInvoke<"update:get-mode">;
   preUpdateBackup?: ElectronInvoke<"update:pre-update-backup">;
 }
 

@@ -61,10 +61,30 @@ test("Demo packages reuse the native payload and add only isolated seed resource
   assert.equal(effective.directories.output, "dist-demo");
   assert.deepEqual(
     effective.extraResources.map(({ to }) => to),
-    ["i18n", "resources", "native-runtime", "demo-seed"],
+    ["i18n", "resources/DEMO", "native-runtime", "demo-seed"],
   );
+  assert.deepEqual(effective.extraResources[1], {
+    from: "resources-demo/DEMO",
+    to: "resources/DEMO",
+  });
   assert.equal(
     effective.extraResources.some(({ from }) => from === "resources"),
     false,
+  );
+});
+
+test("native package excludes test data, source maps, and foreign Bare prebuilds", async () => {
+  const effective = await getConfig(path.resolve(__dirname, ".."));
+  const files = effective.files[0].filter;
+  assert.ok(files.includes("runtime/**/*"));
+  assert.ok(files.includes("backup/**/*"));
+  assert.ok(files.includes("!runtime/**/*.test.js"));
+  assert.ok(files.includes("!backup/**/*.test.js"));
+  assert.ok(files.includes("!backup/fixtures/**/*"));
+  assert.ok(files.includes("!node_modules/**/*.map"));
+  assert.ok(
+    files.includes(
+      "!node_modules/bare-{fs,os,url}/prebuilds/!(darwin-arm64)/**/*",
+    ),
   );
 });

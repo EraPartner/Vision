@@ -101,9 +101,8 @@ export function ElectronBridge({
         });
 
         // Window-level CSV drop. Without this, dropping a file on the shell
-        // navigates the webContents to the file URL (will-navigate allows
-        // file: for the error page) — so swallow every file drop and route
-        // CSVs to the import flow instead.
+        // can navigate the webContents to a file URL. The main process blocks
+        // that navigation, but swallow drops here and route CSVs to import.
         const hasFiles = (e: DragEvent) =>
             Array.from(e.dataTransfer?.types ?? []).includes("Files");
         const onDragOver = (e: DragEvent) => {

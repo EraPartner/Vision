@@ -81,10 +81,6 @@ describe("electron capability detection (present branch)", () => {
             installShellUpdate: vi
                 .fn()
                 .mockResolvedValue({ success: true, version: "1.2.3" }),
-            getMode: vi.fn().mockResolvedValue({
-                mode: "native",
-                is_packaged: true,
-            }),
             preUpdateBackup: vi
                 .fn()
                 .mockResolvedValue({ success: true, file: "/b.sql" }),

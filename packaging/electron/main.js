@@ -30,6 +30,10 @@ const { runBundleBackup, runBundleRestore, runRestore } = backupRestore;
 const updater = require("./updater");
 const { createRuntimeProvider } = require("./runtime");
 const {
+  isAllowedPermissionCheck,
+  isTrustedRendererUrl,
+} = require("./runtime/renderer-security");
+const {
   DEMO_POSTGRES_PORT,
   DEMO_RUNTIME_ID,
   finalizeNativeDemo,
@@ -40,7 +44,6 @@ const { createBadgePngBuffer } = require("./badge-image");
 const {
   GITHUB_OWNER,
   GITHUB_REPO,
-  getUpdateMode,
   checkForShellUpdate,
   installPreparedShellUpdate,
   setupManualShellUpdater,
@@ -284,7 +287,7 @@ const CSP_POLICY = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: https:",
   "font-src 'self' data:",
-  `connect-src 'self' http://localhost:*`,
+  "connect-src 'self'",
   "frame-src 'none'",
   "object-src 'none'",
   "base-uri 'self'",
@@ -308,6 +311,10 @@ function registerSecurityHeaders() {
     (_webContents, _permission, callback) => {
       callback(false);
     },
+  );
+  session.defaultSession.setPermissionCheckHandler(
+    (_webContents, permission, requestingOrigin) =>
+      isAllowedPermissionCheck(permission, requestingOrigin, appUrl()),
   );
 }
 
@@ -1205,19 +1212,22 @@ function createWindow() {
     Menu.buildFromTemplate(items).popup({ window: mainWindow });
   });
 
-  // Block navigation to any URL that isn't localhost/127.0.0.1 or a local file.
-  mainWindow.webContents.on("will-navigate", (event, url) => {
-    try {
-      const parsed = new URL(url);
-      const allowed =
-        parsed.protocol === "file:" ||
-        parsed.hostname === "localhost" ||
-        parsed.hostname === "127.0.0.1";
-      if (!allowed) event.preventDefault();
-    } catch {
+  // Renderer-initiated document navigation must not carry the preload into a
+  // different local service or an arbitrary file. Programmatic splash/error
+  // loads are separate; the exact packaged error page remains allowed.
+  const denyUntrustedNavigation = (event, legacyUrl) => {
+    const destination = event.url || legacyUrl;
+    if (
+      !isTrustedRendererUrl(
+        destination,
+        appUrl(),
+        path.join(__dirname, "assets", "error.html"),
+      )
+    )
       event.preventDefault();
-    }
-  });
+  };
+  mainWindow.webContents.on("will-frame-navigate", denyUntrustedNavigation);
+  mainWindow.webContents.on("will-redirect", denyUntrustedNavigation);
 
   // Loading the HTML shell is not enough to prove that the React renderer
   // started. Keep main-process diagnostics for failures that would otherwise
@@ -1358,8 +1368,9 @@ function httpPut(url, payload) {
 // directly. The sender check is applied by DEFAULT and must be opted *out* of
 // explicitly (`allowAnySender: true`, with a comment saying why), so a new
 // handler is guarded by omission rather than by the author remembering.
-//   • sender guard — reject calls that don't originate from the main window's
-//     webContents. `senderFailure` is the exact value returned on rejection;
+//   • sender guard — reject calls outside the trusted main frame at the app
+//     origin or packaged recovery page. `senderFailure` is the exact value
+//     returned on rejection;
 //     the shapes differ per channel and are load-bearing for the renderer
 //     bridge (electron.ts), so divergent channels pass their own. Channels
 //     whose contract has no failure shape (pure reads) pass REJECT_SENDER,
@@ -1369,7 +1380,7 @@ function httpPut(url, payload) {
 // Nothing currently opts out: the app has exactly one BrowserWindow, new
 // windows are denied (setWindowOpenHandler), and the splash + error pages load
 // into that same window — so the recovery channels reached from error.html do
-// come from mainWindow.webContents like every other channel.
+// come from its trusted main frame like every other channel.
 const REJECT_SENDER = Symbol("reject-unauthorized-sender");
 
 /**
@@ -1392,10 +1403,18 @@ function registerHandler(
   } = {},
 ) {
   ipcMain.handle(channel, async (event, ...args) => {
-    if (
-      !allowAnySender &&
-      (!mainWindow || event.sender !== mainWindow.webContents)
-    ) {
+    const frame = event.senderFrame;
+    const trustedSender =
+      mainWindow &&
+      event.sender === mainWindow.webContents &&
+      frame &&
+      frame === mainWindow.webContents.mainFrame &&
+      isTrustedRendererUrl(
+        frame.url,
+        appUrl(),
+        path.join(__dirname, "assets", "error.html"),
+      );
+    if (!allowAnySender && !trustedSender) {
       if (senderFailure === REJECT_SENDER) {
         throw new Error(`Unauthorized sender for ${channel}`);
       }
@@ -1422,15 +1441,6 @@ registerHandler(
   "update:install-shell",
   async () => await installPreparedShellUpdate(),
   { wrapErrors: true },
-);
-
-registerHandler(
-  "update:get-mode",
-  () => ({
-    mode: getUpdateMode(),
-    is_packaged: app.isPackaged,
-  }),
-  { senderFailure: REJECT_SENDER },
 );
 
 registerHandler("update:pre-update-backup", async () => {

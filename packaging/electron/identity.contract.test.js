@@ -100,7 +100,11 @@ test("Vision Demo packages its native runtime without an external service depend
   assert.match(installer, /build-native-package\.js --demo/);
   assert.deepEqual(
     config.extraResources.map((entry) => entry.to),
-    ["resources"],
+    ["resources/DEMO"],
+  );
+  assert.deepEqual(
+    config.extraResources.map((entry) => entry.from),
+    ["resources-demo/DEMO"],
   );
   assert.equal(config.afterPack, "./scripts/finalize-native-package.js");
 });

@@ -276,7 +276,7 @@ async function main() {
       "/api/transactions",
       {
         transaction_date: "2026-01-15",
-        bank_account: syntheticAccountName,
+        account_id: accountId,
         recipient_id: recipientId,
         amount: -42.5,
         currency: "EUR",

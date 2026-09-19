@@ -17,7 +17,12 @@
     "native-update-installer.js",
     "preload.js",
     "backup/**/*",
-    "assets/**/*"
+    "assets/**/*",
+    "!runtime/**/*.test.js",
+    "!backup/**/*.test.js",
+    "!backup/fixtures/**/*",
+    "!node_modules/**/*.map",
+    "!node_modules/bare-{fs,os,url}/prebuilds/!(darwin-arm64)/**/*"
   ],
   "extraResources": [{ "from": "i18n", "to": "i18n" }]
 }

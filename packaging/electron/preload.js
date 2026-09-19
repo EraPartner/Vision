@@ -73,11 +73,6 @@ const electronUpdater = {
   installShellUpdate: () => ipcRenderer.invoke("update:install-shell"),
 
   /**
-   * Get the current update mode and packaging state.
-   */
-  getMode: () => ipcRenderer.invoke("update:get-mode"),
-
-  /**
    * Create a pre-update database backup in userData/pre-update-backups/.
    * Call this before any install action to ensure zero data loss.
    */
