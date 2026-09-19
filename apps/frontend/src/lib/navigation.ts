@@ -70,6 +70,11 @@ export const GLOBAL_NAV_ITEMS: NavItem[] = [
         url: "/analysis",
         icon: PAGE_ICONS["/analysis"],
     },
+    {
+        titleKey: "nav.analysisMonitors",
+        url: "/analysis/monitors",
+        icon: PAGE_ICONS["/analysis/monitors"],
+    },
 ];
 
 const BUDGETING_SECTION: NavWorkspaceSection = {
@@ -293,6 +298,11 @@ const RESEARCH_SECTION: NavWorkspaceSection = {
                     titleKey: "nav.watchlist",
                     url: "/research/watchlist",
                     icon: PAGE_ICONS["/research/watchlist"],
+                },
+                {
+                    titleKey: "nav.dossiers",
+                    url: "/research/dossiers",
+                    icon: PAGE_ICONS["/research/dossiers"],
                 },
             ],
         },

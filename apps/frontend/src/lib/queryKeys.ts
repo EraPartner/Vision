@@ -56,6 +56,7 @@ export const recipientKeys = {
 
 export const categoryKeys = {
     all: ["categories"] as const,
+    tree: ["categories", "tree"] as const,
     list: (params?: object) => ["categories", params] as const,
     /**
      * Full-list snapshot (`limit: CATEGORY_FETCH_LIMIT`) shared by every

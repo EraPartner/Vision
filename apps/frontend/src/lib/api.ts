@@ -47,6 +47,8 @@ import * as ai from "@/lib/api/ai";
 import * as tags from "@/lib/api/tags";
 import * as crossWorkspace from "@/lib/api/crossWorkspace";
 import * as analysis from "@/lib/api/analysis";
+import * as dossiers from "@/lib/api/dossiers";
+import * as monitors from "@/lib/api/monitors";
 import * as aiResearch from "@/lib/api/aiResearch";
 import * as portfolioExposure from "@/lib/api/portfolioExposure";
 
@@ -65,6 +67,11 @@ export const apiClient = {
     createCategory: cat.createCategory,
     updateCategory: cat.updateCategory,
     deleteCategory: cat.deleteCategory,
+    getCategoryTree: cat.getCategoryTree,
+    createCategoryNode: cat.createCategoryNode,
+    updateCategoryNode: cat.updateCategoryNode,
+    deleteCategoryNode: cat.deleteCategoryNode,
+    mergeCategoryNode: cat.mergeCategoryNode,
 
     // Accounts (ADR-088)
     getAccounts: acct.getAccounts,
@@ -261,6 +268,23 @@ export const apiClient = {
     cancelAnalysis: analysis.cancelAnalysis,
     drillAnalysis: analysis.drillAnalysis,
     listSavedAnalyses: analysis.listSavedAnalyses,
+    listDossiers: dossiers.listDossiers,
+    getDossier: dossiers.getDossier,
+    createDossier: dossiers.createDossier,
+    updateDossier: dossiers.updateDossier,
+    deleteDossier: dossiers.deleteDossier,
+    listDossierVersions: dossiers.listDossierVersions,
+    restoreDossierVersion: dossiers.restoreDossierVersion,
+    exportDossiers: dossiers.exportDossiers,
+    exportDossier: dossiers.exportDossier,
+    listMonitors: monitors.listMonitors,
+    createMonitor: monitors.createMonitor,
+    updateMonitor: monitors.updateMonitor,
+    deleteMonitor: monitors.deleteMonitor,
+    checkMonitor: monitors.checkMonitor,
+    listMonitorObservations: monitors.listMonitorObservations,
+    listMonitorNotifications: monitors.listMonitorNotifications,
+    readMonitorNotification: monitors.readMonitorNotification,
     createSavedAnalysis: analysis.createSavedAnalysis,
     updateSavedAnalysis: analysis.updateSavedAnalysis,
     runSavedAnalysis: analysis.runSavedAnalysis,

@@ -78,6 +78,9 @@ import tagsRouter from "./routes/tags.js";
 import accountsRouter from "./routes/accounts.js";
 import crossWorkspaceRouter from "./routes/crossWorkspace.js";
 import analysisRouter from "./routes/analysis.js";
+import analysisMonitorsRouter from "./routes/analysisMonitors.js";
+import researchDossiersRouter from "./routes/researchDossiers.js";
+import { startAnalysisMonitorScheduler } from "./startup/analysisMonitorScheduler.js";
 import aiResearchDocumentsRouter from "./routes/aiResearchDocuments.js";
 import aiResearchRouter from "./routes/aiResearch.js";
 import { closeAnalysisPool } from "./services/analysisExecutor.js";
@@ -307,7 +310,19 @@ mountRouter(app, "/api/reports", reportRateLimiter, reportsRouter);
 mountRouter(app, "/api/tags", tagsRouter);
 mountRouter(app, "/api/accounts", accountsRouter);
 mountRouter(app, "/api/cross-workspace", crossWorkspaceRouter);
+mountRouter(
+  app,
+  "/api/analysis/monitors",
+  aggregationRateLimiter,
+  analysisMonitorsRouter,
+);
 mountRouter(app, "/api/analysis", aggregationRateLimiter, analysisRouter);
+mountRouter(
+  app,
+  "/api/research-dossiers",
+  aggregationRateLimiter,
+  researchDossiersRouter,
+);
 mountRouter(
   app,
   "/api/ai-research/documents",
@@ -419,6 +434,8 @@ let quotesRefreshInterval = null;
 let cashflowForecastRefreshInterval = null;
 /** @type {NodeJS.Timeout|null} */
 let holdingGapBackfillInterval = null;
+/** @type {NodeJS.Timeout|null} */
+let analysisMonitorInterval = null;
 
 // HTTP server handle — module-scoped so shutdown() can drain in-flight requests.
 // `app.listen(...)` returns whatever express's ambient `any` import resolves
@@ -594,6 +611,8 @@ async function start() {
         version: settings.api.version,
       });
 
+      analysisMonitorInterval = startAnalysisMonitorScheduler();
+
       try {
         const intervals = await runWarmupTasks({ warmupStatus, bootMark });
         exchangeRateRefreshInterval = intervals.exchangeRateRefreshInterval;
@@ -647,6 +666,7 @@ async function shutdown(signal) {
   if (cashflowForecastRefreshInterval)
     clearInterval(cashflowForecastRefreshInterval);
   if (holdingGapBackfillInterval) clearInterval(holdingGapBackfillInterval);
+  if (analysisMonitorInterval) clearInterval(analysisMonitorInterval);
   cancelPendingAggregationRefresh();
 
   // Stop accepting new connections and let in-flight requests finish before

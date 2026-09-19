@@ -37,6 +37,11 @@ export const appRouteManifest = [
         admin: false,
     },
     {
+        path: "/analysis/monitors",
+        loader: () => import("@/pages/AnalysisMonitorsPage"),
+        admin: false,
+    },
+    {
         path: "/recipients",
         loader: () => import("@/pages/RecipientsPage"),
         admin: false,
@@ -190,6 +195,11 @@ export const appRouteManifest = [
     {
         path: "/research/charts",
         loader: () => import("@/pages/research/ChartBuilderPage"),
+        admin: false,
+    },
+    {
+        path: "/research/dossiers",
+        loader: () => import("@/pages/research/ResearchDossiersPage"),
         admin: false,
     },
     {

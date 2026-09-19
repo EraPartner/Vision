@@ -62,6 +62,435 @@ components:
         status:
           type: integer
 
+    ResearchDossierSource:
+      type: object
+      additionalProperties: false
+      required: [title, reference]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 500 }
+        reference: { type: string, minLength: 1, maxLength: 2000 }
+        sourceDate: { type: string, format: date, nullable: true }
+        accessedAt: { type: string, format: date-time, nullable: true }
+        documentId: { type: string, format: uuid }
+        documentVersion: { type: integer, minimum: 1 }
+        passageOrdinal: { type: integer, minimum: 0 }
+        contentSha256: { type: string, pattern: "^[0-9a-f]{64}$" }
+      description: >
+        Citation snapshot. Document metadata is optional, but requires documentId when present;
+        the server pins document version and digest on save. The snapshot remains after source deletion.
+
+    ResearchDossierEvidence:
+      type: object
+      additionalProperties: false
+      required: [stance, origin, claim, source]
+      properties:
+        id: { type: string, format: uuid }
+        stance: { type: string, enum: [support, oppose, context] }
+        origin: { type: string, enum: [user, ai-draft] }
+        claim: { type: string, minLength: 1, maxLength: 8000 }
+        source: { $ref: "#/components/schemas/ResearchDossierSource" }
+        notes: { type: string, maxLength: 8000 }
+
+    ResearchDossierLinks:
+      type: object
+      additionalProperties: false
+      required: [categoryIds, investmentIds, savedAnalysisIds]
+      properties:
+        categoryIds:
+          type: array
+          maxItems: 100
+          uniqueItems: true
+          items: { type: integer, minimum: 1 }
+        investmentIds:
+          type: array
+          maxItems: 100
+          uniqueItems: true
+          items: { type: integer, minimum: 1 }
+        savedAnalysisIds:
+          type: array
+          maxItems: 100
+          uniqueItems: true
+          items: { type: string, minLength: 1, maxLength: 100 }
+      description: Current live links only; deleted targets appear in linkDetails instead.
+
+    ResearchDossierContent:
+      type: object
+      required: [title, workspace, question]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 300 }
+        workspace:
+          type: string
+          enum: [budgeting, portfolio, research, cross-workspace]
+        question: { type: string, minLength: 1, maxLength: 8000 }
+        userThesis: { type: string, maxLength: 16000, default: "" }
+        assumptions:
+          type: array
+          maxItems: 50
+          items: { type: string, minLength: 1, maxLength: 2000 }
+        openQuestions:
+          type: array
+          maxItems: 50
+          items: { type: string, minLength: 1, maxLength: 2000 }
+        conclusion: { type: string, maxLength: 16000, default: "" }
+        reviewDate: { type: string, format: date, nullable: true }
+        evidence:
+          type: array
+          maxItems: 30
+          items: { $ref: "#/components/schemas/ResearchDossierEvidence" }
+        links: { $ref: "#/components/schemas/ResearchDossierLinks" }
+      description: >
+        User-authored research record. Optional arrays, strings and links receive empty defaults;
+        evidence id may be omitted on input and is generated on save. The server rejects unknown
+        request properties; this reusable content schema also describes version snapshots.
+
+    ResearchDossier:
+      allOf:
+        - $ref: "#/components/schemas/ResearchDossierContent"
+        - type: object
+          required: [id, version, linkDetails, createdAt, updatedAt]
+          properties:
+            id: { type: string, format: uuid }
+            version: { type: integer, minimum: 1 }
+            linkDetails:
+              type: array
+              items:
+                type: object
+                required: [kind, historicalId, labelSnapshot, status]
+                properties:
+                  kind:
+                    {
+                      type: string,
+                      enum: [category, investment, saved-analysis],
+                    }
+                  historicalId: { type: string }
+                  labelSnapshot: { type: string }
+                  liveId:
+                    nullable: true
+                    oneOf:
+                      - { type: integer, minimum: 1 }
+                      - { type: string }
+                    description: Integer for category/investment, string for saved analysis; null after deletion.
+                  status: { type: string, enum: [live, deleted] }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+
+    ResearchDossierSummary:
+      type: object
+      required:
+        [
+          id,
+          title,
+          workspace,
+          version,
+          question,
+          reviewDate,
+          createdAt,
+          updatedAt,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        workspace:
+          type: string
+          enum: [budgeting, portfolio, research, cross-workspace]
+        version: { type: integer, minimum: 1 }
+        question: { type: string }
+        reviewDate: { type: string, format: date, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    ResearchDossierVersion:
+      type: object
+      required: [version, snapshot, createdAt]
+      properties:
+        version: { type: integer, minimum: 1 }
+        snapshot: { $ref: "#/components/schemas/ResearchDossierContent" }
+        createdAt: { type: string, format: date-time }
+
+    ResearchDossierExport:
+      type: object
+      required: [schemaVersion, exportedAt, dossiers]
+      properties:
+        schemaVersion: { type: integer, enum: [1] }
+        exportedAt: { type: string, format: date-time }
+        dossiers:
+          type: array
+          items:
+            allOf:
+              - $ref: "#/components/schemas/ResearchDossier"
+              - type: object
+                required: [versions]
+                properties:
+                  versions:
+                    type: array
+                    items:
+                      { $ref: "#/components/schemas/ResearchDossierVersion" }
+
+    ResearchDossierEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/ResearchDossier" }
+
+    ResearchDossierListEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [items, total, limit, offset]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "#/components/schemas/ResearchDossierSummary" }
+                total: { type: integer, minimum: 0 }
+                limit: { type: integer, minimum: 1, maximum: 500 }
+                offset: { type: integer, minimum: 0 }
+
+    ResearchDossierVersionsEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "#/components/schemas/ResearchDossierVersion" }
+
+    ResearchDossierExportEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/ResearchDossierExport" }
+
+    AnalysisMonitorCreate:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [kind, title, savedAnalysisId, fieldId, operator, threshold]
+          properties:
+            kind: { type: string, enum: [analysis-threshold] }
+            title: { type: string, minLength: 1, maxLength: 200 }
+            savedAnalysisId: { type: string, format: uuid }
+            fieldId: { type: string, minLength: 1, maxLength: 100 }
+            operator: { type: string, enum: [above, below] }
+            threshold:
+              type: string
+              maxLength: 100
+              pattern: '^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$'
+              description: Exact decimal string; never a JSON number.
+            intervalMinutes:
+              { type: integer, minimum: 15, maximum: 10080, default: 1440 }
+            cooldownMinutes:
+              { type: integer, minimum: 0, maximum: 10080, default: 1440 }
+        - type: object
+          additionalProperties: false
+          required: [kind, title, dossierId]
+          properties:
+            kind: { type: string, enum: [dossier-evidence] }
+            title: { type: string, minLength: 1, maxLength: 200 }
+            dossierId: { type: string, format: uuid }
+            intervalMinutes:
+              { type: integer, minimum: 15, maximum: 10080, default: 1440 }
+            cooldownMinutes:
+              { type: integer, minimum: 0, maximum: 10080, default: 1440 }
+
+    AnalysisMonitorUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        enabled: { type: boolean }
+        fieldId: { type: string, minLength: 1, maxLength: 100 }
+        operator: { type: string, enum: [above, below] }
+        threshold:
+          type: string
+          maxLength: 100
+          pattern: '^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$'
+        intervalMinutes: { type: integer, minimum: 15, maximum: 10080 }
+        cooldownMinutes: { type: integer, minimum: 0, maximum: 10080 }
+      description: Numeric condition fields are valid only for analysis-threshold monitors.
+
+    AnalysisMonitorObservation:
+      type: object
+      required: [id, monitorId, status, coverage, reasonCode, reason, checkedAt]
+      properties:
+        id: { type: string, format: uuid }
+        monitorId: { type: string, format: uuid }
+        status:
+          type: string
+          enum:
+            [
+              baseline,
+              unchanged,
+              triggered,
+              cooldown-pending,
+              partial,
+              stale,
+              failed,
+            ]
+        previousValue: { type: string, nullable: true }
+        currentValue: { type: string, nullable: true }
+        previousEvidenceVersion: { type: integer, nullable: true }
+        currentEvidenceVersion: { type: integer, nullable: true }
+        analysisDefinitionVersion: { type: integer, nullable: true }
+        analysisRunId: { type: string, nullable: true }
+        historicalAnalysisRunId: { type: string, nullable: true }
+        analysisRunStatus: { type: string, nullable: true }
+        analysisWindow:
+          { type: object, nullable: true, additionalProperties: true }
+        coverage:
+          type: object
+          required: [status, reason]
+          properties:
+            status: { type: string, enum: [unknown] }
+            reason: { type: string }
+        reasonCode: { type: string }
+        reason: { type: string }
+        checkedAt: { type: string, format: date-time }
+
+    AnalysisMonitor:
+      type: object
+      required:
+        [
+          id,
+          kind,
+          title,
+          enabled,
+          historicalTargetId,
+          targetLabel,
+          targetAvailable,
+          intervalMinutes,
+          cooldownMinutes,
+          nextDueAt,
+          createdAt,
+          updatedAt,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [analysis-threshold, dossier-evidence] }
+        title: { type: string }
+        enabled: { type: boolean }
+        savedAnalysisId: { type: string, nullable: true }
+        dossierId: { type: string, format: uuid, nullable: true }
+        historicalTargetId: { type: string }
+        targetLabel: { type: string }
+        targetAvailable: { type: boolean }
+        fieldId: { type: string, nullable: true }
+        operator: { type: string, enum: [above, below], nullable: true }
+        threshold: { type: string, nullable: true }
+        intervalMinutes: { type: integer, minimum: 15, maximum: 10080 }
+        cooldownMinutes: { type: integer, minimum: 0, maximum: 10080 }
+        nextDueAt: { type: string, format: date-time }
+        lastCheckedAt: { type: string, format: date-time, nullable: true }
+        lastStatus: { type: string, nullable: true }
+        lastObservation:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/AnalysisMonitorObservation"
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    AnalysisMonitorNotification:
+      type: object
+      required:
+        [
+          id,
+          monitorId,
+          observationId,
+          kind,
+          title,
+          reasonCode,
+          reason,
+          createdAt,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        monitorId: { type: string, format: uuid }
+        observationId: { type: string, format: uuid }
+        kind: { type: string, enum: [analysis-threshold, dossier-evidence] }
+        title: { type: string }
+        reasonCode: { type: string }
+        reason: { type: string }
+        previousValue: { type: string, nullable: true }
+        currentValue: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        readAt: { type: string, format: date-time, nullable: true }
+
+    AnalysisMonitorEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/AnalysisMonitor" }
+    AnalysisMonitorObservationEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/AnalysisMonitorObservation" }
+    AnalysisMonitorNotificationEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/AnalysisMonitorNotification" }
+    AnalysisMonitorListEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [items, total, limit, offset]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "#/components/schemas/AnalysisMonitor" }
+                total: { type: integer, minimum: 0 }
+                limit: { type: integer, minimum: 1, maximum: 200 }
+                offset: { type: integer, minimum: 0, maximum: 1000000 }
+    AnalysisMonitorObservationListEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [items, total, limit, offset]
+              properties:
+                items:
+                  type: array
+                  items:
+                    { $ref: "#/components/schemas/AnalysisMonitorObservation" }
+                total: { type: integer, minimum: 0 }
+                limit: { type: integer, minimum: 1, maximum: 200 }
+                offset: { type: integer, minimum: 0, maximum: 1000000 }
+    AnalysisMonitorNotificationListEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [items, total, unreadCount, limit, offset]
+              properties:
+                items:
+                  type: array
+                  items:
+                    { $ref: "#/components/schemas/AnalysisMonitorNotification" }
+                total: { type: integer, minimum: 0 }
+                unreadCount: { type: integer, minimum: 0 }
+                limit: { type: integer, minimum: 1, maximum: 200 }
+                offset: { type: integer, minimum: 0, maximum: 1000000 }
+
     AiInvestigationRequest:
       type: object
       additionalProperties: false
@@ -956,6 +1385,87 @@ components:
               type: array
               items:
                 $ref: "#/components/schemas/Link"
+
+    CategoryNode:
+      type: object
+      required:
+        [
+          id,
+          name,
+          pathIds,
+          path,
+          category_name,
+          depth,
+          is_active,
+          hierarchyOnly,
+          legacyCompatible,
+        ]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        parentId:
+          type: integer
+          nullable: true
+        pathIds:
+          type: array
+          items: { type: integer }
+        path:
+          type: array
+          items: { type: string }
+        category_name:
+          type: string
+          description: Display projection only. Use path or pathIds for hierarchy logic.
+        depth:
+          type: integer
+          minimum: 1
+        description:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+        hierarchyOnly:
+          type: boolean
+        legacyCompatible:
+          type: boolean
+
+    CategoryNodeCreate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        parentId: { type: integer, nullable: true, minimum: 1 }
+        description: { type: string, nullable: true, maxLength: 500 }
+
+    CategoryNodeUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        parentId: { type: integer, nullable: true, minimum: 1 }
+        description: { type: string, nullable: true, maxLength: 500 }
+        is_active: { type: boolean }
+
+    CategoryNodeEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/CategoryNode" }
+
+    CategoryTreeEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [items, total]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "#/components/schemas/CategoryNode" }
+                total: { type: integer }
 
     # ─── Recipients ─────────────────────────────────────────────────────────
     Recipient:
@@ -2557,6 +3067,41 @@ components:
               items: { type: string }
               description: Sorted uppercase source currencies whose rows used the fallback.
 
+    CategoryPivotData:
+      type: object
+      required: [categoryPivot]
+      properties:
+        categoryPivot:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: object
+              required:
+                [
+                  categoryId,
+                  categoryName,
+                  categoryPathIds,
+                  categoryPathSegments,
+                  total,
+                  income,
+                  expense,
+                  transactionCount,
+                ]
+              properties:
+                categoryId: { type: integer, nullable: true }
+                categoryName: { type: string }
+                categoryPathIds:
+                  type: array
+                  items: { type: integer }
+                categoryPathSegments:
+                  type: array
+                  items: { type: string }
+                total: { type: number }
+                income: { type: number }
+                expense: { type: number }
+                transactionCount: { type: integer }
+
     # ─── Net Worth ───────────────────────────────────────────────────────────
     NetWorthSnapshot:
       type: object
@@ -3829,6 +4374,368 @@ paths:
         "404": { description: Saved analysis or version not found }
         "409": { description: Current version changed }
 
+  # ─── Deterministic local analysis and evidence monitors ─────────────────────
+  /api/analysis/monitors:
+    get:
+      summary: List bounded monitor rules with their latest observation
+      operationId: listAnalysisMonitors
+      tags: [AnalysisMonitors]
+      parameters:
+        - {
+            in: query,
+            name: limit,
+            schema: { type: integer, minimum: 1, maximum: 200, default: 50 },
+          }
+        - {
+            in: query,
+            name: offset,
+            schema: { type: integer, minimum: 0, maximum: 1000000, default: 0 },
+          }
+      responses:
+        "200":
+          description: Paged local monitor rules
+          content:
+            application/json:
+              schema:
+                { $ref: "#/components/schemas/AnalysisMonitorListEnvelope" }
+        "400": { description: Invalid pagination }
+    post:
+      summary: Create a local threshold or dossier evidence monitor
+      operationId: createAnalysisMonitor
+      tags: [AnalysisMonitors]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AnalysisMonitorCreate" }
+      responses:
+        "201":
+          description: Created rule; first valid check will establish a baseline
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AnalysisMonitorEnvelope" }
+        "400":
+          { description: Invalid rule, frozen analysis, or nonnumeric field }
+        "404": { description: Monitor target not found }
+
+  /api/analysis/monitors/notifications:
+    get:
+      summary: List durable in-app monitor notifications and unread count
+      operationId: listAnalysisMonitorNotifications
+      tags: [AnalysisMonitors]
+      parameters:
+        - {
+            in: query,
+            name: limit,
+            schema: { type: integer, minimum: 1, maximum: 200, default: 50 },
+          }
+        - {
+            in: query,
+            name: offset,
+            schema: { type: integer, minimum: 0, maximum: 1000000, default: 0 },
+          }
+      responses:
+        "200":
+          description: Paged notifications and server-owned unread count
+          content:
+            application/json:
+              schema:
+                {
+                  $ref: "#/components/schemas/AnalysisMonitorNotificationListEnvelope",
+                }
+        "400": { description: Invalid pagination }
+
+  /api/analysis/monitors/notifications/{id}/read:
+    parameters:
+      - {
+          in: path,
+          name: id,
+          required: true,
+          schema: { type: string, format: uuid },
+        }
+    post:
+      summary: Mark one monitor notification read
+      operationId: readAnalysisMonitorNotification
+      tags: [AnalysisMonitors]
+      responses:
+        "200":
+          description: Read notification
+          content:
+            application/json:
+              schema:
+                {
+                  $ref: "#/components/schemas/AnalysisMonitorNotificationEnvelope",
+                }
+        "400": { description: Invalid notification ID }
+        "404": { description: Notification not found }
+
+  /api/analysis/monitors/{id}:
+    parameters:
+      - {
+          in: path,
+          name: id,
+          required: true,
+          schema: { type: string, format: uuid },
+        }
+    patch:
+      summary: Edit a monitor rule without changing its target
+      operationId: patchAnalysisMonitor
+      tags: [AnalysisMonitors]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AnalysisMonitorUpdate" }
+      responses:
+        "200":
+          description: Updated rule; changed threshold conditions establish a fresh baseline
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AnalysisMonitorEnvelope" }
+        "400": { description: Invalid edit or evidence-monitor condition }
+        "404": { description: Monitor not found }
+        "409": { description: Monitor check already running }
+    delete:
+      summary: Delete one monitor, its observations, and inbox notifications
+      operationId: deleteAnalysisMonitor
+      tags: [AnalysisMonitors]
+      responses:
+        "204": { description: Monitor and its history deleted }
+        "400": { description: Invalid monitor ID }
+        "404": { description: Monitor not found }
+
+  /api/analysis/monitors/{id}/check:
+    parameters:
+      - {
+          in: path,
+          name: id,
+          required: true,
+          schema: { type: string, format: uuid },
+        }
+    post:
+      summary: Run one local monitor check and persist its observation
+      operationId: checkAnalysisMonitor
+      tags: [AnalysisMonitors]
+      responses:
+        "200":
+          description: New baseline, unchanged, triggered, cooldown, partial, stale, or failed observation
+          content:
+            application/json:
+              schema:
+                {
+                  $ref: "#/components/schemas/AnalysisMonitorObservationEnvelope",
+                }
+        "400": { description: Invalid monitor ID }
+        "404": { description: Monitor not found }
+        "409": { description: Monitor disabled, already running, or superseded }
+
+  /api/analysis/monitors/{id}/observations:
+    parameters:
+      - {
+          in: path,
+          name: id,
+          required: true,
+          schema: { type: string, format: uuid },
+        }
+    get:
+      summary: List durable monitor observations newest first
+      operationId: listAnalysisMonitorObservations
+      tags: [AnalysisMonitors]
+      parameters:
+        - {
+            in: query,
+            name: limit,
+            schema: { type: integer, minimum: 1, maximum: 200, default: 50 },
+          }
+        - {
+            in: query,
+            name: offset,
+            schema: { type: integer, minimum: 0, maximum: 1000000, default: 0 },
+          }
+      responses:
+        "200":
+          description: Paged observation history, including visible failed and partial checks
+          content:
+            application/json:
+              schema:
+                {
+                  $ref: "#/components/schemas/AnalysisMonitorObservationListEnvelope",
+                }
+        "400": { description: Invalid monitor ID or pagination }
+        "404": { description: Monitor not found }
+
+  # ─── Durable local research dossiers ───────────────────────────────────────
+  /api/research-dossiers:
+    get:
+      summary: List bounded local research dossier summaries in latest-update order
+      operationId: listResearchDossiers
+      tags: [ResearchDossiers]
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+        - in: query
+          name: offset
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: Paged dossier summaries and total count; evidence requires an individual GET
+          content:
+            application/json:
+              schema:
+                { $ref: "#/components/schemas/ResearchDossierListEnvelope" }
+        "400": { description: Invalid pagination }
+    post:
+      summary: Create a local research dossier and version one
+      operationId: createResearchDossier
+      tags: [ResearchDossiers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ResearchDossierContent" }
+      responses:
+        "201":
+          description: Created dossier
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResearchDossierEnvelope" }
+        "400": { description: Invalid content, link, or document provenance }
+
+  /api/research-dossiers/export:
+    get:
+      summary: Export all current dossiers with every version as JSON
+      operationId: exportResearchDossiers
+      tags: [ResearchDossiers]
+      responses:
+        "200":
+          description: Complete portable JSON snapshot; no import endpoint
+          content:
+            application/json:
+              schema:
+                { $ref: "#/components/schemas/ResearchDossierExportEnvelope" }
+
+  /api/research-dossiers/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      summary: Read a current research dossier with live and deleted link details
+      operationId: getResearchDossier
+      tags: [ResearchDossiers]
+      responses:
+        "200":
+          description: Current dossier
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResearchDossierEnvelope" }
+        "404": { description: Dossier not found }
+    put:
+      summary: Append an immutable version if expectedVersion still matches
+      operationId: updateResearchDossier
+      tags: [ResearchDossiers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/ResearchDossierContent"
+                - type: object
+                  required: [expectedVersion]
+                  properties:
+                    expectedVersion: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: New current version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResearchDossierEnvelope" }
+        "400": { description: Invalid content, link, or document provenance }
+        "404": { description: Dossier not found }
+        "409": { description: Expected version is stale }
+    delete:
+      summary: Delete a dossier and all its versions
+      operationId: deleteResearchDossier
+      tags: [ResearchDossiers]
+      responses:
+        "204": { description: Dossier deleted }
+        "404": { description: Dossier not found }
+
+  /api/research-dossiers/{id}/versions:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      summary: List immutable dossier content snapshots, newest first
+      operationId: listResearchDossierVersions
+      tags: [ResearchDossiers]
+      responses:
+        "200":
+          description: Version snapshots
+          content:
+            application/json:
+              schema:
+                { $ref: "#/components/schemas/ResearchDossierVersionsEnvelope" }
+        "404": { description: Dossier not found }
+
+  /api/research-dossiers/{id}/restore:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      summary: Copy a historical snapshot into a new current version
+      operationId: restoreResearchDossier
+      tags: [ResearchDossiers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version, expectedVersion]
+              properties:
+                version: { type: integer, minimum: 1 }
+                expectedVersion: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Restored content at a new version number
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResearchDossierEnvelope" }
+        "400":
+          {
+            description: Historical link or source cannot be restored as requested,
+          }
+        "404": { description: Dossier or version not found }
+        "409": { description: Expected version is stale }
+
+  /api/research-dossiers/{id}/export:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      summary: Export one current dossier with every version as JSON
+      operationId: exportResearchDossier
+      tags: [ResearchDossiers]
+      responses:
+        "200":
+          description: Portable JSON snapshot; no import endpoint
+          content:
+            application/json:
+              schema:
+                { $ref: "#/components/schemas/ResearchDossierExportEnvelope" }
+        "404": { description: Dossier not found }
+
   # ─── Bounded AI research ──────────────────────────────────────────────────
   /api/ai-research/status:
     get:
@@ -4980,6 +5887,102 @@ paths:
                               created:
                                 type: boolean
                                 enum: [true]
+
+  /api/categories/tree:
+    get:
+      summary: List all category hierarchy nodes, including assignable roots
+      operationId: getCategoryTree
+      tags: [Categories]
+      responses:
+        "200":
+          description: Ordered category nodes
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CategoryTreeEnvelope" }
+    post:
+      summary: Create a category at any depth
+      operationId: createCategoryNode
+      tags: [Categories]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryNodeCreate"
+      responses:
+        "201":
+          description: Created category node
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CategoryNodeEnvelope" }
+
+  /api/categories/tree/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: integer, minimum: 1 }
+    get:
+      summary: Get one category hierarchy node
+      operationId: getCategoryNode
+      tags: [Categories]
+      responses:
+        "200":
+          description: Category node
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CategoryNodeEnvelope" }
+    patch:
+      summary: Rename, move, describe, or activate a category node
+      operationId: updateCategoryNode
+      tags: [Categories]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryNodeUpdate"
+      responses:
+        "200":
+          description: Updated category node
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CategoryNodeEnvelope" }
+    delete:
+      summary: Delete a childless category node
+      operationId: deleteCategoryNode
+      tags: [Categories]
+      responses:
+        "204":
+          description: No Content
+
+  /api/categories/tree/{id}/merge:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: integer, minimum: 1 }
+    post:
+      summary: Merge a category and its children into another active category
+      operationId: mergeCategoryNode
+      tags: [Categories]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [targetId]
+              properties:
+                targetId: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Surviving category node
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CategoryNodeEnvelope" }
+        "409":
+          description: Duplicate membership or sibling name; no changes applied
 
   /api/categories/{id}:
     parameters:
@@ -6989,6 +7992,12 @@ paths:
           name: currency
           schema:
             type: string
+        - in: query
+          name: ancestor_category_id
+          description: Optional ancestor ID. Return one total for its exact node and all descendants; each transaction contributes once.
+          schema:
+            type: integer
+            minimum: 1
       responses:
         "200":
           description: Category totals
@@ -7237,7 +8246,7 @@ paths:
                   - type: object
                     properties:
                       data:
-                        $ref: "#/components/schemas/RecipientPivotData"
+                        $ref: "#/components/schemas/CategoryPivotData"
 
   /api/aggregations/recipient-by-year:
     get:

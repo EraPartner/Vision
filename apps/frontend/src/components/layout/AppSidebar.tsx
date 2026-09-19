@@ -31,6 +31,7 @@ import {
     WORKSPACE_ROOT_URLS,
 } from "@/lib/navigation";
 import { InsightsNavBadge } from "@/components/layout/InsightsNavBadge";
+import { MonitorInboxBadge } from "@/components/layout/MonitorInboxBadge";
 import { VisionMark } from "@/components/shared/VisionMark";
 import { APP_NAME, APP_VERSION } from "@/lib/appIdentity";
 
@@ -64,6 +65,7 @@ function withGoToHint(title: string, url: string): string {
 function isActiveRoute(itemUrl: string, pathname: string) {
     // Workspace roots are active only on an exact match (they have children).
     if (WORKSPACE_ROOT_URLS.has(itemUrl)) return pathname === itemUrl;
+    if (itemUrl === "/analysis") return pathname === itemUrl;
     // Boundary-aware prefix match so a route whose path is a string prefix of
     // another (e.g. /research/market vs /research/markets) doesn't light up its
     // sibling. Child routes (/import/:id) still highlight their parent nav item.
@@ -197,7 +199,12 @@ export function AppSidebar() {
                                                         handleNavHover(item.url)
                                                     }
                                                     className="relative"
-                                                    aria-label={title}
+                                                    aria-label={
+                                                        item.url ===
+                                                        "/analysis/monitors"
+                                                            ? undefined
+                                                            : title
+                                                    }
                                                 >
                                                     {isActive && <ActiveRail />}
                                                     <item.icon
@@ -216,6 +223,14 @@ export function AppSidebar() {
                                                     >
                                                         {title}
                                                     </span>
+                                                    {item.url ===
+                                                        "/analysis/monitors" && (
+                                                        <MonitorInboxBadge
+                                                            collapsed={
+                                                                collapsed
+                                                            }
+                                                        />
+                                                    )}
                                                 </NavLink>
                                             </SidebarMenuButton>
                                         </SidebarMenuItem>

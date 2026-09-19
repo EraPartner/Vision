@@ -36,6 +36,34 @@ export interface Category {
     links: Link[];
 }
 
+/** Canonical category tree node. The path arrays, not general/detail, define ancestry. */
+export interface CategoryNode {
+    id: number;
+    name: string;
+    parentId: number | null;
+    pathIds: number[];
+    path: string[];
+    category_name: string;
+    depth: number;
+    description?: string | null;
+    is_active: boolean;
+    hierarchyOnly: boolean;
+    legacyCompatible: boolean;
+}
+
+export interface CategoryNodeCreate {
+    name: string;
+    parentId: number | null;
+    description?: string | null;
+}
+
+export interface CategoryNodeUpdate {
+    name?: string;
+    parentId?: number | null;
+    description?: string | null;
+    is_active?: boolean;
+}
+
 export interface CategoriesListResponse {
     items: Category[];
     total: number;

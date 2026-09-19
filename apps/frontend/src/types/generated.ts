@@ -295,6 +295,231 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/analysis/monitors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List bounded monitor rules with their latest observation */
+        get: operations["listAnalysisMonitors"];
+        put?: never;
+        /** Create a local threshold or dossier evidence monitor */
+        post: operations["createAnalysisMonitor"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/analysis/monitors/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List durable in-app monitor notifications and unread count */
+        get: operations["listAnalysisMonitorNotifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/analysis/monitors/notifications/{id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark one monitor notification read */
+        post: operations["readAnalysisMonitorNotification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/analysis/monitors/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete one monitor, its observations, and inbox notifications */
+        delete: operations["deleteAnalysisMonitor"];
+        options?: never;
+        head?: never;
+        /** Edit a monitor rule without changing its target */
+        patch: operations["patchAnalysisMonitor"];
+        trace?: never;
+    };
+    "/api/analysis/monitors/{id}/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run one local monitor check and persist its observation */
+        post: operations["checkAnalysisMonitor"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/analysis/monitors/{id}/observations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** List durable monitor observations newest first */
+        get: operations["listAnalysisMonitorObservations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/research-dossiers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List bounded local research dossier summaries in latest-update order */
+        get: operations["listResearchDossiers"];
+        put?: never;
+        /** Create a local research dossier and version one */
+        post: operations["createResearchDossier"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/research-dossiers/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export all current dossiers with every version as JSON */
+        get: operations["exportResearchDossiers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/research-dossiers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** Read a current research dossier with live and deleted link details */
+        get: operations["getResearchDossier"];
+        /** Append an immutable version if expectedVersion still matches */
+        put: operations["updateResearchDossier"];
+        post?: never;
+        /** Delete a dossier and all its versions */
+        delete: operations["deleteResearchDossier"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/research-dossiers/{id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** List immutable dossier content snapshots, newest first */
+        get: operations["listResearchDossierVersions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/research-dossiers/{id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Copy a historical snapshot into a new current version */
+        post: operations["restoreResearchDossier"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/research-dossiers/{id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** Export one current dossier with every version as JSON */
+        get: operations["exportResearchDossier"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ai-research/status": {
         parameters: {
             query?: never;
@@ -782,6 +1007,64 @@ export interface paths {
         put?: never;
         /** Create or get existing category */
         post: operations["createCategory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/categories/tree": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List all category hierarchy nodes, including assignable roots */
+        get: operations["getCategoryTree"];
+        put?: never;
+        /** Create a category at any depth */
+        post: operations["createCategoryNode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/categories/tree/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** Get one category hierarchy node */
+        get: operations["getCategoryNode"];
+        put?: never;
+        post?: never;
+        /** Delete a childless category node */
+        delete: operations["deleteCategoryNode"];
+        options?: never;
+        head?: never;
+        /** Rename, move, describe, or activate a category node */
+        patch: operations["updateCategoryNode"];
+        trace?: never;
+    };
+    "/api/categories/tree/{id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Merge a category and its children into another active category */
+        post: operations["mergeCategoryNode"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3717,6 +4000,270 @@ export interface components {
             code?: string;
             status?: number;
         };
+        /** @description Citation snapshot. Document metadata is optional, but requires documentId when present; the server pins document version and digest on save. The snapshot remains after source deletion. */
+        ResearchDossierSource: {
+            title: string;
+            reference: string;
+            /** Format: date */
+            sourceDate?: string | null;
+            /** Format: date-time */
+            accessedAt?: string | null;
+            /** Format: uuid */
+            documentId?: string;
+            documentVersion?: number;
+            passageOrdinal?: number;
+            contentSha256?: string;
+        };
+        ResearchDossierEvidence: {
+            /** Format: uuid */
+            id?: string;
+            /** @enum {string} */
+            stance: "support" | "oppose" | "context";
+            /** @enum {string} */
+            origin: "user" | "ai-draft";
+            claim: string;
+            source: components["schemas"]["ResearchDossierSource"];
+            notes?: string;
+        };
+        /** @description Current live links only; deleted targets appear in linkDetails instead. */
+        ResearchDossierLinks: {
+            categoryIds: number[];
+            investmentIds: number[];
+            savedAnalysisIds: string[];
+        };
+        /** @description User-authored research record. Optional arrays, strings and links receive empty defaults; evidence id may be omitted on input and is generated on save. The server rejects unknown request properties; this reusable content schema also describes version snapshots. */
+        ResearchDossierContent: {
+            title: string;
+            /** @enum {string} */
+            workspace: "budgeting" | "portfolio" | "research" | "cross-workspace";
+            question: string;
+            /** @default  */
+            userThesis: string;
+            assumptions?: string[];
+            openQuestions?: string[];
+            /** @default  */
+            conclusion: string;
+            /** Format: date */
+            reviewDate?: string | null;
+            evidence?: components["schemas"]["ResearchDossierEvidence"][];
+            links?: components["schemas"]["ResearchDossierLinks"];
+        };
+        ResearchDossier: components["schemas"]["ResearchDossierContent"] & {
+            /** Format: uuid */
+            id: string;
+            version: number;
+            linkDetails: {
+                /** @enum {string} */
+                kind: "category" | "investment" | "saved-analysis";
+                historicalId: string;
+                labelSnapshot: string;
+                /** @description Integer for category/investment, string for saved analysis; null after deletion. */
+                liveId?: (number | string) | null;
+                /** @enum {string} */
+                status: "live" | "deleted";
+            }[];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ResearchDossierSummary: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            /** @enum {string} */
+            workspace: "budgeting" | "portfolio" | "research" | "cross-workspace";
+            version: number;
+            question: string;
+            /** Format: date */
+            reviewDate: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ResearchDossierVersion: {
+            version: number;
+            snapshot: components["schemas"]["ResearchDossierContent"];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        ResearchDossierExport: {
+            /** @enum {integer} */
+            schemaVersion: 1;
+            /** Format: date-time */
+            exportedAt: string;
+            dossiers: (components["schemas"]["ResearchDossier"] & {
+                versions: components["schemas"]["ResearchDossierVersion"][];
+            })[];
+        };
+        ResearchDossierEnvelope: components["schemas"]["Envelope"] & {
+            data?: components["schemas"]["ResearchDossier"];
+        };
+        ResearchDossierListEnvelope: components["schemas"]["Envelope"] & {
+            data?: {
+                items: components["schemas"]["ResearchDossierSummary"][];
+                total: number;
+                limit: number;
+                offset: number;
+            };
+        };
+        ResearchDossierVersionsEnvelope: components["schemas"]["Envelope"] & {
+            data?: {
+                items: components["schemas"]["ResearchDossierVersion"][];
+            };
+        };
+        ResearchDossierExportEnvelope: components["schemas"]["Envelope"] & {
+            data?: components["schemas"]["ResearchDossierExport"];
+        };
+        AnalysisMonitorCreate: {
+            /** @enum {string} */
+            kind: "analysis-threshold";
+            title: string;
+            /** Format: uuid */
+            savedAnalysisId: string;
+            fieldId: string;
+            /** @enum {string} */
+            operator: "above" | "below";
+            /** @description Exact decimal string; never a JSON number. */
+            threshold: string;
+            /** @default 1440 */
+            intervalMinutes: number;
+            /** @default 1440 */
+            cooldownMinutes: number;
+        } | {
+            /** @enum {string} */
+            kind: "dossier-evidence";
+            title: string;
+            /** Format: uuid */
+            dossierId: string;
+            /** @default 1440 */
+            intervalMinutes: number;
+            /** @default 1440 */
+            cooldownMinutes: number;
+        };
+        /** @description Numeric condition fields are valid only for analysis-threshold monitors. */
+        AnalysisMonitorUpdate: {
+            title?: string;
+            enabled?: boolean;
+            fieldId?: string;
+            /** @enum {string} */
+            operator?: "above" | "below";
+            threshold?: string;
+            intervalMinutes?: number;
+            cooldownMinutes?: number;
+        };
+        AnalysisMonitorObservation: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            monitorId: string;
+            /** @enum {string} */
+            status: "baseline" | "unchanged" | "triggered" | "cooldown-pending" | "partial" | "stale" | "failed";
+            previousValue?: string | null;
+            currentValue?: string | null;
+            previousEvidenceVersion?: number | null;
+            currentEvidenceVersion?: number | null;
+            analysisDefinitionVersion?: number | null;
+            analysisRunId?: string | null;
+            historicalAnalysisRunId?: string | null;
+            analysisRunStatus?: string | null;
+            analysisWindow?: {
+                [key: string]: unknown;
+            } | null;
+            coverage: {
+                /** @enum {string} */
+                status: "unknown";
+                reason: string;
+            };
+            reasonCode: string;
+            reason: string;
+            /** Format: date-time */
+            checkedAt: string;
+        };
+        AnalysisMonitor: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            kind: "analysis-threshold" | "dossier-evidence";
+            title: string;
+            enabled: boolean;
+            savedAnalysisId?: string | null;
+            /** Format: uuid */
+            dossierId?: string | null;
+            historicalTargetId: string;
+            targetLabel: string;
+            targetAvailable: boolean;
+            fieldId?: string | null;
+            /** @enum {string|null} */
+            operator?: "above" | "below" | null;
+            threshold?: string | null;
+            intervalMinutes: number;
+            cooldownMinutes: number;
+            /** Format: date-time */
+            nextDueAt: string;
+            /** Format: date-time */
+            lastCheckedAt?: string | null;
+            lastStatus?: string | null;
+            lastObservation?: components["schemas"]["AnalysisMonitorObservation"] | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        AnalysisMonitorNotification: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            monitorId: string;
+            /** Format: uuid */
+            observationId: string;
+            /** @enum {string} */
+            kind: "analysis-threshold" | "dossier-evidence";
+            title: string;
+            reasonCode: string;
+            reason: string;
+            previousValue?: string | null;
+            currentValue?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            readAt?: string | null;
+        };
+        AnalysisMonitorEnvelope: components["schemas"]["Envelope"] & {
+            data?: components["schemas"]["AnalysisMonitor"];
+        };
+        AnalysisMonitorObservationEnvelope: components["schemas"]["Envelope"] & {
+            data?: components["schemas"]["AnalysisMonitorObservation"];
+        };
+        AnalysisMonitorNotificationEnvelope: components["schemas"]["Envelope"] & {
+            data?: components["schemas"]["AnalysisMonitorNotification"];
+        };
+        AnalysisMonitorListEnvelope: components["schemas"]["Envelope"] & {
+            data?: {
+                items: components["schemas"]["AnalysisMonitor"][];
+                total: number;
+                limit: number;
+                offset: number;
+            };
+        };
+        AnalysisMonitorObservationListEnvelope: components["schemas"]["Envelope"] & {
+            data?: {
+                items: components["schemas"]["AnalysisMonitorObservation"][];
+                total: number;
+                limit: number;
+                offset: number;
+            };
+        };
+        AnalysisMonitorNotificationListEnvelope: components["schemas"]["Envelope"] & {
+            data?: {
+                items: components["schemas"]["AnalysisMonitorNotification"][];
+                total: number;
+                unreadCount: number;
+                limit: number;
+                offset: number;
+            };
+        };
         AiInvestigationRequest: {
             question: string;
             /**
@@ -4257,6 +4804,40 @@ export interface components {
         CategoryList: components["schemas"]["OptionalPaginationFields"] & {
             items: components["schemas"]["Category"][];
             links: components["schemas"]["Link"][];
+        };
+        CategoryNode: {
+            id: number;
+            name: string;
+            parentId?: number | null;
+            pathIds: number[];
+            path: string[];
+            /** @description Display projection only. Use path or pathIds for hierarchy logic. */
+            category_name: string;
+            depth: number;
+            description?: string | null;
+            is_active: boolean;
+            hierarchyOnly: boolean;
+            legacyCompatible: boolean;
+        };
+        CategoryNodeCreate: {
+            name: string;
+            parentId?: number | null;
+            description?: string | null;
+        };
+        CategoryNodeUpdate: {
+            name?: string;
+            parentId?: number | null;
+            description?: string | null;
+            is_active?: boolean;
+        };
+        CategoryNodeEnvelope: components["schemas"]["Envelope"] & {
+            data?: components["schemas"]["CategoryNode"];
+        };
+        CategoryTreeEnvelope: components["schemas"]["Envelope"] & {
+            data?: {
+                items: components["schemas"]["CategoryNode"][];
+                total: number;
+            };
         };
         Recipient: {
             id: number;
@@ -4959,6 +5540,20 @@ export interface components {
                 usedHistoricalFallback: boolean;
                 /** @description Sorted uppercase source currencies whose rows used the fallback. */
                 affectedCurrencies: string[];
+            };
+        };
+        CategoryPivotData: {
+            categoryPivot: {
+                [key: string]: {
+                    categoryId: number | null;
+                    categoryName: string;
+                    categoryPathIds: number[];
+                    categoryPathSegments: string[];
+                    total: number;
+                    income: number;
+                    expense: number;
+                    transactionCount: number;
+                }[];
             };
         };
         NetWorthSnapshot: {
@@ -6003,6 +6598,597 @@ export interface operations {
             };
             /** @description Current version changed */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listAnalysisMonitors: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paged local monitor rules */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisMonitorListEnvelope"];
+                };
+            };
+            /** @description Invalid pagination */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createAnalysisMonitor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnalysisMonitorCreate"];
+            };
+        };
+        responses: {
+            /** @description Created rule; first valid check will establish a baseline */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisMonitorEnvelope"];
+                };
+            };
+            /** @description Invalid rule */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Monitor target not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listAnalysisMonitorNotifications: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paged notifications and server-owned unread count */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisMonitorNotificationListEnvelope"];
+                };
+            };
+            /** @description Invalid pagination */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    readAnalysisMonitorNotification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Read notification */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisMonitorNotificationEnvelope"];
+                };
+            };
+            /** @description Invalid notification ID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Notification not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deleteAnalysisMonitor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Monitor and its history deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid monitor ID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Monitor not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    patchAnalysisMonitor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnalysisMonitorUpdate"];
+            };
+        };
+        responses: {
+            /** @description Updated rule; changed threshold conditions establish a fresh baseline */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisMonitorEnvelope"];
+                };
+            };
+            /** @description Invalid edit or evidence-monitor condition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Monitor not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Monitor check already running */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    checkAnalysisMonitor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description New baseline, unchanged, triggered, cooldown, partial, stale, or failed observation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisMonitorObservationEnvelope"];
+                };
+            };
+            /** @description Invalid monitor ID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Monitor not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Monitor disabled */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listAnalysisMonitorObservations: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paged observation history, including visible failed and partial checks */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisMonitorObservationListEnvelope"];
+                };
+            };
+            /** @description Invalid monitor ID or pagination */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Monitor not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listResearchDossiers: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paged dossier summaries and total count; evidence requires an individual GET */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResearchDossierListEnvelope"];
+                };
+            };
+            /** @description Invalid pagination */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createResearchDossier: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResearchDossierContent"];
+            };
+        };
+        responses: {
+            /** @description Created dossier */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResearchDossierEnvelope"];
+                };
+            };
+            /** @description Invalid content */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    exportResearchDossiers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Complete portable JSON snapshot; no import endpoint */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResearchDossierExportEnvelope"];
+                };
+            };
+        };
+    };
+    getResearchDossier: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current dossier */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResearchDossierEnvelope"];
+                };
+            };
+            /** @description Dossier not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateResearchDossier: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResearchDossierContent"] & {
+                    expectedVersion: number;
+                };
+            };
+        };
+        responses: {
+            /** @description New current version */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResearchDossierEnvelope"];
+                };
+            };
+            /** @description Invalid content */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Dossier not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Expected version is stale */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deleteResearchDossier: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Dossier deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Dossier not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listResearchDossierVersions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Version snapshots */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResearchDossierVersionsEnvelope"];
+                };
+            };
+            /** @description Dossier not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    restoreResearchDossier: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    version: number;
+                    expectedVersion: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Restored content at a new version number */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResearchDossierEnvelope"];
+                };
+            };
+            /** @description Historical link or source cannot be restored as requested */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Dossier or version not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Expected version is stale */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    exportResearchDossier: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Portable JSON snapshot; no import endpoint */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResearchDossierExportEnvelope"];
+                };
+            };
+            /** @description Dossier not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7355,6 +8541,153 @@ export interface operations {
                         };
                     };
                 };
+            };
+        };
+    };
+    getCategoryTree: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ordered category nodes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryTreeEnvelope"];
+                };
+            };
+        };
+    };
+    createCategoryNode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CategoryNodeCreate"];
+            };
+        };
+        responses: {
+            /** @description Created category node */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryNodeEnvelope"];
+                };
+            };
+        };
+    };
+    getCategoryNode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Category node */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryNodeEnvelope"];
+                };
+            };
+        };
+    };
+    deleteCategoryNode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateCategoryNode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CategoryNodeUpdate"];
+            };
+        };
+        responses: {
+            /** @description Updated category node */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryNodeEnvelope"];
+                };
+            };
+        };
+    };
+    mergeCategoryNode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    targetId: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Surviving category node */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryNodeEnvelope"];
+                };
+            };
+            /** @description Duplicate membership or sibling name; no changes applied */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -9361,6 +10694,8 @@ export interface operations {
         parameters: {
             query?: {
                 currency?: string;
+                /** @description Optional ancestor ID. Return one total for its exact node and all descendants; each transaction contributes once. */
+                ancestor_category_id?: number;
             };
             header?: never;
             path?: never;
@@ -9604,7 +10939,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["RecipientPivotData"];
+                        data?: components["schemas"]["CategoryPivotData"];
                     };
                 };
             };

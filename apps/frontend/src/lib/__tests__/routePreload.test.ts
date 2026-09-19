@@ -14,6 +14,7 @@ const EXPECTED_PATHS = [
     "/accounts",
     "/accounts/:id",
     "/analysis",
+    "/analysis/monitors",
     "/recipients",
     "/planned",
     "/statistics",
@@ -46,6 +47,7 @@ const EXPECTED_PATHS = [
     "/research/compare",
     "/research/forecast",
     "/research/charts",
+    "/research/dossiers",
     "/ai-chat",
 ] as const;
 
@@ -90,6 +92,8 @@ describe("routeLoaders map", () => {
             false,
         ],
         ["/research/charts", "/research/charts", false],
+        ["/research/dossiers", "/research/dossiers", false],
+        ["/analysis/monitors", "/analysis/monitors", false],
     ])("matches deep link %s to %s", (url, expectedPath, expectedAdmin) => {
         const matches = matchRoutes(appRouteManifest, url);
         expect(matches?.at(-1)?.route.path).toBe(expectedPath);

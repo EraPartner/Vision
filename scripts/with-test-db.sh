@@ -21,6 +21,7 @@
 
 set -eu
 umask 077
+unset VISION_TEST_DB_ISOLATED
 
 REPO_ROOT=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$REPO_ROOT"
@@ -220,6 +221,9 @@ URL="postgresql://vision_test@127.0.0.1:$PORT/vision_test"
 # through TEST_DATABASE_URL while the service under test uses DATABASE_URL.
 export DATABASE_URL="$URL"
 export TEST_DATABASE_URL="$URL"
+VISION_TEST_ANALYSIS_PASSWORD=$(bun -e "process.stdout.write(require('node:crypto').randomUUID())")
+export DATABASE_URL_ANALYSIS="postgresql://vision_analysis_executor:$VISION_TEST_ANALYSIS_PASSWORD@127.0.0.1:$PORT/vision_test"
+export VISION_TEST_DB_ISOLATED=1
 # Keep boot-time migration state outside the repository. A disposable database
 # must never consult or overwrite the normal development cache.
 export VISION_CACHE_DIR="$NATIVE_ROOT/vision-cache"
@@ -230,6 +234,26 @@ bun run apps/node-backend/scripts/db-migrate.js
 if [ "$TASK" = migration-fidelity ]; then
   echo "[test-db] Verifying latest-revision downgrade and upgrade fidelity."
   bun run apps/node-backend/scripts/db-migrate.js downgrade -1
+  # A populated legacy category must keep its ID and label across both
+  # directions; an empty-database cycle cannot catch backfill regressions.
+  "$POSTGRES_BIN/psql" "$TEST_DATABASE_URL" -X -q -v ON_ERROR_STOP=1 -c \
+    "INSERT INTO categories (general, detail) VALUES ('VISION_FIDELITY', 'LEGACY')" >/dev/null
+  VISION_MIGRATION_CATEGORY_ID=$("$POSTGRES_BIN/psql" "$TEST_DATABASE_URL" -X -At -v ON_ERROR_STOP=1 -c \
+    "SELECT id FROM categories WHERE general = 'VISION_FIDELITY' AND detail = 'LEGACY'")
+  bun run apps/node-backend/scripts/db-migrate.js upgrade head
+  VISION_MIGRATION_CATEGORY_PATH=$("$POSTGRES_BIN/psql" "$TEST_DATABASE_URL" -X -At -v ON_ERROR_STOP=1 -c \
+    "SELECT path_name FROM categories WHERE id = $VISION_MIGRATION_CATEGORY_ID AND general = 'VISION_FIDELITY' AND detail = 'LEGACY'")
+  if [ "$VISION_MIGRATION_CATEGORY_PATH" != 'VISION_FIDELITY:LEGACY' ]; then
+    echo "[test-db] Legacy category ID/path changed on hierarchy upgrade." >&2
+    exit 1
+  fi
+  bun run apps/node-backend/scripts/db-migrate.js downgrade -1
+  VISION_MIGRATION_CATEGORY_PAIR=$("$POSTGRES_BIN/psql" "$TEST_DATABASE_URL" -X -At -v ON_ERROR_STOP=1 -c \
+    "SELECT general || ':' || detail FROM categories WHERE id = $VISION_MIGRATION_CATEGORY_ID")
+  if [ "$VISION_MIGRATION_CATEGORY_PAIR" != 'VISION_FIDELITY:LEGACY' ]; then
+    echo "[test-db] Legacy category ID/pair changed on hierarchy downgrade." >&2
+    exit 1
+  fi
   bun run apps/node-backend/scripts/db-migrate.js upgrade head
   echo "[test-db] Migration fidelity check passed."
   exit 0
