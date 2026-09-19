@@ -15,7 +15,7 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover";
-import { useCategories } from "@/hooks/useCategories";
+import { useCategoryTree } from "@/hooks/useCategories";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 
 interface CategoryComboboxProps {
@@ -41,19 +41,20 @@ export function CategoryCombobox({
 }: CategoryComboboxProps) {
     const { t } = useLanguage();
     const [open, setOpen] = useState(false);
-    // This picker represents the complete category vocabulary. Omitting
-    // pagination keeps it searchable beyond an arbitrary first-page cap; the
-    // categories route deliberately returns the full active list when no
-    // limit/offset is supplied.
-    const { data } = useCategories({ active: true });
+    // The tree contains assignable ancestors as well as leaves. Do not derive
+    // ancestry by splitting the legacy GENERAL:DETAIL display convention.
+    const { data } = useCategoryTree();
 
-    const categories = useMemo(() => data?.items ?? [], [data?.items]);
+    const categories = useMemo(
+        () => (data?.items ?? []).filter((category) => category.is_active),
+        [data?.items],
+    );
     const selected = useMemo(
         () => categories.find((c) => c.id === value),
         [categories, value],
     );
     const displayLabel = selected
-        ? `${selected.general}: ${selected.detail}`
+        ? selected.path.join(" / ")
         : t("combobox.category.placeholder");
 
     return (
@@ -105,11 +106,11 @@ export function CategoryCombobox({
                                 </span>
                             </CommandItem>
                             {categories.map((cat) => {
-                                const label = `${cat.general}: ${cat.detail}`;
+                                const label = cat.path.join(" / ");
                                 return (
                                     <CommandItem
                                         key={cat.id}
-                                        value={label}
+                                        value={`${label} ${cat.id}`}
                                         onSelect={() => {
                                             onSelect(cat.id, label);
                                             setOpen(false);

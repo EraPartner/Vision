@@ -1,7 +1,7 @@
 import { MultiCombobox } from "@/components/shared/MultiCombobox";
-import { useCategories } from "@/hooks/useCategories";
+import { useCategoryTree } from "@/hooks/useCategories";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
-import type { Category } from "@/types/api";
+import type { CategoryNode } from "@/types/api";
 
 interface CategoryMultiComboboxProps {
     value: number[];
@@ -13,8 +13,8 @@ interface CategoryMultiComboboxProps {
     "aria-labelledby"?: string;
 }
 
-const getId = (cat: Category) => cat.id;
-const getLabel = (cat: Category) => `${cat.general}: ${cat.detail}`;
+const getId = (cat: CategoryNode) => cat.id;
+const getLabel = (cat: CategoryNode) => cat.path.join(" / ");
 
 export function CategoryMultiCombobox({
     value,
@@ -26,7 +26,16 @@ export function CategoryMultiCombobox({
     "aria-labelledby": ariaLabelledBy,
 }: CategoryMultiComboboxProps) {
     const { t } = useLanguage();
-    const { data } = useCategories({ limit: 500, active: true });
+    const { data } = useCategoryTree();
+    const nodes = data?.items ?? [];
+    const selectWithDescendants = (selectedIds: number[]) => {
+        const expanded = new Set(selectedIds);
+        for (const node of nodes) {
+            if (node.pathIds.some((ancestorId) => expanded.has(ancestorId)))
+                expanded.add(node.id);
+        }
+        onChange([...expanded].sort((a, b) => a - b));
+    };
 
     const displayLabel =
         value.length === 0
@@ -39,8 +48,8 @@ export function CategoryMultiCombobox({
     return (
         <MultiCombobox
             value={value}
-            onChange={onChange}
-            items={data?.items ?? []}
+            onChange={selectWithDescendants}
+            items={nodes.filter((category) => category.is_active)}
             getValue={getId}
             getSearchValue={getLabel}
             renderItem={getLabel}

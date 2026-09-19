@@ -1,57 +1,44 @@
-import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useMemo, useState } from "react";
-import { useLanguage } from "@/stores/hydration/LanguageHydration";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useSearchParams } from "react-router";
 import {
+    ChevronDown,
+    ChevronRight,
     Eye,
     EyeOff,
+    Folder,
+    FolderOpen,
+    GitMerge,
+    Pencil,
     ToggleLeft,
     ToggleRight,
     Trash2,
-    ChevronRight,
-    ChevronDown,
-    FolderOpen,
-    Folder,
-    Pencil,
 } from "lucide-react";
-import { PageHeader } from "@/components/shared/PageHeader";
+import { PAGE_ICONS } from "@/lib/pageIcons";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
-import {
-    useCategories,
-    useUpdateCategory,
-    useDeleteCategory,
-} from "@/hooks/useCategories";
-import { AddCategoryDialog } from "@/features/categories/AddCategoryDialog";
-import { cn } from "@/lib/utils";
-import { useConfirmDialog } from "@/hooks/useConfirmDialog";
-import { apiErrorToMessage } from "@/lib/api/errorMessage";
+import { PageHeader } from "@/components/shared/PageHeader";
 import { PageShell } from "@/components/shared/PageShell";
 import { TextLink } from "@/components/shared/TextLink";
-import { TouchDisclosure } from "@/components/shared/TouchDisclosure";
-import { useSearchParams } from "react-router";
+import { Skeleton } from "@/components/ui/skeleton";
+import { CategoryNodeDialog } from "@/features/categories/CategoryNodeDialog";
+import { CategoryMergeDialog } from "@/features/categories/CategoryMergeDialog";
+import {
+    useCategoryTree,
+    useDeleteCategoryNode,
+    useUpdateCategoryNode,
+} from "@/hooks/useCategories";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import {
     booleanSearchParamCodec,
     useSearchParamState,
 } from "@/hooks/useSearchParamState";
-
-type CategoryItem = {
-    id: number;
-    general: string;
-    detail: string;
-    description?: string;
-    is_active?: boolean;
-};
-
-type EditTarget = {
-    id: number;
-    general: string;
-    detail: string;
-    description: string;
-};
+import { apiErrorToMessage } from "@/lib/api/errorMessage";
+import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
+import { cn } from "@/lib/utils";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import type { CategoryNode } from "@/types/api";
 
 export default function CategoriesPage() {
     const { t } = useLanguage();
@@ -61,126 +48,235 @@ export default function CategoriesPage() {
         booleanSearchParamCodec,
     );
     const [searchParams, setSearchParams] = useSearchParams();
-    const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
-
-    const { data, isLoading, error } = useCategories({
-        limit: 500,
-        active: !showAll,
-    });
-    const updateMutation = useUpdateCategory();
-    const deleteMutation = useDeleteCategory();
+    const [editTarget, setEditTarget] = useState<CategoryNode | null>(null);
+    const [mergeSource, setMergeSource] = useState<CategoryNode | null>(null);
+    const { data, isLoading, error } = useCategoryTree();
+    const update = useUpdateCategoryNode();
+    const remove = useDeleteCategoryNode();
     const { confirm, ConfirmDialog } = useConfirmDialog();
 
-    const grouped = useMemo(() => {
-        if (!data?.items) return [];
-        const map = new Map<string, typeof data.items>();
-        for (const cat of data.items) {
-            const g = cat.general;
-            if (!map.has(g)) map.set(g, []);
-            map.get(g)!.push(cat);
+    const allNodes = useMemo(() => data?.items ?? [], [data?.items]);
+    const visible = useMemo(() => {
+        if (showAll) return allNodes;
+        // Old data may have an inactive ancestor above an active descendant.
+        // Keep that ancestor as tree context rather than orphaning the child.
+        const visibleIds = new Set(
+            allNodes
+                .filter((node) => node.is_active)
+                .flatMap((node) => node.pathIds),
+        );
+        return allNodes.filter((node) => visibleIds.has(node.id));
+    }, [allNodes, showAll]);
+    const children = useMemo(() => {
+        const map = new Map<number | null, CategoryNode[]>();
+        for (const node of visible) {
+            const siblings = map.get(node.parentId) ?? [];
+            siblings.push(node);
+            map.set(node.parentId, siblings);
         }
-        return Array.from(map.entries())
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([general, items]) => ({
-                general,
-                items: items.sort((a, b) => a.detail.localeCompare(b.detail)),
-                activeCount: items.filter((i) => i.is_active !== false).length,
-            }));
-    }, [data]);
-
-    const knownGroups = useMemo(
-        () => new Set(grouped.map((group) => group.general)),
-        [grouped],
-    );
-    const expandedGroups = useMemo(
-        () =>
-            new Set(
-                searchParams
-                    .getAll("expanded")
-                    .filter((group) => knownGroups.has(group)),
-            ),
-        [knownGroups, searchParams],
-    );
-
-    const writeExpandedGroups = (groups: Set<string>) => {
+        for (const siblings of map.values())
+            siblings.sort(
+                (a, b) => a.name.localeCompare(b.name) || a.id - b.id,
+            );
+        return map;
+    }, [visible]);
+    const roots = children.get(null) ?? [];
+    const branchIds = visible
+        .filter((node) => (children.get(node.id)?.length ?? 0) > 0)
+        .map((node) => node.id);
+    const expanded = new Set(searchParams.getAll("expanded").map(Number));
+    const writeExpanded = (ids: Set<number>) =>
         setSearchParams(
             (previous) => {
                 const next = new URLSearchParams(previous);
                 next.delete("expanded");
-                for (const group of groups) next.append("expanded", group);
+                for (const id of ids) next.append("expanded", String(id));
                 return next;
             },
             { replace: true },
         );
+    const toggleExpanded = (id: number) => {
+        const next = new Set(expanded);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        writeExpanded(next);
     };
+    const allExpanded =
+        branchIds.length > 0 && branchIds.every((id) => expanded.has(id));
 
-    const toggleGroup = (general: string) => {
-        const next = new Set(expandedGroups);
-        if (next.has(general)) next.delete(general);
-        else next.add(general);
-        writeExpandedGroups(next);
-    };
-
-    const expandAll = () =>
-        writeExpandedGroups(new Set(grouped.map((g) => g.general)));
-    const collapseAll = () => writeExpandedGroups(new Set());
-
-    const toggleActive = (id: number, currentActive: boolean) => {
-        updateMutation.mutate({ id, data: { is_active: !currentActive } });
-    };
-
-    const openEdit = (cat: CategoryItem) => {
-        setEditTarget({
-            id: cat.id,
-            general: cat.general,
-            detail: cat.detail,
-            description: cat.description ?? "",
-        });
-    };
-
-    const handleEditSave = (values: {
-        general: string;
-        detail: string;
-        description: string;
-    }) => {
-        if (!editTarget) return;
-        updateMutation.mutate(
-            {
-                id: editTarget.id,
-                data: {
-                    general: values.general,
-                    detail: values.detail,
-                    description: values.description || undefined,
-                },
-            },
-            { onSuccess: () => setEditTarget(null) },
+    const renderNode = (node: CategoryNode, level: number): React.ReactNode => {
+        const descendants = children.get(node.id) ?? [];
+        const isExpanded = expanded.has(node.id);
+        const subtreeCount = visible.filter((item) =>
+            item.pathIds.includes(node.id),
+        ).length;
+        const subtreeIds = allNodes
+            .filter((item) => item.pathIds.includes(node.id))
+            .map((item) => item.id);
+        const categoryFilter =
+            subtreeIds.length === 1
+                ? `category_id=${node.id}`
+                : `category_ids=${encodeURIComponent(subtreeIds.join(","))}`;
+        return (
+            <div key={node.id}>
+                <div
+                    className={cn(
+                        "flex min-w-0 items-center gap-2 border-t border-border/50 py-2 pr-4 hover:bg-muted/50",
+                        !node.is_active && "opacity-60",
+                    )}
+                    style={{
+                        paddingLeft: `${level * 1.25 + 1}rem`,
+                    }}
+                >
+                    {descendants.length > 0 ? (
+                        <button
+                            type="button"
+                            aria-label={`${isExpanded ? t("categoriesPage.collapseAll") : t("categoriesPage.expandAll")}: ${node.path.join(" / ")}`}
+                            aria-expanded={isExpanded}
+                            onClick={() => toggleExpanded(node.id)}
+                            className="rounded p-1 focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                            {isExpanded ? (
+                                <ChevronDown className="h-4 w-4" />
+                            ) : (
+                                <ChevronRight className="h-4 w-4" />
+                            )}
+                        </button>
+                    ) : (
+                        <span className="w-6" />
+                    )}
+                    <TextLink
+                        to={`/transactions?${categoryFilter}&filter_label=${encodeURIComponent(node.path.join(" / "))}`}
+                        className={cn(
+                            "min-w-0 truncate text-sm",
+                            !node.is_active && "line-through",
+                        )}
+                        title={node.path.join(" / ")}
+                    >
+                        {node.name}
+                    </TextLink>
+                    {descendants.length > 0 && (
+                        <Badge
+                            variant="secondary"
+                            className="text-xs font-normal"
+                        >
+                            {subtreeCount}
+                        </Badge>
+                    )}
+                    {node.description && (
+                        <span className="hidden max-w-[200px] truncate text-xs text-muted-foreground sm:inline">
+                            {node.description}
+                        </span>
+                    )}
+                    <div className="ml-auto flex shrink-0 items-center gap-1">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 gap-1 text-xs"
+                            disabled={update.isPending}
+                            onClick={() =>
+                                update.mutate({
+                                    id: node.id,
+                                    data: { is_active: !node.is_active },
+                                })
+                            }
+                        >
+                            {node.is_active ? (
+                                <ToggleRight className="h-3.5 w-3.5" />
+                            ) : (
+                                <ToggleLeft className="h-3.5 w-3.5" />
+                            )}
+                            {node.is_active
+                                ? t("categoriesPage.statusActive")
+                                : t("categoriesPage.statusInactive")}
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="icon-touch-target"
+                            title={t("common.edit")}
+                            aria-label={`${t("common.edit")} ${node.path.join(" / ")}`}
+                            onClick={() => setEditTarget(node)}
+                        >
+                            <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="icon-touch-target"
+                            aria-label={`${t("categoriesPage.mergeTitle")} ${node.path.join(" / ")}`}
+                            onClick={() => setMergeSource(node)}
+                            disabled={
+                                !allNodes.some(
+                                    (target) =>
+                                        target.is_active &&
+                                        target.id !== node.id &&
+                                        !target.pathIds.includes(node.id),
+                                )
+                            }
+                        >
+                            <GitMerge className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="icon-touch-target hover:text-destructive"
+                            aria-label={`${t("aria.deleteCategory")} ${node.path.join(" / ")}`}
+                            disabled={
+                                remove.isPending || descendants.length > 0
+                            }
+                            title={
+                                descendants.length > 0
+                                    ? t("categoriesPage.deleteChildrenFirst")
+                                    : undefined
+                            }
+                            onClick={async () => {
+                                const ok = await confirm({
+                                    title: t("categoriesPage.delete.title"),
+                                    description: t(
+                                        "categoriesPage.delete.desc",
+                                        { name: node.path.join(" / ") },
+                                    ),
+                                    confirmLabel: t(
+                                        "categoriesPage.delete.confirm",
+                                    ),
+                                    variant: "destructive",
+                                });
+                                if (ok) remove.mutate(node.id);
+                            }}
+                        >
+                            <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                    </div>
+                </div>
+                {isExpanded &&
+                    descendants.map((child) => renderNode(child, level + 1))}
+            </div>
         );
     };
 
-    if (isLoading) {
+    if (isLoading)
         return (
-            <PageShell className="">
+            <PageShell>
                 <PageHeader
                     title={t("categories.title")}
                     icon={PAGE_ICONS["/categories"]}
                 />
                 <Card {...loadingSurfaceProps}>
-                    <CardHeader className="pb-3">
+                    <CardHeader>
                         <Skeleton className="h-6 w-44" />
                     </CardHeader>
                     <CardContent className="space-y-2">
-                        {[...Array(6)].map((_, i) => (
+                        {Array.from({ length: 6 }, (_, i) => (
                             <Skeleton key={i} className="h-12 w-full" />
                         ))}
                     </CardContent>
                 </Card>
             </PageShell>
         );
-    }
-
-    if (error) {
+    if (error)
         return (
-            <PageShell className="">
+            <PageShell>
                 <PageHeader
                     title={t("categories.title")}
                     icon={PAGE_ICONS["/categories"]}
@@ -196,21 +292,16 @@ export default function CategoriesPage() {
                 </Card>
             </PageShell>
         );
-    }
-
-    const totalItems = data?.total ?? data?.items?.length ?? 0;
-    const allExpanded =
-        expandedGroups.size === grouped.length && grouped.length > 0;
 
     return (
         <>
-            <PageShell className="">
+            <PageShell>
                 <div className="flex items-center justify-between">
                     <PageHeader
                         title={t("categories.title")}
                         subtitle={t("categoriesPage.subtitle", {
-                            n: totalItems,
-                            g: grouped.length,
+                            n: visible.length,
+                            g: roots.length,
                         })}
                         icon={PAGE_ICONS["/categories"]}
                     />
@@ -218,7 +309,11 @@ export default function CategoriesPage() {
                         <Button
                             variant="outline"
                             size="sm"
-                            onClick={allExpanded ? collapseAll : expandAll}
+                            onClick={() =>
+                                writeExpanded(
+                                    new Set(allExpanded ? [] : branchIds),
+                                )
+                            }
                             className="gap-1.5"
                         >
                             {allExpanded ? (
@@ -245,10 +340,9 @@ export default function CategoriesPage() {
                                 ? t("categoriesPage.showingAll")
                                 : t("categoriesPage.activeOnly")}
                         </Button>
-                        <AddCategoryDialog />
+                        <CategoryNodeDialog nodes={allNodes} />
                     </div>
                 </div>
-
                 <Card>
                     <CardHeader className="pb-3">
                         <CardTitle variant="sm">
@@ -256,223 +350,39 @@ export default function CategoriesPage() {
                         </CardTitle>
                     </CardHeader>
                     <CardContent variant="flush">
-                        <div className="divide-y divide-border">
-                            {grouped.length === 0 && (
-                                <EmptyState
-                                    headingLevel={3}
-                                    icon={PAGE_ICONS["/categories"]}
-                                    title={t("categoriesPage.empty")}
-                                />
-                            )}
-                            {grouped.map(({ general, items, activeCount }) => {
-                                const isExpanded = expandedGroups.has(general);
-                                return (
-                                    <div key={general}>
-                                        {/* Group header */}
-                                        <button
-                                            onClick={() => toggleGroup(general)}
-                                            className={cn(
-                                                "w-full flex items-center gap-3 px-4 py-3 text-left transition-colors",
-                                                "hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                                            )}
-                                        >
-                                            {isExpanded ? (
-                                                <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
-                                            ) : (
-                                                <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                                            )}
-                                            <span className="font-semibold text-foreground text-sm tracking-wide">
-                                                {general}
-                                            </span>
-                                            <Badge
-                                                variant="secondary"
-                                                className="ml-auto text-xs font-normal"
-                                            >
-                                                {t(
-                                                    activeCount === 1
-                                                        ? "categoriesPage.badgeSingular"
-                                                        : "categoriesPage.badgePlural",
-                                                    { n: activeCount },
-                                                )}
-                                                {showAll &&
-                                                activeCount !== items.length
-                                                    ? ` / ${t("categoriesPage.badgePlural", { n: items.length })}`
-                                                    : ""}
-                                            </Badge>
-                                        </button>
-
-                                        {/* Detail rows */}
-                                        {isExpanded && (
-                                            <div className="bg-muted/30">
-                                                {items.map((cat) => (
-                                                    <div
-                                                        key={cat.id}
-                                                        className={cn(
-                                                            "flex items-center gap-3 pl-11 pr-4 py-2.5 border-t border-border/50",
-                                                            "transition-colors hover:bg-muted/50",
-                                                            cat.is_active ===
-                                                                false &&
-                                                                "opacity-60",
-                                                        )}
-                                                    >
-                                                        <TextLink
-                                                            to={`/transactions?category_id=${cat.id}&filter_label=${encodeURIComponent(cat.general + ":" + cat.detail)}`}
-                                                            className={cn(
-                                                                "min-w-0 max-w-full truncate text-xs font-medium",
-                                                                cat.is_active ===
-                                                                    false &&
-                                                                    "line-through",
-                                                            )}
-                                                        >
-                                                            {cat.detail}
-                                                        </TextLink>
-                                                        <TouchDisclosure
-                                                            label={cat.detail}
-                                                            content={cat.detail}
-                                                            className="shrink-0 px-1 text-xs text-muted-foreground"
-                                                        >
-                                                            …
-                                                        </TouchDisclosure>
-
-                                                        {cat.description && (
-                                                            <span className="text-xs text-muted-foreground truncate max-w-[200px]">
-                                                                {
-                                                                    cat.description
-                                                                }
-                                                            </span>
-                                                        )}
-
-                                                        <div className="ml-auto flex items-center gap-1">
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                className={cn(
-                                                                    "gap-1 h-7 text-xs",
-                                                                    cat.is_active !==
-                                                                        false
-                                                                        ? "text-accent hover:text-accent"
-                                                                        : "text-muted-foreground",
-                                                                )}
-                                                                onClick={(
-                                                                    e,
-                                                                ) => {
-                                                                    e.stopPropagation();
-                                                                    toggleActive(
-                                                                        cat.id,
-                                                                        cat.is_active !==
-                                                                            false,
-                                                                    );
-                                                                }}
-                                                                disabled={
-                                                                    updateMutation.isPending
-                                                                }
-                                                            >
-                                                                {cat.is_active !==
-                                                                false ? (
-                                                                    <ToggleRight className="h-3.5 w-3.5" />
-                                                                ) : (
-                                                                    <ToggleLeft className="h-3.5 w-3.5" />
-                                                                )}
-                                                                {cat.is_active !==
-                                                                false
-                                                                    ? t(
-                                                                          "categoriesPage.statusActive",
-                                                                      )
-                                                                    : t(
-                                                                          "categoriesPage.statusInactive",
-                                                                      )}
-                                                            </Button>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                className="icon-touch-target text-muted-foreground hover:text-foreground"
-                                                                onClick={(
-                                                                    e,
-                                                                ) => {
-                                                                    e.stopPropagation();
-                                                                    openEdit(
-                                                                        cat,
-                                                                    );
-                                                                }}
-                                                                title={t(
-                                                                    "common.edit",
-                                                                )}
-                                                            >
-                                                                <Pencil className="h-3.5 w-3.5" />
-                                                            </Button>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                className="icon-touch-target text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                                                aria-label={t(
-                                                                    "aria.deleteCategory",
-                                                                )}
-                                                                onClick={async (
-                                                                    e,
-                                                                ) => {
-                                                                    e.stopPropagation();
-                                                                    const ok =
-                                                                        await confirm(
-                                                                            {
-                                                                                title: t(
-                                                                                    "categoriesPage.delete.title",
-                                                                                ),
-                                                                                description:
-                                                                                    t(
-                                                                                        "categoriesPage.delete.desc",
-                                                                                        {
-                                                                                            name: `${cat.general}:${cat.detail}`,
-                                                                                        },
-                                                                                    ),
-                                                                                confirmLabel:
-                                                                                    t(
-                                                                                        "categoriesPage.delete.confirm",
-                                                                                    ),
-                                                                                variant:
-                                                                                    "destructive",
-                                                                            },
-                                                                        );
-                                                                    if (ok)
-                                                                        deleteMutation.mutate(
-                                                                            cat.id,
-                                                                        );
-                                                                }}
-                                                                disabled={
-                                                                    deleteMutation.isPending
-                                                                }
-                                                            >
-                                                                <Trash2 className="h-3.5 w-3.5" />
-                                                            </Button>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
+                        {roots.length === 0 ? (
+                            <EmptyState
+                                headingLevel={3}
+                                icon={PAGE_ICONS["/categories"]}
+                                title={t("categoriesPage.empty")}
+                            />
+                        ) : (
+                            roots.map((root) => renderNode(root, 0))
+                        )}
                     </CardContent>
                 </Card>
             </PageShell>
-
             <ConfirmDialog />
-
             {editTarget && (
-                <AddCategoryDialog
+                <CategoryNodeDialog
                     key={editTarget.id}
-                    mode="edit"
-                    open={!!editTarget}
+                    nodes={allNodes}
+                    editNode={editTarget}
+                    open
                     onOpenChange={(open) => {
                         if (!open) setEditTarget(null);
                     }}
-                    initialValues={{
-                        general: editTarget.general,
-                        detail: editTarget.detail,
-                        description: editTarget.description,
+                />
+            )}
+            {mergeSource && (
+                <CategoryMergeDialog
+                    key={mergeSource.id}
+                    source={mergeSource}
+                    nodes={allNodes}
+                    open
+                    onOpenChange={(open) => {
+                        if (!open) setMergeSource(null);
                     }}
-                    onSave={handleEditSave}
-                    isSaving={updateMutation.isPending}
                 />
             )}
         </>

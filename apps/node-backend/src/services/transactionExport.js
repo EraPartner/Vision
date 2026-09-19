@@ -143,9 +143,9 @@ function buildExportChunkSql(
            -- PRIMARY exported the primary's category name while the
            -- transactions list showed the alias's.
            CASE
-             WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
-             WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
-             WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
+             WHEN c.id IS NOT NULL THEN c.path_name
+             WHEN rc.id IS NOT NULL THEN rc.path_name
+             WHEN pc.id IS NOT NULL THEN pc.path_name
              ELSE ''
            END AS category_name,
            t.comment,
@@ -400,7 +400,7 @@ export async function streamNdjsonExport(res, args) {
  * @param {number[]} ids
  * @returns {{ whereSql: string, params: [number[]], nextParamIdx: number }}
  */
- function buildIdListWhere(ids) {
+function buildIdListWhere(ids) {
   return {
     whereSql: "t.id = ANY($1::int[])",
     params: [ids],

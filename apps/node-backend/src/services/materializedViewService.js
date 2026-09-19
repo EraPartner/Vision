@@ -82,7 +82,7 @@ export async function createMaterializedViews() {
       SUM(t.amount) AS net_amount,
       c.id AS category_id,
       COALESCE(c.id, -1) AS category_id_key,
-      COALESCE(c.general || ':' || c.detail, 'UNCATEGORISED') AS category_name
+      COALESCE(c.path_name, 'UNCATEGORISED') AS category_name
     FROM transactions t
     LEFT JOIN recipients r ON t.recipient_id = r.id
     LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
@@ -110,7 +110,7 @@ export async function createMaterializedViews() {
       CREATE MATERIALIZED VIEW IF NOT EXISTS mv_category_totals AS
       SELECT
         COALESCE(c.id, -1) AS category_id,
-        COALESCE(c.general || ':' || c.detail, 'UNCATEGORISED') AS name,
+        COALESCE(c.path_name, 'UNCATEGORISED') AS name,
         COUNT(*) AS count,
         SUM(t.amount) AS total,
         t.currency
@@ -121,7 +121,7 @@ export async function createMaterializedViews() {
       WHERE t.is_active = true AND t.is_transfer = false
       GROUP BY
         COALESCE(c.id, -1),
-        COALESCE(c.general || ':' || c.detail, 'UNCATEGORISED'),
+        COALESCE(c.path_name, 'UNCATEGORISED'),
         t.currency
       ORDER BY count DESC
     `);

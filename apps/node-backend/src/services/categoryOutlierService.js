@@ -297,7 +297,7 @@ async function getRawFindings() {
     // stays flat regardless of total history size.
     const result = await query(`
       SELECT t.date, t.amount, t.category_id,
-             c.general || ':' || c.detail AS category_name
+             c.path_name AS category_name
       FROM transactions t
       LEFT JOIN categories c ON t.category_id = c.id
       WHERE t.is_active = true

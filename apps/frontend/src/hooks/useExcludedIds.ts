@@ -1,7 +1,7 @@
-import { useMemo } from 'react';
-import { CATEGORY_FETCH_LIMIT } from '@/lib/categoriesPreload';
-import { useAllCategories } from '@/hooks/useCategories';
-import { useSettings } from '@/stores/hydration/SettingsHydration';
+import { useMemo } from "react";
+import { CATEGORY_FETCH_LIMIT } from "@/lib/categoriesPreload";
+import { useAllCategories, useCategoryTree } from "@/hooks/useCategories";
+import { useSettings } from "@/stores/hydration/SettingsHydration";
 
 /**
  * Single source of truth for "which category/recipient IDs are excluded from
@@ -23,61 +23,81 @@ import { useSettings } from '@/stores/hydration/SettingsHydration';
 // the same one); re-exported here, where it has always lived for consumers.
 export { CATEGORY_FETCH_LIMIT };
 
-export type ExclusionScopeName = 'dashboard' | 'statistics';
+export type ExclusionScopeName = "dashboard" | "statistics";
 
 export interface ExcludedIds {
-  /** Settings exclusions + hidden categories, de-duplicated and sorted ascending. */
-  excludedCategoryIds: number[];
-  /** Settings recipient exclusions, sorted ascending. */
-  excludedRecipientIds: number[];
-  /** Whether exclusions apply to this scope at all (per settings.exclusionScope). */
-  exclusionsApply: boolean;
-  /** True once the data needed to resolve exclusions is available (or not needed). */
-  isReady: boolean;
+    /** Settings exclusions + hidden categories, de-duplicated and sorted ascending. */
+    excludedCategoryIds: number[];
+    /** Settings recipient exclusions, sorted ascending. */
+    excludedRecipientIds: number[];
+    /** Whether exclusions apply to this scope at all (per settings.exclusionScope). */
+    exclusionsApply: boolean;
+    /** True once the data needed to resolve exclusions is available (or not needed). */
+    isReady: boolean;
 }
 
 const EMPTY: number[] = [];
 
 export function useExcludedIds(scope: ExclusionScopeName): ExcludedIds {
-  const { settings, isLoading: settingsLoading } = useSettings();
+    const { settings, isLoading: settingsLoading } = useSettings();
 
-  const exclusionsApply =
-    settings.exclusionScope === 'everywhere' || settings.exclusionScope === scope;
+    const exclusionsApply =
+        settings.exclusionScope === "everywhere" ||
+        settings.exclusionScope === scope;
 
-  // Only fetch the category list when hidden-category resolution is actually needed.
-  const needsHidden = exclusionsApply && settings.excludeHiddenCategories;
+    // Only fetch the category list when hidden-category resolution is actually needed.
+    const needsHidden = exclusionsApply && settings.excludeHiddenCategories;
 
-  // Shared full-list cache entry (one key for the whole app — see
-  // useAllCategories); it adopts the boot preload for its first fetch.
-  const categoriesQuery = useAllCategories(needsHidden);
+    // Preserve the boot-preloaded legacy list and include new hierarchy nodes
+    // that the general/detail compatibility endpoint cannot return.
+    const categoriesQuery = useAllCategories(needsHidden);
+    const treeQuery = useCategoryTree(needsHidden);
 
-  const hiddenCategoryIds = useMemo(() => {
-    if (!needsHidden || !categoriesQuery.data) return EMPTY;
-    return categoriesQuery.data.filter((cat) => !cat.is_active).map((cat) => cat.id);
-  }, [needsHidden, categoriesQuery.data]);
+    const hiddenCategoryIds = useMemo(() => {
+        if (!needsHidden) return EMPTY;
+        return [
+            ...new Set([
+                ...(categoriesQuery.data ?? [])
+                    .filter((cat) => !cat.is_active)
+                    .map((cat) => cat.id),
+                ...(treeQuery.data?.items ?? [])
+                    .filter((cat) => !cat.is_active)
+                    .map((cat) => cat.id),
+            ]),
+        ];
+    }, [needsHidden, categoriesQuery.data, treeQuery.data]);
 
-  const excludedCategoryIds = useMemo(() => {
-    if (!exclusionsApply) return EMPTY;
-    return [...new Set([...settings.excludedCategoryIds, ...hiddenCategoryIds])].sort((a, b) => a - b);
-  }, [exclusionsApply, settings.excludedCategoryIds, hiddenCategoryIds]);
+    const excludedCategoryIds = useMemo(() => {
+        if (!exclusionsApply) return EMPTY;
+        return [
+            ...new Set([...settings.excludedCategoryIds, ...hiddenCategoryIds]),
+        ].sort((a, b) => a - b);
+    }, [exclusionsApply, settings.excludedCategoryIds, hiddenCategoryIds]);
 
-  const excludedRecipientIds = useMemo(() => {
-    if (!exclusionsApply) return EMPTY;
-    return [...settings.excludedRecipientIds].sort((a, b) => a - b);
-  }, [exclusionsApply, settings.excludedRecipientIds]);
+    const excludedRecipientIds = useMemo(() => {
+        if (!exclusionsApply) return EMPTY;
+        return [...settings.excludedRecipientIds].sort((a, b) => a - b);
+    }, [exclusionsApply, settings.excludedRecipientIds]);
 
-  // Ready when settings are the user's own (not the store defaults) AND the
-  // category fetch either isn't needed or has resolved.
-  //
-  // The settings half matters for money, not latency: until hydration lands,
-  // `settings.excluded*Ids` are the empty defaults, so an exclusion set resolved
-  // now can be missing categories the user actually excludes. Consumers embed
-  // these arrays in their query keys, so such a fetch is not merely early — it
-  // lands under a *different* key and renders totals that look final until
-  // hydration swaps the key and refetches. Both preloads start at module scope,
-  // so waiting for settings costs no round trip on the critical path; it just
-  // stops the first paint of a number from being computed with the wrong set.
-  const isReady = !settingsLoading && (!needsHidden || categoriesQuery.isSuccess);
+    // Ready when settings are the user's own (not the store defaults) AND the
+    // category fetch either isn't needed or has resolved.
+    //
+    // The settings half matters for money, not latency: until hydration lands,
+    // `settings.excluded*Ids` are the empty defaults, so an exclusion set resolved
+    // now can be missing categories the user actually excludes. Consumers embed
+    // these arrays in their query keys, so such a fetch is not merely early — it
+    // lands under a *different* key and renders totals that look final until
+    // hydration swaps the key and refetches. Both preloads start at module scope,
+    // so waiting for settings costs no round trip on the critical path; it just
+    // stops the first paint of a number from being computed with the wrong set.
+    const isReady =
+        !settingsLoading &&
+        (!needsHidden || (categoriesQuery.isSuccess && treeQuery.isSuccess));
 
-  return { excludedCategoryIds, excludedRecipientIds, exclusionsApply, isReady };
+    return {
+        excludedCategoryIds,
+        excludedRecipientIds,
+        exclusionsApply,
+        isReady,
+    };
 }

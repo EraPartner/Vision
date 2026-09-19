@@ -212,20 +212,21 @@ export function buildTransactionWhere(opts = {}) {
   }
   if (categoryId != null) {
     // Effective-category match, expanded from COALESCE(t.category_id,
-    // r.default_category_id, pr.default_category_id) = $ into an indexable
+    // r.default_category_id, pr.default_category_id) into an indexable
     // disjunction of semi-joins so the planner can use the category_id indexes.
     // Replicates the COALESCE precedence exactly:
     //   own category = X, OR
     //   (own NULL AND recipient default = X), OR
     //   (own NULL AND recipient default NULL AND primary default = X).
     const idx = p++;
+    const descendants = `(SELECT category_id FROM category_ancestors WHERE ancestor_id = $${idx})`;
     clauses.push(`(
-      t.category_id = $${idx}
-      OR (t.category_id IS NULL AND t.recipient_id IN (SELECT id FROM recipients WHERE default_category_id = $${idx}))
+      t.category_id IN ${descendants}
+      OR (t.category_id IS NULL AND t.recipient_id IN (SELECT id FROM recipients WHERE default_category_id IN ${descendants}))
       OR (t.category_id IS NULL AND t.recipient_id IN (
         SELECT r2.id FROM recipients r2
         JOIN recipients pr2 ON r2.primary_recipient_id = pr2.id
-        WHERE r2.default_category_id IS NULL AND pr2.default_category_id = $${idx}
+        WHERE r2.default_category_id IS NULL AND pr2.default_category_id IN ${descendants}
       ))
     )`);
     params.push(categoryId);
@@ -238,14 +239,15 @@ export function buildTransactionWhere(opts = {}) {
       // $N to appear multiple times), so the param count/order is unchanged.
       const startIdx = p;
       const placeholders = safe.map((_, i) => `$${startIdx + i}`).join(", ");
+      const descendants = `(SELECT category_id FROM category_ancestors WHERE ancestor_id IN (${placeholders}))`;
       p += safe.length;
       clauses.push(`(
-        t.category_id IN (${placeholders})
-        OR (t.category_id IS NULL AND t.recipient_id IN (SELECT id FROM recipients WHERE default_category_id IN (${placeholders})))
+        t.category_id IN ${descendants}
+        OR (t.category_id IS NULL AND t.recipient_id IN (SELECT id FROM recipients WHERE default_category_id IN ${descendants}))
         OR (t.category_id IS NULL AND t.recipient_id IN (
           SELECT r2.id FROM recipients r2
           JOIN recipients pr2 ON r2.primary_recipient_id = pr2.id
-          WHERE r2.default_category_id IS NULL AND pr2.default_category_id IN (${placeholders})
+          WHERE r2.default_category_id IS NULL AND pr2.default_category_id IN ${descendants}
         ))
       )`);
       params.push(...safe);
@@ -318,7 +320,7 @@ export function buildTransactionWhere(opts = {}) {
     // self-contained scan the planner can index (pg_trgm on memo/comment and
     // recipients.name, btree on the id hops), and the CAST branches exist only
     // when the term is made of characters the cast text can actually contain.
-    const matchingCategories = `SELECT sc.id FROM categories sc WHERE sc.general ILIKE $${p} OR sc.detail ILIKE $${p}`;
+    const matchingCategories = `SELECT sc.id FROM categories sc WHERE sc.path_name ILIKE $${p} OR sc.general ILIKE $${p} OR sc.detail ILIKE $${p}`;
     const branches = [
       `SELECT st.id FROM transactions st WHERE st.memo ILIKE $${p} OR st.comment ILIKE $${p}`,
       // Bank label via the account entity (ADR-088): the search must match the
@@ -431,19 +433,21 @@ export function buildExclusionClauses(opts = {}) {
     "LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id",
   ].join("\n");
 
-  // The trailing -1 keeps rows whose effective category/recipient is NULL: a bare
-  // `NULL NOT IN (...)` evaluates to NULL (not true), which silently dropped every
-  // uncategorized / recipient-less row whenever any exclusion was applied. -1 can
-  // never be an excluded id (validateInt4Ids requires id > 0), so those rows pass.
+  // A selected category excludes its direct assignments and every descendant.
+  // NOT EXISTS keeps uncategorized rows, unlike a nullable NOT IN predicate.
   if (safeCats.length > 0) {
     const placeholders = safeCats.map(() => `$${p++}`).join(", ");
     clauses.push(
-      `COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN (${placeholders})`,
+      `NOT EXISTS (SELECT 1 FROM category_ancestors excluded
+        WHERE excluded.category_id = COALESCE(t.category_id, r.default_category_id, pr.default_category_id)
+          AND excluded.ancestor_id IN (${placeholders}))`,
     );
     params.push(...safeCats);
   }
 
   if (safeRecs.length > 0) {
+    // The trailing -1 keeps recipient-less rows when a recipient exclusion is
+    // present: NULL NOT IN would otherwise drop them.
     const placeholders = safeRecs.map(() => `$${p++}`).join(", ");
     clauses.push(
       `COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN (${placeholders})`,
@@ -467,7 +471,7 @@ export function buildExclusionClauses(opts = {}) {
  *   Union of buildTransactionWhere and buildExclusionClauses options.
  * @returns {{ joinSql: string, whereSql: string, params: any[], nextParamIdx: number }}
  */
- function buildAggregationFilter(opts = {}) {
+function buildAggregationFilter(opts = {}) {
   const base = buildTransactionWhere({
     ...opts,
     startParamIdx: opts.startParamIdx ?? 1,

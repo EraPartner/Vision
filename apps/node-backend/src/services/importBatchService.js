@@ -1,5 +1,5 @@
 /** Import-batch service — repository access plus review view-model assembly. */
-import { getPreviewRows } from '../repositories/importBatchRepository.js';
+import { getPreviewRows } from "../repositories/importBatchRepository.js";
 
 export {
   listBatches,
@@ -8,12 +8,12 @@ export {
   overrideRecipient,
   overrideCategory,
   categoryExists,
-} from '../repositories/importBatchRepository.js';
+} from "../repositories/importBatchRepository.js";
 
 /** @param {string|null} [general] @param {string|null} [detail] */
 function formatCategoryLabel(general, detail) {
   if (!general && !detail) return null;
-  return [general, detail].filter(Boolean).join(': ');
+  return [general, detail].filter(Boolean).join(": ");
 }
 
 /**
@@ -24,23 +24,29 @@ function buildImportBatchPreview(rows) {
   /** @type {Map<string|number, any>} */
   const groupMap = new Map();
   for (const row of rows) {
-    const key = row.effective_recipient_id ?? '__unresolved__';
+    const key = row.effective_recipient_id ?? "__unresolved__";
     if (!groupMap.has(key)) {
-      const defaultLabel = formatCategoryLabel(
-        row.recipient_default_category_general,
-        row.recipient_default_category_detail,
-      );
-      const overrideLabel = formatCategoryLabel(
-        row.override_category_general,
-        row.override_category_detail,
-      );
+      const defaultLabel =
+        row.recipient_default_category_path ??
+        formatCategoryLabel(
+          row.recipient_default_category_general,
+          row.recipient_default_category_detail,
+        );
+      const overrideLabel =
+        row.override_category_path ??
+        formatCategoryLabel(
+          row.override_category_general,
+          row.override_category_detail,
+        );
       groupMap.set(key, {
         recipient_id: row.effective_recipient_id,
         recipient_name: row.recipient_name,
-        recipient_default_category_id: row.recipient_default_category_id ?? null,
+        recipient_default_category_id:
+          row.recipient_default_category_id ?? null,
         recipient_default_category_label: defaultLabel,
         override_category_id: row.override_category_id ?? null,
-        current_category_id: row.override_category_id ?? row.recipient_default_category_id ?? null,
+        current_category_id:
+          row.override_category_id ?? row.recipient_default_category_id ?? null,
         current_category_label: overrideLabel ?? defaultLabel ?? null,
         matched_pattern_id: row.matched_pattern_id,
         matched_pattern_text: row.matched_pattern_text,
@@ -72,7 +78,7 @@ function buildImportBatchPreview(rows) {
   /** @type {Record<string, number>} */
   const totals = { exact: 0, fuzzy: 0, pattern: 0, new: 0, unresolved: 0 };
   for (const row of rows) {
-    const source = row.match_source ?? 'unresolved';
+    const source = row.match_source ?? "unresolved";
     totals[source] = (totals[source] || 0) + 1;
   }
   return { groups, totals };

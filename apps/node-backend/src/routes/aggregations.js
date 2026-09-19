@@ -38,7 +38,7 @@ import { getTargetCurrency } from "./info/_queryParams.js";
 import { parseBooleanQueryParam } from "../lib/httpParams.js";
 import { parseIntClamped } from "../lib/pagination.js";
 import { ValidationError } from "../middleware/errorHandler.js";
-import { validateIntArray } from "../middleware/validation.js";
+import { validateId, validateIntArray } from "../middleware/validation.js";
 import { parseAggregationDateRange } from "../lib/aggregationDateRange.js";
 
 /**
@@ -126,8 +126,18 @@ router.get(
     req,
     res,
   ) => {
+    let ancestorCategoryId;
+    if (req.query.ancestor_category_id !== undefined) {
+      const parsed = validateId(
+        req.query.ancestor_category_id,
+        "ancestor_category_id",
+      );
+      if (!parsed.valid) throw new ValidationError(parsed.error);
+      ancestorCategoryId = parsed.value;
+    }
     const { data, meta } = await computeCategoryBreakdown({
       targetCurrency: getTargetCurrency(req),
+      ancestorCategoryId,
     });
     res.ok({ data, meta });
   },

@@ -3,8 +3,9 @@
  *
  */
 
-import { query } from "../database/connection.js";
+import { query, withTransaction } from "../database/connection.js";
 import { buildLimitOffset, buildSetClauses } from "../lib/sqlClauses.js";
+import { ConflictError } from "../middleware/errorHandler.js";
 
 /** @typedef {import('../types/rows.js').EnrichedCategoryRow} EnrichedCategoryRow */
 
@@ -35,7 +36,7 @@ export const categoryRepository = {
     search = null,
     active = true,
   } = {}) {
-    let sql = `SELECT * FROM categories WHERE 1=1`;
+    let sql = `SELECT * FROM categories WHERE legacy_compatible = true`;
     const params = [];
     let paramIdx = 1;
 
@@ -52,7 +53,7 @@ export const categoryRepository = {
     }
     if (search) {
       const sp = `%${search}%`;
-      sql += ` AND (general ILIKE $${paramIdx} OR detail ILIKE $${paramIdx} OR description ILIKE $${paramIdx})`;
+      sql += ` AND (general ILIKE $${paramIdx} OR detail ILIKE $${paramIdx} OR path_name ILIKE $${paramIdx} OR description ILIKE $${paramIdx})`;
       params.push(sp);
     }
 
@@ -73,7 +74,7 @@ export const categoryRepository = {
     search = null,
     active = true,
   } = {}) {
-    let sql = `SELECT count(*) FROM categories WHERE 1=1`;
+    let sql = `SELECT count(*) FROM categories WHERE legacy_compatible = true`;
     const params = [];
     let paramIdx = 1;
 
@@ -88,7 +89,7 @@ export const categoryRepository = {
     }
     if (search) {
       const sp = `%${search}%`;
-      sql += ` AND (general ILIKE $${paramIdx} OR detail ILIKE $${paramIdx} OR description ILIKE $${paramIdx})`;
+      sql += ` AND (general ILIKE $${paramIdx} OR detail ILIKE $${paramIdx} OR path_name ILIKE $${paramIdx} OR description ILIKE $${paramIdx})`;
       params.push(sp);
     }
 
@@ -142,21 +143,38 @@ export const categoryRepository = {
   async createOrGet({ general, detail, description = null }) {
     const g = general.toUpperCase().trim();
     const d = detail.toUpperCase().trim();
-
-    const insertResult = await query(
-      `INSERT INTO categories (general, detail, description, is_active)
+    return withTransaction(async (client) => {
+      await client.query("SELECT pg_advisory_xact_lock(1128356178, 1)");
+      const alias = await query(
+        `SELECT target_category_id AS id FROM category_merge_aliases
+       WHERE general=$1 AND detail=$2`,
+        [g, d],
+      );
+      if (alias.rows[0])
+        return {
+          category: await this.getById(alias.rows[0].id),
+          created: false,
+        };
+      const insertResult = await query(
+        `INSERT INTO categories (general, detail, description, is_active)
        VALUES ($1, $2, $3, true)
        ON CONFLICT (general, detail) DO NOTHING
        RETURNING *`,
-      [g, d, description],
-    );
+        [g, d, description],
+      );
 
-    if (insertResult.rows.length > 0) {
-      return { category: enrichCategory(insertResult.rows[0]), created: true };
-    }
+      if (insertResult.rows.length > 0) {
+        // The hierarchy path is recomputed by an AFTER trigger, so RETURNING
+        // still sees the pre-trigger placeholder. Read the committed row again.
+        return {
+          category: await this.getById(insertResult.rows[0].id),
+          created: true,
+        };
+      }
 
-    const existing = await this.getByGeneralDetail(g, d);
-    return { category: existing, created: false };
+      const existing = await this.getByGeneralDetail(g, d);
+      return { category: existing, created: false };
+    });
   },
 
   /**
@@ -183,9 +201,9 @@ export const categoryRepository = {
 
     setClauses.push(`updated_at = NOW()`);
     params.push(id);
-    const sql = `UPDATE categories SET ${setClauses.join(", ")} WHERE id = $${paramIdx} RETURNING *`;
+    const sql = `UPDATE categories SET ${setClauses.join(", ")} WHERE id = $${paramIdx} AND legacy_compatible = true RETURNING *`;
     const result = await query(sql, params);
-    return result.rows[0] ? enrichCategory(result.rows[0]) : null;
+    return result.rows[0] ? this.getById(id) : null;
   },
 
   /**
@@ -193,8 +211,19 @@ export const categoryRepository = {
    * @returns {Promise<boolean>}
    */
   async hardDelete(id) {
-    const result = await query("DELETE FROM categories WHERE id = $1", [id]);
-    return result.rowCount > 0;
+    try {
+      const result = await query(
+        "DELETE FROM categories WHERE id = $1 AND legacy_compatible = true",
+        [id],
+      );
+      return result.rowCount > 0;
+    } catch (error) {
+      if (error?.code === "23503")
+        throw new ConflictError(
+          "Category is still referenced or has legacy merge redirects",
+        );
+      throw error;
+    }
   },
 
   /**
@@ -219,7 +248,7 @@ function enrichCategory(row) {
   if (!row) return null;
   return {
     ...row,
-    category_name: `${row.general}:${row.detail}`,
+    category_name: row.path_name ?? `${row.general}:${row.detail}`,
   };
 }
 

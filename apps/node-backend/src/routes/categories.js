@@ -3,7 +3,16 @@
  */
 
 import { Router } from "express";
+import { z } from "zod";
 import categoryService from "../services/categoryService.js";
+import {
+  listCategoryNodes,
+  getCategoryNode,
+  createCategoryNode,
+  updateCategoryNode,
+  deleteCategoryNode,
+  mergeCategoryNodes,
+} from "../services/categoryService.js";
 import { NotFoundError, ValidationError } from "../middleware/errorHandler.js";
 import { validateIdParam, assertIdParam } from "../middleware/validation.js";
 import { listBody, parseOptionalPagination } from "../lib/pagination.js";
@@ -21,6 +30,78 @@ import { scheduleRefresh } from "../services/materializedViewService.js";
  */
 
 const router = Router();
+
+const hierarchyName = z.string().trim().min(1).max(100);
+const hierarchyCreate = z.strictObject({
+  name: hierarchyName,
+  parentId: z.number().int().positive().nullable().default(null),
+  description: z.string().max(500).nullable().optional(),
+});
+const hierarchyUpdate = z.strictObject({
+  name: hierarchyName.optional(),
+  parentId: z.number().int().positive().nullable().optional(),
+  description: z.string().max(500).nullable().optional(),
+  is_active: z.boolean().optional(),
+});
+const hierarchyMerge = z.strictObject({
+  targetId: z.number().int().positive(),
+});
+
+function parseHierarchy(schema, value) {
+  const parsed = schema.safeParse(value);
+  if (!parsed.success)
+    throw new ValidationError(
+      parsed.error.issues.map((issue) => issue.message).join("; "),
+    );
+  return parsed.data;
+}
+
+// The hierarchy contract is additive. Legacy /categories list, create and CSV
+// import retain their general/detail inputs and stable category IDs.
+router.get("/tree", async (_req, res) => {
+  const items = await listCategoryNodes();
+  res.ok({ items, total: items.length });
+});
+
+router.post("/tree", async (req, res) => {
+  const input = parseHierarchy(hierarchyCreate, req.body);
+  const node = await createCategoryNode(input);
+  scheduleRefresh();
+  res.status(201);
+  res.ok(node);
+});
+
+router.get("/tree/:id", validateIdParam, async (req, res) => {
+  const node = await getCategoryNode(assertIdParam(req));
+  if (!node) throw new NotFoundError(`Category ${req.params.id} not found`);
+  res.ok(node);
+});
+
+router.patch("/tree/:id", validateIdParam, async (req, res) => {
+  const node = await updateCategoryNode(
+    assertIdParam(req),
+    parseHierarchy(hierarchyUpdate, req.body),
+  );
+  if (!node) throw new NotFoundError(`Category ${req.params.id} not found`);
+  scheduleRefresh();
+  res.ok(node);
+});
+
+router.delete("/tree/:id", validateIdParam, async (req, res) => {
+  if (!(await deleteCategoryNode(assertIdParam(req))))
+    throw new NotFoundError(`Category ${req.params.id} not found`);
+  scheduleRefresh();
+  res.status(204).send();
+});
+
+router.post("/tree/:id/merge", validateIdParam, async (req, res) => {
+  const sourceId = assertIdParam(req);
+  const { targetId } = parseHierarchy(hierarchyMerge, req.body);
+  const node = await mergeCategoryNodes(sourceId, targetId);
+  if (!node) throw new NotFoundError("Source or target category not found");
+  scheduleRefresh();
+  res.ok(node);
+});
 
 // Pagination is opt-in: without limit/offset this still answers the complete
 // list (category pickers/pages render all of them), so no client is truncated.

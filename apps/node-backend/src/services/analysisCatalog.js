@@ -2,7 +2,7 @@
 
 const DATASETS = {
   transactions: {
-    relation: "vision_analysis.transactions_v1",
+    relation: "vision_analysis.transactions_v2",
     label: "Transactions",
     primaryKey: "transaction_id",
     fields: {
@@ -16,6 +16,17 @@ const DATASETS = {
       recipient_name: ["Recipient", "string", "recipient_name"],
       category_general: ["Category", "string", "category_general"],
       category_detail: ["Category detail", "string", "category_detail"],
+      category_path: ["Category path", "string", "category_path"],
+      category_path_segments: [
+        "Category path segments",
+        "string[]",
+        "category_path_segments",
+      ],
+      category_path_ids: [
+        "Category path IDs",
+        "integer[]",
+        "category_path_ids",
+      ],
       memo: ["Memo", "string", "memo"],
       comment: ["Comment", "string", "comment"],
       is_transfer: ["Transfer", "boolean", "is_transfer"],
@@ -90,7 +101,7 @@ const DATASETS = {
     joins: ["holdings.account"],
   },
   "cash-flows": {
-    relation: "vision_analysis.cash_flows_v1",
+    relation: "vision_analysis.cash_flows_v2",
     label: "Cash flows",
     primaryKey: "cash_flow_id",
     fields: {
@@ -112,6 +123,17 @@ const DATASETS = {
       recipient_name: ["Recipient", "string", "recipient_name"],
       category_general: ["Category", "string", "category_general"],
       category_detail: ["Category detail", "string", "category_detail"],
+      category_path: ["Category path", "string", "category_path"],
+      category_path_segments: [
+        "Category path segments",
+        "string[]",
+        "category_path_segments",
+      ],
+      category_path_ids: [
+        "Category path IDs",
+        "integer[]",
+        "category_path_ids",
+      ],
       is_active: ["Active", "boolean", "is_active"],
       "account.display_name": [
         "Account display name",
@@ -312,6 +334,10 @@ export function compileVisualAnalysis(plan) {
   };
 }
 
-export const APPROVED_ANALYSIS_RELATIONS = new Set(
-  Object.values(DATASETS).map((dataset) => dataset.relation),
-);
+export const APPROVED_ANALYSIS_RELATIONS = new Set([
+  ...Object.values(DATASETS).map((dataset) => dataset.relation),
+  // Existing saved analyses keep their immutable v1 SQL after the catalog
+  // starts generating v2 paths for newly created analyses.
+  "vision_analysis.transactions_v1",
+  "vision_analysis.cash_flows_v1",
+]);

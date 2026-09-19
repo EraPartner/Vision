@@ -46,7 +46,7 @@ const SYSTEM_RECIPIENT_NAME = "SYSTEM";
 /** @type {Record<string, string>} */
 const RECIPIENT_SORT_COLUMNS = {
   name: "r.name",
-  default_category_name: `CASE WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail ELSE NULL END`,
+  default_category_name: `CASE WHEN c.id IS NOT NULL THEN c.path_name ELSE NULL END`,
   primary_bank_account: "primary_bank_account",
   alias_count: "alias_count",
   notes: "r.notes",
@@ -94,7 +94,7 @@ function buildWhereClause({
                  AND t.currency IS NOT NULL
              )`;
   } else if (defaultCategoryId != null) {
-    sql += ` AND r.default_category_id = $${p++}`;
+    sql += ` AND r.default_category_id IN (SELECT category_id FROM category_ancestors WHERE ancestor_id = $${p++})`;
     params.push(defaultCategoryId);
   }
   if (search) {
@@ -151,7 +151,7 @@ export const recipientRepository = {
 
     const sql = `
       SELECT r.*,
-             CASE WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail ELSE NULL END AS default_category_name,
+             CASE WHEN c.id IS NOT NULL THEN c.path_name ELSE NULL END AS default_category_name,
              pba.account_number AS primary_bank_account,
              pr.name AS primary_recipient_name,
              COALESCE(ac.alias_count, 0) AS alias_count
@@ -214,7 +214,7 @@ export const recipientRepository = {
   async getById(id) {
     const sql = `
       SELECT r.*,
-             CASE WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail ELSE NULL END AS default_category_name,
+             CASE WHEN c.id IS NOT NULL THEN c.path_name ELSE NULL END AS default_category_name,
              pba.account_number AS primary_bank_account,
              pr.name AS primary_recipient_name,
              COALESCE(ac.alias_count, 0) AS alias_count
@@ -389,7 +389,7 @@ export const recipientRepository = {
         RETURNING *
       )
       SELECT u.*,
-             CASE WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail ELSE NULL END AS default_category_name,
+             CASE WHEN c.id IS NOT NULL THEN c.path_name ELSE NULL END AS default_category_name,
              pba.account_number AS primary_bank_account,
              pr.name AS primary_recipient_name,
              COALESCE(ac.alias_count, 0) AS alias_count
@@ -500,7 +500,7 @@ export const recipientRepository = {
   async getAliases(primaryId) {
     const sql = `
       SELECT r.*,
-             CASE WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail ELSE NULL END AS default_category_name
+             CASE WHEN c.id IS NOT NULL THEN c.path_name ELSE NULL END AS default_category_name
       FROM recipients r
       LEFT JOIN categories c ON r.default_category_id = c.id
       WHERE r.primary_recipient_id = $1

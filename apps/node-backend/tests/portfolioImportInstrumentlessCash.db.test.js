@@ -30,6 +30,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   acquireDbSuiteLock,
   closeTestPool,
+  deleteAllCategoryFixtures,
   getTestPool,
   hasTestDatabase,
   releaseDbSuiteLock,
@@ -57,7 +58,7 @@ async function wipe() {
   await pool.query(`DELETE FROM investments`);
   await pool.query(`DELETE FROM recipients`);
   await pool.query(`DELETE FROM accounts`);
-  await pool.query(`DELETE FROM categories`);
+  await deleteAllCategoryFixtures(pool);
   await pool.query(`DELETE FROM exchange_rates`);
   await pool.query(
     `DELETE FROM user_settings WHERE key = 'brokerage_cash_category_ids'`,

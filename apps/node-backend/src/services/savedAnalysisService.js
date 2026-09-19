@@ -566,7 +566,7 @@ function finalizeSavedAnalysisResult(result, parameters) {
   };
 }
 
-export async function runSavedAnalysis(id) {
+export async function runSavedAnalysis(id, options = {}) {
   const saved = await getSavedAnalysis(id);
   if (!saved)
     throw Object.assign(new Error("Saved analysis not found"), { status: 404 });
@@ -607,7 +607,8 @@ export async function runSavedAnalysis(id) {
         [id, runId],
       );
     });
-    return getSavedAnalysis(id);
+    const updated = await getSavedAnalysis(id);
+    return options.includeRunId ? { saved: updated, runId } : updated;
   } catch (error) {
     const cancelled = error.code === "57014";
     const errorJson = {
@@ -624,6 +625,7 @@ export async function runSavedAnalysis(id) {
         [id, cancelled ? "cancelled" : "failed", JSON.stringify(errorJson)],
       );
     });
+    error.monitorRunId = runId;
     throw error;
   }
 }

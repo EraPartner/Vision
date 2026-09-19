@@ -32,7 +32,7 @@ export function IncomeSourcesStep({ profile, updateProfile }: StepProps) {
         const list = categories
             .map((c) => ({
                 id: c.id,
-                label: `${c.general}: ${c.detail}`,
+                label: c.path.join(" / "),
             }))
             .sort((a, b) => a.label.localeCompare(b.label));
         if (!q) return list;

@@ -36,6 +36,7 @@ import {
     usePercentFormatter,
 } from "@/hooks/useCurrencyFormatter";
 import { useRecurringPatterns } from "@/hooks/usePlannedMatchSuggestions";
+import { useCategoryTree } from "@/hooks/useCategories";
 
 const DISMISSED_PATTERNS_STORAGE_KEY = "dismissed_recurring_patterns";
 
@@ -61,6 +62,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
     const formatCurrency = useCurrencyFormatter();
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
+    const { data: categoryTree } = useCategoryTree();
     const queryClient = useQueryClient();
     const [expanded, setExpanded] = useState(false);
     const [amountAlertsExpanded, setAmountAlertsExpanded] = useState(false);
@@ -490,10 +492,12 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                                 </Badge>
                                                 {pattern.categoryName && (
                                                     <span className="text-xs text-muted-foreground">
-                                                        {pattern.categoryName
-                                                            .split(":")
-                                                            .pop()
-                                                            ?.trim()}
+                                                        {categoryTree?.items.find(
+                                                            (node) =>
+                                                                node.id ===
+                                                                pattern.categoryId,
+                                                        )?.name ??
+                                                            pattern.categoryName}
                                                     </span>
                                                 )}
                                                 <span className="text-xs text-muted-foreground">

@@ -222,7 +222,12 @@ describe.skipIf(!hasTestDatabase())("roleBootstrap (real Postgres)", () => {
     await queryAs(
       APP_ROLE,
       APP_PASS,
-      "DELETE FROM categories WHERE general = 'vb_rb'",
+      "DELETE FROM categories WHERE general = 'vb_rb' AND parent_id IS NOT NULL",
+    );
+    await queryAs(
+      APP_ROLE,
+      APP_PASS,
+      "DELETE FROM categories WHERE general = 'vb_rb' AND parent_id IS NULL",
     );
   }, 30_000);
 

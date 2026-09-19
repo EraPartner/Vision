@@ -9,8 +9,8 @@
 import * as simpleAverage from "./methods/simpleAverage.js";
 
 /**
- * @typedef {{ date: string, category_id: number|null, general: string, detail: string, net: number }} CategoryHistoryRow
- * @typedef {{ key: string, category_id: number|null, general: string, detail: string }} CategoryKey
+ * @typedef {{ date: string, category_id: number|null, general: string, detail: string, path_name?: string, net: number }} CategoryHistoryRow
+ * @typedef {{ key: string, category_id: number|null, general: string, detail: string, path_name: string }} CategoryKey
  * @typedef {{ date: string, value: number }} SeriesPoint
  * @typedef {{ date: string, net: number|null, cumulative: number|null }} ActualPoint
  */
@@ -29,6 +29,7 @@ import * as simpleAverage from "./methods/simpleAverage.js";
  *   category_id: number|null,
  *   general: string,
  *   detail: string,
+ *   path_name: string,
  *   actual: Array<{ date: string, net: number|null, cumulative: number|null }>,
  *   forecast: Array<{ date: string, value: number }>,
  *   cumulative: Array<{ date: string, value: number }>,
@@ -44,9 +45,9 @@ export function buildCategoryBreakdown({
   referenceDaily,
 }) {
   const categories = extractCategories(
-    historyByCategory,
     currentActualByCategory,
     scheduledActualByCategory,
+    historyByCategory,
   );
 
   const refByDate = new Map(referenceDaily.map((p) => [p.date, p.value]));
@@ -109,6 +110,7 @@ export function buildCategoryBreakdown({
       category_id: cat.category_id,
       general: cat.general,
       detail: cat.detail,
+      path_name: cat.path_name,
       actual: actualByDate,
       forecast: series,
       cumulative,
@@ -120,7 +122,8 @@ export function buildCategoryBreakdown({
 
 /** @param {CategoryHistoryRow} r */
 function catKey(r) {
-  return `${r.category_id ?? "null"}|${r.general}|${r.detail}`;
+  // The stable category ID, not a mutable label, owns each forecast series.
+  return r.category_id == null ? "uncategorized" : String(r.category_id);
 }
 
 /**
@@ -138,12 +141,14 @@ function extractCategories(...rowGroups) {
         category_id: r.category_id ?? null,
         general: r.general ?? "Uncategorized",
         detail: r.detail ?? "Uncategorized",
+        path_name:
+          r.path_name ??
+          ([r.general, r.detail].filter(Boolean).join(":") || "Uncategorized"),
       });
     }
   }
-  return [...seen.values()].sort(
-    (a, b) =>
-      a.general.localeCompare(b.general) || a.detail.localeCompare(b.detail),
+  return [...seen.values()].sort((a, b) =>
+    a.path_name.localeCompare(b.path_name),
   );
 }
 

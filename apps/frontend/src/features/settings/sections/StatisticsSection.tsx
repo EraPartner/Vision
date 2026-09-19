@@ -21,7 +21,7 @@ import {
 } from "@/stores/hydration/SettingsHydration";
 import { apiClient } from "@/lib/api";
 import { settingKeys } from "@/lib/queryKeys";
-import { useAllCategories } from "@/hooks/useCategories";
+import { useCategoryTree } from "@/hooks/useCategories";
 import {
     SettingsSection,
     SettingsGroup,
@@ -39,15 +39,13 @@ export const StatisticsSection = memo(function StatisticsSection() {
     const [categorySearch, setCategorySearch] = useState("");
     const [recipientSearch, setRecipientSearch] = useState("");
 
-    // Shared with useExcludedIds' hidden-category resolution — one cache entry,
-    // one request (see useAllCategories).
     const { data: categoriesData, isLoading: categoriesLoading } =
-        useAllCategories();
+        useCategoryTree();
     const { data: recipientsData, isLoading: recipientsLoading } =
         useStatisticsRecipientOptions();
     const { data: includeTransfersSetting } = useSetting("includeTransfers");
 
-    const categories = categoriesData ?? [];
+    const categories = categoriesData?.items ?? [];
     const recipients = recipientsData?.items ?? [];
     const isLoading = categoriesLoading || recipientsLoading;
 
@@ -222,20 +220,23 @@ export const StatisticsSection = memo(function StatisticsSection() {
                                             for (const cat of categories) {
                                                 const matchesSearch =
                                                     !categorySearch ||
-                                                    cat.general
-                                                        .toLowerCase()
-                                                        .includes(
-                                                            searchLower,
-                                                        ) ||
-                                                    cat.detail
-                                                        .toLowerCase()
-                                                        .includes(searchLower);
+                                                    cat.path.some((segment) =>
+                                                        segment
+                                                            .toLowerCase()
+                                                            .includes(
+                                                                searchLower,
+                                                            ),
+                                                    );
                                                 if (!matchesSearch) continue;
                                                 const group =
-                                                    grouped.get(cat.general) ||
-                                                    [];
+                                                    grouped.get(
+                                                        cat.path[0] ?? cat.name,
+                                                    ) || [];
                                                 group.push(cat);
-                                                grouped.set(cat.general, group);
+                                                grouped.set(
+                                                    cat.path[0] ?? cat.name,
+                                                    group,
+                                                );
                                             }
                                             if (grouped.size === 0) {
                                                 return (
@@ -332,9 +333,15 @@ export const StatisticsSection = memo(function StatisticsSection() {
                                                             </div>
                                                             {items
                                                                 .sort((a, b) =>
-                                                                    a.detail.localeCompare(
-                                                                        b.detail,
-                                                                    ),
+                                                                    a.path
+                                                                        .join(
+                                                                            " / ",
+                                                                        )
+                                                                        .localeCompare(
+                                                                            b.path.join(
+                                                                                " / ",
+                                                                            ),
+                                                                        ),
                                                                 )
                                                                 .map(
                                                                     (
@@ -362,9 +369,9 @@ export const StatisticsSection = memo(function StatisticsSection() {
                                                                                 className="flex flex-1 cursor-pointer items-center justify-between text-sm"
                                                                             >
                                                                                 <span>
-                                                                                    {
-                                                                                        category.detail
-                                                                                    }
+                                                                                    {category.path.join(
+                                                                                        " / ",
+                                                                                    )}
                                                                                 </span>
                                                                                 {!category.is_active && (
                                                                                     <Badge

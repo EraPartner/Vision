@@ -430,6 +430,7 @@ describe("getCashflowForecastDataByCategory", () => {
         category_id: 1,
         general: "Food",
         detail: "Groceries",
+        path_name: "Food:Groceries",
         net: -75,
       },
       {
@@ -437,6 +438,7 @@ describe("getCashflowForecastDataByCategory", () => {
         category_id: 2,
         general: "Bills",
         detail: "Rent",
+        path_name: "Bills:Rent",
         net: -1000,
       },
     ]);
@@ -473,6 +475,7 @@ describe("getCashflowForecastDataByCategory", () => {
         category_id: 1,
         general: "Bills",
         detail: "Rent",
+        path_name: "Bills:Rent",
         net: -25,
       },
     ]);

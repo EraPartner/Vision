@@ -21,6 +21,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   acquireDbSuiteLock,
   closeTestPool,
+  deleteAllCategoryFixtures,
   getTestPool,
   hasTestDatabase,
   releaseDbSuiteLock,
@@ -149,7 +150,7 @@ describe.skipIf(!hasTestDatabase())(
       await pool.query("DELETE FROM transactions");
       await pool.query("DELETE FROM accounts");
       await pool.query("DELETE FROM recipients");
-      await pool.query("DELETE FROM categories");
+      await deleteAllCategoryFixtures(pool);
       await pool.query("DELETE FROM exchange_rates");
       await pool.query(
         `DELETE FROM user_settings WHERE key = 'includeTransfers'`,

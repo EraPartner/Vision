@@ -2,15 +2,25 @@
  * Info sub-repository: planned expenses for next month.
  */
 
-import { query } from '../database/connection.js';
-import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
-import { todayAppDateString, firstOfMonthYmd, addDaysYmd } from '../lib/timezone.js';
-import { nextOccurrenceYmd, fastForwardYmd } from '../lib/calculations/recurrence.js';
-import { addAll, toDecimal, toNumber, roundMoney as roundToCents } from '../lib/money.js';
-import { formatDateToYmd } from '../lib/dateFormat.js';
+import { query } from "../database/connection.js";
+import { convertRowsToEur } from "../services/currency/currencyConversionService.js";
 import {
-  mapRowsForAmountConversion,
-} from './infoRepositoryHelpers.js';
+  todayAppDateString,
+  firstOfMonthYmd,
+  addDaysYmd,
+} from "../lib/timezone.js";
+import {
+  nextOccurrenceYmd,
+  fastForwardYmd,
+} from "../lib/calculations/recurrence.js";
+import {
+  addAll,
+  toDecimal,
+  toNumber,
+  roundMoney as roundToCents,
+} from "../lib/money.js";
+import { formatDateToYmd } from "../lib/dateFormat.js";
+import { mapRowsForAmountConversion } from "./infoRepositoryHelpers.js";
 
 const MAX_OCCURRENCES = 120; // guard against infinite loops on tiny intervals
 
@@ -27,7 +37,9 @@ const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
  * @returns {string}
  */
 function plannedDateToYmd(value) {
-  return value instanceof Date ? formatDateToYmd(value) : String(value).slice(0, 10);
+  return value instanceof Date
+    ? formatDateToYmd(value)
+    : String(value).slice(0, 10);
 }
 
 /**
@@ -82,7 +94,7 @@ function expandRecurringOccurrences(plannedDate, pattern, startYmd, endYmd) {
 }
 
 export const plannedRepository = {
-  async getPlannedExpensesNextMonth(targetCurrency = 'EUR') {
+  async getPlannedExpensesNextMonth(targetCurrency = "EUR") {
     // Anchor the month window to today's calendar month in APP_TIMEZONE and
     // keep it as YYYY-MM-DD strings throughout (ADR-009 helpers: pure calendar
     // math, host-timezone independent).
@@ -98,7 +110,9 @@ export const plannedRepository = {
     const startYmd = firstOfMonthYmd(todayYmd, 1); // first of next month
     const endYmd = firstOfMonthYmd(todayYmd, 2); // first of the month after (exclusive)
     const lastDayYmd = addDaysYmd(endYmd, -1);
-    const [nextMonthYear, nextMonthMonth] = startYmd.split('-').map((s) => parseInt(s, 10));
+    const [nextMonthYear, nextMonthMonth] = startYmd
+      .split("-")
+      .map((s) => parseInt(s, 10));
 
     const sql = `
       SELECT pt.*, COALESCE(pr.name, r.name) AS recipient_name,
@@ -110,9 +124,9 @@ export const plannedRepository = {
              -- category_name: null here while its sibling repository — reading
              -- the same table for the same row — categorised it.
              CASE
-               WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
-               WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
-               WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
+               WHEN c.id IS NOT NULL THEN c.path_name
+               WHEN rc.id IS NOT NULL THEN rc.path_name
+               WHEN pc.id IS NOT NULL THEN pc.path_name
                ELSE NULL
              END AS category_name
       FROM planned_transactions pt
@@ -133,8 +147,8 @@ export const plannedRepository = {
     const result = await query(sql, [startYmd, endYmd]);
 
     const plannedConverted = await convertRowsToEur(
-      mapRowsForAmountConversion(result.rows, 'amount', false),
-      targetCurrency
+      mapRowsForAmountConversion(result.rows, "amount", false),
+      targetCurrency,
     );
 
     /**
@@ -168,10 +182,21 @@ export const plannedRepository = {
      */
     const pushOccurrence = (dateStr, row, eur) => {
       if (!dailyMap[dateStr]) {
-        dailyMap[dateStr] = { date: dateStr, total_income: toDecimal(0), total_expenses: toDecimal(0), transactions: [] };
+        dailyMap[dateStr] = {
+          date: dateStr,
+          total_income: toDecimal(0),
+          total_expenses: toDecimal(0),
+          transactions: [],
+        };
       }
-      if (eur >= 0) dailyMap[dateStr].total_income = dailyMap[dateStr].total_income.plus(toDecimal(eur));
-      else dailyMap[dateStr].total_expenses = dailyMap[dateStr].total_expenses.plus(toDecimal(eur));
+      if (eur >= 0)
+        dailyMap[dateStr].total_income = dailyMap[dateStr].total_income.plus(
+          toDecimal(eur),
+        );
+      else
+        dailyMap[dateStr].total_expenses = dailyMap[
+          dateStr
+        ].total_expenses.plus(toDecimal(eur));
       dailyMap[dateStr].transactions.push({
         id: row.id,
         recipient_name: row.recipient_name,
@@ -188,13 +213,19 @@ export const plannedRepository = {
       if (row.is_recurring && row.recurrence_pattern) {
         // Expand each recurrence into its actual next-month occurrences instead
         // of counting the row once at its (possibly current-month) stored date.
-        for (const ymd of expandRecurringOccurrences(row.planned_date, row.recurrence_pattern, startYmd, endYmd)) {
+        for (const ymd of expandRecurringOccurrences(
+          row.planned_date,
+          row.recurrence_pattern,
+          startYmd,
+          endYmd,
+        )) {
           pushOccurrence(ymd, row, eur);
         }
       } else {
         const dateStr = plannedDateToYmd(row.planned_date);
         // Non-recurring (or pattern-less) rows only count inside the window.
-        if (dateStr >= startYmd && dateStr < endYmd) pushOccurrence(dateStr, row, eur);
+        if (dateStr >= startYmd && dateStr < endYmd)
+          pushOccurrence(dateStr, row, eur);
       }
     }
 

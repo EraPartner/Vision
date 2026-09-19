@@ -164,11 +164,15 @@ describe("buildTransactionWhere", () => {
     });
     // Effective category = own → recipient default → primary default, expanded
     // to semi-joins (replaces the non-indexable COALESCE(...) = $ wrapper).
-    expect(sql).toContain("t.category_id = $1");
     expect(sql).toContain(
-      "t.recipient_id IN (SELECT id FROM recipients WHERE default_category_id = $1)",
+      "t.category_id IN (SELECT category_id FROM category_ancestors WHERE ancestor_id = $1)",
     );
-    expect(sql).toContain("pr2.default_category_id = $1");
+    expect(sql).toContain(
+      "t.recipient_id IN (SELECT id FROM recipients WHERE default_category_id IN (SELECT category_id FROM category_ancestors WHERE ancestor_id = $1))",
+    );
+    expect(sql).toContain(
+      "pr2.default_category_id IN (SELECT category_id FROM category_ancestors WHERE ancestor_id = $1)",
+    );
     expect(sql).toContain("r2.default_category_id IS NULL");
     // COALESCE precedence preserved: recipient/primary fallbacks only apply when
     // the txn's own category is NULL.
@@ -414,17 +418,19 @@ describe("buildExclusionClauses", () => {
   // old exclusive `< MAX_INT4` bound. It is a legal int4 id and now excludes.
   it("excludes an id at the int4 ceiling instead of dropping it", () => {
     const result = buildExclusionClauses({ excludedCategoryIds: [2147483647] });
-    expect(result.whereSql).toBe(
-      "COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN ($1)",
-    );
+    expect(result.whereSql).toContain("excluded.ancestor_id IN ($1)");
     expect(result.params).toEqual([2147483647]);
   });
 
-  it("builds NOT IN predicate for categories using the same COALESCE chain", () => {
+  it("excludes categories through their ancestor IDs using the effective-category chain", () => {
     const result = buildExclusionClauses({ excludedCategoryIds: [1, 2, 3] });
-    expect(result.whereSql).toBe(
-      "COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN ($1, $2, $3)",
+    expect(result.whereSql).toContain(
+      "NOT EXISTS (SELECT 1 FROM category_ancestors excluded",
     );
+    expect(result.whereSql).toContain(
+      "excluded.category_id = COALESCE(t.category_id, r.default_category_id, pr.default_category_id)",
+    );
+    expect(result.whereSql).toContain("excluded.ancestor_id IN ($1, $2, $3)");
     expect(result.params).toEqual([1, 2, 3]);
     expect(result.nextParamIdx).toBe(4);
   });
@@ -438,11 +444,9 @@ describe("buildExclusionClauses", () => {
     expect(result.nextParamIdx).toBe(3);
   });
 
-  it("coalesces NULL to -1 so uncategorized/recipient-less rows are kept, not dropped", () => {
-    // A bare `NULL NOT IN (...)` is NULL (falsy), which silently dropped every
-    // uncategorized row on any exclusion. -1 can never be an excluded id.
+  it("keeps uncategorized and recipient-less rows on exclusions", () => {
     const cat = buildExclusionClauses({ excludedCategoryIds: [1] });
-    expect(cat.whereSql).toContain(", -1) NOT IN");
+    expect(cat.whereSql).toContain("NOT EXISTS");
     const rec = buildExclusionClauses({ excludedRecipientIds: [1] });
     expect(rec.whereSql).toContain(", -1) NOT IN");
   });
@@ -453,9 +457,9 @@ describe("buildExclusionClauses", () => {
       excludedRecipientIds: [20],
       startParamIdx: 4,
     });
-    expect(result.whereSql).toBe(
-      "COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN ($4, $5)" +
-        " AND COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN ($6)",
+    expect(result.whereSql).toContain("excluded.ancestor_id IN ($4, $5)");
+    expect(result.whereSql).toContain(
+      "AND COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN ($6)",
     );
     expect(result.params).toEqual([10, 11, 20]);
     expect(result.nextParamIdx).toBe(7);
@@ -475,9 +479,7 @@ describe("buildAggregationFilter", () => {
     expect(whereSql).toContain("t.is_active = true");
     expect(whereSql).toContain("t.date >= $1");
     expect(whereSql).toContain("t.date <= $2");
-    expect(whereSql).toContain(
-      "COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN ($3)",
-    );
+    expect(whereSql).toContain("excluded.ancestor_id IN ($3)");
     expect(whereSql).toContain(
       "COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN ($4, $5)",
     );
@@ -658,9 +660,15 @@ describe("buildTransactionWhere — categoryIds (plural IN clause)", () => {
     });
     // Same placeholder slots ($1,$2,$3) reused across own / recipient-default /
     // primary-default leaves — params allocated once, count unchanged.
-    expect(sql).toContain("t.category_id IN ($1, $2, $3)");
-    expect(sql).toContain("WHERE default_category_id IN ($1, $2, $3)");
-    expect(sql).toContain("pr2.default_category_id IN ($1, $2, $3)");
+    expect(sql).toContain(
+      "t.category_id IN (SELECT category_id FROM category_ancestors WHERE ancestor_id IN ($1, $2, $3))",
+    );
+    expect(sql).toContain(
+      "WHERE default_category_id IN (SELECT category_id FROM category_ancestors WHERE ancestor_id IN ($1, $2, $3))",
+    );
+    expect(sql).toContain(
+      "pr2.default_category_id IN (SELECT category_id FROM category_ancestors WHERE ancestor_id IN ($1, $2, $3))",
+    );
     expect(sql).not.toContain("COALESCE(t.category_id");
     expect(params).toEqual([2, 5, 9]);
     expect(nextParamIdx).toBe(4);
@@ -687,8 +695,8 @@ describe("buildTransactionWhere — categoryIds (plural IN clause)", () => {
       categoryIds: [1, 2],
       active: false,
     });
-    expect(sql).toContain("t.category_id = $1");
-    expect(sql).not.toContain("t.category_id IN (");
+    expect(sql).toContain("ancestor_id = $1");
+    expect(sql).not.toContain("ancestor_id IN (");
     expect(params).toEqual([3]);
   });
 
@@ -698,7 +706,9 @@ describe("buildTransactionWhere — categoryIds (plural IN clause)", () => {
       active: false,
       startParamIdx: 3,
     });
-    expect(sql).toContain("t.category_id IN ($3, $4)");
+    expect(sql).toContain(
+      "t.category_id IN (SELECT category_id FROM category_ancestors WHERE ancestor_id IN ($3, $4))",
+    );
     expect(params).toEqual([4, 7]);
     expect(nextParamIdx).toBe(5);
   });

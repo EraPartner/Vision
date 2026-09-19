@@ -20,7 +20,7 @@ describe("analysis catalog compiler", () => {
       limit: 500,
     });
 
-    expect(compiled.sql).toContain("FROM vision_analysis.cash_flows_v1");
+    expect(compiled.sql).toContain("FROM vision_analysis.cash_flows_v2");
     expect(compiled.sql).toContain(
       "date_trunc('month', analysis_base.cash_flow_date)::date",
     );
@@ -69,6 +69,22 @@ describe("analysis catalog compiler", () => {
         cardinality: "many-to-one",
         duplicationSafe: true,
       }),
+    ]);
+  });
+
+  it("compiles new analysis paths from the versioned hierarchy view", () => {
+    const compiled = compileVisualAnalysis({
+      datasetId: "transactions",
+      fields: ["category_path", "category_path_segments", "category_path_ids"],
+      groups: [],
+      measures: [],
+    });
+    expect(compiled.sql).toContain("FROM vision_analysis.transactions_v2");
+    expect(compiled.sql).toContain("category_path_segments");
+    expect(compiled.columns.map((column) => column.type)).toEqual([
+      "string",
+      "string[]",
+      "integer[]",
     ]);
   });
 });

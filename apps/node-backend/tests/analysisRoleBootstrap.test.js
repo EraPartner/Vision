@@ -55,7 +55,7 @@ describe("analysis role bootstrap", () => {
       "REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA vision_analysis",
     );
     expect(statements.match(/GRANT SELECT ON vision_analysis\./g)).toHaveLength(
-      4,
+      6,
     );
   });
 

@@ -18,8 +18,54 @@ import {
 } from "./infoRepositoryHelpers.js";
 
 export const statisticsRepository = {
-  async getCategoryBreakdown(targetCurrency = "EUR") {
+  async getCategoryBreakdown(
+    targetCurrency = "EUR",
+    ancestorCategoryId = undefined,
+  ) {
     const includeTransfers = await getIncludeTransfers();
+
+    if (ancestorCategoryId !== undefined) {
+      // Expand the effective category only once through the ancestry view. A
+      // transaction assigned directly to the ancestor and one assigned four
+      // levels below both contribute one row to this one requested rollup.
+      const result = await query(
+        `
+        SELECT ancestor.id AS category_id, ancestor.path_name AS name,
+               SUM(t.amount) AS amount, COUNT(*) AS cnt, t.currency
+        FROM transactions t
+        LEFT JOIN recipients r ON t.recipient_id = r.id
+        LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
+        JOIN category_ancestors ancestry
+          ON ancestry.category_id = COALESCE(t.category_id, r.default_category_id, pr.default_category_id)
+         AND ancestry.ancestor_id = $1
+        JOIN categories ancestor ON ancestor.id = ancestry.ancestor_id
+        WHERE t.is_active = true
+          ${includeTransfers ? "" : "AND t.is_transfer = false"}
+        GROUP BY ancestor.id, ancestor.path_name, t.currency
+      `,
+        [ancestorCategoryId],
+      );
+      const converted = await convertRowsToEur(
+        mapRowsForAmountConversion(result.rows, "amount", false),
+        targetCurrency,
+      );
+      let count = 0;
+      let total = toDecimal(0);
+      for (const row of converted) {
+        count += parseInt(row.cnt, 10) || 0;
+        total = total.plus(toDecimal(row.amount_eur));
+      }
+      return converted.length
+        ? [
+            {
+              id: ancestorCategoryId,
+              name: converted[0].name,
+              count,
+              total: roundToCents(toNumber(total)),
+            },
+          ]
+        : [];
+    }
 
     // The MV (mv_category_totals) is built transfer-excluding, so it is only a
     // valid fast path when the caller also wants transfers excluded.
@@ -50,7 +96,7 @@ export const statisticsRepository = {
     // here while the transactions list shows it categorised.
     const categoryAmountResult = await query(`
       SELECT COALESCE(c.id, -1) AS category_id,
-             COALESCE(c.general || ':' || c.detail, 'UNCATEGORISED') AS name,
+             COALESCE(c.path_name, 'UNCATEGORISED') AS name,
              SUM(t.amount) AS amount,
              COUNT(*) AS cnt,
              t.currency
@@ -61,7 +107,7 @@ export const statisticsRepository = {
       WHERE t.is_active = true
         ${includeTransfers ? "" : "AND t.is_transfer = false"}
       GROUP BY COALESCE(c.id, -1),
-               COALESCE(c.general || ':' || c.detail, 'UNCATEGORISED'),
+               COALESCE(c.path_name, 'UNCATEGORISED'),
                t.currency
     `);
 
@@ -191,7 +237,11 @@ export const statisticsRepository = {
     const sql = `
       SELECT
         COALESCE(t.category_id, r.default_category_id, pr.default_category_id) AS category_id,
-        CONCAT(c.general, ': ', c.detail) AS category_name,
+        CASE WHEN c.legacy_compatible
+             THEN CONCAT(c.general, ': ', c.detail)
+             ELSE c.path_name END AS category_name,
+        path.ids AS category_path_ids,
+        path.names AS category_path_segments,
         TO_CHAR(t.date, 'YYYY-MM') AS period,
         t.date, t.currency,
         SUM(t.amount) FILTER (WHERE t.amount >= 0) AS income,
@@ -201,12 +251,14 @@ export const statisticsRepository = {
       LEFT JOIN recipients r ON t.recipient_id = r.id
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = c.id
+      LEFT JOIN category_paths path ON path.id = c.id
       WHERE t.is_active = true
         ${includeTransfers ? "" : "AND t.is_transfer = false"}
         AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id) IS NOT NULL
         ${exclusionWhere}
         ${dateWhere}
-      GROUP BY COALESCE(t.category_id, r.default_category_id, pr.default_category_id), CONCAT(c.general, ': ', c.detail), TO_CHAR(t.date, 'YYYY-MM'), t.date, t.currency
+      GROUP BY COALESCE(t.category_id, r.default_category_id, pr.default_category_id),
+               c.id, path.ids, path.names, TO_CHAR(t.date, 'YYYY-MM'), t.date, t.currency
       ORDER BY period
     `;
 
@@ -220,6 +272,8 @@ export const statisticsRepository = {
         period: r.period,
         category_id: r.category_id,
         category_name: r.category_name,
+        category_path_ids: r.category_path_ids,
+        category_path_segments: r.category_path_segments,
         date: r.date,
         currency: r.currency,
         cnt: parseInt(r.cnt, 10) || 0,
@@ -241,6 +295,7 @@ export const statisticsRepository = {
     /**
      * @type {Record<string, Record<string, {
      *   categoryId: number|null, categoryName: string,
+     *   categoryPathIds: number[], categoryPathSegments: string[],
      *   total: number, income: number, expense: number, transactionCount: number,
      * }>>}
      */
@@ -257,6 +312,8 @@ export const statisticsRepository = {
         periodCatMap[period][catKey] = {
           categoryId: catId,
           categoryName: catName,
+          categoryPathIds: row.category_path_ids ?? [],
+          categoryPathSegments: row.category_path_segments ?? [],
           total: 0,
           income: 0,
           expense: 0,
@@ -276,6 +333,7 @@ export const statisticsRepository = {
     /**
      * @type {Record<string, Array<{
      *   categoryId: number|null, categoryName: string,
+     *   categoryPathIds: number[], categoryPathSegments: string[],
      *   total: number, income: number, expense: number, transactionCount: number,
      * }>>}
      */

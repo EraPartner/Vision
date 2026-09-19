@@ -6,7 +6,12 @@ import {
     fetchCategoriesForExclusions,
     takeStartedCategoriesPreload,
 } from "@/lib/categoriesPreload";
-import type { CategoryCreate, CategoryUpdate } from "@/types/api";
+import type {
+    CategoryCreate,
+    CategoryUpdate,
+    CategoryNodeCreate,
+    CategoryNodeUpdate,
+} from "@/types/api";
 import { toast } from "sonner";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
@@ -58,6 +63,86 @@ export function useAllCategories(enabled = true) {
         },
         enabled,
         staleTime: QUERY_STALE_TIME_MS.STANDARD,
+    });
+}
+
+/** The complete ordered hierarchy, including assignable structural ancestors. */
+export function useCategoryTree(enabled = true) {
+    return useQuery({
+        queryKey: categoryKeys.tree,
+        queryFn: () => apiClient.getCategoryTree(),
+        enabled,
+        staleTime: QUERY_STALE_TIME_MS.STANDARD,
+    });
+}
+
+export function useCreateCategoryNode() {
+    const queryClient = useQueryClient();
+    const { t } = useLanguage();
+    return useMutation({
+        mutationFn: (input: CategoryNodeCreate) =>
+            apiClient.createCategoryNode(input),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: categoryKeys.all });
+            toast.success(t("categories.created"));
+        },
+        onError: (error: Error) =>
+            toast.error(t("categories.createFailedTitle"), {
+                description: apiErrorToMessage(error, t),
+            }),
+    });
+}
+
+export function useUpdateCategoryNode() {
+    const queryClient = useQueryClient();
+    const { t } = useLanguage();
+    return useMutation({
+        mutationFn: ({ id, data }: { id: number; data: CategoryNodeUpdate }) =>
+            apiClient.updateCategoryNode(id, data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: categoryKeys.all });
+            toast.success(t("categories.updated"));
+        },
+        onError: (error: Error) =>
+            toast.error(t("categories.updateFailedTitle"), {
+                description: apiErrorToMessage(error, t),
+            }),
+    });
+}
+
+export function useDeleteCategoryNode() {
+    const queryClient = useQueryClient();
+    const { t } = useLanguage();
+    return useMutation({
+        mutationFn: (id: number) => apiClient.deleteCategoryNode(id),
+        onSuccess: () =>
+            queryClient.invalidateQueries({ queryKey: categoryKeys.all }),
+        onError: (error: Error) =>
+            toast.error(t("categories.deleteFailedTitle"), {
+                description: apiErrorToMessage(error, t),
+            }),
+    });
+}
+
+export function useMergeCategoryNode() {
+    const queryClient = useQueryClient();
+    const { t } = useLanguage();
+    return useMutation({
+        mutationFn: ({
+            sourceId,
+            targetId,
+        }: {
+            sourceId: number;
+            targetId: number;
+        }) => apiClient.mergeCategoryNode(sourceId, targetId),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: categoryKeys.all });
+            toast.success(t("categories.updated"));
+        },
+        onError: (error: Error) =>
+            toast.error(t("categories.updateFailedTitle"), {
+                description: apiErrorToMessage(error, t),
+            }),
     });
 }
 

@@ -48,4 +48,19 @@ describe("analysis SQL boundary", () => {
       "not approved",
     );
   });
+
+  it("permits v2 hierarchy analysis while retaining saved v1 SQL", () => {
+    expect(
+      __validateAnalysisSql(
+        "SELECT category_path FROM vision_analysis.transactions_v2",
+        ["transactions"],
+      ),
+    ).toContain("category_path");
+    expect(
+      __validateAnalysisSql(
+        "SELECT category_general FROM vision_analysis.transactions_v1",
+        ["transactions"],
+      ),
+    ).toContain("category_general");
+  });
 });

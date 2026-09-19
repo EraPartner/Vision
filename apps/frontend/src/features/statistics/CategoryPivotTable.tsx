@@ -153,26 +153,43 @@ export function CategoryPivotTable({
 
     const hierarchicalCategories = useMemo(() => {
         type PivotItem = (typeof filteredCategories)[number];
+        type DetailRow = PivotItem & {
+            detailName: string;
+            categoryIds: number[];
+            depth: number;
+        };
         const grouped = new Map<
             string,
             {
                 general: string;
                 total: number;
                 months: Record<string, number>;
-                children: Array<PivotItem & { detailName: string }>;
+                categoryIds: number[];
+                children: DetailRow[];
             }
         >();
+        const childMaps = new Map<string, Map<string, DetailRow>>();
 
         for (const cat of filteredCategories) {
-            const [rawGeneral, ...detailParts] = String(
+            // New payloads carry canonical ordered paths. The legacy label
+            // fallback only supports pre-upgrade cached pivot responses.
+            const fallback = String(
                 cat.categoryName || t("txPage.field.uncategorized"),
-            ).split(":");
+            );
+            const colon = fallback.indexOf(":");
+            const segments = cat.categoryPathSegments?.length
+                ? cat.categoryPathSegments
+                : colon < 0
+                  ? [fallback]
+                  : [
+                        fallback.slice(0, colon),
+                        fallback.slice(colon + 1).trimStart(),
+                    ];
+            const ids = cat.categoryPathIds?.length
+                ? cat.categoryPathIds
+                : [cat.categoryId ?? -1];
             const general =
-                rawGeneral?.trim() || t("txPage.field.uncategorized");
-            const detailName =
-                detailParts.length > 0
-                    ? detailParts.join(":").replace(/^ /, "")
-                    : general;
+                segments[0]?.trim() || t("txPage.field.uncategorized");
 
             if (!grouped.has(general)) {
                 const initialMonths: Record<string, number> = {};
@@ -183,26 +200,104 @@ export function CategoryPivotTable({
                     general,
                     total: 0,
                     months: initialMonths,
+                    categoryIds: [],
                     children: [],
                 });
+                childMaps.set(general, new Map());
             }
 
             const group = grouped.get(general)!;
+            if (
+                cat.categoryId != null &&
+                !group.categoryIds.includes(cat.categoryId)
+            )
+                group.categoryIds.push(cat.categoryId);
             group.total += cat.filteredTotal;
             for (const period of filteredPeriods) {
                 group.months[period] += getPeriodValue(cat, period, valueMode);
             }
-            group.children.push({ ...cat, detailName });
+            const childMap = childMaps.get(general)!;
+            for (let depth = 2; depth <= segments.length; depth += 1) {
+                const pathIds = ids.slice(0, depth);
+                const pathSegments = segments.slice(0, depth);
+                const detailName = pathSegments.slice(1).join(" / ");
+                const key =
+                    pathIds.length === depth && pathIds.every((id) => id > 0)
+                        ? `id:${pathIds[depth - 1]}`
+                        : `legacy:${pathSegments.join("\u0000")}`;
+                let row = childMap.get(key);
+                if (!row) {
+                    row = {
+                        ...cat,
+                        categoryId: pathIds[depth - 1] ?? cat.categoryId,
+                        categoryName: cat.categoryPathSegments?.length
+                            ? pathSegments.join(" / ")
+                            : cat.categoryName,
+                        categoryPathIds: pathIds,
+                        categoryPathSegments: pathSegments,
+                        detailName,
+                        depth,
+                        categoryIds: [],
+                        months: {},
+                        incomeMonths: {},
+                        expenseMonths: {},
+                        netMonths: {},
+                        filteredTotal: 0,
+                        total: 0,
+                        incomeTotal: 0,
+                        expenseTotal: 0,
+                        netTotal: 0,
+                    };
+                    childMap.set(key, row);
+                }
+                if (
+                    cat.categoryId != null &&
+                    !row.categoryIds.includes(cat.categoryId)
+                )
+                    row.categoryIds.push(cat.categoryId);
+                row.filteredTotal += cat.filteredTotal;
+                row.total += cat.total;
+                row.incomeTotal += cat.incomeTotal;
+                row.expenseTotal += cat.expenseTotal;
+                row.netTotal += cat.netTotal;
+                for (const period of filteredPeriods) {
+                    row.months[period] =
+                        (row.months[period] ?? 0) + (cat.months[period] ?? 0);
+                    row.incomeMonths[period] =
+                        (row.incomeMonths[period] ?? 0) +
+                        (cat.incomeMonths[period] ?? 0);
+                    row.expenseMonths[period] =
+                        (row.expenseMonths[period] ?? 0) +
+                        (cat.expenseMonths[period] ?? 0);
+                    row.netMonths[period] =
+                        (row.netMonths[period] ?? 0) +
+                        (cat.netMonths[period] ?? 0);
+                }
+            }
         }
 
         return Array.from(grouped.values())
             .map((group) => ({
                 ...group,
-                children: group.children.sort((a, b) =>
-                    valueMode === "net"
-                        ? Math.abs(b.filteredTotal) - Math.abs(a.filteredTotal)
-                        : b.filteredTotal - a.filteredTotal,
-                ),
+                categoryIds: group.categoryIds.sort((a, b) => a - b),
+                children: Array.from(childMaps.get(group.general)!.values())
+                    .map((row) => ({
+                        ...row,
+                        categoryIds: row.categoryIds.sort((a, b) => a - b),
+                    }))
+                    .sort((a, b) => {
+                        const left = a.categoryPathSegments ?? [];
+                        const right = b.categoryPathSegments ?? [];
+                        for (
+                            let i = 0;
+                            i < Math.min(left.length, right.length);
+                            i += 1
+                        ) {
+                            const order = left[i]!.localeCompare(right[i]!);
+                            if (order !== 0) return order;
+                        }
+                        return left.length - right.length;
+                    }),
             }))
             .sort((a, b) =>
                 valueMode === "net"
@@ -409,12 +504,8 @@ export function CategoryPivotTable({
                             <tbody>
                                 {hierarchicalCategories.map(
                                     (group, groupIndex) => {
-                                        const groupCategoryIds = group.children
-                                            .map((c) => c.categoryId)
-                                            .filter(
-                                                (id): id is number =>
-                                                    id != null,
-                                            );
+                                        const groupCategoryIds =
+                                            group.categoryIds;
                                         const expandable =
                                             isExpandableGroup(group);
                                         const isCollapsed = collapsedGroups.has(
@@ -613,7 +704,12 @@ export function CategoryPivotTable({
                                                             hidden={isCollapsed}
                                                             className="border-b border-border/50 hover:bg-muted/50 transition-colors"
                                                         >
-                                                            <td className="py-2 px-3 pl-8 text-muted-foreground sticky left-0 table-sticky-col z-10 whitespace-nowrap">
+                                                            <td
+                                                                className="py-2 px-3 text-muted-foreground sticky left-0 table-sticky-col z-10 whitespace-nowrap"
+                                                                style={{
+                                                                    paddingLeft: `${cat.depth * 1.25 + 0.5}rem`,
+                                                                }}
+                                                            >
                                                                 {cat.detailName}
                                                             </td>
                                                             {visiblePeriods.map(
@@ -627,15 +723,28 @@ export function CategoryPivotTable({
                                                                     const canClick =
                                                                         val !==
                                                                             0 &&
-                                                                        cat.categoryId !=
-                                                                            null;
+                                                                        cat
+                                                                            .categoryIds
+                                                                            .length >
+                                                                            0;
                                                                     const label = `${cat.categoryName} — ${formatPeriodShort(p, monthLabelLocale)}`;
                                                                     const drillUrl =
                                                                         canClick
                                                                             ? buildTransactionDrillUrl(
                                                                                   {
-                                                                                      categoryId:
-                                                                                          cat.categoryId!,
+                                                                                      ...(cat
+                                                                                          .categoryIds
+                                                                                          .length ===
+                                                                                      1
+                                                                                          ? {
+                                                                                                categoryId:
+                                                                                                    cat
+                                                                                                        .categoryIds[0]!,
+                                                                                            }
+                                                                                          : {
+                                                                                                categoryIds:
+                                                                                                    cat.categoryIds,
+                                                                                            }),
                                                                                       period: p,
                                                                                       valueMode,
                                                                                       label,
@@ -697,12 +806,25 @@ export function CategoryPivotTable({
                                                                             "",
                                                                     );
                                                                 const drillUrl =
-                                                                    cat.categoryId !=
-                                                                    null
+                                                                    cat
+                                                                        .categoryIds
+                                                                        .length >
+                                                                    0
                                                                         ? buildTransactionDrillUrl(
                                                                               {
-                                                                                  categoryId:
-                                                                                      cat.categoryId!,
+                                                                                  ...(cat
+                                                                                      .categoryIds
+                                                                                      .length ===
+                                                                                  1
+                                                                                      ? {
+                                                                                            categoryId:
+                                                                                                cat
+                                                                                                    .categoryIds[0]!,
+                                                                                        }
+                                                                                      : {
+                                                                                            categoryIds:
+                                                                                                cat.categoryIds,
+                                                                                        }),
                                                                                   valueMode,
                                                                                   label,
                                                                               },
@@ -715,8 +837,10 @@ export function CategoryPivotTable({
                                                                             cat.filteredTotal <
                                                                                 0 &&
                                                                                 "text-loss",
-                                                                            cat.categoryId !=
-                                                                                null &&
+                                                                            cat
+                                                                                .categoryIds
+                                                                                .length >
+                                                                                0 &&
                                                                                 clickableCell,
                                                                         )}
                                                                     >

@@ -163,4 +163,49 @@ describe("RecurringDetectionPanel — detected sign carried into the planned pay
         expect(toggle).toHaveAttribute("aria-expanded", "true");
         expect(await screen.findByText(/100,00.*€/)).toBeInTheDocument();
     });
+
+    it("shows the canonical leaf name even when a segment contains a colon", async () => {
+        const user = userEvent.setup();
+        server.use(
+            http.get(`${API_BASE}/api/info/recurring-patterns`, () =>
+                ok({
+                    patterns: [
+                        {
+                            ...patternFixture("expense"),
+                            categoryId: 9,
+                            categoryName: "FOOD:SPECIAL:VALUE",
+                        },
+                    ],
+                    total: 1,
+                }),
+            ),
+            http.get(`${API_BASE}/api/categories/tree`, () =>
+                ok({
+                    items: [
+                        {
+                            id: 9,
+                            name: "SPECIAL:VALUE",
+                            parentId: 1,
+                            pathIds: [1, 9],
+                            path: ["FOOD", "SPECIAL:VALUE"],
+                            category_name: "FOOD:SPECIAL:VALUE",
+                            depth: 2,
+                            is_active: true,
+                            hierarchyOnly: false,
+                            legacyCompatible: false,
+                        },
+                    ],
+                    total: 1,
+                }),
+            ),
+        );
+        renderWithApp(<RecurringDetectionPanel />);
+        await user.click(
+            await screen.findByRole("button", {
+                name: /show or hide detected recurring patterns/i,
+            }),
+        );
+        expect(await screen.findByText("SPECIAL:VALUE")).toBeInTheDocument();
+        expect(screen.queryByText("VALUE")).not.toBeInTheDocument();
+    });
 });

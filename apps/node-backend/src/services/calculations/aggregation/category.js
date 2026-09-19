@@ -6,16 +6,26 @@
  * the wrapper will pass them through.
  */
 
-import infoRepository from '../../../repositories/infoRepository.js';
-import { buildEnvelope } from './_envelope.js';
-import { assertCategoryInvariants } from './_invariants.js';
+import infoRepository from "../../../repositories/infoRepository.js";
+import { buildEnvelope } from "./_envelope.js";
+import { assertCategoryInvariants } from "./_invariants.js";
 
 export async function computeCategoryBreakdown({
-  targetCurrency = 'EUR',
+  targetCurrency = "EUR",
+  ancestorCategoryId = undefined,
 } = {}) {
-  const categories = await infoRepository.getCategoryBreakdown(targetCurrency);
+  const categories =
+    ancestorCategoryId === undefined
+      ? await infoRepository.getCategoryBreakdown(targetCurrency)
+      : await infoRepository.getCategoryBreakdown(
+          targetCurrency,
+          ancestorCategoryId,
+        );
   assertCategoryInvariants(categories);
-  return buildEnvelope({ categories }, { source: 'mv' });
+  return buildEnvelope(
+    { categories },
+    { source: ancestorCategoryId === undefined ? "mv" : "live" },
+  );
 }
 
 export default { computeCategoryBreakdown };

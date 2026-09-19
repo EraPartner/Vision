@@ -34,9 +34,7 @@ describe("getSankeyAggregates", () => {
     expect(sql).toContain(
       "LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id",
     );
-    expect(sql).toContain(
-      "COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN ($3)",
-    );
+    expect(sql).toContain("excluded.ancestor_id IN ($3)");
     expect(sql).toContain(
       "COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN ($4)",
     );

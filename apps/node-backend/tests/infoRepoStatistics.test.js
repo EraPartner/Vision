@@ -59,6 +59,34 @@ describe("statisticsRepository.getCategoryBreakdown", () => {
     expect(r[0]).toMatchObject({ id: 1, count: 2, total: -30 });
     expect(r[1]).toMatchObject({ id: 2, count: 1, total: -50 });
   });
+
+  it("rolls a requested ancestor from effective category IDs, once per transaction", async () => {
+    query.mockResolvedValueOnce({
+      rows: [
+        {
+          category_id: 10,
+          name: "Food",
+          amount: "-60",
+          cnt: "3",
+          currency: "EUR",
+        },
+      ],
+    });
+    convertRowsToEur.mockResolvedValueOnce([
+      { category_id: 10, name: "Food", amount_eur: -60, cnt: "3" },
+    ]);
+    const r = await statisticsRepository.getCategoryBreakdown("EUR", 10);
+    expect(r).toEqual([{ id: 10, name: "Food", count: 3, total: -60 }]);
+    expect(query.mock.calls[0][0]).toContain(
+      "JOIN category_ancestors ancestry",
+    );
+    expect(query.mock.calls[0][0]).toContain("ancestry.ancestor_id = $1");
+    expect(query.mock.calls[0][0]).toContain(
+      "COALESCE(t.category_id, r.default_category_id, pr.default_category_id)",
+    );
+    expect(query.mock.calls[0][1]).toEqual([10]);
+    expect(mvAvailable).not.toHaveBeenCalled();
+  });
 });
 
 describe("statisticsRepository.getBanks", () => {
@@ -106,6 +134,39 @@ describe("statisticsRepository.getTransactionCount", () => {
 });
 
 describe("statisticsRepository.getCategoryPivot", () => {
+  it("returns ordered path IDs and names without parsing display labels", async () => {
+    query.mockResolvedValueOnce({
+      rows: [
+        {
+          period: "2025-04",
+          category_id: 3,
+          category_name: "Home:Kitchen:Apples",
+          category_path_ids: [1, 2, 3],
+          category_path_segments: ["Home", "Kitchen:Tools", "Apples"],
+          date: "2025-04-01",
+          currency: "EUR",
+          income: null,
+          expense: "-10",
+          cnt: "1",
+        },
+      ],
+    });
+    convertRowsToEur.mockImplementationOnce(async (rows) =>
+      rows.map((row) => ({
+        ...row,
+        amount_eur: row.amount,
+      })),
+    );
+    const pivot = await statisticsRepository.getCategoryPivot();
+    expect(pivot.categoryPivot["2025-04"][0]).toMatchObject({
+      categoryPathIds: [1, 2, 3],
+      categoryPathSegments: ["Home", "Kitchen:Tools", "Apples"],
+      total: -10,
+      transactionCount: 1,
+    });
+    expect(query.mock.calls[0][0]).toContain("LEFT JOIN category_paths path");
+  });
+
   it("groups by period and category, sorts ascending by total", async () => {
     query.mockResolvedValueOnce({ rows: [] });
     // The repo now converts two legs (income/expense) per grouped row; cnt is the
@@ -166,6 +227,8 @@ describe("statisticsRepository.getCategoryPivot", () => {
       {
         categoryId: 2,
         categoryName: "Bills",
+        categoryPathIds: [],
+        categoryPathSegments: [],
         total: -500,
         income: 0,
         expense: -500,
@@ -174,6 +237,8 @@ describe("statisticsRepository.getCategoryPivot", () => {
       {
         categoryId: 1,
         categoryName: "Food",
+        categoryPathIds: [],
+        categoryPathSegments: [],
         total: -150,
         income: 0,
         expense: -150,
@@ -208,6 +273,8 @@ describe("statisticsRepository.getCategoryPivot", () => {
     expect(r.categoryPivot["2025-04"][0]).toEqual({
       categoryId: 1,
       categoryName: "Food",
+      categoryPathIds: [],
+      categoryPathSegments: [],
       total: 200,
       income: 500,
       expense: -300,

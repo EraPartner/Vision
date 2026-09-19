@@ -13,6 +13,7 @@ import {
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { useStatistics } from "@/hooks/useStatistics";
+import { matchesCategorySelection } from "@/lib/categoryHierarchy";
 
 /** One bar of the yearly income-vs-PIT chart. */
 export interface YearlyIncomeDatum {
@@ -103,11 +104,7 @@ export function useTaxOverviewData() {
         const result = new Map<string, number>();
         if (!hasIncomeSources || !categoryPivot) return result;
         for (const cat of categoryPivot) {
-            if (
-                cat.categoryId == null ||
-                !taxIncomeCategoryIds.has(cat.categoryId)
-            )
-                continue;
+            if (!matchesCategorySelection(cat, taxIncomeCategoryIds)) continue;
             for (const [period, amount] of Object.entries(cat.incomeMonths)) {
                 result.set(period, (result.get(period) ?? 0) + amount);
             }

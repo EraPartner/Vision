@@ -31,7 +31,9 @@ export async function getSankeyAggregates({
     `
     SELECT
       c.id AS category_id,
-      c.general || ': ' || c.detail AS category_name,
+      CASE WHEN c.legacy_compatible
+           THEN c.general || ': ' || c.detail
+           ELSE c.path_name END AS category_name,
       t.currency,
       (t.amount > 0) AS is_income,
       SUM(ABS(t.amount)) AS amount
@@ -43,7 +45,7 @@ export async function getSankeyAggregates({
       ${includeTransfers ? "" : "AND t.is_transfer = false"}
       AND t.date BETWEEN $1 AND $2
       ${exclusionWhere}
-    GROUP BY c.id, c.general, c.detail, t.currency, (t.amount > 0)
+    GROUP BY c.id, t.currency, (t.amount > 0)
     `,
     params,
   );

@@ -192,9 +192,9 @@ const EFFECTIVE_CATEGORY_ID_SQL =
 // (The same CASE is inlined at the sort-column map and in getAll /
 // getAllWithCount below; all four copies share this order.)
 const CATEGORY_NAME_SQL = `CASE
-               WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
-               WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
-               WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
+               WHEN c.id IS NOT NULL THEN c.path_name
+               WHEN rc.id IS NOT NULL THEN rc.path_name
+               WHEN pc.id IS NOT NULL THEN pc.path_name
                ELSE NULL
              END`;
 const RECIPIENT_NAME_SQL = "COALESCE(pr.name, r.name)";
@@ -238,9 +238,9 @@ const TRANSACTION_SORT_COLUMNS = {
   memo: "t.memo",
   recipient: "COALESCE(pr.name, r.name)",
   category: `CASE
-               WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
-               WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
-               WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
+               WHEN c.id IS NOT NULL THEN c.path_name
+               WHEN rc.id IS NOT NULL THEN rc.path_name
+               WHEN pc.id IS NOT NULL THEN pc.path_name
                ELSE NULL
              END`,
   bank: "acct.name",
@@ -383,9 +383,9 @@ export const transactionRepository = {
              COALESCE(pr.name, r.name) AS recipient_name,
              COALESCE(t.category_id, r.default_category_id, pr.default_category_id) AS effective_category_id,
              CASE
-               WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
-               WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
-               WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
+               WHEN c.id IS NOT NULL THEN c.path_name
+               WHEN rc.id IS NOT NULL THEN rc.path_name
+               WHEN pc.id IS NOT NULL THEN pc.path_name
                ELSE NULL
              END AS category_name${runningBalanceCol}
       FROM transactions t
@@ -867,9 +867,9 @@ export const transactionRepository = {
              COALESCE(pr.name, r.name) AS recipient_name,
              COALESCE(t.category_id, r.default_category_id, pr.default_category_id) AS effective_category_id,
              CASE
-               WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
-               WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
-               WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
+               WHEN c.id IS NOT NULL THEN c.path_name
+               WHEN rc.id IS NOT NULL THEN rc.path_name
+               WHEN pc.id IS NOT NULL THEN pc.path_name
                ELSE NULL
              END AS category_name${runningBalanceCol}
       FROM transactions t

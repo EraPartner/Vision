@@ -1,28 +1,42 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { mockConnection } from "./helpers/repoMocks.js";
+import { mockTxConnection } from "./helpers/repoMocks.js";
 
-vi.mock("../src/database/connection.js", () => mockConnection());
+vi.mock("../src/database/connection.js", () => mockTxConnection());
 
 import { query } from "../src/database/connection.js";
 import categoryRepository from "../src/repositories/categoryRepository.js";
 
 describe("categoryRepository.createOrGet", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
+    query.mockResolvedValue({ rows: [] });
   });
 
   it("inserts normalized category and returns created=true", async () => {
-    query.mockResolvedValueOnce({
-      rows: [
-        {
-          id: 10,
-          general: "FOOD",
-          detail: "GROCERIES",
-          description: "Weekly groceries",
-          is_active: true,
-        },
-      ],
-    });
+    query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 10,
+            general: "FOOD",
+            detail: "GROCERIES",
+            description: "Weekly groceries",
+            is_active: true,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 10,
+            general: "FOOD",
+            detail: "GROCERIES",
+            path_name: "FOOD:GROCERIES",
+          },
+        ],
+      });
 
     const result = await categoryRepository.createOrGet({
       general: "  food ",
@@ -30,7 +44,7 @@ describe("categoryRepository.createOrGet", () => {
       description: "Weekly groceries",
     });
 
-    expect(query).toHaveBeenCalledTimes(1);
+    expect(query).toHaveBeenCalledTimes(4);
     expect(query).toHaveBeenCalledWith(
       expect.stringContaining("INSERT INTO categories"),
       ["FOOD", "GROCERIES", "Weekly groceries"],
@@ -47,17 +61,21 @@ describe("categoryRepository.createOrGet", () => {
   });
 
   it("returns existing enriched category with created=false on conflict fallback", async () => {
-    query.mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({
-      rows: [
-        {
-          id: 3,
-          general: "UTILITIES",
-          detail: "ELECTRICITY",
-          description: "Power bill",
-          is_active: true,
-        },
-      ],
-    });
+    query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 3,
+            general: "UTILITIES",
+            detail: "ELECTRICITY",
+            description: "Power bill",
+            is_active: true,
+          },
+        ],
+      });
 
     const result = await categoryRepository.createOrGet({
       general: " utilities ",
@@ -65,14 +83,14 @@ describe("categoryRepository.createOrGet", () => {
       description: "ignored on conflict",
     });
 
-    expect(query).toHaveBeenCalledTimes(2);
+    expect(query).toHaveBeenCalledTimes(4);
     expect(query).toHaveBeenNthCalledWith(
-      1,
+      3,
       expect.stringContaining("ON CONFLICT (general, detail) DO NOTHING"),
       ["UTILITIES", "ELECTRICITY", "ignored on conflict"],
     );
     expect(query).toHaveBeenNthCalledWith(
-      2,
+      4,
       "SELECT * FROM categories WHERE general = $1 AND detail = $2",
       ["UTILITIES", "ELECTRICITY"],
     );
@@ -86,11 +104,29 @@ describe("categoryRepository.createOrGet", () => {
       created: false,
     });
   });
+
+  it("resolves a merged legacy pair without recreating it", async () => {
+    query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id: 42 }] })
+      .mockResolvedValueOnce({ rows: [{ id: 42, path_name: "FOOD:HOME" }] });
+
+    const result = await categoryRepository.createOrGet({
+      general: "food",
+      detail: "groceries",
+    });
+
+    expect(result).toMatchObject({ category: { id: 42 }, created: false });
+    expect(
+      query.mock.calls.some(([sql]) => sql.includes("INSERT INTO categories")),
+    ).toBe(false);
+  });
 });
 
 describe("categoryRepository query helpers", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
+    query.mockResolvedValue({ rows: [] });
   });
 
   it("resolves only active categories from a de-duplicated ID set", async () => {
@@ -193,7 +229,8 @@ describe("categoryRepository query helpers", () => {
 
 describe("categoryRepository mutations", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
+    query.mockResolvedValue({ rows: [] });
   });
 
   it("returns current row when update has no patchable fields", async () => {
@@ -217,17 +254,28 @@ describe("categoryRepository mutations", () => {
   });
 
   it("normalizes update fields and returns enriched row", async () => {
-    query.mockResolvedValueOnce({
-      rows: [
-        {
-          id: 5,
-          general: "UTILITIES",
-          detail: "WATER",
-          description: "Water bill",
-          is_active: true,
-        },
-      ],
-    });
+    query
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 5,
+            general: "UTILITIES",
+            detail: "WATER",
+            description: "Water bill",
+            is_active: true,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 5,
+            general: "UTILITIES",
+            detail: "WATER",
+            path_name: "UTILITIES:WATER",
+          },
+        ],
+      });
 
     const result = await categoryRepository.update(5, {
       general: " utilities ",
@@ -236,7 +284,7 @@ describe("categoryRepository mutations", () => {
       is_active: true,
     });
 
-    expect(query).toHaveBeenCalledTimes(1);
+    expect(query).toHaveBeenCalledTimes(2);
     expect(query).toHaveBeenCalledWith(
       expect.stringContaining("UPDATE categories SET"),
       ["UTILITIES", "WATER", "Water bill", true, 5],
@@ -249,13 +297,20 @@ describe("categoryRepository mutations", () => {
     );
   });
 
+  it("does not let the legacy update path change a tree-only or structural node", async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    const result = await categoryRepository.update(42, { general: "OTHER" });
+    expect(result).toBeNull();
+    expect(query.mock.calls[0][0]).toContain("AND legacy_compatible = true");
+  });
+
   it("returns true from hardDelete when rowCount > 0", async () => {
     query.mockResolvedValueOnce({ rowCount: 1 });
 
     const deleted = await categoryRepository.hardDelete(3);
 
     expect(query).toHaveBeenCalledWith(
-      "DELETE FROM categories WHERE id = $1",
+      "DELETE FROM categories WHERE id = $1 AND legacy_compatible = true",
       [3],
     );
     expect(deleted).toBe(true);

@@ -110,6 +110,8 @@ export function getAggregationBankBalances(params?: {
 export interface CategoryPivotItem {
     categoryId: number | null;
     categoryName: string;
+    categoryPathIds?: number[];
+    categoryPathSegments?: string[];
     total: number; // net (income + expense)
     income?: number; // sum of amount >= 0 (explicit, not sign-of-net)
     expense?: number; // sum of amount < 0 (negative)

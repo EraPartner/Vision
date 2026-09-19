@@ -217,7 +217,7 @@ export async function detectRecurringPatterns() {
              COALESCE(r.primary_recipient_id, t.recipient_id) AS recipient_id,
              COALESCE(pr.name, r.name) AS recipient_name,
              COALESCE(t.category_id, r.default_category_id, pr.default_category_id) AS effective_category_id,
-             COALESCE(c.general || ':' || c.detail, NULL) AS category_name
+             c.path_name AS category_name
       FROM transactions t
       LEFT JOIN accounts acct ON t.account_id = acct.id
       LEFT JOIN recipients r ON t.recipient_id = r.id

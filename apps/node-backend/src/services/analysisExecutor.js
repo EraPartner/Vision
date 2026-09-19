@@ -164,16 +164,22 @@ export function __validateAnalysisSql(sql, datasetIds = []) {
     }
   }
   const relationByDataset = {
-    transactions: "vision_analysis.transactions_v1",
-    accounts: "vision_analysis.accounts_v1",
-    holdings: "vision_analysis.holding_events_v1",
-    "cash-flows": "vision_analysis.cash_flows_v1",
+    transactions: [
+      "vision_analysis.transactions_v1",
+      "vision_analysis.transactions_v2",
+    ],
+    accounts: ["vision_analysis.accounts_v1"],
+    holdings: ["vision_analysis.holding_events_v1"],
+    "cash-flows": [
+      "vision_analysis.cash_flows_v1",
+      "vision_analysis.cash_flows_v2",
+    ],
   };
   const unknownDataset = datasetIds.find((id) => !relationByDataset[id]);
   if (unknownDataset) {
     throw new Error(`Dataset is not approved: ${unknownDataset}`);
   }
-  const expected = new Set(datasetIds.map((id) => relationByDataset[id]));
+  const expected = new Set(datasetIds.flatMap((id) => relationByDataset[id]));
   if (
     relations.some(
       (relation) => !cteNames.has(relation) && !expected.has(relation),
@@ -194,7 +200,9 @@ function safeValue(value) {
 function postgresType(oid) {
   if (oid === 16) return "boolean";
   if ([20, 21, 23].includes(oid)) return "integer";
+  if ([1005, 1007, 1016].includes(oid)) return "integer[]";
   if ([700, 701, 1700].includes(oid)) return "decimal";
+  if ([1009, 1015].includes(oid)) return "string[]";
   if (oid === 1082) return "date";
   if ([1114, 1184].includes(oid)) return "datetime";
   if ([114, 3802].includes(oid)) return "json";

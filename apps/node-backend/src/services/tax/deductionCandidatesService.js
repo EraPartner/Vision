@@ -15,10 +15,11 @@
  * module never reads the clock.
  */
 
-import { parseCategoryName } from '@vision/shared-utils';
-import { transactionRepository } from '../../repositories/transactionRepository.js';
-import { toDecimal, roundToCents } from '../../lib/money.js';
-import { classifyDeduction } from './deductionClassifier.js';
+import { parseCategoryName } from "@vision/shared-utils";
+import { transactionRepository } from "../../repositories/transactionRepository.js";
+import { listCategoryNodes } from "../categoryService.js";
+import { toDecimal, roundToCents } from "../../lib/money.js";
+import { classifyDeduction } from "./deductionClassifier.js";
 
 /** A decimal.js money value, as produced by the shared `toDecimal` helper. */
 /** @typedef {ReturnType<typeof toDecimal>} Money */
@@ -52,6 +53,14 @@ export async function computeDeductionCandidates({ year }) {
     offset: 0,
     active: true,
   });
+  const hasCategoryIds = rows.some(
+    (row) =>
+      Number.isInteger(Number(row.effective_category_id)) &&
+      row.effective_category_id != null,
+  );
+  const pathsById = hasCategoryIds
+    ? new Map((await listCategoryNodes()).map((node) => [node.id, node.path]))
+    : new Map();
 
   // Pass 1: group outflows by raw category name, classifying each category.
   /** @type {Map<string, { category: string, deductionType: string, total: Money, count: number }>} */
@@ -61,7 +70,12 @@ export async function computeDeductionCandidates({ year }) {
     if (amount.gte(0)) continue; // outflows only
 
     if (!row.category_name) continue;
-    const { general, detail } = parseCategoryName(row.category_name);
+    const path = pathsById.get(Number(row.effective_category_id));
+    // Preserve the old two-part classifier for historical rows. For new deep
+    // paths, use ordered segments rather than splitting a display delimiter.
+    const { general, detail } = path
+      ? { general: path[0] ?? "", detail: path.slice(1).join(" ") }
+      : parseCategoryName(row.category_name);
     const deductionType = classifyDeduction(general, detail);
     if (!deductionType) continue; // not a recognized deductible
 
@@ -82,7 +96,10 @@ export async function computeDeductionCandidates({ year }) {
   /** @type {Map<string, { total: Money, categories: Array<{ category: string, total: number, count: number }> }>} */
   const typeAgg = new Map();
   for (const entry of byCategory.values()) {
-    const agg = typeAgg.get(entry.deductionType) || { total: toDecimal(0), categories: [] };
+    const agg = typeAgg.get(entry.deductionType) || {
+      total: toDecimal(0),
+      categories: [],
+    };
     agg.total = agg.total.plus(entry.total);
     agg.categories.push({
       category: entry.category,
@@ -101,5 +118,5 @@ export async function computeDeductionCandidates({ year }) {
     }))
     .sort((a, b) => b.total - a.total);
 
-  return { year, from, to, currency: 'EUR', byDeductionType };
+  return { year, from, to, currency: "EUR", byDeductionType };
 }

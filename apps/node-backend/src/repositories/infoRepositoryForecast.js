@@ -743,12 +743,13 @@ export async function getCashflowForecastDataByCategory(
     t.date,
     COALESCE(t.category_id, r.default_category_id, pr.default_category_id) AS category_id,
     COALESCE(cat.general, 'Uncategorized')                                  AS general,
-    COALESCE(cat.detail,  'Uncategorized')                                  AS detail
+    COALESCE(cat.detail,  'Uncategorized')                                  AS detail,
+    COALESCE(cat.path_name, 'Uncategorized')                                AS path_name
   `;
   const groupByCols = `
     GROUP BY t.date, t.currency,
              COALESCE(t.category_id, r.default_category_id, pr.default_category_id),
-             cat.general, cat.detail
+             cat.general, cat.detail, cat.path_name
   `;
   const joins = `
     LEFT JOIN recipients r  ON t.recipient_id = r.id
@@ -795,10 +796,10 @@ export async function getCashflowForecastDataByCategory(
 
   /**
    * @param {Array<Record<string, any>>} rows
-   * @returns {Array<{ date: string, category_id: number|null, general: string, detail: string, net: number }>}
+   * @returns {Array<{ date: string, category_id: number|null, general: string, detail: string, path_name: string, net: number }>}
    */
   const aggregateByDateAndCategory = (rows) => {
-    /** @type {Map<string, { date: string, category_id: number|null, general: string, detail: string, net: number }>} */
+    /** @type {Map<string, { date: string, category_id: number|null, general: string, detail: string, path_name: string, net: number }>} */
     const map = new Map();
     for (const r of rows) {
       const date =
@@ -812,6 +813,10 @@ export async function getCashflowForecastDataByCategory(
           category_id: r.category_id ?? null,
           general: r.general ?? "Uncategorized",
           detail: r.detail ?? "Uncategorized",
+          path_name:
+            r.path_name ??
+            ([r.general, r.detail].filter(Boolean).join(":") ||
+              "Uncategorized"),
           net: 0,
         });
       }

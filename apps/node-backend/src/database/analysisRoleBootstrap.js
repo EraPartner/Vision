@@ -104,9 +104,11 @@ export async function ensureAnalysisRole({
     );
     for (const relation of [
       "transactions_v1",
+      "transactions_v2",
       "accounts_v1",
       "holding_events_v1",
       "cash_flows_v1",
+      "cash_flows_v2",
     ]) {
       await client.query(
         `GRANT SELECT ON vision_analysis.${relation} TO ${ANALYSIS_ROLE}`,

@@ -6,7 +6,7 @@
  * shared query helper — no raw pool references in this file.
  */
 
-import { query, withTransaction } from '../database/connection.js';
+import { query, withTransaction } from "../database/connection.js";
 
 /** @typedef {import('../types/rows.js').ImportBatchRow} ImportBatchRow */
 
@@ -15,9 +15,9 @@ import { query, withTransaction } from '../database/connection.js';
  * @returns {Promise<{ batches: Omit<ImportBatchRow, 'custom_config'>[], total: number }>}
  */
 export async function listBatches({ limit = 50, offset = 0 } = {}) {
-    const [dataResult, countResult] = await Promise.all([
-        query(
-            `SELECT
+  const [dataResult, countResult] = await Promise.all([
+    query(
+      `SELECT
                 b.id,
                 b.adapter_name,
                 b.source_filename,
@@ -36,15 +36,15 @@ export async function listBatches({ limit = 50, offset = 0 } = {}) {
              GROUP BY b.id
              ORDER BY b.started_at DESC
              LIMIT $1 OFFSET $2`,
-            [limit, offset]
-        ),
-        query('SELECT COUNT(*)::int AS total FROM import_batches'),
-    ]);
+      [limit, offset],
+    ),
+    query("SELECT COUNT(*)::int AS total FROM import_batches"),
+  ]);
 
-    return {
-        batches: dataResult.rows,
-        total: countResult.rows[0].total,
-    };
+  return {
+    batches: dataResult.rows,
+    total: countResult.rows[0].total,
+  };
 }
 
 /**
@@ -52,8 +52,8 @@ export async function listBatches({ limit = 50, offset = 0 } = {}) {
  * @returns {Promise<ImportBatchRow|null>}
  */
 export async function getBatch(id) {
-    const { rows } = await query(
-        `SELECT
+  const { rows } = await query(
+    `SELECT
             b.id,
             b.adapter_name,
             b.source_filename,
@@ -72,9 +72,9 @@ export async function getBatch(id) {
          LEFT JOIN transactions t ON t.import_batch_id = b.id AND t.is_active = true
          WHERE b.id = $1
          GROUP BY b.id`,
-        [id]
-    );
-    return rows[0] ?? null;
+    [id],
+  );
+  return rows[0] ?? null;
 }
 
 /**
@@ -86,8 +86,8 @@ export async function getBatch(id) {
  * @returns {Promise<Record<string, any>[]>} one row per matched staging row
  */
 export async function getPreviewRows(batchId) {
-    const { rows } = await query(
-        `SELECT
+  const { rows } = await query(
+    `SELECT
             isr.id,
             isr.row_index,
             isr.recipient_raw,
@@ -107,8 +107,14 @@ export async function getPreviewRows(batchId) {
             r.default_category_id AS recipient_default_category_id,
             rdc.general AS recipient_default_category_general,
             rdc.detail AS recipient_default_category_detail,
+            CASE WHEN rdc.legacy_compatible
+                        AND rdc.path_name = rdc.general || ':' || rdc.detail
+                 THEN NULL ELSE rdc.path_name END AS recipient_default_category_path,
             oc.general AS override_category_general,
             oc.detail AS override_category_detail,
+            CASE WHEN oc.legacy_compatible
+                        AND oc.path_name = oc.general || ':' || oc.detail
+                 THEN NULL ELSE oc.path_name END AS override_category_path,
             rmp.pattern AS matched_pattern_text,
             rmp.pattern_kind AS matched_pattern_kind
            FROM import_staging_rows isr
@@ -120,9 +126,9 @@ export async function getPreviewRows(batchId) {
           WHERE isr.batch_id = $1
             AND isr.status = 'matched'
           ORDER BY isr.row_index ASC`,
-        [batchId]
-    );
-    return rows;
+    [batchId],
+  );
+  return rows;
 }
 
 /**
@@ -132,13 +138,13 @@ export async function getPreviewRows(batchId) {
  * @returns {Promise<number>} rowCount (0 if row not found / not in matched status)
  */
 export async function overrideRecipient({ batchId, rowId, recipientId }) {
-    const { rowCount } = await query(
-        `UPDATE import_staging_rows
+  const { rowCount } = await query(
+    `UPDATE import_staging_rows
             SET user_override_recipient_id = $3
           WHERE id = $1 AND batch_id = $2 AND status = 'matched'`,
-        [rowId, batchId, recipientId]
-    );
-    return rowCount ?? 0;
+    [rowId, batchId, recipientId],
+  );
+  return rowCount ?? 0;
 }
 
 /**
@@ -148,13 +154,13 @@ export async function overrideRecipient({ batchId, rowId, recipientId }) {
  * @returns {Promise<number>} rowCount (0 if row not found / not in matched status)
  */
 export async function overrideCategory({ batchId, rowId, categoryId }) {
-    const { rowCount } = await query(
-        `UPDATE import_staging_rows
+  const { rowCount } = await query(
+    `UPDATE import_staging_rows
             SET override_category_id = $3
           WHERE id = $1 AND batch_id = $2 AND status = 'matched'`,
-        [rowId, batchId, categoryId]
-    );
-    return rowCount ?? 0;
+    [rowId, batchId, categoryId],
+  );
+  return rowCount ?? 0;
 }
 
 /**
@@ -166,11 +172,11 @@ export async function overrideCategory({ batchId, rowId, categoryId }) {
  * @returns {Promise<number>} rowCount
  */
 export async function markStagingRowDuplicate(rowId) {
-    const { rowCount } = await query(
-        `UPDATE import_staging_rows SET status = 'duplicate' WHERE id = $1`,
-        [rowId]
-    );
-    return rowCount ?? 0;
+  const { rowCount } = await query(
+    `UPDATE import_staging_rows SET status = 'duplicate' WHERE id = $1`,
+    [rowId],
+  );
+  return rowCount ?? 0;
 }
 
 /**
@@ -178,11 +184,11 @@ export async function markStagingRowDuplicate(rowId) {
  * @returns {Promise<number>} rowCount
  */
 export async function markStagingRowCommitted(rowId) {
-    const { rowCount } = await query(
-        `UPDATE import_staging_rows SET status = 'committed' WHERE id = $1`,
-        [rowId]
-    );
-    return rowCount ?? 0;
+  const { rowCount } = await query(
+    `UPDATE import_staging_rows SET status = 'committed' WHERE id = $1`,
+    [rowId],
+  );
+  return rowCount ?? 0;
 }
 
 /**
@@ -191,11 +197,11 @@ export async function markStagingRowCommitted(rowId) {
  * @returns {Promise<number>} rowCount
  */
 export async function markStagingRowError(rowId, message) {
-    const { rowCount } = await query(
-        `UPDATE import_staging_rows SET status = 'error', error_message = $2 WHERE id = $1`,
-        [rowId, message]
-    );
-    return rowCount ?? 0;
+  const { rowCount } = await query(
+    `UPDATE import_staging_rows SET status = 'error', error_message = $2 WHERE id = $1`,
+    [rowId, message],
+  );
+  return rowCount ?? 0;
 }
 
 /**
@@ -203,11 +209,11 @@ export async function markStagingRowError(rowId, message) {
  * @returns {Promise<boolean>}
  */
 export async function categoryExists(categoryId) {
-    const { rows } = await query(
-        `SELECT id FROM categories WHERE id = $1 LIMIT 1`,
-        [categoryId]
-    );
-    return rows.length > 0;
+  const { rows } = await query(
+    `SELECT id FROM categories WHERE id = $1 LIMIT 1`,
+    [categoryId],
+  );
+  return rows.length > 0;
 }
 
 /**
@@ -219,20 +225,20 @@ export async function categoryExists(categoryId) {
  * @returns {Promise<{ deleted: number, recipientsRemoved: number }>}
  */
 export async function rollbackBatch(id) {
-    return withTransaction(async (client) => {
-        const { rowCount: deleted } = await client.query(
-            `DELETE FROM transactions WHERE import_batch_id = $1`,
-            [id]
-        );
+  return withTransaction(async (client) => {
+    const { rowCount: deleted } = await client.query(
+      `DELETE FROM transactions WHERE import_batch_id = $1`,
+      [id],
+    );
 
-        // Clean up recipients this import auto-created that are now orphaned.
-        // Candidates: referenced by this batch's staging rows AND created during the
-        // import window (created_at >= the batch start) AND no longer referenced by any
-        // transaction, planned transaction, or merge alias. This prevents rolled-back
-        // imports from leaving behind zero-transaction recipients, without touching
-        // pre-existing recipients (older created_at) or any still in use.
-        const { rows: orphanRows } = await client.query(
-            `SELECT r.id FROM recipients r
+    // Clean up recipients this import auto-created that are now orphaned.
+    // Candidates: referenced by this batch's staging rows AND created during the
+    // import window (created_at >= the batch start) AND no longer referenced by any
+    // transaction, planned transaction, or merge alias. This prevents rolled-back
+    // imports from leaving behind zero-transaction recipients, without touching
+    // pre-existing recipients (older created_at) or any still in use.
+    const { rows: orphanRows } = await client.query(
+      `SELECT r.id FROM recipients r
               WHERE r.id IN (
                     SELECT resolved_recipient_id FROM import_staging_rows
                      WHERE batch_id = $1 AND resolved_recipient_id IS NOT NULL
@@ -245,32 +251,32 @@ export async function rollbackBatch(id) {
                 AND NOT EXISTS (SELECT 1 FROM transactions t WHERE t.recipient_id = r.id)
                 AND NOT EXISTS (SELECT 1 FROM planned_transactions pt WHERE pt.recipient_id = r.id)
                 AND NOT EXISTS (SELECT 1 FROM recipients r2 WHERE r2.primary_recipient_id = r.id)`,
-            [id]
-        );
-        const orphanIds = orphanRows.map((/** @type {any} */ r) => r.id);
-        let recipientsRemoved = 0;
-        if (orphanIds.length > 0) {
-            // recipient_bank_accounts FK is NO ACTION, so clear those first; the rest cascade.
-            await client.query(
-                `DELETE FROM recipient_bank_accounts WHERE recipient_id = ANY($1::int[])`,
-                [orphanIds]
-            );
-            const { rowCount } = await client.query(
-                `DELETE FROM recipients WHERE id = ANY($1::int[])`,
-                [orphanIds]
-            );
-            recipientsRemoved = rowCount ?? 0;
-        }
+      [id],
+    );
+    const orphanIds = orphanRows.map((/** @type {any} */ r) => r.id);
+    let recipientsRemoved = 0;
+    if (orphanIds.length > 0) {
+      // recipient_bank_accounts FK is NO ACTION, so clear those first; the rest cascade.
+      await client.query(
+        `DELETE FROM recipient_bank_accounts WHERE recipient_id = ANY($1::int[])`,
+        [orphanIds],
+      );
+      const { rowCount } = await client.query(
+        `DELETE FROM recipients WHERE id = ANY($1::int[])`,
+        [orphanIds],
+      );
+      recipientsRemoved = rowCount ?? 0;
+    }
 
-        await client.query(
-            `UPDATE import_batches
+    await client.query(
+      `UPDATE import_batches
                 SET status = 'aborted',
                     completed_at = NOW(),
                     rows_imported = 0
               WHERE id = $1`,
-            [id]
-        );
+      [id],
+    );
 
-        return { deleted: deleted ?? 0, recipientsRemoved };
-    });
+    return { deleted: deleted ?? 0, recipientsRemoved };
+  });
 }

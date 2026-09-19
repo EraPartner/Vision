@@ -38,6 +38,7 @@ import path from "node:path";
 import {
   acquireDbSuiteLock,
   closeTestPool,
+  deleteAllCategoryFixtures,
   getTestPool,
   hasTestDatabase,
   releaseDbSuiteLock,
@@ -186,7 +187,7 @@ async function wipe() {
   await pool.query(`DELETE FROM import_staging_rows`);
   await pool.query(`DELETE FROM import_batches`);
   await pool.query(`DELETE FROM recipients`);
-  await pool.query(`DELETE FROM categories`);
+  await deleteAllCategoryFixtures(pool);
   await pool.query(`DELETE FROM accounts`);
 }
 

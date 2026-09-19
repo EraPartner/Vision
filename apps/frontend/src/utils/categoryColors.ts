@@ -2,8 +2,8 @@
  * Category color identity — ONE deterministic category → color assignment
  * shared by badge chips and every chart.
  *
- * Colors key on the GENERAL part of "GENERAL:DETAIL" via a stable string
- * hash into the eight --chart-N tokens, so FOOD:GROCERIES keeps the same hue
+ * Colors key on the root category via a stable string hash into the eight
+ * --chart-N tokens, so FOOD:GROCERIES keeps the same hue
  * on the dashboard donut, the statistics donut, the Sankey, and the
  * transaction chips — regardless of spend rank, list order, or month.
  * Collisions are expected past eight generals; identity (same category =
@@ -25,13 +25,19 @@ const BADGE_CLASSES = [
     "bg-chart-8/15 text-chart-8 border-chart-8/30",
 ] as const;
 
-function categoryGeneral(category: string): string {
-    return (category.split(":")[0] ?? "").trim().toUpperCase();
+type CategoryColorIdentity = string | readonly string[];
+
+function categoryRoot(category: CategoryColorIdentity): string {
+    // Ordered segments are authoritative. A display name alone cannot
+    // distinguish a literal colon in a name from the legacy separator.
+    if (Array.isArray(category))
+        return (category[0] ?? "").trim().toUpperCase();
+    return (String(category).split(":")[0] ?? "").trim().toUpperCase();
 }
 
-/** Stable 0-based chart-token index for a category (hash of the GENERAL part). */
-export function categoryColorIndex(category: string): number {
-    const general = categoryGeneral(category);
+/** Stable 0-based chart-token index. Pass ordered segments when available. */
+export function categoryColorIndex(category: CategoryColorIdentity): number {
+    const general = categoryRoot(category);
     let hash = 0;
     for (let i = 0; i < general.length; i++) {
         hash = (hash * 31 + general.charCodeAt(i)) | 0;
@@ -40,13 +46,14 @@ export function categoryColorIndex(category: string): number {
 }
 
 /** Chart fill for a category — `hsl(var(--chart-N))`, theme-adaptive. */
-export function getCategoryChartColor(category: string): string {
-    if (!category || !category.trim()) return "hsl(var(--muted-foreground))";
+export function getCategoryChartColor(category: CategoryColorIdentity): string {
+    if (!categoryRoot(category)) return "hsl(var(--muted-foreground))";
     return `hsl(var(--chart-${categoryColorIndex(category) + 1}))`;
 }
 
 /** Badge chip classes for a category; muted for uncategorized. */
-export const getCategoryColor = (category: string): string => {
-    if (!category || !category.trim()) return "bg-muted/15 text-muted-foreground border-muted/30";
+export const getCategoryColor = (category: CategoryColorIdentity): string => {
+    if (!categoryRoot(category))
+        return "bg-muted/15 text-muted-foreground border-muted/30";
     return BADGE_CLASSES[categoryColorIndex(category)];
 };

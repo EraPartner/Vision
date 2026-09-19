@@ -36,6 +36,7 @@ function setMocks({
     }>,
     pivot = [] as Array<{
         categoryId: number | null;
+        categoryPathIds?: number[];
         incomeMonths: Record<string, number>;
     }>,
 } = {}) {
@@ -145,6 +146,32 @@ describe("useAvailableTaxYears", () => {
         expect(years).toContain(2023);
         expect(years).not.toContain(2019);
         expect(years).not.toContain(2018);
+    });
+
+    it("includes descendant income when an ancestor is selected", () => {
+        setMocks({
+            taxYear: 2026,
+            taxIncomeCategoryIds: [10],
+            pivot: [
+                {
+                    categoryId: 40,
+                    categoryPathIds: [10, 20, 30, 40],
+                    incomeMonths: { "2021-03": 2500 },
+                },
+                {
+                    categoryId: 50,
+                    categoryPathIds: [11, 50],
+                    incomeMonths: { "2020-03": 500 },
+                },
+            ],
+        });
+        const { result } = renderHook(() => useAvailableTaxYears());
+        expect(
+            result.current.find((year) => year.year === 2021)?.hasTransactions,
+        ).toBe(true);
+        expect(
+            result.current.find((year) => year.year === 2020),
+        ).toBeUndefined();
     });
 
     it("ignores taxable-income pivot when no categories are configured", () => {

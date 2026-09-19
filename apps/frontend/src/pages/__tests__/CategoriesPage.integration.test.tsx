@@ -5,536 +5,260 @@ import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { err, ok } from "@/test/msw/handlers";
+import { err, noContent, ok, ok201 } from "@/test/msw/handlers";
 import CategoriesPage from "@/pages/CategoriesPage";
 
 const API_BASE = "http://localhost:3002";
+const nodes = [
+    {
+        id: 1,
+        name: "FOOD",
+        parentId: null,
+        pathIds: [1],
+        path: ["FOOD"],
+        category_name: "FOOD",
+        depth: 1,
+        is_active: true,
+        hierarchyOnly: true,
+        legacyCompatible: true,
+    },
+    {
+        id: 2,
+        name: "GROCERIES",
+        parentId: 1,
+        pathIds: [1, 2],
+        path: ["FOOD", "GROCERIES"],
+        category_name: "FOOD:GROCERIES",
+        depth: 2,
+        is_active: true,
+        hierarchyOnly: false,
+        legacyCompatible: true,
+    },
+    {
+        id: 3,
+        name: "ORGANIC",
+        parentId: 2,
+        pathIds: [1, 2, 3],
+        path: ["FOOD", "GROCERIES", "ORGANIC"],
+        category_name: "FOOD:GROCERIES:ORGANIC",
+        depth: 3,
+        is_active: true,
+        hierarchyOnly: false,
+        legacyCompatible: false,
+    },
+    {
+        id: 4,
+        name: "FRUIT",
+        parentId: 3,
+        pathIds: [1, 2, 3, 4],
+        path: ["FOOD", "GROCERIES", "ORGANIC", "FRUIT"],
+        category_name: "FOOD:GROCERIES:ORGANIC:FRUIT",
+        depth: 4,
+        is_active: true,
+        hierarchyOnly: false,
+        legacyCompatible: false,
+    },
+];
 
-describe("CategoriesPage (integration)", () => {
-    it("hydrates show-all and expanded groups from the URL", async () => {
+describe("CategoriesPage hierarchy", () => {
+    it("shows an empty tree and the create action", async () => {
+        renderWithApp(<CategoriesPage />);
+        expect(
+            await screen.findByText(/no categories yet/i),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: /add category/i }),
+        ).toBeInTheDocument();
+    });
+
+    it("expands arbitrary depth and links an ancestor by stable ID", async () => {
+        const user = userEvent.setup();
         server.use(
-            http.get(`${API_BASE}/api/categories`, () =>
+            http.get(`${API_BASE}/api/categories/tree`, () =>
+                ok({ items: nodes, total: nodes.length }),
+            ),
+        );
+        renderWithApp(<CategoriesPage />);
+        await screen.findByRole("link", { name: "FOOD" });
+        await user.click(screen.getByRole("button", { name: /^expand all$/i }));
+        expect(screen.getByRole("link", { name: "FRUIT" })).toHaveAttribute(
+            "href",
+            "/transactions?category_id=4&filter_label=FOOD%20%2F%20GROCERIES%20%2F%20ORGANIC%20%2F%20FRUIT",
+        );
+        expect(screen.getByRole("link", { name: "FOOD" })).toHaveAttribute(
+            "href",
+            "/transactions?category_ids=1%2C2%2C3%2C4&filter_label=FOOD",
+        );
+    });
+
+    it("creates a child using the parent node ID, not a split display label", async () => {
+        const user = userEvent.setup();
+        let body: unknown;
+        server.use(
+            http.get(`${API_BASE}/api/categories/tree`, () =>
+                ok({ items: nodes, total: nodes.length }),
+            ),
+            http.post(
+                `${API_BASE}/api/categories/tree`,
+                async ({ request }) => {
+                    body = await request.json();
+                    return ok201(nodes[3]);
+                },
+            ),
+        );
+        renderWithApp(<CategoriesPage />);
+        await user.click(
+            await screen.findByRole("button", { name: /add category/i }),
+        );
+        await user.type(screen.getByLabelText(/^name$/i), "fruit");
+        await user.selectOptions(
+            screen.getByLabelText(/parent category/i),
+            "3",
+        );
+        await user.click(screen.getByRole("button", { name: /^create$/i }));
+        await waitFor(() =>
+            expect(body).toMatchObject({ name: "fruit", parentId: 3 }),
+        );
+    });
+
+    it("edits a node and excludes its descendants from move targets", async () => {
+        const user = userEvent.setup();
+        let body: unknown;
+        server.use(
+            http.get(`${API_BASE}/api/categories/tree`, () =>
+                ok({ items: nodes, total: nodes.length }),
+            ),
+            http.patch(
+                `${API_BASE}/api/categories/tree/:id`,
+                async ({ request }) => {
+                    body = await request.json();
+                    return ok(nodes[2]);
+                },
+            ),
+        );
+        renderWithApp(<CategoriesPage />);
+        await user.click(
+            await screen.findByRole("button", { name: /^expand all$/i }),
+        );
+        await user.click(
+            screen.getByRole("button", {
+                name: "Edit FOOD / GROCERIES / ORGANIC",
+            }),
+        );
+        const select = screen.getByLabelText(/parent category/i);
+        expect(select.querySelector('option[value="4"]')).toBeNull();
+        await user.selectOptions(select, "1");
+        await user.click(screen.getByRole("button", { name: /^save$/i }));
+        await waitFor(() => expect(body).toMatchObject({ parentId: 1 }));
+    });
+
+    it("does not offer deletion of a node with children", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/categories/tree`, () =>
+                ok({ items: nodes, total: nodes.length }),
+            ),
+        );
+        renderWithApp(<CategoriesPage />);
+        expect(
+            await screen.findByRole("button", { name: "Delete category FOOD" }),
+        ).toBeDisabled();
+    });
+
+    it("merges a branch into an active target outside its subtree", async () => {
+        const user = userEvent.setup();
+        let merged: { sourceId?: string; body?: unknown } = {};
+        server.use(
+            http.get(`${API_BASE}/api/categories/tree`, () =>
+                ok({ items: nodes, total: nodes.length }),
+            ),
+            http.post(
+                `${API_BASE}/api/categories/tree/:id/merge`,
+                async ({ params, request }) => {
+                    merged = {
+                        sourceId: String(params.id),
+                        body: await request.json(),
+                    };
+                    return ok(nodes[0]);
+                },
+            ),
+        );
+        renderWithApp(<CategoriesPage />);
+        await user.click(
+            await screen.findByRole("button", { name: /^expand all$/i }),
+        );
+        await user.click(
+            screen.getByRole("button", {
+                name: "Merge category FOOD / GROCERIES",
+            }),
+        );
+        const target = screen.getByLabelText(/merge into/i);
+        expect(target.querySelector('option[value="3"]')).toBeNull();
+        expect(target.querySelector('option[value="4"]')).toBeNull();
+        await user.selectOptions(target, "1");
+        await user.click(screen.getByRole("button", { name: /^merge$/i }));
+        await waitFor(() =>
+            expect(merged).toEqual({ sourceId: "2", body: { targetId: 1 } }),
+        );
+    });
+
+    it("keeps an inactive ancestor as context for an active descendant", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/categories/tree`, () =>
                 ok({
-                    items: [
-                        {
-                            id: 1,
-                            general: "FOOD",
-                            detail: "GROCERIES",
-                            is_active: false,
-                        },
-                    ],
-                    total: 1,
+                    items: [{ ...nodes[0], is_active: false }, nodes[1]],
+                    total: 2,
                 }),
             ),
         );
-        renderWithApp(<CategoriesPage />, {
-            initialEntries: ["/categories?show_all=true&expanded=FOOD"],
-        });
-
+        renderWithApp(<CategoriesPage />);
         expect(
-            await screen.findByRole("button", { name: /showing all/i }),
+            await screen.findByRole("link", { name: "FOOD" }),
         ).toBeInTheDocument();
-        expect(screen.getByText("GROCERIES")).toBeInTheDocument();
+        await userEvent
+            .setup()
+            .click(screen.getByRole("button", { name: /^expand all$/i }));
+        expect(
+            screen.getByRole("link", { name: "GROCERIES" }),
+        ).toBeInTheDocument();
     });
 
-    it("renders page heading", async () => {
-        renderWithApp(<CategoriesPage />);
-        await screen.findByRole("heading", { name: /^categories$/i });
-    });
-
-    it("renders without crashing when category list is empty", async () => {
-        renderWithApp(<CategoriesPage />);
-        await screen.findByRole("heading", { name: /^categories$/i });
-    });
-
-    it("shows error state when the categories API fails", async () => {
-        const consoleSpy = vi
-            .spyOn(console, "error")
-            .mockImplementation(() => {});
+    it("reports a hierarchy API error", async () => {
+        const spy = vi.spyOn(console, "error").mockImplementation(() => {});
         server.use(
-            http.get(`${API_BASE}/api/categories`, () =>
+            http.get(`${API_BASE}/api/categories/tree`, () =>
                 err(500, "db unavailable"),
             ),
         );
-
         renderWithApp(<CategoriesPage />);
-
         expect(
-            await screen.findByText(
-                /error loading categories/i,
-                {},
-                { timeout: 5000 },
-            ),
+            await screen.findByText(/error loading categories/i),
         ).toBeInTheDocument();
-
-        consoleSpy.mockRestore();
+        spy.mockRestore();
     });
 
-    it("opens Add Category dialog, fills form, and calls POST /api/categories on submit", async () => {
+    it("deletes a leaf only after confirmation", async () => {
         const user = userEvent.setup();
-        let postCalled = false;
-
+        let deleted = false;
         server.use(
-            http.post(`${API_BASE}/api/categories`, () => {
-                postCalled = true;
-                return ok({
-                    id: 99,
-                    general: "FOOD",
-                    detail: "GROCERIES",
-                    is_active: true,
-                });
+            http.get(`${API_BASE}/api/categories/tree`, () =>
+                ok({ items: nodes, total: nodes.length }),
+            ),
+            http.delete(`${API_BASE}/api/categories/tree/:id`, () => {
+                deleted = true;
+                return noContent();
             }),
         );
-
         renderWithApp(<CategoriesPage />);
-
-        // Page must be out of loading state first
-        await screen.findByRole("heading", { name: /^categories$/i });
-
-        // Open the Add Category dialog via the trigger button
-        const triggerBtn = await screen.findByRole("button", {
-            name: /add category/i,
-        });
-        await user.click(triggerBtn);
-
-        // Dialog should be visible
-        expect(await screen.findByRole("dialog")).toBeInTheDocument();
-
-        // Fill in the General field
-        const generalInput = screen.getByLabelText(/general/i);
-        await user.clear(generalInput);
-        await user.type(generalInput, "FOOD");
-
-        // Fill in the Detail field
-        const detailInput = screen.getByLabelText(/detail/i);
-        await user.clear(detailInput);
-        await user.type(detailInput, "GROCERIES");
-
-        // Submit
-        await user.click(screen.getByRole("button", { name: /create/i }));
-
-        expect(postCalled).toBe(true);
-    });
-
-    it("closes Add Category dialog when Cancel is clicked", async () => {
-        const user = userEvent.setup();
-        renderWithApp(<CategoriesPage />);
-
-        await screen.findByRole("heading", { name: /^categories$/i });
-
-        const triggerBtn = await screen.findByRole("button", {
-            name: /add category/i,
-        });
-        await user.click(triggerBtn);
-
-        expect(await screen.findByRole("dialog")).toBeInTheDocument();
-
-        await user.click(screen.getByRole("button", { name: /cancel/i }));
-
-        // Dialog should close
-        await screen.findByRole("heading", { name: /^categories$/i });
-        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    });
-
-    it("closes Add Category dialog via Escape key", async () => {
-        const user = userEvent.setup();
-        renderWithApp(<CategoriesPage />);
-
-        await screen.findByRole("heading", { name: /^categories$/i });
-
-        const triggerBtn = await screen.findByRole("button", {
-            name: /add category/i,
-        });
-        await user.click(triggerBtn);
-
-        await screen.findByRole("dialog");
-        await user.keyboard("{Escape}");
-
-        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    });
-
-    it("shows Category Tree section heading", async () => {
-        renderWithApp(<CategoriesPage />);
-        // categoriesPage.treeTitle = "Category Tree"
-        expect(await screen.findByText(/category tree/i)).toBeInTheDocument();
-    });
-
-    it("shows empty categories message when category list is empty", async () => {
-        renderWithApp(<CategoriesPage />);
-        // Default MSW returns { items: [] }.
-        expect(
-            await screen.findByText(
-                /no categories yet.*import a categories csv/i,
-            ),
-        ).toBeInTheDocument();
-    });
-
-    it("shows Expand All button when page loads", async () => {
-        renderWithApp(<CategoriesPage />);
-        // categoriesPage.expandAll = "Expand All" (rendered when allExpanded = false)
-        expect(
-            await screen.findByRole("button", { name: /expand all/i }),
-        ).toBeInTheDocument();
-    });
-
-    it("shows Active Only filter button", async () => {
-        renderWithApp(<CategoriesPage />);
-        // categoriesPage.activeOnly = "Active Only"
-        expect(
-            await screen.findByRole("button", { name: /active only/i }),
-        ).toBeInTheDocument();
-    });
-
-    it("expands category group when group header is clicked", async () => {
-        const user = userEvent.setup();
-
-        server.use(
-            http.get(`${API_BASE}/api/categories`, () =>
-                ok({
-                    items: [
-                        {
-                            id: 1,
-                            general: "FOOD",
-                            detail: "A VERY LONG GROCERY CATEGORY",
-                            is_active: true,
-                        },
-                    ],
-                    total: 1,
-                }),
-            ),
-        );
-
-        renderWithApp(<CategoriesPage />);
-
-        // Group header button should appear with the general name
-        const groupBtn = await screen.findByRole("button", { name: /food/i });
-        await user.click(groupBtn);
-
-        // Detail row badge becomes visible after expand
-        const detail = await screen.findByRole("link", {
-            name: "A VERY LONG GROCERY CATEGORY",
-        });
-        expect(detail).toHaveClass("truncate");
-        expect(detail).toHaveAttribute(
-            "href",
-            "/transactions?category_id=1&filter_label=FOOD%3AA%20VERY%20LONG%20GROCERY%20CATEGORY",
-        );
-        expect(
-            screen.getByRole("button", {
-                name: "A VERY LONG GROCERY CATEGORY",
-            }),
-        ).toBeInTheDocument();
-    });
-
-    it("shows category count subtitle when page loads", async () => {
-        renderWithApp(<CategoriesPage />);
-        // categoriesPage.subtitle = "{n} categories in {g} groups"
-        // With default MSW data (empty items): "0 categories in 0 groups"
-        expect(
-            await screen.findByText(/0 categories in 0 groups/i),
-        ).toBeInTheDocument();
-    });
-
-    it("opens Edit Category dialog when edit button is clicked on a category", async () => {
-        const user = userEvent.setup();
-
-        server.use(
-            http.get(`${API_BASE}/api/categories`, () =>
-                ok({
-                    items: [
-                        {
-                            id: 1,
-                            general: "FOOD",
-                            detail: "GROCERIES",
-                            is_active: true,
-                        },
-                    ],
-                    total: 1,
-                }),
-            ),
-        );
-
-        renderWithApp(<CategoriesPage />);
-
-        // Expand the group first
-        const groupBtn = await screen.findByRole("button", { name: /food/i });
-        await user.click(groupBtn);
-
-        // Edit icon button has title = t('common.edit') = "Edit"
-        const editBtn = await screen.findByRole("button", { name: /^edit$/i });
-        await user.click(editBtn);
-
-        // form.addCategory.editTitle = "Edit Category"
-        expect(await screen.findByRole("dialog")).toBeInTheDocument();
-        expect(
-            await screen.findByRole("heading", { name: /^edit category$/i }),
-        ).toBeInTheDocument();
-    });
-
-    it("closes Edit Category dialog when Cancel is clicked", async () => {
-        const user = userEvent.setup();
-
-        server.use(
-            http.get(`${API_BASE}/api/categories`, () =>
-                ok({
-                    items: [
-                        {
-                            id: 1,
-                            general: "FOOD",
-                            detail: "GROCERIES",
-                            is_active: true,
-                        },
-                    ],
-                    total: 1,
-                }),
-            ),
-        );
-
-        renderWithApp(<CategoriesPage />);
-
-        const groupBtn = await screen.findByRole("button", { name: /food/i });
-        await user.click(groupBtn);
-
-        const editBtn = await screen.findByRole("button", { name: /^edit$/i });
-        await user.click(editBtn);
-
-        await screen.findByRole("dialog");
-
-        await user.click(screen.getByRole("button", { name: /cancel/i }));
-
-        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    });
-
-    it("closes Edit Category dialog via Escape key", async () => {
-        const user = userEvent.setup();
-
-        server.use(
-            http.get(`${API_BASE}/api/categories`, () =>
-                ok({
-                    items: [
-                        {
-                            id: 1,
-                            general: "FOOD",
-                            detail: "GROCERIES",
-                            is_active: true,
-                        },
-                    ],
-                    total: 1,
-                }),
-            ),
-        );
-
-        renderWithApp(<CategoriesPage />);
-
-        const groupBtn = await screen.findByRole("button", { name: /food/i });
-        await user.click(groupBtn);
-
-        const editBtn = await screen.findByRole("button", { name: /^edit$/i });
-        await user.click(editBtn);
-
-        await screen.findByRole("dialog");
-        await user.keyboard("{Escape}");
-
-        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    });
-
-    it("clicking Active Only toggles to Showing All mode", async () => {
-        const user = userEvent.setup();
-        renderWithApp(<CategoriesPage />);
-
-        const activeOnlyBtn = await screen.findByRole("button", {
-            name: /active only/i,
-        });
-        await user.click(activeOnlyBtn);
-
-        // categoriesPage.showingAll = "Showing All"
-        expect(
-            await screen.findByRole("button", { name: /showing all/i }),
-        ).toBeInTheDocument();
-    });
-
-    it("clicking Expand All with categories present toggles to Collapse All", async () => {
-        const user = userEvent.setup();
-
-        server.use(
-            http.get(`${API_BASE}/api/categories`, () =>
-                ok({
-                    items: [
-                        {
-                            id: 1,
-                            general: "FOOD",
-                            detail: "GROCERIES",
-                            is_active: true,
-                        },
-                    ],
-                    total: 1,
-                }),
-            ),
-        );
-
-        renderWithApp(<CategoriesPage />);
-
-        // Click Expand All — only enabled when groups exist
-        const expandAllBtn = await screen.findByRole("button", {
-            name: /expand all/i,
-        });
-        await user.click(expandAllBtn);
-
-        // categoriesPage.collapseAll = "Collapse All" — button label flips
-        expect(
-            await screen.findByRole("button", { name: /collapse all/i }),
-        ).toBeInTheDocument();
-    });
-
-    it("submitting Edit Category form calls PATCH /api/categories/:id", async () => {
-        const user = userEvent.setup();
-        let patchCalled = false;
-        let patchedId: string | undefined;
-
-        server.use(
-            http.get(`${API_BASE}/api/categories`, () =>
-                ok({
-                    items: [
-                        {
-                            id: 1,
-                            general: "FOOD",
-                            detail: "GROCERIES",
-                            is_active: true,
-                        },
-                    ],
-                    total: 1,
-                }),
-            ),
-            http.patch(`${API_BASE}/api/categories/:id`, ({ params }) => {
-                patchCalled = true;
-                patchedId = params.id as string;
-                return ok({
-                    id: 1,
-                    general: "FOOD",
-                    detail: "ORGANIC",
-                    is_active: true,
-                });
-            }),
-        );
-
-        renderWithApp(<CategoriesPage />);
-
-        // Expand the FOOD group to reveal the edit button
-        const groupBtn = await screen.findByRole("button", { name: /food/i });
-        await user.click(groupBtn);
-
-        // Open Edit Category dialog
-        const editBtn = await screen.findByRole("button", { name: /^edit$/i });
-        await user.click(editBtn);
-
-        await screen.findByRole("dialog");
-
-        // Change the Detail field
-        const detailInput = screen.getByLabelText(/detail/i);
-        await user.clear(detailInput);
-        await user.type(detailInput, "ORGANIC");
-
-        // Submit — form.addCategory.save = "Save"
-        await user.click(screen.getByRole("button", { name: /^save$/i }));
-
-        expect(patchCalled).toBe(true);
-        expect(patchedId).toBe("1");
-    });
-
-    it("names the category, explains unlinking, and deletes the confirmed category", async () => {
-        const user = userEvent.setup();
-        let deletedId: string | undefined;
-        server.use(
-            http.get(`${API_BASE}/api/categories`, () =>
-                ok({
-                    items: [
-                        {
-                            id: 7,
-                            general: "FOOD",
-                            detail: "GROCERIES",
-                            is_active: true,
-                        },
-                    ],
-                    total: 1,
-                }),
-            ),
-            http.delete(`${API_BASE}/api/categories/:id`, ({ params }) => {
-                deletedId = params.id as string;
-                return new Response(null, { status: 204 });
-            }),
-        );
-
-        renderWithApp(<CategoriesPage />);
-        await user.click(await screen.findByRole("button", { name: /food/i }));
         await user.click(
-            await screen.findByRole("button", { name: /delete category/i }),
+            await screen.findByRole("button", { name: /^expand all$/i }),
         );
-
-        const dialog = await screen.findByRole("alertdialog");
-        expect(dialog).toHaveTextContent('Delete "FOOD:GROCERIES"?');
-        expect(dialog).toHaveTextContent(
-            /linked transactions and planned payments will become uncategorized/i,
-        );
-        expect(dialog).toHaveTextContent(
-            /recipient default categories will be cleared/i,
-        );
-        expect(deletedId).toBeUndefined();
-
-        await user.click(screen.getByRole("button", { name: /^delete$/i }));
-        await waitFor(() => expect(deletedId).toBe("7"));
-    });
-
-    // ─── Edge cases ────────────────────────────────────────────────────────
-
-    it("does not crash when categories endpoint returns 404", async () => {
-        const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-        server.use(
-            http.get(`${API_BASE}/api/categories`, () => err(404, "Not found")),
-        );
-        const { container } = renderWithApp(<CategoriesPage />);
-        await new Promise((r) => setTimeout(r, 200));
-        expect(container.firstChild).toBeTruthy();
-        errSpy.mockRestore();
-    });
-
-    it("after a successful create, the categories list refetches (stale refetch)", async () => {
-        let getCalls = 0;
-        server.use(
-            http.get(`${API_BASE}/api/categories`, () => {
-                getCalls += 1;
-                return ok({
-                    items: [],
-                    total: 0,
-                    limit: 200,
-                    offset: 0,
-                    links: [],
-                });
+        await user.click(
+            screen.getByRole("button", {
+                name: "Delete category FOOD / GROCERIES / ORGANIC / FRUIT",
             }),
-            http.post(`${API_BASE}/api/categories`, () =>
-                ok({
-                    id: 99,
-                    general: "FOOD",
-                    detail: "GROCERIES",
-                    is_active: true,
-                }),
-            ),
         );
-        const user = userEvent.setup();
-        renderWithApp(<CategoriesPage />);
-        await screen.findByRole("heading", { name: /^categories$/i });
-        const initial = getCalls;
-
-        const triggerBtn = await screen.findByRole("button", {
-            name: /add category/i,
-        });
-        await user.click(triggerBtn);
-        await screen.findByRole("dialog");
-        const generalInput = screen.getByLabelText(/general/i);
-        await user.type(generalInput, "FOOD");
-        const detailInput = screen.getByLabelText(/detail/i);
-        await user.type(detailInput, "GROCERIES");
-        await user.click(screen.getByRole("button", { name: /create/i }));
-
-        await waitFor(() => expect(getCalls).toBeGreaterThan(initial));
+        expect(deleted).toBe(false);
+        await user.click(screen.getByRole("button", { name: /^delete$/i }));
+        await waitFor(() => expect(deleted).toBe(true));
     });
 });

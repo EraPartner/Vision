@@ -31,6 +31,8 @@ interface MonthlyData {
 interface CategoryMonthlyData {
     categoryName: string;
     categoryId: number | null;
+    categoryPathIds?: number[];
+    categoryPathSegments?: string[];
     months: Record<string, number>;
     incomeMonths: Record<string, number>;
     expenseMonths: Record<string, number>;
@@ -212,6 +214,8 @@ export function mapToStatisticsData(
                 catMap.set(key, {
                     categoryName: item.categoryName,
                     categoryId: item.categoryId,
+                    categoryPathIds: item.categoryPathIds ?? [],
+                    categoryPathSegments: item.categoryPathSegments ?? [],
                     months: {},
                     incomeMonths: {},
                     expenseMonths: {},

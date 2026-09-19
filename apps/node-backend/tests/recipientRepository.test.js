@@ -81,7 +81,9 @@ describe("recipientRepository", () => {
       expect(n).toBe(42);
       const [sql, params] = query.mock.calls[0];
       expect(sql).toContain("count(*)");
-      expect(sql).toContain("r.default_category_id = $1");
+      expect(sql).toContain(
+        "r.default_category_id IN (SELECT category_id FROM category_ancestors WHERE ancestor_id = $1)",
+      );
       expect(params).toEqual([9]);
     });
   });

@@ -17,7 +17,12 @@ async function wipe() {
   await pool.query("DELETE FROM insight_dismissals");
   await pool.query("DELETE FROM insight_cash_projections");
   await pool.query("DELETE FROM recipients WHERE name LIKE 'Insight DB %'");
-  await pool.query("DELETE FROM categories WHERE general = 'INSIGHT_DB'");
+  await pool.query(
+    "DELETE FROM categories WHERE general = 'INSIGHT_DB' AND parent_id IS NOT NULL",
+  );
+  await pool.query(
+    "DELETE FROM categories WHERE general = 'INSIGHT_DB' AND parent_id IS NULL",
+  );
   await pool.query(
     `UPDATE insight_digest_state
         SET undismissed_count = NULL, dirty_version = 1,

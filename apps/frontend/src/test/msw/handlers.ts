@@ -363,6 +363,9 @@ export const defaultHandlers = [
     http.get(`${API_BASE}/api/categories`, () =>
         ok({ items: [], total: 0, limit: 200, offset: 0, links: [] }),
     ),
+    http.get(`${API_BASE}/api/categories/tree`, () =>
+        ok({ items: [], total: 0 }),
+    ),
     http.get(`${API_BASE}/api/recipients`, () =>
         ok({ items: [], total: 0, limit: 200, offset: 0, links: [] }),
     ),
@@ -632,6 +635,49 @@ export const defaultHandlers = [
     http.post(`${API_BASE}/api/categories`, () => ok(CATEGORY_STUB)),
     http.patch(`${API_BASE}/api/categories/:id`, () => ok(CATEGORY_STUB)),
     http.delete(`${API_BASE}/api/categories/:id`, () => noContent()),
+    http.post(`${API_BASE}/api/categories/tree`, () =>
+        ok201({
+            id: 1,
+            name: "FOOD",
+            parentId: null,
+            pathIds: [1],
+            path: ["FOOD"],
+            category_name: "FOOD",
+            depth: 1,
+            is_active: true,
+            hierarchyOnly: false,
+            legacyCompatible: false,
+        }),
+    ),
+    http.patch(`${API_BASE}/api/categories/tree/:id`, () =>
+        ok({
+            id: 1,
+            name: "FOOD",
+            parentId: null,
+            pathIds: [1],
+            path: ["FOOD"],
+            category_name: "FOOD",
+            depth: 1,
+            is_active: true,
+            hierarchyOnly: false,
+            legacyCompatible: false,
+        }),
+    ),
+    http.delete(`${API_BASE}/api/categories/tree/:id`, () => noContent()),
+    http.post(`${API_BASE}/api/categories/tree/:id/merge`, () =>
+        ok({
+            id: 2,
+            name: "TARGET",
+            parentId: null,
+            pathIds: [2],
+            path: ["TARGET"],
+            category_name: "TARGET",
+            depth: 1,
+            is_active: true,
+            hierarchyOnly: false,
+            legacyCompatible: false,
+        }),
+    ),
 
     http.post(`${API_BASE}/api/recipients`, () => ok(RECIPIENT_STUB)),
     http.patch(`${API_BASE}/api/recipients/:id`, () => ok(RECIPIENT_STUB)),

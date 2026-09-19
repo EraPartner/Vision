@@ -30,6 +30,7 @@ import {
 import {
   acquireDbSuiteLock,
   closeTestPool,
+  deleteAllCategoryFixtures,
   getTestPool,
   hasTestDatabase,
   releaseDbSuiteLock,
@@ -256,7 +257,7 @@ describe.skipIf(!hasTestDatabase())(
       await pool.query("DELETE FROM tags");
       await pool.query("DELETE FROM accounts");
       await pool.query("DELETE FROM recipients");
-      await pool.query("DELETE FROM categories");
+      await deleteAllCategoryFixtures(pool);
       for (const bag of [cat, rec, acc, tag, T])
         for (const k of Object.keys(bag)) delete bag[k];
     });

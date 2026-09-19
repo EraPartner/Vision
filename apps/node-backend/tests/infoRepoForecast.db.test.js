@@ -38,6 +38,7 @@ import {
 import {
   acquireDbSuiteLock,
   closeTestPool,
+  deleteAllCategoryFixtures,
   getTestPool,
   hasTestDatabase,
   releaseDbSuiteLock,
@@ -197,7 +198,7 @@ describe.skipIf(!hasTestDatabase())(
       await pool.query("DELETE FROM transactions");
       await pool.query("DELETE FROM accounts");
       await pool.query("DELETE FROM recipients");
-      await pool.query("DELETE FROM categories");
+      await deleteAllCategoryFixtures(pool);
       await pool.query("DELETE FROM exchange_rates");
       await pool.query(
         `DELETE FROM user_settings WHERE key = 'includeTransfers'`,
@@ -529,6 +530,7 @@ describe.skipIf(!hasTestDatabase())(
               category_id: cat.Food,
               general: "Food",
               detail: "Groceries",
+              path_name: "Food:Groceries",
               net: -75,
             },
             {
@@ -536,6 +538,7 @@ describe.skipIf(!hasTestDatabase())(
               category_id: cat.Bills,
               general: "Bills",
               detail: "Utilities",
+              path_name: "Bills:Utilities",
               net: -1000,
             },
             {
@@ -543,6 +546,7 @@ describe.skipIf(!hasTestDatabase())(
               category_id: null,
               general: "Uncategorized",
               detail: "Uncategorized",
+              path_name: "Uncategorized",
               net: -10,
             },
           ]),
@@ -558,6 +562,7 @@ describe.skipIf(!hasTestDatabase())(
             category_id: cat.Food,
             general: "Food",
             detail: "Groceries",
+            path_name: "Food:Groceries",
             net: today === lastDay ? -12 : -5,
           },
         ]);
@@ -570,6 +575,7 @@ describe.skipIf(!hasTestDatabase())(
                   category_id: cat.Food,
                   general: "Food",
                   detail: "Groceries",
+                  path_name: "Food:Groceries",
                   net: -7,
                 },
               ],
@@ -665,6 +671,7 @@ describe.skipIf(!hasTestDatabase())(
             category_id: cat.Food,
             general: "Food",
             detail: "Groceries",
+            path_name: "Food:Groceries",
             net: -100,
           },
         ]);
@@ -675,6 +682,7 @@ describe.skipIf(!hasTestDatabase())(
             category_id: null,
             general: "Uncategorized",
             detail: "Uncategorized",
+            path_name: "Uncategorized",
             net: 50,
           },
         ]);
@@ -725,6 +733,7 @@ describe.skipIf(!hasTestDatabase())(
             category_id: null,
             general: "Uncategorized",
             detail: "Uncategorized",
+            path_name: "Uncategorized",
             net: -1000,
           },
         ]);

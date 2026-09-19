@@ -176,6 +176,21 @@ describe("computeCategoryBreakdown", () => {
     expectEnvelope(env, { source: "mv" });
     expect(env.data).toEqual({ categories: [{ id: 1 }] });
   });
+
+  it("requests one live ancestor rollup without changing the default path", async () => {
+    infoRepository.getCategoryBreakdown.mockResolvedValueOnce([
+      { id: 12, name: "Food", count: 3, total: -60 },
+    ]);
+    const env = await computeCategoryBreakdown({
+      targetCurrency: "EUR",
+      ancestorCategoryId: 12,
+    });
+    expect(infoRepository.getCategoryBreakdown).toHaveBeenCalledWith("EUR", 12);
+    expect(env.meta.source).toBe("live");
+    expect(env.data.categories).toEqual([
+      { id: 12, name: "Food", count: 3, total: -60 },
+    ]);
+  });
 });
 
 describe("computeRecipientInsights", () => {

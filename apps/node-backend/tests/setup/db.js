@@ -55,6 +55,25 @@ export function hasTestDatabase() {
   return Boolean(process.env.TEST_DATABASE_URL);
 }
 
+/**
+ * Delete category fixtures from leaves toward roots. The hierarchy's
+ * restrictive self-reference intentionally rejects deleting a parent that
+ * still has children; a broad single-statement DELETE is no longer valid.
+ * Call only after other fixture tables that reference categories are cleared.
+ * @param {import('pg').Pool | import('pg').PoolClient} pool
+ */
+export async function deleteAllCategoryFixtures(pool) {
+  await pool.query("DELETE FROM category_merge_aliases");
+  await pool.query("DELETE FROM category_root_aliases");
+  let deleted;
+  do {
+    ({ rowCount: deleted } = await pool.query(`
+      DELETE FROM categories c
+      WHERE NOT EXISTS (SELECT 1 FROM categories child WHERE child.parent_id = c.id)
+    `));
+  } while (deleted > 0);
+}
+
 // ── Cross-suite serialization ───────────────────────────────────────────────
 // Vitest runs test FILES in parallel workers, but every DB-backed suite shares
 // the one TEST_DATABASE_URL database and wipes whole tables between tests —

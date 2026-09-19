@@ -906,10 +906,44 @@ describe("buildCategoryBreakdown", () => {
       expect(item).toHaveProperty("category_id");
       expect(item).toHaveProperty("general");
       expect(item).toHaveProperty("detail");
+      expect(item).toHaveProperty("path_name");
       expect(Array.isArray(item.actual)).toBe(true);
       expect(Array.isArray(item.forecast)).toBe(true);
       expect(Array.isArray(item.cumulative)).toBe(true);
     }
+  });
+
+  it("keeps one series per stable category ID after a path rename", () => {
+    const result = buildCategoryBreakdown({
+      historyByCategory: [
+        {
+          date: "2025-04-03",
+          category_id: 7,
+          general: "OLD",
+          detail: "NAME",
+          path_name: "Old:Name",
+          net: -10,
+        },
+      ],
+      currentActualByCategory: [
+        {
+          date: "2026-04-01",
+          category_id: 7,
+          general: "NEW",
+          detail: "NAME",
+          path_name: "New:Branch:Name",
+          net: -5,
+        },
+      ],
+      future,
+      all,
+      todayDay,
+      referenceDaily,
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0].category_id).toBe(7);
+    expect(result[0].path_name).toBe("New:Branch:Name");
+    expect(result[0].actual[0].net).toBe(-5);
   });
 
   it("actual rows null after todayDay", () => {

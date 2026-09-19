@@ -21,19 +21,25 @@
  * falls back from is transactional, so it starts on an unchanged database.
  */
 
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
-import { parse } from 'csv-parse/sync';
-import { parseCategoryName } from '@vision/shared-utils';
-import { logger } from '../config/logger.js';
-import { query, withTransaction } from '../database/connection.js';
-import { normalizeForMatching } from '../lib/textNormalization.js';
-import { recipientRepository } from '../repositories/recipientRepository.js';
-import { categoryRepository } from '../repositories/categoryRepository.js';
-import { recipientBankAccountRepository } from '../repositories/recipientBankAccountRepository.js';
+import fs from "fs";
+import os from "os";
+import path from "path";
+import { parse } from "csv-parse/sync";
+import { parseCategoryName } from "@vision/shared-utils";
+import { logger } from "../config/logger.js";
+import { query, withTransaction } from "../database/connection.js";
+import { normalizeForMatching } from "../lib/textNormalization.js";
+import { recipientRepository } from "../repositories/recipientRepository.js";
+import { categoryRepository } from "../repositories/categoryRepository.js";
+import { recipientBankAccountRepository } from "../repositories/recipientBankAccountRepository.js";
 
-const ALLOWED_ENCODINGS = new Set(['utf-8', 'utf8', 'latin1', 'iso-8859-1', 'windows-1252']);
+const ALLOWED_ENCODINGS = new Set([
+  "utf-8",
+  "utf8",
+  "latin1",
+  "iso-8859-1",
+  "windows-1252",
+]);
 const SAFE_BASENAME_RE = /^[A-Za-z0-9._-]+$/;
 
 /**
@@ -90,10 +96,15 @@ const SAFE_BASENAME_RE = /^[A-Za-z0-9._-]+$/;
 async function safeReadCsv(filePath, encoding) {
   const basename = path.basename(filePath);
   if (!SAFE_BASENAME_RE.test(basename)) {
-    throw new Error('Refusing to read CSV with unsafe filename');
+    throw new Error("Refusing to read CSV with unsafe filename");
   }
-  const safeEncoding = ALLOWED_ENCODINGS.has(String(encoding).toLowerCase()) ? encoding : 'utf-8';
-  return fs.promises.readFile(path.join(os.tmpdir(), basename), /** @type {BufferEncoding} */ (safeEncoding));
+  const safeEncoding = ALLOWED_ENCODINGS.has(String(encoding).toLowerCase())
+    ? encoding
+    : "utf-8";
+  return fs.promises.readFile(
+    path.join(os.tmpdir(), basename),
+    /** @type {BufferEncoding} */ (safeEncoding),
+  );
 }
 
 // ─── Shared resolution ────────────────────────────────────────────────────────
@@ -112,7 +123,10 @@ async function safeReadCsv(filePath, encoding) {
  */
 function parseCategoryPair(categoryStr) {
   const parsed = parseCategoryName(categoryStr);
-  return { general: parsed.general.toUpperCase(), detail: parsed.detail.toUpperCase() };
+  return {
+    general: parsed.general.toUpperCase(),
+    detail: parsed.detail.toUpperCase(),
+  };
 }
 
 /**
@@ -130,10 +144,14 @@ function categoryKeyOf(pair) {
  */
 async function selectCategories(generals, details) {
   const result = await query(
-    `SELECT c.id, c.general, c.detail
-       FROM categories c
-       JOIN UNNEST($1::text[], $2::text[]) AS want(general, detail)
-         ON c.general = want.general AND c.detail = want.detail`,
+    `SELECT COALESCE(c.id, a.target_category_id) AS id,
+            want.general, want.detail
+       FROM UNNEST($1::text[], $2::text[]) AS want(general, detail)
+       LEFT JOIN categories c
+         ON c.general = want.general AND c.detail = want.detail
+       LEFT JOIN category_merge_aliases a
+         ON a.general = want.general AND a.detail = want.detail
+       WHERE c.id IS NOT NULL OR a.target_category_id IS NOT NULL`,
     [generals, details],
   );
   return result.rows;
@@ -152,8 +170,14 @@ async function resolveCategories(pairs) {
   /** @type {Map<string, { id: number, created: boolean }>} */
   const resolved = new Map();
   if (pairs.length === 0) return resolved;
+  // Both batch call sites run inside withTransaction. Serialize with merges so
+  // a pair cannot be reinserted between alias lookup and insertion.
+  await query("SELECT pg_advisory_xact_lock(1128356178, 1)");
 
-  for (const row of await selectCategories(pairs.map((p) => p.general), pairs.map((p) => p.detail))) {
+  for (const row of await selectCategories(
+    pairs.map((p) => p.general),
+    pairs.map((p) => p.detail),
+  )) {
     resolved.set(categoryKeyOf(row), { id: row.id, created: false });
   }
 
@@ -167,7 +191,9 @@ async function resolveCategories(pairs) {
      RETURNING id, general, detail`,
     [missing.map((p) => p.general), missing.map((p) => p.detail)],
   );
-  for (const row of /** @type {{ id: number, general: string, detail: string }[]} */ (inserted.rows)) {
+  for (const row of /** @type {{ id: number, general: string, detail: string }[]} */ (
+    inserted.rows
+  )) {
     resolved.set(categoryKeyOf(row), { id: row.id, created: true });
   }
 
@@ -176,7 +202,10 @@ async function resolveCategories(pairs) {
   // SELECT covers. Such a row exists but is not ours, hence created: false.
   const raced = missing.filter((p) => !resolved.has(categoryKeyOf(p)));
   if (raced.length > 0) {
-    for (const row of await selectCategories(raced.map((p) => p.general), raced.map((p) => p.detail))) {
+    for (const row of await selectCategories(
+      raced.map((p) => p.general),
+      raced.map((p) => p.detail),
+    )) {
       resolved.set(categoryKeyOf(row), { id: row.id, created: false });
     }
   }
@@ -232,8 +261,15 @@ async function resolveRecipients(names) {
      RETURNING id, normalized_name`,
     [missing.map((n) => n.upper), missing.map((n) => n.normalized)],
   );
-  for (const row of /** @type {{ id: number, normalized_name: string }[]} */ (inserted.rows)) {
-    resolved.set(row.normalized_name, { id: row.id, created: true, notes: null, defaultCategoryId: null });
+  for (const row of /** @type {{ id: number, normalized_name: string }[]} */ (
+    inserted.rows
+  )) {
+    resolved.set(row.normalized_name, {
+      id: row.id,
+      created: true,
+      notes: null,
+      defaultCategoryId: null,
+    });
   }
 
   const raced = missing.filter((n) => !resolved.has(n.normalized));
@@ -265,13 +301,13 @@ function readRecipientRow(record) {
   /** @param {string} name */
   const col = (name) => {
     const key = rowKeys.find((k) => k.toLowerCase().trim() === name);
-    return key ? (record[key] ?? '').trim() : '';
+    return key ? (record[key] ?? "").trim() : "";
   };
   return {
-    name: col('name'),
-    bankAccount: col('bank_account') || col('account_number'),
-    address: col('address'),
-    categoryStr: col('category'),
+    name: col("name"),
+    bankAccount: col("bank_account") || col("account_number"),
+    address: col("address"),
+    categoryStr: col("category"),
   };
 }
 
@@ -289,20 +325,30 @@ function readRecipientRow(record) {
  * @param {(one: U) => Promise<unknown>} single
  * @returns {Promise<void>}
  */
-async function flushRecipientUpdates(updates, outcomes, label, batched, single) {
+async function flushRecipientUpdates(
+  updates,
+  outcomes,
+  label,
+  batched,
+  single,
+) {
   if (updates.length === 0) return;
   try {
     await batched(updates);
     return;
   } catch (err) {
-    logger.warn(`Recipient import: batched ${label} update failed, applying per row: ${err.message}`);
+    logger.warn(
+      `Recipient import: batched ${label} update failed, applying per row: ${err.message}`,
+    );
   }
   for (const update of updates) {
     try {
       await single(update);
     } catch (err) {
-      logger.warn(`Recipient import: error processing "${update.name}": ${err.message}`);
-      outcomes[update.rowIndex] = 'error';
+      logger.warn(
+        `Recipient import: error processing "${update.name}": ${err.message}`,
+      );
+      outcomes[update.rowIndex] = "error";
     }
   }
 }
@@ -327,11 +373,15 @@ async function importRecipientRowsBatched(rows, results) {
   for (const row of rows) {
     const normalized = normalizeForMatching(row.name);
     if (!distinctNames.has(normalized)) {
-      distinctNames.set(normalized, { upper: row.name.toUpperCase().trim(), normalized });
+      distinctNames.set(normalized, {
+        upper: row.name.toUpperCase().trim(),
+        normalized,
+      });
     }
     if (row.categoryStr) {
       const pair = parseCategoryPair(row.categoryStr);
-      if (pair.general && pair.detail) distinctPairs.set(categoryKeyOf(pair), pair);
+      if (pair.general && pair.detail)
+        distinctPairs.set(categoryKeyOf(pair), pair);
     }
   }
 
@@ -359,19 +409,31 @@ async function importRecipientRowsBatched(rows, results) {
     const row = rows[i];
     const recipient = recipients.get(normalizeForMatching(row.name));
     if (!recipient) {
-      logger.warn(`Recipient import: error processing "${row.name}": recipient could not be resolved`);
-      outcomes[i] = 'error';
+      logger.warn(
+        `Recipient import: error processing "${row.name}": recipient could not be resolved`,
+      );
+      outcomes[i] = "error";
       continue;
     }
 
     // Store address in notes only if the recipient is new or has no notes
     if (row.address && !recipient.notes) {
-      notesUpdates.push({ rowIndex: i, name: row.name, id: recipient.id, notes: row.address });
+      notesUpdates.push({
+        rowIndex: i,
+        name: row.name,
+        id: recipient.id,
+        notes: row.address,
+      });
       recipient.notes = row.address;
     }
 
     if (row.bankAccount) {
-      bankAccounts.push({ rowIndex: i, name: row.name, id: recipient.id, accountNumber: row.bankAccount });
+      bankAccounts.push({
+        rowIndex: i,
+        name: row.name,
+        id: recipient.id,
+        accountNumber: row.bankAccount,
+      });
     }
 
     if (row.categoryStr) {
@@ -379,21 +441,30 @@ async function importRecipientRowsBatched(rows, results) {
       if (pair.general && pair.detail) {
         const category = categories.get(categoryKeyOf(pair));
         if (!category) {
-          logger.warn(`Recipient import: error processing "${row.name}": category could not be resolved`);
-          outcomes[i] = 'error';
+          logger.warn(
+            `Recipient import: error processing "${row.name}": category could not be resolved`,
+          );
+          outcomes[i] = "error";
           continue;
         }
         // Only set if no default category yet (never overwrite existing
         // assignment) — within one file that makes the first category named
         // for a recipient the one that sticks, as the guarded UPDATE did.
         if (recipient.defaultCategoryId == null) {
-          categoryUpdates.push({ rowIndex: i, name: row.name, id: recipient.id, categoryId: category.id });
+          categoryUpdates.push({
+            rowIndex: i,
+            name: row.name,
+            id: recipient.id,
+            categoryId: category.id,
+          });
           recipient.defaultCategoryId = category.id;
         }
-      } else if (row.categoryStr.indexOf(':') <= 0) {
+      } else if (row.categoryStr.indexOf(":") <= 0) {
         // Same warn condition as the old colonIdx <= 0 branch; an empty
         // part after a well-placed ':' stays a silent skip, as before.
-        logger.warn(`Recipient import: invalid category format "${row.categoryStr}" for "${row.name}" — expected GENERAL:DETAIL`);
+        logger.warn(
+          `Recipient import: invalid category format "${row.categoryStr}" for "${row.name}" — expected GENERAL:DETAIL`,
+        );
       }
     }
 
@@ -401,55 +472,70 @@ async function importRecipientRowsBatched(rows, results) {
     // line created, which the loop counted as skipped.
     const firstOccurrence = !counted.has(recipient.id);
     counted.add(recipient.id);
-    outcomes[i] = recipient.created && firstOccurrence ? 'imported' : 'skipped';
+    outcomes[i] = recipient.created && firstOccurrence ? "imported" : "skipped";
   }
 
   // Ordered as the loop ordered them per row: notes, then bank account, then
   // default category.
   await flushRecipientUpdates(
-    notesUpdates, outcomes, 'notes',
-    (all) => query(
-      `UPDATE recipients r SET notes = u.notes
+    notesUpdates,
+    outcomes,
+    "notes",
+    (all) =>
+      query(
+        `UPDATE recipients r SET notes = u.notes
          FROM UNNEST($1::int[], $2::text[]) AS u(id, notes)
         WHERE r.id = u.id`,
-      [all.map((u) => u.id), all.map((u) => u.notes)],
-    ),
-    (one) => query(`UPDATE recipients SET notes = $1 WHERE id = $2`, [one.notes, one.id]),
+        [all.map((u) => u.id), all.map((u) => u.notes)],
+      ),
+    (one) =>
+      query(`UPDATE recipients SET notes = $1 WHERE id = $2`, [
+        one.notes,
+        one.id,
+      ]),
   );
 
   for (const account of bankAccounts) {
     // A row the notes flush charged as an error never reached its bank account
     // in the loop either.
-    if (outcomes[account.rowIndex] === 'error') continue;
-    await recipientBankAccountRepository.createOrGet({
-      recipientId: account.id,
-      accountNumber: account.accountNumber,
-      setAsPrimary: false,
-    }).catch((err) => {
-      logger.warn(`Recipient import: could not add bank account for "${account.name}": ${err.message}`);
-      results.bank_account_errors++;
-    });
+    if (outcomes[account.rowIndex] === "error") continue;
+    await recipientBankAccountRepository
+      .createOrGet({
+        recipientId: account.id,
+        accountNumber: account.accountNumber,
+        setAsPrimary: false,
+      })
+      .catch((err) => {
+        logger.warn(
+          `Recipient import: could not add bank account for "${account.name}": ${err.message}`,
+        );
+        results.bank_account_errors++;
+      });
   }
 
   // A row the notes replay charged as an error stopped there in the per-row
   // loop — its category assignment must not still land.
   await flushRecipientUpdates(
-    categoryUpdates.filter((u) => outcomes[u.rowIndex] !== 'error'), outcomes, 'default category',
-    (all) => query(
-      `UPDATE recipients r SET default_category_id = u.category_id
+    categoryUpdates.filter((u) => outcomes[u.rowIndex] !== "error"),
+    outcomes,
+    "default category",
+    (all) =>
+      query(
+        `UPDATE recipients r SET default_category_id = u.category_id
          FROM UNNEST($1::int[], $2::int[]) AS u(id, category_id)
         WHERE r.id = u.id AND r.default_category_id IS NULL`,
-      [all.map((u) => u.id), all.map((u) => u.categoryId)],
-    ),
-    (one) => query(
-      `UPDATE recipients SET default_category_id = $1 WHERE id = $2 AND default_category_id IS NULL`,
-      [one.categoryId, one.id],
-    ),
+        [all.map((u) => u.id), all.map((u) => u.categoryId)],
+      ),
+    (one) =>
+      query(
+        `UPDATE recipients SET default_category_id = $1 WHERE id = $2 AND default_category_id IS NULL`,
+        [one.categoryId, one.id],
+      ),
   );
 
   for (const outcome of outcomes) {
-    if (outcome === 'imported') results.imported++;
-    else if (outcome === 'skipped') results.skipped++;
+    if (outcome === "imported") results.imported++;
+    else if (outcome === "skipped") results.skipped++;
     else results.errors++;
   }
 }
@@ -468,33 +554,47 @@ async function importRecipientRowsBatched(rows, results) {
 async function importRecipientRowsPerRow(rows, results) {
   for (const row of rows) {
     try {
-      const { recipient, created } = await recipientRepository.createOrGet({ name: row.name });
+      const { recipient, created } = await recipientRepository.createOrGet({
+        name: row.name,
+      });
 
       if (row.address && !recipient.notes) {
-        await query(`UPDATE recipients SET notes = $1 WHERE id = $2`, [row.address, recipient.id]);
+        await query(`UPDATE recipients SET notes = $1 WHERE id = $2`, [
+          row.address,
+          recipient.id,
+        ]);
       }
 
       if (row.bankAccount) {
-        await recipientBankAccountRepository.createOrGet({
-          recipientId: recipient.id,
-          accountNumber: row.bankAccount,
-          setAsPrimary: false,
-        }).catch((err) => {
-          logger.warn(`Recipient import: could not add bank account for "${row.name}": ${err.message}`);
-          results.bank_account_errors++;
-        });
+        await recipientBankAccountRepository
+          .createOrGet({
+            recipientId: recipient.id,
+            accountNumber: row.bankAccount,
+            setAsPrimary: false,
+          })
+          .catch((err) => {
+            logger.warn(
+              `Recipient import: could not add bank account for "${row.name}": ${err.message}`,
+            );
+            results.bank_account_errors++;
+          });
       }
 
       if (row.categoryStr) {
         const { general, detail } = parseCategoryPair(row.categoryStr);
         if (general && detail) {
-          const { category } = await categoryRepository.createOrGet({ general, detail });
+          const { category } = await categoryRepository.createOrGet({
+            general,
+            detail,
+          });
           await query(
             `UPDATE recipients SET default_category_id = $1 WHERE id = $2 AND default_category_id IS NULL`,
             [category.id, recipient.id],
           );
-        } else if (row.categoryStr.indexOf(':') <= 0) {
-          logger.warn(`Recipient import: invalid category format "${row.categoryStr}" for "${row.name}" — expected GENERAL:DETAIL`);
+        } else if (row.categoryStr.indexOf(":") <= 0) {
+          logger.warn(
+            `Recipient import: invalid category format "${row.categoryStr}" for "${row.name}" — expected GENERAL:DETAIL`,
+          );
         }
       }
 
@@ -504,7 +604,9 @@ async function importRecipientRowsPerRow(rows, results) {
         results.skipped++;
       }
     } catch (err) {
-      logger.warn(`Recipient import: error processing "${row.name}": ${err.message}`);
+      logger.warn(
+        `Recipient import: error processing "${row.name}": ${err.message}`,
+      );
       results.errors++;
     }
   }
@@ -519,52 +621,65 @@ async function importRecipientRowsPerRow(rows, results) {
  * @param {string} [options.encoding]  - File encoding (default: 'utf-8')
  * @returns {Promise<RecipientImportResults>}
  */
-export async function importRecipientsCSV(filePath, { separator = ',', encoding = 'utf-8' } = {}) {
-    const content = await safeReadCsv(filePath, encoding);
+export async function importRecipientsCSV(
+  filePath,
+  { separator = ",", encoding = "utf-8" } = {},
+) {
+  const content = await safeReadCsv(filePath, encoding);
 
-    // csv-parse's `columns: true` overload is generic (`T = unknown`) and infers
-    // `{}` with no column list supplied — annotate to the actual shape
-    // (header name -> cell string) so downstream property/index access typechecks.
-    /** @type {Record<string, string>[]} */
-    let records;
+  // csv-parse's `columns: true` overload is generic (`T = unknown`) and infers
+  // `{}` with no column list supplied — annotate to the actual shape
+  // (header name -> cell string) so downstream property/index access typechecks.
+  /** @type {Record<string, string>[]} */
+  let records;
+  try {
+    records = parse(content, {
+      columns: true,
+      skip_empty_lines: true,
+      trim: true,
+      delimiter: separator,
+      relax_column_count: true,
+    });
+  } catch (parseErr) {
+    throw new Error(`CSV parse error: ${parseErr.message}`, {
+      cause: parseErr,
+    });
+  }
+
+  const results = {
+    total_processed: records.length,
+    imported: 0,
+    skipped: 0,
+    errors: 0,
+    bank_account_errors: 0,
+  };
+  if (records.length === 0) return results;
+
+  /** @type {RecipientCsvRow[]} */
+  const rows = [];
+  for (const record of records) {
+    const row = readRecipientRow(record);
+    if (!row.name) {
+      logger.warn("Recipient import: skipping row with missing name");
+      results.errors++;
+      continue;
+    }
+    rows.push(row);
+  }
+
+  if (rows.length > 0) {
     try {
-        records = parse(content, {
-            columns: true,
-            skip_empty_lines: true,
-            trim: true,
-            delimiter: separator,
-            relax_column_count: true,
-        });
-    } catch (parseErr) {
-        throw new Error(`CSV parse error: ${parseErr.message}`, { cause: parseErr });
+      await importRecipientRowsBatched(rows, results);
+    } catch (err) {
+      logger.warn(
+        `Recipient import: batched resolve unavailable, falling back to per-row: ${err.message}`,
+      );
+      await importRecipientRowsPerRow(rows, results);
     }
+  }
 
-    const results = { total_processed: records.length, imported: 0, skipped: 0, errors: 0, bank_account_errors: 0 };
-    if (records.length === 0) return results;
-
-    /** @type {RecipientCsvRow[]} */
-    const rows = [];
-    for (const record of records) {
-        const row = readRecipientRow(record);
-        if (!row.name) {
-            logger.warn('Recipient import: skipping row with missing name');
-            results.errors++;
-            continue;
-        }
-        rows.push(row);
-    }
-
-    if (rows.length > 0) {
-        try {
-            await importRecipientRowsBatched(rows, results);
-        } catch (err) {
-            logger.warn(`Recipient import: batched resolve unavailable, falling back to per-row: ${err.message}`);
-            await importRecipientRowsPerRow(rows, results);
-        }
-    }
-
-    logger.info('Recipient CSV import complete', results);
-    return results;
+  logger.info("Recipient CSV import complete", results);
+  return results;
 }
 
 // ─── Categories ───────────────────────────────────────────────────────────────
@@ -579,12 +694,15 @@ async function importCategoryRowsBatched(rows, results) {
   const distinct = new Map();
   for (const row of rows) {
     const key = categoryKeyOf(row);
-    if (!distinct.has(key)) distinct.set(key, { general: row.general, detail: row.detail });
+    if (!distinct.has(key))
+      distinct.set(key, { general: row.general, detail: row.detail });
   }
 
   // Transactional for the same reason as the recipient resolve: the fallback
   // below must start from a database this call did not touch.
-  const resolved = await withTransaction(() => resolveCategories([...distinct.values()]));
+  const resolved = await withTransaction(() =>
+    resolveCategories([...distinct.values()]),
+  );
 
   /** @type {Set<string>} */
   const counted = new Set();
@@ -592,7 +710,9 @@ async function importCategoryRowsBatched(rows, results) {
     const key = categoryKeyOf(row);
     const category = resolved.get(key);
     if (!category) {
-      logger.warn(`Category import: error processing "${row.raw}": category could not be resolved`);
+      logger.warn(
+        `Category import: error processing "${row.raw}": category could not be resolved`,
+      );
       results.errors++;
       continue;
     }
@@ -617,14 +737,19 @@ async function importCategoryRowsBatched(rows, results) {
 async function importCategoryRowsPerRow(rows, results) {
   for (const row of rows) {
     try {
-      const { created } = await categoryRepository.createOrGet({ general: row.general, detail: row.detail });
+      const { created } = await categoryRepository.createOrGet({
+        general: row.general,
+        detail: row.detail,
+      });
       if (created) {
         results.imported++;
       } else {
         results.skipped++;
       }
     } catch (err) {
-      logger.warn(`Category import: error processing "${row.raw}": ${err.message}`);
+      logger.warn(
+        `Category import: error processing "${row.raw}": ${err.message}`,
+      );
       results.errors++;
     }
   }
@@ -639,65 +764,82 @@ async function importCategoryRowsPerRow(rows, results) {
  * @param {string} [options.encoding]  - File encoding (default: 'utf-8')
  * @returns {Promise<{total_processed: number, imported: number, skipped: number, errors: number}>}
  */
-export async function importCategoriesCSV(filePath, { separator = ',', encoding = 'utf-8' } = {}) {
-    const content = await safeReadCsv(filePath, encoding);
+export async function importCategoriesCSV(
+  filePath,
+  { separator = ",", encoding = "utf-8" } = {},
+) {
+  const content = await safeReadCsv(filePath, encoding);
 
-    /** @type {Record<string, string>[]} */
-    let records;
+  /** @type {Record<string, string>[]} */
+  let records;
+  try {
+    records = parse(content, {
+      columns: true,
+      skip_empty_lines: true,
+      trim: true,
+      delimiter: separator,
+      relax_column_count: true,
+    });
+  } catch (parseErr) {
+    throw new Error(`CSV parse error: ${parseErr.message}`, {
+      cause: parseErr,
+    });
+  }
+
+  const results = {
+    total_processed: records.length,
+    imported: 0,
+    skipped: 0,
+    errors: 0,
+  };
+  if (records.length === 0) return results;
+
+  // Determine the column to read from: prefer "category", fall back to first column
+  const firstKey = Object.keys(records[0])[0];
+  const categoryKey =
+    Object.keys(records[0]).find(
+      (k) => k.toLowerCase().trim() === "category",
+    ) ?? firstKey;
+
+  /** @type {CategoryCsvRow[]} */
+  const rows = [];
+  for (const record of records) {
+    const raw = (record[categoryKey] ?? "").trim();
+    if (!raw) {
+      results.errors++;
+      continue;
+    }
+
+    // No ':' at all is a format error; empty parts are flagged below.
+    if (!raw.includes(":")) {
+      logger.warn(
+        `Category import: invalid format "${raw}" — expected GENERAL:DETAIL`,
+      );
+      results.errors++;
+      continue;
+    }
+
+    const { general, detail } = parseCategoryPair(raw);
+    if (!general || !detail) {
+      logger.warn(`Category import: empty general or detail in "${raw}"`);
+      results.errors++;
+      continue;
+    }
+
+    rows.push({ raw, general, detail });
+  }
+
+  if (rows.length > 0) {
     try {
-        records = parse(content, {
-            columns: true,
-            skip_empty_lines: true,
-            trim: true,
-            delimiter: separator,
-            relax_column_count: true,
-        });
-    } catch (parseErr) {
-        throw new Error(`CSV parse error: ${parseErr.message}`, { cause: parseErr });
+      await importCategoryRowsBatched(rows, results);
+    } catch (err) {
+      logger.warn(
+        `Category import: batched resolve unavailable, falling back to per-row: ${err.message}`,
+      );
+      await importCategoryRowsPerRow(rows, results);
     }
+  }
 
-    const results = { total_processed: records.length, imported: 0, skipped: 0, errors: 0 };
-    if (records.length === 0) return results;
-
-    // Determine the column to read from: prefer "category", fall back to first column
-    const firstKey = Object.keys(records[0])[0];
-    const categoryKey = Object.keys(records[0]).find(k => k.toLowerCase().trim() === 'category') ?? firstKey;
-
-    /** @type {CategoryCsvRow[]} */
-    const rows = [];
-    for (const record of records) {
-        const raw = (record[categoryKey] ?? '').trim();
-        if (!raw) {
-            results.errors++;
-            continue;
-        }
-
-        // No ':' at all is a format error; empty parts are flagged below.
-        if (!raw.includes(':')) {
-            logger.warn(`Category import: invalid format "${raw}" — expected GENERAL:DETAIL`);
-            results.errors++;
-            continue;
-        }
-
-        const { general, detail } = parseCategoryPair(raw);
-        if (!general || !detail) {
-            logger.warn(`Category import: empty general or detail in "${raw}"`);
-            results.errors++;
-            continue;
-        }
-
-        rows.push({ raw, general, detail });
-    }
-
-    if (rows.length > 0) {
-        try {
-            await importCategoryRowsBatched(rows, results);
-        } catch (err) {
-            logger.warn(`Category import: batched resolve unavailable, falling back to per-row: ${err.message}`);
-            await importCategoryRowsPerRow(rows, results);
-        }
-    }
-
-    logger.info('Category CSV import complete', results);
-    return results;
+  logger.info("Category CSV import complete", results);
+  return results;
 }

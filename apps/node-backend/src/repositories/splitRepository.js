@@ -372,9 +372,9 @@ export const splitRepository = {
         -- differently-defaulted PRIMARY exported the primary's category name
         -- while the transactions list showed the alias's.
         CASE
-          WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
-          WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
-          WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
+          WHEN c.id IS NOT NULL THEN c.path_name
+          WHEN rc.id IS NOT NULL THEN rc.path_name
+          WHEN pc.id IS NOT NULL THEN pc.path_name
           ELSE ''
         END AS category_name,
         t.comment

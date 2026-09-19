@@ -31,6 +31,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   acquireDbSuiteLock,
   closeTestPool,
+  deleteAllCategoryFixtures,
   getTestPool,
   hasTestDatabase,
   releaseDbSuiteLock,
@@ -129,7 +130,7 @@ async function wipeAll() {
   await pool.query("DELETE FROM portfolio_performance_snapshots");
   await pool.query("DELETE FROM accounts");
   await pool.query("DELETE FROM recipients");
-  await pool.query("DELETE FROM categories");
+  await deleteAllCategoryFixtures(pool);
   await pool.query("DELETE FROM exchange_rates");
   await pool.query(`DELETE FROM user_settings WHERE key = 'includeTransfers'`);
   for (const bag of [cat, rec]) for (const k of Object.keys(bag)) delete bag[k];

@@ -16,6 +16,7 @@ import { useMemo } from "react";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { useStatistics } from "@/hooks/useStatistics";
+import { matchesCategorySelection } from "@/lib/categoryHierarchy";
 
 export interface AvailableTaxYear {
     year: number;
@@ -78,11 +79,7 @@ export function useAvailableTaxYears(): AvailableTaxYear[] {
         const pivot = stats.data?.categoryPivot ?? [];
         if (taxIncomeCategoryIds.size === 0) return years;
         for (const cat of pivot) {
-            if (
-                cat.categoryId == null ||
-                !taxIncomeCategoryIds.has(cat.categoryId)
-            )
-                continue;
+            if (!matchesCategorySelection(cat, taxIncomeCategoryIds)) continue;
             for (const [period, amount] of Object.entries(cat.incomeMonths)) {
                 if (amount <= 0) continue;
                 const y = yearFromMonthKey(period);
