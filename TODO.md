@@ -367,6 +367,167 @@ optional enhancement, not a prerequisite for the original six-stage local analys
 
 ### 🔒 Security and access control
 
+- [] **Trying to open the Statistics page or scrolling down far enough on the Tax page gives a server error and a blank page** ⏫
+  - Tracking: 🔎 decision-needed 2026-09-09 (the error is reproducible on a fresh install; the root cause is unknown)
+  - ↪ _from: User report 2026-09-08 · Statistics/Tax page server error_
+  - Reproduce the error on a fresh install with no user data. Inspect the server logs and stack trace.
+    Determine whether the error is due to missing data, a misconfigured route, or a bug in the rendering
+    logic. Exit: fix the underlying issue
+
+- [ ] **Harden dependency admission, CI, releases and desktop updates to a balanced supply-chain baseline** ⏬
+  - Tracking: 🔎 decision-needed 2026-09-18 (the only remaining sequencing decision is whether
+    every item in the fixed prerequisite snapshot below has been closed or explicitly superseded)
+  - ↪ _from: User supply-chain hardening decision 2026-09-18 · balanced security level_
+  - **Sequencing gate:** do not select or start this epic before all eleven other TODO items that
+    existed on 2026-09-18 are closed or explicitly superseded. TODO items added after this snapshot
+    do not extend the gate. An urgent vulnerability containment may land earlier, but it does not
+    start or close this epic.
+  - **Fixed prerequisite snapshot (11 items):**
+    1. Trying to open the Statistics page or scrolling down far enough on the Tax page gives a
+       server error and a blank page.
+    2. Make privileged audit trails tamper-evident without turning them into signed reports.
+    3. Add isolated opt-in Codex subscription access through a supported integration.
+    4. Evaluate cloud-assistance privacy boundaries and usefulness before release.
+    5. Make category hierarchies depth-agnostic without changing existing financial results.
+    6. Create persistent research dossiers linked to investments or budgeting topics.
+    7. Monitor saved analysis conditions and evidence changes with meaningful notifications.
+    8. Evaluate commitment-aware available cash for spending and investing.
+    9. Evaluate saved life scenarios joining budget surplus and portfolio contributions.
+    10. Audit and minimize the Electron surface while retaining valuable native capabilities.
+    11. Create a squashed database baseline for fresh installs with a safe existing-install bridge.
+  - **Dependency execution:** make every CI, release and desktop-update install consume the committed
+    lockfile without rewriting it. Disable dependency lifecycle scripts by default and keep any
+    exception in a small reviewed allowlist with a reason and test. Remove fetch-to-shell execution
+    from the updater and launcher; acquire the pinned Bun toolchain as a file, verify a repository-owned
+    checksum before execution, and fail closed on a version or integrity mismatch. Apply the same rule
+    to every remotely acquired executable, build tool and standalone runtime: a checksum file fetched
+    from the same mutable upstream location is not an independent trust root. Preserve an intentionally
+    offline relaunch only when the complete previously verified dependency tree exists. Remove dynamic
+    tool fallback from trusted jobs: invoke repository-installed binaries instead of download-capable
+    `bunx` paths, hash-pin the release PyInstaller and CI audit-tool closures, and either hash-pin or
+    replace the devcontainer `safe-chain` installation whose transitive closure is currently mutable.
+  - **Dependency admission:** add a required, full-SHA-pinned dependency-review gate plus a
+    repository-owned manifest/lockfile policy check. Reject manifest/lock drift, unexpected registry,
+    Git, URL or local-path sources, new trusted dependencies or lifecycle scripts without explicit
+    review, and unexplained lockfile-only changes. Report direct/transitive additions, runtime scope,
+    package age, integrity data, license and executable install behavior so a reviewer can understand
+    what changed; vulnerability scanning remains necessary but is not evidence that a fresh version
+    is benign. Enforce a reviewed dependency budget that flags unexplained transitive growth, duplicate
+    libraries, new native or WebAssembly payloads, new network-capable build dependencies, install
+    scripts and publisher or ownership changes; require an explicit exception rather than treating a
+    passing vulnerability scan as admission.
+  - **Namespace and publication safety:** mark every internal application and package manifest that is
+    not intentionally published with `"private": true`, including the backend and Electron package, and
+    enforce that invariant in CI. Reject internal package names or scopes that unexpectedly resolve from
+    a public registry, prevent accidental `npm`/Bun publication, and require an explicit reviewed policy
+    change before any Vision package becomes publishable.
+  - **Update policy:** give routine Dependabot version updates a seven-day cooldown while allowing
+    security updates through immediately. Auto-merge only an explicit allowlist of development-only
+    patch updates after all required gates pass. Require human review for production, Electron,
+    Python, GitHub Actions, minor and major changes, and verify the dependency class from Dependabot
+    metadata rather than trusting the PR title or actor name alone. Keep rollback simple by preserving
+    one dependency update purpose per pull request or tightly related reviewed group.
+  - **CI and publication authority:** enforce repository settings that allow only approved Actions and
+    require full commit-SHA pins; retain default-deny, job-scoped token permissions. Minimize third-party
+    code in jobs with write or OpenID Connect authority. Set `persist-credentials: false` on every source
+    checkout and expose a write credential only to the final narrow GitHub API operation after
+    repository-controlled code has stopped executing. Protect release tags and a release environment,
+    prove that the release commit is the exact reviewed commit reachable from protected `main`, and use
+    the strongest practical approval or wait gate available to this single-maintainer repository. Read
+    back the live GitHub rules and environment state; an unavailable API is unverified, not green.
+  - **Artifact and update integrity:** generate a machine-readable Software Bill of Materials for the
+    shipped JavaScript, Python, Electron, Chromium and PostgreSQL components; bind it and every shipped
+    artifact to the release commit with attestations. Do not let the updater trust an artifact and
+    checksum that can both be replaced under the same release authority: verify an independently
+    signed manifest or equivalent provenance before installation, then retain local SHA-256 and archive
+    path checks as defense in depth. Give the trusted update metadata an explicit version, channel,
+    expiry, expected byte length and artifact digest; persist the newest accepted metadata version so
+    rollback, freeze and mix-and-match attempts fail closed, and document signing-key rotation and
+    recovery. Document consumer verification and run an incident drill that can identify affected
+    releases from a named compromised package and stop or supersede their update.
+  - **Privileged shipped code and data:** bind the complete native-runtime manifest and a canonical
+    manifest of Alembic revision IDs, predecessor IDs and migration-file hashes to the independently
+    verified release identity. In packaged mode, verify the native manifest before spawning any bundled
+    executable and verify the migration manifest before granting migration authority or changing the
+    database. Reject missing, extra or modified entries. Keep source-development overrides explicit,
+    noisy and unavailable in packaged builds so the verifier cannot silently become optional.
+  - **Model and tool provenance:** treat locally installed AI models as mutable external supply-chain
+    inputs. Record and verify the Ollama content digest, not only a reusable model name, for evaluated or
+    selected models; bind each persisted AI execution to that digest plus the prompt, tool-schema and
+    Vision release versions. Warn or require a new explicit selection when a name resolves to a different
+    digest. This proves which artifact ran, not that its output is correct. Apply the same immutable-
+    identity rule to future downloaded plugins, adapters or analysis bundles before they can receive data
+    or execute code.
+  - **Build-environment identity:** keep base images and runner/tool versions immutable, generate
+    provenance for published development or release-builder images, and verify the expected repository,
+    workflow, commit and digest before use. A tag, successful vulnerability scan or attestation that is
+    never checked by its consumer is insufficient. Keep this scoped to images Vision publishes or relies
+    on for trusted builds; a private registry and diverse independent builders remain higher assurance.
+  - **Network-isolated release construction:** split release work into a controlled acquisition phase
+    that resolves every declared source, dependency, browser, tool and runtime to an immutable digest,
+    followed by a build phase with outbound network access denied. The build must fail when an undeclared
+    input is absent rather than fetching it. Keep tests that prove a lifecycle script, compiler, packaging
+    hook or missing `bunx` command cannot contact the network or introduce a second-stage payload.
+  - **Release-cache isolation:** do not restore general CI dependency or executable caches into trusted
+    release builds. Prefer a clean acquisition for each release; if measured cost later justifies a
+    release cache, make it read-only and content-addressed by every lockfile, workflow, base-image,
+    toolchain and target-architecture digest, verify each restored artifact before use, and fail closed
+    on an incomplete identity or mismatch. A cache miss rebuilds; it never selects a mutable fallback.
+  - **Build once and attest at origin:** the job that creates each DMG, application ZIP or source ZIP must
+    generate its provenance and immutable digest before handing it off. The separately permissioned
+    publication job may verify policy and publish only those exact bytes; it must not rebuild, re-sign,
+    repackage or otherwise mutate them. Verification must constrain repository, protected workflow,
+    triggering event, reviewed commit and expected builder identity, not merely accept any valid
+    attestation issued within the account.
+  - **Reproducibility and SLSA progression:** first characterize nondeterminism for unsigned application
+    contents, native runtimes and source archives, separating expected signing/timestamp metadata from
+    unexplained byte drift. Produce and compare canonical component manifests on two clean hosted runs;
+    make stable components bit-for-bit reproducible and gate releases on their equality. Move release
+    construction into a minimal, protected reusable workflow whose platform-generated provenance cannot
+    be forged or influenced by caller-controlled build steps, then independently assess and verify the
+    resulting design against the current SLSA Build Level 3 requirements. Do not claim Level 3 from a
+    workflow label or attestation alone. Promote whole-artifact reproducibility to a required gate only
+    after repeated clean-run evidence shows it is reliable; record justified residual nondeterminism.
+  - **Exit:** adversarial tests prove lockfile mutation, a new install script/trusted dependency,
+    publishable internal manifest or public-registry namespace collision, dependency-budget violation,
+    unapproved dependency class, fresh-package auto-merge, persisted checkout credential, dynamic tool
+    download, undeclared network fetch, poisoned or incorrectly keyed release cache, mismatched toolchain
+    checksum, mutated build-to-publish handoff, replaced release asset/checksum, expired or rolled-back
+    update metadata, modified native-runtime or migration manifest, changed model digest, unverified build
+    image, non-`main` release commit and missing GitHub protection all fail closed. Focused CI tests, two
+    clean reproducibility runs, provenance-policy verification, a synthetic native and source update on
+    the Vision Demo app, migration verification in packaged and development modes, live ruleset and
+    attestation readback, SBOM inspection, rollback/key-recovery evidence, and synchronized
+    security/release docs pass. Private registry quarantine, diverse independent builders, multi-party
+    release approval, and Apple Developer ID/notarization are higher-assurance follow-ups, not
+    prerequisites for this baseline unless implementation evidence shows the signed-manifest design
+    cannot give the updater an independent trust root.
+
+- [ ] **Make privileged audit trails tamper-evident without turning them into signed reports** 🔼
+  - Tracking: 🔎 verified-present 2026-09-18 (`db_editor_audit`, `split_audit` and
+    `portfolio_retag_audit` are ordinary PostgreSQL rows; same-database append-only conventions do not
+    reveal a privileged rewrite, deletion or reorder, and DB-editor retention currently deletes old rows)
+  - ↪ _from: User cryptographic-proof hardening decision 2026-09-18 · tamper-evident audit logs_
+  - Define one canonical, versioned audit-entry encoding and chain each security-relevant entry to the
+    previous entry hash inside the same transaction as the protected mutation. Cover at least direct DB
+    editor changes, split lifecycle events, portfolio broker re-tag receipts, migration execution and
+    release/update verification decisions; document why any existing privileged audit sink is excluded.
+  - Periodically close bounded chain segments and sign or message-authenticate the segment head with a
+    device key held outside PostgreSQL. Store the latest checkpoint outside the database in the strongest
+    platform keystore available; when no protected external anchor exists, report tamper evidence as
+    unavailable instead of presenting a database-local hash as independent proof. Define key creation,
+    rotation, loss, restore and device-migration behavior without weakening encrypted-backup recovery.
+  - Verify the chain and its external checkpoint at startup, before audit display/export and after restore.
+    Surface missing entries, reordered rows, altered payloads, checkpoint rollback and an unverifiable
+    restored chain distinctly; never silently repair or re-sign history. Preserve privacy and bounded
+    storage by pruning only complete, externally checkpointed segments under an explicit retention rule.
+    Do not add signed financial or analysis reports.
+  - **Exit:** tests alter, delete, insert and reorder rows; roll back a checkpoint; rotate or remove the
+    device key; cross a retention boundary; and restore a valid and a tampered backup. Every manipulation
+    is detected without blocking ordinary audited transactions, valid retention, a documented recovery
+    path or supported device migration. Database migration tests, backup coverage, performance evidence
+    for audited write paths, and synchronized security/backup/data-model docs pass.
+
 - [x] **Resolve OpenAI API and Codex subscription integration feasibility and privacy profiles** ⏫
   - Tracking: ✅ verified-documented 2026-09-12 (ADR-138 and the dated route matrix separate API and subscription access, supported and unsupported paths, account-specific unknowns, retention, revocation, isolation, and cost gates)
   - ↪ _from: User opt-in OpenAI/Codex plan 2026-09-09 · access and privacy feasibility_
@@ -452,8 +613,8 @@ provisional; dependencies determine delivery order. Resolve each named design ch
 implementation; do not treat planned features as reproduced defects. Existing forecasting,
 chart layouts, alerts and admin tools remain starting points rather than duplicate implementations.
 
-- [ ] **Make category hierarchies depth-agnostic without changing existing financial results** ⏫
-  - Tracking: 🔎 decision-needed 2026-09-13 (choose the canonical hierarchy model, stable identity and compatibility contract before changing persisted categories or public APIs)
+- [x] **Make category hierarchies depth-agnostic without changing existing financial results** ⏫
+  - Tracking: ✅ verified-implemented 2026-09-19 (migration 0114 preserves legacy IDs and pairs while adding ordered paths, ancestor rollups and guarded rollback; tree CRUD/merge, import redirects, filters, editors, localization and analysis projections are implemented. Disposable migration fidelity, focused mixed-depth/import DB tests, focused unit tests, backend lint, typecheck, locale and API checks passed. The full DB suite has unrelated account failures under separate user work.)
   - ↪ _from: User request 2026-09-13 · flexible category depth_
   - Replace the required `GENERAL:DETAIL` shape with an ordered hierarchy that supports a leaf at
     depth 1 and deeper paths such as 3 or 4 levels without treating a display delimiter as the data
@@ -482,8 +643,8 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
     Distinguish listing currency, underlying currency, hedging, and revenue geography; do not infer
     economic FX exposure from listing currency. Defer derivatives and recursive funds unless modeled.
 
-- [ ] **Create persistent research dossiers linked to investments or budgeting topics** ⏫
-  - Tracking: 🔎 decision-needed 2026-09-08 (favored direction; agree dossier fields, evidence retention, and editing/version behavior)
+- [x] **Create persistent research dossiers linked to investments or budgeting topics** ⏫
+  - Tracking: ✅ verified-implemented 2026-09-19 (local versioned dossiers store authored thesis, dated source snapshots and live/deleted category, investment, and saved-analysis links; explicit editor, history restore, full JSON export, backup coverage, disposable migration and real-PostgreSQL lifecycle checks)
   - ↪ _from: User product exploration 2026-09-08 · research dossiers_
   - Save the question, user thesis, supporting/opposing evidence, assumptions, unresolved questions,
     linked holdings/categories, conclusion, and review date. Separate user-authored claims from AI
@@ -673,8 +834,8 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
     contract-cost comparisons. Include backup/export and dossier links without duplicating existing
     chart-layout storage.
 
-- [ ] **Monitor saved analysis conditions and evidence changes with meaningful notifications** ⏫
-  - Tracking: 🔎 decision-needed 2026-09-08 (favored direction; depends on saved analyses; decide scheduler location, offline catch-up, thresholds, and delivery channels)
+- [x] **Monitor saved analysis conditions and evidence changes with meaningful notifications** ⏫
+  - Tracking: ✅ verified-implemented 2026-09-19 (migration 0116, bounded local scheduler, exact completed-run numeric crossings and dossier-evidence changes, durable baselines/observations/inbox, episode deduplication, cooldown catch-up, visible partial/stale/failure states, backup coverage and EN/NL UI; disposable migration and real-PostgreSQL tests passed. No provider, AI, web or OS notification channel is used.)
   - ↪ _from: User product exploration 2026-09-08 · saved questions and monitoring_
   - Extend/reuse existing alerts where suitable. Evaluate explicit cash-flow/exposure thresholds or
     new dossier evidence; record prior/current values, coverage, and why a notification fired.
@@ -703,8 +864,8 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
 
 ### 🏛️ API and architecture
 
-- [ ] **Audit and minimize the Electron surface while retaining valuable native capabilities** 🔼
-  - Tracking: 🔎 decision-needed 2026-09-13 (inventory the current runtime, builder configuration and actual desktop requirements; select capabilities from measured value rather than defaults)
+- [x] **Audit and minimize the Electron surface while retaining valuable native capabilities** 🔼
+  - Tracking: ✅ completed 2026-09-19 (ADR-155 records the capability matrix and disposable native Demo before/after measurements; the selected-origin main-frame IPC/navigation boundary is narrowed, one unused invoke bridge and package-only assets are removed; both bundles reached home, the final bundle passed menu, copy, and cancelled native picker checks, and a packaged-payload smoke passed synthetic encrypted backup/restore. Production update/in-app restore/DMG flows remain release-gate checks, not claims from this audit.)
   - ↪ _from: User request 2026-09-13 · smallest effective Electron configuration_
   - Trace every Electron option, permission, dependency, preload bridge, process feature, bundled
     asset and platform integration to a current Vision requirement. Remove or disable unused
@@ -802,6 +963,26 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
     boundary, and then remove the type in a reversible PostgreSQL migration.
 
 ### 🏦 Accounts and portfolio features
+
+- [ ] **Add the Awesome portfolio as a selectable rebalancing preset** 🔼
+  - Tracking: 🔎 decision-needed 2026-09-19 (user chose Savings investments for cash; decide how
+    the existing cash-deployment calculation treats a 20% `savings` target)
+  - ↪ _from: User request 2026-09-19 · Awesome 20/20/20/20/20 portfolio_
+  - Add an **Awesome portfolio** built-in choice beside 60/40, All Weather, and Three Fund on
+    Portfolio → Analysis → Rebalance. Target five equal 20% tranches: real estate, stocks, gold,
+    government bonds, and cash. Represent the cash tranche with Savings investments using the
+    existing `savings` sleeve; use `real_estate`, `stocks`, `gold`, and `bonds` for the other
+    tranches. Do not restrict government bonds to a region or prescribe specific holdings. Keep
+    the displayed target weights and the server model in sync, and let users load the preset into
+    an editable custom plan as with existing presets.
+  - The current rebalancer treats spendable account balances as deployable cash and `savings` as
+    a separate investment sleeve. Count Savings investment value in the 20% cash target and actual
+    allocation exactly once; do not count spendable account balances as holdings in that tranche.
+    Preserve the existing cash-cap and no-sell behavior.
+  - **Exit:** selecting Awesome shows five 20% targets; actual allocation and deployment results
+    respect the chosen cash definition, including an already funded cash reserve; loading and saving
+    a custom copy preserves the weights. Cover model validation/calculation and the selector in
+    focused tests, then update the portfolio feature docs and English/Dutch labels.
 
 - [x] **Build forward-only persisted per-broker history** 🔽
   - Tracking: ✅ completed 2026-09-13 (ADR-143 and migration 0109 add an empty forward-only snapshot table with no backfill; the transactional writer preserves frozen account labels after retagging, includes unassigned holdings, enforces per-date portfolio reconciliation, serves the chart API, renders broker series, and is covered by focused writer, migration and backup tests)
