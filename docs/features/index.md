@@ -2,9 +2,9 @@
 title: Features Documentation Index
 type: features-index
 status: active
-date: 2026-04-24
-updated: 2026-09-11
-revised: 2026-09-11
+date: 2026-09-19
+updated: 2026-09-19
+revised: 2026-09-19
 tags: [features, index, documentation, phase-5a, phase-6, phase-7, phase-10, phase-c, phase-d, phase-e, phase-f, phase-9, statistics-refactoring, cash-flow-forecast, cost-basis, database-maintenance, sankey-flow, rolling-averages, pdf-report, admin-observability, dev-observability, multi-method-forecast, frontend-visualization, accuracy-persistence, materialized-cache, ensemble-methods, nightly-job, bug-hunt-2026-05-05, bug-hunt-2026-05-06, phase-c-bug-fixes, accessibility, csv-parsing, memory-safety, debounce, useCallback, bulk-actions, belgian-tax-correctness, exemption-brackets, own-home-credits, taxable-income-sources, historical-tax-year-viewer, portfolio-import, file-headers-panel, adr-078]
 description: Feature documentation for all major capabilities of the Vision application. Phase 6 complete with cash flow forecast, cost basis methods. Phase 7 adds database maintenance UI, Sankey flow visualization, rolling average overlays, and PDF report export. Phase 10 adds multi-method statistical cash flow forecast with 7 methods. Phase C adds dashboard frontend visualization. Phase D adds persisted accuracy metrics and historical trend analysis. Phase E adds nightly cache materialization for performance. Phase F adds inverse-MSE ensemble method (8th method). Phase 9 completes aggregation shadow cutover. April 2026 extends Saved Charts with recipients, variants, time buckets, and date ranges; introduces Custom Charts tab in Statistics. May 2026 bulk transaction actions enable multi-row operations (delete, recategorize, reassign, activate/deactivate, export, tag); bug hunt completes comprehensive correctness hardening. May 11 2026: Belgian Tax correctness fixes — personal exemption now applied at lowest brackets via exemption-bracket table (CIR-92 art. 134 §3); regional own-home credits (Flemish woonbonus, Walloon chèque habitat); taxable income source filtering for graph visualization. June 2026 (ADR-078): Portfolio CSV Import — parallel pipeline for brokerage/exchange trade CSV files; shared FileHeadersPanel component now shown for all bank adapters in TransactionImportCard.
 aliases: [features, capabilities]
@@ -35,7 +35,7 @@ SORT title ASC
 
 ### Organization
 
-- [[docs/features/categories\|Categories]] - Transaction categorization with GENERAL:DETAIL format and atomic assignment (Phase 6)
+- [[docs/features/categories\|Categories]] - Ordered category paths at any depth with stable legacy GENERAL:DETAIL identities
 - [[docs/features/recipients\|Recipients]] - Payee/payer management with atomic merge and fuzzy matching (Phase 6)
 - [[docs/features/tags\|Tags]] - Slug-based orthogonal labelling dimension layered on transactions (ADR-052, May 2026)
 - [[docs/features/bulk-actions\|Bulk Actions]] - Multi-row select with atomic delete, recategorize, reassign, export, tag operations
@@ -68,6 +68,8 @@ SORT title ASC
 
 ### Analytics & Reporting
 
+- [[docs/features/research-dossiers\|Research Dossiers]] - Local versioned questions, evidence, conclusions, and linked analysis
+- [[docs/features/analysis-monitors\|Analysis Monitors]] - Local threshold and evidence checks with durable observations and an in-app inbox
 - [[docs/features/statistics\|Statistics]] - Comprehensive analytics with charts, pivot tables, and exclusions
 - [[docs/features/sankey-flow\|Sankey Flow]] - Income allocation visualization showing flow to spending categories (Phase 7)
 - [[docs/features/rolling-averages\|Rolling Averages]] - 3-month moving average overlays on spending/income charts (Phase 7)

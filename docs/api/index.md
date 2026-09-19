@@ -2,8 +2,8 @@
 title: API Documentation Index
 type: api-index
 status: active
-date: 2026-04-24
-updated: 2026-09-13
+date: 2026-09-19
+updated: 2026-09-19
 tags: [api, index, rest, endpoints, openapi, phase-5a, attachments, phase-2, phase-9, phase-f, admin, observability, ing, bnp, supported-adapters, portfolio-import, adr-078, research, adr-079, multi-provider]
 description: Complete REST API documentation for the Vision backend; authoritative spec in openapi.yaml (Phase 2.4); JSON export and attachments added in Phase 5A; Phase F adds 4 admin endpoints for provider health, endpoint liveness, and metrics; Phase 9 aggregation shadow cutover complete; May 12 2026: ING and BNP Paribas Fortis adapters added (8 total banks supported); June 15 2026: Portfolio CSV Import (ADR-078) adds 12 endpoints under /api/portfolio/import; June 16 2026: Research aggregation (ADR-079) adds 6 endpoints under /api/research
 aliases: [API, endpoints, REST]
@@ -50,6 +50,8 @@ SORT path ASC
 | Resource                    | Path                                | Methods                  | Documentation                                                   |
 | --------------------------- | ----------------------------------- | ------------------------ | --------------------------------------------------------------- |
 | Analysis workspace          | `/api/analysis`                     | GET, POST, PUT, DELETE   | [[docs/api/analysis\|Analysis API]]                             |
+| Research dossiers           | `/api/research-dossiers`            | GET, POST, PUT, DELETE   | [[docs/api/research-dossiers\|Research Dossiers API]]           |
+| Analysis monitors           | `/api/analysis/monitors`            | GET, POST, PATCH, DELETE | [[docs/api/analysis-monitors\|Analysis Monitors API]]           |
 | Transactions                | `/api/transactions`                 | GET, POST, PATCH, DELETE | [[docs/api/transactions\|Transactions API]]                     |
 | Categories                  | `/api/categories`                   | GET, POST, PATCH, DELETE | [[docs/api/categories\|Categories API]]                         |
 | Recipients                  | `/api/recipients`                   | GET, POST, PATCH, DELETE | [[docs/api/recipients\|Recipients API]]                         |

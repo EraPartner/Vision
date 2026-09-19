@@ -2,8 +2,8 @@
 title: Analysis Workspace
 type: feature
 status: active
-date: 2026-09-14
-updated: 2026-09-14
+date: 2026-09-19
+updated: 2026-09-19
 tags:
   [
     feature,
@@ -128,6 +128,7 @@ URL by replacing the username. Provisioning uses `DATABASE_URL_MIGRATIONS` when 
 
 ## Related
 
+- [[docs/features/analysis-monitors|Analysis Monitors]]
 - [[docs/api/analysis|Analysis API]]
 - [[docs/reference/analysis-contract|Analysis Contract Reference]]
 - [[docs/reference/analysis-datasets|Analysis Datasets]]

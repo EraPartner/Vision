@@ -2,13 +2,14 @@
 title: Analysis Datasets
 type: reference
 status: active
-date: 2026-09-12
+date: 2026-09-19
 tags: [analysis, datasets, reconciliation, money, portfolio, security]
-description: Version-1 dataset catalog, financial meanings, allowed joins, exclusions, and reconciliation rules for Vision analyses.
+description: Versioned analysis datasets, including ordered category paths, financial meanings, joins, and reconciliation rules.
 aliases: [financial datasets, vision_analysis]
 related_code:
   - packages/types/src/analysisDatasets.js
   - alembic/versions/0107_analysis_dataset_views.py
+  - alembic/versions/0114_category_hierarchy.py
   - apps/node-backend/tests/analysisDatasets.test.js
   - apps/node-backend/tests/analysisDatasets.db.test.js
 ---
@@ -17,7 +18,7 @@ related_code:
 
 The authoritative machine-readable catalog is `@vision/types/analysis-datasets`. The PostgreSQL
 relations live in `vision_analysis`. They are not automatically available to application or public
-roles; a future isolated executor must receive an explicit grant.
+roles; the isolated executor receives explicit read-only grants.
 
 | Dataset          | Relation                            | Row grain                | Default meaning                                                                            | Known coverage                                                                       |
 | ---------------- | ----------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
@@ -25,6 +26,16 @@ roles; a future isolated executor must receive an explicit grant.
 | `accounts@1`     | `vision_analysis.accounts_v1`       | One own account          | Account policy plus the complete per-currency statement-balance collection                 | Active and archived own accounts; credentials and settings excluded                  |
 | `holdings@1`     | `vision_analysis.holding_events_v1` | One portfolio event      | Replay input for the canonical portfolio engine                                            | All portfolio events; current positions are derived, not stored in the view          |
 | `cash-flows@1`   | `vision_analysis.cash_flows_v1`     | One budgeting ledger row | Signed flow plus transfer-safe spending and positive-flow projections                      | Budgeting ledger only; portfolio income appears only when represented in that ledger |
+
+The catalog-backed builder now selects `vision_analysis.transactions_v2` and
+`vision_analysis.cash_flows_v2` for new transaction and cash-flow analyses. Each is the same
+one-ledger-row grain as version 1, with additive `category_path` (display text),
+`category_path_segments` (ordered text array), and `category_path_ids` (ordered integer array).
+The version-1 views remain available to previously saved immutable SQL definitions. The catalog
+also retains the old `category_general` and `category_detail` fields for compatibility; they are
+not the canonical hierarchy after a move or rename. No path field expands a transaction into
+multiple rows, so existing totals stay at the same grain. New ancestor aggregation must join
+the selected category ID to `category_ancestors` explicitly.
 
 ## Allowed joins
 
@@ -57,7 +68,8 @@ estimate.
 
 ## Security boundary
 
-Migration 0107 revokes access from `PUBLIC` and excludes provider keys, admin audit data, raw CSV,
+Migration 0107 revokes access from `PUBLIC`, and migration 0114 does the same for the two v2 views.
+The executor grants only approved versioned views. They exclude provider keys, admin audit data, raw CSV,
 deduplication hashes, application settings, and AI conversations. The dataset scope is
 `local-user-database`. This describes one single-user Vision database; it is not proof that a future
 multi-user deployment has row-level authorization. Broader read-only schema access is a separate

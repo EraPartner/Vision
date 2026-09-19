@@ -12,10 +12,13 @@ package "Frontend" {
   class Hooks {
     useTransactions
     useCategories
+    useCategoryTree
     useRecipients
     usePlannedPayments
     usePortfolio
     useStatistics
+    useDossiers
+    useMonitors
   }
   
   package "API Client" {
@@ -64,8 +67,8 @@ package "Frontend" {
   }
   
   package "i18n" {
-    class en (English)
-    class nl (Dutch)
+    class "en (English)" as en
+    class "nl (Dutch)" as nl
   }
 }
 
@@ -74,15 +77,15 @@ package "Backend (Node.js)" {
   class ExpressRoutes
   class Repositories
   class Services
-  class Database (PostgreSQL)
+  class "Database (PostgreSQL)" as Database
 }
 
 package "External Services" {
-  class ECB (Exchange Rates)
-  class Binance (Crypto Prices)
-  class YahooFinance (Stock Prices)
-  class Kinesis (US Stock Prices)
-  class Statbel (Belgian Inflation)
+  class "ECB (Exchange Rates)" as ECB
+  class "Binance (Crypto Prices)" as Binance
+  class "YahooFinance (Stock Prices)" as YahooFinance
+  class "Kinesis (US Stock Prices)" as Kinesis
+  class "Statbel (Belgian Inflation)" as Statbel
 }
 
 ' Relationships
@@ -99,6 +102,10 @@ Pages --> Components
 
 RESTEndpoints --> Repositories
 Repositories --> Database
+Pages --> useDossiers : dossier library and editor
+useDossiers --> ApiClient : /api/research-dossiers
+Pages --> useMonitors : rule editor and inbox
+useMonitors --> ApiClient : /api/analysis/monitors
 
 CurrencyConversionService --> ECB
 PriceProviderService --> Binance

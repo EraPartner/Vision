@@ -185,6 +185,14 @@ package "Custom Hooks (Business Logic)" {
     +delete(id): Promise<void>
   }
 
+  class useMonitors <<ADR-154>> {
+    +paged rules and observations
+    +inbox and unread count
+    +create, edit, check, read, delete
+    note bottom: PostgreSQL owns due times, history,
+    episodes, and read state; React Query caches views only.
+  }
+
   class usePortfolioTaxAdjustments {
     +adjustments: TaxAdjustment[]
     +byYear(year): TaxAdjustment[]
@@ -220,13 +228,13 @@ package "Utility Hooks" {
 
 ' Provider Hierarchy (React Context nesting)
 package "Provider Stack" {
-  QueryClientProvider
-  ThemeHydration
-  SettingsPreloadContext
-  SettingsHydration
-  AppSettingsHydration
-  BelgianTaxProfileContext
-  LanguageHydration
+  class QueryClientProvider
+  class ThemeHydration
+  class SettingsPreloadContext
+  class SettingsHydration
+  class AppSettingsHydration
+  class BelgianTaxProfileContext
+  class LanguageHydration
 }
 
 ' Hooks consume Query Client (dependency relationship)
@@ -245,6 +253,7 @@ useSettleSplit ..> QueryClient : uses
 useSettleAllSplitsByRecipient ..> QueryClient : uses
 useDeleteSplit ..> QueryClient : uses
 useSavedCharts ..> QueryClient : uses
+useMonitors ..> QueryClient : caches server-owned monitoring state
 usePortfolioTaxAdjustments ..> QueryClient : uses
 useFilteredDashboardStats ..> QueryClient : uses
 

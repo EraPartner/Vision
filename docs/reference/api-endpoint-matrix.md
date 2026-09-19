@@ -2,13 +2,13 @@
 title: API Endpoint Matrix
 type: reference
 status: active
-date: 2026-09-14
-updated: 2026-09-14
-last_modified: 2026-09-14
+date: 2026-09-19
+updated: 2026-09-19
+last_modified: 2026-09-19
 adr-reference: 026
 # Authoritative HTTP-operation count, derived from openapi.yaml and enforced by
 # scripts/check-endpoint-matrix.js (CI verify-generated). Bump when routes change.
-api_operation_count: 258
+api_operation_count: 281
 tags:
   [
     reference,
@@ -72,7 +72,7 @@ tags:
     auto-link,
     planned-match,
   ]
-description: Complete matrix of all 232 HTTP API operations (authoritative count from openapi.yaml), 2 health endpoints, and 24 Electron IPC invoke channels. The Electron contract also defines 6 renderer event channels.
+description: Complete matrix of all 281 HTTP API operations (authoritative count from openapi.yaml), 2 health endpoints, and 23 Electron IPC invoke channels. The Electron contract also defines 6 renderer event channels.
 aliases:
   [api matrix, endpoint matrix, all endpoints, api overview, endpoint list]
 ---
@@ -80,7 +80,7 @@ aliases:
 # API Endpoint Matrix
 
 > [!abstract] Overview
-> **232 HTTP API operations** (authoritative count = operations in `openapi.yaml`, enforced by `scripts/check-endpoint-matrix.js` in CI), 2 unversioned `/health` endpoints, and 24 Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
+> **281 HTTP API operations** (authoritative count = operations in `openapi.yaml`, enforced by `scripts/check-endpoint-matrix.js` in CI), 2 unversioned `/health` endpoints, and 23 Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
 >
 > **Note:** As of Phase 2.4, `openapi.yaml` is the authoritative API specification. This matrix provides a quick lookup; see the OpenAPI spec for formal schemas and examples.
 >
@@ -183,6 +183,40 @@ aliases:
 | GET, POST, DELETE | `/api/ai-research/disclosures/*`             | Preview exact/tokenized payloads and govern digest-bound egress    | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
 | GET, POST, DELETE | `/api/ai-research/documents/*`               | Manage documents and retrieve cited passages                       | attachment/standard | [[docs/api/ai-research\|AI Research]] |
 
+## Research Dossiers (9 operations — ADR-153)
+
+The local dossier API is additive. The list is paged and returns bounded summaries; individual
+reads and exports include full evidence. The group uses the aggregation rate limiter.
+
+| Method | Path                                  | Description                                                  | Rate Limit  | Doc                                               |
+| ------ | ------------------------------------- | ------------------------------------------------------------ | ----------- | ------------------------------------------------- |
+| GET    | `/api/research-dossiers`              | List bounded summaries with `limit`/`offset` and total count | 600 req/min | [[docs/api/research-dossiers\|Research Dossiers]] |
+| POST   | `/api/research-dossiers`              | Create dossier version 1                                     | 600 req/min | [[docs/api/research-dossiers\|Research Dossiers]] |
+| GET    | `/api/research-dossiers/export`       | Export all current dossiers and versions as JSON             | 600 req/min | [[docs/api/research-dossiers\|Research Dossiers]] |
+| GET    | `/api/research-dossiers/:id`          | Read one full dossier with live/deleted link details         | 600 req/min | [[docs/api/research-dossiers\|Research Dossiers]] |
+| PUT    | `/api/research-dossiers/:id`          | Append version with `expectedVersion` conflict check         | 600 req/min | [[docs/api/research-dossiers\|Research Dossiers]] |
+| DELETE | `/api/research-dossiers/:id`          | Delete dossier and private history                           | 600 req/min | [[docs/api/research-dossiers\|Research Dossiers]] |
+| GET    | `/api/research-dossiers/:id/versions` | List immutable content snapshots                             | 600 req/min | [[docs/api/research-dossiers\|Research Dossiers]] |
+| POST   | `/api/research-dossiers/:id/restore`  | Restore snapshot as a new version                            | 600 req/min | [[docs/api/research-dossiers\|Research Dossiers]] |
+| GET    | `/api/research-dossiers/:id/export`   | Export one dossier and all versions as JSON                  | 600 req/min | [[docs/api/research-dossiers\|Research Dossiers]] |
+
+## Analysis Monitors (8 operations — ADR-154)
+
+The local rule API is additive. Rule, observation, and inbox lists are bounded and paged; the
+first valid check establishes a baseline without a notification. Failures remain visible in
+history. This group uses the aggregation rate limiter.
+
+| Method | Path                                            | Description                                          | Rate Limit  | Doc                                               |
+| ------ | ----------------------------------------------- | ---------------------------------------------------- | ----------- | ------------------------------------------------- |
+| GET    | `/api/analysis/monitors`                        | List paged rules with latest observations            | 600 req/min | [[docs/api/analysis-monitors\|Analysis Monitors]] |
+| POST   | `/api/analysis/monitors`                        | Create local threshold or dossier-evidence rule      | 600 req/min | [[docs/api/analysis-monitors\|Analysis Monitors]] |
+| PATCH  | `/api/analysis/monitors/:id`                    | Edit rule and reset baseline for a changed condition | 600 req/min | [[docs/api/analysis-monitors\|Analysis Monitors]] |
+| DELETE | `/api/analysis/monitors/:id`                    | Delete rule, observations, and inbox entries         | 600 req/min | [[docs/api/analysis-monitors\|Analysis Monitors]] |
+| POST   | `/api/analysis/monitors/:id/check`              | Persist an on-demand observation                     | 600 req/min | [[docs/api/analysis-monitors\|Analysis Monitors]] |
+| GET    | `/api/analysis/monitors/:id/observations`       | List paged observation history                       | 600 req/min | [[docs/api/analysis-monitors\|Analysis Monitors]] |
+| GET    | `/api/analysis/monitors/notifications`          | List paged inbox and unread count                    | 600 req/min | [[docs/api/analysis-monitors\|Analysis Monitors]] |
+| POST   | `/api/analysis/monitors/notifications/:id/read` | Mark one notification read                           | 600 req/min | [[docs/api/analysis-monitors\|Analysis Monitors]] |
+
 ## Transactions (18 endpoints — incl. 4 Tags endpoints)
 
 > [!warning] Breaking transaction response cleanup (2026-09-11)
@@ -209,16 +243,22 @@ aliases:
 | PATCH  | `/api/tags/:id`                          | Update tag color or is_active                                                                                                                                                                                                                                                                                                                                                                                                                                                              | —          | [[docs/features/tags\|Tags]]                 |
 | DELETE | `/api/tags/:id`                          | Soft-delete tag (`is_active=false`)                                                                                                                                                                                                                                                                                                                                                                                                                                                        | —          | [[docs/features/tags\|Tags]]                 |
 
-## Categories (7 endpoints)
+## Categories (12 endpoints)
 
-| Method | Path                         | Description                                              | Rate Limit | Doc                                 |
-| ------ | ---------------------------- | -------------------------------------------------------- | ---------- | ----------------------------------- |
-| GET    | `/api/categories`            | List with filtering                                      | —          | [[docs/api/categories\|Categories]] |
-| POST   | `/api/categories`            | Create or get existing; response includes `created`      | —          | [[docs/api/categories\|Categories]] |
-| GET    | `/api/categories/:id`        | Get single                                               | —          | [[docs/api/categories\|Categories]] |
-| PATCH  | `/api/categories/:id`        | Update                                                   | —          | [[docs/api/categories\|Categories]] |
-| DELETE | `/api/categories/:id`        | Hard delete                                              | —          | [[docs/api/categories\|Categories]] |
-| POST   | `/api/categories/:id/assign` | Canonical category resource action: assign to recipients | —          | [[docs/api/categories\|Categories]] |
+| Method | Path                             | Description                                              | Rate Limit | Doc                                 |
+| ------ | -------------------------------- | -------------------------------------------------------- | ---------- | ----------------------------------- |
+| GET    | `/api/categories`                | List with filtering                                      | —          | [[docs/api/categories\|Categories]] |
+| POST   | `/api/categories`                | Create or get existing; response includes `created`      | —          | [[docs/api/categories\|Categories]] |
+| GET    | `/api/categories/:id`            | Get single                                               | —          | [[docs/api/categories\|Categories]] |
+| PATCH  | `/api/categories/:id`            | Update                                                   | —          | [[docs/api/categories\|Categories]] |
+| DELETE | `/api/categories/:id`            | Hard delete                                              | —          | [[docs/api/categories\|Categories]] |
+| POST   | `/api/categories/:id/assign`     | Canonical category resource action: assign to recipients | —          | [[docs/api/categories\|Categories]] |
+| GET    | `/api/categories/tree`           | List ordered hierarchy paths and assignable roots        | —          | [[docs/api/categories\|Categories]] |
+| POST   | `/api/categories/tree`           | Create a node at any depth                               | —          | [[docs/api/categories\|Categories]] |
+| GET    | `/api/categories/tree/:id`       | Get one node and its ordered path                        | —          | [[docs/api/categories\|Categories]] |
+| PATCH  | `/api/categories/tree/:id`       | Rename, move, or change node state                       | —          | [[docs/api/categories\|Categories]] |
+| DELETE | `/api/categories/tree/:id`       | Delete a childless node                                  | —          | [[docs/api/categories\|Categories]] |
+| POST   | `/api/categories/tree/:id/merge` | Merge children and references atomically                 | —          | [[docs/api/categories\|Categories]] |
 
 ## Recipients (14 endpoints)
 
@@ -516,7 +556,7 @@ Aggregation routes removed in Phase 9 as migration to `/api/aggregations/*` is c
 
 **Streaming Lifecycle:** Frontend pre-creates conversation via POST `/api/ai/conversations`, then streams via POST `/api/ai/chat/stream`. Stream lives in module-level `aiChatStreamStore`; user can navigate away and stream continues. On completion, TanStack Query cache invalidates to hydrate persisted messages. Sidebar shows pulsing indicator for active streams via `useStreamingConversationIds()`.
 
-## IPC Contract — Electron Desktop (24 invoke channels, 6 event channels)
+## IPC Contract — Electron Desktop (23 invoke channels, 6 event channels)
 
 Electron-specific inter-process communication is grouped into five context bridges. The complete
 argument and result types are owned by `packaging/electron/electron-api.d.ts` and re-exported as
@@ -524,10 +564,10 @@ argument and result types are owned by `packaging/electron/electron-api.d.ts` an
 
 | Bridge             | Invoke channels | Event channels |
 | ------------------ | --------------: | -------------: |
-| `electronUpdater`  |               5 |              0 |
+| `electronUpdater`  |               3 |              0 |
 | `electronBackup`   |               9 |              0 |
 | `electronServices` |               2 |              0 |
-| `electronAPI`      |               6 |              4 |
+| `electronAPI`      |               7 |              4 |
 | `electronRecovery` |               2 |              2 |
 
 The backup operations remain:
@@ -544,7 +584,7 @@ The backup operations remain:
 | `backup:get-encryption-status` | `()`                                                    | `Promise<{ success: boolean; secureStorageAvailable: boolean; hasStoredPassphrase: boolean; hasEnvPassphrase: boolean }>`                  | Check secure-storage availability and stored/environment passphrase presence.                                                                                                                                                                         |
 | `backup:set-passphrase`        | `(passphrase: string)`                                  | `Promise<{ success: boolean; available: boolean; error?: string }>`                                                                        | Set or update backup encryption passphrase (stored encrypted in `settings.json` via `safeStorage`). Empty string clears passphrase.                                                                                                                   |
 
-`packaging/electron/ipc-contract.test.js` requires the 24 shared invoke channels to equal both the
+`packaging/electron/ipc-contract.test.js` requires the 23 shared invoke channels to equal both the
 main-process registrations and preload invokes. It also requires all 6 shared event channels to
 equal the main senders and preload subscriptions.
 
@@ -560,9 +600,10 @@ equal the main senders and preload subscriptions.
 | ------------------------------------ | --------- | ------------ |
 | Accounts (ADR-088)                   | 13        | 0            |
 | Analysis Workspace (ADR-144)         | 11        | 11           |
+| Analysis Monitors (ADR-154)          | 8         | 8            |
 | Cross-Workspace (ADR-098)            | 1         | 0            |
 | Transactions (incl. Tags)            | 18        | 2            |
-| Categories                           | 6         | 0            |
+| Categories                           | 12        | 0            |
 | Recipients                           | 14        | 0            |
 | Planned Transactions                 | 8         | 1            |
 | Investments                          | 17        | 0            |
@@ -582,10 +623,10 @@ equal the main senders and preload subscriptions.
 | Reports (Phase 3/7)                  | 3         | 0            |
 | Info/Statistics (Phase 14)           | 17        | 5            |
 | AI Chat                              | 9         | 2            |
-| Electron IPC invoke channels         | 24        | 0            |
-| **Total**                            | **260**   | **26**       |
+| Electron IPC invoke channels         | 23        | 0            |
+| **Total**                            | **273**   | **34**       |
 
-> **232** versioned `/api` HTTP operations are declared in `openapi.yaml` and enforced by `scripts/check-endpoint-matrix.js`. The summary rows are a hand-maintained navigation aid and also list the 2 unversioned `/health` endpoints plus 24 Electron invoke channels. The 6 Electron event channels are documented separately and are not request endpoints. (The Rate-Limited column is approximate and not gate-checked.)
+> **281** versioned `/api` HTTP operations are declared in `openapi.yaml` and enforced by `scripts/check-endpoint-matrix.js`. The summary rows are a hand-maintained navigation aid and are not the authoritative operation count. The 6 Electron event channels are documented separately and are not request endpoints. (The Rate-Limited column is approximate and not gate-checked.)
 
 ## Phase G Endpoint Consolidation (April 2026)
 

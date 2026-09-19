@@ -1312,6 +1312,26 @@
             "desc": "ADR-144 and ADR-149: compiles manual or cloud-authored identifier-only catalog plans, injects trusted scope locally, executes only approved views through the vision_analysis_executor role, and persists immutable definitions plus success/failure runs. Read-only transactions, timeouts, row/byte limits, and same-role cancellation are enforced independently of the UI."
           },
           {
+            "id": "sv.dossiers",
+            "label": "Research dossiers",
+            "sub": "versioned local content · citation snapshots · links",
+            "kind": "service",
+            "x": 580,
+            "y": 960,
+            "path": "apps/node-backend/src/services/researchDossierService.js",
+            "desc": "ADR-153: validates user-authored research and optional document provenance, appends immutable versions under expectedVersion, retains deleted-link labels, and exports complete local JSON history. No provider call."
+          },
+          {
+            "id": "sv.monitors",
+            "label": "Local analysis monitors",
+            "sub": "due scheduler · thresholds · evidence · inbox",
+            "kind": "service",
+            "x": 220,
+            "y": 960,
+            "path": "apps/node-backend/src/services/analysisMonitorService.js",
+            "desc": "ADR-154: a bounded local scheduler leases due rules, checks one exact saved-analysis run or dossier evidence set, and persists baseline, failure, cooldown, episode, and in-app notification state. No AI, provider, web, or OS notification call."
+          },
+          {
             "id": "sv.portfolioexposure",
             "label": "Portfolio exposure",
             "sub": "explicit classifications · supported fund look-through",
@@ -1400,8 +1420,13 @@
           ["be.routes", "sv.reports"],
           ["be.routes", "sv.transactiondomains"],
           ["be.routes", "sv.analysis"],
+          ["be.routes", "sv.monitors"],
+          ["be.routes", "sv.dossiers"],
           ["be.routes", "sv.portfolioexposure"],
           ["sv.analysis", "db.postgres"],
+          ["sv.monitors", "sv.analysis"],
+          ["sv.monitors", "db.postgres"],
+          ["sv.dossiers", "db.postgres"],
           ["sv.airesearch", "sv.analysis"],
           ["sv.portfolioexposure", "be.repos"],
           ["sv.portfolioexposure", "db.postgres"],
@@ -1801,6 +1826,100 @@
                 "to": "sv.analysis",
                 "payload": "POST /api/analysis/saved or /saved/:id/run",
                 "annotation": "savedAnalysisService.js appends strict definition versions and records refresh success or failure without deleting the last usable result."
+              }
+            ]
+          },
+          {
+            "id": "research-dossier",
+            "name": "Save and revisit a research dossier",
+            "category": "Research",
+            "summary": "An explicit editor save appends a local immutable content version; citation snapshots and deleted-link labels remain reviewable, and a JSON export includes all versions.",
+            "steps": [
+              {
+                "from": "browser",
+                "to": "fe.pages",
+                "payload": "question, thesis, evidence, conclusion, and link edits",
+                "annotation": "apps/frontend/src/pages/research/ResearchDossiersPage.tsx keeps the dossier editor separate from analysis execution."
+              },
+              {
+                "from": "fe.pages",
+                "to": "fe.apiclient",
+                "payload": "PUT dossier content with expectedVersion",
+                "annotation": "apps/frontend/src/lib/api/dossiers.ts sends only an explicit save and exposes stale-version conflicts."
+              },
+              {
+                "from": "fe.apiclient",
+                "to": "be.routes",
+                "payload": "PUT /api/research-dossiers/:id",
+                "annotation": "apps/node-backend/src/routes/researchDossiers.js uses the aggregation limiter and standard response envelope."
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.dossiers",
+                "payload": "validated content, expectedVersion, source and live-link checks",
+                "annotation": "apps/node-backend/src/services/researchDossierService.js refuses a stale version or mismatched changed document citation."
+              },
+              {
+                "from": "sv.dossiers",
+                "to": "db.postgres",
+                "payload": "transactionally append snapshot and update current row plus links",
+                "annotation": "alembic/versions/0115_research_dossiers.py creates current, immutable-version, and deletion-safe link tables."
+              },
+              {
+                "from": "be.routes",
+                "to": "fe.apiclient",
+                "payload": "GET /api/research-dossiers/:id/versions or /:id/export",
+                "annotation": "researchDossierService.js returns history and portable JSON; old versions are not changed by restore."
+              }
+            ]
+          },
+          {
+            "id": "local-analysis-monitor",
+            "name": "Check a local analysis condition or dossier evidence",
+            "category": "Research",
+            "summary": "A due or manual local rule creates a durable baseline, visible failure, or deduplicated in-app notification without calling a provider.",
+            "steps": [
+              {
+                "from": "browser",
+                "to": "fe.pages",
+                "payload": "rule, observations, and unread inbox",
+                "annotation": "apps/frontend/src/pages/AnalysisMonitorsPage.tsx presents local rules and persisted observation history."
+              },
+              {
+                "from": "fe.pages",
+                "to": "fe.apiclient",
+                "payload": "POST /api/analysis/monitors/:id/check or paged reads",
+                "annotation": "apps/frontend/src/lib/api/monitors.ts sends rule actions and reads server-owned inbox state."
+              },
+              {
+                "from": "fe.apiclient",
+                "to": "be.routes",
+                "payload": "validated local monitor request",
+                "annotation": "apps/node-backend/src/routes/analysisMonitors.js is mounted before the generic analysis route with the aggregation limiter."
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.monitors",
+                "payload": "claim lease; inspect threshold or evidence",
+                "annotation": "apps/node-backend/src/services/analysisMonitorService.js applies exact decimal comparison and persisted episode state; startup/analysisMonitorScheduler.js checks overdue rules."
+              },
+              {
+                "from": "sv.monitors",
+                "to": "sv.analysis",
+                "payload": "one newly recorded saved-analysis run when rule targets analysis",
+                "annotation": "savedAnalysisService.js uses the restricted local executor; monitor accepts only completed, current, single-row finite numeric results. Dossier rules read local evidence instead."
+              },
+              {
+                "from": "sv.monitors",
+                "to": "db.postgres",
+                "payload": "baseline, partial/failure, trigger, cooldown, or inbox episode",
+                "annotation": "alembic/versions/0116_analysis_monitors.py adds due rules, durable observations, and deduplicated in-app notifications."
+              },
+              {
+                "from": "db.postgres",
+                "to": "fe.apiclient",
+                "payload": "paged history and server-owned unread count",
+                "annotation": "analysisMonitorService.js returns persisted status and coverage unknown; it never reports an unverified source-coverage guarantee."
               }
             ]
           },
@@ -3249,6 +3368,62 @@
                 "to": "fe.apiclient",
                 "payload": "local structured result or visible failed state",
                 "annotation": "result_json stores the restored answer on success. A completed result remains readable after backup restore; an in-flight token-bearing checkpoint additionally needs the original installation key and unexpired map."
+              }
+            ]
+          },
+          {
+            "id": "category-hierarchy-edit",
+            "name": "Edit a category hierarchy",
+            "category": "Categories",
+            "summary": "A user manages parent-linked categories at any depth while legacy category IDs and general/detail inputs remain valid for older clients.",
+            "steps": [
+              {
+                "from": "browser",
+                "to": "fe.pages",
+                "payload": "Open /categories and select a category node",
+                "annotation": "CategoriesPage.tsx renders the ordered tree and launches CategoryNodeDialog.tsx for node creation, rename, move, and merge."
+              },
+              {
+                "from": "fe.pages",
+                "to": "fe.hooks",
+                "payload": "useCategoryTree() and category-node mutations",
+                "annotation": "hooks/useCategories.ts owns the React Query tree query and mutation invalidation."
+              },
+              {
+                "from": "fe.hooks",
+                "to": "fe.apiclient",
+                "payload": "GET/POST/PATCH/DELETE /api/categories/tree and POST /tree/:id/merge",
+                "annotation": "The tree API sends canonical node names and parent IDs, not a colon-split label or fixed general/detail pair."
+              },
+              {
+                "from": "fe.apiclient",
+                "to": "be.routes",
+                "payload": "validated category tree request",
+                "annotation": "routes/categories.js validates names, parent IDs and merge target IDs, then schedules derived-view refresh after mutations."
+              },
+              {
+                "from": "be.routes",
+                "to": "be.repos",
+                "payload": "list/create/update/merge/delete category node",
+                "annotation": "categoryHierarchyRepository.js uses transactions for edits, rejects inactive or missing parents, cycles, duplicate siblings and unsafe merges."
+              },
+              {
+                "from": "be.repos",
+                "to": "db.postgres",
+                "payload": "categories.parent_id and name; category_paths and category_ancestors",
+                "annotation": "Migration 0114 preserves existing category IDs, adds parent links and recursive path/ancestor views, and blocks cycles in a database trigger."
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.matview",
+                "payload": "scheduleRefresh() after a committed category mutation",
+                "annotation": "routes/categories.js refreshes derived monthly and category-total labels without changing the assigned category IDs."
+              },
+              {
+                "from": "be.routes",
+                "to": "fe.apiclient",
+                "payload": "ordered path segments, path IDs and stable category ID",
+                "annotation": "The node response contains name, parentId, path, pathIds and depth. Legacy /api/categories remains available to old clients."
               }
             ]
           }

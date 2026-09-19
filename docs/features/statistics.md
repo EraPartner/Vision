@@ -3,8 +3,8 @@ title: Statistics Feature
 type: feature
 status: active
 date: 2026-04-24
-updated: 2026-09-11
-last_modified: 2026-09-11
+updated: 2026-09-19
+last_modified: 2026-09-19
 tags:
   [
     feature,
@@ -263,7 +263,7 @@ The page is organized into 6 tabs:
 
 - Category Spending Pie (donut chart, top 10, year-filterable)
 - Category Spending Trend (line chart, top 5 categories)
-- Category Pivot Table (hierarchical GENERAL:DETAIL, 4 value modes: absolute/net/income/expense)
+- Category Pivot Table (ordered category paths at any depth, 4 value modes: absolute/net/income/expense)
 
 ### Recipients Tab
 
@@ -300,7 +300,7 @@ All charts use **Recharts** with consistent styling:
 
 The most complex widget — a hierarchical table showing categories × months with drillthrough to transactions:
 
-- **Hierarchy**: Groups `GENERAL: DETAIL` categories under their GENERAL parent
+- **Hierarchy**: Groups exact-category rows under every ordered ancestor ID; path segments, not display-string splitting, define the tree
 - **Value modes**: Absolute (default), Net, Income-only, Expense-only
 - **Year filtering**: Filter to specific year or show all periods
 - **Sorting**: By total descending (absolute value for net mode)

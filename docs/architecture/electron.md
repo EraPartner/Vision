@@ -3,7 +3,7 @@ title: Electron Desktop Architecture
 type: architecture-doc
 status: active
 date: 2026-08-31
-updated: 2026-09-13
+updated: 2026-09-19
 tags:
   [
     architecture,
@@ -103,6 +103,7 @@ related_code:
     "packaging/electron/main.js",
     "packaging/electron/preload.js",
     "packaging/electron/runtime/index.js",
+    "packaging/electron/runtime/renderer-security.js",
     "packaging/electron/runtime/native.js",
     "apps/frontend/src/lib/api/electron.ts",
     "apps/frontend/src/components/layout/ElectronBridge.tsx",
@@ -468,7 +469,7 @@ The new surface sits alongside the existing `window.electronUpdater` and `window
 | `onCsvOpen(cb)`            | Subscribe to `app:csv-opened` — receives `{name, content}` (no path)     |
 | `onFullScreenChange(cb)`   | Subscribe to `window:fullscreen` with a boolean fullscreen state         |
 
-Frontend helpers in `lib/api/electron.ts`: `getElectronAPI()`, `isElectronMac()`, `setDockBadge()`, `setNativeLanguage()`, `getSystemAccentColor()`. The optional language bridge preserves compatibility when a newer renderer is served by an older shell. `packaging/electron/electron-api.d.ts` owns bridge, invoke-channel, event-channel, argument, and result types; `@vision/types/electron` is a thin re-export consumed by the renderer, while preload JSDoc imports the canonical source directly. `ipc-contract.test.js` checks the 24 main handlers, 24 preload invokes, and 6 renderer events against it.
+Frontend helpers in `lib/api/electron.ts`: `getElectronAPI()`, `isElectronMac()`, `setDockBadge()`, `setNativeLanguage()`, `getSystemAccentColor()`. The optional language bridge preserves compatibility when a newer renderer is served by an older shell. `packaging/electron/electron-api.d.ts` owns bridge, invoke-channel, event-channel, argument, and result types; `@vision/types/electron` is a thin re-export consumed by the renderer, while preload JSDoc imports the canonical source directly. `ipc-contract.test.js` checks the 23 main handlers, 23 preload invokes, and 6 renderer events against it.
 
 **IPC hygiene**: every `ipcMain.handle` that renderer can invoke validates `event.sender === mainWindow.webContents`. `app:set-badge` clamps the count to an integer 0–999. Backup handlers accept renderer-supplied paths only for guarded, local filesystem operations; OS-opened CSV paths stay in main and only `{name, content}` crosses into the renderer.
 
@@ -717,7 +718,6 @@ IPC handlers, and frontend behavior.
 
 | Handler                    | Purpose                                                       | Modes          |
 | -------------------------- | ------------------------------------------------------------- | -------------- |
-| `update:get-mode`          | Return `native`, `dev`, or `source`                           | All            |
 | `update:pre-update-backup` | Create a `.visionbak` through the native runtime transport    | native, source |
 | `update:install-shell`     | Download, verify, and install the native app or source update | native, source |
 | `update:check-github`      | Check GitHub and return the current update mode               | All            |
@@ -868,6 +868,14 @@ contextBridge.exposeInMainWorld("electronRecovery", {
 - Preload is the **only** way renderer can access Node.js or IPC
 - All functions are validated and scoped
 - Sandbox prevents renderer from directly calling Node APIs
+- Every privileged invoke must come from the current main frame at the selected
+  backend origin or the exact packaged recovery page. A localhost page at a
+  different port, a subframe, and an arbitrary local file cannot use the bridge.
+- Renderer navigation and redirects are restricted to that backend origin and
+  recovery page. Programmatic splash loads remain controlled by the main process.
+- The request and check permission handlers deny renderer capabilities except
+  app-origin sanitized clipboard writes and local-network checks required for
+  the loopback backend. Native dialogs and notifications are main-process flows.
 
 ### Error Page (Sandbox-Safe)
 
@@ -885,6 +893,35 @@ The backend sets Content-Security-Policy headers appropriate for Electron:
 - `img-src` includes `https:` for remote news thumbnails
 - `script-src` restricts script sources
 - `default-src` limits resource loading
+- `connect-src 'self'` restricts renderer connections to the selected backend
+  origin rather than any service on localhost.
+
+### Minimal Native Capability and Package Audit
+
+[[docs/adr/155-evidence-led-electron-surface|ADR-155]] records the capability decision
+and the before/after disposable Demo measurements. The current matrix is:
+
+| Capability                                                                               | Decision                                  | Current journey or boundary                                              |
+| ---------------------------------------------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------ |
+| Sandboxed single window, preload, 23 invokes and 6 events                                | Keep, narrow sender to trusted main frame | Local application, backup, updates, recovery, and native integrations    |
+| Native dialogs and `safeStorage`                                                         | Keep in main process                      | Backup and restore selection and optional encrypted passphrase           |
+| Main-process updater and verified downloads                                              | Keep                                      | Explicit native or source update, checksum and rollback                  |
+| Notifications, menu and dock, Finder CSV, window bounds                                  | Keep                                      | Local reminders, native commands, import handoff, and relaunch state     |
+| macOS accent and tier-gated vibrancy                                                     | Keep                                      | Existing appearance controls; vibrancy is inactive outside enhanced tier |
+| `update:get-mode`, packaged tests/maps/foreign prebuilds, duplicate Demo art             | Remove                                    | No shipped caller or runtime need                                        |
+| General web views, arbitrary downloads, protocol deep links, renderer file-system access | Do not add                                | No current journey that warrants the added privileged surface            |
+
+Both audited bundles used the same native runtime manifest. The final Demo
+package was 4,392 KiB smaller (686,196 to 681,804 KiB), with `app.asar` down
+from 6,668,208 to 2,891,881 bytes. A single cold-start log sample was 11,004
+ms before and 10,414 ms after. A single idle process sample was 15 processes,
+1,117.2 MiB resident memory, 0.5% CPU before and 16 processes, 942.2 MiB,
+1.5% CPU after. These one-off samples are observations, not benchmark claims.
+Both disposable Demo builds reached home; the final build also passed menu,
+copy, and cancelled backup-folder picker checks. A separate packaged-payload
+smoke passed a synthetic encrypted backup and restore on a disposable database.
+The in-app restore, production update, download, Finder open-with, notification
+delivery, and release-DMG behavior were not exercised in this audit.
 
 ---
 

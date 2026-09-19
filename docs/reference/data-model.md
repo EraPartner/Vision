@@ -2,9 +2,9 @@
 title: Data Model Reference
 type: reference
 status: active
-date: 2026-09-14
-updated: 2026-09-14
-last_modified: 2026-09-14
+date: 2026-09-19
+updated: 2026-09-19
+last_modified: 2026-09-19
 tags:
   [
     reference,
@@ -949,6 +949,67 @@ Execution records keyed by text UUID. Each row names an immutable definition ver
 parameters, lifecycle status, result or error, and timestamps. Completed/partial states require a
 result; failed/cancelled states require an error. The parent library's last-successful foreign key is
 set null if that run is removed.
+
+## Research dossiers (migration 0115)
+
+### research_dossiers
+
+The mutable current row has a UUID primary key, positive integer `version`, one of the four
+workspace values, a nonempty title of at most 300 characters, strict object `content_json`, and
+creation/update timestamps. `content_json` holds the question, user thesis, assumptions, open
+questions, conclusion, optional review date, evidence citation snapshots, and requested live link
+IDs. Reads derive the current live ID arrays from `research_dossier_links`, not from stale JSON.
+The `(workspace, updated_at DESC, id)` index supports library ordering. Each explicit write
+advances the version with an expected-version check.
+
+### research_dossier_versions
+
+The primary key is `(dossier_id, version)`. Each row holds one object `snapshot_json` and
+`created_at`. A trigger rejects updates to a snapshot. Deleting the parent dossier cascades to its
+versions. Restoring a snapshot appends a new version instead of editing history.
+
+### research_dossier_links
+
+Each row is keyed by `(dossier_id, link_type, ordinal)`. `link_type` is `category`, `investment`,
+or `saved-analysis`. The row keeps `historical_id` and `label_snapshot` plus one nullable live
+foreign key to the matching target table. Target deletion uses `ON DELETE SET NULL`, so the label
+and historical ID survive while the API marks the link deleted. Parent dossier deletion cascades.
+Indexes on non-null target IDs support reverse lookup and category-merge retargeting. An earlier
+version can still refer to a former ID; restoration must resolve it against current targets.
+
+These three tables are included in `.visionbak`. Migration 0115's downgrade refuses to drop them
+while any dossier exists; export and intentional removal are required before rollback. See
+[[docs/adr/153-persistent-research-dossiers|ADR-153]],
+[[docs/features/research-dossiers|Research Dossiers]], and
+[[docs/features/backup-coverage-audit|Backup Coverage Audit]].
+
+### analysis_monitors
+
+Migration 0116 stores one local rule per UUID. `kind` is `analysis-threshold` or
+`dossier-evidence`. Exactly one live foreign key identifies a saved analysis or dossier; deletion
+sets it to null while `historical_target_id` and `target_label` keep the former identity visible.
+The analysis kind has a numeric `threshold`, `field_id`, and strict `above` or `below` operator.
+`interval_minutes`, `next_due_at`, and an expiring lease drive bounded scheduled checks.
+`condition_revision`, active episode, pending signature, and last-notified time preserve baseline,
+deduplication, and cooldown behavior across restarts.
+
+### analysis_monitor_observations
+
+Observations belong to one rule and record `baseline`, `unchanged`, `triggered`,
+`cooldown-pending`, `partial`, `stale`, or `failed`. They keep previous/current exact decimal
+strings or dossier version numbers, the evidence hash, definition version and exact saved-analysis
+run provenance, result window, reason code, and `coverage_json` with unknown source coverage.
+The run foreign key becomes null if its run is removed, but `historical_analysis_run_id` remains.
+Deleting a monitor cascades to its observations.
+
+### analysis_monitor_notifications
+
+An inbox entry belongs to one monitor and one triggering observation. Its `(monitor_id,
+episode_key)` uniqueness prevents duplicate notifications in one episode; `read_at` is persisted
+for the server-owned unread count. Removing the monitor removes these entries. All three tables
+are in `.visionbak` coverage; the 0116 downgrade refuses when monitor data remains. See
+[[docs/adr/154-local-analysis-monitors|ADR-154]] and
+[[docs/features/analysis-monitors|Analysis Monitors]].
 
 ## AI Chat Entities (Phase 10)
 

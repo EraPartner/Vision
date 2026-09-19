@@ -3,7 +3,7 @@ title: Views & Pages
 type: feature
 status: active
 date: 2026-04-10
-updated: 2026-09-11
+updated: 2026-09-19
 tags:
   [
     feature,
@@ -151,7 +151,7 @@ Manage transaction categorization with hierarchical categories.
 
 ### Features
 
-- **Hierarchical Structure**: Format `GENERAL:DETAIL` (e.g., `FOOD:GROCERIES`)
+- **Hierarchical Structure**: Ordered parent-linked category paths of any depth; historical `GENERAL:DETAIL` labels retain their IDs
 - **Category Management**:
   - Create new categories
   - Edit category name/details
@@ -296,7 +296,7 @@ Comprehensive analytics and reporting dashboard.
 - **Custom Charts**: Save chart configurations with selected categories
 - **Per-graph Exclusions**: Each chart can independently toggle category/recipient exclusions
 - **Currency-aware statistics requests**: Statistics and dashboard analytics endpoints are requested with the selected app currency, and query caches are keyed by currency to keep results isolated
-- **Hierarchical Pivot Table**: Categories grouped by GENERAL with DETAIL sub-items
+- **Hierarchical Pivot Table**: Exact category rows grouped under ordered ancestors at any depth
 - **Pivot Metric Modes**: Category pivot table supports `Absolute (Income + Expense)`, `Net (Income - Expense)`, `Income only`, and `Expense only`
 - **Pivot Mode Semantics**: Historical default behavior remains available as `Absolute` (sum of `abs(tx.amount)`), while `Net` includes negative values and sorts rows by absolute net magnitude
 - **Combined Filtering**: Pivot year filter remains available and now combines with the selected metric mode
@@ -314,12 +314,13 @@ Comprehensive analytics and reporting dashboard.
 
 ### Category Name Formatting
 
-Categories follow the `GENERAL: DETAIL` format:
+Legacy categories retain the `GENERAL: DETAIL` display format:
 
 - **GENERAL**: Main category (e.g., FOOD, TRANSPORT, UTILITIES)
 - **DETAIL**: Specific subcategory (e.g., GROCERIES, GAS, ELECTRICITY)
 
-The statistics page normalizes all category names to ensure consistent formatting across:
+New categories use an ordered path array, and the statistics pivot uses its path IDs for grouping.
+Display labels are kept consistent across:
 
 - Pie chart labels
 - Trend chart legends

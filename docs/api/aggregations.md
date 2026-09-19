@@ -3,8 +3,8 @@ title: Aggregations API
 type: endpoint
 status: active
 date: 2026-04-25
-updated: 2026-09-11
-last_modified: 2026-09-11
+updated: 2026-09-19
+last_modified: 2026-09-19
 recipient_pivot_added: 2026-04-28
 tag_pivot_added: 2026-06-26
 tags: [endpoint, api, aggregations, backend, phase-2, phase-6, phase-9, phase-10, phase-d, phase-e, phase-f, phase-g, phase-h, phase-h-v2, decimal, money, cashflow-forecast, multi-method-forecast, statistical-forecasting, ensemble-methods, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience, rolling-window, url-persistence, rolling-cache, rolling-diagnostics, recipient-pivot, tag-pivot, saved-charts, exclusion-filters, ensemble-v2, tags]
@@ -55,7 +55,11 @@ related_code:
 
 > [!warning] Id query params (2026-08-11 — breaking for malformed ids)
 > Every `integer[]` query param below (`excluded_category_ids[]`, `excluded_recipient_ids[]`, `recipient_ids[]`, `tag_ids[]`) accepts **only** a plain base-10 integer in 1..2,147,483,647 per element, repeated once per id (`?excluded_category_ids=5&excluded_category_ids=9`). One bad element rejects the whole request with **400 `VALIDATION_ERROR`** (`"<field> contains invalid value: <value>"`) — no aggregation is computed.
->
+
+Category exclusions use effective category IDs (transaction, recipient default, then primary
+recipient default). Each selected ID excludes its own assignments and those of all descendants;
+uncategorized rows stay included. This is an ancestor filter, not a display-name prefix test.
+
 > **Absent or empty is unchanged and is not an error:** omitting the param, or sending `?excluded_category_ids=`, still means "no filter" and answers 200 with the unfiltered dataset. An empty list and a list with a bad element are deliberately different cases.
 >
 > This changed on 2026-08-11: the parser was `.map(Number).filter(Number.isFinite)`, so a bad element was **dropped**, not rejected. `?excluded_category_ids=12abc` yielded `[]` and switched the exclusion off entirely — the endpoint answered 200 with a _different dataset than the caller asked for_ and nothing surfaced, while `"0x10"` decoded to 16 and `"1e3"` to 1000, excluding a category nobody named. Clients sending plain integers are unaffected. `mc_percentiles[]` is **not** an id param and keeps the lenient parser. Full accept set: [[docs/security/input-validation#Repeatable ID Query Params (aggregations)|Input Validation]].
@@ -185,9 +189,16 @@ Spending totals by category.
 
 **Query Parameters:**
 
-| Parameter  | Type   | Default | Description     |
-| ---------- | ------ | ------- | --------------- |
-| `currency` | string | EUR     | Target currency |
+| Parameter              | Type    | Default | Description                                                                  |
+| ---------------------- | ------- | ------- | ---------------------------------------------------------------------------- |
+| `currency`             | string  | EUR     | Target currency                                                              |
+| `ancestor_category_id` | integer | —       | Optional node ID; aggregate its direct assignments and descendants once each |
+
+Without `ancestor_category_id`, the response keeps its existing exact-category breakdown. With
+that parameter, the backend uses the effective category ID for each transaction, joins it to the
+selected ancestor through `category_ancestors`, and returns one rollup total. It uses live rows
+instead of a materialized-view category label. Null effective categories are not descendants of
+any node and remain outside a requested rollup. See [[docs/adr/152-depth-agnostic-category-hierarchy|ADR-152]].
 
 **Response (data field):**
 
@@ -228,7 +239,7 @@ Top merchants and month-over-month spending changes. Supports the same exclusion
 | `currency`                 | string    | EUR     | Target currency                                                                      |
 | `start_date`               | date      | —       | Inclusive lower transaction-date bound                                               |
 | `end_date`                 | date      | —       | Inclusive upper transaction-date bound                                               |
-| `excluded_category_ids[]`  | integer[] | []      | Categories to exclude (applied via `COALESCE(t.category_id, r.default_category_id)`) |
+| `excluded_category_ids[]`  | integer[] | []      | Exclude selected category nodes and descendants using the effective category ID      |
 | `excluded_recipient_ids[]` | integer[] | []      | Recipients to exclude (applied via `COALESCE(pr.id, r.id)` to resolve cluster roots) |
 
 **Response (data field):**
@@ -591,6 +602,8 @@ Aggregated spending data pivoted by category with support for exclusion filters.
       {
         "categoryId": 5,
         "categoryName": "FOOD:GROCERIES",
+        "categoryPathIds": [12, 5],
+        "categoryPathSegments": ["FOOD", "GROCERIES"],
         "total": -1250.75,
         "income": 0,
         "expense": -1250.75,
@@ -604,6 +617,9 @@ Aggregated spending data pivoted by category with support for exclusion filters.
 **Notes:**
 
 - Serves as an alternative category-level pivot, supporting exclusion filters for filtered dashboard views
+- `categoryPathIds` and `categoryPathSegments` are ordered from root to the
+  exact assigned category. Pivot amounts retain exact-category grain. The UI
+  uses the arrays for ancestor grouping; it never splits `categoryName`.
 - `meta.source` remains `'live'`; repeated identical requests may reuse the
   five-minute in-process response cache without changing the source label
 
@@ -1136,6 +1152,7 @@ Real-time cash flow forecast for the current month using eight forecasting metho
 | `category_breakdown[].category_id`   | number \| null | Category ID; null for uncategorized                                                                                                              |
 | `category_breakdown[].general`       | string         | General category name (e.g., "Groceries")                                                                                                        |
 | `category_breakdown[].detail`        | string         | Detail category name (e.g., "Supermarket")                                                                                                       |
+| `category_breakdown[].path_name`     | string         | Full display path; `general` and `detail` remain legacy aliases. Category ID owns the forecast series.                                           |
 | `category_breakdown[].actual[]`      | array          | Per-category realized daily net (past and today) with cumulative                                                                                 |
 | `category_breakdown[].forecast[]`    | array          | Per-category simple-average forecast (reconciled)                                                                                                |
 | `category_breakdown[].cumulative[]`  | array          | Per-category cumulative series (actual + forecast)                                                                                               |

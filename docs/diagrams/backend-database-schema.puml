@@ -10,14 +10,35 @@ hide circle
 ' Core Tables
 entity "categories" as categories {
   * id : serial <<PK>>
+  parent_id : integer <<FK categories.id>>
+  * name : text
+  * path_name : text
   * general : text
   * detail : text
+  * hierarchy_only : boolean
+  * legacy_compatible : boolean
   description : text
   * is_active : boolean
   created_at : timestamptz
   updated_at : timestamptz
   ---
   UNIQUE(general, detail)
+  UNIQUE(parent_id, name) for siblings
+}
+
+entity "category_paths" as category_paths <<view>> {
+  * id : integer
+  parent_id : integer
+  * ids : integer[]
+  * names : text[]
+  * path_name : text
+  * depth : integer
+}
+
+entity "category_ancestors" as category_ancestors <<view>> {
+  * category_id : integer
+  * ancestor_id : integer
+  * distance : integer
 }
 
 entity "recipients" as recipients {
@@ -335,6 +356,88 @@ saved_analyses ||--|{ saved_analysis_versions
 saved_analyses ||--o{ saved_analysis_runs
 saved_analysis_versions ||--o{ saved_analysis_runs
 
+entity "research_dossiers" as research_dossiers {
+  * id : uuid <<PK>>
+  * version : integer
+  * workspace : text
+  * title : text
+  * content_json : jsonb
+  * created_at : timestamptz
+  * updated_at : timestamptz
+}
+
+entity "research_dossier_versions" as research_dossier_versions {
+  * dossier_id : uuid <<PK,FK>>
+  * version : integer <<PK>>
+  * snapshot_json : jsonb
+  * created_at : timestamptz
+  ---
+  UPDATE rejected by trigger
+}
+
+entity "research_dossier_links" as research_dossier_links {
+  * dossier_id : uuid <<PK,FK>>
+  * link_type : text <<PK>>
+  * ordinal : integer <<PK>>
+  * historical_id : text
+  * label_snapshot : text
+  category_id : integer <<FK, nullable>>
+  investment_id : integer <<FK, nullable>>
+  saved_analysis_id : text <<FK, nullable>>
+}
+
+research_dossiers ||--|{ research_dossier_versions
+research_dossiers ||--o{ research_dossier_links
+categories |o--o{ research_dossier_links
+investments |o--o{ research_dossier_links
+saved_analyses |o--o{ research_dossier_links
+
+entity "analysis_monitors" as analysis_monitors {
+  * id : uuid <<PK>>
+  saved_analysis_id : text <<FK, nullable>>
+  dossier_id : uuid <<FK, nullable>>
+  * kind : text
+  * historical_target_id : text
+  * target_label : text
+  field_id : text
+  operator : text
+  threshold : numeric
+  * next_due_at : timestamptz
+  lease_token : uuid
+  * condition_revision : integer
+  active_episode_key : uuid
+  pending_signature : text
+  last_notified_at : timestamptz
+}
+
+entity "analysis_monitor_observations" as analysis_monitor_observations {
+  * id : uuid <<PK>>
+  * monitor_id : uuid <<FK>>
+  analysis_run_id : text <<FK, nullable>>
+  * status : text
+  previous_value : text
+  current_value : text
+  evidence_hash : text
+  * reason_code : text
+  * coverage_json : jsonb
+  * checked_at : timestamptz
+}
+
+entity "analysis_monitor_notifications" as analysis_monitor_notifications {
+  * id : uuid <<PK>>
+  * monitor_id : uuid <<FK>>
+  * observation_id : uuid <<FK, unique>>
+  * episode_key : text <<unique with monitor_id>>
+  read_at : timestamptz
+}
+
+saved_analyses |o--o{ analysis_monitors
+research_dossiers |o--o{ analysis_monitors
+analysis_monitors ||--o{ analysis_monitor_observations
+analysis_monitors ||--o{ analysis_monitor_notifications
+analysis_monitor_observations ||--o| analysis_monitor_notifications
+saved_analysis_runs |o--o{ analysis_monitor_observations
+
 entity "belgian_inflation_rates" as belgian_inflation_rates {
   * id : serial <<PK>>
   * month_date : date <<UQ>>
@@ -473,6 +576,9 @@ end note
 
 ' Relationships (using standard UML crow's foot notation)
 ' One-to-One / One-to-Many relationships
+categories |o--o{ categories : parent_id
+category_paths ..> categories : recursive path projection
+category_ancestors ..> categories : recursive ancestor projection
 categories ||--o{ recipients : default_category_id
 recipients ||--o| recipients : primary_recipient_id
 recipient_bank_accounts }o--|| recipients

@@ -3,29 +3,66 @@ title: API - Categories
 type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/categories
-description: Category management for organizing transactions with UNIQUE constraint and atomic assignment
-date: 2026-09-11
-updated: 2026-09-11
+description: Ordered category hierarchy with stable IDs and a compatible GENERAL:DETAIL API
+date: 2026-09-19
+updated: 2026-09-19
 tags: [api, categories, organization, GENERAL-DETAIL, atomic, phase-6]
 status: active
 aliases: [categories-api, category-management, labels, tags, GENERAL-DETAIL]
-related_code: [[apps/node-backend/src/routes/categories.js]], [[apps/node-backend/src/repositories/categoryRepository.js]]
+related_code: [[apps/node-backend/src/routes/categories.js]], [[apps/node-backend/src/repositories/categoryRepository.js]], [[apps/node-backend/src/repositories/categoryHierarchyRepository.js]]
 ---
 
 # Categories API
 
 ## Overview
 
-Categories organize transactions using a "GENERAL:DETAIL" format (e.g., "FOOD:GROCERIES", "TRANSPORT:GAS"). Categories are hierarchical with general as the parent category and detail as the subcategory.
+The canonical hierarchy uses a parent ID and ordered path arrays. Existing `GENERAL:DETAIL`
+categories retain their IDs and historical aliases. The `/api/categories` endpoints keep the
+legacy two-field create/update/list behavior; `/api/categories/tree` is the depth-agnostic API.
+Use `pathIds` and `path`, not the colon-joined `category_name`, for structure.
 
 ## Endpoints
 
+### Hierarchy endpoints
+
+`GET /api/categories/tree` returns every category node, including assignable depth-one roots,
+with `{ items, total }`. Each item includes `id`, `name`, `parentId`, `pathIds`, `path`,
+`category_name`, `depth`, `description`, `is_active`, `hierarchyOnly`, and `legacyCompatible`.
+The ordered path arrays are authoritative. Results include inactive nodes so the editor can
+show them; assignment controls should still respect `is_active`.
+
+`POST /api/categories/tree` accepts `{ "name": "SOLAR", "parentId": 12,
+"description": "..." }`. Omit `parentId` or send null for a depth-one root. Names are trimmed,
+uppercased, and unique among siblings. Missing or inactive parents and invalid names are rejected.
+
+`GET /api/categories/tree/:id` returns one node. `PATCH /api/categories/tree/:id` accepts
+optional `name`, `parentId` (including null to make a root), `description`, and `is_active`.
+It keeps the node ID stable and rejects cycles, sibling collisions, and an inactive parent.
+`DELETE /api/categories/tree/:id` deletes only a childless node and returns 204. Existing
+foreign-key deletion rules determine whether linked records become uncategorized.
+
+`POST /api/categories/tree/:id/merge` accepts `{ "targetId": 34 }`. It moves children and
+direct category references to the active target, then deletes the source, in one transaction.
+It retains redirects for legacy import pairs, including earlier redirects through chained
+merges. Legacy category-name input also resolves those pairs. Merging a structural legacy root
+also redirects future imports of that general prefix.
+It rejects a target inside the source subtree. A duplicate sibling name or unique membership
+returns 409 with no partial move; the user must resolve the collision and retry. The target
+node is returned.
+
+The tree API is additive. The legacy endpoints below preserve historical `general` and
+`detail` aliases after a tree rename or move; they do not expose synthetic tree-only aliases
+in their list. A legacy pair update relocates that row under the corresponding general root.
+Legacy PATCH and DELETE reject tree-only nodes and structural roots.
+
 ### GET /api/categories
 
-Retrieve a list of categories. Pagination is **opt-in** (`parseOptionalPagination`, see
+Retrieve legacy-compatible categories. Newly created tree-only nodes are on `/tree` instead.
+Pagination is **opt-in** (`parseOptionalPagination`, see
 [[docs/reference/code-patterns#Adding pagination to a list that never had it|code-patterns]]):
 a request without `limit`/`offset` returns the **complete** collection — the full-list
-consumers (category pickers, the categories page) are never silently truncated.
+legacy consumers are never silently truncated. The current category editor and pickers use
+`/tree` for all depths.
 
 **Query Parameters:**
 
@@ -141,7 +178,8 @@ The response count reports how many recipient rows were updated.
 
 ## Category Format
 
-Categories use the format: `GENERAL:DETAIL`
+Legacy category aliases use `GENERAL:DETAIL`. Canonical hierarchy paths use ordered ID and
+name arrays; a colon in one segment is valid and must not be parsed as a boundary.
 
 Examples:
 

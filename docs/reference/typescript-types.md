@@ -3,7 +3,7 @@ title: TypeScript Types Reference
 type: reference
 status: active
 date: 2026-09-12
-updated: 2026-09-12
+updated: 2026-09-19
 tags:
   [
     reference,
@@ -51,7 +51,7 @@ without mutating a saved definition or prior result. See
 [[docs/adr/137-shared-analysis-definition-and-result-contract|ADR-137]].
 
 Electron inter-process communication has a separate shared contract because it is not HTTP or
-OpenAPI. `packaging/electron/electron-api.d.ts`, beside the preload, owns all 24 invoke channels,
+OpenAPI. `packaging/electron/electron-api.d.ts`, beside the preload, owns all 23 invoke channels,
 6 event channels, their payloads and results, and the five optional `Window` bridges. The
 `@vision/types/electron` entry point is a thin type re-export used by the frontend. Preload JSDoc
 and main-process channel registration import the canonical declaration directly, while

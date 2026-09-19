@@ -52,6 +52,15 @@ package "Repositories" {
     +assignToRecipients(categoryId, recipientIds): Promise<number>
   }
 
+  class CategoryHierarchyRepository {
+    +listCategoryNodes(): Promise<CategoryNode[]>
+    +getCategoryNode(id): Promise<CategoryNode | null>
+    +createCategoryNode(input): Promise<CategoryNode>
+    +updateCategoryNode(id, input): Promise<CategoryNode | null>
+    +mergeCategoryNodes(sourceId, targetId): Promise<CategoryNode | null>
+    +deleteCategoryNode(id): Promise<boolean>
+  }
+
   class PlannedTransactionRepository {
     +getAll(opts): Promise<{items, total}>
     +getById(id): Promise<PlannedTransaction | null>
@@ -321,6 +330,7 @@ package "Services" {
 DB <.. TransactionRepository
 DB <.. RecipientRepository
 DB <.. CategoryRepository
+DB <.. CategoryHierarchyRepository
 DB <.. PlannedTransactionRepository
 DB <.. RecipientBankAccountRepository
 DB <.. InvestmentRepository

@@ -49,8 +49,13 @@ package "Core Entities" {
 
   class Category {
     +id: integer
+    +parent_id: integer <<FK Category>>
+    +name: text
+    +path_name: text
     +general: text
     +detail: text
+    +hierarchy_only: boolean
+    +legacy_compatible: boolean
     +description: text
     +is_active: boolean
     +created_at: timestamptz
@@ -375,6 +380,7 @@ package "Storage & Observability (May 2026)" {
 }
 
 ' Relationships (using UML standard notation)
+Category "0..1" <-- "*" Category : parent_id
 Recipient "1" --> "0..1" Recipient : primary_recipient_id
 Recipient "1" --> "0..1" Category : default_category_id
 Recipient "1" o-- "*" RecipientBankAccount : has

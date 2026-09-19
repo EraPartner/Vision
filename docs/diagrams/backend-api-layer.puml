@@ -68,6 +68,12 @@ package "Routes" {
 
   class CategoriesRouter {
     +GET / : list categories
+    +GET /tree : list ordered category paths
+    +POST /tree : create category node
+    +GET /tree/:id : get category node
+    +PATCH /tree/:id : rename or move node
+    +POST /tree/:id/merge : merge category nodes
+    +DELETE /tree/:id : delete leaf node
     +GET /:id : get category
     +POST / : create category
     +PATCH /:id : update category
@@ -189,6 +195,23 @@ package "Routes" {
     +POST /saved/:id/run : refresh and record state
   }
 
+  class ResearchDossiersRouter <<ADR-153>> {
+    +GET,POST / : summaries/create
+    +GET,PUT,DELETE /:id : read/version/delete
+    +GET /:id/versions : immutable history
+    +POST /:id/restore : append restoration
+    +GET /export,/:id/export : JSON snapshots
+  }
+
+  class AnalysisMonitorsRouter <<ADR-154>> {
+    +GET,POST / : list/create rules
+    +PATCH,DELETE /:id : edit/delete rule
+    +POST /:id/check : persist manual observation
+    +GET /:id/observations : paged history
+    +GET /notifications : paged inbox
+    +POST /notifications/:id/read : read inbox entry
+  }
+
   class SplitsRouter {
     +GET /owed : get owed summary
     +GET /owed/:id : get owed by recipient
@@ -220,7 +243,7 @@ package "Routes" {
     +GET /planned-expenses-next-month : get planned expenses
     +GET /average-vs-current-spending : compare spending
     +GET /cashflow-comparison : compare cashflow
-    +GET /category-breakdown : get category breakdown
+    +GET /category-breakdown : breakdown, optional ancestor_category_id
     +GET /bank-balances : get bank balances
     +GET /recurring-patterns : get recurring patterns
     +GET /net-worth : get net worth
@@ -310,6 +333,7 @@ end note
 package "Repositories" {
   class "TransactionRepository" as TR
   class "CategoryRepository" as CR
+  class "CategoryHierarchyRepository" as CHR
   class "RecipientRepository" as RR
   class "PlannedTransactionRepository" as PTR
   class "InvestmentRepository" as IR
@@ -363,6 +387,8 @@ Main --> SettingsRouter
 Main --> WatchlistRouter
 Main --> SavedChartsRouter
 Main --> AnalysisRouter
+Main --> AnalysisMonitorsRouter : /api/analysis/monitors before /api/analysis
+Main --> ResearchDossiersRouter
 Main --> SplitsRouter
 Main --> MarketLookupRouter
 Main --> InfoRouter
@@ -380,6 +406,7 @@ RecipientsRouter ..> RecipientBankAccountsRouter : mounts at /recipients/:id/ban
 
 TransactionsRouter --> TR
 CategoriesRouter --> CR
+CategoriesRouter --> CHR
 RecipientsRouter --> RR
 RecipientBankAccountsRouter --> RBAR
 PlannedTransactionsRouter --> PTR
@@ -400,6 +427,8 @@ SettingsRouter --> SR2
 WatchlistRouter --> WR
 SavedChartsRouter --> SCR
 AnalysisRouter --> Connection : isolated analysis pool
+AnalysisMonitorsRouter --> Connection : local rule and history service
+ResearchDossiersRouter --> Connection : local transactional dossier service
 SplitsRouter --> SR
 MarketLookupRouter --> PriceProviderService
 InfoRouter --> IFR

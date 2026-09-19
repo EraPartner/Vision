@@ -27,8 +27,9 @@ package "Budgeting Pages" {
   }
 
   class CategoriesPage {
-    +Category List
-    +Category Form
+    +Category Tree
+    +Category Node Dialog
+    +Move and Merge Actions
   }
 
   class RecipientsPage {
@@ -137,6 +138,15 @@ package "Portfolio Pages" {
 }
 
 package "Research Pages (ADR-079)" {
+  class ResearchDossiersPage <<ADR-153>> {
+    +Question, thesis, evidence, conclusion
+    +Version history and restore
+    +Local JSON export
+  }
+  class AnalysisMonitorsPage <<ADR-154>> {
+    +Threshold and evidence rules
+    +Observation history and inbox
+  }
   class ResearchHomePage {
     +Aggregated Provider Data
     +Quick Symbol Search
@@ -306,6 +316,8 @@ ResearchHomePage --> ResearchComparePage : "/research/compare"
 ResearchHomePage --> ChartBuilderPage : "/research/charts"
 ResearchHomePage --> PortfolioForecastPage : "/research/forecast"
 ResearchHomePage --> MarketOverviewPage : "/research/markets"
+ResearchHomePage --> ResearchDossiersPage : "/research/dossiers"
+AppLayout --> AnalysisMonitorsPage : "/analysis/monitors"
 
 AppLayout --> AdminOverviewPage : "/admin"
 AdminOverviewPage --> DbMaintenancePage : "/admin/db"

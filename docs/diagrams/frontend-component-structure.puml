@@ -203,6 +203,11 @@ package "Feature Components - Forms" {
   class PlannedPaymentForm
 }
 
+package "Feature Components - Categories" {
+  class CategoriesPage
+  class CategoryNodeDialog
+}
+
 package "Feature Components - Portfolio" {
   class PortfolioOverview
   class PortfolioExposureCard <<ADR-150>>
@@ -327,6 +332,28 @@ package "Feature Components - Onboarding" {
   class OnboardingWizard
 }
 
+package "Feature Components - Research" {
+  class AnalysisMonitorsPage {
+    +rule editor and observation history
+    +server-owned in-app inbox
+  }
+  class MonitorInboxBadge {
+    +unread count in navigation
+  }
+  class useMonitors {
+    +paged rules, observations, and inbox
+    +local rule mutations
+  }
+  class ResearchDossiersPage {
+    +local versioned editor
+    +evidence and link provenance
+  }
+  class useDossiers {
+    +list and detail queries
+    +save, restore, delete mutations
+  }
+}
+
 ' Relationships
 App --> AppLayout
 App --> QueryClientProvider
@@ -339,8 +366,13 @@ AppLayout --> CommandPalette
 AppLayout --> ShortcutsOverlay
 AppLayout --> PageTransition
 AppLayout --> ShaderAurora
+ResearchDossiersPage --> useDossiers
+AnalysisMonitorsPage --> useMonitors
+MonitorInboxBadge --> useMonitors
+AppSidebar --> MonitorInboxBadge
 
 AddTransactionDialog --> CategoryCombobox
+CategoriesPage --> CategoryNodeDialog
 AddTransactionDialog --> RecipientCombobox
 VirtualDataTable --> ColumnFilter
 DataTable --> ColumnFilter

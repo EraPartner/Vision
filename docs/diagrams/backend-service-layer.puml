@@ -137,6 +137,24 @@ package "External / Data" {
     +runSavedAnalysis(id): Promise<SavedAnalysis>
   }
 
+  class ResearchDossierService <<ADR-153>> {
+    +createResearchDossier(input): Promise<Dossier>
+    +updateResearchDossier(id, expectedVersion, content): Promise<Dossier>
+    +restoreResearchDossier(id, version, expectedVersion): Promise<Dossier>
+    +exportResearchDossiers(): Promise<Export>
+  }
+
+  class AnalysisMonitorService <<ADR-154>> {
+    +checkAnalysisMonitor(id): Promise<Observation>
+    +checkDueAnalysisMonitors(): Promise<number>
+    +listMonitorNotifications(page): Promise<Inbox>
+  }
+
+  class AnalysisMonitorScheduler <<ADR-154>> {
+    +startAnalysisMonitorScheduler(): void
+    +one startup catch-up and 60-second ticks
+  }
+
   class CloudAnalysisPlanService <<ADR-149>> {
     +getPublicCloudAnalysisCatalog(): PublicCatalog
     +parseCloudAnalysisPlans(text, scope): Plan[]
@@ -326,6 +344,17 @@ PortfolioPerformanceSnapshotService --> PortfolioSummaryService
 AnalysisExecutor --> AnalysisCatalog : validates approved relations
 SavedAnalysisService --> AnalysisCatalog : compiles visual definitions
 SavedAnalysisService --> AnalysisExecutor : refreshes saved runs
+AnalysisMonitorScheduler --> AnalysisMonitorService : bounded due checks
+AnalysisMonitorService --> SavedAnalysisService : one exact local run per check
+note right of AnalysisMonitorService
+  Reads current dossier evidence from PostgreSQL;
+  it does not invoke document or provider fetches.
+end note
+note right of ResearchDossierService
+  Uses the normal PostgreSQL connection and transaction.
+  Validates live category, investment, saved-analysis,
+  and document references directly before each write.
+end note
 CloudAnalysisPlanService --> AnalysisCatalog : validates identifier-only plans
 CloudAnalysisPlanService --> AnalysisExecutor : executes with locally injected scope
 
