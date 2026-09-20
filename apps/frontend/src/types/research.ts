@@ -357,11 +357,13 @@ export type ForecastReturnSource = "historical" | "blended";
 export interface PortfolioForecastInput {
     horizonMonths: number;
     monthlyContribution?: number;
+    monthlyContributionSchedule?: number[];
     paths?: number;
     /** 0 = pure historical drift, 1 = pure forward. */
     forwardBlend?: number;
     method?: ForecastMethod;
     targetValue?: number;
+    goalMonth?: number;
     currency?: string;
     seed?: string;
 }
@@ -398,6 +400,7 @@ export interface PortfolioForecast {
     startValue?: number;
     startInvested?: number;
     monthlyContribution?: number;
+    goalMonth?: number;
     totalContributions?: number;
     netInvested?: number;
     expectedAnnualReturn?: number;

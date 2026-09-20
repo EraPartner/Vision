@@ -2,9 +2,10 @@
  * Cross-workspace API (ADR-098) — cash-aware rebalancing composing Budgeting
  * + Portfolio data. (The unified-tax surface was removed in ADR-102.)
  */
-import { apiRequest } from '@/lib/api/client';
+import { apiRequest } from "@/lib/api/client";
 
-export type ModelPortfolio = 'sixty_forty' | 'all_weather' | 'three_fund';
+export type ModelPortfolio =
+    "sixty_forty" | "all_weather" | "three_fund" | "awesome";
 
 /**
  * A user-defined custom rebalancing target, persisted under the `rebalance_plans`
@@ -51,9 +52,41 @@ export interface RebalanceResponse {
     deployment: Record<string, number>;
 }
 
-export function computeRebalance(req: RebalanceRequest): Promise<RebalanceResponse> {
-    return apiRequest('/api/cross-workspace/rebalance', {
-        method: 'POST',
+export interface CommitmentAwareCashResponse {
+    currency: string;
+    today: string;
+    horizonEnd: string;
+    horizonDays: number;
+    currentCash: number;
+    reserveFloor: number;
+    minimumProjectedBalance: number;
+    minimumDate: string;
+    candidateCashCap: number;
+    occurrenceCount: number;
+    assumptions: {
+        plannedOnly: boolean;
+        excludesStatisticalForecast: boolean;
+        excludesFutureIncome: boolean;
+        excludesUnplannedExpenses: boolean;
+        currencyConversionAtRecentRates: boolean;
+    };
+}
+
+export function computeCommitmentAwareCash(req: {
+    currency?: string;
+    reserveFloor: number;
+}): Promise<CommitmentAwareCashResponse> {
+    return apiRequest("/api/cross-workspace/commitment-aware-cash", {
+        method: "POST",
+        body: JSON.stringify(req),
+    });
+}
+
+export function computeRebalance(
+    req: RebalanceRequest,
+): Promise<RebalanceResponse> {
+    return apiRequest("/api/cross-workspace/rebalance", {
+        method: "POST",
         body: JSON.stringify(req),
     });
 }

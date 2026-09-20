@@ -689,6 +689,23 @@ export const plannedTransactionRepository = {
     return result.rows;
   },
 
+  /** Active, unexecuted commitments through an inclusive day boundary. */
+  async getForCommitmentProjection(horizonEnd) {
+    const result = await query(
+      `SELECT pt.id, pt.planned_date, pt.amount, pt.currency,
+              pt.is_recurring, pt.recurrence_pattern,
+              pt.recurrence_end_date, pt.max_occurrences,
+              (SELECT COUNT(*)::int FROM planned_transaction_executions pte
+                WHERE pte.planned_transaction_id = pt.id) AS execution_count
+         FROM planned_transactions pt
+        WHERE pt.is_active = true AND pt.is_executed = false
+          AND pt.planned_date <= $1::date
+        ORDER BY pt.planned_date, pt.id`,
+      [horizonEnd],
+    );
+    return result.rows;
+  },
+
   /**
    * @param {number} id
    * @returns {Promise<boolean>}

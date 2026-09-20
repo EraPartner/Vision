@@ -337,15 +337,47 @@ router.post(
     res,
   ) => {
     const body = req.body ?? {};
+    const requestedHorizon = Number(body.horizon_months);
+    const horizon = Number.isFinite(requestedHorizon)
+      ? Math.min(600, Math.max(1, Math.round(requestedHorizon)))
+      : 120;
+    const schedule = body.monthly_contribution_schedule;
+    if (schedule !== undefined) {
+      const parsed = z
+        .array(z.number().finite().min(0))
+        .max(600)
+        .safeParse(schedule);
+      if (!parsed.success || parsed.data.length > horizon) {
+        throw new ValidationError(
+          "monthly_contribution_schedule must contain at most horizon_months non-negative amounts",
+        );
+      }
+    }
+    const goalMonth = body.goal_month;
+    const targetValue = Number(body.target_value);
+    if (
+      goalMonth !== undefined &&
+      (!Number.isInteger(goalMonth) ||
+        goalMonth < 1 ||
+        goalMonth > horizon ||
+        !Number.isFinite(targetValue) ||
+        targetValue <= 0)
+    ) {
+      throw new ValidationError(
+        "goal_month must be within horizon_months and accompanied by a positive target_value",
+      );
+    }
     const result = await runPortfolioForecast({
       horizonMonths: body.horizon_months,
       monthlyContribution: body.monthly_contribution,
+      monthlyContributionSchedule: body.monthly_contribution_schedule,
       paths: body.paths,
       forwardBlend: body.forward_blend,
       method: /** @type {'parametric'|'block_bootstrap'|undefined} */ (
         single(body.method) || undefined
       ),
       targetValue: body.target_value,
+      goalMonth: body.goal_month,
       currency: single(body.currency) || undefined,
       seed: single(body.seed) || undefined,
     });

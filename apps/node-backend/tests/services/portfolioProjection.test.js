@@ -160,4 +160,49 @@ describe('runPortfolioForecast', () => {
     expect(r.flowArtifactDays).toBe(1);
     expect(r.historyDays).toBe(2);
   });
+
+  it('keeps a constant schedule identical to the legacy contribution path', async () => {
+    for (const method of ['parametric', 'block_bootstrap']) {
+      const input = { horizonMonths: 6, paths: 200, monthlyContribution: 100, method };
+      const legacy = await runPortfolioForecast(input, deps());
+      const scheduled = await runPortfolioForecast(
+        { ...input, monthlyContributionSchedule: Array(6).fill(100) }, deps(),
+      );
+      expect(scheduled.seed).toBe(legacy.seed);
+      expect(scheduled.projected).toEqual(legacy.projected);
+      expect(scheduled.points).toEqual(legacy.points);
+      expect(scheduled.totalContributions).toBe(legacy.totalContributions);
+    }
+  });
+
+  it('accounts for interrupted contributions each month and evaluates a dated goal', async () => {
+    const stable = deps({
+      getSnapshots: async () => Array.from({ length: 100 }, () => ({ value: 1000, invested: 1000 })),
+      getPortfolioSummary: async () => ({
+        totals: { totalPortfolioValue: 1000, totalInvested: 1000 }, summaries: [],
+      }),
+    });
+    const input = {
+      horizonMonths: 6, paths: 100, monthlyContribution: 100,
+      monthlyContributionSchedule: [0, 0, 0], targetValue: 1250, seed: 'interruption',
+    };
+    const dated = await runPortfolioForecast({ ...input, goalMonth: 3 }, stable);
+    const undated = await runPortfolioForecast(input, stable);
+    expect(dated.points.map((point) => point.netInvested)).toEqual([1000, 1000, 1000, 1100, 1200, 1300]);
+    expect(dated.totalContributions).toBe(300);
+    expect(dated.netInvested).toBe(1300);
+    expect(dated.goalMonth).toBe(3);
+    expect(dated.probTarget).toBe(0);
+    expect(undated.probTarget).toBe(1);
+    expect(undated).not.toHaveProperty('goalMonth');
+  });
+
+  it('rejects schedules longer than the horizon or containing invalid amounts', async () => {
+    await expect(runPortfolioForecast({ horizonMonths: 2, monthlyContributionSchedule: [0, 0, 0] }, deps()))
+      .rejects.toThrow(RangeError);
+    await expect(runPortfolioForecast({ horizonMonths: 2, monthlyContributionSchedule: [0, -1] }, deps()))
+      .rejects.toThrow(RangeError);
+    await expect(runPortfolioForecast({ horizonMonths: 2, monthlyContributionSchedule: [0, Infinity] }, deps()))
+      .rejects.toThrow(RangeError);
+  });
 });

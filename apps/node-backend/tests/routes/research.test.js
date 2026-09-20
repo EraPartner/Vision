@@ -371,6 +371,61 @@ describe("Research route parameter guards", () => {
       expect(res.body.data).toEqual({ bands: [] });
     });
 
+    it("passes a bounded contribution schedule and dated goal", async () => {
+      runPortfolioForecast.mockResolvedValue({ available: true });
+      await api
+        .post(`${BASE}/portfolio-forecast`)
+        .send({
+          horizon_months: 12,
+          monthly_contribution: 200,
+          monthly_contribution_schedule: [0, 0, 0],
+          target_value: 10000,
+          goal_month: 9,
+        })
+        .expect(200);
+      expect(runPortfolioForecast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          monthlyContributionSchedule: [0, 0, 0],
+          goalMonth: 9,
+        }),
+      );
+    });
+
+    it("rejects a schedule longer than the horizon", async () => {
+      await api
+        .post(`${BASE}/portfolio-forecast`)
+        .send({
+          horizon_months: 1,
+          monthly_contribution_schedule: [0, 0],
+        })
+        .expect(400);
+      expect(runPortfolioForecast).not.toHaveBeenCalled();
+    });
+
+    it("rejects a goal month after the horizon", async () => {
+      await api
+        .post(`${BASE}/portfolio-forecast`)
+        .send({
+          horizon_months: 12,
+          target_value: 10000,
+          goal_month: 24,
+        })
+        .expect(400);
+      expect(runPortfolioForecast).not.toHaveBeenCalled();
+    });
+
+    it("rejects a dated goal with a nonfinite target", async () => {
+      await api
+        .post(`${BASE}/portfolio-forecast`)
+        .send({
+          horizon_months: 12,
+          target_value: "Infinity",
+          goal_month: 3,
+        })
+        .expect(400);
+      expect(runPortfolioForecast).not.toHaveBeenCalled();
+    });
+
     it("no longer accepts the camelCase spellings", async () => {
       runPortfolioForecast.mockResolvedValue({ bands: [] });
       await api

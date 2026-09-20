@@ -39,6 +39,7 @@ import { PAGE_ICONS } from "@/lib/pageIcons";
 import { PageShell } from "@/components/shared/PageShell";
 import { usePortfolioForecastQuery } from "@/features/research/useResearchQueries";
 import { parseDecimal } from "@/lib/decimal";
+import LifeScenarioPanel from "./LifeScenarioPanel";
 
 const HORIZONS = [
     { labelKey: "research.forecast.h1y", months: 12 },
@@ -548,6 +549,12 @@ export default function PortfolioForecastPage() {
                         )}
                 </>
             )}
+            <LifeScenarioPanel
+                forecastInput={input}
+                currency={currency}
+                locale={locale}
+                numberFormat={appSettings.numberFormat}
+            />
         </PageShell>
     );
 }

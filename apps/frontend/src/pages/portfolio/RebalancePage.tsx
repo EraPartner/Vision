@@ -5,7 +5,7 @@ import { PAGE_ICONS } from "@/lib/pageIcons";
  * how to deploy spendable budgeting cash into underweight sleeves without selling.
  * Custom plans are persisted via useRebalancePlans (the `rebalance_plans` setting).
  */
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -46,6 +46,7 @@ import { cn } from "@/lib/utils";
 import { useRebalancePlans } from "@/hooks/useRebalancePlans";
 import type {
     ModelPortfolio,
+    CommitmentAwareCashResponse,
     RebalanceResponse,
 } from "@/lib/api/crossWorkspace";
 import { PageShell } from "@/components/shared/PageShell";
@@ -60,7 +61,12 @@ import { useRebalanceInputs } from "@/features/portfolio/usePortfolioQueries";
 import { parseDecimal } from "@/lib/decimal";
 import { formatEditableNumber, type NumberFormat } from "@/utils/currency";
 
-const MODELS: ModelPortfolio[] = ["sixty_forty", "all_weather", "three_fund"];
+const MODELS: ModelPortfolio[] = [
+    "sixty_forty",
+    "all_weather",
+    "three_fund",
+    "awesome",
+];
 
 // Allocation sleeves offered in the custom editor. Mirrors the rolled-up sleeve
 // vocabulary the server reports actuals in (crossWorkspaceDataService SLEEVE_ROLLUP)
@@ -82,6 +88,13 @@ const PRESET_WEIGHTS: Record<ModelPortfolio, Record<string, number>> = {
     sixty_forty: { stocks: 0.6, bonds: 0.4 },
     all_weather: { stocks: 0.3, bonds: 0.55, gold: 0.075, commodities: 0.075 },
     three_fund: { stocks: 0.48, intl_stocks: 0.12, bonds: 0.4 },
+    awesome: {
+        real_estate: 0.2,
+        stocks: 0.2,
+        gold: 0.2,
+        bonds: 0.2,
+        savings: 0.2,
+    },
 };
 
 interface Row {
@@ -185,6 +198,7 @@ export default function RebalancePage() {
     const planName = draft.name;
     const useCashCap = draft.capEnabled;
     const cashCapInput = draft.cap;
+    const [reserveFloorInput, setReserveFloorInput] = useState("0");
 
     useEffect(() => {
         if (plansLoading || !editingPlanId) return;
@@ -245,34 +259,68 @@ export default function RebalancePage() {
     const inputs = useRebalanceInputs(currency);
     const availableCash = inputs.data?.availableCash ?? 0;
     const currentActuals = inputs.data?.actualValues ?? {};
+    const inputSignature = JSON.stringify({
+        currency,
+        source,
+        rows,
+        useCashCap,
+        cashCapInput,
+        reserveFloorInput,
+        availableCash,
+        numberFormat: appSettings.numberFormat,
+    });
 
     const compute = useMutation({
-        mutationFn: () => {
-            if (isPreset && presetModel)
-                return apiClient.computeRebalance({
-                    model: presetModel,
-                    currency,
-                });
-            const targetWeights = rowsToWeights(rows);
-            const availableCashArg = useCashCap
+        mutationFn: async (): Promise<{
+            rebalance: RebalanceResponse;
+            projection: CommitmentAwareCashResponse;
+            inputSignature: string;
+        }> => {
+            const reserveFloor = parseDecimal(
+                reserveFloorInput,
+                appSettings.numberFormat,
+                NaN,
+            );
+            if (!Number.isFinite(reserveFloor) || reserveFloor < 0)
+                throw new Error(t("rebalance.commitment.invalidFloor"));
+            const projection = await apiClient.computeCommitmentAwareCash({
+                currency,
+                reserveFloor,
+            });
+            const customCap = useCashCap
                 ? resolveCap(
                       cashCapInput,
                       availableCash,
                       appSettings.numberFormat,
                   )
                 : undefined;
-            return apiClient.computeRebalance({
-                targetWeights,
+            const cap = Math.min(
+                projection.candidateCashCap,
+                customCap ?? projection.candidateCashCap,
+            );
+            const rebalance = await apiClient.computeRebalance({
+                ...(isPreset && presetModel
+                    ? { model: presetModel }
+                    : { targetWeights: rowsToWeights(rows) }),
                 currency,
-                availableCash: availableCashArg,
+                availableCash: cap,
             });
+            return { rebalance, projection, inputSignature };
         },
         // Errors render inline below the form (compute.isError) — keep the global
         // mutation-error backstop from also toasting the same failure.
         meta: { suppressErrorToast: true },
     });
-    const result: RebalanceResponse | undefined = compute.data;
-
+    const resetCompute = compute.reset;
+    const currentResult =
+        compute.data?.inputSignature === inputSignature
+            ? compute.data
+            : undefined;
+    const result = currentResult?.rebalance;
+    const projection = currentResult?.projection;
+    useEffect(() => {
+        resetCompute();
+    }, [inputSignature, resetCompute]);
     const totalDeployed = result
         ? Object.values(result.deployment).reduce((s, v) => s + v, 0)
         : 0;
@@ -505,6 +553,25 @@ export default function RebalancePage() {
                             </SelectContent>
                         </Select>
                     </div>
+                    <div className="space-y-1.5">
+                        <Label
+                            htmlFor="rebalance-reserve-floor"
+                            className="text-xs text-muted-foreground"
+                        >
+                            {t("rebalance.commitment.reserveFloor")}
+                        </Label>
+                        <Input
+                            id="rebalance-reserve-floor"
+                            type="text"
+                            inputMode="decimal"
+                            value={reserveFloorInput}
+                            onChange={(event) => {
+                                setReserveFloorInput(event.target.value);
+                                compute.reset();
+                            }}
+                            className="w-40 text-right tabular-nums"
+                        />
+                    </div>
                     <Button
                         onClick={() => compute.mutate()}
                         disabled={
@@ -520,7 +587,57 @@ export default function RebalancePage() {
                         {t("rebalance.compute")}
                     </Button>
                 </CardContent>
+                {presetModel && (
+                    <div className="border-t border-border/60 px-4 py-3">
+                        <p className="mb-2 text-xs text-muted-foreground">
+                            {t("rebalance.target")}
+                        </p>
+                        <ul
+                            className="flex flex-wrap gap-2"
+                            aria-label={t("rebalance.target")}
+                        >
+                            {Object.entries(PRESET_WEIGHTS[presetModel]).map(
+                                ([sleeve, weight]) => (
+                                    <li
+                                        key={sleeve}
+                                        className="rounded-md border border-border/70 px-2 py-1 text-xs tabular-nums"
+                                    >
+                                        {sleeveLabel(sleeve)} {pct(weight)}
+                                    </li>
+                                ),
+                            )}
+                        </ul>
+                    </div>
+                )}
             </Card>
+
+            {projection && (
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardTitle variant="sm">
+                            {t("rebalance.commitment.title")}
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2 text-sm">
+                        <p>
+                            {t("rebalance.commitment.minimum", {
+                                amount: fmt(projection.minimumProjectedBalance),
+                                date: projection.minimumDate,
+                            })}
+                        </p>
+                        <p>
+                            {t("rebalance.commitment.candidate", {
+                                amount: fmt(projection.candidateCashCap),
+                            })}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                            {t("rebalance.commitment.assumptions", {
+                                date: projection.horizonEnd,
+                            })}
+                        </p>
+                    </CardContent>
+                </Card>
+            )}
 
             {showEditor && (
                 <Card>

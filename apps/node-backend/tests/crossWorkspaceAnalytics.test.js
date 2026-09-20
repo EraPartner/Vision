@@ -3,6 +3,7 @@ import {
   __projectNetWorth as projectNetWorth, rebalanceDeployment, resolveDeployableCash,
 } from '../src/services/crossWorkspaceAnalytics.js';
 import { foldTargetSleeves } from '../src/services/portfolio/allocationAnalytics.js';
+import { resolveRebalanceTargetWeights } from '../src/services/portfolio/rebalanceTargets.js';
 
 describe('projectNetWorth (ADR-098)', () => {
   it('compounds the median path and widens bands with time', () => {
@@ -24,6 +25,16 @@ describe('projectNetWorth (ADR-098)', () => {
 });
 
 describe('rebalanceDeployment (ADR-098)', () => {
+  it('counts funded Savings investments toward Awesome without treating spendable cash as a holding', () => {
+    const targetWeights = resolveRebalanceTargetWeights({ model: 'awesome' });
+    const actualValues = { real_estate: 2000, stocks: 2000, gold: 2000, bonds: 2000, savings: 2000 };
+    const deployment = rebalanceDeployment({ actualValues, targetWeights, availableCash: 1000 });
+    expect(deployment.savings).toBe(200);
+    expect(Object.values(deployment).reduce((sum, amount) => sum + amount, 0)).toBe(1000);
+    expect(resolveDeployableCash({ availableCash: 1000, cap: 500 })).toBe(500);
+    expect(rebalanceDeployment({ actualValues: { ...actualValues, savings: 5000 }, targetWeights, availableCash: 1000 }).savings).toBeUndefined();
+  });
+
   it('deploys cash into underweight sleeves proportional to shortfall', () => {
     // actual 6000/4000 (60/40 of 10k); target 50/50; +2000 cash → total 12k, desired 6k/6k.
     // bonds short by 2000, stocks short by 0 → all cash to bonds.

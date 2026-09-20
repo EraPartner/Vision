@@ -24,6 +24,7 @@ import { median } from "../lib/math.js";
  * @property {string} amount NUMERIC
  * @property {string|null} currency
  * @property {string|null} memo
+ * @property {number} account_id
  * @property {string|null} bank_account
  * @property {number|null} recipient_id
  * @property {string|null} recipient_name

@@ -39,10 +39,16 @@ describe('resolveRebalanceTargetWeights', () => {
       .toEqual({ stocks: 0.6, bonds: 0.4 });
   });
 
+  it('resolves Awesome to five equal representable sleeves', () => {
+    expect(resolveRebalanceTargetWeights({ model: 'awesome' })).toEqual({
+      real_estate: 0.2, stocks: 0.2, gold: 0.2, bonds: 0.2, savings: 0.2,
+    });
+  });
+
   it('rejects an unknown model and a missing target with the existing messages', () => {
     expectValidationError(
       { model: 'yolo' },
-      "Unknown model 'yolo' (expected one of: sixty_forty, all_weather, three_fund)",
+      "Unknown model 'yolo' (expected one of: sixty_forty, all_weather, three_fund, awesome)",
     );
     expectValidationError({}, 'Provide either `model` or `targetWeights`');
   });

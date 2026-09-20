@@ -55,6 +55,7 @@ export const CLASSIC_PORTFOLIOS = Object.freeze({
   sixty_forty: Object.freeze({ stocks: 0.6, bonds: 0.4 }),
   all_weather: Object.freeze({ stocks: 0.30, bonds: 0.55, gold: 0.075, commodities: 0.075 }),
   three_fund: Object.freeze({ stocks: 0.48, intl_stocks: 0.12, bonds: 0.40 }),
+  awesome: Object.freeze({ real_estate: 0.20, stocks: 0.20, gold: 0.20, bonds: 0.20, savings: 0.20 }),
 });
 
 /**

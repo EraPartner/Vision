@@ -149,10 +149,12 @@ const defaultDeps = {
  * @param {object} input
  * @param {number} [input.horizonMonths=120]
  * @param {number} [input.monthlyContribution=0]
+ * @param {number[]} [input.monthlyContributionSchedule]  Month 1 first; trailing months use monthlyContribution
  * @param {number} [input.paths=1000]
  * @param {number} [input.forwardBlend=0]  0 = pure historical drift, 1 = pure forward
  * @param {'parametric'|'block_bootstrap'} [input.method='parametric']
  * @param {number} [input.targetValue]
+ * @param {number} [input.goalMonth]  Month at which targetValue is evaluated
  * @param {string} [input.currency='EUR']
  * @param {string} [input.seed]
  * @param {Partial<typeof defaultDeps>} [deps]
@@ -164,14 +166,33 @@ export async function runPortfolioForecast(input = {}, deps = defaultDeps) {
   const monthlyContribution = Number.isFinite(Number(input.monthlyContribution))
     ? Math.max(0, Number(input.monthlyContribution))
     : 0;
+  const schedule = input.monthlyContributionSchedule;
+  if (schedule !== undefined && (!Array.isArray(schedule) || schedule.length > horizonMonths
+    || schedule.some((amount) => !Number.isFinite(amount) || amount < 0))) {
+    throw new RangeError('monthlyContributionSchedule must contain at most horizonMonths nonnegative finite amounts');
+  }
+  const hasScheduleOverride = schedule?.some((amount) => amount !== monthlyContribution);
+  const contributions = Array.from(
+    { length: horizonMonths },
+    (_, month) => schedule?.[month] ?? monthlyContribution,
+  );
+  const cumulativeContributions = hasScheduleOverride
+    ? contributions.reduce((totals, contribution) => {
+      totals.push((totals.at(-1) ?? 0) + contribution);
+      return totals;
+    }, [])
+    : contributions.map((_, month) => monthlyContribution * (month + 1));
   const paths = clampInt(input.paths, 100, MAX_PATHS, DEFAULT_PATHS);
   const forwardBlend = clamp(Number.isFinite(Number(input.forwardBlend)) ? Number(input.forwardBlend) : 0, 0, 1);
   const method = input.method === 'block_bootstrap' ? 'block_bootstrap' : 'parametric';
   const targetValue = Number.isFinite(Number(input.targetValue)) && Number(input.targetValue) > 0
     ? Number(input.targetValue)
     : undefined;
+  const goalMonth = targetValue !== undefined && input.goalMonth !== undefined
+    ? clampInt(input.goalMonth, 1, horizonMonths, horizonMonths)
+    : undefined;
   const seed = input.seed
-    || `pf:${currency}:${horizonMonths}:${paths}:${method}:${forwardBlend}:${monthlyContribution}`;
+    || `pf:${currency}:${horizonMonths}:${paths}:${method}:${forwardBlend}:${monthlyContribution}${hasScheduleOverride ? `:${contributions.join(',')}` : ''}`;
 
   const summary = await d.getPortfolioSummary(currency);
   const startValue = Number(summary?.totals?.totalPortfolioValue) || 0;
@@ -241,7 +262,7 @@ export async function runPortfolioForecast(input = {}, deps = defaultDeps) {
       const logRet = method === 'block_bootstrap'
         ? monthlyDrift + sumBootstrapResiduals(residuals, TRADING_DAYS_PER_MONTH, MEAN_BLOCK_LENGTH, rng)
         : monthlyDrift + monthlyVol * gaussian(rng);
-      v = v * Math.exp(logRet) + monthlyContribution;
+      v = v * Math.exp(logRet) + contributions[h];
       monthValues[h][p] = v;
     }
     finals[p] = v;
@@ -254,7 +275,7 @@ export async function runPortfolioForecast(input = {}, deps = defaultDeps) {
     return {
       monthIndex: h + 1,
       date: firstOfMonthYmd(today, h + 1),
-      netInvested: round2(startInvested + monthlyContribution * (h + 1)),
+      netInvested: round2(startInvested + cumulativeContributions[h]),
       p10: round2(quantile(sorted, 10)),
       p25: round2(quantile(sorted, 25)),
       p50: round2(quantile(sorted, 50)),
@@ -264,10 +285,11 @@ export async function runPortfolioForecast(input = {}, deps = defaultDeps) {
   });
 
   const sortedFinals = finals.slice().sort((a, b) => a - b);
-  const totalContributions = monthlyContribution * horizonMonths;
+  const totalContributions = cumulativeContributions[horizonMonths - 1];
   const netInvested = startInvested + totalContributions;
   const probBelowInvested = finals.filter((v) => v < netInvested).length / paths;
-  const probTarget = targetValue ? finals.filter((v) => v >= targetValue).length / paths : undefined;
+  const goalValues = goalMonth === undefined ? finals : monthValues[goalMonth - 1];
+  const probTarget = targetValue ? goalValues.filter((v) => v >= targetValue).length / paths : undefined;
 
   return {
     available: true,
@@ -305,6 +327,7 @@ export async function runPortfolioForecast(input = {}, deps = defaultDeps) {
     },
     probBelowInvested: round4(probBelowInvested),
     targetValue,
+    ...(goalMonth !== undefined ? { goalMonth } : {}),
     probTarget: probTarget != null ? round4(probTarget) : undefined,
     points,
   };

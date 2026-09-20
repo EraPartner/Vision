@@ -171,6 +171,50 @@ describe("Settings storage and retrieval", () => {
   });
 });
 
+describe("life_scenarios setting", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const scenario = {
+    id: "interruption-1",
+    name: "Income interruption",
+    kind: "income_interruption",
+    interruptionMonths: 3,
+    monthlySurplus: 800,
+    monthlyIncomeLoss: 500,
+    monthlyContribution: 600,
+    goalValue: 25000,
+    goalDate: "2028-12-01",
+  };
+
+  it("saves a bounded scenario with a paired dated goal", async () => {
+    query.mockResolvedValue({});
+    const response = await api
+      .put(`${BASE}/life_scenarios`)
+      .send({ value: [scenario] })
+      .expect(200);
+    expect(response.body).toEqual(
+      okEnvelope({ key: "life_scenarios", value: [scenario] }),
+    );
+  });
+
+  it("rejects an unpaired goal and invalid cash assumptions", async () => {
+    const { goalDate: _goalDate, ...unpaired } = scenario;
+    await api
+      .put(`${BASE}/life_scenarios`)
+      .send({ value: [unpaired] })
+      .expect(400);
+    await api
+      .put(`${BASE}/life_scenarios`)
+      .send({ value: [{ ...scenario, monthlySurplus: -1 }] })
+      .expect(400);
+    await api
+      .put(`${BASE}/life_scenarios`)
+      .send({ value: [{ ...scenario, monthlyContribution: 900 }] })
+      .expect(400);
+    expect(query).not.toHaveBeenCalled();
+  });
+});
+
 describe("rebalance_plans setting (ADR-098 custom rebalancing plans)", () => {
   beforeEach(() => {
     vi.clearAllMocks();

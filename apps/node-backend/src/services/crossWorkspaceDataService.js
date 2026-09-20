@@ -10,7 +10,10 @@
  */
 
 import { query } from "../database/connection.js";
-import { convertToCurrency } from "./currency/currencyConversionService.js";
+import {
+  convertToCurrency,
+  convertWithRates,
+} from "./currency/currencyConversionService.js";
 import { getPortfolioSummary } from "./portfolio/portfolioSummaryService.js";
 import { toDecimal, toNumber, roundToCents } from "../lib/money.js";
 import { computedBalanceByCurrencyAggLateral } from "../repositories/accountBalanceSql.js";
@@ -42,10 +45,13 @@ const SLEEVE_ROLLUP = Object.freeze({
  * which read as the denomination of the `balance` beside it and would label a
  * EUR-converted figure "USD".
  *
- * @param {{ currency?: string }} args
- * @returns {Promise<{ currency: string, actualValues: Record<string, number>, availableCash: number, cashAccounts: Array<{ id:number, name:string, accountCurrency:string, balance:number, balanceCurrency:string }> }>}
+ * @param {{ currency?: string, rates?: Record<string, number> }} args
+ * @returns {Promise<{ currency: string, actualValues: Record<string, number>, availableCash: number, cashAccounts: Array<{ id:number, name:string, accountCurrency:string, balance:number, balanceCurrency:string }>, cashCurrencies: string[] }>}
  */
-export async function assembleRebalanceInputs({ currency = "EUR" } = {}) {
+export async function assembleRebalanceInputs({
+  currency = "EUR",
+  rates,
+} = {}) {
   const target = (currency || "EUR").toUpperCase();
 
   const { summaries } = await getPortfolioSummary(target);
@@ -96,6 +102,7 @@ export async function assembleRebalanceInputs({ currency = "EUR" } = {}) {
   );
 
   const cashAccounts = [];
+  const cashCurrencies = new Set();
   let availableCash = toDecimal(0);
   for (const r of rows) {
     const acctCurrency = (r.currency || "EUR").toUpperCase();
@@ -104,11 +111,14 @@ export async function assembleRebalanceInputs({ currency = "EUR" } = {}) {
     let accountTotal = toDecimal(0);
     for (const part of partitions) {
       const partCurrency = (part.currency || "EUR").toUpperCase();
+      cashCurrencies.add(partCurrency);
       const native = toNumber(toDecimal(part.balance));
       const converted =
         partCurrency === target
           ? native
-          : await convertToCurrency(native, partCurrency, target);
+          : rates
+            ? convertWithRates(native, partCurrency, target, rates)
+            : await convertToCurrency(native, partCurrency, target);
       accountTotal = accountTotal.plus(toDecimal(converted));
     }
     availableCash = availableCash.plus(accountTotal);
@@ -132,6 +142,7 @@ export async function assembleRebalanceInputs({ currency = "EUR" } = {}) {
     actualValues,
     availableCash: toNumber(roundToCents(availableCash)),
     cashAccounts,
+    cashCurrencies: [...cashCurrencies],
   };
 }
 

@@ -145,6 +145,25 @@ const dashboardSettingsSchema = z.looseObject({
 // a dedicated table) since they are small, per-install config — same key-value
 // store as the other settings.
 const MAX_REBALANCE_PLANS = 50;
+const lifeScenarioSchema = z
+  .strictObject({
+    id: z.string().min(1).max(100),
+    name: z.string().trim().min(1).max(80),
+    kind: z.literal("income_interruption"),
+    interruptionMonths: z.literal(3),
+    monthlySurplus: z.number().finite().min(0),
+    monthlyIncomeLoss: z.number().finite().min(0),
+    monthlyContribution: z.number().finite().min(0),
+    goalValue: z.number().finite().positive().optional(),
+    goalDate: z.iso.date().optional(),
+  })
+  .refine((value) => Boolean(value.goalValue) === Boolean(value.goalDate), {
+    message: "goalValue and goalDate must be provided together",
+  })
+  .refine((value) => value.monthlyContribution <= value.monthlySurplus, {
+    message: "monthlyContribution must not exceed monthlySurplus",
+  });
+const lifeScenariosSchema = z.array(lifeScenarioSchema).max(50);
 
 const rebalancePlanSchema = z.looseObject({
   id: z.string().min(1).max(100),
@@ -251,6 +270,7 @@ const SETTING_SCHEMAS = {
   services_settings: jsonObjectSchema,
   widget_visibility: jsonObjectSchema,
   rebalance_plans: rebalancePlansSchema,
+  life_scenarios: lifeScenariosSchema,
   belgian_tax_profile: belgianTaxProfileSchema,
   // Year-keyed maps: snapshots get the full profile validation per entry.
   belgian_tax_profile_snapshots_v1: z.record(
@@ -357,6 +377,7 @@ const SETTING_DEFAULTS = {
   widget_visibility: {},
   cost_basis_method: "weighted_avg",
   rebalance_plans: [],
+  life_scenarios: [],
   // Matches getIncludeTransfers' `=== true` read default — without this entry
   // the GET 404'd until the first toggle and react-query retried on every visit.
   includeTransfers: false,

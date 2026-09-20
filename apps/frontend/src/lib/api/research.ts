@@ -152,10 +152,12 @@ export function getPortfolioForecast(
     return researchSend<PortfolioForecast>('/api/research/portfolio-forecast', 'POST', {
         horizon_months: input.horizonMonths,
         monthly_contribution: input.monthlyContribution,
+        monthly_contribution_schedule: input.monthlyContributionSchedule,
         paths: input.paths,
         forward_blend: input.forwardBlend,
         method: input.method,
         target_value: input.targetValue,
+        goal_month: input.goalMonth,
         currency: input.currency,
         seed: input.seed,
     });

@@ -16,7 +16,10 @@ vi.mock("../src/services/currency/currencyConversionService.js", () =>
 
 import { query } from "../src/database/connection.js";
 import { getPortfolioSummary } from "../src/services/portfolio/portfolioSummaryService.js";
-import { convertToCurrency } from "../src/services/currency/currencyConversionService.js";
+import {
+  convertToCurrency,
+  convertWithRates,
+} from "../src/services/currency/currencyConversionService.js";
 import { assembleRebalanceInputs } from "../src/services/crossWorkspaceDataService.js";
 
 beforeEach(() => {
@@ -32,6 +35,7 @@ describe("assembleRebalanceInputs (ADR-098)", () => {
         { id: 3, asset_class: "bond", currentValue: 400, avgCostBasis: 0 },
         { id: 4, asset_class: "metals", currentValue: 300, avgCostBasis: 0 },
         { id: 5, asset_class: "crypto", currentValue: 250, avgCostBasis: 0 },
+        { id: 6, asset_class: "savings", currentValue: 600, avgCostBasis: 0 },
       ],
     });
     query.mockResolvedValue({
@@ -59,6 +63,7 @@ describe("assembleRebalanceInputs (ADR-098)", () => {
       bonds: 400,
       gold: 300,
       crypto: 250,
+      savings: 600,
     });
     expect(out.availableCash).toBe(2000);
     expect(out.cashAccounts).toHaveLength(2);
@@ -93,6 +98,33 @@ describe("assembleRebalanceInputs (ADR-098)", () => {
         balanceCurrency: "EUR",
       },
     ]);
+  });
+
+  it("uses supplied stored rates for cash when a commitment estimate is requested", async () => {
+    getPortfolioSummary.mockResolvedValue({ summaries: [] });
+    query.mockResolvedValue({
+      rows: [
+        {
+          id: 10,
+          name: "USD cash",
+          currency: "USD",
+          balance_parts: [{ currency: "USD", balance: "100" }],
+        },
+      ],
+    });
+    convertWithRates.mockReturnValue(50);
+
+    const out = await assembleRebalanceInputs({
+      currency: "EUR",
+      rates: { EUR: 1, USD: 0.5 },
+    });
+
+    expect(out.availableCash).toBe(50);
+    expect(convertWithRates).toHaveBeenCalledWith(100, "USD", "EUR", {
+      EUR: 1,
+      USD: 0.5,
+    });
+    expect(convertToCurrency).not.toHaveBeenCalled();
   });
 
   // The defect: the cross-currency lateral summed 100 EUR + 100 USD as bare

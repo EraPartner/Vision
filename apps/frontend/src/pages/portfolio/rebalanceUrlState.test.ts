@@ -54,4 +54,10 @@ describe("rebalance URL state", () => {
         const next = writeRebalanceUrl(previous, defaultRebalanceDraft());
         expect(next.toString()).toBe("keep=yes");
     });
+
+    it("round-trips the Awesome preset source", () => {
+        const draft = { ...defaultRebalanceDraft(), source: "model:awesome" };
+        const params = writeRebalanceUrl(new URLSearchParams(), draft);
+        expect(parseRebalanceUrl(params).source).toBe("model:awesome");
+    });
 });

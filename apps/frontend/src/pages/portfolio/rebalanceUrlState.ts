@@ -4,6 +4,7 @@ export const REBALANCE_MODELS: readonly ModelPortfolio[] = [
     "sixty_forty",
     "all_weather",
     "three_fund",
+    "awesome",
 ];
 export const REBALANCE_SLEEVES = [
     "stocks",

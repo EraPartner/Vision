@@ -573,7 +573,7 @@ router.post(
     // planned_date/amount are present by the time this line runs.
     const created = await plannedTransactionService.create(
       /** @type {Record<string, any> & { planned_date: string, amount: number|string, is_loan?: boolean, loan_schedule?: Array<Record<string, any>>, tags?: string[]|null }} */ (
-        data
+        /** @type {unknown} */ (data)
       ),
     );
     res.status(201);
