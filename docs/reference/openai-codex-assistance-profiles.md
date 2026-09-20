@@ -3,7 +3,7 @@ title: OpenAI and Codex Assistance Profiles
 type: reference
 status: active
 date: 2026-09-12
-updated: 2026-09-14
+updated: 2026-09-20
 tags:
   [
     reference,
@@ -27,11 +27,11 @@ aliases:
 
 # OpenAI and Codex Assistance Profiles
 
-> [!warning] Disabled by default
-> ADR-145 implements the OpenAI API route, but configuration keeps it disabled by default. No call is
-> authorized until the user inspects the exact payload and creates a grant naming the destination,
-> route, purpose, fields, lifetime, and budget. Live synthetic acceptance and account entitlement
-> verification remain release gates.
+> [!warning] Packaged API route disabled for this release
+> [[docs/adr/167-packaged-openai-api-release-gate|ADR-167]] keeps the OpenAI API route disabled in
+> packaged Vision even if a runtime file requests it. Source development can exercise the adapter
+> with explicit configuration. Live synthetic API acceptance remains a gate before any packaged
+> release enables it. The Codex App Server route remains a synthetic-only experiment.
 
 ## Evidence Scope
 
@@ -106,6 +106,11 @@ login, plus logout and ChatGPT rate-limit reads. It also labels direct externall
 token login experimental. Vision will not use that experimental mode unless a later ADR accepts its
 auth lifecycle and support boundary
 ([Codex App Server](https://learn.chatgpt.com/docs/app-server)).
+
+The current App Server documentation labels the `codex app-server` command experimental and
+unsupported for production workloads. Vision therefore keeps the subscription route experimental,
+disabled by default, and synthetic-only. It is not a release-ready private-data route
+([Codex App Server](https://developers.openai.com/docs/app-server)).
 
 OpenAI states that business-product data is not used for training by default and that workspace
 administrators can control retention for specified managed products. Those statements cannot be
@@ -198,7 +203,39 @@ P3 is not the default API profile and cannot be offered optimistically.
 | Retention  | Account/workspace-specific and displayed as unknown until verified                                     |
 | Revocation | App Server logout, local grant removal, workspace disposal, and credential cleanup are separate checks |
 | Cost       | Subscription limits/credits only; never switch to an API key automatically                             |
-| Status     | Synthetic-only candidate; private payloads blocked pending independent isolation and policy proof      |
+| Status     | Opt-in macOS App Server experiment; fixed fictional prompt only; private payloads remain blocked       |
+
+The experimental admin route at `/api/admin/codex-experimental/*` needs
+`VISION_EXPERIMENTAL_CODEX=1`, an absolute `VISION_EXPERIMENTAL_CODEX_BINARY` path, a configured
+`ADMIN_AUTH_TOKEN`, and a loopback peer. Its `session` operation creates a disposable private
+workspace and ephemeral credential store. The backend starts the App Server under macOS Seatbelt
+and gives it only a local CONNECT proxy for `chatgpt.com` and `auth.openai.com`. `login` starts
+ChatGPT device-code login; `status` reports the account type without credentials;
+`synthetic-turn` sends one fixed fictional question; and `logout` closes the process and removes
+the disposable state. The session also expires after ten minutes. Login may need to be repeated
+after a backend restart. No frontend control, financial-data input, or API-key fallback is exposed.
+
+The offline host smoke proves that the child cannot read a test file outside its private root
+and cannot connect to any destination except its proxy port. It does not prove how a live Codex
+model behaves, whether all effective tools are disabled, or what the provider retains. The proxy
+checks the destination and byte caps but cannot inspect encrypted provider payloads. Real data
+remains outside this experiment.
+
+On 2026-09-20, a live device-code login reached a ChatGPT subscription account and the fixed
+fictional turn returned an answer. CONNECT traces named only `auth.openai.com` and `chatgpt.com`;
+the disposable root and App Server process were absent afterward. The result does not prove
+provider-side token revocation or reveal the encrypted request body. Earlier failed diagnostic
+turns also removed their local state; one failure prevented confirmation of the App Server
+logout response. The route now checks account state after logout and reports an unverified
+logout instead of claiming success.
+
+After an unexpected backend exit, the next experimental session start removes
+only marked synthetic roots whose owning process is gone. Active and unmarked
+temporary directories are left alone. This local cleanup is separate from
+provider-side revocation. See [[docs/adr/164-disposable-codex-session-cleanup|ADR-164]].
+
+See [[docs/adr/159-experimental-isolated-codex-route|ADR-159]] and
+[[docs/diagrams/codex-experimental-isolation-flow.puml|the isolation flow]] for the exact boundary.
 
 ### P5 - No retention or no third-party processing
 

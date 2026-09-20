@@ -2,7 +2,7 @@
 title: Diagrams Index
 type: reference
 status: active
-date: 2026-09-19
+date: 2026-09-20
 tags: [diagrams, index, plantuml, uml, reference]
 description: Complete index of all PlantUML diagrams in Vision - organized by category with descriptions and use cases
 aliases: [diagram index, UML diagrams, plantuml diagrams]
@@ -27,18 +27,22 @@ aliases: [diagram index, UML diagrams, plantuml diagrams]
 
 ### Backend Flow Diagrams
 
-| Diagram                                             | File                        | Description                           | Use Case                                                                          |
-| --------------------------------------------------- | --------------------------- | ------------------------------------- | --------------------------------------------------------------------------------- |
-| [[docs/diagrams/import-pipeline.puml                | Import Pipeline]]           | `import-pipeline.puml`                | CSV import with bank adapters and deduplication                                   | Understanding import flow             |
-| [[docs/diagrams/import-sequence.puml                | Import Sequence]]           | `import-sequence.puml`                | Detailed import sequence                                                          | Debugging imports                     |
-| [[docs/diagrams/currency-conversion-flow.puml       | Currency Conversion]]       | `currency-conversion-flow.puml`       | Exchange rate fetching and caching                                                | Understanding currency                |
-| [[docs/diagrams/price-provider-flow.puml            | Price Provider]]            | `price-provider-flow.puml`            | Investment price updates                                                          | Understanding price feeds             |
-| [[docs/diagrams/recurring-detection-flow.puml       | Recurring Detection]]       | `recurring-detection-flow.puml`       | Automatic recurring detection                                                     | Understanding detection               |
-| [[docs/diagrams/materialized-view-flow.puml         | Materialized Views]]        | `materialized-view-flow.puml`         | View refresh strategy                                                             | Performance optimization              |
-| [[docs/diagrams/ai-chat-tool-loop.puml              | AI Chat Tool Loop]]         | `ai-chat-tool-loop.puml`              | Ollama tool-call loop with repository dispatch                                    | Understanding AI chat                 |
-| [[docs/diagrams/ai-research-investigation-flow.puml | AI Research Investigation]] | `ai-research-investigation-flow.puml` | Recoverable local research, cloud planning, and selected-evidence cloud synthesis | Understanding AI research and privacy |
-| [[docs/diagrams/backup-aead-encryption.puml         | Backup AEAD Encryption]]    | `backup-aead-encryption.puml`         | AES-256-GCM v2 bundle create + restore                                            | Understanding backup format           |
-| [[docs/diagrams/dev-observability-flow.puml         | Dev Observability]]         | `dev-observability-flow.puml`         | API event bus → ring buffer → Inspector                                           | Frontend internals                    |
+| Diagram                                                | File                        | Description                              | Use Case                                                                          |
+| ------------------------------------------------------ | --------------------------- | ---------------------------------------- | --------------------------------------------------------------------------------- |
+| [[docs/diagrams/import-pipeline.puml                   | Import Pipeline]]           | `import-pipeline.puml`                   | CSV import with bank adapters and deduplication                                   | Understanding import flow               |
+| [[docs/diagrams/import-sequence.puml                   | Import Sequence]]           | `import-sequence.puml`                   | Detailed import sequence                                                          | Debugging imports                       |
+| [[docs/diagrams/currency-conversion-flow.puml          | Currency Conversion]]       | `currency-conversion-flow.puml`          | Exchange rate fetching and caching                                                | Understanding currency                  |
+| [[docs/diagrams/price-provider-flow.puml               | Price Provider]]            | `price-provider-flow.puml`               | Investment price updates                                                          | Understanding price feeds               |
+| [[docs/diagrams/recurring-detection-flow.puml          | Recurring Detection]]       | `recurring-detection-flow.puml`          | Automatic recurring detection                                                     | Understanding detection                 |
+| [[docs/diagrams/materialized-view-flow.puml            | Materialized Views]]        | `materialized-view-flow.puml`            | View refresh strategy                                                             | Performance optimization                |
+| [[docs/diagrams/ai-chat-tool-loop.puml                 | AI Chat Tool Loop]]         | `ai-chat-tool-loop.puml`                 | Ollama tool-call loop with repository dispatch                                    | Understanding AI chat                   |
+| [[docs/diagrams/ai-research-investigation-flow.puml    | AI Research Investigation]] | `ai-research-investigation-flow.puml`    | Recoverable local research, cloud planning, and selected-evidence cloud synthesis | Understanding AI research and privacy   |
+| [[docs/diagrams/backup-aead-encryption.puml            | Backup AEAD Encryption]]    | `backup-aead-encryption.puml`            | AES-256-GCM v2 bundle create + restore                                            | Understanding backup format             |
+| [[docs/diagrams/dev-observability-flow.puml            | Dev Observability]]         | `dev-observability-flow.puml`            | API event bus → ring buffer → Inspector                                           | Frontend internals                      |
+| [[docs/diagrams/commitment-aware-cash-flow.puml        | Commitment-aware Cash]]     | `commitment-aware-cash-flow.puml`        | Reserve floor, planned bills, and rebalance cap                                   | Understanding cash planning             |
+| [[docs/diagrams/life-scenario-flow.puml                | Life Scenario]]             | `life-scenario-flow.puml`                | Saved assumptions and paired portfolio forecasts                                  | Understanding scenario comparison       |
+| [[docs/diagrams/electron-audit-verification-flow.puml  | Electron Audit Receipt]]    | `electron-audit-verification-flow.puml`  | Signed local witness, private bridge, live closure, and restore gate              | Understanding native audit recovery     |
+| [[docs/diagrams/codex-experimental-isolation-flow.puml | Codex Isolation]]           | `codex-experimental-isolation-flow.puml` | Disposable App Server, Seatbelt, and CONNECT proxy                                | Understanding the synthetic Codex trial |
 
 ## Frontend Diagrams
 
@@ -79,7 +83,7 @@ aliases: [diagram index, UML diagrams, plantuml diagrams]
 A single-page HTML companion to these PlantUML diagrams — click a flow on the left, see the path light up, step through it, and read the payload + annotation at each hop.
 
 - **File:** `docs/flow-visualizer.html` — open it directly in any browser (no build step, no network calls).
-- **Coverage:** 65 components / 34 flows including transactions, imports, manual and cloud-authored catalog analysis, persistent research dossiers, local analysis monitors, explicit portfolio look-through exposure, bounded AI research with scoped local reference restoration, forward-only broker history, portfolio, AI chat, backup, native Demo seed activation (ADR-114), admin (including db-data-edit ADR-101), build/release, dev observability, sign-in, custom CSV parsers, cashflow forecast, app update, macro series fetch (ADR-082), research aggregation, and close-account (ADR-091).
+- **Coverage:** 75 components / 38 flows including transactions, imports, manual and cloud-authored catalog analysis, persistent research dossiers, local analysis monitors, explicit portfolio look-through exposure, bounded AI research with scoped local reference restoration, forward-only broker history, portfolio, AI chat, backup, native Demo seed activation (ADR-114), admin (including db-data-edit ADR-101), build/release, dev observability, sign-in, custom CSV parsers, cashflow forecast, app update, macro series fetch (ADR-082), research aggregation, and close-account (ADR-091).
 - **Extending:** edit the JSON block at the bottom of the HTML (schema documented inline).
 - **Shortcuts:** ←/→ step, Space play, R restart, A show all, Esc clear.
 

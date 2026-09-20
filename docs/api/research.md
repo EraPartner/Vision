@@ -3,7 +3,7 @@ title: Research API
 type: endpoint
 status: active
 date: 2026-06-16
-updated: 2026-09-03
+updated: 2026-09-20
 tags:
   - api
   - research
@@ -443,76 +443,63 @@ When fundamentals are unavailable from all providers:
 
 ### POST /api/research/portfolio-forecast
 
-Monte Carlo projection of aggregate portfolio value. Non-persisted; re-submit with the same seed to reproduce results.
+Monte Carlo projection of aggregate portfolio value. Results are not persisted; submit the same seed and inputs to reproduce a run. Saved scenario definitions use [[docs/api/settings|Settings API]] instead.
 
 **Request Body:**
 
-| Field                  | Type    | Required | Default        | Description                                                                                                                               |
-| ---------------------- | ------- | -------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `horizon_months`       | integer | Yes      | —              | Projection horizon in months (1–360)                                                                                                      |
-| `monthly_contribution` | number  | No       | `0`            | Fixed monthly cash contribution in `currency`                                                                                             |
-| `paths`                | integer | No       | `1000`         | Number of simulation paths (10–10000)                                                                                                     |
-| `forward_blend`        | number  | No       | `0`            | Fraction of drift from forward-looking provider inputs (0 = pure historical, 1 = pure analyst consensus)                                  |
-| `method`               | string  | No       | `"parametric"` | Simulation method: `"parametric"` (Gaussian monthly steps) or `"block_bootstrap"` (stationary Politis–Romano resample of daily residuals) |
-| `target_value`         | number  | No       | —              | Optional target portfolio value — enables `probTarget` in summary                                                                         |
-| `currency`             | string  | No       | app default    | Display currency for output values                                                                                                        |
-| `seed`                 | integer | No       | random         | PRNG seed for deterministic reproduction                                                                                                  |
+| Field                           | Type     | Required | Default             | Description                                                                                                                               |
+| ------------------------------- | -------- | -------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `horizon_months`                | integer  | No       | `120`               | Projection horizon in months (1–600)                                                                                                      |
+| `monthly_contribution`          | number   | No       | `0`                 | Fixed nonnegative monthly cash contribution in `currency`                                                                                 |
+| `monthly_contribution_schedule` | number[] | No       | —                   | Per-month nonnegative contributions, starting with month 1; trailing months use `monthly_contribution`; at most `horizon_months` values   |
+| `paths`                         | integer  | No       | `1000`              | Number of simulation paths (100–5000)                                                                                                     |
+| `forward_blend`                 | number   | No       | `0`                 | Fraction of drift from forward-looking provider inputs (0 = pure historical, 1 = pure analyst consensus)                                  |
+| `method`                        | string   | No       | `"parametric"`      | Simulation method: `"parametric"` (Gaussian monthly steps) or `"block_bootstrap"` (stationary Politis–Romano resample of daily residuals) |
+| `target_value`                  | number   | No       | —                   | Optional target portfolio value — enables `probTarget` in summary                                                                         |
+| `goal_month`                    | integer  | No       | final month         | Evaluate `probTarget` at this month when `target_value` is supplied                                                                       |
+| `currency`                      | string   | No       | app default         | Display currency for output values                                                                                                        |
+| `seed`                          | string   | No       | derived from inputs | PRNG seed for deterministic reproduction                                                                                                  |
 
-**Response:** `200 OK`
+**Response:** `200 OK`. When the portfolio or history is unavailable, `data.available` is `false` with `reason` set to `no_holdings` or `insufficient_history`.
 
 ```json
 {
   "ok": true,
   "data": {
-    "bands": [
-      {
-        "month": "2026-07",
-        "p10": 98000,
-        "p25": 101000,
-        "p50": 105000,
-        "p75": 110000,
-        "p90": 116000
-      }
-    ],
-    "summary": {
-      "projectedP10": 115000,
-      "projectedP25": 130000,
-      "projectedP50": 148000,
-      "projectedP75": 170000,
-      "projectedP90": 198000,
-      "expectedAnnualReturn": 0.082,
-      "annualVolatility": 0.154,
-      "probBelowInvested": 0.12,
-      "probTarget": 0.43
+    "available": true,
+    "currency": "EUR",
+    "horizonMonths": 12,
+    "seed": "scenario-1",
+    "projected": {
+      "mean": 105000,
+      "p10": 90000,
+      "p25": 96000,
+      "p50": 103000,
+      "p75": 112000,
+      "p90": 122000
     },
-    "forwardInputs": [
+    "totalContributions": 9000,
+    "netInvested": 98000,
+    "probTarget": 0.43,
+    "goalMonth": 9,
+    "points": [
       {
-        "symbol": "AAPL",
-        "weight": 0.18,
-        "targetGrowth": 0.14,
-        "dividendYield": 0.005,
-        "provider": "finnhub",
-        "skipped": false
-      },
-      {
-        "symbol": "MSFT",
-        "weight": 0.15,
-        "targetGrowth": null,
-        "dividendYield": null,
-        "provider": null,
-        "skipped": true
+        "monthIndex": 1,
+        "date": "2026-10-01",
+        "netInvested": 89750,
+        "p10": 88000,
+        "p25": 89000,
+        "p50": 90500,
+        "p75": 92000,
+        "p90": 93000
       }
-    ],
-    "seed": 42
-  },
-  "meta": { "source": "live" }
+    ]
+  }
 }
 ```
 
-**Error Responses:**
-
-- `400 Bad Request` — missing or invalid body fields
-- `422 Unprocessable Entity` — insufficient portfolio snapshot history (< 60 days); response: `{ "error": "insufficient_history", "message": "..." }`
+`points` contains one entry per forecast month. `projected` always summarizes the final month. With a dated goal, `probTarget` is measured at `goalMonth`. Without one, it is measured at the final month. The contribution schedule changes both simulated values and month-by-month `netInvested`. Invalid schedules receive `400 Bad Request`.
+`goal_month` must be an integer from 1 through `horizon_months` and requires a positive finite `target_value`; invalid combinations receive `400 Bad Request`.
 
 > [!info] Drift / Risk decoupling
 > **RISK** (σ) is always estimated from the aggregate portfolio **flow-adjusted** daily-return history via `portfolioPerformanceSnapshotService.getSnapshots()` — embedded realized cross-holding covariance, no covariance matrix required. Returns use Modified Dietz (`(Vₜ − Vₜ₋₁ − ΔInvestedₜ) / Vₜ₋₁`) so deposits/withdrawals are not mistaken for market return; gross flow artifacts (>±50% daily) are dropped and reported as `flowArtifactDays`. **DRIFT** (μ) is a per-holding weighted blend of the historical mean (weight = `1 - forward_blend`) and forward-looking analyst inputs (analyst 12m target-implied growth + dividend yield, fetched through `researchAggregator`, capped ±50%, top-25 holdings by weight). Forward inputs that are unavailable (no keyed provider, quota exhausted) appear in `forwardInputs` with `skipped: true` and fall back to historical drift for that holding.

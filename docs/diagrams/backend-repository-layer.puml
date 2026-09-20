@@ -126,6 +126,13 @@ package "Repositories" {
     +writeAudit(input): Promise<AuditRow>
   }
 
+  class AuditChainRepository <<ADR-156>> {
+    +appendAuditEvent(payload, client?): Promise<Entry>
+    +readAuditSegment(options?): Promise<Entry[]>
+    +readAuditHead(): Promise<Head>
+    +recordAuditCheckpoint(receipt): Promise<Checkpoint>
+  }
+
   class SettingsRepository {
     +get(key): Promise<any>
     +set(key, value): Promise<void>
@@ -337,6 +344,7 @@ DB <.. InvestmentRepository
 DB <.. PortfolioTransactionRepository
 DB <.. WatchlistRepository
 DB <.. SplitRepository
+DB <.. AuditChainRepository
 DB <.. SettingsRepository
 DB <.. SavedChartsRepository
 DB <.. RawTransactionRepository

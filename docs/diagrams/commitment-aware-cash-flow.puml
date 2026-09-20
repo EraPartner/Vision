@@ -1,0 +1,26 @@
+@startuml Commitment Aware Cash Flow
+title Commitment-aware cash cap before rebalance
+actor User
+participant "RebalancePage" as UI
+participant "crossWorkspace API" as API
+participant "commitmentAwareCashService" as Cash
+participant "plannedTransactionRepository" as Planned
+participant "crossWorkspaceDataService" as Inputs
+participant "currencyConversionService" as FX
+participant "commitmentAwareCash core" as Core
+
+User -> UI: Enter reserve floor and request plan
+UI -> API: POST /commitment-aware-cash {currency, reserveFloor}
+API -> Cash: computeCommitmentAwareCash()
+Cash -> Planned: Get active unexecuted bills through day 90
+Cash -> FX: Get latest stored exchange rates
+Cash -> Inputs: Assemble spendable balances with same rates
+Cash -> Cash: Expand bounded recurring occurrences once
+Cash -> Cash: Reject missing or stale foreign rates
+Cash -> Core: Project lowest end-of-day balance
+Core --> Cash: candidateCashCap = max(0, minimum - floor)
+Cash --> API: Candidate cap and assumptions
+API --> UI: Display projection
+UI -> API: POST /rebalance {availableCash: min(candidate, custom cap)}
+API --> UI: Proposed buys only
+@enduml

@@ -191,6 +191,7 @@ package "Research Pages (ADR-079)" {
     +Monte Carlo Projection
     +Confidence Bands P10-P90
     +Horizon / Blend / Model Controls
+    +Saved income interruption scenarios
   }
 
   class MarketOverviewPage {

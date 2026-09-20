@@ -244,6 +244,14 @@ package "Feature Components - Planning" {
   }
 }
 
+package "Feature Components - Research" {
+  class LifeScenarioPanel {
+    +saved three-month income interruption
+    +optional monthly savings goal
+    +paired forecasts with one seed
+  }
+}
+
 package "Feature Components - Recipients" {
   class MergeRecipientsDialog
   class SplitTransactionDialog

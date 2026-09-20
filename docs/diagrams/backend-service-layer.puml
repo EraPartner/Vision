@@ -70,6 +70,18 @@ package "Business Logic Services" {
     note bottom: Validates explicit weights or model presets,\nfolds aliases, then normalizes.
   }
 
+  class CommitmentAwareCashService {
+    +computeCommitmentAwareCash({currency, reserveFloor}): Promise<CashCap>
+  }
+
+  class "research/projection/portfolioProjection" as PortfolioProjection {
+    +runPortfolioForecast({monthlyContributionSchedule?, goalMonth?}): Projection
+  }
+
+  class CrossWorkspaceDataService {
+    +assembleRebalanceInputs({currency, rates?}): Promise<Inputs>
+  }
+
   class DeduplicationService {
     +isDuplicateByFields(date, amount, recipient, memo): Promise<boolean>
     +findDuplicates(criteria): Promise<Transaction[]>
@@ -197,6 +209,16 @@ package "Storage & Performance" {
 }
 
 package "AI & Observability" {
+  class AuditVerificationService <<ADR-156>> {
+    +verifyAuditHistory({trustedCheckpoint?}): Promise<Report>
+    note bottom: Scans domain links and latest chained Alembic heads.\nWithout an authenticated external checkpoint,\nreport is unavailable for tamper evidence.
+  }
+
+  class AuditRetentionService <<ADR-162>> {
+    +planAuditRetention(trustedCheckpoint): Promise<Plan>
+    +pruneAuditRetention(trustedCheckpoint): Promise<Count>
+  }
+
   class AiChatService {
     +respond(messages, tools): Stream
     +dispatchTool(name, args): ToolResult
@@ -329,6 +351,14 @@ RecipientPatternService --> IBANService
 RecipientPatternService --> TextNormalization
 
 CurrencyConversionService --> TransactionRepository
+CommitmentAwareCashService --> PlannedTransactionRepository : pending dated bills
+CommitmentAwareCashService --> CrossWorkspaceDataService : spendable computed balances
+CommitmentAwareCashService --> CurrencyConversionService : stored recent FX
+CommitmentAwareCashService --> RecurrenceCalc : expand bounded occurrences
+PortfolioProjection --> PortfolioPerformanceSnapshotService : NAV history
+AuditVerificationService --> AuditChainRepository : scan local chain and cutover
+AuditRetentionService --> AuditVerificationService : verify signed boundary
+AuditRetentionService --> AuditChainRepository : read head and chain
 
 PriceProviderService --> InvestmentRepository
 PriceProviderService --> ProviderHealthService

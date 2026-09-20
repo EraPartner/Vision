@@ -3,8 +3,8 @@ title: Feature - AI Chat
 type: feature
 status: active
 date: 2026-09-14
-updated: 2026-09-14
-last_modified: 2026-09-14
+updated: 2026-09-20
+last_modified: 2026-09-20
 tags:
   [
     feature,
@@ -49,8 +49,9 @@ related_code:
 
 > [!abstract] Overview
 > Natural-language chat remains local via Ollama. The separate investigation panel adds recoverable,
-> evidence-backed local work and an optional consent-bound OpenAI API route. Nothing uses cloud
-> inference unless that route is enabled and the exact payload has been previewed and granted.
+> evidence-backed local work. The consent-bound OpenAI API code remains available for source
+> development, but [[docs/adr/167-packaged-openai-api-release-gate|ADR-167]] disables that route
+> in packaged Vision for this release. The Codex experiment is synthetic-only.
 
 ## Feature Overview
 

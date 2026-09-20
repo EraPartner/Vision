@@ -2,9 +2,9 @@
 title: Feature - Portfolio & Investments
 type: feature
 status: active
-date: 2026-09-14
-last_modified: 2026-09-14
-updated: 2026-09-14
+date: 2026-09-20
+last_modified: 2026-09-20
+updated: 2026-09-20
 tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding, fx-attribution, asset-gain, fx-gain, purchase-date-rates, value-fx-neutral, adr-074, adr-091, adr-100, per-account, move-holding, close-account, brokerage-fanout, rebalancing, saved-plans, cash-aware, cross-workspace, adr-098, portfolio-ticker, marquee, live-quotes, ticker-manager, show-in-ticker, migration-0061, fx-aware-pnl, unified-detail-dialog, useFxAwarePnl]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections. 2026-05-29 adds historical FX in snapshots and loading/error states on all asset pages. June 2026 adds snapshotBuilder split/return_of_capital events, APP_TIMEZONE day-boundary fix, shared portfolioUnitMath.ts, and FX attribution UI (ADR-074): asset gain / FX effect decomposition on overview, performance, asset pages, and investment detail.
@@ -1003,7 +1003,7 @@ The page offers three mutually exclusive source modes:
 
 | Mode             | Description                                                                 |
 | ---------------- | --------------------------------------------------------------------------- |
-| **Presets**      | Three built-in plans: `sixty_forty`, `all_weather`, `three_fund`            |
+| **Presets**      | Four built-in plans: `sixty_forty`, `all_weather`, `three_fund`, `awesome`  |
 | **Saved plans**  | User-named custom allocations persisted across sessions (see below)         |
 | **Custom (new)** | Editable per-sleeve target-% rows; unsaved until explicitly named and saved |
 
@@ -1013,11 +1013,34 @@ Sleeve names match the `SLEEVE_ROLLUP` grouping in `crossWorkspaceDataService.js
 
 `stocks` · `intl_stocks` · `bonds` · `gold` · `commodities` · `crypto` · `real_estate` · `savings`
 
-### Optional cash cap
+The Awesome portfolio targets 20% each in real estate, stocks, gold, bonds, and
+Savings investments (`savings`). Its bond sleeve does not impose a region or select
+holdings. Savings investment value counts once in the target and actual allocation;
+spendable account balances remain deployable cash, not holdings in that sleeve. An
+already funded Savings tranche reduces its shortfall. The cash cap and no-sell rule
+apply as they do for every preset. Users can load Awesome into an editable custom
+plan and save the resulting weights. Selecting any preset shows its named target
+sleeves and percentages before running the calculation.
 
-A numeric input limits how much spendable cash to deploy in a run. Blank = deploy all available
-liquid cash. The UI clamps user input to `[0, availableCash]` before sending it as the existing
-`availableCash` parameter on the route.
+### Commitment-aware cash estimate and optional cap
+
+Before computing a plan, the page calls `POST /api/cross-workspace/commitment-aware-cash`
+with an editable reserve floor. The server starts from spendable account balances and projects
+active, unexecuted planned bills through the next 90 days. Future income is excluded so the cap
+does not depend on it arriving as planned. Each recurring occurrence
+counts once, subject to its end date and remaining execution limit. Overdue pending items count
+on the current day. The page shows the lowest projected end-of-day balance and a candidate cash
+cap after the reserve floor. It uses the lower of that cap and any custom-plan cap for every
+allocation source, including presets.
+
+The estimate uses stored exchange rates no older than seven days for cash and planned items in other currencies. It excludes
+unplanned irregular expenses, earmarks outside non-spendable accounts, and statistical forecasts
+that may already represent the same planned bills. It is a candidate cap, not guaranteed
+spendable cash. A custom numeric cap can further limit deployment. Blank uses the candidate cap;
+the UI clamps custom input to `[0, availableCash]` before sending the effective cap as the
+existing `availableCash` parameter on the rebalancing route.
+
+The end-to-end data path is shown in [[docs/diagrams/commitment-aware-cash-flow.puml|Commitment-aware Cash Flow]]. The API contract is [[docs/api/cross-workspace|Cross-Workspace API]].
 
 The **"Available cash"** summary card always shows the true spendable-balance sum drawn from
 the uncapped inputs query, not the capped value. This means the card stays accurate regardless

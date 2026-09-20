@@ -3,7 +3,7 @@ title: Environment Variables Reference
 type: reference
 status: active
 date: 2026-09-14
-updated: 2026-09-14
+updated: 2026-09-20
 tags:
   [
     reference,
@@ -102,6 +102,13 @@ aliases: [env vars, environment variables, .env, configuration, env]
 | `VISION_SKIP_CONFIG_ENV_LOCAL` | `false`                                                                    | No       | When `true`, Alembic ignores the legacy `config/.env.local` layer. Native children set this so checkout settings cannot replace generated native database URLs.                                                                                                                                                                                                                 | [[alembic/env.py\|env.py]]                                                                                                                                                                                                          |
 | `PUPPETEER_EXECUTABLE_PATH`    | _(unset)_                                                                  | No       | Path to Chrome/Chromium used for PDF reports. Native Electron verifies the bundled Chrome Headless Shell and sets this explicitly. A standalone backend may rely on Puppeteer's normal discovery.                                                                                                                                                                               | [[apps/node-backend/src/services/reports/puppeteerRenderer.js\|puppeteerRenderer.js]], [[packaging/electron/runtime/native.js\|native.js]]                                                                                          |
 
+`VISION_BASELINE_BRIDGE_APPROVED=1` is an internal one-run flag used by the
+restore-tested `db:bridge-baseline` command and the disposable PostgreSQL test
+harness. It must not be set in the normal backend environment. Normal startup
+defers an existing installation at revision 0118; the operator command also
+requires a new logical backup path, stopped writers, and an approved maintenance
+window. See [[docs/guides/migrations|Database Migration Guide]].
+
 ## AI Chat / Ollama
 
 | Variable                               | Default       | Required | Description                                                                                                                                                                                                                                                                                                                                                                                         | Code                                                                                                                             |
@@ -124,7 +131,7 @@ aliases: [env vars, environment variables, .env, configuration, env]
 | `AI_WEB_RESEARCH_MAX_PAGES`            | `5`           | No       | Maximum public pages in one investigation                                                                                                                                                                                                                                                                                                                                                           | [[apps/node-backend/src/config/env.js\|env.js]]                                                                                  |
 | `BRAVE_SEARCH_API_KEY`                 | _(unset)_     | No       | User-owned Brave Search credential                                                                                                                                                                                                                                                                                                                                                                  | [[apps/node-backend/src/config/env.js\|env.js]]                                                                                  |
 | `AI_REFERENCE_MAPPING_KEY`             | _(unset)_     | No       | Optional operator-supplied base64-encoded 32-byte AES-256-GCM key for local reversible-reference mappings; Vision does not generate it. Unmarked flows work without it, but marked previews return `503` when it is absent or invalid. Keep it as installation secret state outside PostgreSQL and database backups. Losing or rotating it makes unexpired token-bearing checkpoints unrecoverable. | [[apps/node-backend/src/config/env.js\|env.js]], [[apps/node-backend/src/services/aiReferenceService.js\|aiReferenceService.js]] |
-| `OPENAI_API_ENABLED`                   | `false`       | No       | Enables the consent-bound OpenAI Responses adapter                                                                                                                                                                                                                                                                                                                                                  | [[apps/node-backend/src/config/env.js\|env.js]]                                                                                  |
+| `OPENAI_API_ENABLED`                   | `false`       | No       | Enables the consent-bound OpenAI Responses adapter in source development; packaged Vision forces `false` for this release under ADR-167                                                                                                                                                                                                                                                             | [[apps/node-backend/src/config/env.js\|env.js]], [[docs/adr/167-packaged-openai-api-release-gate\|ADR-167]]                      |
 | `OPENAI_API_KEY`                       | _(unset)_     | No       | API project credential passed only to the egress helper                                                                                                                                                                                                                                                                                                                                             | [[apps/node-backend/src/config/env.js\|env.js]]                                                                                  |
 | `OPENAI_API_MODEL`                     | _(unset)_     | No       | Explicit OpenAI model; Vision never silently chooses or downgrades                                                                                                                                                                                                                                                                                                                                  | [[apps/node-backend/src/config/env.js\|env.js]]                                                                                  |
 | `OPENAI_API_MODELS_JSON`               | _(unset)_     | No       | JSON array of at most 12 UI-selectable API models with `id`, optional `label`, and positive `inputMicrosPerMillion`/`outputMicrosPerMillion`; `OPENAI_API_MODEL` names the default and must be present when both are set                                                                                                                                                                            | [[apps/node-backend/src/config/openAiModelCatalog.js\|openAiModelCatalog.js]]                                                    |
@@ -166,6 +173,20 @@ keyed — Yahoo needs no key). See
 | `FMP_API_KEY`           | —       | No       | Financial Modeling Prep key — fundamentals (free tier 250/day)                                                                                                              | [[apps/node-backend/src/services/research/providerKeys.js\|providerKeys.js]] |
 | `ALPHA_VANTAGE_API_KEY` | —       | No       | Alpha Vantage key — fallback quotes/fundamentals (free tier ~25/day)                                                                                                        | [[apps/node-backend/src/services/research/providerKeys.js\|providerKeys.js]] |
 | `FRED_API_KEY`          | —       | No       | FRED key — macroeconomic series open search + fetch (ADR-082; free, ~120/min, get one at fredaccount.stlouisfed.org/apikeys). Eurostat/DBnomics macro providers need no key | [[apps/node-backend/src/services/research/providerKeys.js\|providerKeys.js]] |
+
+## Experimental Codex App Server
+
+These two optional backend variables are read only by the disabled-by-default
+`/api/admin/codex-experimental/*` route. They do not enable private-data disclosure.
+
+| Variable                           | Default | Purpose                                                                         |
+| ---------------------------------- | ------- | ------------------------------------------------------------------------------- |
+| `VISION_EXPERIMENTAL_CODEX`        | unset   | Set exactly `1` to enable the synthetic admin route on macOS.                   |
+| `VISION_EXPERIMENTAL_CODEX_BINARY` | unset   | Absolute path to the local Codex executable. The route refuses a relative path. |
+
+The route also requires `ADMIN_AUTH_TOKEN`, an admin bearer header, a loopback peer, and the normal
+CSRF guard. The Codex child receives a fresh environment rather than these backend variables.
+See [[docs/adr/159-experimental-isolated-codex-route|ADR-159]].
 
 ## Frontend Variables
 

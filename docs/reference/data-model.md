@@ -2,9 +2,9 @@
 title: Data Model Reference
 type: reference
 status: active
-date: 2026-09-19
-updated: 2026-09-19
-last_modified: 2026-09-19
+date: 2026-09-20
+updated: 2026-09-20
+last_modified: 2026-09-20
 tags:
   [
     reference,
@@ -44,6 +44,10 @@ tags:
     split-guard,
     migration-0062,
     db-editor-audit,
+    audit-chain,
+    migration-0117,
+    migration-0118,
+    migration-0119,
     migration-0059,
     adr-101,
     provider-api-keys,
@@ -68,10 +72,22 @@ tags:
   ]
 description: Complete reference for all data entities in Vision — core, portfolio, planning, supporting, and aggregation entities. Covers aggregation tables, attachments, transaction tags, custom parser configs, portfolio imports, provider configuration, forecast accuracy, and current materialized views. September 2026 migrations retire dormant import bank-account resolution state and the empty upgraded-install-only exchange-rate cache.
 aliases: [data model, entities, domain model, schema entities]
-related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
+related_code:
+  [
+    "apps/node-backend/src/repositories/",
+    "alembic/versions/",
+    "alembic/baseline/",
+  ]
 ---
 
 # Data Model Reference
+
+Fresh PostgreSQL 18 installations load the reviewed `0119` baseline SQL in one transaction.
+Existing installations keep their current schema and revision until the guarded bridge verifies
+the contracted shape and a restored logical backup. The baseline and the historical Alembic graph
+produce the same application objects; one PostgreSQL CHECK-expression rendering differs after dump
+restore. See [[docs/adr/165-reviewed-fresh-database-baseline|ADR-165]] and
+[[docs/guides/migrations|Database Migration Guide]].
 
 > [!abstract] Overview
 > This document provides a complete reference of all data entities in Vision's domain model. Designed for **developers** working with the database, **AI agents** understanding the domain, and **computer scientists** studying the entity relationships.
@@ -688,16 +704,18 @@ Migration 0091 normalizes dangling recipient ids to `NULL` and protects the acti
 
 **Purpose:** Audit log for split-related operations (`create`, `payment`, `settle`, `settle_all`, and `delete`). `splitService` writes it through the repository's parameterized `writeAudit()` primitive in the mutation transaction.
 
-| Field        | Type        | Constraints                                          | Description                                        |
-| ------------ | ----------- | ---------------------------------------------------- | -------------------------------------------------- |
-| `id`         | BIGSERIAL   | PK                                                   | Unique audit entry identifier                      |
-| `split_id`   | INTEGER     | FK → transaction_splits ON DELETE SET NULL, NULLABLE | Split being audited (SET NULL if split is deleted) |
-| `action`     | VARCHAR(50) | NOT NULL                                             | Action name (e.g., `create`, `payment`, `settle`)  |
-| `actor`      | TEXT        | NULLABLE                                             | Who performed the action                           |
-| `payload`    | JSONB       | NULLABLE                                             | Action-specific data                               |
-| `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW()                              | When the action occurred                           |
+| Field        | Type        | Constraints                                   | Description                                       |
+| ------------ | ----------- | --------------------------------------------- | ------------------------------------------------- |
+| `id`         | BIGSERIAL   | PK                                            | Unique audit entry identifier                     |
+| `split_id`   | INTEGER     | NULLABLE; no foreign key after migration 0117 | Original split ID retained after split deletion   |
+| `action`     | VARCHAR(50) | NOT NULL                                      | Action name (e.g., `create`, `payment`, `settle`) |
+| `actor`      | TEXT        | NULLABLE                                      | Who performed the action                          |
+| `payload`    | JSONB       | NULLABLE                                      | Action-specific data                              |
+| `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW()                       | When the action occurred                          |
 
 **Indexes:** `idx_split_audit_split_id`
+
+Migration 0117 drops `split_audit_split_id_fkey`: its former `ON DELETE SET NULL` action changed an audit row when a split was deleted. A retained ID may therefore point to a deleted split. Downgrade re-adds the foreign key only under the narrow 0117 rollback guard (sole matching 0117 upgrade entry and no checkpoint); it also requires every retained non-null split ID to have a matching split, or PostgreSQL rejects the constraint restoration.
 
 **Related:** migration [[alembic/versions/0021_split_audit.py|0021]]
 
@@ -740,11 +758,31 @@ Migration 0091 normalizes dangling recipient ids to `NULL` and protects the acti
 
 **Indexes:** `idx_db_editor_audit_table_time` on `(table_name, created_at DESC)` — renamed from `db_editor_audit_table_time_idx` by migration 0090. Its CHECK constraint (`db_editor_audit_op_check`) was left as-is by 0090 (already named per convention).
 
-**Note:** The table is itself browsable (and editable) through the data editor — an edit to `db_editor_audit` writes its own audit row.
+**Note:** The generic Admin data editor returns `403` for schema, rows, and mutations on `db_editor_audit` and the other five protected audit tables. It has no authenticated external receipt and cannot present a verified audit history. Permitted editor mutations write a domain audit row and a linked chain entry in the same transaction.
 
 **Related:** [[docs/features/database-maintenance|Database Maintenance UI]], [[docs/api/admin|Admin API]], [[docs/adr/101-db-data-editor|ADR-101]], migration [[alembic/versions/0059_db_editor_audit.py|0059]]
 
 ---
+
+### Audit chain foundation (migration 0117)
+
+Migration [[alembic/versions/0117_audit_chain.py|0117]] adds three tables and removes `split_audit`'s mutating foreign key. It does not hash or rewrite existing `db_editor_audit`, `split_audit`, or `portfolio_retag_audit` rows. The singleton `audit_chain_head` captures each table's maximum ID at upgrade (`legacy_db_editor_max_id`, `legacy_split_max_id`, `legacy_retag_max_id`) as a forward-only cutover marker.
+
+| Table                     | Key fields                                                                                  | Role                                                                                                                  |
+| ------------------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `audit_chain_head`        | `singleton` PK, `last_sequence`, `last_hash`, three legacy maximum IDs, `updated_at`        | Serializes application appends with a row lock and records the current internal head.                                 |
+| `audit_chain_entries`     | `sequence` PK, `version`, `previous_hash`, `entry_hash`, `payload` JSONB, `created_at`      | Stores versioned chain entries after the cutover. Index: `(created_at, sequence)`.                                    |
+| `audit_chain_checkpoints` | `id` PK, `sequence`, `head_hash`, `anchor_kind`, `receipt_id`, `receipt_hash`, `created_at` | Stores metadata for a separately persisted receipt. Unique `(anchor_kind, receipt_id)` and descending sequence index. |
+
+The migration blocks updates, deletes, and truncation of entries and checkpoint rows; it blocks deleting or truncating the head. A database administrator can still alter the schema or restore an older backup. `appendAuditEvent` in `auditChainRepository.js` locks the head and appends in the caller's transaction. All three tables are in `BACKUP_COVERED_TABLES`. A database-local checkpoint is not an independent witness. The later Electron receipt described in [[docs/adr/157-electron-local-audit-receipt|ADR-157]] binds the head and legacy cutover outside PostgreSQL for startup and restore checks, subject to the installation-local rollback and enrollment limits in [[docs/security/data-protection|Data Protection]]. Migration 0117 permits downgrade only with its sole matching deterministic 0117 upgrade entry, a matching head, unchanged legacy high-water IDs, and no checkpoint; any later entry or checkpoint refuses downgrade. See [[docs/adr/156-forward-only-audit-chain-foundation|ADR-156]].
+
+Post-cutover editor, split, and broker retag chain entries bind the persisted domain row and its exact UTC microsecond `created_at`. The writers use values returned by PostgreSQL for the chain payload; broker retag also uses the returned, normalized UUID and receipt fields. Verification recomputes editor and split digests and compares the broker retag payload against stored rows, so changing a linked row or its timestamp breaks the domain link. This does not make the pre-cutover rows verified.
+
+For PostgreSQL migrations, `alembic/env.py` appends a `schema_migration` chain entry in the same revision transaction when Alembic applies 0117 or a later revision or stamp while the chain exists. The payload records direction, revision ID, and resulting Alembic heads. The verifier compares the latest chained `heads` with `alembic_version`. Pre-0117 revisions and SQLite/offline migrations do not create these entries. A chained PostgreSQL revision with a missing chain fails rather than silently advancing. This is a database-local consistency check and still needs the separate Electron receipt to detect a coordinated rewrite.
+
+---
+
+Migration [[alembic/versions/0118_audit_retention_pruner.py|0118]] adds a guarded function for one-year retention without changing the three tables. Once Electron signs the boundary into its separate receipt and Keychain witness, `audit_chain_prune_prefix` removes only a contiguous, complete, year-old prefix behind an existing version 3 checkpoint. It preserves the next entry and its `previous_hash`. The signed boundary carries the deleted predecessor hash, linked domain high-water IDs, and migration heads so verification can continue across the missing prefix. Audit domain rows and checkpoint metadata remain; only chain entries are pruned. A downgrade of 0118 is refused after any prefix was removed. See [[docs/adr/162-one-year-audit-retention|ADR-162]].
 
 ### provider_api_keys (June 2026, ADR-079, migration 0043)
 

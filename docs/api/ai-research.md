@@ -3,6 +3,7 @@ title: AI Research API
 type: api
 status: active
 date: 2026-09-14
+updated: 2026-09-20
 tags: [api, ai, research, jobs, documents, disclosure, openai]
 description: Recoverable AI investigations, local research documents, consent-bound cloud disclosure, and scoped reversible-reference endpoints.
 aliases: [AI investigation API, research document API, disclosure API]
@@ -13,6 +14,11 @@ aliases: [AI investigation API, research document API, disclosure API]
 > [!abstract]
 > `/api/ai-research` is the provider-neutral investigation and disclosure surface.
 > `/api/ai-research/documents` owns the local passage library. Both use the normal response envelope.
+
+Packaged Vision reports the `openai-api` provider as `disabled` and refuses its execution with
+`OPENAI_DISABLED` for this release, regardless of a private runtime setting. See
+[[docs/adr/167-packaged-openai-api-release-gate|ADR-167]]. This changes deployment availability,
+not the API operation or response schema.
 
 ## Endpoints
 

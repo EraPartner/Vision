@@ -2,13 +2,13 @@
 title: API Endpoint Matrix
 type: reference
 status: active
-date: 2026-09-19
-updated: 2026-09-19
-last_modified: 2026-09-19
+date: 2026-09-20
+updated: 2026-09-20
+last_modified: 2026-09-20
 adr-reference: 026
 # Authoritative HTTP-operation count, derived from openapi.yaml and enforced by
 # scripts/check-endpoint-matrix.js (CI verify-generated). Bump when routes change.
-api_operation_count: 281
+api_operation_count: 293
 tags:
   [
     reference,
@@ -72,7 +72,7 @@ tags:
     auto-link,
     planned-match,
   ]
-description: Complete matrix of all 281 HTTP API operations (authoritative count from openapi.yaml), 2 health endpoints, and 23 Electron IPC invoke channels. The Electron contract also defines 6 renderer event channels.
+description: Complete matrix of all 293 HTTP API operations (authoritative count from openapi.yaml), 2 health endpoints, and 25 Electron IPC invoke channels. The Electron contract also defines 6 renderer event channels.
 aliases:
   [api matrix, endpoint matrix, all endpoints, api overview, endpoint list]
 ---
@@ -80,7 +80,7 @@ aliases:
 # API Endpoint Matrix
 
 > [!abstract] Overview
-> **281 HTTP API operations** (authoritative count = operations in `openapi.yaml`, enforced by `scripts/check-endpoint-matrix.js` in CI), 2 unversioned `/health` endpoints, and 23 Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
+> **293 HTTP API operations** (authoritative count = operations in `openapi.yaml`, enforced by `scripts/check-endpoint-matrix.js` in CI), 2 unversioned `/health` endpoints, and 25 Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
 >
 > **Note:** As of Phase 2.4, `openapi.yaml` is the authoritative API specification. This matrix provides a quick lookup; see the OpenAPI spec for formal schemas and examples.
 >
@@ -153,11 +153,12 @@ aliases:
 | PUT    | `/api/accounts/:id/statement-balances/:currency` | Store an authoritative statement reading for one native currency (ADR-089 D2)                                                                                    | —          | [[docs/api/accounts\|Accounts]] |
 | DELETE | `/api/accounts/:id/statement-balances/:currency` | Remove an authoritative statement reading for one native currency (ADR-089 D2)                                                                                   | —          | [[docs/api/accounts\|Accounts]] |
 
-## Cross-Workspace (1 endpoint — ADR-098)
+## Cross-Workspace (2 endpoints — ADR-098)
 
-| Method | Path                             | Description                                                                                                           | Rate Limit | Doc |
-| ------ | -------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ---------- | --- |
-| POST   | `/api/cross-workspace/rebalance` | Cash-aware rebalancing: deploy spendable cash into underweight sleeves toward a target allocation, no sells (ADR-098) | —          | —   |
+| Method | Path                                         | Description                                                                                                                                                | Rate Limit | Doc                                    |
+| ------ | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | -------------------------------------- |
+| POST   | `/api/cross-workspace/rebalance`             | Cash-aware rebalancing: deploy spendable cash into underweight sleeves toward a target allocation, no sells; supports Awesome's five 20% sleeves (ADR-098) | —          | [[docs/features/portfolio\|Portfolio]] |
+| POST   | `/api/cross-workspace/commitment-aware-cash` | Estimate a 90-day candidate cash cap from spendable balances, pending planned and recurring items, and an editable reserve floor                           | —          | [[docs/features/portfolio\|Portfolio]] |
 
 ## Analysis Workspace (11 endpoints — ADR-144)
 
@@ -460,7 +461,22 @@ All routes mounted at `/api/portfolio/import` with `importRateLimiter`. Parallel
 | GET    | `/health`          | Health check (backend ready)             | —          | [[docs/api/health\|Health]] |
 | GET    | `/health/detailed` | Detailed health with cache warmup status | —          | [[docs/api/health\|Health]] |
 
-## Admin (17 endpoints)
+## Private Electron Audit Bridge (3 endpoints)
+
+These routes are for the native Electron main process. They require a loopback socket peer and a per-launch Bearer token that differs from `ADMIN_AUTH_TOKEN`. An HTTP 200 verification response can contain a failed or unavailable audit status.
+
+| Method | Path                                  | Description                                                               | Access                   | Doc                                       |
+| ------ | ------------------------------------- | ------------------------------------------------------------------------- | ------------------------ | ----------------------------------------- |
+| POST   | `/api/internal/audit/verify`          | Verify full chain and domain links against an authenticated local receipt | Loopback + private token | [[docs/api/internal-audit\|Audit Bridge]] |
+| POST   | `/api/internal/audit/read`            | Read one bounded page from the same verified database snapshot            | Loopback + private token | [[docs/api/internal-audit\|Audit Bridge]] |
+| POST   | `/api/internal/audit/retention-plan`  | Plan a complete one-year-old prefix behind a trusted checkpoint           | Loopback + private token | [[docs/api/internal-audit\|Audit Bridge]] |
+| POST   | `/api/internal/audit/retention-prune` | Prune a signed eligible prefix with atomic database guards                | Loopback + private token | [[docs/api/internal-audit\|Audit Bridge]] |
+| POST   | `/api/internal/audit/checkpoint`      | Record metadata for an already persisted receipt                          | Loopback + private token | [[docs/api/internal-audit\|Audit Bridge]] |
+| POST   | `/api/internal/audit/update-decision` | Append bounded Electron checksum or install decision; no publisher proof  | Loopback + private token | [[docs/api/internal-audit\|Audit Bridge]] |
+
+## Admin (22 endpoints)
+
+The three generic `/api/admin/database/tables/:table/{schema,rows,mutate}` editor operations return `403` for the six protected audit tables, including read requests. Database statistics and backup coverage do not imply authenticated audit evidence.
 
 | Method | Path                                              | Description                                                                                                                                  | Rate Limit         | Doc                       |
 | ------ | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | ------------------------- |
@@ -481,6 +497,11 @@ All routes mounted at `/api/portfolio/import` with `importRateLimiter`. Parallel
 | GET    | `/api/admin/metrics/requests`                     | Rolling request metrics per route (in-memory, 15 min)                                                                                        | —                  | [[docs/api/admin\|Admin]] |
 | GET    | `/api/admin/endpoints`                            | Static endpoint manifest from Express router                                                                                                 | —                  | [[docs/api/admin\|Admin]] |
 | GET    | `/api/admin/endpoint-liveness`                    | Route manifest annotated with `live: true` per entry                                                                                         | —                  | [[docs/api/admin\|Admin]] |
+| GET    | `/api/admin/codex-experimental/status`            | Disposable synthetic Codex session and account status                                                                                        | adminRateLimiter   | [[docs/api/admin\|Admin]] |
+| POST   | `/api/admin/codex-experimental/session`           | Start isolated App Server with synthetic workspace                                                                                           | adminRateLimiter   | [[docs/api/admin\|Admin]] |
+| POST   | `/api/admin/codex-experimental/login`             | Begin ChatGPT device-code login in isolated runtime                                                                                          | adminRateLimiter   | [[docs/api/admin\|Admin]] |
+| POST   | `/api/admin/codex-experimental/synthetic-turn`    | Send one fixed fictional question; no request payload                                                                                        | adminRateLimiter   | [[docs/api/admin\|Admin]] |
+| POST   | `/api/admin/codex-experimental/logout`            | Log out and remove disposable runtime state                                                                                                  | adminRateLimiter   | [[docs/api/admin\|Admin]] |
 
 ## Reports (3 endpoints) — Phase 3 / Phase 5 / Phase 7
 
@@ -556,9 +577,9 @@ Aggregation routes removed in Phase 9 as migration to `/api/aggregations/*` is c
 
 **Streaming Lifecycle:** Frontend pre-creates conversation via POST `/api/ai/conversations`, then streams via POST `/api/ai/chat/stream`. Stream lives in module-level `aiChatStreamStore`; user can navigate away and stream continues. On completion, TanStack Query cache invalidates to hydrate persisted messages. Sidebar shows pulsing indicator for active streams via `useStreamingConversationIds()`.
 
-## IPC Contract — Electron Desktop (23 invoke channels, 6 event channels)
+## IPC Contract — Electron Desktop (25 invoke channels, 6 event channels)
 
-Electron-specific inter-process communication is grouped into five context bridges. The complete
+Electron-specific inter-process communication is grouped into six context bridges. The complete
 argument and result types are owned by `packaging/electron/electron-api.d.ts` and re-exported as
 `@vision/types/electron`.
 
@@ -569,6 +590,7 @@ argument and result types are owned by `packaging/electron/electron-api.d.ts` an
 | `electronServices` |               2 |              0 |
 | `electronAPI`      |               7 |              4 |
 | `electronRecovery` |               2 |              2 |
+| `electronAudit`    |               2 |              0 |
 
 The backup operations remain:
 
@@ -584,7 +606,9 @@ The backup operations remain:
 | `backup:get-encryption-status` | `()`                                                    | `Promise<{ success: boolean; secureStorageAvailable: boolean; hasStoredPassphrase: boolean; hasEnvPassphrase: boolean }>`                  | Check secure-storage availability and stored/environment passphrase presence.                                                                                                                                                                         |
 | `backup:set-passphrase`        | `(passphrase: string)`                                  | `Promise<{ success: boolean; available: boolean; error?: string }>`                                                                        | Set or update backup encryption passphrase (stored encrypted in `settings.json` via `safeStorage`). Empty string clears passphrase.                                                                                                                   |
 
-`packaging/electron/ipc-contract.test.js` requires the 23 shared invoke channels to equal both the
+`electronAudit.read` requests a bounded verified page from the native main process. `electronAudit.exportSnapshot` saves a complete verified snapshot of at most 500 entries through the native save dialog. The renderer receives neither the private backend bearer nor direct access to the local receipt. A newer tail is labeled pending authentication; the export states that its local receipt and macOS Keychain checkpoint do not make it a signed report or remote attestation.
+
+`packaging/electron/ipc-contract.test.js` requires the 25 shared invoke channels to equal both the
 main-process registrations and preload invokes. It also requires all 6 shared event channels to
 equal the main senders and preload subscriptions.
 
@@ -601,7 +625,7 @@ equal the main senders and preload subscriptions.
 | Accounts (ADR-088)                   | 13        | 0            |
 | Analysis Workspace (ADR-144)         | 11        | 11           |
 | Analysis Monitors (ADR-154)          | 8         | 8            |
-| Cross-Workspace (ADR-098)            | 1         | 0            |
+| Cross-Workspace (ADR-098)            | 2         | 0            |
 | Transactions (incl. Tags)            | 18        | 2            |
 | Categories                           | 12        | 0            |
 | Recipients                           | 14        | 0            |
@@ -617,16 +641,17 @@ equal the main senders and preload subscriptions.
 | Settings                             | 5         | 0            |
 | Recipient Bank Accounts              | 5         | 0            |
 | Admin (incl. DB Data Editor ADR-101) | 17        | 3            |
+| Private Electron Audit Bridge        | 4         | 0            |
 | Splits                               | 11        | 0            |
 | Health                               | 2         | 0            |
 | Aggregations (Phase 2/6/10/D)        | 15        | 0            |
 | Reports (Phase 3/7)                  | 3         | 0            |
 | Info/Statistics (Phase 14)           | 17        | 5            |
 | AI Chat                              | 9         | 2            |
-| Electron IPC invoke channels         | 23        | 0            |
-| **Total**                            | **273**   | **34**       |
+| Electron IPC invoke channels         | 25        | 0            |
+| **Total**                            | **279**   | **34**       |
 
-> **281** versioned `/api` HTTP operations are declared in `openapi.yaml` and enforced by `scripts/check-endpoint-matrix.js`. The summary rows are a hand-maintained navigation aid and are not the authoritative operation count. The 6 Electron event channels are documented separately and are not request endpoints. (The Rate-Limited column is approximate and not gate-checked.)
+> **286** versioned `/api` HTTP operations are declared in `openapi.yaml` and enforced by `scripts/check-endpoint-matrix.js`. The summary rows are a hand-maintained navigation aid and are not the authoritative operation count. The 6 Electron event channels are documented separately and are not request endpoints. (The Rate-Limited column is approximate and not gate-checked.)
 
 ## Phase G Endpoint Consolidation (April 2026)
 

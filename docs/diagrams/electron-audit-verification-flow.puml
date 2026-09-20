@@ -1,0 +1,130 @@
+@startuml Electron Audit Verification Flow
+title Native Electron Audit Receipt and Restore Check
+
+actor User
+participant "Electron main\nmain.js" as Main
+participant "Local receipt\naudit-anchor.js" as Anchor
+participant "macOS Keychain\naudit-keychain helper" as Keychain
+participant "Native backend\nprivate audit route" as Route
+participant "Audit verifier\nauditVerificationService.js" as Verifier
+participant "Retention planner\nauditRetentionService.js" as Retention
+database "PostgreSQL\naudit chain + domain rows" as DB
+
+Main -> Anchor: Read HMAC-signed receipt and safeStorage key
+Anchor -> Keychain: Read latest checkpoint digest
+Keychain --> Anchor: Matching witness or unavailable
+Anchor --> Main: Trusted checkpoint or uninitialized
+Main -> Route: POST /verify (loopback + per-launch token; checkpoint if present)
+Route -> Verifier: verifyAuditHistory(trustedCheckpoint)
+Verifier -> DB: Scan chain, domain links, schema heads, cutover
+DB --> Verifier: Current rows and head
+Verifier --> Route: verified | partially_verified | unavailable | failed
+Route --> Main: ADR-026 envelope with status
+
+alt new cluster this launch, no receipt, fully checked head, zero legacy counts
+  Main -> Anchor: Sign first checkpoint at current post-migration head
+  Anchor -> Keychain: Create independent checkpoint record
+  Main -> Route: POST /checkpoint metadata
+  Main -> Main: Enable trusted live session
+else exact verified startup head
+  Main -> Main: Enable trusted live session
+else partial at startup or no trusted receipt
+  Main -> Main: Notify; do not promote existing tail
+end
+
+opt existing installation has no trusted receipt and user chooses enrollment
+  User -> Main: Start audit protection
+  Main -> Verifier: Recheck complete current chain without receipt
+  Verifier --> Main: Internally valid head and legacy cutover
+  Main --> User: Default-Cancel warning; earlier authenticity cannot be proved
+  User -> Main: Confirm
+  Main -> Anchor: Sign head with immutable enrollment sequence
+  Anchor -> Keychain: Create independent checkpoint witness
+  Main -> Route: POST /checkpoint metadata
+  Main -> Main: Enable forward-looking live closure
+end
+
+User -> Main: Open Admin audit view or export snapshot
+Main -> Anchor: Read authenticated local receipt
+Anchor -> Keychain: Compare checkpoint record
+Main -> Route: POST /read (checkpoint, cursor, page limit)
+Route -> Verifier: Verify complete chain in read-only snapshot
+Verifier -> DB: Scan chain and linked domain rows
+Route -> DB: Read page from the same snapshot
+Route --> Main: Verification, anchored/pending entries, hasMore
+alt verified page
+  Main --> User: Label enrollment baseline; show page or save complete snapshot (max 500 entries, 2 MB)
+else failed or unavailable
+  Main --> User: Show status without entries or export
+end
+
+opt trusted live session enabled
+  loop every 30 seconds while backend healthy
+    Main -> Route: Re-verify full chain and cutover
+    Route --> Main: Valid new tail or failure
+    alt valid new tail
+      Main -> Anchor: Persist signed new checkpoint
+      Anchor -> Keychain: Replace latest checkpoint record
+      Main -> Route: POST /checkpoint metadata
+      Route -> DB: Insert metadata for existing local receipt
+    else failed or unavailable
+      Main -> Main: End session and notify
+    end
+  end
+end
+
+opt trusted live session; daily retention attempt
+  Main -> Route: POST /retention-plan with authenticated checkpoint
+  Route -> Retention: Verify full history and find complete year-old prefix
+  Retention -> DB: Read eligible boundary and linked high-water IDs
+  Retention --> Main: Sequence, hash, domain IDs, migration heads
+  Main -> Anchor: Sign retention boundary before deletion
+  Anchor -> Keychain: Replace checkpoint witness
+  Main -> Route: POST /checkpoint metadata; POST /retention-prune
+  Route -> Retention: Verify signed boundary and retained chain
+  Retention -> DB: Guarded atomic prefix prune under head lock
+  DB --> Main: Deleted count or exact retry (zero)
+end
+
+User -> Main: Request native update
+Main -> Route: POST /update-decision (checksum or install decision)
+Route -> DB: Append release_update chain event
+Route --> Main: Sequence and hash
+alt receipt exists or a trusted session was established
+  Main -> Anchor: Close verified checkpoint synchronously
+  Main -> Main: Block install if closure fails
+else no receipt and no trusted session
+  Main -> Main: Report unavailable; update may continue
+end
+note right of Main
+  This records Electron's local decision.
+  It does not prove publisher signature or release provenance.
+end note
+
+User -> Main: Request native backup restore
+Main -> Main: Pause live closure; stage database and attachments
+Main -> Route: Verify candidate against unchanged local receipt
+Route --> Main: Verification status
+alt status is verified
+  Main -> Main: Finalize database switch
+else any other status
+  Main -> Main: Roll back candidate database and attachments
+  alt rollback succeeds and user accepts second warning
+    Main -> Route: Verify selected backup's full internal chain without receipt
+    Route --> Main: Internally valid or failed
+    alt internally valid
+      Main -> Main: Finalize one retry; keep old receipt; continuity unverified
+    else invalid
+      Main -> Main: Roll back retry
+    end
+  else cancel or rollback failure
+    Main -> Main: Keep original database; do not retry
+  end
+end
+
+note over Anchor,DB
+  The Keychain checkpoint is outside PostgreSQL and app data.
+  Missing or mismatched sides fail closed; no silent re-enrollment.
+end note
+
+@enduml

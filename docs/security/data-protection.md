@@ -2,8 +2,8 @@
 title: Security - Data Protection & CSP
 type: security
 status: active
-date: 2026-09-13
-updated: 2026-09-13
+date: 2026-09-20
+updated: 2026-09-20
 tags: [security, csp, cors, data-protection, privacy, content-security-policy, xss, dangerouslySetInnerHTML, path-traversal, rfc-5987, backup-encryption, passphrase, phase-7, phase-c, pre-restore-confirmation, concurrent-backup-guard, watchdog-pause, bug-hunt-2026-05-05, bug-hunt-2026-05-06, electron-hardening, window-open-handler, will-navigate, checksum-verification, backup-directory-restrictions, csv-filename-sanitization, safe-storage, keychain, lazy-safeStorage, csrf-guard, sec-fetch-site, admin-auth, token-or-open, zip-bomb, response-cap, content-length]
 description: Content Security Policy, CORS, data protection, path traversal prevention, backup security, and privacy considerations for Vision. Phase 7 adds pre-restore confirmation dialog and concurrent-backup guard. May 2026 bug hunt hardens Electron with setWindowOpenHandler denial, will-navigate whitelist, mandatory installer checksum verification, and backup directory restrictions. safeStorage is now accessed lazily to avoid macOS Keychain prompts when no passphrase is configured. 2026-05-29: admin auth replaced with token-or-open + CSRF guard (ADR-063). June 2026: zip-bomb guard on restore, 5 MB Content-Length response cap on external fetches.
 aliases: [CSP, data protection, privacy, content security policy, security headers, XSS prevention, path traversal]
@@ -518,6 +518,36 @@ res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
 ---
 
+## Audit chain foundation and backup boundary (2026-09-20)
+
+Migration 0117 starts a versioned hash chain after the existing DB-editor, split, and portfolio-retag audit rows. Its head records the highest legacy ID for each older table. New chain entries and checkpoint metadata are stored with the head in PostgreSQL and included in normal Vision backups. Application appends lock the head; the entry and domain change must share one database transaction. Database triggers reject ordinary rewrites of entries and checkpoint rows.
+
+The native Electron main process now keeps a versioned HMAC-signed receipt and its `safeStorage`-encrypted key under its local application-data `audit-anchor/` directory. The receipt binds the chain sequence, hash, and migration 0117 legacy high-water IDs. Version 3 also requires a matching checkpoint in a separate macOS Keychain generic-password item. The packaged helper uses the Security framework and receives checkpoint data on standard input. Rolling back PostgreSQL and application data alone leaves a detectable mismatch if the Keychain item survives. Version 2 receipts are not silently enrolled. An unsigned build may prompt for the Keychain password. The main process sends the authenticated receipt through a private loopback bridge protected by a random per-launch Bearer token (`VISION_AUDIT_BRIDGE_TOKEN` in the backend child). The backend scans the complete chain and post-cutover domain links; pre-cutover audit rows remain unverified. The renderer and ordinary admin token cannot access the bridge.
+
+The generic Admin data editor has no access to this authenticated receipt. Its schema, row, and mutation endpoints return `403` for `audit_chain_head`, `audit_chain_entries`, `audit_chain_checkpoints`, `db_editor_audit`, `split_audit`, and `portfolio_retag_audit`. Table-health statistics may still show these tables. A database backup preserves their bytes for recovery, but a copy of those bytes alone does not establish verified audit evidence.
+
+The native Admin audit view reads through Electron main, which authenticates the local receipt and Keychain checkpoint before requesting a bounded page. The backend verifies the complete chain and reads that page in one repeatable-read snapshot. Each entry is labeled as either within the anchored prefix or pending a newer receipt. A failed or unavailable check returns no entries. Native export writes a complete snapshot only when the chain fits within 500 entries and 2 MB, and the file states it is not a signed report or remote attestation. Browser deployments without the native bridge cannot display this verified view.
+
+For an existing native installation with no trusted receipt, the Admin view offers a deliberate enrollment action with a default-Cancel native warning. The backend first checks the whole current chain and linked domain rows. Electron signs the observed head, creates the separate Keychain witness, and stores an immutable enrollment sequence in the receipt. Entries at or before that sequence are shown as **Accepted at enrollment**; neither the view nor export claims to prove their authenticity before enrollment. An existing, damaged, or mismatched receipt or witness blocks this action. It is never run automatically during startup or restore.
+
+If the Keychain witness and receipt were written but the backend checkpoint acknowledgement failed, a later trusted startup repeats the exact checkpoint metadata write. The backend accepts a byte-identical repeated receipt and rejects an identity conflict. This repairs database metadata only; it never creates a new external anchor or changes the enrollment baseline.
+
+For a new Mac, the operator may export an independently verified receipt and audit key in a password-protected transfer file. The password is never stored; the file contains no transactions and is encrypted with scrypt and AES-256-GCM. The recipient imports it only during its first native launch, before restoring the matching encrypted database backup. Import replaces the new cluster's fresh witness but cannot authenticate database rows; the restore gate must compare the complete restored chain with the imported checkpoint. A copied transfer file and its password together expose the audit key, so they should be kept separate and discarded after a successful move. See [[docs/adr/161-password-protected-audit-device-transfer|ADR-161]].
+
+An interrupted transfer leaves a private copy of the original fresh key and receipt. At the next load, Electron retains the current pair if it matches the Keychain witness, or restores the original pair only if that pair matches. An unmatched witness blocks verification. Recovery does not permit another import into an established installation; restart with a fresh empty target before retrying a failed device move. See [[docs/adr/163-audit-transfer-recovery-journal|ADR-163]].
+
+Admin can explicitly rotate the local audit key after the whole chain verifies. The receipt remains at the same head under a new key and Keychain witness; a failed write does not silently accept an old checkpoint. Keep a matching protected transfer and backup before rotating, because a crash between file writes and Keychain replacement can leave an unavailable witness.
+
+One-year audit retention signs the last eligible old entry hash and linked-domain high-water IDs into the external receipt and Keychain witness before migration 0118 removes a complete prefix. The database function rechecks age and continuity under the chain-head lock. The retained suffix remains verifiable against the signed predecessor; older chain payloads are no longer available in the live database. Audit domain rows and backup copies follow their own retention rules. An interrupted prune is retried using the same signed boundary. See [[docs/adr/162-one-year-audit-retention|ADR-162]].
+
+On one disposable PostgreSQL 18 run on this Mac, 100 synthetic `appendAuditEvent` calls inside one transaction measured 0.536 ms median, 0.768 ms p95, and 1.115 ms maximum per append. This samples the chain writer only; it is not an end-to-end DB-editor, split, or broker-retag latency guarantee. The opt-in probe is in `auditAdversarial.db.test.js` and can be rerun with `VISION_RUN_AUDIT_PERFORMANCE=1 bun run test:db tests/auditAdversarial.db.test.js --reporter=verbose`.
+
+Native startup checks before first navigation and after backend recovery. An exact verified head enables a trusted live session; every 30 seconds while healthy, Electron re-verifies the chain and signed cutover, then advances its local receipt to a valid new tail and mirrors checkpoint metadata. Failed or unavailable checks end that session and raise an operating-system notification, while leaving the app accessible. Backend loss ends the session. Native updater decisions are appended through the private bridge. If an external receipt exists or a trusted session was established this launch, each decision must be synchronously checkpointed; failure blocks install. An existing installation with no receipt and no trusted session may still install after the event is recorded, with audit protection reported unavailable. The event records the local checksum or install decision, not publisher or signed-release provenance. Source development updates may have no native bridge event.
+
+Restore pauses live closure, compares before database-switch finalization, and initially rolls back unless the result is exactly `verified`. A chain with valid entries beyond the last receipt is `partially_verified`; a tail already present at startup is not promoted. After a successful rollback, the user can accept a separate default-Cancel warning to retry the selected authenticated backup once. This recovery still checks the full internal chain, preserves the external receipt, and leaves continuity unverified; a later check may report rollback. No recovery retry is offered when the first rollback fails. Existing installations are not automatically enrolled. Missing, partial, or corrupt receipt files are not silently replaced.
+
+This is installation-local evidence, not a complete tamper-evidence guarantee. A privileged actor with control of the Keychain item or application code can rewrite this local witness. Changes within the live 30-second interval can also be incorporated into the next receipt. Moving only a backup to a new machine lacks the original witness. Checkpoint metadata in PostgreSQL cannot prove that an external receipt exists. Interrupted-transfer recovery passed synthetic and disposable-Keychain checks; a physical two-Mac move remains untested. Migration 0117 permits downgrade only with its sole matching upgrade event and no checkpoint; any later event or checkpoint blocks it. See [[docs/adr/156-forward-only-audit-chain-foundation|ADR-156]], [[docs/adr/157-electron-local-audit-receipt|ADR-157]], [[docs/adr/158-macos-keychain-audit-witness|ADR-158]], [[docs/adr/160-explicit-audit-enrollment-baseline|ADR-160]], [[docs/adr/161-password-protected-audit-device-transfer|ADR-161]], [[docs/adr/163-audit-transfer-recovery-journal|ADR-163]], [[docs/api/internal-audit|Private Audit Bridge]], [[docs/reference/data-model|Data Model Reference]], and [[docs/features/backup-coverage-audit|Backup Coverage Audit]].
+
 ## Backup Encryption (Phase 2 + v2 Upgrade 2026-04-28)
 
 Encrypted backup restore (`.visionbak.enc`) is fully implemented with passphrase-modal UX and upgraded v2 AEAD encryption:
@@ -541,9 +571,9 @@ Encrypted backup restore (`.visionbak.enc`) is fully implemented with passphrase
 
 ### Lazy safeStorage Access (May 2026)
 
-`safeStorage` is now only accessed when a passphrase blob is actually present in `settings.json`:
+For backup passphrase handling, `safeStorage` is accessed only when a passphrase blob is present in `settings.json`. The separate native audit anchor also uses `safeStorage` when enrolled:
 
-- **`getBackupPassphrase()`** — reads the stored `backupPassphraseEncrypted` blob first. If absent (and `VISION_BACKUP_PASSPHRASE` env var is not set), returns without calling any `safeStorage` API. This eliminates macOS Keychain prompts for users who have not configured backup encryption.
+- **`getBackupPassphrase()`** — reads the stored `backupPassphraseEncrypted` blob first. If absent (and `VISION_BACKUP_PASSPHRASE` env var is not set), returns without calling any `safeStorage` API. This avoids backup-passphrase Keychain prompts for users who have not configured backup encryption.
 - **`getBackupPassphraseStatus()`** — reports `secureStorageAvailable` from the API object's presence alone (no keychain probe) when no passphrase is stored. The actual availability check is deferred to `setBackupPassphrase()` at opt-in time.
 
 Users who do store a passphrase may still see macOS Keychain prompts on unsigned builds (macOS re-challenges an unstable code identity). The `VISION_BACKUP_PASSPHRASE` environment variable bypasses `safeStorage` entirely as an escape hatch.
@@ -612,12 +642,12 @@ The installed application starts only its private loopback PostgreSQL cluster.
 
 ## Future Security Roadmap
 
-| Feature            | Status  | Description                                                                               |
-| ------------------ | ------- | ----------------------------------------------------------------------------------------- |
-| Authentication     | Planned | Multi-user support with auth                                                              |
-| Encryption at rest | Planned | Database encryption (would subsume the plaintext `provider_api_keys` risk accepted above) |
-| API authentication | Planned | Token-based API auth                                                                      |
-| Audit logging      | Planned | Track all data modifications                                                              |
+| Feature            | Status  | Description                                                                                                                                                                                                                                                     |
+| ------------------ | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Authentication     | Planned | Multi-user support with auth                                                                                                                                                                                                                                    |
+| Encryption at rest | Planned | Database encryption (would subsume the plaintext `provider_api_keys` risk accepted above)                                                                                                                                                                       |
+| API authentication | Planned | Token-based API auth                                                                                                                                                                                                                                            |
+| Audit logging      | Partial | Migrations 0117–0118 add a hash chain and guarded one-year prefix pruning; Electron keeps a Keychain-backed receipt, checks startup/restore, supports enrollment, rotation, and protected device transfer. Live device-move and recovery acceptance remain open |
 
 ---
 

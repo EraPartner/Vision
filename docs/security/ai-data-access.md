@@ -3,7 +3,7 @@ title: AI Data Access Policy
 type: security
 status: active
 date: 2026-09-14
-updated: 2026-09-14
+updated: 2026-09-20
 tags:
   [
     security,
@@ -42,7 +42,8 @@ Security policies governing the AI chat feature introduced by [[docs/adr/024-loc
 ## Core Guarantees
 
 1. **Ordinary chat is local.** `/api/ai` contacts only configured Ollama. The separate
-   `/api/ai-research` OpenAI route is disabled by default and requires the boundary below.
+   `/api/ai-research` OpenAI route is disabled in packaged Vision for this release, even if its
+   runtime environment requests it. Source development still requires the boundary below.
 2. **No raw SQL from LLM output.** The LLM cannot emit SQL. It selects from a fixed tool registry; every tool is backed by existing parameterized repository queries.
 3. **Parameterized queries only.** All tool dispatch goes through `query(text, params)` / `queryPrepared()` in [apps/node-backend/src/database/connection.js](apps/node-backend/src/database/connection.js). No string concatenation.
 4. **Audit trail.** Every `tool_call` and `tool_result` persists in `ai_messages` (role `tool`, with `tool_name`, `tool_args`, `tool_result` JSONB columns). Forensic review is possible per-conversation.

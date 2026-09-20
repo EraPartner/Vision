@@ -2,8 +2,8 @@
 title: Database Migration Guide
 type: guide
 status: active
-date: 2026-08-30
-updated: 2026-09-04
+date: 2026-09-20
+updated: 2026-09-20
 tags:
   [
     guide,
@@ -37,14 +37,18 @@ Vision uses [Alembic](https://alembic.sqlalchemy.org/) to manage PostgreSQL sche
 
 ## Quick Reference
 
-| Action                            | Repository command                 |
-| --------------------------------- | ---------------------------------- |
-| Run all pending migrations        | `bun run db:upgrade`               |
-| Create a migration                | `bun run db:revision -- "message"` |
-| Check graph and rollback fidelity | `bun run db:check`                 |
-| Check current schema revision     | `bun run db:current`               |
-| View the migration chain          | `bun run db:history`               |
-| Disposable rollback test only     | `bun run db:downgrade -- <target>` |
+| Action                            | Repository command                                                                                                                                              |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Run pending automatic migrations  | `bun run db:upgrade`                                                                                                                                            |
+| Back up an older revision safely  | `bun run db:backup-before-baseline --backup /absolute/new.dump --writers-stopped --maintenance-approved`                                                        |
+| Bridge contracted 0118 to 0119    | `bun run db:bridge-baseline --backup /absolute/new.dump --writers-stopped --maintenance-approved`                                                               |
+| Convert reviewed legacy 0118      | `bun run db:convert-legacy-baseline --backup /absolute/new.dump --archive /absolute/new-archive.dump --writers-stopped --maintenance-approved --utc-timestamps` |
+| Roll back before new writes       | `bun run db:rollback-legacy-baseline --journal /absolute/conversion-journal.json --writers-stopped --maintenance-approved`                                      |
+| Create a migration                | `bun run db:revision -- "message"`                                                                                                                              |
+| Check graph and rollback fidelity | `bun run db:check`                                                                                                                                              |
+| Check current schema revision     | `bun run db:current`                                                                                                                                            |
+| View the migration chain          | `bun run db:history`                                                                                                                                            |
+| Disposable rollback test only     | `bun run db:downgrade -- <target>`                                                                                                                              |
 
 > [!warning] Don't invoke bare `alembic` for anything that writes the version table
 > Alembic auto-creates `alembic_version.version_num` as `VARCHAR(32)`, which is too narrow for this chain's revision ids — a fresh database dies on revision 3 with `value too long for type character varying(32)`. The `db:migrate`/`db:upgrade`/`db:downgrade`/`db:stamp`/`db:reset` scripts route through `apps/node-backend/scripts/db-migrate.js`, which runs the boot-path `VARCHAR(64)` preflight first. See [[docs/reference/scripts|Scripts Reference]].
@@ -60,6 +64,70 @@ Vision uses [Alembic](https://alembic.sqlalchemy.org/) to manage PostgreSQL sche
   - Handles model autogenerate (`--autogenerate` flag)
   - Configures transactional DDL for PostgreSQL
 - **Migration directory:** `alembic/versions/` — All migration files live here
+
+### Reviewed 0119 fresh baseline
+
+An empty PostgreSQL 18 database receives the reviewed SQL snapshot in
+`alembic/baseline/0119_fresh.sql` in one transaction. The installer verifies its
+SHA-256, the absence of application objects, the revision marker, and the
+catalog fingerprint. New audit history starts with one `baseline_installed`
+event. The old Alembic files remain available for upgrades and downgrade
+evidence; fresh installation no longer replays them.
+
+Existing installations normally stay at `0118_audit_retention_pruner` while
+the `0119` bridge awaits a maintenance window. This is deliberate: the six
+guarded manual contracts mean revision `0118` alone cannot establish the
+maintained schema. The bridge revision contains no DDL or data rewrite and
+rejects an unknown schema fingerprint. A failed bridge leaves the previous
+revision and audit head unchanged.
+
+For an installation already at the contracted `0118` shape, stop every writer,
+choose a new absolute path for the retained logical backup, and run the
+operator bridge command shown above during an approved maintenance window.
+The command rejects other database clients, requires the reviewed schema,
+creates a fresh backup, restores it in disposable PostgreSQL 18, compares
+counts and digests for every table, exercises a rolled-back category write,
+then advances to `0119` and confirms domain rows did not change. It retains
+the backup. The `.dump` is owner-only but is not encrypted by this command;
+keep it on protected local storage and encrypt it before any transfer. Do not
+treat the two command flags as substitutes for actually
+stopping writers or approving the window. The command supports an explicit
+local PostgreSQL URL and does not print financial rows or the URL.
+
+Older active revisions first follow the preserved Alembic graph to `0118` and
+complete each applicable guarded manual contract with its own backup and
+parity requirements. A pre-ADR-027 revision marker needs an exact 0001 schema
+fingerprint before any mapping; an unknown or divergent shape stops. Do not
+manually stamp a revision to bypass a refusal. The maintained installation's
+former `0113` database had historical differences from a fresh `0113` install,
+including timestamp types, defaults, indexes, and a populated ADR-109 archive.
+Its restore-tested `0113` backup was retained. The `0113` to `0118` graph passed
+on a disposable restore, but that restored schema still differed from the
+reviewed `0118` bridge shape. The normal no-DDL bridge refused it. During the
+approved maintenance window, the operator applied `0113` to `0118` and used the
+separate canonical conversion described in
+[[docs/adr/166-maintained-database-canonical-conversion|ADR-166]].
+
+For that exact maintained legacy profile, first stop every Vision writer and
+upgrade from `0113` to `0118` during the approved maintenance window. The
+existing verified `0113` backup must remain available. Run the conversion
+command with two **new** absolute paths in an owner-only backup directory.
+The command makes and restore-tests a new full `0118` backup, separately
+exports and verifies `adr109_legacy_archive`, creates the fresh `0119` schema
+in a new database, and copies the rows with old timestamp-without-time-zone
+values interpreted as **UTC**. It verifies every shared table digest, all
+foreign keys, the audit chain, and an application-role write that is rolled
+back. The old database remains under a recovery name in the owner-only
+conversion journal. Do not delete it or either dump before acceptance.
+
+The conversion changes stored data and database identity. Keep writers stopped
+until the packaged app's reads and writes are accepted. If no new writes have
+occurred, the rollback command above checks the journal and both database
+manifests before restoring the old database name. Once the converted database
+has new writes, restoring the old name would lose them; use the full backup
+and an explicit reconciliation plan. The dump and archive are owner-only, not
+encrypted. Keep them on protected local storage and encrypt them before
+transfer. Unknown older shapes still fail closed.
 
 ### Migration File Format
 
@@ -102,9 +170,9 @@ repository's `db-migrations` skill for schema work.
 
 1. **Always provide a downgrade** — Every migration should be reversible
 2. **Test both directions** — Run `upgrade` and `downgrade` locally before committing
-3. **Assume it runs unattended** — native startup calls the guarded migration runner, so
-   anything in `alembic/versions/` applies on the next application start. Never write a migration
-   whose safety depends on an operator choosing a separate time to run it.
+3. **Assume it runs unattended** — native startup calls the guarded migration runner. The 0119
+   bridge is explicitly deferred until the restore-tested operator procedure; do not copy that
+   exception into ordinary migrations.
 4. **Use idempotent operations** — Where possible, check if changes already exist before applying
 5. **Handle dependencies** — For view/trigger changes, drop dependencies before altering types, then recreate
 6. **Mark destructive DDL** — Anything that drops or retypes needs a `destructive-ok:` marker, or it belongs out-of-band; see [[#destructive-ddl-and-the-destructive-ok-marker|below]]

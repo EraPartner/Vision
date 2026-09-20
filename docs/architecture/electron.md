@@ -2,8 +2,8 @@
 title: Electron Desktop Architecture
 type: architecture-doc
 status: active
-date: 2026-08-31
-updated: 2026-09-19
+date: 2026-09-20
+updated: 2026-09-20
 tags:
   [
     architecture,
@@ -299,6 +299,70 @@ startup sets the canonical identity but does not inspect, rename, archive, or im
 
 ### Frontend Initialization
 
+Before first app navigation, the Electron main process uses a private loopback
+bridge to verify the native audit chain against an HMAC-signed local receipt.
+`packaging/electron/audit-anchor.js` keeps the receipt and its
+`safeStorage`-encrypted key under the application's `audit-anchor/` directory,
+outside PostgreSQL and backup bundles. Version 3 also requires a matching latest-checkpoint record in the macOS Keychain, read through the packaged `audit-keychain` helper. Missing or mismatched records fail verification; older version 2 receipts remain unverified. Unsigned builds may ask for the user's Keychain password. Each launch creates a random bridge token
+and passes it only to the backend child as `VISION_AUDIT_BRIDGE_TOKEN`; the
+renderer and ordinary admin token cannot call the bridge. A cluster created in
+the current launch can enroll at its fully checked post-migration head when all
+legacy-unverified audit counts are zero. Migration 0117 may already have added
+the first chain entry. Existing clusters without a receipt remain unavailable
+until the user explicitly starts protection in the native Admin audit view. That
+action checks the current chain, asks for confirmation with Cancel as default,
+and stores the observed head as an enrollment baseline. Earlier entries are
+accepted as a starting point, not proven authentic before enrollment. A transient first request
+failure can be retried up to five times at 30-second intervals while healthy.
+The check notifies on failed or unavailable status and allows startup to continue.
+
+Admin also exposes a password-protected audit transfer for a device move. Export closes
+the chain tail before encrypting the receipt and key. Import is limited to the
+first native launch on a new Mac while its fresh checkpoint still matches the
+pristine database. The user then restores the matching backup, which must pass
+the existing full-chain check against the transferred checkpoint. See
+[[docs/adr/161-password-protected-audit-device-transfer|ADR-161]].
+The import writes a private rollback journal before replacing the local pair.
+After an interruption, it uses the Keychain witness to keep the imported pair
+or restore the original fresh pair. An unmatched witness fails closed. See
+[[docs/adr/163-audit-transfer-recovery-journal|ADR-163]].
+
+An exact verified startup head enables a live session. While the backend remains
+healthy, a 30-second timer re-verifies the complete chain and signed migration
+cutover, persists a valid new head in the local receipt, and mirrors its metadata
+to PostgreSQL. A partial tail already present at startup is not promoted.
+Backend loss or update restart ends the live session. Restore pauses the timer
+and checks the candidate database after detailed readiness but before final
+database-switch activation. A status other than `verified` first rolls the
+candidate database and attachments back. Electron then offers a second warning
+with Cancel as default. If the user explicitly continues, it retries the
+selected backup once, checks the entire chain without claiming the local
+receipt matches, preserves that receipt, and leaves audit continuity
+unverified. A later check against the preserved receipt may report rollback.
+Native updater checksum and install decisions are sent through the bridge as
+chained local events. If a receipt exists or this launch established a trusted
+session, Electron closes each checkpoint synchronously and blocks install if
+closure fails. An existing installation without either can proceed after
+recording the event, with audit protection reported unavailable. The event does
+not prove signed release provenance.
+
+During a trusted live session, a daily retention attempt verifies the chain and plans a complete one-year-old prefix behind the external checkpoint. Electron signs its boundary into the receipt and Keychain witness before the private backend route calls migration 0118's guarded prune function. The next attempt retries an interrupted signed boundary. A retained suffix verifies from that signed predecessor, and the Admin view states how many earlier entries were removed. See [[docs/adr/162-one-year-audit-retention|ADR-162]].
+
+The Admin audit view uses a separate `electronAudit` context bridge. Main reads
+the local receipt and asks the private backend route to verify the whole chain
+and return one bounded page from the same read-only database snapshot. Renderer
+code receives entries and explicit `anchored` or `pending_anchor` labels, not
+the private token or receipt key. Native export uses the save dialog and writes
+only a complete verified snapshot within the 500-entry and 2 MB limits. The
+export describes the local receipt and Keychain checkpoint as its trust source; it is not a signed report or remote attestation. If an installation has no local receipt,
+the Admin view offers deliberate enrollment and warns that earlier authenticity
+cannot be proven. The signed receipt retains that baseline through later
+checkpoint updates, and exports carry the same caveat.
+See [[docs/api/internal-audit|Private Audit Bridge]] and
+[[docs/adr/157-electron-local-audit-receipt|ADR-157]], [[docs/adr/158-macos-keychain-audit-witness|ADR-158]], and [[docs/adr/160-explicit-audit-enrollment-baseline|ADR-160]].
+
+![[docs/diagrams/electron-audit-verification-flow.puml]]
+
 7. **Readiness Poll** — `pollAndLoad({ building })` uses a build-aware budget and gates the FIRST navigation on `/health/detailed` readiness:
    - Polls `GET /health/detailed` every 300ms (`VISION_HEALTH_POLL_INTERVAL_MS`) via `pingReady()` + `pollReady()`
    - **Readiness predicate:** navigate when `/health/detailed` returns `status === 'ready'` OR `caches.materializedViews === true`. The materialized-views flag is DB-only and fast; network-bound warmup tasks (exchange rates, portfolio snapshots) cannot stall startup.
@@ -385,11 +449,12 @@ Electron-builder configuration in `packaging/electron/package.json`:
 
 **Key Configuration Details:**
 
-- **`files`** — Packed inside `app.asar`. Must include `runtime/**/*`, `backup/**/*`, and
-  `assets/**/*`. Missing runtime or backup modules makes startup fail before data access.
+- **`files`** — Packed inside `app.asar`. Must include `runtime/**/*`, `backup/**/*`,
+  `audit-anchor.js`, `audit-keychain.js`, `audit-viewer.js`, and `assets/**/*`. Missing a required main-process module
+  makes startup fail before data access. The Demo package uses this same file list.
 
 - **`extraResources`** — Kept outside asar at `Contents/Resources/`. They include `i18n/` and the
-  executable `native-runtime/` payload.
+  executable `native-runtime/` payload and the compiled `audit-keychain` helper.
 
 - **`native-runtime/`** — Also kept outside asar. It contains the compiled Bun backend,
   production frontend, migrations, migration runner, configuration, and checksum manifest used by
@@ -626,6 +691,12 @@ Mounted once in `AppLayout`, inside `SidebarProvider`. Responsibilities:
 `packaging/electron/backup/restore.js` resolves the native transport and privileged database
 identity through one shared environment resolver for bundle backup, bundle restore, and legacy SQL
 restore. It prefers `DATABASE_URL_MIGRATIONS`; credential values are never logged.
+Native bundle and legacy SQL restores first require an exact audit match against
+the installation-local receipt before finalizing the database switch. A missing
+receipt or valid but unanchored tail rolls the candidate database back. The user
+can explicitly retry once under the separate unverified-audit recovery warning;
+that path requires an internally valid chain and keeps the old receipt unchanged.
+The receipt files are not included in backup bundles.
 
 **Frontend Integration:**
 

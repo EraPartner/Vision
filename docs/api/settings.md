@@ -5,7 +5,7 @@ method: GET, PUT, DELETE
 path: /api/settings
 description: User preferences and application settings
 date: 2026-06-19
-updated: 2026-09-14
+updated: 2026-09-20
 tags: [api, settings, preferences, phase-3, auto-link, planned-match, june-2026]
 status: active
 aliases: [settings-api, preferences-api, user-settings, app-settings]
@@ -138,6 +138,7 @@ Response semantics:
 | onboarding_complete          | boolean | First-run onboarding completion state                                                        |
 | dismissed_recurring_patterns | array   | IDs/patterns dismissed from recurring suggestions                                            |
 | rebalance_plans              | array   | Saved custom portfolio rebalancing plans (max 50 entries)                                    |
+| life_scenarios               | array   | Saved three-month income interruption scenarios (max 50 entries)                             |
 | brokerage_cash_category_ids  | object  | Active category IDs used for instrument-free brokerage dividend, interest, fee, and tax rows |
 
 ### `brokerage_cash_category_ids` shape (2026-09-04)
@@ -147,6 +148,26 @@ Response semantics:
 ```
 
 All four keys are required. Each value is either `null` or a positive PostgreSQL integer category ID. Strings, fractions, zero, negatives, out-of-range IDs, missing keys, and extra keys are rejected for single and bulk writes. The all-null object is the read default. Imports re-check that configured IDs are active; a missing, deleted, inactive, or unset category leaves the new cash row uncategorized.
+
+### `life_scenarios` shape (2026-09-19)
+
+`GET/PUT /api/settings/life_scenarios` stores up to 50 named scenario definitions. The default is `[]`. Definitions are included in the normal settings backup; forecast results are computed on demand and are not stored.
+
+```json
+{
+  "id": "user-generated identifier",
+  "name": "Income interruption",
+  "kind": "income_interruption",
+  "interruptionMonths": 3,
+  "monthlySurplus": 800,
+  "monthlyIncomeLoss": 500,
+  "monthlyContribution": 600,
+  "goalValue": 25000,
+  "goalDate": "2028-12-01"
+}
+```
+
+Each entry requires a nonblank name, nonnegative finite monthly amounts, a contribution no larger than the baseline surplus, and exactly three interruption months. `goalValue` and `goalDate` are optional but must be supplied together; the goal value must be positive. The UI chooses a goal month and stores its first day because the projection has monthly resolution. The server rejects extra fields, more than 50 entries, and malformed dates with `400`. The UI compares a baseline contribution against a contribution limited by the reduced surplus for the first three months. This is a nominal assumption, not a change to transactions or the portfolio.
 
 ### `rebalance_plans` shape (2026-06-19)
 

@@ -740,6 +740,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/cross-workspace/commitment-aware-cash": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Estimate a 90-day candidate cash cap after planned commitments
+         * @description Projects the lowest end-of-day spendable balance from active unexecuted planned transactions, including bounded recurring occurrences once. Subtracts the editable reserve floor. Excludes statistical forecasts and unplanned expenses; the result is an estimate, not a guarantee.
+         */
+        post: operations["computeCommitmentAwareCash"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/cross-workspace/rebalance": {
         parameters: {
             query?: never;
@@ -3410,6 +3430,226 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/internal/audit/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify the audit chain against a main-process checkpoint
+         * @description Private native Electron endpoint. The server requires both a loopback socket peer and the per-launch bearer token. The optional checkpoint must first be authenticated outside PostgreSQL by the Electron main process. HTTP 200 reports the verification result, including failed and unavailable statuses; it does not imply audit success.
+         */
+        post: operations["internalAuditVerify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/internal/audit/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read a bounded audit page from a verified database snapshot
+         * @description Private native Electron endpoint. The per-launch bearer and loopback socket checks match verify. The main process supplies an externally authenticated checkpoint. The server verifies the full history and reads the page under one repeatable-read transaction. Failed or unavailable verification returns an empty entries array. A verified prefix does not authenticate a pending tail.
+         */
+        post: operations["internalAuditRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/internal/audit/retention-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Plan an eligible one-year audit prefix after full verification
+         * @description Private Electron endpoint with loopback and per-launch bearer checks. The caller supplies an externally authenticated checkpoint. The plan is advisory; Electron must sign its boundary outside PostgreSQL before invoking retention-prune. A non-eligible plan does not delete rows.
+         */
+        post: operations["internalAuditRetentionPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/internal/audit/retention-prune": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Prune a complete old prefix bound by a signed receipt
+         * @description Private Electron endpoint. The signed retention boundary must already be present in the externally authenticated checkpoint. Full retained history is verified before the guarded database function runs.
+         */
+        post: operations["internalAuditRetentionPrune"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/internal/audit/checkpoint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record metadata for an already persisted Electron receipt
+         * @description Private native Electron endpoint with the same loopback and per-launch token checks as verify. This records database metadata only. The receipt itself is kept in Electron application data outside PostgreSQL.
+         */
+        post: operations["internalAuditCheckpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/internal/audit/update-decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Append a local Electron updater decision to the audit chain
+         * @description Private native Electron endpoint with loopback and per-launch Bearer checks. Records a bounded decision, update mode, and version as a release_update audit event. It does not prove release signature or publisher provenance.
+         */
+        post: operations["internalAuditUpdateDecision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/codex-experimental/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read disposable experimental Codex session status
+         * @description Disabled unless VISION_EXPERIMENTAL_CODEX=1 and a binary path and ADMIN_AUTH_TOKEN are configured. Requires loopback peer and admin bearer token. Never returns credentials.
+         */
+        get: operations["adminCodexExperimentalStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/codex-experimental/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start disposable experimental Codex App Server
+         * @description Creates a synthetic workspace and a macOS Seatbelt confined App Server. No financial data is mounted. Request body must be empty.
+         */
+        post: operations["adminCodexExperimentalSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/codex-experimental/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Begin isolated ChatGPT device-code login
+         * @description Returns a device verification URL and short user code. Request body must be empty. No API-key login or host Codex credential import is allowed.
+         */
+        post: operations["adminCodexExperimentalLogin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/codex-experimental/synthetic-turn": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run one fixed fictional prompt through isolated subscription Codex
+         * @description No request payload or private prompt is accepted. Refuses unauthenticated accounts and unavailable rate limits. Never falls back to API billing.
+         */
+        post: operations["adminCodexExperimentalSyntheticTurn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/codex-experimental/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Log out and dispose of isolated Codex session
+         * @description Closes App Server and proxy, and deletes disposable runtime state. Request body must be empty.
+         */
+        post: operations["adminCodexExperimentalLogout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin": {
         parameters: {
             query?: never;
@@ -3505,7 +3745,10 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** Get a table's column metadata (Data Editor, ADR-101) */
+        /**
+         * Get a table's column metadata (Data Editor, ADR-101)
+         * @description The six protected audit tables require a dedicated viewer that authenticates audit history and return 403 here.
+         */
         get: operations["adminGetTableSchema"];
         put?: never;
         post?: never;
@@ -3524,7 +3767,10 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** Read paginated rows from a table (Data Editor, ADR-101) */
+        /**
+         * Read paginated rows from a table (Data Editor, ADR-101)
+         * @description The six protected audit tables require a dedicated viewer that authenticates audit history and return 403 here.
+         */
         get: operations["adminGetTableRows"];
         put?: never;
         post?: never;
@@ -3547,7 +3793,7 @@ export interface paths {
         put?: never;
         /**
          * Apply row mutations to a table (Data Editor, ADR-101)
-         * @description Rate-limited (adminMutateLimiter). Identifiers are validated against the live catalog and double-quoted; values are parameterised. Updates/deletes are optimistic-locked on xmin. Pass dryRun to preview statements without applying.
+         * @description Rate-limited (adminMutateLimiter). Identifiers are validated against the live catalog and double-quoted; values are parameterised. Updates/deletes are optimistic-locked on xmin. Pass dryRun to preview statements without applying. The six protected audit tables return 403 even for dry runs.
          */
         post: operations["adminMutateTableRows"];
         delete?: never;
@@ -3989,6 +4235,77 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AuditTrustedCheckpoint: {
+            sequence: number;
+            hash: string;
+            retention?: components["schemas"]["AuditRetentionBoundary"];
+        };
+        AuditRetentionBoundary: {
+            through: number;
+            hash: string;
+            domainMax: components["schemas"]["AuditRetentionDomainMax"];
+            migrationHeads: string[];
+        };
+        AuditRetentionDomainMax: {
+            dbEditor: number;
+            split: number;
+            retag: number;
+        };
+        AuditLegacyCutover: {
+            dbEditorMaxId: number;
+            splitMaxId: number;
+            retagMaxId: number;
+        };
+        AuditVerificationResult: {
+            /** @enum {string} */
+            status: "verified" | "partially_verified" | "unavailable" | "failed";
+            /** @description Failure reason when status is failed */
+            code?: string;
+            /** @description Unavailability reason when status is unavailable */
+            reason?: string;
+            sequence?: number;
+            hash?: string;
+            anchoredThrough?: number;
+            retentionThrough?: number;
+            legacyCutover?: components["schemas"]["AuditLegacyCutover"];
+            /** @description Decimal-string counts of pre-cutover audit rows outside the chain. */
+            legacyUnverified?: {
+                dbEditor?: string;
+                split?: string;
+                portfolioRetag?: string;
+            };
+        };
+        AuditReadPage: {
+            verification: components["schemas"]["AuditVerificationResult"];
+            entries: {
+                sequence: number;
+                version: number;
+                previousHash: string;
+                hash: string;
+                payload: {
+                    [key: string]: unknown;
+                };
+                /** Format: date-time */
+                createdAt: string;
+                /** @enum {string} */
+                anchorStatus: "anchored" | "pending_anchor";
+            }[];
+            hasMore: boolean;
+        };
+        AuditCheckpointMetadata: {
+            sequence: number;
+            headHash: string;
+            anchorKind: string;
+            receiptId: string;
+            receiptHash: string;
+        };
+        AuditUpdateDecision: {
+            /** @enum {string} */
+            decision: "checksum_verified" | "checksum_failed" | "install_requested" | "install_failed";
+            /** @enum {string} */
+            mode: "native" | "dev";
+            version: string;
+        };
         Envelope: {
             ok: boolean;
             /** @description Present on success */
@@ -4701,6 +5018,8 @@ export interface components {
             startValue?: number;
             startInvested?: number;
             monthlyContribution?: number;
+            /** @description Month at which target probability is evaluated */
+            goalMonth?: number;
             totalContributions?: number;
             netInvested?: number;
             expectedAnnualReturn?: number;
@@ -7700,6 +8019,65 @@ export interface operations {
             };
         };
     };
+    computeCommitmentAwareCash: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    currency?: string;
+                    /** @default 0 */
+                    reserveFloor?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Candidate cap and projection assumptions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            currency: string;
+                            /** Format: date */
+                            today: string;
+                            /** Format: date */
+                            horizonEnd: string;
+                            /** @enum {integer} */
+                            horizonDays: 90;
+                            currentCash: number;
+                            reserveFloor: number;
+                            minimumProjectedBalance: number;
+                            /** Format: date */
+                            minimumDate: string;
+                            candidateCashCap: number;
+                            occurrenceCount: number;
+                            assumptions: {
+                                plannedOnly: boolean;
+                                excludesStatisticalForecast: boolean;
+                                excludesFutureIncome: boolean;
+                                excludesUnplannedExpenses: boolean;
+                                currencyConversionAtRecentRates: boolean;
+                            };
+                        };
+                    };
+                };
+            };
+            /** @description Invalid reserve floor or currency */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     computeRebalance: {
         parameters: {
             query?: never;
@@ -7712,7 +8090,7 @@ export interface operations {
                 "application/json": {
                     currency?: string;
                     /** @enum {string} */
-                    model?: "sixty_forty" | "all_weather" | "three_fund";
+                    model?: "sixty_forty" | "all_weather" | "three_fund" | "awesome";
                     targetWeights?: {
                         [key: string]: number;
                     };
@@ -13596,6 +13974,468 @@ export interface operations {
             };
         };
     };
+    internalAuditVerify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    trustedCheckpoint?: components["schemas"]["AuditTrustedCheckpoint"];
+                };
+            };
+        };
+        responses: {
+            /** @description Verification status in the response data */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {boolean} */
+                        ok: true;
+                        data: components["schemas"]["AuditVerificationResult"];
+                    };
+                };
+            };
+            /** @description Invalid or oversized request body */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid per-launch bearer token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Socket peer is not loopback */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    internalAuditRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    trustedCheckpoint?: components["schemas"]["AuditTrustedCheckpoint"];
+                    afterSequence?: number;
+                    limit?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Verification result and bounded audit page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {boolean} */
+                        ok: true;
+                        data: components["schemas"]["AuditReadPage"];
+                    };
+                };
+            };
+            /** @description Invalid or oversized request body */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid per-launch bearer token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Socket peer is not loopback */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    internalAuditRetentionPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    trustedCheckpoint: components["schemas"]["AuditTrustedCheckpoint"];
+                };
+            };
+        };
+        responses: {
+            /** @description Eligible boundary or bounded reason for no deletion */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {boolean} */
+                        ok: true;
+                        data: {
+                            eligible: boolean;
+                            reason?: string;
+                            through?: number;
+                            hash?: string;
+                            domainMax?: components["schemas"]["AuditRetentionDomainMax"];
+                            migrationHeads?: string[];
+                        };
+                    };
+                };
+            };
+            /** @description Invalid or missing authenticated checkpoint */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid per-launch bearer token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Socket peer is not loopback */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    internalAuditRetentionPrune: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    trustedCheckpoint: components["schemas"]["AuditTrustedCheckpoint"];
+                };
+            };
+        };
+        responses: {
+            /** @description Number of deleted rows; zero on an exact retry */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {boolean} */
+                        ok: true;
+                        data: {
+                            removed: number;
+                        };
+                    };
+                };
+            };
+            /** @description Invalid or missing signed retention boundary */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid per-launch bearer token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Socket peer is not loopback */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    internalAuditCheckpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuditCheckpointMetadata"];
+            };
+        };
+        responses: {
+            /** @description Inserted checkpoint metadata identifier and creation time */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {boolean} */
+                        ok: true;
+                        data: {
+                            id: string;
+                            /** Format: date-time */
+                            createdAt: string;
+                        };
+                    };
+                };
+            };
+            /** @description Invalid or oversized request body */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid per-launch bearer token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Socket peer is not loopback */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Checkpoint sequence or hash conflicts with the stored chain */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    internalAuditUpdateDecision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuditUpdateDecision"];
+            };
+        };
+        responses: {
+            /** @description Appended audit sequence and hash */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {boolean} */
+                        ok: true;
+                        data: {
+                            sequence: number;
+                            hash: string;
+                        };
+                    };
+                };
+            };
+            /** @description Invalid or oversized request body */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid per-launch bearer token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Socket peer is not loopback */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    adminCodexExperimentalStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Session and ChatGPT account status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description Experimental route disabled or session unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    adminCodexExperimentalSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Session started */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description Disabled or sandbox startup failed */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    adminCodexExperimentalLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Device login instructions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description Session or provider login unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    adminCodexExperimentalSyntheticTurn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fixed question and bounded answer */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description Subscription or safety gate unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    adminCodexExperimentalLogout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Session disposed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description Logout failed after local disposal */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     adminOverview: {
         parameters: {
             query?: never;
@@ -13741,6 +14581,13 @@ export interface operations {
                     };
                 };
             };
+            /** @description Protected audit table cannot be opened in the generic data editor */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Unknown table */
             404: {
                 headers: {
@@ -13797,6 +14644,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Protected audit table cannot be opened in the generic data editor */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Unknown table */
             404: {
                 headers: {
@@ -13847,6 +14701,13 @@ export interface operations {
             };
             /** @description Malformed change set */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Protected audit table cannot be edited in the generic data editor */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -14350,12 +15211,16 @@ export interface operations {
                 "application/json": {
                     horizon_months?: number;
                     monthly_contribution?: number;
+                    /** @description Per-month contributions; omitted trailing months use monthly_contribution */
+                    monthly_contribution_schedule?: number[];
                     paths?: number;
                     /** @description 0 = historical drift, 1 = forward */
                     forward_blend?: number;
                     /** @enum {string} */
                     method?: "parametric" | "block_bootstrap";
                     target_value?: number;
+                    /** @description Must not exceed horizon_months and requires target_value */
+                    goal_month?: number;
                     currency?: string;
                     seed?: string;
                 };

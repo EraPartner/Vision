@@ -26,7 +26,7 @@ package "Server" {
   rectangle "Node.js Backend (Bun runtime)" {
     node "Express.js" as Express
     node "Middleware Stack\nadminAuth · requestId · metrics\nCORS · rate limit · envelope · errors" as Middleware
-    node "Routes\ntransactions · planning · portfolio · imports\nreports · AI · settings · admin" as Routes
+    node "Routes\ntransactions · planning · portfolio · imports\nreports · AI · settings · admin · private audit" as Routes
     node "Services\nimports · prices · FX · tax · snapshots\nbackup · AI orchestration + references · reports · attachments" as Services
     node "Repositories\ntransaction · recipient · planning · portfolio\nimports · AI jobs + reference maps · attachments · settings · info" as Repos
     node "Background Jobs\nrefreshCashflowForecastMc · local analysis monitor scheduler" as Jobs
@@ -52,6 +52,7 @@ cloud "External Services" as External {
   node "DBnomics (ECB/OECD/IMF macro, keyless, ADR-082)" as DBnomics
   node "Local Ollama (LLM, 127.0.0.1:11434)" as Ollama
   node "OpenAI Responses API\nopt-in planning or selected-evidence synthesis" as OpenAI
+  node "Codex App Server provider\nexperimental synthetic-only" as CodexProvider
 }
 
 cloud "Build & Distribution" as DevToolsCloud {
@@ -72,9 +73,20 @@ package "Client to Server" {
 }
 
 package "Desktop Runtime" {
+  node "Local audit receipt\nHMAC + safeStorage key\noutside PostgreSQL and backup" as AuditReceipt
   Electron --> NativeRuntime : packaged default
   NativeRuntime --> Express : loopback backend
   NativeRuntime --> DB : owner/app role connections
+  Electron --> AuditReceipt : authenticate and update
+  Electron --> Routes : loopback + per-launch token\nverify and checkpoint metadata
+}
+
+package "Experimental Codex Boundary" {
+  node "Disposable App Server\nmacOS Seatbelt + ephemeral auth" as CodexChild
+  node "CONNECT proxy\nallowed hosts + byte caps" as CodexProxy
+  Routes --> CodexChild : admin opt-in + fixed fictional turn
+  CodexChild --> CodexProxy : loopback only
+  CodexProxy --> CodexProvider : TLS tunnel
 }
 
 package "Server Components" {

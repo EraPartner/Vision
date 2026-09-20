@@ -3,7 +3,7 @@ title: Research Feature
 type: feature
 status: active
 date: 2026-06-16
-updated: 2026-09-11
+updated: 2026-09-20
 tags:
   - url-state
   - feature
@@ -99,6 +99,8 @@ The Research section gives users a unified hub to investigate any security — n
 > **Provider keys:** all five adapters are implemented; the keyed four (Twelve Data, Finnhub, FMP, Alpha Vantage) activate when their key is set via the Settings UI or the root `.env` (ADR-080). Adapter normalization is unit-tested with mocks — **live verification per provider/tier is still recommended**. Universe screening remains out of scope — there is no universe-scan endpoint and free-tier quotas can't support one (Pillar D ships as a _selected-symbol_ fundamentals comparison + per-symbol scorecard instead).
 
 ## API Surface
+
+The Forecast page also supports saved three-month income interruption scenarios. The user enters a baseline monthly surplus, planned portfolio contribution, and monthly income loss. Vision limits the first three months of scenario contributions to the nonnegative reduced surplus, then resumes the baseline contribution. An optional nominal savings goal month compares target probabilities at that month using the same simulation seed for both paths. The UI refuses to attribute an approximate median difference to income interruption if reported market inputs change between the two forecast requests. Scenario definitions are stored under `life_scenarios` in [[docs/api/settings|Settings API]]; results remain on demand. The values are assumptions, not a budget guarantee or a real-value inflation adjustment. See [[docs/api/research|Research API]] for the contribution schedule and goal-month contract and [[docs/diagrams/life-scenario-flow.puml|Life Scenario Flow]] for the request path.
 
 Eighteen endpoints at `/api/research`, all under `marketRateLimiter`: six GET data endpoints (search/quote/chart/fundamentals/analyst/news), two analytics endpoints (scorecard, portfolio-forecast), two macro endpoints (macro/search, macro/series — ADR-082), five symbol-mapping endpoints (`GET/POST/DELETE /mappings`, `POST /mappings/resolve`, `POST /mappings/audit`), and three provider-key Settings endpoints. Full endpoint reference: [[docs/api/research|Research API]].
 

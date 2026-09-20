@@ -2,8 +2,8 @@
 title: Vision Project Knowledge Base
 type: index
 status: active
-date: 2026-09-19
-updated: 2026-09-19
+date: 2026-09-20
+updated: 2026-09-20
 last_modified: 2026-09-19
 tags:
   [
@@ -176,7 +176,7 @@ LIMIT 20
 **View all diagrams:** [[docs/diagrams/index|Diagrams Index]] | [[docs/architecture/index|Architecture Overview]] | [Interactive Flow Visualizer](flow-visualizer.html)
 
 > [!tip] Interactive Flow Visualizer
-> `docs/flow-visualizer.html` is a single-page, interactive map of all packages (65 components) + 34 end-to-end flows (create-transaction, CSV import, category hierarchy editing, manual analysis, persistent research dossiers, local analysis monitoring, local execution of cloud-authored catalog plans, portfolio look-through exposure, bounded AI research with scoped local reference restoration, forward-only broker history, AI chat, AES-256-GCM backup, native Demo seed activation, app update, macro-series-fetch, close-account, db-data-edit, …). Open it directly in any browser — click a flow on the left, watch the path light up, and read the payload at each hop. Add new flows by editing the JSON block at the bottom of the file.
+> `docs/flow-visualizer.html` is a single-page, interactive map of all packages (75 components) + 38 end-to-end flows (create-transaction, CSV import, category hierarchy editing, manual analysis, persistent research dossiers, local analysis monitoring, local execution of cloud-authored catalog plans, portfolio look-through exposure, bounded AI research with scoped local reference restoration, forward-only broker history, AI chat, AES-256-GCM backup, native Demo seed activation, app update, macro-series-fetch, close-account, db-data-edit, …). Open it directly in any browser — click a flow on the left, watch the path light up, and read the payload at each hop. Add new flows by editing the JSON block at the bottom of the file.
 
 | Resource                                 | Description                           |
 | ---------------------------------------- | ------------------------------------- |

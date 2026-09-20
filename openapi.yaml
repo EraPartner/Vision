@@ -14,6 +14,13 @@ servers:
 
 # ─── Shared envelope & list wrappers ─────────────────────────────────────────
 components:
+  securitySchemes:
+    AuditBridgeToken:
+      type: http
+      scheme: bearer
+      description: >
+        Per-launch token supplied only by the Electron main process to its native
+        backend. A loopback socket peer is also required. This is not ADMIN_AUTH_TOKEN.
   parameters:
     # Opt-in pagination for list endpoints that historically returned every row.
     # Both are optional and, when neither is sent, the response carries the full
@@ -39,6 +46,121 @@ components:
       description: Rows to skip. Omit (together with limit) to receive the whole collection.
 
   schemas:
+    AuditTrustedCheckpoint:
+      type: object
+      additionalProperties: false
+      required: [sequence, hash]
+      properties:
+        sequence: { type: integer, minimum: 0 }
+        hash: { type: string, pattern: "^[0-9a-f]{64}$" }
+        retention: { $ref: "#/components/schemas/AuditRetentionBoundary" }
+    AuditRetentionBoundary:
+      type: object
+      additionalProperties: false
+      required: [through, hash, domainMax, migrationHeads]
+      properties:
+        through: { type: integer, minimum: 1 }
+        hash: { type: string, pattern: "^[0-9a-f]{64}$" }
+        domainMax: { $ref: "#/components/schemas/AuditRetentionDomainMax" }
+        migrationHeads:
+          type: array
+          maxItems: 16
+          items: { type: string, pattern: "^[0-9a-z_]{1,64}$" }
+    AuditRetentionDomainMax:
+      type: object
+      additionalProperties: false
+      required: [dbEditor, split, retag]
+      properties:
+        dbEditor: { type: integer, minimum: 0 }
+        split: { type: integer, minimum: 0 }
+        retag: { type: integer, minimum: 0 }
+    AuditLegacyCutover:
+      type: object
+      required: [dbEditorMaxId, splitMaxId, retagMaxId]
+      properties:
+        dbEditorMaxId: { type: integer, minimum: 0 }
+        splitMaxId: { type: integer, minimum: 0 }
+        retagMaxId: { type: integer, minimum: 0 }
+    AuditVerificationResult:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [verified, partially_verified, unavailable, failed]
+        code:
+          { type: string, description: Failure reason when status is failed }
+        reason:
+          {
+            type: string,
+            description: Unavailability reason when status is unavailable,
+          }
+        sequence: { type: integer, minimum: 0 }
+        hash: { type: string, pattern: "^[0-9a-f]{64}$" }
+        anchoredThrough: { type: integer, minimum: 0 }
+        retentionThrough: { type: integer, minimum: 1 }
+        legacyCutover: { $ref: "#/components/schemas/AuditLegacyCutover" }
+        legacyUnverified:
+          type: object
+          description: Decimal-string counts of pre-cutover audit rows outside the chain.
+          properties:
+            dbEditor: { type: string, pattern: "^[0-9]+$" }
+            split: { type: string, pattern: "^[0-9]+$" }
+            portfolioRetag: { type: string, pattern: "^[0-9]+$" }
+    AuditReadPage:
+      type: object
+      required: [verification, entries, hasMore]
+      properties:
+        verification: { $ref: "#/components/schemas/AuditVerificationResult" }
+        entries:
+          type: array
+          items:
+            type: object
+            required:
+              [
+                sequence,
+                version,
+                previousHash,
+                hash,
+                payload,
+                createdAt,
+                anchorStatus,
+              ]
+            properties:
+              sequence: { type: integer, minimum: 1 }
+              version: { type: integer, minimum: 1 }
+              previousHash: { type: string, pattern: "^[0-9a-f]{64}$" }
+              hash: { type: string, pattern: "^[0-9a-f]{64}$" }
+              payload: { type: object, additionalProperties: true }
+              createdAt: { type: string, format: date-time }
+              anchorStatus: { type: string, enum: [anchored, pending_anchor] }
+        hasMore: { type: boolean }
+    AuditCheckpointMetadata:
+      type: object
+      additionalProperties: false
+      required: [sequence, headHash, anchorKind, receiptId, receiptHash]
+      properties:
+        sequence: { type: integer, minimum: 0 }
+        headHash: { type: string, pattern: "^[0-9a-f]{64}$" }
+        anchorKind: { type: string, minLength: 1, maxLength: 100 }
+        receiptId: { type: string, minLength: 1, maxLength: 300 }
+        receiptHash: { type: string, pattern: "^[0-9a-f]{64}$" }
+    AuditUpdateDecision:
+      type: object
+      additionalProperties: false
+      required: [decision, mode, version]
+      properties:
+        decision:
+          type: string
+          enum:
+            [
+              checksum_verified,
+              checksum_failed,
+              install_requested,
+              install_failed,
+            ]
+        mode: { type: string, enum: [native, dev] }
+        version: { type: string, pattern: "^v?[0-9][0-9A-Za-z.+-]{0,63}$" }
     # ADR-026 API envelope
     Envelope:
       type: object
@@ -1158,6 +1280,11 @@ components:
         startValue: { type: number }
         startInvested: { type: number }
         monthlyContribution: { type: number }
+        goalMonth:
+          {
+            type: integer,
+            description: "Month at which target probability is evaluated",
+          }
         totalContributions: { type: number }
         netInvested: { type: number }
         expectedAnnualReturn: { type: number }
@@ -5040,6 +5167,81 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Envelope" }
 
+  /api/cross-workspace/commitment-aware-cash:
+    post:
+      summary: Estimate a 90-day candidate cash cap after planned commitments
+      description: >-
+        Projects the lowest end-of-day spendable balance from active unexecuted
+        planned transactions, including bounded recurring occurrences once.
+        Subtracts the editable reserve floor. Excludes statistical forecasts and
+        unplanned expenses; the result is an estimate, not a guarantee.
+      operationId: computeCommitmentAwareCash
+      tags: [CrossWorkspace]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                currency: { type: string, pattern: "^[A-Za-z]{3}$" }
+                reserveFloor: { type: number, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: Candidate cap and projection assumptions
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required:
+                          [
+                            currency,
+                            today,
+                            horizonEnd,
+                            horizonDays,
+                            currentCash,
+                            reserveFloor,
+                            minimumProjectedBalance,
+                            minimumDate,
+                            candidateCashCap,
+                            occurrenceCount,
+                            assumptions,
+                          ]
+                        properties:
+                          currency: { type: string }
+                          today: { type: string, format: date }
+                          horizonEnd: { type: string, format: date }
+                          horizonDays: { type: integer, enum: [90] }
+                          currentCash: { type: number }
+                          reserveFloor: { type: number }
+                          minimumProjectedBalance: { type: number }
+                          minimumDate: { type: string, format: date }
+                          candidateCashCap: { type: number }
+                          occurrenceCount: { type: integer }
+                          assumptions:
+                            type: object
+                            required:
+                              [
+                                plannedOnly,
+                                excludesStatisticalForecast,
+                                excludesFutureIncome,
+                                excludesUnplannedExpenses,
+                                currencyConversionAtRecentRates,
+                              ]
+                            properties:
+                              plannedOnly: { type: boolean }
+                              excludesStatisticalForecast: { type: boolean }
+                              excludesFutureIncome: { type: boolean }
+                              excludesUnplannedExpenses: { type: boolean }
+                              currencyConversionAtRecentRates: { type: boolean }
+        "400":
+          description: Invalid reserve floor or currency
+
   /api/cross-workspace/rebalance:
     post:
       summary: Cash-aware rebalancing plan (ADR-098)
@@ -5058,7 +5260,7 @@ paths:
                 currency: { type: string }
                 model:
                   type: string
-                  enum: [sixty_forty, all_weather, three_fund]
+                  enum: [sixty_forty, all_weather, three_fund, awesome]
                 targetWeights:
                   type: object
                   additionalProperties: { type: number }
@@ -11066,7 +11268,343 @@ paths:
         "409":
           description: Batch is not in awaiting_review or matched status
 
+  # ─── Private Electron audit bridge ────────────────────────────────────────────
+  /api/internal/audit/verify:
+    post:
+      summary: Verify the audit chain against a main-process checkpoint
+      operationId: internalAuditVerify
+      tags: [Internal Audit Bridge]
+      description: >
+        Private native Electron endpoint. The server requires both a loopback
+        socket peer and the per-launch bearer token. The optional checkpoint
+        must first be authenticated outside PostgreSQL by the Electron main
+        process. HTTP 200 reports the verification result, including failed
+        and unavailable statuses; it does not imply audit success.
+      security:
+        - AuditBridgeToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                trustedCheckpoint:
+                  $ref: "#/components/schemas/AuditTrustedCheckpoint"
+      responses:
+        "200":
+          description: Verification status in the response data
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, data]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  data: { $ref: "#/components/schemas/AuditVerificationResult" }
+        "400": { description: Invalid or oversized request body }
+        "401": { description: Missing or invalid per-launch bearer token }
+        "403": { description: Socket peer is not loopback }
+
+  /api/internal/audit/read:
+    post:
+      summary: Read a bounded audit page from a verified database snapshot
+      operationId: internalAuditRead
+      tags: [Internal Audit Bridge]
+      description: >
+        Private native Electron endpoint. The per-launch bearer and loopback
+        socket checks match verify. The main process supplies an externally
+        authenticated checkpoint. The server verifies the full history and
+        reads the page under one repeatable-read transaction. Failed or
+        unavailable verification returns an empty entries array. A verified
+        prefix does not authenticate a pending tail.
+      security:
+        - AuditBridgeToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                trustedCheckpoint:
+                  $ref: "#/components/schemas/AuditTrustedCheckpoint"
+                afterSequence: { type: integer, minimum: 0 }
+                limit: { type: integer, minimum: 1, maximum: 500 }
+      responses:
+        "200":
+          description: Verification result and bounded audit page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, data]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  data: { $ref: "#/components/schemas/AuditReadPage" }
+        "400": { description: Invalid or oversized request body }
+        "401": { description: Missing or invalid per-launch bearer token }
+        "403": { description: Socket peer is not loopback }
+
+  /api/internal/audit/retention-plan:
+    post:
+      summary: Plan an eligible one-year audit prefix after full verification
+      operationId: internalAuditRetentionPlan
+      tags: [Internal Audit Bridge]
+      description: >
+        Private Electron endpoint with loopback and per-launch bearer checks.
+        The caller supplies an externally authenticated checkpoint. The plan
+        is advisory; Electron must sign its boundary outside PostgreSQL before
+        invoking retention-prune. A non-eligible plan does not delete rows.
+      security:
+        - AuditBridgeToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [trustedCheckpoint]
+              properties:
+                trustedCheckpoint:
+                  $ref: "#/components/schemas/AuditTrustedCheckpoint"
+      responses:
+        "200":
+          description: Eligible boundary or bounded reason for no deletion
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, data]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  data:
+                    type: object
+                    required: [eligible]
+                    properties:
+                      eligible: { type: boolean }
+                      reason: { type: string }
+                      through: { type: integer, minimum: 1 }
+                      hash: { type: string, pattern: "^[0-9a-f]{64}$" }
+                      domainMax:
+                        { $ref: "#/components/schemas/AuditRetentionDomainMax" }
+                      migrationHeads:
+                        type: array
+                        items: { type: string }
+        "400": { description: Invalid or missing authenticated checkpoint }
+        "401": { description: Missing or invalid per-launch bearer token }
+        "403": { description: Socket peer is not loopback }
+
+  /api/internal/audit/retention-prune:
+    post:
+      summary: Prune a complete old prefix bound by a signed receipt
+      operationId: internalAuditRetentionPrune
+      tags: [Internal Audit Bridge]
+      description: >
+        Private Electron endpoint. The signed retention boundary must already
+        be present in the externally authenticated checkpoint. Full retained
+        history is verified before the guarded database function runs.
+      security:
+        - AuditBridgeToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [trustedCheckpoint]
+              properties:
+                trustedCheckpoint:
+                  $ref: "#/components/schemas/AuditTrustedCheckpoint"
+      responses:
+        "200":
+          description: Number of deleted rows; zero on an exact retry
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, data]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  data:
+                    type: object
+                    required: [removed]
+                    properties:
+                      removed: { type: integer, minimum: 0 }
+        "400": { description: Invalid or missing signed retention boundary }
+        "401": { description: Missing or invalid per-launch bearer token }
+        "403": { description: Socket peer is not loopback }
+
+  /api/internal/audit/checkpoint:
+    post:
+      summary: Record metadata for an already persisted Electron receipt
+      operationId: internalAuditCheckpoint
+      tags: [Internal Audit Bridge]
+      description: >
+        Private native Electron endpoint with the same loopback and per-launch
+        token checks as verify. This records database metadata only. The
+        receipt itself is kept in Electron application data outside PostgreSQL.
+      security:
+        - AuditBridgeToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuditCheckpointMetadata"
+      responses:
+        "200":
+          description: Inserted checkpoint metadata identifier and creation time
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, data]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  data:
+                    type: object
+                    required: [id, createdAt]
+                    properties:
+                      id: { type: string }
+                      createdAt: { type: string, format: date-time }
+        "400": { description: Invalid or oversized request body }
+        "401": { description: Missing or invalid per-launch bearer token }
+        "403": { description: Socket peer is not loopback }
+        "409":
+          {
+            description: Checkpoint sequence or hash conflicts with the stored chain,
+          }
+
+  /api/internal/audit/update-decision:
+    post:
+      summary: Append a local Electron updater decision to the audit chain
+      operationId: internalAuditUpdateDecision
+      tags: [Internal Audit Bridge]
+      description: >
+        Private native Electron endpoint with loopback and per-launch Bearer
+        checks. Records a bounded decision, update mode, and version as a
+        release_update audit event. It does not prove release signature or
+        publisher provenance.
+      security:
+        - AuditBridgeToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuditUpdateDecision"
+      responses:
+        "200":
+          description: Appended audit sequence and hash
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, data]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  data:
+                    type: object
+                    required: [sequence, hash]
+                    properties:
+                      sequence: { type: integer, minimum: 1 }
+                      hash: { type: string, pattern: "^[0-9a-f]{64}$" }
+        "400": { description: Invalid or oversized request body }
+        "401": { description: Missing or invalid per-launch bearer token }
+        "403": { description: Socket peer is not loopback }
+
   # ─── Admin ────────────────────────────────────────────────────────────────────
+  /api/admin/codex-experimental/status:
+    get:
+      summary: Read disposable experimental Codex session status
+      description: Disabled unless VISION_EXPERIMENTAL_CODEX=1 and a binary path and ADMIN_AUTH_TOKEN are configured. Requires loopback peer and admin bearer token. Never returns credentials.
+      operationId: adminCodexExperimentalStatus
+      tags: [Admin]
+      responses:
+        "200":
+          {
+            description: Session and ChatGPT account status,
+            content:
+              {
+                application/json:
+                  { schema: { $ref: "#/components/schemas/Envelope" } },
+              },
+          }
+        "503":
+          { description: Experimental route disabled or session unavailable }
+  /api/admin/codex-experimental/session:
+    post:
+      summary: Start disposable experimental Codex App Server
+      description: Creates a synthetic workspace and a macOS Seatbelt confined App Server. No financial data is mounted. Request body must be empty.
+      operationId: adminCodexExperimentalSession
+      tags: [Admin]
+      responses:
+        "200":
+          {
+            description: Session started,
+            content:
+              {
+                application/json:
+                  { schema: { $ref: "#/components/schemas/Envelope" } },
+              },
+          }
+        "503": { description: Disabled or sandbox startup failed }
+  /api/admin/codex-experimental/login:
+    post:
+      summary: Begin isolated ChatGPT device-code login
+      description: Returns a device verification URL and short user code. Request body must be empty. No API-key login or host Codex credential import is allowed.
+      operationId: adminCodexExperimentalLogin
+      tags: [Admin]
+      responses:
+        "200":
+          {
+            description: Device login instructions,
+            content:
+              {
+                application/json:
+                  { schema: { $ref: "#/components/schemas/Envelope" } },
+              },
+          }
+        "503": { description: Session or provider login unavailable }
+  /api/admin/codex-experimental/synthetic-turn:
+    post:
+      summary: Run one fixed fictional prompt through isolated subscription Codex
+      description: No request payload or private prompt is accepted. Refuses unauthenticated accounts and unavailable rate limits. Never falls back to API billing.
+      operationId: adminCodexExperimentalSyntheticTurn
+      tags: [Admin]
+      responses:
+        "200":
+          {
+            description: Fixed question and bounded answer,
+            content:
+              {
+                application/json:
+                  { schema: { $ref: "#/components/schemas/Envelope" } },
+              },
+          }
+        "503": { description: Subscription or safety gate unavailable }
+  /api/admin/codex-experimental/logout:
+    post:
+      summary: Log out and dispose of isolated Codex session
+      description: Closes App Server and proxy, and deletes disposable runtime state. Request body must be empty.
+      operationId: adminCodexExperimentalLogout
+      tags: [Admin]
+      responses:
+        "200":
+          {
+            description: Session disposed,
+            content:
+              {
+                application/json:
+                  { schema: { $ref: "#/components/schemas/Envelope" } },
+              },
+          }
+        "503": { description: Logout failed after local disposal }
   /api/admin:
     get:
       summary: Admin overview / health
@@ -11154,6 +11692,7 @@ paths:
         description: Table name (validated against the live catalog)
     get:
       summary: Get a table's column metadata (Data Editor, ADR-101)
+      description: The six protected audit tables require a dedicated viewer that authenticates audit history and return 403 here.
       operationId: adminGetTableSchema
       tags: [Admin]
       responses:
@@ -11187,6 +11726,8 @@ paths:
                                 hasDefault: { type: boolean }
                                 generated: { type: boolean }
                                 writable: { type: boolean }
+        "403":
+          description: Protected audit table cannot be opened in the generic data editor
         "404":
           description: Unknown table
 
@@ -11199,6 +11740,7 @@ paths:
           type: string
     get:
       summary: Read paginated rows from a table (Data Editor, ADR-101)
+      description: The six protected audit tables require a dedicated viewer that authenticates audit history and return 403 here.
       operationId: adminGetTableRows
       tags: [Admin]
       parameters:
@@ -11247,6 +11789,8 @@ paths:
                             type: [string, "null"]
         "400":
           description: Invalid filters or query parameter
+        "403":
+          description: Protected audit table cannot be opened in the generic data editor
         "404":
           description: Unknown table
 
@@ -11259,7 +11803,7 @@ paths:
           type: string
     post:
       summary: Apply row mutations to a table (Data Editor, ADR-101)
-      description: Rate-limited (adminMutateLimiter). Identifiers are validated against the live catalog and double-quoted; values are parameterised. Updates/deletes are optimistic-locked on xmin. Pass dryRun to preview statements without applying.
+      description: Rate-limited (adminMutateLimiter). Identifiers are validated against the live catalog and double-quoted; values are parameterised. Updates/deletes are optimistic-locked on xmin. Pass dryRun to preview statements without applying. The six protected audit tables return 403 even for dry runs.
       operationId: adminMutateTableRows
       tags: [Admin]
       requestBody:
@@ -11303,6 +11847,8 @@ paths:
                 $ref: "#/components/schemas/Envelope"
         "400":
           description: Malformed change set
+        "403":
+          description: Protected audit table cannot be edited in the generic data editor
         "404":
           description: Unknown table
         "409":
@@ -11738,6 +12284,10 @@ paths:
               properties:
                 horizon_months: { type: integer }
                 monthly_contribution: { type: number }
+                monthly_contribution_schedule:
+                  type: array
+                  description: "Per-month contributions; omitted trailing months use monthly_contribution"
+                  items: { type: number, minimum: 0 }
                 paths: { type: integer }
                 forward_blend:
                   {
@@ -11746,6 +12296,13 @@ paths:
                   }
                 method: { type: string, enum: [parametric, block_bootstrap] }
                 target_value: { type: number }
+                goal_month:
+                  {
+                    type: integer,
+                    minimum: 1,
+                    maximum: 600,
+                    description: "Must not exceed horizon_months and requires target_value",
+                  }
                 currency: { type: string }
                 seed: { type: string }
       responses:

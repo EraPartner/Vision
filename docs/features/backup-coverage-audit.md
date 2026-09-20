@@ -2,9 +2,9 @@
 title: Backup Coverage Audit
 type: feature
 status: active
-date: 2026-09-19
-updated: 2026-09-19
-last_modified: 2026-09-19
+date: 2026-09-20
+updated: 2026-09-20
+last_modified: 2026-09-20
 tags: [feature, backup, restore, database, filesystem, localStorage, bundle, encryption, schema-migration, phase-1, phase-2, phase-7, passphrase-modal, ux, aead, aes-256-gcm, rolling-cache, concurrent-backup-guard, pre-restore-confirmation, watchdog-pause, safe-storage, keychain, lazy-safeStorage, settings-dialog-fix, backup-path-revert-fix]
 description: Authoritative audit of every persistence surface in Vision and its backup/restore coverage status. Phase 1+2 implements .visionbak bundle format with optional AES-256-CBC encryption (v1) or AES-256-GCM (v2, 2026-04-28), schema-safe restore, and localStorage hydration. Phase 7 (May 2026) hardens restore with user confirmation, concurrent-backup guard, and health watchdog pause. safeStorage is now accessed lazily to avoid macOS Keychain prompts for users without a stored passphrase. 2026-06-11: fixes "backup path keeps reverting to default" — settings dialog now loads backup settings on open; Electron IPC handlers correctly unwrap the response envelope.
 aliases: [backup audit, coverage audit, backup coverage, visionbak, bundle format]
@@ -47,6 +47,33 @@ All user-data tables are included in the `pg_dump` SQL artifact inside every `.v
 | ----------------------- | ---------- | ----------- | ----- |
 | `agg_recipient_totals`  | Aggregates | ✅ Included |       |
 | `agg_split_outstanding` | Aggregates | ✅ Included |       |
+
+#### Audit history
+
+| Table                     | Domain    | Backup      | Notes                                                                               |
+| ------------------------- | --------- | ----------- | ----------------------------------------------------------------------------------- |
+| `audit_chain_head`        | Audit     | ✅ Included | Current internal head and forward-only legacy maximum IDs                           |
+| `audit_chain_entries`     | Audit     | ✅ Included | Versioned linked entries after migration 0117                                       |
+| `audit_chain_checkpoints` | Audit     | ✅ Included | Metadata for separately persisted receipts; the receipt files are not in the bundle |
+| `db_editor_audit`         | Admin     | ✅ Included | Older DB-editor audit rows                                                          |
+| `split_audit`             | Splits    | ✅ Included | Older split audit rows                                                              |
+| `portfolio_retag_audit`   | Portfolio | ✅ Included | Older broker-retag audit rows                                                       |
+
+The three new tables are registered in `BACKUP_COVERED_TABLES`. A bundle preserves the bytes of all six audit tables for recovery, but it does not include the Electron `audit-anchor/` key and signed receipt. Included audit bytes are not a verified evidence claim. The generic Admin data editor cannot inspect those tables without an authenticated receipt, so its schema, row, and mutation requests return `403`. The same installation first compares a restored chain with the local receipt before finalizing the database switch and rolls back unless verification returns `verified`. This exact-head rule can reject an otherwise valid older backup or one taken between the 30-second live receipt updates. After a successful rollback, the user can deliberately accept a second default-Cancel warning to retry that backup once. Recovery still requires a full internally valid chain, keeps the old external receipt, and leaves audit continuity unverified; a later check may report rollback. A backup moved to a new installation lacks the original witness and cannot silently enroll. An existing native installation may deliberately establish a new forward-looking baseline from the Admin audit view after a full internal check; entries through that baseline are labeled accepted at enrollment, not proven authentic before it. Version 3 additionally checks a macOS Keychain checkpoint outside the application-data tree, so a rollback of PostgreSQL and that tree alone is detected if the Keychain item survives. Missing Keychain items and older version 2 receipts remain unverified. See [[docs/adr/156-forward-only-audit-chain-foundation|ADR-156]], [[docs/adr/157-electron-local-audit-receipt|ADR-157]], [[docs/adr/158-macos-keychain-audit-witness|ADR-158]], [[docs/adr/160-explicit-audit-enrollment-baseline|ADR-160]], and [[docs/security/data-protection|Data Protection]].
+
+For a new Mac, Admin can export a small password-protected audit transfer on the old Mac. Import it during the new Mac's first native launch, then restore a database backup whose audit head matches the transferred checkpoint. Import replaces only the fresh cluster's checkpoint and does not trust database rows; the existing restore gate verifies the full chain. Keep the password apart from the transfer file and keep the old Mac available until the restore verifies. See [[docs/adr/161-password-protected-audit-device-transfer|ADR-161]].
+
+If transfer import is interrupted, the next start accepts only the local checkpoint pair that matches the independent Keychain witness. A private journal restores the original fresh pair if the witness did not advance; it keeps the imported pair if the witness did. A mismatched or missing witness fails closed. After a crash that restores the original pair, create a fresh empty target again before retrying import. Keep the old Mac and matching backup until restore succeeds. See [[docs/adr/163-audit-transfer-recovery-journal|ADR-163]].
+
+After one-year retention prunes an authenticated old prefix, a new backup contains the retained suffix and current head, not the deleted chain payloads. The matching external receipt signs the deleted predecessor sequence and hash, linked domain high-water IDs, and migration heads. Restore on the same Mac or via a protected device transfer must retain that receipt; a database bundle alone cannot verify its truncated prefix. Older backups may still contain those entries under the backup retention policy. Migration 0118 refuses downgrade after the first prune. See [[docs/adr/162-one-year-audit-retention|ADR-162]].
+
+Fresh installs start at revision `0119_squashed_baseline` with a single audit baseline event. Existing
+backups retain their original revision and audit entries; the 0118-to-0119 bridge never rebuilds
+their data. The operator bridge creates a new logical backup, restores it into disposable
+PostgreSQL 18, compares every table count and digest, and retains that backup for recovery. A
+backup from an uncontracted or divergent schema cannot be stamped into the new baseline. See
+[[docs/adr/165-reviewed-fresh-database-baseline|ADR-165]] and
+[[docs/guides/migrations|Database Migration Guide]].
 
 #### AI & Conversations
 
@@ -127,7 +154,6 @@ All user-data tables are included in the `pg_dump` SQL artifact inside every `.v
 | `saved_chart_recipients`     | Charts       | ✅ Included | Recipient memberships                  |
 | `saved_chart_tags`           | Charts       | ✅ Included | Tag memberships                        |
 | `saved_charts`               | Charts       | ✅ Included | Chart configurations                   |
-| `split_audit`                | Splits       | ✅ Included | Split change audit log                 |
 | `split_payments`             | Splits       | ✅ Included |                                        |
 | `tags`                       | Tags         | ✅ Included |                                        |
 | `transaction_raw_references` | Import       | ✅ Included | Raw↔canonical links                    |
@@ -189,13 +215,15 @@ Captured as `frontend-state.json` in the bundle. Restored after DB load triggers
 
 ### 4. In-Memory / Derived State
 
-| Surface                           | Backup      | Notes                                                                                                                                                                                                         |
-| --------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Materialised views                | ❌ Excluded | Re-built at runtime by `materializedViewService.js`                                                                                                                                                           |
-| Price provider caches (HTTP)      | ❌ Excluded | Re-fetched on demand                                                                                                                                                                                          |
-| Electron `safeStorage` passphrase | ❌ Excluded | User re-enters passphrase post-restore. safeStorage is accessed lazily — only when a passphrase blob is already stored — to avoid macOS Keychain prompts for users who have not configured backup encryption. |
-| `AI_REFERENCE_MAPPING_KEY`        | ❌ Excluded | Installation-held reversible-reference key. It is not PostgreSQL data and is never written into the bundle. Preserve it separately to recover an in-flight token-bearing investigation after restore.         |
-| `settings.json` (Electron-local)  | ❌ Excluded | Contains backup dir config + deviceId; meaningless on new machine                                                                                                                                             |
+| Surface                                            | Backup      | Notes                                                                                                                                                                                                         |
+| -------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Materialised views                                 | ❌ Excluded | Re-built at runtime by `materializedViewService.js`                                                                                                                                                           |
+| Price provider caches (HTTP)                       | ❌ Excluded | Re-fetched on demand                                                                                                                                                                                          |
+| Electron `safeStorage` passphrase                  | ❌ Excluded | User re-enters passphrase post-restore. safeStorage is accessed lazily — only when a passphrase blob is already stored — to avoid macOS Keychain prompts for users who have not configured backup encryption. |
+| `AI_REFERENCE_MAPPING_KEY`                         | ❌ Excluded | Installation-held reversible-reference key. It is not PostgreSQL data and is never written into the bundle. Preserve it separately to recover an in-flight token-bearing investigation after restore.         |
+| `settings.json` (Electron-local)                   | ❌ Excluded | Contains backup dir config + deviceId; meaningless on new machine                                                                                                                                             |
+| Electron `audit-anchor/` receipt and encrypted key | ❌ Excluded | A same-install restore checks the candidate chain against this receipt and the separate Keychain checkpoint. A new installation has neither witness.                                                          |
+| macOS Keychain audit checkpoint                    | ❌ Excluded | Latest version 3 receipt digest and chain head. Its loss or mismatch fails verification; it is not recreated from a restored database.                                                                        |
 
 The encrypted reference tables are backed up to preserve job and checkpoint consistency. On the
 same installation, a restored in-flight job can restore its provider-form checkpoint while the
@@ -227,7 +255,7 @@ Users who **do** store a passphrase will see macOS password prompts on an unsign
 | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Always Allow**                   | In the Keychain dialog, click "Always Allow" to suppress future challenges for Vision Safe Storage                                                                          |
 | `VISION_BACKUP_PASSPHRASE` env var | Bypasses `safeStorage` entirely; the shell reads the passphrase from the environment variable instead. Useful for automation, CI, or users who want no Keychain involvement |
-| No stored passphrase               | If you do not configure backup encryption, no Keychain prompts occur at all                                                                                                 |
+| No stored passphrase               | No backup-passphrase Keychain prompt occurs. An enrolled native audit checkpoint can still prompt through its separate Keychain item.                                       |
 
 > [!note]
 > `safeStorage` only stores and retrieves the _passphrase text_. The backup encryption key itself is always derived via scrypt from the passphrase; the Keychain never holds the raw key.
@@ -337,8 +365,12 @@ their public interfaces and supply format-specific magic values and messages:
 7. **Attachment Stage** — Extract `attachments/` to a sibling staging directory, reject symbolic
    links, and compute the count and aggregate SHA-256 fingerprint.
 8. **Atomic Activation** — Stop the active writer, switch the staged database and attachment tree,
-   start the provider, and wait for database-backed `/health/detailed` readiness. Both switches keep
-   rollback state until readiness succeeds.
+   start the provider, and wait for database-backed `/health/detailed` readiness. Native Electron
+   then compares the restored audit chain with its local signed receipt. A non-`verified` result
+   rolls the candidate back before finalization. If rollback succeeds, the user may explicitly
+   retry once under a second default-Cancel warning; that path requires an internally valid chain
+   and leaves audit continuity unverified. Both switches keep rollback state until readiness and
+   the required audit check succeed.
 9. **Frontend State Restore** — Return `{ frontendState.keys }` to renderer; component writes each key to localStorage via `localStorage.setItem(key, value)`.
 10. **Page Reload** — Trigger full reload so theme and UI preferences take effect.
 
@@ -352,6 +384,9 @@ their public interfaces and supply format-specific magic values and messages:
   remain active or are rolled back together
 - Database restore or detailed-readiness failure → Explicit provider error; staged database and
   attachment state are rolled back before the writer resumes
+- Missing, mismatched, or incomplete trusted audit receipt for native restore → First attempt
+  rejects the candidate and rolls the database and attachment switches back; recovery is offered
+  only after that rollback succeeds and requires a full internally valid chain on one retry
 - Fallback source resolution: If user does not enter passphrase in modal, restore attempts `VISION_BACKUP_PASSPHRASE` env var and OS keychain (Electron safeStorage) before throwing `PASSPHRASE_REQUIRED`
 
 **Related Code:**

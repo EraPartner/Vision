@@ -1,7 +1,7 @@
 ---
 title: Scripts Reference
 type: reference
-date: 2026-09-13
+date: 2026-09-20
 tags:
   [
     reference,
@@ -67,21 +67,23 @@ Run root scripts with `bun run <name>`. Run workspace scripts with
 
 ## Tests
 
-| Script                        | Purpose                                                          |
-| ----------------------------- | ---------------------------------------------------------------- |
-| `test`                        | Backend Vitest suite                                             |
-| `test:frontend`               | Frontend Vitest suite                                            |
-| `test:electron`               | Electron, backup, runtime, and packaging Node tests              |
-| `test:scripts`                | Repository script tests                                          |
-| `test:e2e`                    | Playwright end-to-end suite                                      |
-| `test:e2e:visual`             | Manual visual snapshot suite                                     |
-| `test:db`                     | Backend suite against a disposable native PostgreSQL 18 cluster  |
-| `native:db-smoke`             | Native migration, dump/restore, and attachment smoke             |
-| `native:isolated-smoke`       | Full smoke with a disposable native cluster                      |
-| `native:smoke`                | Native backend and health smoke                                  |
-| `calibrate:category-outliers` | Privacy-preserving threshold backtest against a local Vision API |
-| `evaluate:local-ai`           | Score a live Ollama model with fixed synthetic tool oracles      |
-| `evaluate:cloud-privacy`      | Inspect deterministic synthetic cloud-assistance traffic         |
+| Script                          | Purpose                                                                                                                        |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `test`                          | Backend Vitest suite                                                                                                           |
+| `test:frontend`                 | Frontend Vitest suite                                                                                                          |
+| `test:electron`                 | Electron, backup, runtime, and packaging Node tests                                                                            |
+| `test:scripts`                  | Repository script tests                                                                                                        |
+| `test:e2e`                      | Playwright end-to-end suite                                                                                                    |
+| `test:e2e:visual`               | Manual visual snapshot suite                                                                                                   |
+| `test:db`                       | Backend suite against a disposable native PostgreSQL 18 cluster                                                                |
+| `native:db-smoke`               | Native migration, dump/restore, and attachment smoke                                                                           |
+| `native:isolated-smoke`         | Full smoke with a disposable native cluster                                                                                    |
+| `native:smoke`                  | Offline disposable native backend, audit enrollment, protected device move, valid backup restore and tampered backup rejection |
+| `calibrate:category-outliers`   | Privacy-preserving threshold backtest against a local Vision API                                                               |
+| `evaluate:local-ai`             | Score a live Ollama model with fixed synthetic tool oracles                                                                    |
+| `evaluate:cloud-privacy`        | Inspect deterministic synthetic cloud-assistance traffic                                                                       |
+| `evaluate:codex-seatbelt-smoke` | Offline macOS file and network boundary probe for synthetic Codex                                                              |
+| `evaluate:codex-subscription`   | Opt-in device login and one fixed fictional Codex turn; requires `VISION_EXPERIMENTAL_CODEX_BINARY`                            |
 
 `scripts/with-test-db.sh` uses caller-supplied `TEST_DATABASE_URL` when present. Otherwise it
 creates a private native PostgreSQL 18 cluster, enables required extensions, migrates it, runs the
@@ -100,19 +102,23 @@ rollback contract.
 
 ## Database
 
-| Script               | Purpose                                                             |
-| -------------------- | ------------------------------------------------------------------- |
-| `db:migrate`         | Run the guarded migration command                                   |
-| `db:upgrade`         | Upgrade to the current Alembic head                                 |
-| `db:downgrade`       | Explicit downgrade through the guarded runner                       |
-| `db:current`         | Show current revision                                               |
-| `db:history`         | Show revision history                                               |
-| `db:stamp`           | Stamp through the guarded runner                                    |
-| `db:revision`        | Create an autogenerated revision                                    |
-| `db:index-stats`     | Inspect index statistics                                            |
-| `db:precision-drift` | Check stored precision drift                                        |
-| `db:legacy-status`   | Read-only status for the six manual legacy database contracts       |
-| `db:check`           | Check Alembic heads and migration fidelity in a disposable database |
+| Script                        | Purpose                                                                                                                                                                            |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `db:migrate`                  | Run the guarded migration command                                                                                                                                                  |
+| `db:upgrade`                  | Upgrade to the current Alembic head                                                                                                                                                |
+| `db:downgrade`                | Explicit downgrade through the guarded runner                                                                                                                                      |
+| `db:current`                  | Show current revision                                                                                                                                                              |
+| `db:history`                  | Show revision history                                                                                                                                                              |
+| `db:stamp`                    | Stamp through the guarded runner                                                                                                                                                   |
+| `db:revision`                 | Create an autogenerated revision                                                                                                                                                   |
+| `db:index-stats`              | Inspect index statistics                                                                                                                                                           |
+| `db:precision-drift`          | Check stored precision drift                                                                                                                                                       |
+| `db:legacy-status`            | Read-only status for the six manual legacy database contracts                                                                                                                      |
+| `db:check`                    | Check Alembic heads and migration fidelity in a disposable database                                                                                                                |
+| `db:backup-before-baseline`   | Create and restore-test a new logical backup before upgrading an older maintained revision; leaves the source unchanged                                                            |
+| `db:bridge-baseline`          | Restore-test a new logical backup and bridge a contracted 0118 database to 0119 during approved maintenance                                                                        |
+| `db:convert-legacy-baseline`  | Convert the reviewed maintained 0118 legacy shape to canonical 0119 with a full backup, verified archive export, UTC timestamp rule, retained prior database, and recovery journal |
+| `db:rollback-legacy-baseline` | Restore the prior database name only before new writes and only when both manifests still match the conversion journal                                                             |
 
 `db:legacy-status` connects with `DATABASE_URL_MIGRATIONS` when configured, otherwise with the
 normal application database URL. It opens a read-only transaction and reports only the target

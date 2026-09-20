@@ -66,6 +66,12 @@ backend on a random loopback port when appropriate, and waits for detailed readi
 the application. `runtime-state.json` records the active native database identity so a stale or
 partially switched database cannot become the writer by accident.
 
+An empty PostgreSQL 18 cluster installs the reviewed 0119 SQL baseline atomically. An existing
+cluster stays at 0118 until the separately approved, restore-tested bridge; ordinary startup does
+not rewrite its data or stamp it to 0119. The package includes the baseline SQL and historical
+migrations. See [[docs/guides/migrations|Database Migration Guide]] and
+[[docs/adr/165-reviewed-fresh-database-baseline|ADR-165]].
+
 ## Native Vision Demo
 
 ```bash
@@ -99,6 +105,10 @@ bun run native:db-smoke
 bun run native:isolated-smoke
 bun run native:smoke
 ```
+
+`native:smoke` runs its backend with external refreshes disabled. It uses a
+disposable synthetic PostgreSQL cluster and checks package startup, backup,
+restore, audit history, and runtime-role writes without contacting data providers.
 
 For an installed app, read the persisted `appPort` from settings and probe `GET /health` and
 `GET /api/health/detailed`. Do not reset the database merely because startup failed; inspect the

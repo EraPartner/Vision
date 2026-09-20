@@ -835,6 +835,54 @@ entity "db_editor_audit" as db_editor_audit {
   * created_at : timestamptz
 }
 
+entity "split_audit" as split_audit {
+  * id : bigserial <<PK>>
+  split_id : integer <<retained ID, no FK>>
+  * action : varchar(50)
+  actor : text
+  payload : jsonb
+  * created_at : timestamptz
+}
+
+entity "audit_chain_head" as audit_chain_head {
+  * singleton : boolean <<PK>>
+  * last_sequence : bigint
+  * last_hash : char(64)
+  * legacy_db_editor_max_id : bigint
+  * legacy_split_max_id : bigint
+  * legacy_retag_max_id : bigint
+  * updated_at : timestamptz
+}
+
+entity "audit_chain_entries" as audit_chain_entries {
+  * sequence : bigint <<PK>>
+  * version : smallint
+  * previous_hash : char(64)
+  * entry_hash : char(64)
+  * payload : jsonb
+  * created_at : timestamptz
+}
+
+entity "audit_chain_checkpoints" as audit_chain_checkpoints {
+  * id : bigint <<PK>>
+  * sequence : bigint
+  * head_hash : char(64)
+  * anchor_kind : text
+  * receipt_id : text
+  * receipt_hash : char(64)
+  * created_at : timestamptz
+  ---
+  UNIQUE(anchor_kind, receipt_id)
+}
+
+note bottom of audit_chain_head
+  Migration 0117 captures the highest legacy audit IDs.
+  The head serializes appends; entries and checkpoints
+  have no foreign key to it. Electron holds the separate
+  Keychain-backed receipt. Migration 0118 can prune a
+  signed complete year-old entry prefix.
+end note
+
 note bottom of provider_health
   Rolling-window admin observability hub (ADR-034).
   See providerHealthRepository.js for query patterns.

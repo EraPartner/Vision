@@ -1,0 +1,21 @@
+@startuml Life Scenario Flow
+title Saved three-month income interruption scenario
+actor User
+participant "LifeScenarioPanel" as Panel
+participant "Settings API" as Settings
+database "user_settings" as DB
+participant "Research forecast API" as Forecast
+participant "portfolioProjection" as Projection
+
+User -> Panel: Enter surplus, income loss, contribution, optional goal month
+Panel -> Settings: PUT /api/settings/life_scenarios {value: definitions}
+Settings -> DB: Validate and store JSONB settings
+DB --> Panel: Saved definition
+User -> Panel: Run comparison
+Panel -> Forecast: POST baseline {monthly_contribution, goal_month?, seed}
+Panel -> Forecast: POST interruption {monthly_contribution_schedule: [reduced x 3], same seed}
+Forecast -> Projection: Simulate each request with live portfolio inputs
+Projection --> Panel: Two distributions and optional goal probabilities
+Panel -> Panel: Compare returned inputs; hide result if draft changes
+Panel --> User: Approximate median difference and goal probability
+@enduml

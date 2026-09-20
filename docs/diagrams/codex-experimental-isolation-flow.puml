@@ -1,0 +1,33 @@
+@startuml Experimental Codex Isolation
+title Synthetic-only Codex App Server experiment (ADR-159)
+
+actor "Local administrator" as Admin
+participant "Admin API\nadmin bearer + CSRF + loopback" as Route
+participant "Synthetic session" as Session
+participant "Mac Seatbelt\nCodex App Server" as Child
+participant "Local CONNECT proxy\nhost and byte allowlist" as Proxy
+participant "ChatGPT / Codex" as Provider
+
+Admin -> Route : start disposable session
+Route -> Session : empty request only
+Session -> Child : private workspace + ephemeral credentials
+Session -> Proxy : start bounded listener
+Child -> Proxy : CONNECT only to allowed hosts
+Proxy -> Provider : TLS tunnel (payload opaque)
+Admin -> Route : device-code login
+Route -> Child : account/login/start
+Child --> Route : verification URL + user code
+Admin -> Route : fixed synthetic turn
+Route -> Child : fictional question; read-only policy
+Child --> Route : bounded agent answer
+Admin -> Route : logout
+Route -> Child : account/logout, terminate
+Route -> Session : remove disposable root
+
+note over Child
+  No Vision database, financial workspace, host Codex state,
+  shell, browser, plugin, or general network access.
+  Unexpected tool activity fails closed.
+end note
+
+@enduml

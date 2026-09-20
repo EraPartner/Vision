@@ -1378,6 +1378,66 @@
             "y": 960
           },
           {
+            "id": "sv.cashplanning",
+            "label": "Commitment-aware cash",
+            "sub": "90-day bills · reserve floor · candidate cap",
+            "kind": "service",
+            "path": "apps/node-backend/src/services/commitmentAwareCashService.js",
+            "desc": "Reads active unexecuted planned bills and spendable balances, expands bounded recurrence, uses one checked stored-rate map, and computes a candidate cap.",
+            "x": 220,
+            "y": 1060
+          },
+          {
+            "id": "sv.portfolioprojection",
+            "label": "Portfolio projection",
+            "sub": "Research · matched scenario paths",
+            "kind": "service",
+            "path": "apps/node-backend/src/services/research/projection/portfolioProjection.js",
+            "desc": "Simulates aggregate portfolio value using snapshot risk and optional provider drift. A monthly contribution schedule and goal month support income-interruption comparisons with one explicit seed.",
+            "x": 400,
+            "y": 1060
+          },
+          {
+            "id": "sv.auditverify",
+            "label": "Audit verifier",
+            "sub": "chain · domain links · migration heads",
+            "kind": "service",
+            "path": "apps/node-backend/src/services/auditVerificationService.js",
+            "desc": "Scans the complete chain, linked domain rows, migration heads, and legacy cutover against an authenticated checkpoint supplied by Electron.",
+            "x": 580,
+            "y": 1060
+          },
+          {
+            "id": "build.auditanchor",
+            "label": "Local audit receipt",
+            "sub": "Electron safeStorage · HMAC",
+            "kind": "build",
+            "path": "packaging/electron/audit-anchor.js",
+            "desc": "HMAC receipt and encrypted key outside PostgreSQL and backup bundles. Version 3 is checked against a separate macOS Keychain checkpoint.",
+            "x": 760,
+            "y": 1060
+          },
+          {
+            "id": "ex.keychain",
+            "label": "macOS Keychain",
+            "sub": "latest audit checkpoint",
+            "kind": "external",
+            "path": "packaging/electron/audit-keychain.swift",
+            "desc": "Security framework generic-password item stores the latest signed-receipt digest and chain head outside application data.",
+            "x": 940,
+            "y": 1060
+          },
+          {
+            "id": "sv.auditretention",
+            "label": "Audit retention",
+            "sub": "one-year prefix · guarded prune",
+            "kind": "service",
+            "path": "apps/node-backend/src/services/auditRetentionService.js",
+            "desc": "Plans a verified year-old chain prefix and asks migration 0118 to prune only after Electron signs the boundary outside PostgreSQL.",
+            "x": 1120,
+            "y": 1060
+          },
+          {
             "id": "ex.brave",
             "label": "Brave Search API",
             "sub": "public queries · hard daily ceiling",
@@ -1392,6 +1452,45 @@
             "kind": "external",
             "x": 1320,
             "y": 1310
+          },
+          {
+            "id": "sv.codexsession",
+            "label": "Codex experiment",
+            "sub": "synthetic-only · disposable",
+            "kind": "service",
+            "x": 220,
+            "y": 1160,
+            "path": "apps/node-backend/src/integrations/codex/experimentalSession.js",
+            "desc": "ADR-159: a ten-minute admin-only session accepts no user prompt, checks ChatGPT account and limits, and sends one fixed fictional question."
+          },
+          {
+            "id": "sv.codexchild",
+            "label": "Codex App Server",
+            "sub": "private home · Seatbelt",
+            "kind": "service",
+            "x": 400,
+            "y": 1160,
+            "path": "apps/node-backend/src/integrations/codex/appServerTransport.js",
+            "desc": "App Server runs in a disposable root with ephemeral auth and a restrictive macOS Seatbelt profile. Effective configuration is checked before use."
+          },
+          {
+            "id": "sv.codexproxy",
+            "label": "Codex CONNECT proxy",
+            "sub": "two hosts · byte caps",
+            "kind": "service",
+            "x": 580,
+            "y": 1160,
+            "path": "apps/node-backend/src/integrations/codex/connectProxy.js",
+            "desc": "A local-only CONNECT proxy permits exact provider hosts and port 443, bounds transfer bytes, and does not decrypt TLS."
+          },
+          {
+            "id": "ex.codex",
+            "label": "ChatGPT / Codex",
+            "sub": "experimental subscription route",
+            "kind": "external",
+            "x": 1120,
+            "y": 1160,
+            "desc": "Official Codex App Server provider route; the integration is currently experimental and not supported for production workloads."
           },
           {
             "id": "sv.dbeditor",
@@ -1423,6 +1522,24 @@
           ["be.routes", "sv.monitors"],
           ["be.routes", "sv.dossiers"],
           ["be.routes", "sv.portfolioexposure"],
+          ["be.routes", "sv.cashplanning"],
+          ["be.routes", "sv.portfolioprojection"],
+          ["be.routes", "sv.auditverify"],
+          ["be.routes", "sv.auditretention"],
+          ["sv.auditretention", "sv.auditverify"],
+          ["sv.auditretention", "db.postgres"],
+          ["be.routes", "sv.codexsession"],
+          ["sv.codexsession", "sv.codexchild"],
+          ["sv.codexchild", "sv.codexproxy"],
+          ["sv.codexproxy", "ex.codex"],
+          ["sv.auditverify", "db.postgres"],
+          ["build.electron", "build.auditanchor"],
+          ["build.auditanchor", "ex.keychain"],
+          ["build.electron", "be.routes"],
+          ["sv.cashplanning", "be.repos"],
+          ["sv.cashplanning", "sv.currency"],
+          ["sv.portfolioprojection", "be.repos"],
+          ["sv.portfolioprojection", "sv.research"],
           ["sv.analysis", "db.postgres"],
           ["sv.monitors", "sv.analysis"],
           ["sv.monitors", "db.postgres"],
@@ -2165,7 +2282,7 @@
             "id": "backup-restore",
             "name": "Restore an encrypted backup",
             "category": "Backup",
-            "summary": "Detect format via magic header \u2192 prompt for passphrase \u2192 schema-check \u2192 decrypt \u2192 swap state.",
+            "summary": "Authenticate the bundle, stage data, and compare its audit chain with the local receipt before finalizing. A second default-Cancel warning can authorize one internally checked recovery retry.",
             "steps": [
               {
                 "from": "electron",
@@ -2201,7 +2318,13 @@
                 "from": "build.electron",
                 "to": "db.attachments",
                 "payload": "swap attachments/  \u00b7  hydrate localStorage",
-                "annotation": "31 user-data tables + receipts + frontend-state.json all restored."
+                "annotation": "Database and attachments remain rollback-capable until native readiness and audit verification finish."
+              },
+              {
+                "from": "build.electron",
+                "to": "build.auditanchor",
+                "payload": "compare candidate chain with trusted local receipt",
+                "annotation": "packaging/electron/backup/native-transport.js first rolls back any non-verified candidate. After successful rollback, a separate default-Cancel warning can permit one retry with a full internal chain check; the original receipt remains unchanged and continuity unverified."
               },
               {
                 "from": "fe.pages",
@@ -3424,6 +3547,266 @@
                 "to": "fe.apiclient",
                 "payload": "ordered path segments, path IDs and stable category ID",
                 "annotation": "The node response contains name, parentId, path, pathIds and depth. Legacy /api/categories remains available to old clients."
+              }
+            ]
+          },
+          {
+            "id": "commitment-aware-cash",
+            "name": "Estimate cash before rebalancing",
+            "category": "Portfolio",
+            "summary": "An editable reserve floor and a 90-day bill projection set the cash cap for buy-only rebalancing.",
+            "steps": [
+              {
+                "from": "browser",
+                "to": "fe.pages",
+                "payload": "RebalancePage: reserve floor and plan request",
+                "annotation": "apps/frontend/src/pages/portfolio/RebalancePage.tsx asks for a projection before every plan."
+              },
+              {
+                "from": "fe.pages",
+                "to": "fe.apiclient",
+                "payload": "POST /api/cross-workspace/commitment-aware-cash",
+                "annotation": "apps/frontend/src/lib/api/crossWorkspace.ts sends currency and reserveFloor."
+              },
+              {
+                "from": "fe.apiclient",
+                "to": "be.routes",
+                "payload": "validated currency and reserve floor",
+                "annotation": "apps/node-backend/src/routes/crossWorkspace.js delegates to the commitment-aware cash service."
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.cashplanning",
+                "payload": "computeCommitmentAwareCash: 90-day horizon",
+                "annotation": "apps/node-backend/src/services/commitmentAwareCashService.js excludes future income and statistical forecasts."
+              },
+              {
+                "from": "sv.cashplanning",
+                "to": "be.repos",
+                "payload": "active unexecuted plans and spendable balances",
+                "annotation": "plannedTransactionRepository.js reads bill occurrences; crossWorkspaceDataService.js reads computed cash balances."
+              },
+              {
+                "from": "sv.cashplanning",
+                "to": "sv.currency",
+                "payload": "latest stored rates, no older than seven days",
+                "annotation": "commitmentAwareCashService.js uses the same checked rates for cash and bills, or rejects the estimate."
+              },
+              {
+                "from": "sv.cashplanning",
+                "to": "fe.apiclient",
+                "payload": "minimumProjectedBalance and candidateCashCap",
+                "annotation": "commitmentAwareCash.js subtracts the floor from the lowest projected end-of-day balance."
+              },
+              {
+                "from": "fe.apiclient",
+                "to": "be.routes",
+                "payload": "POST /api/cross-workspace/rebalance with lower candidate or custom cap",
+                "annotation": "RebalancePage.tsx applies the candidate cap to preset and custom plans."
+              },
+              {
+                "from": "be.routes",
+                "to": "fe.pages",
+                "payload": "buy-only deployment proposal",
+                "annotation": "crossWorkspace.js returns a plan without executing trades."
+              }
+            ]
+          },
+          {
+            "id": "saved-income-interruption",
+            "name": "Save and compare income interruption",
+            "category": "Forecasting",
+            "summary": "A saved three-month income interruption uses paired forecast requests with one seed and an optional goal month.",
+            "steps": [
+              {
+                "from": "browser",
+                "to": "fe.pages",
+                "payload": "LifeScenarioPanel: surplus, income loss, contribution, goal month",
+                "annotation": "apps/frontend/src/pages/research/LifeScenarioPanel.tsx collects nominal assumptions inside PortfolioForecastPage."
+              },
+              {
+                "from": "fe.pages",
+                "to": "fe.apiclient",
+                "payload": "PUT /api/settings/life_scenarios",
+                "annotation": "LifeScenarioPanel.tsx saves named definitions; forecast results stay on demand."
+              },
+              {
+                "from": "fe.apiclient",
+                "to": "be.routes",
+                "payload": "validated income_interruption definition",
+                "annotation": "apps/node-backend/src/routes/settings.js validates three months, monthly amounts, and optional paired goal fields."
+              },
+              {
+                "from": "be.routes",
+                "to": "be.repos",
+                "payload": "settingsRepository JSONB upsert",
+                "annotation": "Definitions use the normal Settings store and its backup coverage."
+              },
+              {
+                "from": "be.repos",
+                "to": "db.postgres",
+                "payload": "user_settings: life_scenarios",
+                "annotation": "Only user-authored inputs are stored; simulation results are not persisted."
+              },
+              {
+                "from": "fe.pages",
+                "to": "fe.apiclient",
+                "payload": "two POST /api/research/portfolio-forecast requests with one seed",
+                "annotation": "LifeScenarioPanel.tsx compares a fixed contribution with a three-entry reduced schedule."
+              },
+              {
+                "from": "fe.apiclient",
+                "to": "be.routes",
+                "payload": "monthly_contribution_schedule and optional goal_month",
+                "annotation": "apps/node-backend/src/routes/research.js bounds the schedule and goal month."
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.portfolioprojection",
+                "payload": "runPortfolioForecast twice",
+                "annotation": "apps/node-backend/src/services/research/projection/portfolioProjection.js applies per-month contributions and optional goal probability."
+              },
+              {
+                "from": "sv.portfolioprojection",
+                "to": "be.repos",
+                "payload": "portfolio summary and NAV snapshot history",
+                "annotation": "The two requests read live portfolio inputs; the UI checks reported input summaries before comparison."
+              },
+              {
+                "from": "sv.portfolioprojection",
+                "to": "fe.pages",
+                "payload": "approximate median gap and goal probabilities",
+                "annotation": "LifeScenarioPanel.tsx hides stale draft results and rejects changed reported market inputs."
+              }
+            ]
+          },
+          {
+            "id": "native-audit-receipt",
+            "name": "Verify native audit history and guard restore",
+            "category": "Security",
+            "summary": "Electron compares the database chain with a signed local receipt and macOS Keychain checkpoint, offers an explicit baseline for existing installations, closes valid tails during a trusted live session, and rejects restore candidates without an exact match.",
+            "steps": [
+              {
+                "from": "build.electron",
+                "to": "build.auditanchor",
+                "payload": "read HMAC-signed receipt and safeStorage-encrypted key",
+                "annotation": "packaging/electron/audit-anchor.js authenticates the installation-local sequence, hash, and migration cutover outside PostgreSQL."
+              },
+              {
+                "from": "build.auditanchor",
+                "to": "ex.keychain",
+                "payload": "compare version 3 receipt digest and chain head with Keychain checkpoint",
+                "annotation": "packaging/electron/audit-keychain.swift reads the independent checkpoint; packaging/electron/audit-anchor.js fails closed on a missing or mismatched record."
+              },
+              {
+                "from": "build.electron",
+                "to": "be.routes",
+                "payload": "POST /api/internal/audit/verify with loopback peer and per-launch token",
+                "annotation": "packaging/electron/runtime/native.js calls apps/node-backend/src/routes/internalAudit.js; the renderer never receives the token."
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.auditverify",
+                "payload": "authenticated checkpoint or no anchor",
+                "annotation": "apps/node-backend/src/services/auditVerificationService.js returns verified, partially_verified, unavailable, or failed."
+              },
+              {
+                "from": "sv.auditverify",
+                "to": "db.postgres",
+                "payload": "scan chain, domain links, schema migration heads, and legacy cutover",
+                "annotation": "The verifier compares a supplied trusted checkpoint with the full audit history and current alembic_version."
+              },
+              {
+                "from": "browser",
+                "to": "build.electron",
+                "payload": "explicit Start audit protection action with default-Cancel warning",
+                "annotation": "apps/frontend/src/pages/admin/AuditHistoryCard.tsx calls the native audit:enroll bridge; packaging/electron/main.js rechecks the missing-anchor state and asks for confirmation."
+              },
+              {
+                "from": "build.electron",
+                "to": "build.auditanchor",
+                "payload": "internally checked existing head and immutable enrollment sequence",
+                "annotation": "packaging/electron/runtime/native.js verifies the full unanchored chain; audit-anchor.js signs the enrollment baseline and creates a Keychain witness without claiming earlier authenticity."
+              },
+              {
+                "from": "build.electron",
+                "to": "build.auditanchor",
+                "payload": "trusted live 30-second cycle persists valid new head",
+                "annotation": "packaging/electron/main.js runs the closure timer only after an exact verified startup head; a tail already present at startup is not promoted."
+              },
+              {
+                "from": "build.electron",
+                "to": "sv.auditretention",
+                "payload": "daily /retention-plan with externally authenticated checkpoint",
+                "annotation": "packaging/electron/runtime/native.js asks auditRetentionService.js for a verified complete prefix older than one year."
+              },
+              {
+                "from": "sv.auditretention",
+                "to": "build.auditanchor",
+                "payload": "last old sequence and hash, linked domain IDs, migration heads",
+                "annotation": "packaging/electron/audit-anchor.js signs the proposed boundary into its receipt and Keychain witness before deletion."
+              },
+              {
+                "from": "build.electron",
+                "to": "sv.auditretention",
+                "payload": "signed /retention-prune request",
+                "annotation": "apps/node-backend/src/services/auditRetentionService.js verifies the retained history and calls migration 0118's atomic guarded function."
+              },
+              {
+                "from": "sv.auditretention",
+                "to": "db.postgres",
+                "payload": "delete eligible complete prefix under chain-head lock",
+                "annotation": "alembic/versions/0118_audit_retention_pruner.py rechecks age, continuity, checkpoint metadata, boundary hash, and successor."
+              },
+              {
+                "from": "build.electron",
+                "to": "be.routes",
+                "payload": "POST /api/internal/audit/update-decision: bounded checksum or install event",
+                "annotation": "packaging/electron/updater.js records native decisions through the private bridge. A receipt or previously trusted session requires synchronous checkpoint closure; an existing installation without either may continue with audit unavailable."
+              },
+              {
+                "from": "build.electron",
+                "to": "db.postgres",
+                "payload": "restore candidate must match local receipt before database switch finalizes",
+                "annotation": "packaging/electron/backup/native-transport.js first rolls back a non-verified candidate. Explicit recovery then retries once only after successful rollback, requires a full internally valid chain, and preserves the external receipt."
+              }
+            ]
+          },
+          {
+            "id": "experimental-codex-synthetic",
+            "name": "Experimental Codex synthetic turn",
+            "category": "Security",
+            "summary": "An opt-in admin session isolates Codex App Server in a disposable macOS sandbox and sends only a fixed fictional question through a bounded provider proxy.",
+            "steps": [
+              {
+                "from": "browser",
+                "to": "be.routes",
+                "payload": "admin bearer, CSRF, loopback, empty request",
+                "annotation": "apps/node-backend/src/routes/codexExperimental.js requires the explicit enable flag, binary path, admin token, and loopback peer."
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.codexsession",
+                "payload": "start or use one disposable synthetic session",
+                "annotation": "apps/node-backend/src/integrations/codex/experimentalSession.js permits one fixed fictional question and expires after ten minutes."
+              },
+              {
+                "from": "sv.codexsession",
+                "to": "sv.codexchild",
+                "payload": "private root, ephemeral auth, validated effective config",
+                "annotation": "apps/node-backend/src/integrations/codex/appServerTransport.js runs the process under the Seatbelt profile in seatbelt.js."
+              },
+              {
+                "from": "sv.codexchild",
+                "to": "sv.codexproxy",
+                "payload": "only local proxy-port network access",
+                "annotation": "apps/node-backend/src/integrations/codex/seatbelt.js permits the exact local proxy port; no general outbound socket access."
+              },
+              {
+                "from": "sv.codexproxy",
+                "to": "ex.codex",
+                "payload": "bounded TLS tunnel to exact allowed host",
+                "annotation": "apps/node-backend/src/integrations/codex/connectProxy.js validates CONNECT host and port, with byte caps; encrypted payload content remains opaque."
               }
             ]
           }

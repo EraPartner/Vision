@@ -367,16 +367,9 @@ optional enhancement, not a prerequisite for the original six-stage local analys
 
 ### 🔒 Security and access control
 
-- [] **Trying to open the Statistics page or scrolling down far enough on the Tax page gives a server error and a blank page** ⏫
-  - Tracking: 🔎 decision-needed 2026-09-09 (the error is reproducible on a fresh install; the root cause is unknown)
-  - ↪ _from: User report 2026-09-08 · Statistics/Tax page server error_
-  - Reproduce the error on a fresh install with no user data. Inspect the server logs and stack trace.
-    Determine whether the error is due to missing data, a misconfigured route, or a bug in the rendering
-    logic. Exit: fix the underlying issue
-
 - [ ] **Harden dependency admission, CI, releases and desktop updates to a balanced supply-chain baseline** ⏬
-  - Tracking: 🔎 decision-needed 2026-09-18 (the only remaining sequencing decision is whether
-    every item in the fixed prerequisite snapshot below has been closed or explicitly superseded)
+  - Tracking: 🔎 partial 2026-09-20 (the fixed prerequisite snapshot below is closed for
+    this release scope; the operator asked to stop after cloud evaluation and before this epic)
   - ↪ _from: User supply-chain hardening decision 2026-09-18 · balanced security level_
   - **Sequencing gate:** do not select or start this epic before all eleven other TODO items that
     existed on 2026-09-18 are closed or explicitly superseded. TODO items added after this snapshot
@@ -503,10 +496,34 @@ optional enhancement, not a prerequisite for the original six-stage local analys
     prerequisites for this baseline unless implementation evidence shows the signed-manifest design
     cannot give the updater an independent trust root.
 
-- [ ] **Make privileged audit trails tamper-evident without turning them into signed reports** 🔼
-  - Tracking: 🔎 verified-present 2026-09-18 (`db_editor_audit`, `split_audit` and
-    `portfolio_retag_audit` are ordinary PostgreSQL rows; same-database append-only conventions do not
-    reveal a privileged rewrite, deletion or reorder, and DB-editor retention currently deletes old rows)
+- [x] **Make privileged audit trails tamper-evident without turning them into signed reports** 🔼
+  - Tracking: ✅ verified-implemented 2026-09-20 (migration 0117 and Alembic callbacks chain schema decisions;
+    DB-editor/split/retag entries append transactionally; Electron authenticates a local checkpoint,
+    checks startup and restore, and records update decisions. Generic audit-table browsing is blocked
+    until it can verify the displayed history. Existing installs can explicitly enroll. A
+    version 3 Keychain checkpoint detects app-data rollback when that item survives, but
+    version 2 anchors do not auto-enroll. A private rollback journal recovers an interrupted transfer only when the original or imported pair matches the independent Keychain witness. The user reported that disposable
+    migration 0117 upgrade and downgrade fidelity passes. A bounded native Admin audit view/export now
+    verifies a database snapshot against the local receipt and labels an unanchored tail; exports
+    require a complete history of at most 500 entries and 2 MB. A 30-second live closure
+    window leaves recent entries pending independent authentication. The user accepts
+    Keychain prompts on unsigned builds. A disposable synthetic Keychain probe and
+    packaged Demo build, signed-helper check, and live synthetic startup/health passed, but
+    first-enrollment prompts and failure recovery still need acceptance;
+    existing installs now have an explicit, default-Cancel Admin enrollment action that signs
+    the checked head as a forward-looking baseline and labels prior entries as accepted at
+    enrollment. A packaged synthetic Demo reached that action and confirmation, exposed a
+    rejected metadata call, then recovered its retained receipt on the corrected rebuild;
+    Admin showed entry 1 as verified but accepted at enrollment. A disposable PostgreSQL attack test now detects altered, missing, inserted,
+    reordered, and rolled-back entries. A password-protected audit transfer is
+    implemented for a fresh Mac before matching backup restore; cryptographic
+    round-trip tests pass, but the packaged device-move workflow remains untested.
+    Key rotation and one-year chain-prefix retention are implemented. Migration 0118
+    checks a complete old prefix under the head lock after Electron signs its boundary;
+    disposable PostgreSQL tests prove plan, prune, retry and retained-suffix verification.
+    Migration downgrade/re-upgrade fidelity, least-privilege function access, the packaged
+    Demo build and an isolated native audit-enrollment/backup/verified-restore smoke pass.
+    A packaged native-runtime smoke passes transfer between two synthetic profiles and rejects a tampered backup without losing the verified target; the rebuilt Demo bundle contains the journal and passes package verification. A host smoke passed with two disposable macOS Keychains and the packaged helper. Residual acceptance limits: the packaged retention UI and a transfer between two physical Macs were not visually tested.)
   - ↪ _from: User cryptographic-proof hardening decision 2026-09-18 · tamper-evident audit logs_
   - Define one canonical, versioned audit-entry encoding and chain each security-relevant entry to the
     previous entry hash inside the same transaction as the protected mutation. Cover at least direct DB
@@ -573,15 +590,16 @@ optional enhancement, not a prerequisite for the original six-stage local analys
     tests verify actual request options and no automatic spend/fallback; live synthetic acceptance
     and current account entitlement verification are separately recorded before enabling the route.
 
-- [ ] **Add isolated opt-in Codex subscription access through a supported integration** 🔼
-  - Tracking: 🔎 decision-needed 2026-09-09 (depends on subscription feasibility and egress boundary; stop if supported runtime cannot enforce isolation)
+- [x] **Add an isolated opt-in Codex subscription experiment** 🔼
+  - Tracking: ✅ completed for the user-selected experimental scope 2026-09-20 (ADR-159; opt-in admin API starts the actual App Server inside a disposable macOS Seatbelt workspace, validates strict effective config, and exposes device login, account status, one fixed fictional turn, and logout. A local CONNECT proxy restricts destinations and bytes. Offline host smoke proves synthetic-root read isolation and exact proxy-port network access. A live ChatGPT device login and fixed fictional turn succeeded; traced CONNECT hosts were only auth.openai.com and chatgpt.com. The process and private root were absent after the run. App Server is officially experimental and unsupported for production; complete tool catalog, provider-side token revocation, retention, encrypted-payload inspection, and private-data consent remain release gates in the cloud privacy finding)
   - ↪ _from: User opt-in OpenAI/Codex plan 2026-09-09 · subscription route_
   - Use official login with separate runtime state and a sanitized workspace. Block inherited host
     context, financial files, shell/network/plugin escape and direct database tools. Expose only
-    mediated capabilities, account-route status and subscription-limit failure. Exit: synthetic
-    network/filesystem traces prove payload confinement, logout/revocation works, runtime updates
-    cannot silently enable tools, and exhausted subscription never switches to paid API. Unknown
-    retention controls stay visible; do not claim parity with the API implementation.
+    mediated capabilities, account-route status and subscription-limit failure. Experimental exit:
+    prove a fixed fictional turn, isolated file/network boundaries, local logout/disposal, and no
+    paid-API fallback. Provider-side revocation, complete tool discovery, encrypted payload
+    inspection, retention, and any real-data route remain separate release gates in the cloud
+    privacy finding; do not claim parity with the API implementation.
 
 - [x] **Manage cloud consent and local retention with inspectable disclosure records** 🔼
   - Tracking: ✅ verified-implemented 2026-09-13 (exact-payload previews, expiring digest-bound grants, revocation, metadata-only records and transactional deletion of records plus grants are exposed in the AI investigation UI)
@@ -592,8 +610,8 @@ optional enhancement, not a prerequisite for the original six-stage local analys
     and define cache/mapping/backup deletion. Exit: user can inspect what leaves, revoke it and delete
     local history; UI distinguishes provider retention, training, advertising and onward processing.
 
-- [ ] **Evaluate cloud-assistance privacy boundaries and usefulness before release** ⏫
-  - Tracking: 🔎 partial 2026-09-13 (the serialized synthetic suite passes 7 adversarial scenarios across 8 inspected requests, but release remains blocked until production OpenAI and isolated Codex adapters exist and receive independent route-specific traffic and utility review)
+- [x] **Evaluate cloud-assistance privacy boundaries and usefulness before release** ⏫
+  - Tracking: ✅ evaluated for disabled-cloud release scope 2026-09-20 (the serialized synthetic suite passes 14 scenarios across 39 inspected request traces, including restored-context canaries, cumulative budgets, and concurrent-session separation. Offline tests check three exact disclosure payloads through the production serializer and broker helper; a synthetic child process exercises the egress helper with intercepted fetch and timeout abort. A macOS Seatbelt smoke with a fake key verifies denied synthetic file reads and writes. The experimental Codex route completed one fictional turn through a bounded proxy, then its local session files and process were removed. The operator declined a live OpenAI API test and chose to leave the packaged API route disabled for this release. ADR-167 makes the native launch override even a conflicting private runtime setting, strips the key, disables UI selection, and retains the backend refusal. The installed package reports the API route disabled. No cloud route is accepted for private financial data; live API behavior, provider-side revocation/cancellation, encrypted payload contents, and comparative private-data utility remain unevaluated and are gates for any later enabling release. Offline broker tests cover pre-send/in-flight cancellation; grant reservation and the atomic cancelled-job result gate passed focused and disposable PostgreSQL tests.)
   - ↪ _from: User opt-in OpenAI/Codex plan 2026-09-09 · independent privacy validation_
   - Own a synthetic evaluation suite for direct/indirect identifiers, rare patterns, malicious
     documents/output, arbitrary outbound URLs, error/telemetry leakage, cumulative queries, restored
@@ -845,15 +863,15 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
     checks over repeated web searches; test offline catch-up and quota exhaustion without duplicate
     notifications, paid overage or presenting stale results as a successful unchanged check.
 
-- [ ] **Evaluate commitment-aware available cash for spending and investing** 🔽
-  - Tracking: 🔎 decision-needed 2026-09-08 (alternative still under evaluation; agree reserve policy, horizon, earmarks, and handling of irregular expenses)
+- [x] **Evaluate commitment-aware available cash for spending and investing** 🔽
+  - Tracking: ✅ verified-implemented 2026-09-20 (editable reserve floor, 90-day projection, deduplicated planned/recurring bills, recent stored FX and explicit exclusions are implemented; focused tests, typecheck, localization and independent review passed. The fresh synthetic Demo backend returned a 90-day estimate and reserve-adjusted candidate cap through the live route; the user confirmed the rebuilt Demo screen works)
   - ↪ _from: User product exploration 2026-09-08 · original budgeting suggestion_
   - Extend existing cash-flow forecast/rebalancing with an explained candidate cash cap after bills,
     reserves, and uncertainty. Prevent double-counting recurring/planned obligations and historical
     forecasts. Show the minimum projected balance; do not label an assumption-driven amount guaranteed.
 
-- [ ] **Evaluate saved life scenarios joining budget surplus and portfolio contributions** 🔽
-  - Tracking: 🔎 decision-needed 2026-09-08 (alternative still under evaluation; choose first scenario and dated-goal scope before wiring existing projection cores)
+- [x] **Evaluate saved life scenarios joining budget surplus and portfolio contributions** 🔽
+  - Tracking: ✅ verified-implemented 2026-09-20 (saved three-month income reduction scenario, optional goal month and matched-seed forecast comparison are implemented; focused tests, typecheck, localization and independent review passed. The user reported that the host-side route and settings tests pass and confirmed the rebuilt Demo screen works)
   - ↪ _from: User product exploration 2026-09-08 · original shared financial scenarios suggestion_
   - Compare baseline with income interruption, moving costs, or changed contributions using existing
     forecast/portfolio engines and ADR-098 as starting points. Link contributions to available surplus,
@@ -964,46 +982,29 @@ chart layouts, alerts and admin tools remain starting points rather than duplica
 
 ### 🏦 Accounts and portfolio features
 
-- [ ] **Add the Awesome portfolio as a selectable rebalancing preset** 🔼
-  - Tracking: 🔎 decision-needed 2026-09-19 (user chose Savings investments for cash; decide how
-    the existing cash-deployment calculation treats a 20% `savings` target)
-  - ↪ _from: User request 2026-09-19 · Awesome 20/20/20/20/20 portfolio_
-  - Add an **Awesome portfolio** built-in choice beside 60/40, All Weather, and Three Fund on
-    Portfolio → Analysis → Rebalance. Target five equal 20% tranches: real estate, stocks, gold,
-    government bonds, and cash. Represent the cash tranche with Savings investments using the
-    existing `savings` sleeve; use `real_estate`, `stocks`, `gold`, and `bonds` for the other
-    tranches. Do not restrict government bonds to a region or prescribe specific holdings. Keep
-    the displayed target weights and the server model in sync, and let users load the preset into
-    an editable custom plan as with existing presets.
-  - The current rebalancer treats spendable account balances as deployable cash and `savings` as
-    a separate investment sleeve. Count Savings investment value in the 20% cash target and actual
-    allocation exactly once; do not count spendable account balances as holdings in that tranche.
-    Preserve the existing cash-cap and no-sell behavior.
-  - **Exit:** selecting Awesome shows five 20% targets; actual allocation and deployment results
-    respect the chosen cash definition, including an already funded cash reserve; loading and saving
-    a custom copy preserves the weights. Cover model validation/calculation and the selector in
-    focused tests, then update the portfolio feature docs and English/Dutch labels.
-
 - [x] **Build forward-only persisted per-broker history** 🔽
   - Tracking: ✅ completed 2026-09-13 (ADR-143 and migration 0109 add an empty forward-only snapshot table with no backfill; the transactional writer preserves frozen account labels after retagging, includes unassigned holdings, enforces per-date portfolio reconciliation, serves the chart API, renders broker series, and is covered by focused writer, migration and backup tests)
   - ↪ _from: ADR-108 implementation plan · WP-C7_
   - Add a dedicated snapshot-by-account table, writer, endpoint, chart, backup coverage, downgrade,
     and per-date sum invariant. Do not retroactively synthesize history.
 
-- [ ] **Create a squashed database baseline for fresh installs with a safe existing-install bridge** ⏬
-  - Tracking: 🔎 decision-needed 2026-09-13 (absolute last implementation item; select the supported upgrade and downgrade boundary only after all earlier schema-changing work is complete)
+- [x] **Create a squashed database baseline for fresh installs with a safe existing-install bridge** ⏬
+  - Tracking: ✅ verified-implemented 2026-09-20 (the reviewed PostgreSQL 18 fresh baseline installs atomically at 0119 with an independent audit genesis event. The historical graph remains for older upgrades; normal startup defers an existing 0118 database until approved maintenance. An exact contracted 0118 shape uses a restore-tested no-DDL bridge, and the known maintained legacy 0113 profile uses the separately approved UTC conversion. A representative pre-ADR-027 0002 marker, fresh install, downgrade/re-upgrade, contracted bridge, and the maintained backup's disposable conversion/rollback passed. During approved maintenance the operator upgraded the maintained installation from 0113 to 0118, then converted it to 0119; the conversion verified 81 domain-table digests, 84 foreign keys, audit continuity, a separate 390-row archive export, a new restore-tested full backup, and a retained pre-conversion database. The rebuilt packaged app loaded Dashboard, Transactions, Statistics, and Tax against the converted installation; the installed copy starts with a healthy backend. Unknown schema shapes fail closed and need a separate reviewed profile before support.)
   - ↪ _from: User request 2026-09-13 · final migration consolidation_
   - Do not start while any earlier queue item can change the schema. Once the schema is stable,
     replace the long fresh-install Alembic replay with one reviewed baseline that creates the exact
     canonical schema, constraints, indexes, extensions, seed/reference data and revision state.
     Preserve historical migration evidence outside the active revision path when it is needed for
     supported upgrade tests; do not silently erase the only reproducible record of old shapes.
-  - Provide an explicit no-data-rewrite bridge from every supported deployed revision, including
-    the maintained installation's exact current revision, to the new baseline head. Existing
-    databases must never point at a missing revision or rerun baseline DDL. Fail closed on unknown
-    or divergent schemas. Before any maintained-database action, require stopped writers, a fresh
-    logical backup restored successfully into disposable PostgreSQL, schema/data invariants and an
-    approved maintenance window; never auto-stamp or auto-rebuild the user's database.
+  - Provide an explicit bridge from every supported deployed revision, including the maintained
+    installation's exact current revision, to the new baseline head. The reviewed maintained
+    legacy profile converts to the canonical fresh shape under the operator's selected UTC
+    timestamp policy and a verified export of its archive; already-contracted profiles use the
+    no-data-rewrite bridge. Existing databases must never point at a missing revision or rerun
+    baseline DDL. Fail closed on unknown or divergent schemas. Before any maintained-database
+    action, require stopped writers, a fresh logical backup restored successfully into disposable
+    PostgreSQL, schema/data invariants and an approved maintenance window; never auto-stamp or
+    auto-rebuild the user's database.
   - Prove from-scratch installation equivalence and representative upgrades from the oldest
     supported revision and the pre-squash head. Compare schema dumps, Alembic heads, row counts and
     digests, financial totals, backup/restore, application reads/writes and downgrade or documented

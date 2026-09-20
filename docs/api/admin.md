@@ -2,8 +2,8 @@
 title: Admin API
 type: endpoint
 status: active
-date: 2026-08-31
-updated: 2026-09-11
+date: 2026-09-20
+updated: 2026-09-20
 tags:
   - api
   - admin
@@ -23,6 +23,7 @@ aliases:
   - initialization
 related_code:
   - apps/node-backend/src/routes/admin.js
+  - apps/node-backend/src/routes/codexExperimental.js
   - apps/node-backend/src/services/dbEditor.js
   - apps/node-backend/src/main.js
   - apps/node-backend/src/config/config.js
@@ -36,13 +37,33 @@ related_code:
 
 System administration endpoints for database management, health checks, provider health tracking, and endpoint liveness metrics. Includes the [[docs/features/database-maintenance|DB data editor]] (ADR-101) for raw table inspection and editing.
 
+## Experimental Codex session
+
+`/api/admin/codex-experimental` is disabled by default. It requires
+`VISION_EXPERIMENTAL_CODEX=1`, `VISION_EXPERIMENTAL_CODEX_BINARY` pointing to the Codex executable,
+`ADMIN_AUTH_TOKEN`, a loopback connection, and the usual admin bearer and CSRF checks. This is an
+additive experimental API. It accepts no financial data or caller-supplied prompt.
+
+| Method | Path              | Result                                                                 |
+| ------ | ----------------- | ---------------------------------------------------------------------- |
+| GET    | `/status`         | Disposable session and account type; no credential material            |
+| POST   | `/session`        | Start the private App Server and local proxy                           |
+| POST   | `/login`          | Begin ChatGPT device-code login; return verification URL and user code |
+| POST   | `/synthetic-turn` | Send one fixed fictional question after account and rate-limit checks  |
+| POST   | `/logout`         | Log out, close the process, and remove private state                   |
+
+POST bodies must be empty objects. A session expires after ten minutes and is lost when the
+backend exits. The route is available only on macOS because it requires Seatbelt. See
+[[docs/reference/openai-codex-assistance-profiles|OpenAI and Codex Assistance Profiles]] for the
+privacy and release limits.
+
 ## Base URL
 
 ```
 /api/admin
 ```
 
-## Endpoints (17 total)
+## Endpoints (22 total)
 
 ### GET /api/admin
 
@@ -301,6 +322,8 @@ Run `VACUUM ANALYZE` on one or all tables.
 
 ---
 
+The generic data editor refuses all three operations below for `audit_chain_head`, `audit_chain_entries`, `audit_chain_checkpoints`, `db_editor_audit`, `split_audit`, and `portfolio_retag_audit` with `403 Forbidden`. This includes schema and row reads as well as dry-run and committed mutations. The editor cannot authenticate the separate Electron audit receipt. The native Admin Overview audit card uses the [[docs/api/internal-audit|private verification flow]] and labels any unanchored tail; a browser deployment cannot use that card. Database table-health statistics and backup bytes are separate from verified audit evidence.
+
 ### GET /api/admin/database/tables/:table/schema (ADR-101)
 
 Retrieve the column schema and primary key for a single table. Used by the data editor to build the column header row and know which columns are part of the primary key.
@@ -521,12 +544,13 @@ Execute a batch of insert/update/delete operations against a single table. Suppo
 | Status | Scenario                                                                                          |
 | ------ | ------------------------------------------------------------------------------------------------- |
 | `400`  | Unknown table, missing PK for update/delete, constraint violation (NOT NULL, CHECK, invalid type) |
+| `403`  | Protected audit table is inaccessible through the generic data editor                             |
 | `409`  | `xmin` mismatch (optimistic concurrency conflict) or UNIQUE constraint violation                  |
 | `500`  | Unexpected database error (rolled back)                                                           |
 
 Constraint SQLSTATEs (`23502` NOT NULL, `23503` FK violation, `23505` UNIQUE, `23514` CHECK, `22P02` invalid type) are mapped to human-readable messages before the `400`/`409` response is sent.
 
-**Audit trail:** Every committed statement is written to `db_editor_audit` (table `db_editor_audit(id, table_name, op, pk_json, before_json, after_json, statement, created_at)`; index `idx_db_editor_audit_table_time`) inside the same transaction, and also emitted on the structured logger. The audit record is created even if the change targets the `db_editor_audit` table itself. Migration: `alembic/versions/0059_db_editor_audit.py`.
+**Audit trail:** Every permitted committed statement is written to `db_editor_audit` (table `db_editor_audit(id, table_name, op, pk_json, before_json, after_json, statement, created_at)`; index `idx_db_editor_audit_table_time`) and linked to the hash chain in the same transaction. It is also emitted on the structured logger. Audit tables themselves are excluded from the generic editor. Migration: `alembic/versions/0059_db_editor_audit.py` and [[docs/adr/157-electron-local-audit-receipt|ADR-157]].
 
 See [[docs/features/database-maintenance|Database Maintenance Feature]] and [[docs/adr/101-db-data-editor|ADR-101]] for full safety model.
 
