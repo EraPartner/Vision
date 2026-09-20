@@ -12,8 +12,12 @@ vi.mock("../src/services/materializedViewService.js", () => ({
 }));
 
 vi.mock("../src/database/connection.js", () => mockConnection());
+vi.mock("../src/repositories/auditChainRepository.js", () => ({
+  appendAuditEvent: vi.fn(),
+}));
 
 import { query, getClient } from "../src/database/connection.js";
+import { appendAuditEvent } from "../src/repositories/auditChainRepository.js";
 import { scheduleRefresh } from "../src/services/materializedViewService.js";
 import {
   getTableMeta,
@@ -171,6 +175,21 @@ function makeClient(handlers) {
   const client = {
     query: vi.fn(async (sql, params) => {
       calls.push({ sql, params });
+      if (sql.includes("INSERT INTO db_editor_audit")) {
+        return {
+          rows: [
+            {
+              id: "42",
+              pk_text: JSON.stringify(params[2] ?? null),
+              before_text: JSON.stringify(params[3] ?? null),
+              after_text: JSON.stringify(params[4] ?? null),
+              statement: params[5],
+              occurred_at: "2026-09-20T00:00:00.123456Z",
+            },
+          ],
+          rowCount: 1,
+        };
+      }
       for (const [needle, value] of handlers) {
         if (sql.includes(needle))
           return typeof value === "function" ? value(sql, params) : value;
@@ -187,6 +206,21 @@ beforeEach(() => vi.clearAllMocks());
 // ── Introspection ───────────────────────────────────────────────────────────
 
 describe("getTableMeta", () => {
+  it("does not expose audit history through the generic table browser", async () => {
+    for (const table of [
+      "audit_chain_head",
+      "audit_chain_entries",
+      "audit_chain_checkpoints",
+      "db_editor_audit",
+      "split_audit",
+      "portfolio_retag_audit",
+    ]) {
+      await expect(getTableMeta(table)).rejects.toMatchObject({ status: 403 });
+      await expect(readRows(table)).rejects.toMatchObject({ status: 403 });
+    }
+    expect(query).not.toHaveBeenCalled();
+  });
+
   it("returns columns and primary key for a known table", async () => {
     query.mockImplementation(catalogRouter("transactions"));
     const meta = await getTableMeta("transactions");
@@ -484,6 +518,18 @@ describe("applyMutations (execute)", () => {
     expect(result.refreshScheduled).toBe(true);
     expect(scheduleRefresh).toHaveBeenCalledOnce();
     expect(calls.some((c) => c.sql.includes("db_editor_audit"))).toBe(true);
+    expect(appendAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stream: "db_editor",
+        event: "update",
+        auditRowId: "42",
+        table: "transactions",
+      }),
+      client,
+    );
+    expect(calls.findIndex((c) => c.sql === "COMMIT")).toBeGreaterThan(
+      calls.findIndex((c) => c.sql.includes("db_editor_audit")),
+    );
     expect(calls.some((c) => c.sql === "COMMIT")).toBe(true);
     expect(calls.some((c) => c.sql.includes("pg_advisory_xact_lock"))).toBe(
       false,
@@ -534,6 +580,39 @@ describe("applyMutations (execute)", () => {
     expect(result.applied).toBe(1);
     expect(result.refreshScheduled).toBe(false);
     expect(scheduleRefresh).not.toHaveBeenCalled();
+  });
+
+  it("refuses to edit audit tables, including dry runs", async () => {
+    for (const table of [
+      "audit_chain_head",
+      "audit_chain_entries",
+      "audit_chain_checkpoints",
+      "db_editor_audit",
+      "split_audit",
+      "portfolio_retag_audit",
+    ]) {
+      await expect(
+        applyMutations(table, [{ op: "delete", pk: { id: 1 } }], {
+          dryRun: true,
+        }),
+      ).rejects.toMatchObject({ status: 403 });
+    }
+    expect(getClient).not.toHaveBeenCalled();
+  });
+
+  it("rolls back the mutation if the audit chain append fails", async () => {
+    query.mockImplementation(catalogRouter("tags"));
+    const { client, calls } = makeClient([
+      ['INSERT INTO "tags"', { rows: [{ id: 7, slug: "new" }] }],
+    ]);
+    getClient.mockResolvedValue(client);
+    appendAuditEvent.mockRejectedValueOnce(new Error("chain unavailable"));
+
+    await expect(
+      applyMutations("tags", [{ op: "insert", values: { slug: "new" } }]),
+    ).rejects.toThrow("chain unavailable");
+    expect(calls.some((c) => c.sql === "ROLLBACK")).toBe(true);
+    expect(calls.some((c) => c.sql === "COMMIT")).toBe(false);
   });
 });
 

@@ -9,11 +9,79 @@ const { EventEmitter } = require("node:events");
 const { execFileSync, spawnSync } = require("node:child_process");
 
 const {
+  init,
   pickNativeAppZip,
+  verifyUpdateChecksum,
+  recordUpdateDecision,
+  launchAuditedInstaller,
   updaterChildEnv,
   launchPreparedNativeInstaller,
   writeInstallerScript,
 } = require("./updater");
+
+test("update checksum decisions are recorded without file paths or URLs", async () => {
+  const events = [];
+  init({ recordAuditUpdateDecision: async (event) => events.push(event) });
+  await verifyUpdateChecksum(
+    "a".repeat(64),
+    "a".repeat(64),
+    "v1.2.3",
+    "native",
+  );
+  await assert.rejects(
+    verifyUpdateChecksum("a".repeat(64), "b".repeat(64), "v1.2.3", "native"),
+    /Checksum mismatch/,
+  );
+  assert.deepEqual(events, [
+    { decision: "checksum_verified", mode: "native", version: "v1.2.3" },
+    { decision: "checksum_failed", mode: "native", version: "v1.2.3" },
+  ]);
+});
+
+test("native update decisions fail closed when audit callback is missing or fails", async () => {
+  init({});
+  await assert.rejects(
+    recordUpdateDecision("install_requested", "v1.2.3", "native"),
+    /audit bridge is unavailable/,
+  );
+  init({
+    recordAuditUpdateDecision: async () => {
+      throw new Error("audit down");
+    },
+  });
+  await assert.rejects(
+    recordUpdateDecision("install_requested", "v1.2.3", "native"),
+    /audit down/,
+  );
+});
+
+test("installer launch follows the recorded decision and failure is recorded", async () => {
+  const calls = [];
+  init({
+    recordAuditUpdateDecision: async ({ decision }) => calls.push(decision),
+  });
+  await assert.rejects(
+    launchAuditedInstaller("v1.2.3", "native", async () => {
+      calls.push("launch");
+      throw new Error("launch failed");
+    }),
+    /launch failed/,
+  );
+  assert.deepEqual(calls, ["install_requested", "launch", "install_failed"]);
+
+  init({
+    recordAuditUpdateDecision: async () => {
+      throw new Error("audit down");
+    },
+  });
+  await assert.rejects(
+    launchAuditedInstaller("v1.2.3", "native", async () =>
+      calls.push("unexpected"),
+    ),
+    /audit down/,
+  );
+  assert.equal(calls.includes("unexpected"), false);
+});
 const {
   parseInstallerArgs,
   validateVisionAppPath,

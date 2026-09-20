@@ -61,6 +61,7 @@ import plannedTransactionsRouter from "./routes/plannedTransactions.js";
 import infoRouter from "./routes/info.js";
 import aggregationsRouter from "./routes/aggregations.js";
 import adminRouter from "./routes/admin.js";
+import codexExperimentalRouter from "./routes/codexExperimental.js";
 import importRouter from "./routes/importRoutes.js";
 import portfolioImportRouter from "./routes/portfolioImportRoutes.js";
 import investmentsRouter from "./routes/investments.js";
@@ -77,6 +78,7 @@ import reportsRouter from "./routes/reports.js";
 import tagsRouter from "./routes/tags.js";
 import accountsRouter from "./routes/accounts.js";
 import crossWorkspaceRouter from "./routes/crossWorkspace.js";
+import internalAuditRouter from "./routes/internalAudit.js";
 import analysisRouter from "./routes/analysis.js";
 import analysisMonitorsRouter from "./routes/analysisMonitors.js";
 import researchDossiersRouter from "./routes/researchDossiers.js";
@@ -109,6 +111,9 @@ app.use(requestId);
 app.use(requestMetrics);
 
 app.use(createCorsMiddleware(() => settings.api.corsOrigins));
+
+// The Electron-only audit bridge has a narrower body limit than the data API.
+app.use("/api/internal/audit", express.json({ limit: "4kb" }));
 
 // JSON body parser with size limit
 app.use(express.json({ limit: "1mb" }));
@@ -270,6 +275,7 @@ app.use("/api", globalRateLimiter);
 // Electron-main requests pass unchanged.
 app.use("/api", csrfGuard);
 
+mountRouter(app, "/api/internal/audit", internalAuditRouter);
 mountRouter(app, "/api/transactions", transactionsRouter);
 mountRouter(app, "/api/categories", categoriesRouter);
 mountRouter(app, "/api/recipients", recipientsRouter);
@@ -283,6 +289,14 @@ mountRouter(
   aggregationsRouter,
 );
 mountRouter(app, "/api/ai-research", aggregationRateLimiter, aiResearchRouter);
+mountRouter(
+  app,
+  "/api/admin/codex-experimental",
+  adminRateLimiter,
+  adminCsrfGuard,
+  adminAuthMiddleware,
+  codexExperimentalRouter,
+);
 mountRouter(
   app,
   "/api/admin",
@@ -506,7 +520,7 @@ async function start() {
     // role if missing and (re)applies the shared grant set. No-op in the
     // classic single-role setup; warn-not-crash on every failure path.
     const endRoleBootstrap = bootMark("role_bootstrap");
-    await ensureAppRole({
+    const appRoleBootstrap = await ensureAppRole({
       databaseUrl: settings.database.url,
       migrationsUrl: settings.database.migrationsUrl,
     });
@@ -537,6 +551,15 @@ async function start() {
         // Alembic is the single source of schema DDL (ADR-027).
         const endMig = bootMark("run_migrations");
         await runMigrations();
+        // A fresh baseline can introduce routines after the app role's first
+        // grant pass. Apply that grant set once more only when a grant was
+        // missing before migration.
+        if (appRoleBootstrap.grantFailures) {
+          await ensureAppRole({
+            databaseUrl: settings.database.url,
+            migrationsUrl: settings.database.migrationsUrl,
+          });
+        }
         endMig();
         resumeRecoverableInvestigations()
           .then((count) => {

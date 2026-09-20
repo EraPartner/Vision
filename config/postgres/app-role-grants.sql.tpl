@@ -12,6 +12,9 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO :"app_rol
 
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO :"app_role";
 
+-- Only the audit retention procedure runs with migration-owner rights.
+GRANT EXECUTE ON FUNCTION public.audit_chain_prune_prefix(BIGINT, CHAR(64)) TO :"app_role";
+
 ALTER DEFAULT PRIVILEGES FOR ROLE :"owner_role" IN SCHEMA public
   GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO :"app_role";
 

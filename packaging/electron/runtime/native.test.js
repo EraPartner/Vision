@@ -6,9 +6,31 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 const { EventEmitter } = require("node:events");
+const { createAuditAnchor } = require("../audit-anchor");
+
+const syntheticWitnesses = new Map();
+function fakeWitness(userDataDir) {
+  const key = path.resolve(userDataDir);
+  if (!syntheticWitnesses.has(key)) {
+    let value;
+    syntheticWitnesses.set(key, {
+      read: async () => value && structuredClone(value),
+      create: async (next) => {
+        if (value) throw new Error("witness exists");
+        value = structuredClone(next);
+      },
+      replace: async (next) => {
+        if (!value) throw new Error("witness missing");
+        value = structuredClone(next);
+      },
+    });
+  }
+  return syntheticWitnesses.get(key);
+}
 
 const {
   safeChildEnv,
+  recordUpdateDecisionThroughNativeRuntime,
   managedPostgresChildEnv,
   validateArgs,
   parsePostgresMajor,
@@ -270,6 +292,7 @@ test("managed PostgreSQL initializes a private loopback-only cluster with argume
     path.join(os.tmpdir(), "vision-pg-managed-init-"),
   );
   const calls = [];
+  const auditCalls = [];
   try {
     const fixture = await createBundledPostgresFixture(temp);
     const runtime = createNativeRuntime({
@@ -282,6 +305,33 @@ test("managed PostgreSQL initializes a private loopback-only cluster with argume
       alembicPath: "/bin/echo",
       chromePath: "/bin/echo",
       runFile: postgresFixtureRunFile(calls),
+      auditBridgeToken: "a".repeat(64),
+      auditSafeStorage: {
+        isEncryptionAvailable: () => true,
+        encryptString: (value) => Buffer.from(value),
+        decryptString: (value) => value.toString(),
+      },
+      auditWitness: fakeWitness(path.join(temp, "user-data")),
+      auditRequest: async (endpoint, payload) => {
+        auditCalls.push({ endpoint, payload });
+        return endpoint === "verify"
+          ? {
+              status: "unavailable",
+              sequence: 1,
+              hash: "b".repeat(64),
+              legacyCutover: {
+                dbEditorMaxId: 0,
+                splitMaxId: 0,
+                retagMaxId: 0,
+              },
+              legacyUnverified: {
+                dbEditor: "0",
+                split: "0",
+                portfolioRetag: "0",
+              },
+            }
+          : { id: 1 };
+      },
     });
     await runtime.discover();
     const config = await runtime.ensureLayout();
@@ -315,6 +365,13 @@ test("managed PostgreSQL initializes a private loopback-only cluster with argume
       configContents,
       /shared_preload_libraries = 'pg_stat_statements'/,
     );
+    assert.equal(
+      (await runtime.verifyAuditHistory({ establishSession: true })).status,
+      "verified",
+    );
+    assert.equal(auditCalls[1].endpoint, "checkpoint");
+    assert.equal(auditCalls[1].payload.sequence, 1);
+    assert.equal(runtime.auditClosureEnabled(), true);
   } finally {
     await fs.promises.rm(temp, { recursive: true, force: true });
   }
@@ -1184,6 +1241,8 @@ test("packaged backend environment pins native data, migration, browser, and loo
       DATABASE_URL: "postgresql://vision_app:redacted@127.0.0.1:5432/vision",
       DATABASE_URL_MIGRATIONS:
         "postgresql://vision_owner:redacted@127.0.0.1:5432/vision",
+      OPENAI_API_ENABLED: "true",
+      OPENAI_API_KEY: "synthetic-key",
     },
     port: 43123,
     paths: {
@@ -1193,6 +1252,7 @@ test("packaged backend environment pins native data, migration, browser, and loo
         "/Users/test/Library/Application Support/Vision/native/vision/cache",
     },
     runtimeRoot,
+    auditBridgeToken: "a".repeat(64),
     tools: {
       alembic: "/opt/homebrew/bin/alembic",
       chrome: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
@@ -1211,9 +1271,596 @@ test("packaged backend environment pins native data, migration, browser, and loo
   assert.equal(env.VISION_SKIP_CONFIG_ENV_LOCAL, "true");
   assert.equal(env.OLLAMA_URL, "http://127.0.0.1:11434");
   assert.equal(env.ADMIN_ALLOW_TOKENLESS_NONLOOPBACK, "false");
+  assert.equal(env.OPENAI_API_ENABLED, "false");
+  assert.equal(env.OPENAI_API_KEY, undefined);
+  assert.equal(env.VISION_AUDIT_BRIDGE_TOKEN, "a".repeat(64));
   assert.equal(
     env.PUPPETEER_EXECUTABLE_PATH,
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  );
+});
+
+test("native audit verification rejects a changed legacy cutover even with the same chain head", async (t) => {
+  const userDataDir = await fs.promises.mkdtemp(
+    path.join(os.tmpdir(), "vision-native-audit-"),
+  );
+  t.after(() => fs.promises.rm(userDataDir, { recursive: true, force: true }));
+  const safeStorage = {
+    isEncryptionAvailable: () => true,
+    encryptString: (value) => Buffer.from(value),
+    decryptString: (value) => value.toString(),
+  };
+  const cutover = { dbEditorMaxId: 0, splitMaxId: 0, retagMaxId: 0 };
+  const anchor = createAuditAnchor({
+    userDataDir,
+    safeStorage,
+    witness: fakeWitness(userDataDir),
+    platform: "darwin",
+  });
+  await anchor.initializeGenesis(cutover);
+  const runtime = createNativeRuntime({
+    userDataDir,
+    auditBridgeToken: "a".repeat(64),
+    auditSafeStorage: safeStorage,
+    auditWitness: fakeWitness(userDataDir),
+    auditRequest: async (endpoint) => {
+      assert.equal(endpoint, "verify");
+      return {
+        status: "verified",
+        sequence: 0,
+        hash: "0".repeat(64),
+        legacyCutover: { ...cutover, splitMaxId: 1 },
+      };
+    },
+  });
+  assert.equal(await runtime.auditRequiresAnchoredClosure(), true);
+  assert.deepEqual(await runtime.verifyAuditHistory(), {
+    status: "failed",
+    reason: "legacy_cutover_changed",
+  });
+  await assert.rejects(runtime.assertRestoredAuditHistory(), {
+    code: "RESTORED_AUDIT_INTEGRITY_FAILED",
+  });
+});
+
+test("native audit read supplies the external receipt and rejects mismatched cutover", async (t) => {
+  const userDataDir = await fs.promises.mkdtemp(
+    path.join(os.tmpdir(), "vision-native-audit-read-"),
+  );
+  t.after(() => fs.promises.rm(userDataDir, { recursive: true, force: true }));
+  const safeStorage = {
+    isEncryptionAvailable: () => true,
+    encryptString: (value) => Buffer.from(value),
+    decryptString: (value) => value.toString(),
+  };
+  const cutover = { dbEditorMaxId: 0, splitMaxId: 0, retagMaxId: 0 };
+  const anchor = createAuditAnchor({
+    userDataDir,
+    safeStorage,
+    witness: fakeWitness(userDataDir),
+    platform: "darwin",
+  });
+  await anchor.initializeGenesis(cutover);
+  let changed = false;
+  const runtime = createNativeRuntime({
+    userDataDir,
+    auditBridgeToken: "a".repeat(64),
+    auditSafeStorage: safeStorage,
+    auditWitness: fakeWitness(userDataDir),
+    auditRequest: async (endpoint, payload) => {
+      assert.equal(endpoint, "read");
+      assert.deepEqual(payload.trustedCheckpoint, {
+        sequence: 0,
+        hash: "0".repeat(64),
+      });
+      return {
+        verification: {
+          status: "verified",
+          sequence: 0,
+          hash: "0".repeat(64),
+          anchoredThrough: 0,
+          legacyCutover: { ...cutover, splitMaxId: changed ? 1 : 0 },
+        },
+        entries: [],
+        hasMore: false,
+      };
+    },
+  });
+  assert.equal(
+    (await runtime.readVerifiedAuditEntries()).verification.status,
+    "verified",
+  );
+  changed = true;
+  assert.deepEqual(await runtime.readVerifiedAuditEntries(), {
+    verification: {
+      status: "failed",
+      reason: "audit_read_verification_failed",
+    },
+    entries: [],
+    hasMore: false,
+  });
+});
+
+test("native restore rejects an absent anchor without creating one", async (t) => {
+  const userDataDir = await fs.promises.mkdtemp(
+    path.join(os.tmpdir(), "vision-native-audit-"),
+  );
+  t.after(() => fs.promises.rm(userDataDir, { recursive: true, force: true }));
+  const safeStorage = {
+    isEncryptionAvailable: () => true,
+    encryptString: (value) => Buffer.from(value),
+    decryptString: (value) => value.toString(),
+  };
+  const runtime = createNativeRuntime({
+    userDataDir,
+    auditBridgeToken: "a".repeat(64),
+    auditSafeStorage: safeStorage,
+    auditWitness: fakeWitness(userDataDir),
+    auditRequest: async () => ({
+      status: "unavailable",
+      sequence: 0,
+      hash: "0".repeat(64),
+      legacyUnverified: { dbEditor: "0", split: "0", portfolioRetag: "0" },
+      legacyCutover: { dbEditorMaxId: 0, splitMaxId: 0, retagMaxId: 0 },
+    }),
+  });
+  assert.equal((await runtime.verifyAuditHistory()).status, "unavailable");
+  assert.equal(await runtime.auditRequiresAnchoredClosure(), false);
+  await assert.rejects(runtime.assertRestoredAuditHistory(), {
+    code: "RESTORED_AUDIT_INTEGRITY_UNAVAILABLE",
+  });
+  assert.equal(fs.existsSync(path.join(userDataDir, "audit-anchor")), false);
+});
+
+test("explicit enrollment of an existing chain records a forward-looking baseline", async (t) => {
+  const userDataDir = await fs.promises.mkdtemp(
+    path.join(os.tmpdir(), "vision-native-audit-"),
+  );
+  t.after(() => fs.promises.rm(userDataDir, { recursive: true, force: true }));
+  const safeStorage = {
+    isEncryptionAvailable: () => true,
+    encryptString: (value) => Buffer.from(value),
+    decryptString: (value) => value.toString(),
+  };
+  const witness = fakeWitness(userDataDir);
+  const cutover = { dbEditorMaxId: 2, splitMaxId: 1, retagMaxId: 0 };
+  const head = { sequence: 3, hash: "b".repeat(64) };
+  const recorded = [];
+  const runtime = createNativeRuntime({
+    userDataDir,
+    auditBridgeToken: "a".repeat(64),
+    auditSafeStorage: safeStorage,
+    auditWitness: witness,
+    auditRequest: async (endpoint, payload) => {
+      if (endpoint === "checkpoint") {
+        recorded.push(payload);
+        return { id: 1 };
+      }
+      return {
+        status: payload.trustedCheckpoint ? "verified" : "unavailable",
+        ...head,
+        legacyCutover: cutover,
+        legacyUnverified: { dbEditor: "2", split: "1", portfolioRetag: "0" },
+      };
+    },
+  });
+  assert.equal(
+    (await runtime.verifyAuditHistory()).reason,
+    "no_trusted_anchor",
+  );
+  assert.deepEqual(await runtime.enrollExistingAuditHistory(), {
+    status: "verified",
+    enrollmentSequence: 3,
+  });
+  assert.equal(runtime.auditClosureEnabled(), true);
+  assert.equal(recorded.length, 1);
+  const anchor = createAuditAnchor({
+    userDataDir,
+    safeStorage,
+    witness,
+    platform: "darwin",
+  });
+  assert.equal(
+    (await anchor.readTrustedCheckpoint()).metadata.enrollmentSequence,
+    3,
+  );
+  assert.equal(
+    (await runtime.enrollExistingAuditHistory()).reason,
+    "already_enrolled",
+  );
+});
+
+test("native startup leaves a verified but unanchored tail unpromoted", async (t) => {
+  const userDataDir = await fs.promises.mkdtemp(
+    path.join(os.tmpdir(), "vision-native-audit-"),
+  );
+  t.after(() => fs.promises.rm(userDataDir, { recursive: true, force: true }));
+  const safeStorage = {
+    isEncryptionAvailable: () => true,
+    encryptString: (value) => Buffer.from(value),
+    decryptString: (value) => value.toString(),
+  };
+  const cutover = { dbEditorMaxId: 0, splitMaxId: 0, retagMaxId: 0 };
+  const anchor = createAuditAnchor({
+    userDataDir,
+    safeStorage,
+    witness: fakeWitness(userDataDir),
+    platform: "darwin",
+  });
+  await anchor.initializeGenesis(cutover);
+  const runtime = createNativeRuntime({
+    userDataDir,
+    auditBridgeToken: "a".repeat(64),
+    auditSafeStorage: safeStorage,
+    auditWitness: fakeWitness(userDataDir),
+    auditRequest: async () => ({
+      status: "partially_verified",
+      sequence: 1,
+      hash: "b".repeat(64),
+      legacyCutover: cutover,
+    }),
+  });
+  assert.equal(
+    (await runtime.verifyAuditHistory({ establishSession: true })).status,
+    "partially_verified",
+  );
+  assert.equal(runtime.auditClosureEnabled(), false);
+  assert.equal((await anchor.readTrustedCheckpoint()).sequence, 0);
+  await assert.rejects(runtime.assertRestoredAuditHistory(), {
+    code: "RESTORED_AUDIT_INTEGRITY_UNAVAILABLE",
+  });
+});
+
+test("verified live session closes an honest write before same-device restore", async (t) => {
+  const userDataDir = await fs.promises.mkdtemp(
+    path.join(os.tmpdir(), "vision-native-audit-"),
+  );
+  t.after(() => fs.promises.rm(userDataDir, { recursive: true, force: true }));
+  const safeStorage = {
+    isEncryptionAvailable: () => true,
+    encryptString: (value) => Buffer.from(value),
+    decryptString: (value) => value.toString(),
+  };
+  const cutover = { dbEditorMaxId: 0, splitMaxId: 0, retagMaxId: 0 };
+  const anchor = createAuditAnchor({
+    userDataDir,
+    safeStorage,
+    witness: fakeWitness(userDataDir),
+    platform: "darwin",
+  });
+  await anchor.initializeGenesis(cutover);
+  let head = { sequence: 0, hash: "0".repeat(64) };
+  const recorded = [];
+  const runtime = createNativeRuntime({
+    userDataDir,
+    auditBridgeToken: "a".repeat(64),
+    auditSafeStorage: safeStorage,
+    auditWitness: fakeWitness(userDataDir),
+    auditRequest: async (endpoint, payload) => {
+      if (endpoint === "checkpoint") {
+        recorded.push(payload);
+        return { id: recorded.length };
+      }
+      const trusted = payload.trustedCheckpoint;
+      assert.ok(trusted);
+      return {
+        status:
+          trusted.sequence === head.sequence
+            ? "verified"
+            : "partially_verified",
+        ...head,
+        legacyCutover: cutover,
+      };
+    },
+  });
+  assert.equal(
+    (await runtime.verifyAuditHistory({ establishSession: true })).status,
+    "verified",
+  );
+  assert.equal(runtime.auditClosureEnabled(), true);
+  assert.equal(await runtime.auditRequiresAnchoredClosure(), true);
+  head = { sequence: 1, hash: "b".repeat(64) };
+  assert.equal((await runtime.closeAuditCheckpoint()).status, "verified");
+  assert.equal((await anchor.readTrustedCheckpoint()).sequence, 1);
+  assert.equal(recorded.length, 2);
+  await runtime.pauseAuditClosure();
+  assert.equal((await runtime.assertRestoredAuditHistory()).status, "verified");
+  runtime.resumeAuditClosure();
+  runtime.endAuditSession();
+  assert.equal(await runtime.auditRequiresAnchoredClosure(), true);
+  head = { sequence: 2, hash: "c".repeat(64) };
+  assert.equal(
+    (await runtime.closeAuditCheckpoint()).reason,
+    "live_closure_not_active",
+  );
+  assert.equal((await anchor.readTrustedCheckpoint()).sequence, 1);
+});
+
+test("transient first audit request can retry and establish the live session", async (t) => {
+  const userDataDir = await fs.promises.mkdtemp(
+    path.join(os.tmpdir(), "vision-native-audit-"),
+  );
+  t.after(() => fs.promises.rm(userDataDir, { recursive: true, force: true }));
+  const safeStorage = {
+    isEncryptionAvailable: () => true,
+    encryptString: (value) => Buffer.from(value),
+    decryptString: (value) => value.toString(),
+  };
+  const cutover = { dbEditorMaxId: 0, splitMaxId: 0, retagMaxId: 0 };
+  await createAuditAnchor({
+    userDataDir,
+    safeStorage,
+    witness: fakeWitness(userDataDir),
+    platform: "darwin",
+  }).initializeGenesis(cutover);
+  let attempts = 0;
+  const runtime = createNativeRuntime({
+    userDataDir,
+    auditBridgeToken: "a".repeat(64),
+    auditSafeStorage: safeStorage,
+    auditWitness: fakeWitness(userDataDir),
+    auditRequest: async () => {
+      attempts += 1;
+      if (attempts === 1) throw new Error("temporary bridge failure");
+      return {
+        status: "verified",
+        sequence: 0,
+        hash: "0".repeat(64),
+        legacyCutover: cutover,
+      };
+    },
+  });
+  await assert.rejects(
+    runtime.verifyAuditHistory({ establishSession: true }),
+    /temporary bridge failure/,
+  );
+  assert.equal(runtime.auditSessionPending(), true);
+  assert.equal(
+    (await runtime.verifyAuditHistory({ establishSession: true })).status,
+    "verified",
+  );
+  assert.equal(runtime.auditSessionPending(), false);
+  assert.equal(runtime.auditClosureEnabled(), true);
+});
+
+test("native updater sends only the decision payload through the private audit bridge", async (t) => {
+  const userDataDir = await fs.promises.mkdtemp(
+    path.join(os.tmpdir(), "vision-native-audit-"),
+  );
+  t.after(() => fs.promises.rm(userDataDir, { recursive: true, force: true }));
+  const requests = [];
+  const runtime = createNativeRuntime({
+    userDataDir,
+    auditBridgeToken: "a".repeat(64),
+    auditRequest: async (endpoint, payload) => {
+      requests.push({ endpoint, payload });
+      return { id: 1 };
+    },
+  });
+  await runtime.recordAuditUpdateDecision({
+    decision: "checksum_verified",
+    mode: "native",
+    version: "v1.2.3",
+  });
+  assert.deepEqual(requests, [
+    {
+      endpoint: "update-decision",
+      payload: {
+        decision: "checksum_verified",
+        mode: "native",
+        version: "v1.2.3",
+      },
+    },
+  ]);
+});
+
+test("source development updates skip an absent native bridge while native updates fail closed", async () => {
+  const decision = {
+    decision: "checksum_verified",
+    mode: "dev",
+    version: "v1.2.3",
+  };
+  assert.equal(
+    await recordUpdateDecisionThroughNativeRuntime(undefined, decision),
+    undefined,
+  );
+  await assert.rejects(
+    recordUpdateDecisionThroughNativeRuntime(undefined, {
+      ...decision,
+      mode: "native",
+    }),
+    /Native update audit bridge is unavailable/,
+  );
+  const calls = [];
+  await recordUpdateDecisionThroughNativeRuntime(
+    {
+      mode: "native",
+      recordAuditUpdateDecision: async (payload) =>
+        calls.push(["record", payload]),
+      auditRequiresAnchoredClosure: async () => true,
+      closeAuditCheckpoint: async () => {
+        calls.push(["checkpoint"]);
+        return { status: "verified" };
+      },
+    },
+    decision,
+  );
+  assert.deepEqual(calls, [["record", decision], ["checkpoint"]]);
+});
+
+test("native update decisions close the live audit checkpoint before installation continues", async () => {
+  const calls = [];
+  const runtime = {
+    mode: "native",
+    auditRequiresAnchoredClosure: () => true,
+    recordAuditUpdateDecision: async (payload) => {
+      calls.push(`record:${payload.decision}`);
+    },
+    closeAuditCheckpoint: async () => {
+      calls.push("checkpoint");
+      return { status: "verified" };
+    },
+  };
+  for (const decision of [
+    "checksum_verified",
+    "checksum_failed",
+    "install_requested",
+  ]) {
+    await recordUpdateDecisionThroughNativeRuntime(runtime, {
+      decision,
+      mode: "native",
+      version: "v1.2.3",
+    });
+  }
+  assert.deepEqual(calls, [
+    "record:checksum_verified",
+    "checkpoint",
+    "record:checksum_failed",
+    "checkpoint",
+    "record:install_requested",
+    "checkpoint",
+  ]);
+});
+
+test("native installation is blocked when its update decision cannot be anchored", async () => {
+  const calls = [];
+  await assert.rejects(
+    recordUpdateDecisionThroughNativeRuntime(
+      {
+        mode: "native",
+        auditRequiresAnchoredClosure: () => true,
+        recordAuditUpdateDecision: async () => calls.push("record"),
+        closeAuditCheckpoint: async () => {
+          calls.push("checkpoint");
+          return { status: "unavailable" };
+        },
+      },
+      {
+        decision: "install_requested",
+        mode: "native",
+        version: "v1.2.3",
+      },
+    ),
+    { code: "AUDIT_UPDATE_CHECKPOINT_UNAVAILABLE" },
+  );
+  assert.deepEqual(calls, ["record", "checkpoint"]);
+});
+
+test("native update remains available on an existing install without an external anchor", async () => {
+  const calls = [];
+  const result = await recordUpdateDecisionThroughNativeRuntime(
+    {
+      mode: "native",
+      auditRequiresAnchoredClosure: () => false,
+      recordAuditUpdateDecision: async () => {
+        calls.push("record");
+        return { id: 7 };
+      },
+      closeAuditCheckpoint: async () => {
+        calls.push("checkpoint");
+        return { status: "verified" };
+      },
+    },
+    {
+      decision: "install_requested",
+      mode: "native",
+      version: "v1.2.3",
+    },
+  );
+  assert.deepEqual(calls, ["record"]);
+  assert.deepEqual(result, { auditStatus: "unavailable", recorded: { id: 7 } });
+});
+
+test("explicit restore recovery accepts a checked older or inter-tick chain without lowering the anchor", async (t) => {
+  const userDataDir = await fs.promises.mkdtemp(
+    path.join(os.tmpdir(), "vision-native-audit-"),
+  );
+  t.after(() => fs.promises.rm(userDataDir, { recursive: true, force: true }));
+  const safeStorage = {
+    isEncryptionAvailable: () => true,
+    encryptString: (value) => Buffer.from(value),
+    decryptString: (value) => value.toString(),
+  };
+  const cutover = { dbEditorMaxId: 0, splitMaxId: 0, retagMaxId: 0 };
+  const anchor = createAuditAnchor({
+    userDataDir,
+    safeStorage,
+    witness: fakeWitness(userDataDir),
+    platform: "darwin",
+  });
+  await anchor.initializeFirstCheckpoint(
+    { sequence: 2, hash: "a".repeat(64) },
+    cutover,
+  );
+  let candidate = "older";
+  const runtime = createNativeRuntime({
+    userDataDir,
+    auditBridgeToken: "a".repeat(64),
+    auditSafeStorage: safeStorage,
+    auditWitness: fakeWitness(userDataDir),
+    auditRequest: async (endpoint, payload) => {
+      assert.equal(endpoint, "verify");
+      if (payload.trustedCheckpoint) {
+        return candidate === "older"
+          ? { status: "failed", reason: "rollback" }
+          : {
+              status: "partially_verified",
+              sequence: 3,
+              hash: "b".repeat(64),
+              legacyCutover: cutover,
+            };
+      }
+      return {
+        status: "unavailable",
+        sequence: candidate === "older" ? 1 : 3,
+        hash: candidate === "older" ? "c".repeat(64) : "b".repeat(64),
+        legacyCutover: cutover,
+      };
+    },
+  });
+  await assert.rejects(runtime.assertRestoredAuditHistory(), {
+    code: "RESTORED_AUDIT_INTEGRITY_FAILED",
+  });
+  assert.equal(
+    (await runtime.assertRestoredAuditHistory({ allowUnverifiedAudit: true }))
+      .status,
+    "unavailable",
+  );
+  assert.equal((await anchor.readTrustedCheckpoint()).sequence, 2);
+  candidate = "inter-tick";
+  await assert.rejects(runtime.assertRestoredAuditHistory(), {
+    code: "RESTORED_AUDIT_INTEGRITY_UNAVAILABLE",
+  });
+  assert.equal(
+    (await runtime.assertRestoredAuditHistory({ allowUnverifiedAudit: true }))
+      .status,
+    "unavailable",
+  );
+  assert.equal((await anchor.readTrustedCheckpoint()).sequence, 2);
+});
+
+test("explicit recovery rejects a tampered audit chain", async (t) => {
+  const userDataDir = await fs.promises.mkdtemp(
+    path.join(os.tmpdir(), "vision-native-audit-"),
+  );
+  t.after(() => fs.promises.rm(userDataDir, { recursive: true, force: true }));
+  const safeStorage = {
+    isEncryptionAvailable: () => true,
+    encryptString: (value) => Buffer.from(value),
+    decryptString: (value) => value.toString(),
+  };
+  const runtime = createNativeRuntime({
+    userDataDir,
+    auditBridgeToken: "a".repeat(64),
+    auditSafeStorage: safeStorage,
+    auditWitness: fakeWitness(userDataDir),
+    auditRequest: async () => ({ status: "failed", reason: "head_mismatch" }),
+  });
+  await assert.rejects(
+    runtime.assertRestoredAuditHistory({ allowUnverifiedAudit: true }),
+    {
+      code: "RESTORED_AUDIT_RECOVERY_INVALID",
+    },
   );
 });
 

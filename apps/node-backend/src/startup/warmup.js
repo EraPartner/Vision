@@ -64,11 +64,6 @@ const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 // Terminal import-batch states safe to prune (no in-flight staging work).
 const IMPORT_RETENTION_DAYS = 30;
 
-// db_editor_audit carries full before/after JSONB images per changed row and is
-// never deleted from anywhere — a slow-burn disk-growth sink. Keep a generous
-// window (the table is indexed, so reads stay fast regardless).
-const DB_EDITOR_AUDIT_RETENTION_DAYS = 180;
-
 /**
  * Best-effort retention sweep: drop finished import batches (and their staging
  * rows) older than IMPORT_RETENTION_DAYS so raw CSV staging data isn't retained
@@ -97,30 +92,6 @@ async function pruneOldImportBatches() {
         error: err.message,
       });
     }
-  }
-}
-
-/**
- * Best-effort retention sweep for the admin DB-editor audit log. Same family as
- * the import-staging prune above: full JSONB before/after images accumulate
- * forever otherwise. Age from created_at. Failures logged and swallowed.
- */
-async function pruneOldDbEditorAudit() {
-  try {
-    const result = await query(
-      `DELETE FROM db_editor_audit
-        WHERE created_at < now() - ($1 || ' days')::interval`,
-      [String(DB_EDITOR_AUDIT_RETENTION_DAYS)],
-    );
-    if (result.rowCount > 0) {
-      logger.info(
-        `Pruned ${result.rowCount} old db_editor_audit row(s) (> ${DB_EDITOR_AUDIT_RETENTION_DAYS}d)`,
-      );
-    }
-  } catch (err) {
-    logger.error("Failed to prune old db_editor_audit on startup", {
-      error: err.message,
-    });
   }
 }
 
@@ -365,9 +336,8 @@ export async function runWarmupTasks({ warmupStatus, bootMark }) {
       });
     });
 
-  // Best-effort retention sweeps for unbounded audit/staging tables (self-catching).
+  // Prune only terminal import staging; audit evidence is retained.
   pruneOldImportBatches();
-  pruneOldDbEditorAudit();
 
   const online = await isInternetReachable();
   if (!online) {

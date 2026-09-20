@@ -142,6 +142,19 @@ const electronBackup = {
 };
 contextBridge.exposeInMainWorld("electronBackup", electronBackup);
 
+/** @type {import("./electron-api").ElectronAuditBridge} */
+const electronAudit = {
+  enroll: () => ipcRenderer.invoke("audit:enroll"),
+  read: (options) => ipcRenderer.invoke("audit:read", options),
+  exportSnapshot: () => ipcRenderer.invoke("audit:export"),
+  exportTransfer: (password) =>
+    ipcRenderer.invoke("audit:transfer-export", password),
+  importTransfer: (password) =>
+    ipcRenderer.invoke("audit:transfer-import", password),
+  rotateKey: () => ipcRenderer.invoke("audit:rotate-key"),
+};
+contextBridge.exposeInMainWorld("electronAudit", electronAudit);
+
 /**
  * Expose service-lifecycle controls (currently the opt-in "keep services running
  * on quit" toggle) to the renderer via contextBridge.

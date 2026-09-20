@@ -1,5 +1,23 @@
 "use strict";
 
+const AUDIT_RECOVERY_CODES = new Set([
+  "RESTORED_AUDIT_INTEGRITY_FAILED",
+  "RESTORED_AUDIT_INTEGRITY_UNAVAILABLE",
+]);
+
+async function restoreWithAuditRecovery(restoreSelected, confirmRecovery) {
+  try {
+    return { result: await restoreSelected(false), recovered: false };
+  } catch (error) {
+    if (!AUDIT_RECOVERY_CODES.has(error?.code)) throw error;
+    if (error.auditRecoveryUnsafe || error.rollbackErrors?.length > 0) {
+      throw error;
+    }
+    if (!(await confirmRecovery(error))) return { cancelled: true };
+    return { result: await restoreSelected(true), recovered: true };
+  }
+}
+
 async function rollbackNativeRestore(
   runtime,
   { databaseSwitch, attachmentSwitch },
@@ -29,9 +47,14 @@ async function rollbackNativeRestore(
 async function restoreNativeDatabase(
   runtime,
   sourcePath,
-  { format = "plain", expectedSchemaHead = undefined } = {},
+  {
+    format = "plain",
+    expectedSchemaHead = undefined,
+    allowUnverifiedAudit = false,
+  } = {},
 ) {
   let databaseSwitch;
+  await runtime.pauseAuditClosure?.();
   try {
     databaseSwitch = await runtime.activateRestoredDatabase(sourcePath, {
       format,
@@ -39,6 +62,9 @@ async function restoreNativeDatabase(
     });
     await runtime.start();
     await runtime.waitUntilReady({ detailed: true });
+    if (typeof runtime.assertRestoredAuditHistory === "function") {
+      await runtime.assertRestoredAuditHistory({ allowUnverifiedAudit });
+    }
     await runtime.finalizeDatabaseSwitch(databaseSwitch.switchToken);
     return { databaseSwitch };
   } catch (error) {
@@ -47,17 +73,28 @@ async function restoreNativeDatabase(
       { databaseSwitch },
       { restart: error.code !== "DATABASE_SWITCH_RECOVERY_FAILED" },
     );
-    if (rollbackErrors.length > 0) error.rollbackErrors = rollbackErrors;
+    if (rollbackErrors.length > 0) {
+      error.rollbackErrors = rollbackErrors;
+      error.auditRecoveryUnsafe = true;
+    }
     throw error;
+  } finally {
+    runtime.resumeAuditClosure?.();
   }
 }
 
 async function restoreNativeBundle(
   runtime,
-  { dbSqlPath, attachmentsDir, expectedSchemaHead = undefined },
+  {
+    dbSqlPath,
+    attachmentsDir,
+    expectedSchemaHead = undefined,
+    allowUnverifiedAudit = false,
+  },
 ) {
   let databaseSwitch;
   let attachmentSwitch;
+  await runtime.pauseAuditClosure?.();
   try {
     databaseSwitch = await runtime.activateRestoredDatabase(dbSqlPath, {
       format: "plain",
@@ -70,6 +107,9 @@ async function restoreNativeBundle(
     }
     await runtime.start();
     await runtime.waitUntilReady({ detailed: true });
+    if (typeof runtime.assertRestoredAuditHistory === "function") {
+      await runtime.assertRestoredAuditHistory({ allowUnverifiedAudit });
+    }
     await runtime.finalizeDatabaseSwitch(databaseSwitch.switchToken);
   } catch (error) {
     const rollbackErrors = await rollbackNativeRestore(
@@ -77,8 +117,13 @@ async function restoreNativeBundle(
       { databaseSwitch, attachmentSwitch },
       { restart: error.code !== "DATABASE_SWITCH_RECOVERY_FAILED" },
     );
-    if (rollbackErrors.length > 0) error.rollbackErrors = rollbackErrors;
+    if (rollbackErrors.length > 0) {
+      error.rollbackErrors = rollbackErrors;
+      error.auditRecoveryUnsafe = true;
+    }
     throw error;
+  } finally {
+    runtime.resumeAuditClosure?.();
   }
 
   // Database finalization is the commit point. Removing the retained previous
@@ -96,6 +141,7 @@ async function restoreNativeBundle(
 }
 
 module.exports = {
+  restoreWithAuditRecovery,
   rollbackNativeRestore,
   restoreNativeDatabase,
   restoreNativeBundle,

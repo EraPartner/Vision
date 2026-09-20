@@ -1,10 +1,14 @@
 import os
+import hashlib
+import json
+import re
 from logging.config import fileConfig
 from dotenv import load_dotenv
 
 from alembic import context
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
+from sqlalchemy import text
 
 # Load environment variables from .env.local if present. The native macOS
 # runtime supplies an explicit generated environment and must never let a
@@ -43,6 +47,146 @@ if database_url.startswith("sqlite") and not database_url.startswith("sqlite:///
 # The backend is Node.js; there are no Python SQLAlchemy models to import.
 # Migrations are hand-written SQL, so --autogenerate is not supported.
 target_metadata = None
+
+AUDIT_CHAIN_REVISION = "0117_audit_chain"
+AUDIT_GENESIS_HASH = "0" * 64
+MAX_SAFE_INTEGER = 2**53 - 1
+
+
+def _revision_at_or_after_audit_chain(revision_map, revision_ids):
+    """Follow Alembic's graph, rather than assuming revision names sort."""
+    pending = list(revision_ids)
+    visited = set()
+    while pending:
+        revision_id = pending.pop()
+        if revision_id == AUDIT_CHAIN_REVISION:
+            return True
+        if revision_id in visited:
+            continue
+        visited.add(revision_id)
+        revision = revision_map.get_revision(revision_id)
+        if revision is None:
+            raise RuntimeError(f"Unknown migration revision: {revision_id}")
+        parents = revision.down_revision
+        if isinstance(parents, str):
+            pending.append(parents)
+        elif parents:
+            pending.extend(parents)
+    return False
+
+
+def _append_migration_audit(ctx, step, heads, run_args):
+    """Append after Alembic changes the version row, before its transaction commits.
+
+    The payload intentionally contains only ASCII revision identifiers and
+    strings. JSON's sorted-key encoding then matches canonicalAuditPayload in
+    the Node audit chain; the SHA-256 envelope matches hashAuditEntry v1.
+    """
+    connection = ctx.connection
+    if connection.dialect.name != "postgresql":
+        return
+
+    has_chain = connection.execute(
+        text(
+            "SELECT to_regclass('audit_chain_head') IS NOT NULL "
+            "AND to_regclass('audit_chain_entries') IS NOT NULL"
+        )
+    ).scalar_one()
+    needs_chain = _revision_at_or_after_audit_chain(
+        step.revision_map, step.up_revision_ids
+    )
+    # An empty 0117 downgrade drops the chain itself. A nonempty chain is
+    # rejected inside that revision before this callback can run.
+    removing_chain = (
+        not step.is_upgrade
+        and not step.is_stamp
+        and AUDIT_CHAIN_REVISION in step.up_revision_ids
+    )
+    if not has_chain:
+        if needs_chain and not removing_chain:
+            raise RuntimeError("Audit chain is missing after a chained revision")
+        return
+
+    if any(not revision.isascii() for revision in (*step.up_revision_ids, *heads)):
+        raise ValueError("Audit migration revision IDs must be ASCII")
+    payload = {
+        "stream": "schema_migration",
+        "event": "version_changed" if step.is_stamp else "revision_applied",
+        "direction": "stamp"
+        if step.is_stamp
+        else ("upgrade" if step.is_upgrade else "downgrade"),
+        "revision": step.up_revision_id or "",
+        "heads": sorted(heads),
+    }
+    encoded_payload = json.dumps(
+        payload, sort_keys=True, ensure_ascii=False, separators=(",", ":")
+    )
+    head = (
+        connection.execute(
+            text(
+                "SELECT last_sequence, last_hash FROM audit_chain_head "
+                "WHERE singleton = true FOR UPDATE"
+            )
+        )
+        .mappings()
+        .one()
+    )
+    last_sequence = int(head["last_sequence"])
+    if last_sequence < 0 or last_sequence >= MAX_SAFE_INTEGER:
+        raise OverflowError("Audit chain sequence is outside the safe range")
+    latest = (
+        connection.execute(
+            text(
+                "SELECT sequence, entry_hash FROM audit_chain_entries "
+                "ORDER BY sequence DESC LIMIT 1"
+            )
+        )
+        .mappings()
+        .first()
+    )
+    expected_sequence = int(latest["sequence"]) if latest else 0
+    expected_hash = str(latest["entry_hash"]) if latest else AUDIT_GENESIS_HASH
+    previous_hash = str(head["last_hash"])
+    if not re.fullmatch(r"[0-9a-f]{64}", previous_hash):
+        raise RuntimeError("Audit chain head hash is invalid")
+    if last_sequence != expected_sequence or previous_hash != expected_hash:
+        raise RuntimeError("Audit chain head does not match stored history")
+    sequence = last_sequence + 1
+    envelope = (
+        f'["vision.audit.entry",1,{sequence},"{previous_hash}",{encoded_payload}]'
+    )
+    entry_hash = hashlib.sha256(envelope.encode("utf-8")).hexdigest()
+    connection.execute(
+        text(
+            "INSERT INTO audit_chain_entries "
+            "(sequence, version, previous_hash, entry_hash, payload) "
+            "VALUES (:sequence, 1, :previous_hash, :entry_hash, "
+            "CAST(:payload AS jsonb))"
+        ),
+        {
+            "sequence": sequence,
+            "previous_hash": previous_hash,
+            "entry_hash": entry_hash,
+            "payload": encoded_payload,
+        },
+    )
+    updated = connection.execute(
+        text(
+            "UPDATE audit_chain_head SET last_sequence = :sequence, "
+            "last_hash = :entry_hash, updated_at = now() "
+            "WHERE singleton = true AND last_sequence = :previous_sequence "
+            "AND last_hash = :previous_hash"
+        ),
+        {
+            "sequence": sequence,
+            "entry_hash": entry_hash,
+            "previous_sequence": last_sequence,
+            "previous_hash": previous_hash,
+        },
+    )
+    if updated.rowcount != 1:
+        raise RuntimeError("Audit chain head changed during migration append")
+
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -127,6 +271,7 @@ def run_migrations_online() -> None:
             # not support transactional DDL, so keep the single-transaction
             # behaviour there.
             transaction_per_migration=connection.dialect.name != "sqlite",
+            on_version_apply=_append_migration_audit,
         )
 
         with context.begin_transaction():

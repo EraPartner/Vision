@@ -261,6 +261,7 @@ export const apiClient = {
 
     // Cross-workspace (ADR-098)
     computeRebalance: crossWorkspace.computeRebalance,
+    computeCommitmentAwareCash: crossWorkspace.computeCommitmentAwareCash,
 
     // Shared manual analysis workspace
     getAnalysisCatalog: analysis.getAnalysisCatalog,

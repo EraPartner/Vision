@@ -185,7 +185,10 @@ async function runBundleBackup(destDir, frontendStateJson = null) {
   }
 }
 
-async function runBundleRestore(bundlePath, { passphrase } = {}) {
+async function runBundleRestore(
+  bundlePath,
+  { passphrase, allowUnverifiedAudit = false } = {},
+) {
   if (!bundlePath) throw new Error("No backup file specified");
   if (!fs.existsSync(bundlePath))
     throw new Error(`File not found: ${bundlePath}`);
@@ -226,6 +229,7 @@ async function runBundleRestore(bundlePath, { passphrase } = {}) {
       dbSqlPath,
       attachmentsDir,
       expectedSchemaHead: metadata.schemaHead || undefined,
+      allowUnverifiedAudit,
     });
     return {
       success: true,
@@ -238,7 +242,10 @@ async function runBundleRestore(bundlePath, { passphrase } = {}) {
   }
 }
 
-async function runRestore(sqlFilePath, { passphrase } = {}) {
+async function runRestore(
+  sqlFilePath,
+  { passphrase, allowUnverifiedAudit = false } = {},
+) {
   if (!sqlFilePath) throw new Error("No backup file specified");
   if (!fs.existsSync(sqlFilePath))
     throw new Error(`File not found: ${sqlFilePath}`);
@@ -265,6 +272,7 @@ async function runRestore(sqlFilePath, { passphrase } = {}) {
     await restoreNativeDatabase(nativeRuntime, restoreSource, {
       format: "plain",
       expectedSchemaHead: dumpHead || undefined,
+      allowUnverifiedAudit,
     });
     return { success: true, file: sqlFilePath };
   } finally {

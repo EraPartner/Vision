@@ -35,7 +35,7 @@ test("main, preload, and the shared invoke contract expose the same channels", (
   const registered = matches(main, /registerHandler\(\s*"([^"]+)"/g);
   const invoked = matches(preload, /ipcRenderer\.invoke\("([^"]+)"/g);
 
-  assert.equal(declared.size, 23);
+  assert.equal(declared.size, 29);
   assert.deepEqual(registered, declared);
   assert.deepEqual(invoked, declared);
 });
@@ -56,13 +56,14 @@ test("preload subscriptions and main sends match the shared event contract", () 
   assert.deepEqual(sent, declared);
 });
 
-test("all five context bridges consume a shared interface", () => {
+test("all six context bridges consume a shared interface", () => {
   const interfaces = {
     electronUpdater: "ElectronUpdaterBridge",
     electronBackup: "ElectronBackupBridge",
     electronServices: "ElectronServicesBridge",
     electronAPI: "ElectronApiBridge",
     electronRecovery: "ElectronRecoveryBridge",
+    electronAudit: "ElectronAuditBridge",
   };
   for (const [name, interfaceName] of Object.entries(interfaces)) {
     assert.match(

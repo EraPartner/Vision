@@ -1,6 +1,8 @@
 /** Split lifecycle, validation, projection, and audit orchestration. */
 
+import crypto from "node:crypto";
 import { withTransaction } from "../database/connection.js";
+import { appendAuditEvent } from "../repositories/auditChainRepository.js";
 import {
   computeOwedSummary,
   normalizeMoneyAmount,
@@ -21,6 +23,33 @@ import splitRepository, {
   lockSplitForPayment,
   markSettledIfCovered,
 } from "../repositories/splitRepository.js";
+
+async function writeSplitAudit(input) {
+  const row = await splitRepository.writeAudit(input);
+  if (!row) throw new Error("Split audit insert did not return a row");
+  const auditDigest = crypto
+    .createHash("sha256")
+    .update(
+      JSON.stringify([
+        input.split_id === null ? null : String(input.split_id),
+        input.action,
+        input.actor ?? null,
+        row.payload_text ?? null,
+        row.occurred_at,
+      ]),
+    )
+    .digest("hex");
+  await appendAuditEvent({
+    stream: "split",
+    event: input.action,
+    auditRowId: String(row.id),
+    splitId: input.split_id === null ? null : String(input.split_id),
+    actor: input.actor ?? null,
+    occurred_at: row.occurred_at,
+    auditDigest,
+  });
+  return row;
+}
 
 /**
  * @param {{transaction_id:number, recipient_id:number, amount:number|string, note?:string|null, actor?:string|null}} input
@@ -43,7 +72,7 @@ export async function createSplitAtomic(input) {
       amount: normalizedAmount,
       note,
     });
-    await splitRepository.writeAudit({
+    await writeSplitAudit({
       split_id: split.id,
       action: "create",
       actor,
@@ -85,7 +114,7 @@ export async function createSplitsBatchAtomic({
       prepared,
     );
     for (const split of created) {
-      await splitRepository.writeAudit({
+      await writeSplitAudit({
         split_id: split.id,
         action: "create",
         actor,
@@ -148,7 +177,7 @@ export async function addPayment(input) {
       paid_at: paid_at || toAppDateString(new Date()),
     });
     const autoSettled = await markSettledIfCovered(client, split_id);
-    await splitRepository.writeAudit({
+    await writeSplitAudit({
       split_id,
       action: "payment",
       actor,
@@ -169,7 +198,7 @@ export async function settleSplit(splitId, actor = null) {
   return withTransaction(async (client) => {
     const split = await splitRepository.settleSplit(splitId, client);
     if (!split) return null;
-    await splitRepository.writeAudit({
+    await writeSplitAudit({
       split_id: splitId,
       action: "settle",
       actor,
@@ -187,7 +216,7 @@ export async function settleAllByRecipient(recipientId, actor = null) {
       client,
     );
     if (result.settled_count > 0)
-      await splitRepository.writeAudit({
+      await writeSplitAudit({
         split_id: null,
         action: "settle_all",
         actor,
@@ -206,7 +235,7 @@ export async function deleteSplit(splitId, actor = null) {
     const split = await splitRepository.getSplitById(splitId, client);
     if (!split) return false;
     if (!(await splitRepository.deleteSplit(splitId, client))) return false;
-    await splitRepository.writeAudit({
+    await writeSplitAudit({
       split_id: null,
       action: "delete",
       actor,

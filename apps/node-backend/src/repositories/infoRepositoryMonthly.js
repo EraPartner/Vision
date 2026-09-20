@@ -239,10 +239,12 @@ export async function getMonthlyFinancialSummary(
   const params = excl.params;
   const exclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : "";
 
-  // The app-date anchor rides after the exclusion params; `todayParam` is its
-  // placeholder in the SQL below.
+  // Both explicit bounds replace the default month window, so the app-date
+  // anchor must not be bound in that case: PostgreSQL cannot type an unused
+  // prepared-statement parameter (the Statistics range hit this as $1).
+  const needsTodayAnchor = allTime || !startDate || !endDate;
   const todayParam = `$${params.length + 1}`;
-  params.push(todayYmd);
+  if (needsTodayAnchor) params.push(todayYmd);
 
   let rangeStart = allTime
     ? `COALESCE((SELECT MIN(date_trunc('month', date)) FROM transactions WHERE is_active = true), date_trunc('month', ${todayParam}::date))`

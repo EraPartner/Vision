@@ -39,6 +39,11 @@ vi.mock("../src/repositories/splitRepository.js", () => ({
   default: mockRepository,
   ...mockPrimitives,
 }));
+vi.mock("../src/repositories/auditChainRepository.js", () => ({
+  appendAuditEvent: vi.fn(),
+}));
+
+import { appendAuditEvent } from "../src/repositories/auditChainRepository.js";
 
 import {
   addPayment,
@@ -49,6 +54,11 @@ import {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockRepository.writeAudit.mockResolvedValue({
+    id: "42",
+    payload_text: '{"test":true}',
+    occurred_at: "2026-09-20T00:00:00.123456Z",
+  });
 });
 
 describe("splitService transaction orchestration", () => {
@@ -83,6 +93,14 @@ describe("splitService transaction orchestration", () => {
         client: mockClient,
       }),
     );
+    expect(appendAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stream: "split",
+        event: "create",
+        auditRowId: "42",
+        splitId: "9",
+      }),
+    );
   });
 
   it("rejects an overpayment before insert or audit", async () => {
@@ -98,6 +116,7 @@ describe("splitService transaction orchestration", () => {
     );
     expect(mockPrimitives.insertPaymentInTransaction).not.toHaveBeenCalled();
     expect(mockRepository.writeAudit).not.toHaveBeenCalled();
+    expect(appendAuditEvent).not.toHaveBeenCalled();
   });
 
   it("settles and audits with the same transaction client", async () => {

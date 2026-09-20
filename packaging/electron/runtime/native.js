@@ -8,6 +8,8 @@ const os = require("node:os");
 const path = require("node:path");
 const { execFile, spawn } = require("node:child_process");
 const { DATABASE_STATS_SQL, parseDatabaseStats } = require("./database-stats");
+const { createAuditAnchor, AuditAnchorError } = require("../audit-anchor");
+const { createKeychainWitness } = require("../audit-keychain");
 
 const POSTGRES_MAJOR = 18;
 const POSTGRES_MINOR = 6;
@@ -83,6 +85,24 @@ function safeChildEnv(overrides = {}) {
     .filter(Boolean)
     .join(":");
   return env;
+}
+
+async function recordUpdateDecisionThroughNativeRuntime(runtime, payload) {
+  if (runtime?.mode === "native") {
+    const recorded = await runtime.recordAuditUpdateDecision(payload);
+    if (!(await runtime.auditRequiresAnchoredClosure())) {
+      return { auditStatus: "unavailable", recorded };
+    }
+    const closure = await runtime.closeAuditCheckpoint();
+    if (closure?.status !== "verified") {
+      const error = new Error("Native update audit checkpoint is unavailable");
+      error.code = "AUDIT_UPDATE_CHECKPOINT_UNAVAILABLE";
+      throw error;
+    }
+    return recorded;
+  }
+  if (payload?.mode === "dev") return;
+  throw new Error("Native update audit bridge is unavailable");
 }
 
 function managedPostgresChildEnv() {
@@ -497,6 +517,8 @@ function buildNativeBackendEnv({
   runtimeRoot,
   repoRoot,
   tools,
+  auditBridgeToken,
+  syntheticOffline,
 }) {
   const resolvedRuntimeRoot = runtimeRoot || repoRoot;
   if (!resolvedRuntimeRoot) {
@@ -504,6 +526,8 @@ function buildNativeBackendEnv({
   }
   return safeChildEnv({
     ...runtimeEnv,
+    OPENAI_API_ENABLED: "false",
+    OPENAI_API_KEY: undefined,
     SERVER_HOST: LOOPBACK_HOST,
     PORT: String(port),
     NODE_ENV: "production",
@@ -518,6 +542,8 @@ function buildNativeBackendEnv({
     PUPPETEER_EXECUTABLE_PATH: tools.chrome,
     OLLAMA_URL: "http://127.0.0.1:11434",
     ADMIN_ALLOW_TOKENLESS_NONLOOPBACK: "false",
+    VISION_AUDIT_BRIDGE_TOKEN: auditBridgeToken,
+    VISION_SYNTHETIC_SMOKE_OFFLINE: syntheticOffline ? "1" : undefined,
   });
 }
 
@@ -974,6 +1000,28 @@ function createNativeRuntime(options) {
     typeof options.appPort === "function"
       ? options.appPort
       : () => Number(options.appPort || DEFAULT_APP_PORT);
+  const auditBridgeToken = options.auditBridgeToken;
+  if (
+    auditBridgeToken !== undefined &&
+    !/^[0-9a-f]{64}$/.test(auditBridgeToken)
+  ) {
+    throw new TypeError("Invalid native audit bridge token");
+  }
+  const auditAnchor =
+    options.auditSafeStorage &&
+    (options.auditKeychainHelper || options.auditWitness)
+      ? createAuditAnchor({
+          userDataDir,
+          safeStorage: options.auditSafeStorage,
+          witness:
+            options.auditWitness ||
+            createKeychainWitness({
+              executable: options.auditKeychainHelper,
+              runtimeId,
+            }),
+        })
+      : undefined;
+  const sendAuditRequest = options.auditRequest || auditRequest;
   const nativeRoot = path.join(userDataDir, "native", runtimeId);
   const paths = Object.freeze({
     nativeRoot,
@@ -992,6 +1040,17 @@ function createNativeRuntime(options) {
   let tools;
   let child;
   let postgresChild;
+  let newClusterCreatedThisLaunch = false;
+  let freshAuditReceiptId;
+  let auditSessionEstablished = false;
+  let auditLiveClosureEnabled = false;
+  let auditAnchorDetectedThisLaunch = false;
+  let auditEverTrustedThisLaunch = false;
+  let auditCheckpointMetadataSyncedThisLaunch = false;
+  let auditClosurePaused = false;
+  let auditClosurePromise = Promise.resolve();
+  let lastAuditRetentionAttempt = 0;
+  let auditRetentionPromise;
 
   async function ensureLayout() {
     for (const dir of [
@@ -1212,6 +1271,7 @@ function createNativeRuntime(options) {
       await ensureManagedPostgresConfig(staging);
       await fs.promises.chmod(staging, 0o700);
       await fs.promises.rename(staging, paths.postgresData);
+      newClusterCreatedThisLaunch = true;
       return {
         status: "initialized",
         dataDirectory: paths.postgresData,
@@ -1831,20 +1891,27 @@ function createNativeRuntime(options) {
         error.code = "BACKEND_PID_OWNERSHIP_MISMATCH";
         throw error;
       }
-      try {
-        await health();
-        return {
-          status: "already-running",
-          pid: existing.pid,
-          port: getAppPort(),
-        };
-      } catch {
+      const healthy = await health().then(
+        () => true,
+        () => false,
+      );
+      if (!healthy) {
         const error = new Error(
           "A recorded Vision backend process exists but is not healthy; stop it before restart.",
         );
         error.code = "BACKEND_STALE_PID";
         throw error;
       }
+      if (!auditBridgeToken) {
+        return {
+          status: "already-running",
+          pid: existing.pid,
+          port: getAppPort(),
+        };
+      }
+      // A backend kept alive across app launches has the previous launch's
+      // private token. Restart it before any audit verification request.
+      await stopBackend();
     }
     await fs.promises.unlink(paths.pid).catch(() => {});
 
@@ -1864,6 +1931,8 @@ function createNativeRuntime(options) {
       runtimeRoot,
       repoRoot,
       tools,
+      auditBridgeToken,
+      syntheticOffline: options.syntheticOffline === true,
     });
     const logFd = fs.openSync(paths.backendLog, "a", 0o600);
     child = spawnProcess(command.bin, validateArgs(command.args), {
@@ -1893,6 +1962,554 @@ function createNativeRuntime(options) {
       port,
       database: config.database,
     };
+  }
+
+  function auditRequest(endpoint, payload) {
+    if (!auditBridgeToken) {
+      const error = new Error("Native audit bridge is not configured");
+      error.code = "AUDIT_BRIDGE_UNAVAILABLE";
+      throw error;
+    }
+    const data = JSON.stringify(payload);
+    const maxResponseBytes = endpoint === "read" ? 4 * 1024 * 1024 : 16_384;
+    return new Promise((resolve, reject) => {
+      const request = http.request(
+        {
+          hostname: LOOPBACK_HOST,
+          port: getAppPort(),
+          path: `/api/internal/audit/${endpoint}`,
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${auditBridgeToken}`,
+            "Content-Type": "application/json",
+            "Content-Length": Buffer.byteLength(data),
+          },
+          timeout: 10_000,
+        },
+        (response) => {
+          let body = "";
+          let responseBytes = 0;
+          response.on("data", (chunk) => {
+            responseBytes += chunk.length;
+            if (responseBytes > maxResponseBytes) {
+              request.destroy(new Error("Audit bridge response is too large"));
+              return;
+            }
+            body += chunk;
+          });
+          response.on("end", () => {
+            try {
+              const parsed = JSON.parse(body);
+              if (
+                response.statusCode !== 200 ||
+                parsed?.ok !== true ||
+                !parsed.data
+              ) {
+                throw new Error("Audit bridge rejected request");
+              }
+              resolve(parsed.data);
+            } catch (error) {
+              reject(error);
+            }
+          });
+        },
+      );
+      request.on("timeout", () =>
+        request.destroy(new Error("Audit bridge timed out")),
+      );
+      request.on("error", reject);
+      request.end(data);
+    });
+  }
+
+  async function recordAuditUpdateDecision(payload) {
+    return sendAuditRequest("update-decision", payload);
+  }
+
+  function checkpointBridgePayload(metadata) {
+    const { sequence, headHash, anchorKind, receiptId, receiptHash } = metadata;
+    return { sequence, headHash, anchorKind, receiptId, receiptHash };
+  }
+
+  function trustedBridgePayload(trusted) {
+    return {
+      sequence: trusted.sequence,
+      hash: trusted.hash,
+      ...(trusted.retention ? { retention: trusted.retention } : {}),
+    };
+  }
+
+  async function readVerifiedAuditEntries({
+    afterSequence = 0,
+    limit = 100,
+  } = {}) {
+    if (
+      !Number.isSafeInteger(afterSequence) ||
+      afterSequence < 0 ||
+      !Number.isSafeInteger(limit) ||
+      limit < 1 ||
+      limit > 500
+    ) {
+      throw new RangeError("Invalid audit read page");
+    }
+    const unavailable = (status, reason) => ({
+      verification: { status, reason },
+      entries: [],
+      hasMore: false,
+    });
+    if (!auditBridgeToken || !auditAnchor) {
+      return unavailable("unavailable", "bridge_or_anchor_unavailable");
+    }
+    let trusted;
+    try {
+      trusted = await auditAnchor.readTrustedCheckpoint();
+    } catch (error) {
+      if (error instanceof AuditAnchorError && error.code === "uninitialized") {
+        return unavailable("unavailable", "no_trusted_anchor");
+      }
+      return unavailable("failed", "anchor_invalid");
+    }
+    const result = await sendAuditRequest("read", {
+      trustedCheckpoint: trustedBridgePayload(trusted),
+      afterSequence,
+      limit,
+    });
+    const verification = result?.verification;
+    if (
+      !verification ||
+      !["verified", "partially_verified"].includes(verification.status) ||
+      verification.anchoredThrough !== trusted.sequence ||
+      verification.retentionThrough !== trusted.retention?.through ||
+      ["dbEditorMaxId", "splitMaxId", "retagMaxId"].some(
+        (field) =>
+          verification.legacyCutover?.[field] !== trusted.legacyCutover[field],
+      )
+    ) {
+      return unavailable("failed", "audit_read_verification_failed");
+    }
+    if (
+      !Array.isArray(result.entries) ||
+      result.entries.length > limit ||
+      typeof result.hasMore !== "boolean" ||
+      result.entries.some(
+        (entry) =>
+          !Number.isSafeInteger(entry.sequence) ||
+          entry.sequence <=
+            Math.max(afterSequence, trusted.retention?.through ?? 0) ||
+          entry.sequence > verification.sequence ||
+          entry.anchorStatus !==
+            (entry.sequence <= trusted.sequence
+              ? "anchored"
+              : "pending_anchor"),
+      )
+    ) {
+      return unavailable("failed", "invalid_audit_read_response");
+    }
+    return {
+      ...result,
+      verification: {
+        ...verification,
+        ...(trusted.metadata.enrollmentSequence !== undefined
+          ? { enrollmentSequence: trusted.metadata.enrollmentSequence }
+          : {}),
+      },
+    };
+  }
+
+  async function verifyAuditHistory({
+    forRestore = false,
+    establishSession = false,
+  } = {}) {
+    const establishing = establishSession && !auditSessionEstablished;
+    const finish = (result) => {
+      if (establishing) auditSessionEstablished = true;
+      return result;
+    };
+    if (!auditBridgeToken || !auditAnchor) {
+      return finish({
+        status: "unavailable",
+        reason: "bridge_or_anchor_unavailable",
+      });
+    }
+    let trusted;
+    try {
+      trusted = await auditAnchor.readTrustedCheckpoint();
+      auditAnchorDetectedThisLaunch = true;
+    } catch (error) {
+      if (
+        !(error instanceof AuditAnchorError) ||
+        error.code !== "uninitialized"
+      ) {
+        auditAnchorDetectedThisLaunch = true;
+        return finish({ status: "failed", reason: "anchor_invalid" });
+      }
+    }
+    const result = await sendAuditRequest(
+      "verify",
+      trusted
+        ? {
+            trustedCheckpoint: {
+              ...trustedBridgePayload(trusted),
+            },
+          }
+        : {},
+    );
+    if (trusted && result.status === "unavailable") {
+      return finish({
+        status: "failed",
+        reason: "anchored_history_unavailable",
+      });
+    }
+    if (result.status === "failed") return finish(result);
+    if (
+      trusted &&
+      ["dbEditorMaxId", "splitMaxId", "retagMaxId"].some(
+        (field) =>
+          !Number.isSafeInteger(result.legacyCutover?.[field]) ||
+          result.legacyCutover[field] !== trusted.legacyCutover[field],
+      )
+    ) {
+      return finish({ status: "failed", reason: "legacy_cutover_changed" });
+    }
+    if (!trusted) {
+      if (
+        forRestore ||
+        !newClusterCreatedThisLaunch ||
+        result.status !== "unavailable" ||
+        !Number.isSafeInteger(result.sequence) ||
+        result.sequence < 0 ||
+        !/^[0-9a-f]{64}$/.test(result.hash) ||
+        !result.legacyUnverified ||
+        Object.values(result.legacyUnverified).some((count) => count !== "0")
+      ) {
+        return finish({ status: "unavailable", reason: "no_trusted_anchor" });
+      }
+      let metadata;
+      try {
+        metadata = await auditAnchor.initializeFirstCheckpoint(
+          { sequence: result.sequence, hash: result.hash },
+          result.legacyCutover,
+        );
+      } catch (error) {
+        if (error instanceof AuditAnchorError) {
+          return finish({ status: "unavailable", reason: error.code });
+        }
+        throw error;
+      }
+      await sendAuditRequest("checkpoint", checkpointBridgePayload(metadata));
+      auditCheckpointMetadataSyncedThisLaunch = true;
+      auditAnchorDetectedThisLaunch = true;
+      auditEverTrustedThisLaunch = true;
+      freshAuditReceiptId = metadata.receiptId;
+      if (establishing) auditLiveClosureEnabled = true;
+      return finish({
+        status: "verified",
+        sequence: result.sequence,
+        hash: result.hash,
+      });
+    }
+    if (!["verified", "partially_verified"].includes(result.status)) {
+      return finish({
+        status: "failed",
+        reason: "unexpected_verification_status",
+      });
+    }
+    if (
+      establishing &&
+      !forRestore &&
+      !auditCheckpointMetadataSyncedThisLaunch
+    ) {
+      try {
+        await sendAuditRequest(
+          "checkpoint",
+          checkpointBridgePayload(trusted.metadata),
+        );
+        auditCheckpointMetadataSyncedThisLaunch = true;
+      } catch {
+        return finish({
+          status: "failed",
+          reason: "checkpoint_metadata_unavailable",
+        });
+      }
+    }
+    // A valid prefix does not make the unanchored tail independently trusted.
+    // Never promote it to the external anchor during a later startup or restore.
+    if (establishing && result.status === "verified") {
+      auditLiveClosureEnabled = true;
+      auditEverTrustedThisLaunch = true;
+    }
+    return finish(result);
+  }
+
+  async function enrollExistingAuditHistory() {
+    if (!auditBridgeToken || !auditAnchor) {
+      return { status: "unavailable", reason: "bridge_or_anchor_unavailable" };
+    }
+    try {
+      await auditAnchor.readTrustedCheckpoint();
+      return { status: "unavailable", reason: "already_enrolled" };
+    } catch (error) {
+      if (
+        !(error instanceof AuditAnchorError) ||
+        error.code !== "uninitialized"
+      ) {
+        return { status: "failed", reason: "anchor_invalid" };
+      }
+    }
+    // The operator explicitly accepts this internally consistent history as
+    // the starting point. We cannot attest what happened before this moment.
+    const result = await sendAuditRequest("verify", {});
+    if (
+      result?.status !== "unavailable" ||
+      !Number.isSafeInteger(result.sequence) ||
+      result.sequence < 0 ||
+      !/^[0-9a-f]{64}$/.test(result.hash) ||
+      !result.legacyCutover
+    ) {
+      return { status: "failed", reason: "history_invalid" };
+    }
+    let metadata;
+    try {
+      metadata = await auditAnchor.initializeFirstCheckpoint(
+        { sequence: result.sequence, hash: result.hash },
+        result.legacyCutover,
+        { enrollment: true },
+      );
+      await sendAuditRequest("checkpoint", checkpointBridgePayload(metadata));
+      auditCheckpointMetadataSyncedThisLaunch = true;
+    } catch {
+      return { status: "failed", reason: "enrollment_incomplete" };
+    }
+    auditAnchorDetectedThisLaunch = true;
+    const verified = await verifyAuditHistory({ establishSession: true });
+    if (!["verified", "partially_verified"].includes(verified.status)) {
+      return { status: "failed", reason: "enrollment_verification_failed" };
+    }
+    auditLiveClosureEnabled = true;
+    auditEverTrustedThisLaunch = true;
+    return {
+      status: verified.status,
+      enrollmentSequence: metadata.enrollmentSequence,
+    };
+  }
+
+  async function exportProtectedAuditTransfer(password) {
+    if (!auditAnchor) throw new AuditAnchorError("uninitialized");
+    const verified = await verifyAuditHistory();
+    if (!["verified", "partially_verified"].includes(verified.status)) {
+      throw new AuditAnchorError("history_unverified");
+    }
+    if (verified.status === "partially_verified") {
+      const closed = await closeAuditCheckpoint();
+      if (closed.status !== "verified")
+        throw new AuditAnchorError("history_unverified");
+    }
+    return auditAnchor.exportProtectedTransfer(password);
+  }
+
+  async function importProtectedAuditTransfer(contents, password) {
+    if (!auditAnchor || !newClusterCreatedThisLaunch || !freshAuditReceiptId) {
+      throw new AuditAnchorError("transfer_target_not_fresh");
+    }
+    await pauseAuditClosure();
+    try {
+      const current = await auditAnchor.readTrustedCheckpoint();
+      if (
+        current.metadata.receiptId !== freshAuditReceiptId ||
+        (await verifyAuditHistory()).status !== "verified"
+      ) {
+        throw new AuditAnchorError("transfer_target_not_fresh");
+      }
+      const metadata = await auditAnchor.importProtectedTransfer(
+        contents,
+        password,
+        {
+          expectedCurrent: { sequence: current.sequence, hash: current.hash },
+        },
+      );
+      freshAuditReceiptId = undefined;
+      endAuditSession();
+      auditCheckpointMetadataSyncedThisLaunch = false;
+      return { sequence: metadata.sequence, hash: metadata.headHash };
+    } finally {
+      resumeAuditClosure();
+    }
+  }
+
+  async function rotateAuditKey() {
+    if (!auditAnchor) throw new AuditAnchorError("uninitialized");
+    const verified = await verifyAuditHistory();
+    if (!["verified", "partially_verified"].includes(verified.status)) {
+      throw new AuditAnchorError("history_unverified");
+    }
+    if (verified.status === "partially_verified") {
+      const closed = await closeAuditCheckpoint();
+      if (closed.status !== "verified")
+        throw new AuditAnchorError("history_unverified");
+    }
+    const metadata = await auditAnchor.rotateKey();
+    freshAuditReceiptId = undefined;
+    auditCheckpointMetadataSyncedThisLaunch = false;
+    await sendAuditRequest("checkpoint", checkpointBridgePayload(metadata));
+    auditCheckpointMetadataSyncedThisLaunch = true;
+    return { sequence: metadata.sequence };
+  }
+
+  async function runAuditRetentionIfDue() {
+    if (!auditAnchor || !auditBridgeToken || !auditLiveClosureEnabled) {
+      return { status: "unavailable" };
+    }
+    if (auditRetentionPromise) return auditRetentionPromise;
+    if (Date.now() - lastAuditRetentionAttempt < 24 * 60 * 60 * 1000) {
+      return { status: "not_due" };
+    }
+    lastAuditRetentionAttempt = Date.now();
+    auditRetentionPromise = (async () => {
+      let trusted = await auditAnchor.readTrustedCheckpoint();
+      if (trusted.retention) {
+        await sendAuditRequest("retention-prune", {
+          trustedCheckpoint: trustedBridgePayload(trusted),
+        });
+      }
+      const plan = await sendAuditRequest("retention-plan", {
+        trustedCheckpoint: trustedBridgePayload(trusted),
+      });
+      if (!plan?.eligible) return { status: "nothing_due" };
+      const metadata = await auditAnchor.persistRetentionBoundary(plan);
+      auditCheckpointMetadataSyncedThisLaunch = false;
+      await sendAuditRequest("checkpoint", checkpointBridgePayload(metadata));
+      auditCheckpointMetadataSyncedThisLaunch = true;
+      trusted = await auditAnchor.readTrustedCheckpoint();
+      const pruned = await sendAuditRequest("retention-prune", {
+        trustedCheckpoint: trustedBridgePayload(trusted),
+      });
+      return { status: "pruned", removed: pruned.removed };
+    })();
+    try {
+      return await auditRetentionPromise;
+    } catch (error) {
+      lastAuditRetentionAttempt =
+        Date.now() - 24 * 60 * 60 * 1000 + 5 * 60 * 1000;
+      throw error;
+    } finally {
+      auditRetentionPromise = undefined;
+    }
+  }
+
+  function auditClosureEnabled() {
+    return auditLiveClosureEnabled;
+  }
+
+  async function auditRequiresAnchoredClosure() {
+    if (auditAnchorDetectedThisLaunch || auditEverTrustedThisLaunch)
+      return true;
+    if (!auditAnchor) return false;
+    try {
+      await auditAnchor.readTrustedCheckpoint();
+      auditAnchorDetectedThisLaunch = true;
+      return true;
+    } catch (error) {
+      if (error instanceof AuditAnchorError && error.code === "uninitialized") {
+        return false;
+      }
+      auditAnchorDetectedThisLaunch = true;
+      return true;
+    }
+  }
+
+  function auditSessionPending() {
+    return !auditSessionEstablished;
+  }
+
+  function endAuditSession() {
+    auditLiveClosureEnabled = false;
+  }
+
+  async function pauseAuditClosure() {
+    auditClosurePaused = true;
+    await auditClosurePromise;
+  }
+
+  function resumeAuditClosure() {
+    auditClosurePaused = false;
+  }
+
+  function closeAuditCheckpoint() {
+    const closure = auditClosurePromise.then(async () => {
+      if (!auditLiveClosureEnabled || auditClosurePaused) {
+        return { status: "unavailable", reason: "live_closure_not_active" };
+      }
+      try {
+        const result = await verifyAuditHistory();
+        if (result.status === "verified") return result;
+        if (result.status !== "partially_verified") {
+          auditLiveClosureEnabled = false;
+          return result;
+        }
+        const metadata = await auditAnchor.persistCheckpoint({
+          sequence: result.sequence,
+          hash: result.hash,
+        });
+        await sendAuditRequest("checkpoint", checkpointBridgePayload(metadata));
+        auditCheckpointMetadataSyncedThisLaunch = true;
+        return { ...result, status: "verified" };
+      } catch (error) {
+        auditLiveClosureEnabled = false;
+        throw error;
+      }
+    });
+    auditClosurePromise = closure.catch(() => {});
+    return closure;
+  }
+
+  async function assertRestoredAuditHistory({
+    allowUnverifiedAudit = false,
+  } = {}) {
+    if (allowUnverifiedAudit) {
+      // Explicit recovery verifies the restored chain independently. An older
+      // backup cannot contain the current trusted checkpoint, so it must not
+      // be enrolled or used to lower the external receipt.
+      const candidate = await sendAuditRequest("verify", {});
+      if (
+        candidate.status !== "unavailable" ||
+        !Number.isSafeInteger(candidate.sequence) ||
+        candidate.sequence < 0 ||
+        !/^[0-9a-f]{64}$/.test(candidate.hash)
+      ) {
+        const error = new Error("Restored database audit chain is invalid");
+        error.code = "RESTORED_AUDIT_RECOVERY_INVALID";
+        throw error;
+      }
+      endAuditSession();
+      return { status: "unavailable", reason: "explicit_recovery" };
+    }
+    let result;
+    try {
+      result = await verifyAuditHistory({ forRestore: true });
+    } catch {
+      const error = new Error(
+        "Restored database audit verification is unavailable",
+      );
+      error.code = "RESTORED_AUDIT_INTEGRITY_UNAVAILABLE";
+      error.auditStatus = "unavailable";
+      error.auditReason = "bridge_unavailable";
+      throw error;
+    }
+    if (result.status !== "verified") {
+      const error = new Error(
+        result.status === "failed"
+          ? "Restored database failed the trusted audit integrity check"
+          : "Restored database cannot be verified against the trusted audit checkpoint",
+      );
+      error.code =
+        result.status === "failed"
+          ? "RESTORED_AUDIT_INTEGRITY_FAILED"
+          : "RESTORED_AUDIT_INTEGRITY_UNAVAILABLE";
+      error.auditStatus = result.status;
+      error.auditReason = result.reason;
+      throw error;
+    }
+    return result;
   }
 
   async function stopBackend({ forceAfterMs = 10_000 } = {}) {
@@ -2573,6 +3190,22 @@ function createNativeRuntime(options) {
     readState,
     writeState,
     start,
+    verifyAuditHistory,
+    enrollExistingAuditHistory,
+    exportProtectedAuditTransfer,
+    importProtectedAuditTransfer,
+    rotateAuditKey,
+    runAuditRetentionIfDue,
+    readVerifiedAuditEntries,
+    recordAuditUpdateDecision,
+    assertRestoredAuditHistory,
+    auditClosureEnabled,
+    auditRequiresAnchoredClosure,
+    auditSessionPending,
+    endAuditSession,
+    closeAuditCheckpoint,
+    pauseAuditClosure,
+    resumeAuditClosure,
     stop,
     stopPostgres,
     restart,
@@ -2605,6 +3238,7 @@ module.exports = {
   REQUIRED_POSTGRES_EXTENSIONS,
   NATIVE_APPLICATION_ENV_KEYS,
   safeChildEnv,
+  recordUpdateDecisionThroughNativeRuntime,
   managedPostgresChildEnv,
   validateArgs,
   defaultRunFile,

@@ -12,6 +12,9 @@
   "files": [
     "main.js",
     "badge-image.js",
+    "audit-anchor.js",
+    "audit-keychain.js",
+    "audit-viewer.js",
     "runtime/**/*",
     "updater.js",
     "native-update-installer.js",

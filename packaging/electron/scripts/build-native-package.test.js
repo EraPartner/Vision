@@ -38,6 +38,14 @@ test("native package resources use the prepared payload without path strings", (
     packageConfig(runtimeRoot).afterPack,
     path.join(__dirname, "finalize-native-package.js"),
   );
+  assert.deepEqual(
+    packageConfig(runtimeRoot, { auditHelper: "/tmp/audit-keychain" })
+      .extraResources,
+    [
+      { from: runtimeRoot, to: "native-runtime" },
+      { from: "/tmp/audit-keychain", to: "audit-keychain" },
+    ],
+  );
 });
 
 test("Demo packages reuse the native payload and add only isolated seed resources", async () => {
@@ -76,6 +84,8 @@ test("Demo packages reuse the native payload and add only isolated seed resource
 test("native package excludes test data, source maps, and foreign Bare prebuilds", async () => {
   const effective = await getConfig(path.resolve(__dirname, ".."));
   const files = effective.files[0].filter;
+  assert.ok(files.includes("audit-viewer.js"));
+  assert.ok(files.includes("audit-keychain.js"));
   assert.ok(files.includes("runtime/**/*"));
   assert.ok(files.includes("backup/**/*"));
   assert.ok(files.includes("!runtime/**/*.test.js"));

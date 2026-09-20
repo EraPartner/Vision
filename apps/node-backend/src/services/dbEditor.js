@@ -32,6 +32,7 @@ import {
   NotFoundError,
 } from "../middleware/errorHandler.js";
 import { lockAccountFundingGraph } from "../lib/accountFundingGraphLock.js";
+import { appendAuditEvent } from "../repositories/auditChainRepository.js";
 
 /** @typedef {import('../types/rows.js').QueryRunner} QueryRunner */
 
@@ -104,6 +105,18 @@ const DEFAULT_PAGE_SIZE = 100;
 const MAX_PAGE_SIZE = 500;
 const READ_TIMEOUT_MS = 15_000;
 const WRITE_TIMEOUT_MS = 30_000;
+
+// The editor bypasses domain services and has no authenticated external audit
+// receipt. Keep audit history out of its generic read and write paths until a
+// dedicated viewer verifies the exact history before showing it.
+const PROTECTED_AUDIT_TABLES = new Set([
+  "audit_chain_entries",
+  "audit_chain_head",
+  "audit_chain_checkpoints",
+  "db_editor_audit",
+  "split_audit",
+  "portfolio_retag_audit",
+]);
 
 // Base tables whose rows feed the dashboard materialized views. Editing any of
 // these leaves the views stale until refreshed (see materializedViewService).
@@ -231,6 +244,9 @@ async function resolveEditableTable(table) {
  * @returns {Promise<TableMeta>}
  */
 export async function getTableMeta(table) {
+  if (PROTECTED_AUDIT_TABLES.has(table)) {
+    throw new ForbiddenError("Audit tables require verified audit history");
+  }
   // `safeTable` is the catalog's string, not the caller's — see resolveIdent.
   // Everything downstream (meta.table, and through it every quoteIdent call in
   // this module) is built from it.
@@ -807,9 +823,12 @@ async function applyOne(client, table, change, ctx) {
  */
 async function writeAuditRows(client, audit) {
   for (const a of audit) {
-    await client.query(
+    const result = await client.query(
       `INSERT INTO db_editor_audit (table_name, op, pk_json, before_json, after_json, statement)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, pk_json::text AS pk_text, before_json::text AS before_text,
+                 after_json::text AS after_text, statement,
+                 to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS occurred_at`,
       [
         a.table,
         a.op,
@@ -818,6 +837,33 @@ async function writeAuditRows(client, audit) {
         a.after ?? undefined,
         a.statement,
       ],
+    );
+    const row = result.rows[0];
+    if (!row) throw new Error("DB editor audit insert did not return a row");
+    const auditDigest = crypto
+      .createHash("sha256")
+      .update(
+        JSON.stringify([
+          a.table,
+          a.op,
+          row.pk_text,
+          row.before_text,
+          row.after_text,
+          row.statement,
+          row.occurred_at,
+        ]),
+      )
+      .digest("hex");
+    await appendAuditEvent(
+      {
+        stream: "db_editor",
+        event: a.op,
+        auditRowId: String(row.id),
+        table: a.table,
+        occurred_at: row.occurred_at,
+        auditDigest,
+      },
+      client,
     );
   }
 }
@@ -832,6 +878,9 @@ async function writeAuditRows(client, audit) {
  * @param {{dryRun?:boolean}} [opts]
  */
 export async function applyMutations(table, changes, { dryRun = false } = {}) {
+  if (PROTECTED_AUDIT_TABLES.has(table)) {
+    throw new ForbiddenError("Audit tables cannot be edited");
+  }
   const { table: safeTable, columns, primaryKey } = await getTableMeta(table);
   if (!primaryKey.length) {
     throw new ValidationError(

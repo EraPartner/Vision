@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { withTransaction } from "../../database/connection.js";
 import repository from "../../repositories/portfolioBrokerRetagRepository.js";
+import { appendAuditEvent } from "../../repositories/auditChainRepository.js";
 import {
   buildInvestmentSummaryCorePartitioned,
   partitionOversellDeficits,
@@ -342,6 +343,20 @@ export async function retagPortfolioTransactions(request) {
       })),
       selected_count: transactionIds.length,
       changed_count: changedIds.length,
+    });
+    await appendAuditEvent({
+      stream: "portfolio_retag",
+      event: "receipt_created",
+      receipt_id: String(audit.id),
+      occurred_at: audit.occurred_at,
+      idempotency_key: audit.idempotency_key,
+      request_fingerprint: audit.request_fingerprint,
+      from_account_id: audit.from_account_id,
+      to_account_id: audit.to_account_id,
+      transaction_ids: audit.transaction_ids,
+      previous_assignments: audit.previous_assignments,
+      selected_count: audit.selected_count,
+      changed_count: audit.changed_count,
     });
     return mapReceipt(audit, false);
   });

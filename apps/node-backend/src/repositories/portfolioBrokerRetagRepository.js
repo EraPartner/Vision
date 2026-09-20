@@ -129,7 +129,8 @@ export async function insertAudit(receipt) {
      VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8)
      RETURNING id, idempotency_key, request_fingerprint, from_account_id,
                to_account_id, transaction_ids, previous_assignments,
-               selected_count, changed_count, created_at`,
+               selected_count, changed_count, created_at,
+               to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS occurred_at`,
     [
       receipt.idempotency_key,
       receipt.request_fingerprint,

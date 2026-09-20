@@ -550,7 +550,7 @@ export const splitRepository = {
    *   payload?: object | null,
    *   client?: QueryRunner | null,
    * }} input
-   * @returns {Promise<{ id: string }>} `split_audit.id` is BIGSERIAL — a string
+   * @returns {Promise<{ id: string, payload_text: string|null, occurred_at: string }>} `split_audit.id` is BIGSERIAL — a string
    */
   async writeAudit({
     split_id,
@@ -562,7 +562,8 @@ export const splitRepository = {
     const sql = `
       INSERT INTO split_audit (split_id, action, actor, payload)
       VALUES ($1, $2, $3, $4)
-      RETURNING id
+      RETURNING id, payload::text AS payload_text,
+                to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS occurred_at
     `;
     const params = [
       split_id,

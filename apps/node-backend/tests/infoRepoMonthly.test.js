@@ -182,7 +182,7 @@ describe("getMonthlyFinancialSummary — materialized-view fast path", () => {
     await getMonthlyFinancialSummary([5, 7], "EUR", [], false);
 
     const [sql, params] = query.mock.calls[0];
-    expect(sql).toContain("NOT IN ($1, $2)");
+    expect(sql).toContain("excluded.ancestor_id IN ($1, $2)");
     // The app-date window anchor rides after the exclusion params (ADR-009).
     expect(params).toEqual([5, 7, todayAppDateString()]);
   });
@@ -204,7 +204,7 @@ describe("getMonthlyFinancialSummary — materialized-view fast path", () => {
 
     await getMonthlyFinancialSummary([1], "EUR", [99], false);
     const [sql, params] = query.mock.calls[0];
-    expect(sql).toMatch(/category.*\$1/);
+    expect(sql).toContain("excluded.ancestor_id IN ($1)");
     // Alias-aware recipient exclusion (canonical), not bare t.recipient_id.
     expect(sql).toContain(
       "COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN ($2)",
@@ -269,11 +269,11 @@ describe("getMonthlyFinancialSummary — materialized-view fast path", () => {
     );
 
     const [sql, params] = query.mock.calls[0];
+    expect(sql).toContain("date_trunc('month', $1::date)");
     expect(sql).toContain("date_trunc('month', $2::date)");
-    expect(sql).toContain("date_trunc('month', $3::date)");
-    expect(sql).toContain("t.date >= $2::date");
-    expect(sql).toContain("t.date <= $3::date");
-    expect(params).toEqual([todayAppDateString(), "2024-10-01", "2026-09-07"]);
+    expect(sql).toContain("t.date >= $1::date");
+    expect(sql).toContain("t.date <= $2::date");
+    expect(params).toEqual(["2024-10-01", "2026-09-07"]);
     expect(mvAvailable).not.toHaveBeenCalled();
   });
 

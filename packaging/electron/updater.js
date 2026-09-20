@@ -17,7 +17,7 @@ const { Readable } = require("stream");
 const { pipeline } = require("stream/promises");
 
 // Context threaded from main.js via init():
-//   { APP_NAME, IS_DEMO, t, notify, workDir(), markQuitting() }
+//   { APP_NAME, IS_DEMO, t, notify, workDir(), markQuitting(), recordAuditUpdateDecision() }
 // markQuitting flips main.js's isQuitting flag so the will-quit handler knows
 // the installer-driven quit is already underway.
 let ctx = {};
@@ -229,6 +229,34 @@ function shellEscape(value) {
 function getUpdateMode() {
   if (!app.isPackaged) return "dev";
   return "native";
+}
+
+async function recordUpdateDecision(decision, version, mode = getUpdateMode()) {
+  if (typeof ctx.recordAuditUpdateDecision !== "function") {
+    if (mode === "native") {
+      throw new Error("Native update audit bridge is unavailable");
+    }
+    return;
+  }
+  await ctx.recordAuditUpdateDecision({ decision, mode, version });
+}
+
+async function verifyUpdateChecksum(expected, actual, version, mode) {
+  if (!expected || !actual || actual.toLowerCase() !== expected.toLowerCase()) {
+    await recordUpdateDecision("checksum_failed", version, mode);
+    throw new Error("Checksum mismatch — update was not installed");
+  }
+  await recordUpdateDecision("checksum_verified", version, mode);
+}
+
+async function launchAuditedInstaller(version, mode, launch) {
+  await recordUpdateDecision("install_requested", version, mode);
+  try {
+    await launch();
+  } catch (error) {
+    await recordUpdateDecision("install_failed", version, mode);
+    throw error;
+  }
 }
 
 function writeInstallerScript({
@@ -463,6 +491,7 @@ async function prepareShellUpdateInstaller() {
 
     const checksumAsset = pickChecksumAsset(release, sourceLauncherAsset.name);
     if (!checksumAsset?.browser_download_url) {
+      await recordUpdateDecision("checksum_failed", latestVersion, "dev");
       throw new Error(
         "No checksum asset found for this release — aborting update to prevent running an unverified installer",
       );
@@ -470,14 +499,11 @@ async function prepareShellUpdateInstaller() {
     const body = await fetchUrlBody(checksumAsset.browser_download_url);
     const expected = parseSha256Body(body);
     if (!expected) {
+      await recordUpdateDecision("checksum_failed", latestVersion, "dev");
       throw new Error("Checksum file present but could not parse SHA256 hash");
     }
     const actual = await computeFileSha256(zipPath);
-    if (actual.toLowerCase() !== expected.toLowerCase()) {
-      throw new Error(
-        "Checksum mismatch — downloaded file may be corrupted or tampered with",
-      );
-    }
+    await verifyUpdateChecksum(expected, actual, latestVersion, "dev");
 
     // Validate ZIP entry paths before extraction to prevent path traversal attacks.
     // zipinfo -1 lists one path per line; any entry escaping extractDir is rejected.
@@ -574,15 +600,19 @@ async function prepareNativeUpdateInstaller() {
     );
 
     const checksumAsset = pickChecksumAsset(release, asset.name);
-    if (!checksumAsset?.browser_download_url)
+    if (!checksumAsset?.browser_download_url) {
+      await recordUpdateDecision("checksum_failed", latestVersion, "native");
       throw new Error("No checksum asset found for the native update");
+    }
     const expected = parseSha256Body(
       await fetchUrlBody(checksumAsset.browser_download_url),
     );
-    if (!expected) throw new Error("Native update checksum is invalid");
+    if (!expected) {
+      await recordUpdateDecision("checksum_failed", latestVersion, "native");
+      throw new Error("Native update checksum is invalid");
+    }
     const actual = await computeFileSha256(zipPath);
-    if (actual !== expected)
-      throw new Error("Checksum mismatch — native update was not installed");
+    await verifyUpdateChecksum(expected, actual, latestVersion, "native");
 
     const zipEntries = await runCommand("zipinfo", ["-1", zipPath], tempRoot);
     for (const entry of zipEntries.split("\n")) {
@@ -719,6 +749,7 @@ async function installPreparedShellUpdate() {
   try {
     const installerPath = pendingShellUpdate.installerPath;
     const latestVersion = pendingShellUpdate.latest_version || "";
+    const mode = pendingShellUpdate.nativeInstaller ? "native" : "dev";
     // Revalidate before committing to quit: the bundle may have been prepared
     // arbitrarily long ago. If the OS purged the temp dir, the old flow set
     // isQuitting and quit anyway — the spawn failed silently and the app
@@ -749,19 +780,21 @@ async function installPreparedShellUpdate() {
     } catch (_) {
       /* offline — proceed with the prepared bundle */
     }
-    if (pendingShellUpdate.nativeInstaller) {
-      await launchPreparedNativeInstaller({
-        installerPath,
-        installerArgs: pendingShellUpdate.installerArgs,
-        stopRuntime: ctx.stopRuntime,
-        startRuntime: ctx.startRuntime,
-      });
-    } else {
-      spawn("open", [installerPath], {
-        detached: true,
-        stdio: "ignore",
-      }).unref();
-    }
+    await launchAuditedInstaller(latestVersion, mode, async () => {
+      if (pendingShellUpdate.nativeInstaller) {
+        await launchPreparedNativeInstaller({
+          installerPath,
+          installerArgs: pendingShellUpdate.installerArgs,
+          stopRuntime: ctx.stopRuntime,
+          startRuntime: ctx.startRuntime,
+        });
+      } else {
+        spawn("open", [installerPath], {
+          detached: true,
+          stdio: "ignore",
+        }).unref();
+      }
+    });
     ctx.markQuitting();
     setImmediate(() => app.quit());
     return { success: true, version: latestVersion };
@@ -836,6 +869,9 @@ module.exports = {
   installPreparedShellUpdate,
   setupManualShellUpdater,
   pickNativeAppZip,
+  verifyUpdateChecksum,
+  recordUpdateDecision,
+  launchAuditedInstaller,
   updaterChildEnv,
   launchPreparedNativeInstaller,
   writeInstallerScript,

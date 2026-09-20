@@ -7,6 +7,9 @@ import { mockTxConnection } from "./helpers/repoMocks.js";
 // LATERAL aggregate (only the relevant rows) while preserving numeric output.
 
 vi.mock("../src/database/connection.js", () => mockTxConnection());
+vi.mock("../src/repositories/auditChainRepository.js", () => ({
+  appendAuditEvent: vi.fn(),
+}));
 
 import { query } from "../src/database/connection.js";
 import splitPersistence from "../src/repositories/splitRepository.js";
@@ -104,7 +107,7 @@ describe("splitRepository emits coerced money on every write path", () => {
         ],
       })
       .mockResolvedValueOnce({ rowCount: 0, rows: [] })
-      .mockResolvedValueOnce({ rows: [] });
+      .mockResolvedValueOnce({ rows: [{ id: "1", payload_text: "{}" }] });
 
     const payment = await splitRepository.addPayment({
       split_id: 7,
@@ -134,7 +137,7 @@ describe("splitRepository emits coerced money on every write path", () => {
       .mockResolvedValueOnce({ rows: [{ paid: "0" }] })
       .mockResolvedValueOnce({ rows: [{ ...stored }] })
       .mockResolvedValueOnce({ rowCount: 0, rows: [] })
-      .mockResolvedValueOnce({ rows: [] });
+      .mockResolvedValueOnce({ rows: [{ id: "1", payload_text: "{}" }] });
     const posted = await splitRepository.addPayment({
       split_id: 7,
       amount: 12.5,
@@ -169,7 +172,7 @@ describe("splitRepository emits coerced money on every write path", () => {
           },
         ],
       })
-      .mockResolvedValueOnce({ rows: [{ id: "1" }] });
+      .mockResolvedValueOnce({ rows: [{ id: "1", payload_text: "{}" }] });
 
     const split = await splitRepository.createSplitAtomic({
       transaction_id: 1,
@@ -224,8 +227,8 @@ describe("splitRepository emits coerced money on every write path", () => {
           },
         ],
       })
-      .mockResolvedValueOnce({ rows: [{ id: "1" }] })
-      .mockResolvedValueOnce({ rows: [{ id: "2" }] });
+      .mockResolvedValueOnce({ rows: [{ id: "1", payload_text: "{}" }] })
+      .mockResolvedValueOnce({ rows: [{ id: "2", payload_text: "{}" }] });
 
     const splits = await splitRepository.createSplitsBatchAtomic({
       transaction_id: 1,
