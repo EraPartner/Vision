@@ -146,8 +146,12 @@ const { closePool } = await import("../src/database/connection.js");
 
 try {
   if (command === "upgrade") {
-    await runMigrations(target === undefined ? {} : { target });
-    console.log(`[db-migrate] schema is at ${target ?? "head"}`);
+    const result = await runMigrations(target === undefined ? {} : { target });
+    console.log(
+      result?.deferred
+        ? `[db-migrate] schema is at ${result.revision}; 0119 bridge awaits approved maintenance`
+        : `[db-migrate] schema is at ${target ?? "head"}`,
+    );
   } else if (command === "downgrade") {
     await runAlembicCommand(["downgrade", target ?? "-1"]);
     console.log(`[db-migrate] downgraded to ${target ?? "-1"}`);

@@ -37,9 +37,9 @@ NATIVE_LOG=
 POSTGRES_BIN=
 
 case "$TASK" in
-  tests|migration-fidelity|legacy-retirements|adr090-retirement|adr088-contract|statement-contract) ;;
+  tests|migration-fidelity|legacy-retirements|adr090-retirement|adr088-contract|statement-contract|baseline-restore) ;;
   *)
-    echo "[test-db] VISION_TEST_DB_TASK must be tests, migration-fidelity, legacy-retirements, adr090-retirement, adr088-contract, or statement-contract." >&2
+    echo "[test-db] Unknown VISION_TEST_DB_TASK." >&2
     exit 1
     ;;
 esac
@@ -60,7 +60,7 @@ if [ -n "${TEST_DATABASE_URL:-}" ]; then
     echo "[test-db] Caller-managed TEST_DATABASE_URL is available."
     exit 0
   fi
-  if [ "$TASK" = migration-fidelity ] || [ "$TASK" = legacy-retirements ] || [ "$TASK" = adr090-retirement ] || [ "$TASK" = adr088-contract ] || [ "$TASK" = statement-contract ]; then
+  if [ "$TASK" = migration-fidelity ] || [ "$TASK" = legacy-retirements ] || [ "$TASK" = adr090-retirement ] || [ "$TASK" = adr088-contract ] || [ "$TASK" = statement-contract ] || [ "$TASK" = baseline-restore ]; then
     echo "[test-db] Destructive migration lifecycle tasks refuse a caller-managed TEST_DATABASE_URL." >&2
     echo "[test-db] Unset it so this script provisions a disposable database." >&2
     exit 1
@@ -199,13 +199,15 @@ start_native_postgres() {
     --locale=C \
     --template=template0 \
     vision_test
-  "$POSTGRES_BIN/psql" \
-    -h 127.0.0.1 \
-    -p "$PORT" \
-    -U vision_test \
-    -d vision_test \
-    -v ON_ERROR_STOP=1 \
-    -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm; CREATE EXTENSION IF NOT EXISTS pgcrypto; CREATE EXTENSION IF NOT EXISTS pg_stat_statements;' >/dev/null
+  if [ "$TASK" != baseline-restore ]; then
+    "$POSTGRES_BIN/psql" \
+      -h 127.0.0.1 \
+      -p "$PORT" \
+      -U vision_test \
+      -d vision_test \
+      -v ON_ERROR_STOP=1 \
+      -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm; CREATE EXTENSION IF NOT EXISTS pgcrypto; CREATE EXTENSION IF NOT EXISTS pg_stat_statements;' >/dev/null
+  fi
 }
 
 if ! find_native_postgres; then
@@ -224,9 +226,24 @@ export TEST_DATABASE_URL="$URL"
 VISION_TEST_ANALYSIS_PASSWORD=$(bun -e "process.stdout.write(require('node:crypto').randomUUID())")
 export DATABASE_URL_ANALYSIS="postgresql://vision_analysis_executor:$VISION_TEST_ANALYSIS_PASSWORD@127.0.0.1:$PORT/vision_test"
 export VISION_TEST_DB_ISOLATED=1
+# The bridge is allowed only inside this script's disposable native cluster.
+# Caller-managed TEST_DATABASE_URL returns above and never receives this flag.
+export VISION_BASELINE_BRIDGE_APPROVED=1
 # Keep boot-time migration state outside the repository. A disposable database
 # must never consult or overwrite the normal development cache.
 export VISION_CACHE_DIR="$NATIVE_ROOT/vision-cache"
+
+if [ "$TASK" = baseline-restore ]; then
+  if [ -z "${VISION_BASELINE_BACKUP_PATH:-}" ] || [ -z "${VISION_BASELINE_SOURCE_MANIFEST:-}" ]; then
+    echo "[test-db] baseline-restore requires backup and source manifest paths." >&2
+    exit 1
+  fi
+  echo "[test-db] Restoring and verifying the exact supplied logical backup in disposable PostgreSQL 18."
+  "$POSTGRES_BIN/pg_restore" --exit-on-error --no-owner --no-acl \
+    -d "$URL" "$VISION_BASELINE_BACKUP_PATH"
+  node scripts/verify-baseline-restore.mjs
+  exit 0
+fi
 
 echo "[test-db] Migrating the disposable database to head."
 bun run apps/node-backend/scripts/db-migrate.js

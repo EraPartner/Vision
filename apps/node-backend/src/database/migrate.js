@@ -12,6 +12,10 @@ import { fileURLToPath } from "node:url";
 import pg from "pg";
 import { logger } from "../config/logger.js";
 import { query } from "./connection.js";
+import {
+  FRESH_BASELINE_REVISION,
+  installFreshBaseline,
+} from "./freshBaseline.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -193,6 +197,8 @@ const LEGACY_REVISIONS = new Set([
   "0031_ai_chat_tables",
   "0032_add_hot_path_indexes",
 ]);
+const LEGACY_0001_SCHEMA_FINGERPRINT =
+  "fd651bec4d81a896e89e25af39821bb744e6a8e7b08a2cc8528915fcfa1c22bc";
 
 /**
  * If the DB has an `alembic_version` row pointing at a revision that was
@@ -227,9 +233,55 @@ async function stampBaselineWithQuery(migrationQuery) {
       };
     }
 
-    // Expand version_num to VARCHAR(64) if narrower — older DBs created by
-    // alembic at a time when revision IDs were short still have VARCHAR(32),
-    // which truncates the longer named revisions we use today.
+    const versionRes = await migrationQuery(
+      "SELECT version_num FROM alembic_version LIMIT 2",
+    );
+    if (versionRes.rows.length > 1) {
+      throw new Error(
+        "Multiple Alembic revisions require manual reconciliation",
+      );
+    }
+    const current = versionRes.rows[0]?.version_num;
+    if (!current) {
+      return { skipped: true, reason: "alembic_version table empty" };
+    }
+    const legacy = LEGACY_REVISIONS.has(current);
+    const active = readdirSync(VERSIONS_DIR).some((filename) => {
+      if (!filename.endsWith(".py")) return false;
+      const source = readFileSync(path.join(VERSIONS_DIR, filename), "utf8");
+      const match = /^revision\s*(?::\s*str)?\s*=\s*["']([^"']+)["']/m.exec(
+        source,
+      );
+      return match?.[1] === current;
+    });
+    if (!legacy && !active) {
+      return {
+        skipped: true,
+        reason: `unknown revision ${current}; leaving untouched`,
+      };
+    }
+    if (legacy && process.env.VISION_BASELINE_BRIDGE_APPROVED !== "1") {
+      throw new Error(
+        `Historical revision ${current} requires an explicit, restore-tested bridge`,
+      );
+    }
+    if (legacy) {
+      const fingerprintSql = readFileSync(
+        path.join(REPO_ROOT, "alembic", "baseline", "schema_fingerprint.sql"),
+        "utf8",
+      );
+      const fingerprint = await migrationQuery(fingerprintSql);
+      if (
+        fingerprint.rows[0]?.schema_fingerprint !==
+        LEGACY_0001_SCHEMA_FINGERPRINT
+      ) {
+        throw new Error(
+          `Historical revision ${current} has an unrecognized schema; refusing stamp`,
+        );
+      }
+    }
+
+    // Only recognized, approved revision paths may alter the version column.
     const colRes = await migrationQuery(
       `SELECT character_maximum_length AS len
        FROM information_schema.columns
@@ -245,21 +297,13 @@ async function stampBaselineWithQuery(migrationQuery) {
         "ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(64)",
       );
     }
-
-    const versionRes = await migrationQuery(
-      "SELECT version_num FROM alembic_version LIMIT 1",
-    );
-    const current = versionRes.rows[0]?.version_num;
-    if (!current) {
-      return { skipped: true, reason: "alembic_version table empty" };
-    }
-    if (current === BASELINE_REVISION) {
-      return { skipped: true, reason: "already at baseline" };
-    }
-    if (!LEGACY_REVISIONS.has(current)) {
+    if (!legacy) {
       return {
         skipped: true,
-        reason: `unknown revision ${current}; leaving untouched`,
+        reason:
+          current === BASELINE_REVISION
+            ? "already at baseline"
+            : `active revision ${current}`,
       };
     }
 
@@ -277,8 +321,20 @@ async function stampBaselineWithQuery(migrationQuery) {
   }
 }
 
- async function stampBaselineIfLegacy() {
+async function stampBaselineIfLegacy() {
   return withMigrationQuery(stampBaselineWithQuery);
+}
+
+async function readCurrentRevision() {
+  return withMigrationQuery(async (migrationQuery) => {
+    const result = await migrationQuery(
+      "SELECT version_num FROM alembic_version LIMIT 2",
+    );
+    if (result.rows.length !== 1) {
+      throw new Error("Database must have exactly one Alembic revision");
+    }
+    return result.rows[0].version_num;
+  });
 }
 
 /**
@@ -403,18 +459,48 @@ export async function runMigrations(options = {}) {
 
   logger.info({ target, cwd: REPO_ROOT }, "alembic migrate start");
 
-  await stampBaselineIfLegacy();
-
-  if (target === "head" && (await isAtHeadCached())) {
-    logger.info("alembic skip: cached head matches DB and versions/ unchanged");
-    return;
+  let installed = false;
+  if (target === "head") {
+    installed = await installFreshBaseline({
+      repoRoot: REPO_ROOT,
+      connectionString:
+        process.env.DATABASE_URL_MIGRATIONS?.trim() ||
+        process.env.DATABASE_URL?.trim(),
+    });
+    if (installed) logger.info("reviewed fresh database baseline installed");
   }
 
-  await execAlembic(["upgrade", target], timeoutMs);
+  await stampBaselineIfLegacy();
+
+  const currentRevision =
+    target === "head" ? await readCurrentRevision() : undefined;
+  const bridgeApproved = process.env.VISION_BASELINE_BRIDGE_APPROVED === "1";
+  const deferred =
+    target === "head" &&
+    !installed &&
+    !bridgeApproved &&
+    currentRevision !== FRESH_BASELINE_REVISION;
+  const effectiveTarget = deferred ? "0118_audit_retention_pruner" : target;
+  if (deferred) {
+    logger.warn(
+      { currentRevision },
+      "squashed baseline bridge deferred until approved maintenance",
+    );
+    if (currentRevision === effectiveTarget) {
+      return { revision: effectiveTarget, deferred: true };
+    }
+  }
+
+  if (!deferred && target === "head" && (await isAtHeadCached())) {
+    logger.info("alembic skip: cached head matches DB and versions/ unchanged");
+    return { revision: target, deferred: false };
+  }
+
+  await execAlembic(["upgrade", effectiveTarget], timeoutMs);
 
   logger.info("alembic migrate ok");
 
-  if (target === "head") {
+  if (target === "head" && !deferred) {
     await writeHeadCache();
   }
 
@@ -424,6 +510,7 @@ export async function runMigrations(options = {}) {
   // via isAtHeadCached() above and never reaches here — so it is not paid on
   // every boot. Best-effort: bad stats are a perf issue, never a boot blocker.
   await analyzeAfterMigrations();
+  return { revision: effectiveTarget, deferred };
 }
 
 export { stampBaselineIfLegacy as __stampBaselineIfLegacy };

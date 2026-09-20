@@ -31,8 +31,40 @@ test("the synthetic generator is deterministic data-only SQL", async () => {
   assert.deepEqual(first.demoSeedSummary, second.demoSeedSummary);
   assert.equal(first.demoSeedReferenceDate, "2026-09-03");
   assert.doesNotMatch(first.demoSeedSql, /\balembic_version\b/i);
+  assert.doesNotMatch(
+    first.demoSeedSql,
+    /\bstatement_balance_date\b|\bbank_account,recipient_id\b/,
+  );
+  assert.match(
+    first.demoSeedSql,
+    /INSERT INTO transactions \(id,date,amount,currency,account_id,/,
+  );
   assert.match(first.demoSeedSql, /onboarding_complete/);
   assert.equal(sha256(first.demoSeedSql).length, 64);
+});
+
+test("hierarchy root IDs cannot collide with explicit demo category IDs", async () => {
+  const { demoSeedSql } = await loadGenerator("2026-09-03");
+  const lines = demoSeedSql.split("\n");
+  const categoryIds = lines
+    .map((line) =>
+      /^INSERT INTO categories \(id,/.test(line)
+        ? Number(line.match(/VALUES \((\d+),/)?.[1])
+        : undefined,
+    )
+    .filter((id) => id !== undefined);
+  const beforeLeaf = lines.findIndex((line) =>
+    line.startsWith("INSERT INTO categories (id,"),
+  );
+  assert.ok(categoryIds.length > 0);
+  assert.equal(
+    lines[beforeLeaf - 1],
+    `SELECT setval('public.categories_id_seq',${Math.max(...categoryIds)},true);`,
+  );
+  assert.match(
+    demoSeedSql,
+    /SELECT setval\('public.categories_id_seq',\(SELECT MAX\(id\) FROM categories\),true\);/,
+  );
 });
 
 test("the reference date shifts historical and planned rows together", async () => {
@@ -58,7 +90,7 @@ test("the reference date shifts historical and planned rows together", async () 
 
   assert.match(
     later.demoSeedSql,
-    /statement_balance_date\) VALUES \([^\n]+'2026-10-03'/,
+    /account_statement_balances \(account_id,currency,balance,balance_date\) VALUES \([^\n]+'2026-10-03'/,
   );
 });
 

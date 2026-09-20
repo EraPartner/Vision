@@ -72,9 +72,8 @@ const num = (v, d = 2) =>
 S("-- Vision demo data (synthetic). Generated deterministically.");
 
 // ---- Accounts (ADR-088: real account entities) ----
-// `bank_account` strings double as the account `name`: the dual-write trigger (migration 0051)
-// links each transaction to the account whose name == btrim(bank_account), and its
-// ON CONFLICT(name) DO NOTHING leaves the rich typed rows we pre-create here untouched.
+// Synthetic account labels are mapped to the stable account IDs used by the
+// current transaction schema.
 const ACCT = {
   CHECKING: "BE76 7340 1234 5678",
   SAVINGS: "BE12 0688 1947 5532",
@@ -86,7 +85,7 @@ const START_BAL = {
   [ACCT.MORTGAGE]: -205000,
 };
 // Stable account ids — referenced by portfolio holdings for per-account positioning (ADR-091).
-// Brokerage/exchange accounts (3,4,6) are linked to lots by id, not via a bank_account string.
+// Brokerage/exchange accounts (3,4,6) are linked to lots by id.
 const AID = {
   CHECKING: 1,
   SAVINGS: 2,
@@ -143,6 +142,9 @@ const CATS = [
   ["FINANCE", "TAX"],
   ["TELECOM", "MOBILE"],
 ];
+// Migration 0114 creates a root row on each legacy leaf insert. Keep those
+// sequence-assigned root IDs above the explicit synthetic leaf IDs.
+S(`SELECT setval('public.categories_id_seq',${CATS.length},true);`);
 const catId = {};
 CATS.forEach((c, i) => {
   const id = i + 1;
@@ -624,18 +626,17 @@ for (const acct of Object.keys(byAcct)) {
   }
 }
 
-// ===== Accounts (typed entities) — emitted before the transaction rows so the dual-write
-// trigger (0051) resolves each transaction's account_id onto these rich rows. statement_balance
-// drives the reconciliation-drift feature (ADR-094): checking drifts +€15.50, savings reconciles.
+// ===== Accounts (typed entities) — emitted before transactions. The statement
+// balance collection drives reconciliation drift: checking drifts +€15.50.
 const finalBal = (a) => {
   const l = byAcct[a];
   return l && l.length ? l[l.length - 1].balance : 0;
 };
 S(
-  `INSERT INTO accounts (id,name,display_name,institution,type,liquidity_class,owner,currency,statement_balance,statement_balance_date) VALUES (${AID.CHECKING},${q(ACCT.CHECKING)},'KBC Zichtrekening','KBC','checking','liquid','joint','EUR',${num(finalBal(ACCT.CHECKING) + 15.5, 2)},'${fmt(TODAY)}');`,
+  `INSERT INTO accounts (id,name,display_name,institution,type,liquidity_class,owner,currency) VALUES (${AID.CHECKING},${q(ACCT.CHECKING)},'KBC Zichtrekening','KBC','checking','liquid','joint','EUR');`,
 );
 S(
-  `INSERT INTO accounts (id,name,display_name,institution,type,liquidity_class,owner,currency,statement_balance,statement_balance_date) VALUES (${AID.SAVINGS},${q(ACCT.SAVINGS)},'KBC Spaarrekening','KBC','savings','semi_liquid','joint','EUR',${num(finalBal(ACCT.SAVINGS), 2)},'${fmt(TODAY)}');`,
+  `INSERT INTO accounts (id,name,display_name,institution,type,liquidity_class,owner,currency) VALUES (${AID.SAVINGS},${q(ACCT.SAVINGS)},'KBC Spaarrekening','KBC','savings','semi_liquid','joint','EUR');`,
 );
 S(
   `INSERT INTO accounts (id,name,display_name,institution,type,liquidity_class,owner,currency,has_cash_sleeve) VALUES (${AID.DEGIRO},'DEGIRO Beleggingsrekening','DEGIRO','DEGIRO','brokerage','liquid','me','EUR',true);`,
@@ -649,10 +650,23 @@ S(
 S(
   `INSERT INTO accounts (id,name,display_name,institution,type,liquidity_class,owner,currency,has_cash_sleeve) VALUES (${AID.BITVAVO},'Bitvavo','Bitvavo','Bitvavo','crypto_exchange','liquid','me','EUR',true);`,
 );
+S(
+  `INSERT INTO account_statement_balances (account_id,currency,balance,balance_date) VALUES (${AID.CHECKING},'EUR',${num(finalBal(ACCT.CHECKING) + 15.5, 2)},'${fmt(TODAY)}'),(${AID.SAVINGS},'EUR',${num(finalBal(ACCT.SAVINGS), 2)},'${fmt(TODAY)}');`,
+);
+
+const accountIdByName = {
+  [ACCT.CHECKING]: AID.CHECKING,
+  [ACCT.SAVINGS]: AID.SAVINGS,
+  [ACCT.MORTGAGE]: AID.MORTGAGE,
+};
 
 for (const t of txns.slice().sort((a, b) => a.id - b.id)) {
+  const accountId = accountIdByName[t.account];
+  if (accountId === undefined) {
+    throw new Error(`Unknown synthetic account: ${t.account}`);
+  }
   S(
-    `INSERT INTO transactions (id,date,amount,currency,bank_account,recipient_id,category_id,is_active,memo,comment,balance,is_transfer,transfer_source) VALUES (${t.id},'${fmt(t.date)}',${num(t.amount, 4)},'EUR',${q(t.account)},${recId[t.recip]},${t.cid ?? "NULL"},true,${q(t.memo)},${q(t.comment)},${num(t.balance, 2)},${t.isTransfer ? "true" : "false"},${t.transferSource ? q(t.transferSource) : "NULL"});`,
+    `INSERT INTO transactions (id,date,amount,currency,account_id,recipient_id,category_id,is_active,memo,comment,balance,is_transfer,transfer_source) VALUES (${t.id},'${fmt(t.date)}',${num(t.amount, 4)},'EUR',${accountId},${recId[t.recip]},${t.cid ?? "NULL"},true,${q(t.memo)},${q(t.comment)},${num(t.balance, 2)},${t.isTransfer ? "true" : "false"},${t.transferSource ? q(t.transferSource) : "NULL"});`,
   );
 }
 
@@ -1275,7 +1289,6 @@ S(
 // ===== Reset sequences =====
 const seqs = [
   ["accounts_id_seq", 6],
-  ["categories_id_seq", CATS.length],
   ["recipients_id_seq", RECIPS.length],
   ["recipient_bank_accounts_id_seq", 3],
   ["recipient_match_patterns_id_seq", 2],
@@ -1294,6 +1307,9 @@ const seqs = [
 for (const [s, v] of seqs) {
   if (v > 0) S(`SELECT setval('public.${s}',${v},true);`);
 }
+S(
+  "SELECT setval('public.categories_id_seq',(SELECT MAX(id) FROM categories),true);",
+);
 
 export const demoSeedSql = out.join("\n") + "\n";
 export const demoSeedReferenceDate = fmt(REFERENCE_DATE);

@@ -49,6 +49,8 @@ const { runDatabaseAnalyze, __stampBaselineIfLegacy: stampBaselineIfLegacy } =
 describe("migration role preflight", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.appQuery.mockReset();
+    mocks.migrationQuery.mockReset();
     mocks.connect.mockResolvedValue(undefined);
     mocks.end.mockResolvedValue(undefined);
     process.env.DATABASE_URL =
@@ -86,9 +88,9 @@ describe("migration role preflight", () => {
   it("uses the migration role for alembic_version schema writes", async () => {
     mocks.migrationQuery
       .mockResolvedValueOnce({ rows: [{ present: true }] })
+      .mockResolvedValueOnce({ rows: [{ version_num: "0001_initial" }] })
       .mockResolvedValueOnce({ rows: [{ len: 32 }] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [{ version_num: "0001_initial" }] });
+      .mockResolvedValueOnce({ rows: [] });
 
     await expect(stampBaselineIfLegacy()).resolves.toEqual({
       skipped: true,
@@ -108,7 +110,6 @@ describe("migration role preflight", () => {
     delete process.env.DATABASE_URL_MIGRATIONS;
     mocks.appQuery
       .mockResolvedValueOnce({ rows: [{ present: true }] })
-      .mockResolvedValueOnce({ rows: [{ len: 64 }] })
       .mockResolvedValueOnce({ rows: [] });
 
     await expect(stampBaselineIfLegacy()).resolves.toEqual({
@@ -116,9 +117,24 @@ describe("migration role preflight", () => {
       reason: "alembic_version table empty",
     });
 
-    expect(mocks.appQuery).toHaveBeenCalledTimes(3);
+    expect(mocks.appQuery).toHaveBeenCalledTimes(2);
     expect(mocks.connect).not.toHaveBeenCalled();
     expect(mocks.migrationQuery).not.toHaveBeenCalled();
+  });
+
+  it("refuses to stamp an old revision before a restore-tested bridge", async () => {
+    mocks.migrationQuery
+      .mockResolvedValueOnce({ rows: [{ present: true }] })
+      .mockResolvedValueOnce({ rows: [{ version_num: "0002_add_url" }] });
+
+    await expect(stampBaselineIfLegacy()).rejects.toThrow(
+      "requires an explicit, restore-tested bridge",
+    );
+    expect(mocks.migrationQuery).toHaveBeenCalledTimes(2);
+    expect(mocks.migrationQuery).not.toHaveBeenCalledWith(
+      expect.stringMatching(/^ALTER TABLE|^UPDATE alembic_version/),
+      expect.anything(),
+    );
   });
 
   it("runs database-wide ANALYZE through the migration role", async () => {
