@@ -240,6 +240,30 @@ describe("AI investigation orchestration", () => {
     expect(store).not.toHaveBeenCalled();
   });
 
+  it("does not checkpoint a provider answer after the investigation was cancelled", async () => {
+    const controller = new AbortController();
+    const store = vi.fn();
+    await expect(
+      __resolveProviderAnswer({
+        job: { id: "job-cancelled", checkpoint: {} },
+        request: {
+          ...request,
+          route: "openai-api",
+          selectedEvidence: "Fictional selected evidence",
+        },
+        stepRows: [],
+        synthesisInput: { signal: controller.signal },
+        generateProvider: async () => {
+          controller.abort();
+          return { text: JSON.stringify(__fallbackAnswer(request, [])) };
+        },
+        generateLocal: vi.fn(),
+        store,
+      }),
+    ).rejects.toMatchObject({ code: "CANCELLED" });
+    expect(store).not.toHaveBeenCalled();
+  });
+
   it("preserves a provider checkpoint when retrying local reference restoration", () => {
     expect(
       __shouldPreserveProviderCheckpoint({

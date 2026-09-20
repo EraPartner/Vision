@@ -579,8 +579,15 @@ async function resolveProviderAnswer({
   const response = usesCloudSynthesis(request)
     ? await generateProvider(synthesisInput)
     : await generateLocal(synthesisInput);
+  if (synthesisInput.signal?.aborted)
+    throw Object.assign(new Error("Investigation was cancelled"), {
+      code: "CANCELLED",
+    });
   const answer = parseModelAnswer(response.text, request, stepRows);
-  await store(job.id, answer);
+  if (!(await store(job.id, answer)))
+    throw Object.assign(new Error("Investigation was cancelled"), {
+      code: "CANCELLED",
+    });
   return answer;
 }
 

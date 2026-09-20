@@ -66,7 +66,7 @@ describe("cloud-assistance privacy evaluation", () => {
             request: {
               url: "https://api.openai.com/v1/responses",
               method: "POST",
-              headers: {},
+              headers: { "content-type": "application/json" },
               bodyBase64: Buffer.from(body).toString("base64"),
               byteLength: Buffer.byteLength(body),
             },
@@ -76,6 +76,65 @@ describe("cloud-assistance privacy evaluation", () => {
       CLOUD_PRIVACY_SYNTHETIC_POLICY,
     );
 
+    expect(result.violations).toContainEqual(
+      expect.objectContaining({ code: "UNINSPECTABLE_BODY" }),
+    );
+  });
+
+  it("rejects malformed destinations and request byte metadata", () => {
+    const body = JSON.stringify({ purpose: "synthetic" });
+    const result = evaluateCloudPrivacyTrace(
+      {
+        mode: "cloud-plan",
+        exchanges: [
+          {
+            sessionId: "session-a",
+            analysisId: "analysis-a",
+            sequence: 1,
+            request: {
+              url: "http://[invalid",
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              bodyBase64: Buffer.from(body).toString("base64"),
+              byteLength: 0,
+            },
+          },
+        ],
+      },
+      CLOUD_PRIVACY_SYNTHETIC_POLICY,
+    );
+
+    expect(result.passed).toBe(false);
+    expect(result.inspectedBytes).toBe(Buffer.byteLength(body));
+    expect(result.violations.map((entry) => entry.code)).toEqual([
+      "UNINSPECTABLE_URL",
+      "BYTE_LENGTH_MISMATCH",
+      "NONCANONICAL_URL",
+      "BROKER_POLICY_VIOLATION",
+    ]);
+  });
+
+  it("rejects non-canonical request body encoding", () => {
+    const result = evaluateCloudPrivacyTrace(
+      {
+        mode: "cloud-plan",
+        exchanges: [
+          {
+            sessionId: "session-a",
+            analysisId: "analysis-a",
+            sequence: 1,
+            request: {
+              url: "https://api.openai.com/v1/responses",
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              bodyBase64: "%%%",
+              byteLength: 0,
+            },
+          },
+        ],
+      },
+      CLOUD_PRIVACY_SYNTHETIC_POLICY,
+    );
     expect(result.violations).toContainEqual(
       expect.objectContaining({ code: "UNINSPECTABLE_BODY" }),
     );
@@ -94,7 +153,10 @@ describe("cloud-assistance privacy evaluation", () => {
             request: {
               url: "https://api.openai.com/v1/responses",
               method: "POST",
-              headers: { accountId: "opaque-value" },
+              headers: {
+                "content-type": "application/json",
+                accountId: "opaque-value",
+              },
               bodyBase64: Buffer.from(body).toString("base64"),
               byteLength: Buffer.byteLength(body),
             },

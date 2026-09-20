@@ -62,6 +62,7 @@ export async function deleteHistory() {
 export async function reserveDisclosure({
   grantId,
   jobId,
+  expectedMode,
   preview,
   outputTokens,
   costMicros,
@@ -83,6 +84,13 @@ export async function reserveDisclosure({
       throw Object.assign(new Error("Disclosure grant is inactive"), {
         code: "GRANT_INACTIVE",
       });
+    if (grant.route !== "openai-api" || grant.mode !== expectedMode)
+      throw Object.assign(
+        new Error(
+          "Disclosure grant route or mode differs from the approved request",
+        ),
+        { code: "GRANT_MODE_MISMATCH" },
+      );
     if (grant.preview_payload_sha256 !== preview.payloadSha256)
       throw Object.assign(
         new Error("Payload differs from the inspected preview"),

@@ -1,4 +1,14 @@
-const textDecoder = new TextDecoder();
+const textDecoder = new TextDecoder("utf-8", { fatal: true });
+const DISCLOSURE_FIELDS = new Set([
+  "question",
+  "publicSchema",
+  "language",
+  "depth",
+  "constraints",
+  "selectedSummary",
+  "selectedEvidence",
+  "citations",
+]);
 
 function headersObject(headers = {}) {
   return Object.fromEntries(new Headers(headers).entries());
@@ -17,9 +27,13 @@ function bodyBytes(body) {
 }
 
 function decodeBody(exchange) {
-  return textDecoder.decode(
-    Uint8Array.from(Buffer.from(exchange.request.bodyBase64 || "", "base64")),
-  );
+  const encoded = exchange.request?.bodyBase64;
+  if (typeof encoded !== "string") throw new TypeError("Missing body bytes");
+  const bytes = Buffer.from(encoded, "base64");
+  if (bytes.toString("base64") !== encoded) {
+    throw new TypeError("Non-canonical body encoding");
+  }
+  return { text: textDecoder.decode(bytes), byteLength: bytes.length };
 }
 
 function findForbiddenKeys(value, forbiddenKeys, path = "$") {
@@ -75,6 +89,8 @@ export function createInspectionFetch({ fetchImpl, onExchange }) {
 
 export const DEFAULT_CLOUD_PRIVACY_POLICY = Object.freeze({
   allowedOrigins: ["https://api.openai.com"],
+  allowedPaths: ["/v1/responses"],
+  allowedMethods: ["POST"],
   forbiddenKeys: [
     "accountId",
     "account_id",
@@ -88,6 +104,7 @@ export const DEFAULT_CLOUD_PRIVACY_POLICY = Object.freeze({
   forbiddenLiterals: [],
   maxCumulativeRequestBytes: 32_768,
   maxRequestsPerSession: 12,
+  requireBrokerPolicy: true,
 });
 
 export function evaluateCloudPrivacyTrace(
@@ -101,6 +118,8 @@ export function evaluateCloudPrivacyTrace(
     [...forbiddenKeys].map((key) => key.toLowerCase()),
   );
   const allowedOrigins = new Set(policy.allowedOrigins ?? []);
+  const allowedPaths = new Set(policy.allowedPaths ?? ["/v1/responses"]);
+  const allowedMethods = new Set(policy.allowedMethods ?? ["POST"]);
   const sessions = new Map();
   const tokenOwners = new Map();
 
@@ -115,10 +134,38 @@ export function evaluateCloudPrivacyTrace(
   }
 
   for (const exchange of exchanges) {
-    const url = new URL(exchange.request.url);
-    const body = decodeBody(exchange);
-    const searchable = `${exchange.request.url}\n${JSON.stringify(
-      exchange.request.headers,
+    let url;
+    try {
+      url = new URL(exchange.request?.url);
+    } catch {
+      violations.push(
+        violation("UNINSPECTABLE_URL", exchange, "Request URL is invalid"),
+      );
+    }
+    let body = "";
+    let actualByteLength = 0;
+    let bodyInspectible = false;
+    try {
+      const decoded = decodeBody(exchange);
+      body = decoded.text;
+      actualByteLength = decoded.byteLength;
+      bodyInspectible = true;
+      if (exchange.request.byteLength !== actualByteLength) {
+        violations.push(
+          violation(
+            "BYTE_LENGTH_MISMATCH",
+            exchange,
+            "Declared request length differs from captured bytes",
+          ),
+        );
+      }
+    } catch {
+      violations.push(
+        violation("UNINSPECTABLE_BODY", exchange, "Body bytes are invalid"),
+      );
+    }
+    const searchable = `${exchange.request?.url}\n${JSON.stringify(
+      exchange.request?.headers,
     )}\n${body}`.toLowerCase();
     const session = sessions.get(exchange.sessionId) ?? {
       count: 0,
@@ -126,16 +173,55 @@ export function evaluateCloudPrivacyTrace(
       bodies: [],
     };
     session.count += 1;
-    session.bytes += exchange.request.byteLength ?? bodyBytes(body).byteLength;
+    session.bytes += actualByteLength;
     session.bodies.push(body);
     sessions.set(exchange.sessionId, session);
 
-    if (!allowedOrigins.has(url.origin)) {
+    if (url && !allowedOrigins.has(url.origin)) {
       violations.push(
         violation("UNAPPROVED_DESTINATION", exchange, url.origin),
       );
     }
-    if (url.search) {
+    if (url && !allowedPaths.has(url.pathname)) {
+      violations.push(violation("UNAPPROVED_PATH", exchange, url.pathname));
+    }
+    if (exchange.request?.url !== "https://api.openai.com/v1/responses") {
+      violations.push(
+        violation(
+          "NONCANONICAL_URL",
+          exchange,
+          "Responses URL differs from the fixed helper URL",
+        ),
+      );
+    }
+    if (!allowedMethods.has(exchange.request?.method)) {
+      violations.push(
+        violation("UNAPPROVED_METHOD", exchange, exchange.request?.method),
+      );
+    }
+    let headers;
+    try {
+      headers = headersObject(exchange.request?.headers);
+    } catch {
+      headers = {};
+      violations.push(
+        violation(
+          "UNINSPECTABLE_HEADERS",
+          exchange,
+          "Request headers are invalid",
+        ),
+      );
+    }
+    if (headers["content-type"] !== "application/json") {
+      violations.push(
+        violation(
+          "INVALID_CONTENT_TYPE",
+          exchange,
+          "Expected application/json",
+        ),
+      );
+    }
+    if (url?.search) {
       violations.push(
         violation(
           "URL_QUERY_DISCLOSURE",
@@ -144,7 +230,7 @@ export function evaluateCloudPrivacyTrace(
         ),
       );
     }
-    for (const headerName of Object.keys(exchange.request.headers ?? {})) {
+    for (const headerName of Object.keys(exchange.request?.headers ?? {})) {
       if (forbiddenHeaderNames.has(headerName.toLowerCase())) {
         violations.push(
           violation("FORBIDDEN_FIELD", exchange, `header.${headerName}`),
@@ -175,15 +261,95 @@ export function evaluateCloudPrivacyTrace(
         );
       }
     }
-    try {
-      const parsed = JSON.parse(body || "null");
-      for (const keyPath of findForbiddenKeys(parsed, forbiddenKeys)) {
-        violations.push(violation("FORBIDDEN_FIELD", exchange, keyPath));
+    if (bodyInspectible) {
+      try {
+        const parsed = JSON.parse(body || "null");
+        for (const keyPath of findForbiddenKeys(parsed, forbiddenKeys)) {
+          violations.push(violation("FORBIDDEN_FIELD", exchange, keyPath));
+        }
+        if (policy.requireBrokerPolicy) {
+          if (
+            !parsed ||
+            typeof parsed !== "object" ||
+            Array.isArray(parsed) ||
+            Object.keys(parsed).sort().join(",") !==
+              "background,input,max_output_tokens,model,store,tools" ||
+            parsed.store !== false ||
+            parsed.background !== false ||
+            !Array.isArray(parsed.tools) ||
+            parsed.tools.length !== 0 ||
+            typeof parsed.input !== "string" ||
+            Buffer.byteLength(parsed.input) > 512 * 1024 ||
+            typeof parsed.model !== "string" ||
+            parsed.model.length < 1 ||
+            parsed.model.length > 200 ||
+            !Number.isInteger(parsed.max_output_tokens) ||
+            parsed.max_output_tokens < 64 ||
+            parsed.max_output_tokens > 32_000
+          ) {
+            violations.push(
+              violation(
+                "BROKER_POLICY_VIOLATION",
+                exchange,
+                "OpenAI request shape changed",
+              ),
+            );
+          } else {
+            const disclosure = JSON.parse(parsed.input);
+            if (
+              !disclosure ||
+              typeof disclosure !== "object" ||
+              Array.isArray(disclosure) ||
+              ["question", "selectedSummary", "selectedEvidence"].filter(
+                (field) =>
+                  typeof disclosure[field] === "string" &&
+                  disclosure[field].length > 0,
+              ).length !== 1 ||
+              typeof disclosure.publicSchema !== "string" ||
+              !["en", "nl"].includes(disclosure.language) ||
+              !["quick", "detailed"].includes(disclosure.depth) ||
+              !Array.isArray(disclosure.citations) ||
+              disclosure.citations.some(
+                (citation) => typeof citation !== "string",
+              ) ||
+              (disclosure.constraints !== undefined &&
+                (!Array.isArray(disclosure.constraints) ||
+                  disclosure.constraints.some(
+                    (constraint) => typeof constraint !== "string",
+                  )))
+            ) {
+              violations.push(
+                violation(
+                  "DISCLOSURE_SHAPE_INVALID",
+                  exchange,
+                  "Nested disclosure shape changed",
+                ),
+              );
+            }
+            for (const field of Object.keys(disclosure)) {
+              if (!DISCLOSURE_FIELDS.has(field))
+                violations.push(
+                  violation("UNAPPROVED_DISCLOSURE_FIELD", exchange, field),
+                );
+            }
+            for (const keyPath of findForbiddenKeys(
+              disclosure,
+              forbiddenKeys,
+              "$.input",
+            )) {
+              violations.push(violation("FORBIDDEN_FIELD", exchange, keyPath));
+            }
+          }
+        }
+      } catch {
+        violations.push(
+          violation(
+            "UNINSPECTABLE_BODY",
+            exchange,
+            "Body or disclosure is not JSON",
+          ),
+        );
       }
-    } catch {
-      violations.push(
-        violation("UNINSPECTABLE_BODY", exchange, "Body is not JSON"),
-      );
     }
 
     for (const token of body.match(
@@ -237,20 +403,10 @@ export function evaluateCloudPrivacyTrace(
   return {
     passed: violations.length === 0,
     inspectedRequests: exchanges.length,
-    inspectedBytes: exchanges.reduce(
-      (byteCount, exchange) => byteCount + (exchange.request.byteLength ?? 0),
+    inspectedBytes: [...sessions.values()].reduce(
+      (byteCount, session) => byteCount + session.bytes,
       0,
     ),
     violations,
-  };
-}
-
-export function scoreCloudUtility(expected, actual) {
-  const expectedText = JSON.stringify(expected);
-  const actualText = JSON.stringify(actual);
-  return {
-    exact: expectedText === actualText,
-    expectedBytes: Buffer.byteLength(expectedText),
-    actualBytes: Buffer.byteLength(actualText),
   };
 }

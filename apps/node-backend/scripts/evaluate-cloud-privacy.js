@@ -3,12 +3,8 @@
 import {
   CLOUD_PRIVACY_EVALUATION_CASES,
   CLOUD_PRIVACY_SYNTHETIC_POLICY,
-  CLOUD_UTILITY_REFERENCE,
 } from "../src/services/aiEvaluation/cloudPrivacyCases.js";
-import {
-  evaluateCloudPrivacyTrace,
-  scoreCloudUtility,
-} from "../src/services/aiEvaluation/cloudPrivacy.js";
+import { evaluateCloudPrivacyTrace } from "../src/services/aiEvaluation/cloudPrivacy.js";
 
 function unique(values) {
   return [...new Set(values)].sort();
@@ -31,16 +27,6 @@ const cases = CLOUD_PRIVACY_EVALUATION_CASES.map((testCase) => {
   };
 });
 
-const utility = {
-  cloudPlan: scoreCloudUtility(
-    CLOUD_UTILITY_REFERENCE.localOnly,
-    CLOUD_UTILITY_REFERENCE.cloudPlan,
-  ),
-  approvedSummary: scoreCloudUtility(
-    CLOUD_UTILITY_REFERENCE.localOnly,
-    CLOUD_UTILITY_REFERENCE.approvedSummary,
-  ),
-};
 const report = {
   schemaVersion: 1,
   generatedAt: new Date().toISOString(),
@@ -48,11 +34,11 @@ const report = {
   releaseAccepted: false,
   releaseBlockers: [
     "Live OpenAI API traffic, account entitlement, and current retention controls have not been verified.",
-    "The enclosing managed sandbox blocks a nested macOS Seatbelt runtime smoke test.",
-    "No isolated Codex subscription adapter exists to inspect.",
-    "Synthetic utility parity is contract evidence, not a live model comparison.",
+    "The separate macOS Seatbelt smoke check does not verify live provider traffic or network confinement.",
+    "The experimental Codex route completed one fictional turn, but encrypted provider payloads, provider-side logout, and independent route acceptance remain unverified.",
+    "Local-only, cloud-plan, and approved-summary utility have not been compared on identical financial tasks.",
   ],
-  utility,
+  utility: { evaluated: false },
   cases,
 };
 

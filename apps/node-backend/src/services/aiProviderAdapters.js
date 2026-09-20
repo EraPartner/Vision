@@ -167,6 +167,11 @@ export async function generateWithProvider({
     throw Object.assign(new Error("An active disclosure grant is required"), {
       code: "GRANT_REQUIRED",
     });
+  const disclosureMode = request.selectedEvidence
+    ? "cloud-synthesis-selected"
+    : request.selectedSummary
+      ? "selected-summary"
+      : "cloud-plan-public";
   const preview = disclosurePayload(request);
   const maxOutputTokens = preview.payload.max_output_tokens;
   const cost = estimatedCostMicros(
@@ -199,6 +204,7 @@ export async function generateWithProvider({
     const record = await reserveDisclosure({
       grantId: request.grantId,
       jobId,
+      expectedMode: disclosureMode,
       preview,
       outputTokens: maxOutputTokens,
       costMicros: cost,

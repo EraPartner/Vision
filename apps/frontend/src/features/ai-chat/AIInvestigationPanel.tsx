@@ -473,7 +473,9 @@ export function AIInvestigationPanel() {
                     }}
                 >
                     <option value="local">{t("aiResearch.localModel")}</option>
-                    <option value="openai-api">{t("aiResearch.openAi")}</option>
+                    <option value="openai-api" disabled={!openAiEnabled}>
+                        {t("aiResearch.openAi")}
+                    </option>
                 </select>
             </div>
             <p className="mt-2 text-xs text-muted-foreground">

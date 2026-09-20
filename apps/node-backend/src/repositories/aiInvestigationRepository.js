@@ -164,7 +164,15 @@ export async function resetSteps(jobId, stepIds) {
 export async function finishJob(id, state, result, error = null) {
   return (
     await query(
-      `UPDATE ai_investigation_jobs SET state=$2,result_json=$3::jsonb,error_json=$4::jsonb,completed_at=CASE WHEN $2 IN ('completed','failed','cancelled') THEN NOW() ELSE NULL END,updated_at=NOW() WHERE id=$1 RETURNING ${COLUMNS}`,
+      `UPDATE ai_investigation_jobs
+       SET state=CASE WHEN cancel_requested_at IS NOT NULL THEN 'cancelled' ELSE $2 END,
+           result_json=CASE WHEN cancel_requested_at IS NOT NULL THEN NULL ELSE $3::jsonb END,
+           error_json=CASE WHEN cancel_requested_at IS NOT NULL
+             THEN '{"code":"CANCELLED"}'::jsonb ELSE $4::jsonb END,
+           completed_at=CASE WHEN cancel_requested_at IS NOT NULL
+             OR $2 IN ('completed','failed','cancelled') THEN NOW() ELSE NULL END,
+           updated_at=NOW()
+       WHERE id=$1 RETURNING ${COLUMNS}`,
       [
         id,
         state,
@@ -180,7 +188,7 @@ export async function setProviderResult(id, result) {
     await query(
       `UPDATE ai_investigation_jobs
        SET checkpoint_json=jsonb_set(checkpoint_json,'{providerResult}',$2::jsonb,true),updated_at=NOW()
-       WHERE id=$1 RETURNING id`,
+       WHERE id=$1 AND cancel_requested_at IS NULL RETURNING id`,
       [id, JSON.stringify(result)],
     )
   ).rows[0];
@@ -200,7 +208,7 @@ export async function requestCancel(id) {
   return (
     (
       await query(
-        `UPDATE ai_investigation_jobs SET cancel_requested_at=NOW(),state=CASE WHEN state='queued' THEN 'cancelled' ELSE state END,updated_at=NOW() WHERE id=$1 AND state NOT IN ('completed','failed','cancelled') RETURNING ${COLUMNS}`,
+        `UPDATE ai_investigation_jobs SET cancel_requested_at=NOW(),state=CASE WHEN state='queued' THEN 'cancelled' ELSE state END,checkpoint_json=checkpoint_json - 'providerResult',updated_at=NOW() WHERE id=$1 AND state NOT IN ('completed','failed','cancelled') RETURNING ${COLUMNS}`,
         [id],
       )
     ).rows[0] ?? null

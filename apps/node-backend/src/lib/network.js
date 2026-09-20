@@ -7,10 +7,10 @@
  * back to cached/DB data — adding noise and delaying readiness.
  */
 
-import net from 'node:net';
-import { logger } from '../config/logger.js';
+import net from "node:net";
+import { logger } from "../config/logger.js";
 
-const DEFAULT_PROBE_HOST = '1.1.1.1';
+const DEFAULT_PROBE_HOST = "1.1.1.1";
 const DEFAULT_PROBE_PORT = 443;
 const DEFAULT_TIMEOUT_MS = 1500;
 const CACHE_TTL_MS = 30_000;
@@ -34,14 +34,18 @@ function probe({ host, port, timeoutMs }) {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      try { socket.destroy(); } catch { /* ignore */ }
+      try {
+        socket.destroy();
+      } catch {
+        /* ignore */
+      }
       resolve(ok);
     };
     // node net's socket.setTimeout fires only AFTER connect — useless for
     // gating a hung SYN. Use an explicit timer to bound the connect attempt.
     const timer = setTimeout(() => finish(false), timeoutMs);
-    socket.once('connect', () => finish(true));
-    socket.once('error', () => finish(false));
+    socket.once("connect", () => finish(true));
+    socket.once("error", () => finish(false));
   });
 }
 
@@ -53,6 +57,7 @@ function probe({ host, port, timeoutMs }) {
  * @returns {Promise<boolean>}
  */
 export async function isInternetReachable(opts = {}) {
+  if (process.env.VISION_SYNTHETIC_SMOKE_OFFLINE === "1") return false;
   const {
     force = false,
     host = DEFAULT_PROBE_HOST,
@@ -70,10 +75,12 @@ export async function isInternetReachable(opts = {}) {
     .then((ok) => {
       cachedResult = ok;
       cachedAt = Date.now();
-      logger.debug('Internet reachability probe', { ok, host, port });
+      logger.debug("Internet reachability probe", { ok, host, port });
       return ok;
     })
-    .finally(() => { inflight = null; });
+    .finally(() => {
+      inflight = null;
+    });
 
   return inflight;
 }

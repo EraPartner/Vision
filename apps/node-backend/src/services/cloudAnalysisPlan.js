@@ -138,6 +138,11 @@ function injectPredicates(sql, predicates) {
   return `${head}${/\nWHERE\b/.test(head) ? " AND " : "\nWHERE "}${predicates.join(" AND ")}${tail}`;
 }
 
+/**
+ * @param {unknown} candidate
+ * @param {{workspaces?: string[], accountIds?: number[], investmentIds?: number[], dateFrom?: string, dateTo?: string}} trustedScope
+ * @param {{execute?: typeof executeAnalysisSql, requestId?: string}} [options]
+ */
 export async function executeCloudAnalysisPlan(
   candidate,
   trustedScope,
