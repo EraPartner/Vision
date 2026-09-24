@@ -23,7 +23,7 @@ const FIELD_GRID_CONTRACTS: FieldGridContract[] = [
         file: "src/features/tax/profile-steps/IncomeStep.tsx",
         responsiveCount: 3,
     },
-    { file: "src/features/accounts/AddAccountDialog.tsx", responsiveCount: 4 },
+    { file: "src/features/accounts/AddAccountDialog.tsx", responsiveCount: 3 },
     {
         file: "src/features/portfolio/InvestmentFormFields.tsx",
         responsiveCount: 6,

@@ -1,14 +1,8 @@
-import { useEffect, useRef, useState } from "react";
-import {
-    BookOpen,
-    Download,
-    Plus,
-    RotateCcw,
-    Save,
-    Trash2,
-} from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
+import { Download, Plus, RotateCcw, Save, Trash2 } from "lucide-react";
 import { apiClient, ApiClientError } from "@/lib/api";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
+import { pageIcon } from "@/lib/pageIcons";
 import type {
     DossierContent,
     DossierEvidence,
@@ -78,11 +72,12 @@ function LinesField({
     value: string[];
     onChange: (lines: string[]) => void;
 }) {
+    const inputId = useId();
     return (
         <div className="space-y-1">
-            <Label>{label}</Label>
+            <Label htmlFor={inputId}>{label}</Label>
             <Textarea
-                aria-label={label}
+                id={inputId}
                 value={value.join("\n")}
                 onChange={(event) =>
                     onChange(
@@ -260,7 +255,7 @@ export default function ResearchDossiersPage() {
             <PageHeader
                 title={t("dossiers.title")}
                 subtitle={t("dossiers.subtitle")}
-                icon={BookOpen}
+                icon={pageIcon("/research/dossiers")}
                 actions={
                     <>
                         <Button
@@ -752,7 +747,7 @@ export default function ResearchDossiersPage() {
                                                         document.id ===
                                                         item.source.documentId,
                                                 ) && (
-                                                    <p className="text-sm text-amber-600">
+                                                    <p className="text-sm text-warning">
                                                         {t(
                                                             "dossiers.documentUnavailable",
                                                         )}
@@ -943,7 +938,7 @@ export default function ResearchDossiersPage() {
                                     .map((entry) => (
                                         <p
                                             key={`${entry.kind}-${entry.historicalId}`}
-                                            className="rounded-md border border-amber-500/50 p-2 text-sm"
+                                            className="rounded-md border border-warning/50 p-2 text-sm"
                                         >
                                             {t("dossiers.deletedLink", {
                                                 label: entry.labelSnapshot,
