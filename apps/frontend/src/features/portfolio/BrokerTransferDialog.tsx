@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowRightLeft, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Account, PortfolioBrokerRetagReceipt } from "@/types/api";
@@ -8,6 +8,7 @@ import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { invalidateAccountRepoint } from "@/lib/queryKeys";
 import { useAccounts } from "@/hooks/useAccounts";
 import { activeBrokerAccounts } from "@/features/portfolio/manualTradeBroker";
+import { useAccountPortfolioLotRetagPreview } from "@/features/portfolio/usePortfolioQueries";
 import {
     PortfolioLotRetagChoice,
     UNASSIGNED_PORTFOLIO_LOTS,
@@ -39,11 +40,7 @@ export function BrokerTransferDialog({ account, open, onOpenChange }: Props) {
     const idempotencyRef = useRef<
         { fingerprint: string; key: string } | undefined
     >(undefined);
-    const preview = useQuery({
-        queryKey: ["account-portfolio-lot-retag-preview", account.id],
-        queryFn: () => apiClient.getAccountPortfolioLotRetagPreview(account.id),
-        enabled: open,
-    });
+    const preview = useAccountPortfolioLotRetagPreview(account.id, open);
 
     useEffect(() => {
         if (!open) return;

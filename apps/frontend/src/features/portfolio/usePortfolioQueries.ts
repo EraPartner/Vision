@@ -169,6 +169,17 @@ export function usePortfolioImportPreview(batchId: number) {
     });
 }
 
+export function useAccountPortfolioLotRetagPreview(
+    accountId: number,
+    enabled: boolean,
+) {
+    return useQuery({
+        queryKey: ["account-portfolio-lot-retag-preview", accountId],
+        queryFn: () => apiClient.getAccountPortfolioLotRetagPreview(accountId),
+        enabled,
+    });
+}
+
 export function useNetWorthSummary(currency: string) {
     return useQuery({
         queryKey: netWorthKeys.byCurrency(currency),

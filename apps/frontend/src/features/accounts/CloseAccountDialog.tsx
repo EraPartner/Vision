@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
     Dialog,
     DialogContent,
@@ -30,6 +30,7 @@ import type { Account } from "@/types/api";
 import { isHoldingsOnlyPortfolioType, isPortfolioType } from "./groupAccounts";
 import { useAccounts } from "@/hooks/useAccounts";
 import { activeBrokerAccounts } from "@/features/portfolio/manualTradeBroker";
+import { useAccountPortfolioLotRetagPreview } from "@/features/portfolio/usePortfolioQueries";
 import {
     KEEP_PORTFOLIO_LOTS,
     PortfolioLotRetagChoice,
@@ -61,11 +62,10 @@ export function CloseAccountDialog({
     const brokerAccounts = activeBrokerAccounts(
         accountsQuery.data?.items ?? [],
     );
-    const portfolioPreview = useQuery({
-        queryKey: ["account-portfolio-lot-retag-preview", account.id],
-        queryFn: () => apiClient.getAccountPortfolioLotRetagPreview(account.id),
-        enabled: open && portfolioAccount,
-    });
+    const portfolioPreview = useAccountPortfolioLotRetagPreview(
+        account.id,
+        open && portfolioAccount,
+    );
 
     useEffect(() => {
         if (open) {
