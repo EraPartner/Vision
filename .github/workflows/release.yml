@@ -2,7 +2,7 @@ name: Release
 
 # Triggered when a version tag is pushed, e.g. v1.2.3
 # Workflow:
-#   0. Verify: version tag matches root, frontend, and Electron package manifests + full quality gate
+#   0. Verify: version tag matches root, frontend, and Electron package manifests; run release checks
 #   1. Build mac .app + .dmg via electron-builder (arm64 — Apple Silicon only)
 #   2. Create a GitHub Release with all artifacts + SHA256 checksums
 
@@ -27,17 +27,14 @@ concurrency:
 
 jobs:
   # ─────────────────────────────────────────────────────────────────────────────
-  # 0. Verify: version tag == package.json version + full quality gate
+  # 0. Verify: version tag == package.json version + release checks
   # ─────────────────────────────────────────────────────────────────────────────
   verify:
     name: Verify Release
     runs-on: ubuntu-24.04
     outputs:
       release_commit: ${{ steps.release_commit.outputs.sha }}
-    # 40, not 30: this job now also runs the secrets scan, the backend JSDoc
-    # type-check and the generated-artifact checks that ci.yml's quality tier
-    # runs (they were missing here, so a tag pushed on a commit that never
-    # passed CI got none of them).
+    # Allow time for native migration checks and all release test suites.
     timeout-minutes: 50
     permissions:
       contents: read
@@ -202,7 +199,7 @@ jobs:
 
       # ci.yml's typecheck-backend job — a required gate there, absent here.
       # Both halves: the loose base program over all of src/, then the
-      # noImplicitAny ratchet over the paths scripts/checkjs-ratchet.js lists.
+      # noImplicitAny ratchet over src/ with an explicit existing-debt baseline.
       - name: Type-check backend (JSDoc)
         run: apps/node-backend/node_modules/.bin/tsc -p apps/node-backend/tsconfig.check.json
 
@@ -211,6 +208,9 @@ jobs:
 
       - name: Build frontend
         run: CI=1 bun run build
+
+      - name: Check frontend bundle size
+        run: cd apps/frontend && bun run size:check
 
       - name: Verify production health and migration reversibility
         env:
@@ -223,11 +223,20 @@ jobs:
       - name: Run Electron and native-runtime contract tests
         run: bun run test:electron
 
-      - name: Run backend tests
-        run: bun run test
+      - name: Run repository script tests
+        run: bun run test:scripts
+
+      - name: Run backend tests with disposable PostgreSQL
+        run: scripts/with-test-db.sh --coverage
 
       - name: Run frontend tests with coverage
         run: bun run test:coverage
+
+      - name: Run live API contract tests
+        env:
+          LIVE_API_BASE: http://localhost:3002
+          VISION_NATIVE_COMMAND_DIR: apps/frontend
+        run: bash .github/scripts/with-native-stack.sh bun run vitest run src/test/live-contracts/live-contracts.test.ts
 
   # ─────────────────────────────────────────────────────────────────────────────
   # 1. Build mac .app + .dmg via electron-builder (arm64 — Apple Silicon only)

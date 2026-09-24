@@ -34,6 +34,16 @@ const safeDisclosure = {
   citations: ["cashflow-range"],
 };
 
+/**
+ * @typedef {{publicSchema: string, language: string, depth: string,
+ *   citations: string[]} & (
+ *   {question: string, selectedSummary?: never, selectedEvidence?: never} |
+ *   {question?: never, selectedSummary: string, selectedEvidence?: never} |
+ *   {question?: never, selectedSummary?: never, selectedEvidence: string}
+ * ) & Record<string, unknown>} SyntheticDisclosure
+ */
+
+/** @param {SyntheticDisclosure} [disclosure] */
 function brokerBody(disclosure = safeDisclosure, overrides = {}) {
   return {
     model: "synthetic-model",

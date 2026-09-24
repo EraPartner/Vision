@@ -55,9 +55,13 @@ const DIST_DIR = process.env.VISION_DIST_DIR
  * absorb routine dependency-lockfile churn without false alarms — tight
  * enough that a single mis-scoped import still trips it.
  *
- * Last measured (2026-08-25, fresh production build):
- *   boot-preload graph: 399.72 KB gz (44 files: entry + 43 modulepreloads)
- *   total (all routes): 914.13 KB gz (146 JS/CSS assets)
+ * Last measured (2026-09-24, production build with the current locked dependencies):
+ *   boot-preload graph: 445.33 KB gz (49 files: entry + 48 modulepreloads)
+ *   total (all routes): 1046.60 KB gz (163 JS/CSS assets)
+ * The 2026-08-25 budget revision, built with the same local toolchain, measured
+ * 399.96 KB / 914.30 KB. The intervening analysis, AI, category, planning,
+ * and audit features account for the larger route set. Keep the new budgets
+ * close to the current measured graph rather than exempting these features.
  *
  * The 2026-08-02 drop (306.76 -> 282.14 KB gz, -24.62) is the Framer Motion
  * engine leaving the entry chunk: every `motion.*` call site now uses the
@@ -69,12 +73,10 @@ const DIST_DIR = process.env.VISION_DIST_DIR
  * own chunk instead of being inlined; that is the intended trade.
  */
 const BUDGETS_KB = {
-    // 399.72 * 1.05 = 419.71, rounded up. The deliberate increase covers the
-    // default Dashboard route's static graph, now preloaded to remove its serial hop.
-    preload: 420,
-    // The existing total budget remains tighter than 914.13 * 1.05 = 959.84.
-    // Effective headroom is 2.83%, so route preloading does not loosen total size.
-    total: 940,
+    // 445.33 * 1.05 = 467.60, rounded up after measured feature growth.
+    preload: 468,
+    // 1046.60 * 1.05 = 1098.93, rounded to the next 10 KB.
+    total: 1100,
 };
 
 /** Parses dist/index.html for the entry module script and its modulepreload set. */

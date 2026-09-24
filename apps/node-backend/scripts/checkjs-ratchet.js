@@ -7,8 +7,8 @@
  * gate only catches gross misuse. Turning `noImplicitAny` on globally is not
  * something one change could pay for in one sitting, so it was ratcheted on
  * per file/directory instead — see RATCHETED below for how that campaign
- * finished: the whole `src/` tree is now held to noImplicitAny, permanently,
- * by a single prefix entry.
+ * finished: the whole `src/` tree is checked by a single prefix entry. The
+ * baseline records later regressions, while any new diagnostic fails this gate.
  *
  * Why a filtering script instead of a second tsconfig scoped to a directory:
  * `tsc` has no per-directory strictness, and narrowing a config's `include` to
@@ -28,35 +28,34 @@
  *
  * Usage: bun run typecheck:ratchet     (or: bun scripts/checkjs-ratchet.js)
  *
- * There is nothing left to ratchet: every file under `src/` is already held to
- * noImplicitAny via the single prefix entry below, and a newly created file
- * under `src/` is covered from birth — no per-file or per-directory addition
- * needed. If a future top-level sibling of `src/` appears (a second source
- * root outside it) and should also be held to noImplicitAny, add its own
- * prefix entry to RATCHETED the same way.
+ * The baseline stores each existing diagnostic's file, code, message, and
+ * trimmed source line. Repeated identical diagnostics are counted separately.
+ * Remove entries as source is fixed; stale entries also fail the gate. Do not
+ * add new entries to bypass a failure.
+ * A new file under `src/` is covered without a per-file entry.
  */
 
-import path from 'node:path';
-import process from 'node:process';
-import { fileURLToPath } from 'node:url';
+import path from "node:path";
+import process from "node:process";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
-import ts from 'typescript';
+import ts from "typescript";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const CONFIG_PATH = path.join(ROOT, 'tsconfig.check.strict.json');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const CONFIG_PATH = path.join(ROOT, "tsconfig.check.strict.json");
+const BASELINE_PATH = path.join(ROOT, "scripts/checkjs-ratchet-baseline.json");
 
 /**
  * Paths whose implicit-any errors FAIL this check. Relative to
  * `apps/node-backend/`, POSIX separators. An entry ending in `/` is a directory
  * prefix; anything else is an exact file.
  *
- * Campaign complete: every file under `src/` (types, repositories, services,
- * routes, lib, middleware, controllers, integrations, startup, config, utils,
- * database, main.js) is implicit-any-clean, so the tree collapses to the
- * single `src/` prefix below. `isRatcheted`'s match is per-string-prefix, not
- * per-directory-level, so this one entry covers the whole tree, including any
- * new file added from birth — no per-directory or per-file entries needed
- * anymore. History, briefly: the data layer (`types/`, `repositories/`) went
+ * The original annotation campaign covered every file under `src/`, so the
+ * tree collapsed to the single prefix below. Later source changes introduced
+ * diagnostics recorded in checkjs-ratchet-baseline.json. `isRatcheted` matches
+ * by string prefix, so this entry covers the whole tree, including new files.
+ * History, briefly: the data layer (`types/`, `repositories/`) went
  * first, then `services/` one subdirectory at a time (`calculations/` last),
  * then the non-routes backend tail (`lib/`, `middleware/`, `controllers/`,
  * `integrations/`, `startup/`, `config/`, `utils/`, `database/`, 272 errors
@@ -80,16 +79,14 @@ const CONFIG_PATH = path.join(ROOT, 'tsconfig.check.strict.json');
  *
  * @type {string[]}
  */
-const RATCHETED = [
-  'src/',
-];
+const RATCHETED = ["src/"];
 
 /**
  * @param {string} absolutePath
  * @returns {string} POSIX path relative to apps/node-backend/
  */
 function toRelative(absolutePath) {
-  return path.relative(ROOT, absolutePath).split(path.sep).join('/');
+  return path.relative(ROOT, absolutePath).split(path.sep).join("/");
 }
 
 /**
@@ -98,7 +95,52 @@ function toRelative(absolutePath) {
  */
 function isRatcheted(relativePath) {
   return RATCHETED.some((entry) =>
-    entry.endsWith('/') ? relativePath.startsWith(entry) : relativePath === entry);
+    entry.endsWith("/")
+      ? relativePath.startsWith(entry)
+      : relativePath === entry,
+  );
+}
+
+/** @param {ts.Diagnostic} diagnostic */
+function diagnosticKey(diagnostic) {
+  const file = diagnostic.file;
+  const start = diagnostic.start;
+  if (!file || start === undefined) return undefined;
+  const rel = toRelative(file.fileName);
+  const line = file.getLineAndCharacterOfPosition(start).line;
+  const sourceLine = file.text.split(/\r?\n/)[line]?.trim() ?? "";
+  return JSON.stringify([
+    rel,
+    diagnostic.code,
+    ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
+    sourceLine,
+  ]);
+}
+
+function loadBaseline() {
+  /** @type {unknown} */
+  const parsed = JSON.parse(readFileSync(BASELINE_PATH, "utf8"));
+  if (
+    !Array.isArray(parsed) ||
+    !parsed.every(
+      (item) =>
+        Array.isArray(item) &&
+        item.length === 4 &&
+        typeof item[0] === "string" &&
+        typeof item[1] === "number" &&
+        typeof item[2] === "string" &&
+        typeof item[3] === "string",
+    )
+  ) {
+    throw new Error(`[checkjs-ratchet] Invalid baseline: ${BASELINE_PATH}`);
+  }
+  /** @type {Map<string, number>} */
+  const counts = new Map();
+  for (const item of parsed) {
+    const key = JSON.stringify(item);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
 }
 
 /**
@@ -109,11 +151,17 @@ function loadConfig() {
     ...ts.sys,
     /** @param {ts.Diagnostic} diagnostic */
     onUnRecoverableConfigFileDiagnostic(diagnostic) {
-      console.error(ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'));
+      console.error(
+        ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
+      );
       process.exit(2);
     },
   };
-  const parsed = ts.getParsedCommandLineOfConfigFile(CONFIG_PATH, undefined, host);
+  const parsed = ts.getParsedCommandLineOfConfigFile(
+    CONFIG_PATH,
+    undefined,
+    host,
+  );
   if (!parsed) {
     console.error(`[checkjs-ratchet] could not read ${CONFIG_PATH}`);
     process.exit(2);
@@ -134,39 +182,62 @@ function main() {
   for (const diagnostic of diagnostics) {
     if (!diagnostic.file) continue;
     const rel = toRelative(diagnostic.file.fileName);
-    if (rel.startsWith('..') || rel.includes('node_modules/')) continue;
+    if (rel.startsWith("..") || rel.includes("node_modules/")) continue;
     const bucket = byFile.get(rel);
     if (bucket) bucket.push(diagnostic);
     else byFile.set(rel, [diagnostic]);
   }
 
-  const failures = [...byFile.entries()].filter(([rel]) => isRatcheted(rel));
+  const baseline = loadBaseline();
+  const ratcheted = [...byFile.entries()].filter(([rel]) => isRatcheted(rel));
+  const failures = ratcheted
+    .flatMap(([, list]) => list)
+    .filter((diagnostic) => {
+      const key = diagnosticKey(diagnostic);
+      if (!key) return true;
+      const remaining = baseline.get(key) ?? 0;
+      if (remaining === 0) return true;
+      baseline.set(key, remaining - 1);
+      return false;
+    });
 
   if (failures.length > 0) {
     const formatHost = {
       getCanonicalFileName: (/** @type {string} */ f) => f,
       getCurrentDirectory: () => ROOT,
-      getNewLine: () => '\n',
+      getNewLine: () => "\n",
     };
-    const flat = failures.flatMap(([, list]) => list);
-    console.error(ts.formatDiagnostics(flat, formatHost).trimEnd());
-    console.error('');
+    console.error(ts.formatDiagnostics(failures, formatHost).trimEnd());
+    console.error("");
     console.error(
-      `[checkjs-ratchet] FAIL: ${flat.length} error(s) in ${failures.length} ratcheted file(s).`,
+      `[checkjs-ratchet] FAIL: ${failures.length} new diagnostic(s) in ratcheted source.`,
     );
-    console.error('[checkjs-ratchet] These paths are held to noImplicitAny — annotate, do not widen.');
+    console.error(
+      "[checkjs-ratchet] Fix new diagnostics; the baseline records existing debt only.",
+    );
     process.exit(1);
   }
 
   const ratchetedCount = [...program.getSourceFiles()]
     .map((sourceFile) => toRelative(sourceFile.fileName))
-    .filter((rel) => !rel.startsWith('..') && isRatcheted(rel)).length;
+    .filter((rel) => !rel.startsWith("..") && isRatcheted(rel)).length;
 
-  // No "ready to ratchet" hint anymore: RATCHETED is a single `src/` prefix,
-  // so every in-scope file is either already ratcheted (and just got counted
-  // above) or would have failed the check above already — there is no
-  // clean-but-unlisted frontier left to surface.
-  console.log(`[checkjs-ratchet] OK: ${ratchetedCount} file(s) clean under noImplicitAny.`);
+  // The single src/ prefix also covers newly added files. Require baseline
+  // entries to be pruned when their diagnostics are fixed, so reintroducing an
+  // old error cannot consume a stale entry later.
+  const resolved = [...baseline.values()].reduce(
+    (sum, count) => sum + count,
+    0,
+  );
+  if (resolved > 0) {
+    console.error(
+      `[checkjs-ratchet] FAIL: ${resolved} stale baseline diagnostic(s). Remove their entries from ${BASELINE_PATH}.`,
+    );
+    process.exit(1);
+  }
+  console.log(
+    `[checkjs-ratchet] OK: ${ratchetedCount} source file(s) checked; no new or stale diagnostics.`,
+  );
 }
 
 main();

@@ -48,6 +48,17 @@ scan, or publish a product container image. The required aggregate check remains
 stage and keeps a stable branch-protection name. A skipped path-filtered job is handled explicitly;
 an absent or failed required result is not treated as green.
 
+The frontend build is followed by `size:check`. Its measured gzip limits are 468 KB for the
+initial preload graph and 1100 KB for all route assets. The limits include about five percent
+headroom over the 2026-09-24 production build; the checker reads the generated `index.html`
+and assets to catch new eager imports and total bundle growth.
+
+The backend runs the base JSDoc type check and a `noImplicitAny` check over every `src/` file.
+The latter compares diagnostics with `scripts/checkjs-ratchet-baseline.json`, which records the
+1,254 existing diagnostics measured on 2026-09-24 by file, code, message, and source line. A
+new diagnostic fails CI, including one in a newly added file. A corrected diagnostic also
+requires removal of its baseline entry, so the same error cannot silently return later.
+
 ### Dependency and workflow admission
 
 The shared Bun setup runs a frozen install with lifecycle scripts disabled and does not restore a
@@ -111,7 +122,9 @@ Visual snapshots remain manual because macOS and Linux render different baseline
 1. **Verify Release** checks that the tag's commit is reachable from `main`, checks the tag and
    manifest versions, scans secrets and the release
    filesystem, audits dependencies, regenerates checked artifacts, runs lint/type checks, builds
-   the frontend, exercises native health and migration reversibility, and runs the test suites.
+   the frontend and its bundle limit, exercises native health and migration reversibility, and runs
+   script, Electron, frontend coverage, backend coverage against a disposable PostgreSQL cluster,
+   and live API contract tests.
 2. **Build mac .app + DMG** builds the ad-hoc signed native macOS artifacts and source-launcher
    update bundle from the exact verified commit with pinned runtime inputs. It scans the packaged
    app and source tree into separate CycloneDX software bills of materials (SBOMs), checks that

@@ -119,7 +119,10 @@ async function verifyDomainRow(payload, runQuery) {
  * authenticated outside PostgreSQL; a row in audit_chain_checkpoints is not
  * such a receipt. A checkpoint behind the head anchors only its prefix.
  *
- * @param {{trustedCheckpoint?: {sequence:number, hash:string}, pageSize?:number,
+ * @param {{trustedCheckpoint?: {sequence:number, hash:string,
+ *   retention?: {through:number, hash:string,
+ *     domainMax:{dbEditor:number, split:number, retag:number},
+ *     migrationHeads:string[]}}, pageSize?:number,
  *   readSegment?:typeof readAuditSegment, readHead?:typeof readAuditHead,
  *   runQuery?:typeof query}} [options]
  */
