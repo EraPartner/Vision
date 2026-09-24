@@ -111,7 +111,12 @@ describe("getCount", () => {
       amountSigned: true,
     });
     const [sql, params] = query.mock.calls[0];
-    expect(sql).toContain("t.category_id IN ($1, $2)");
+    expect(sql).toContain(
+      "t.category_id IN (SELECT category_id FROM category_ancestors WHERE ancestor_id IN ($1, $2))",
+    );
+    expect(sql).toContain(
+      "r2.default_category_id IN (SELECT category_id FROM category_ancestors WHERE ancestor_id IN ($1, $2))",
+    );
     expect(sql).toContain("t.amount < 0");
     expect(sql).toContain("t.amount >= $3");
     expect(sql).toContain("t.amount <= $4");

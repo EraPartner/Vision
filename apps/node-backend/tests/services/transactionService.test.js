@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { mockConnection } from "../helpers/repoMocks.js";
 
 const mocks = vi.hoisted(() => ({
   create: vi.fn(),
@@ -42,9 +43,9 @@ vi.mock("../../src/services/deduplication.js", () => ({
   lockManualTransactionIdentity: mocks.lockManualTransactionIdentity,
   recordManualTransactionDedupClaim: mocks.recordManualTransactionDedupClaim,
 }));
-vi.mock("../../src/database/connection.js", () => ({
-  withTransaction: mocks.withTransaction,
-}));
+vi.mock("../../src/database/connection.js", () =>
+  mockConnection({ withTransaction: mocks.withTransaction }),
+);
 vi.mock("../../src/services/plannedMatchService.js", () => ({
   autoLinkTransactions: mocks.autoLinkTransactions,
 }));

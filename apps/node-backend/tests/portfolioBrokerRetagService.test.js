@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { mockConnection } from "./helpers/repoMocks.js";
 
 const mocks = vi.hoisted(() => ({
   lockPortfolioTransactionWrites: vi.fn(),
@@ -13,9 +14,9 @@ const mocks = vi.hoisted(() => ({
   getSetting: vi.fn(),
 }));
 
-vi.mock("../src/database/connection.js", () => ({
-  withTransaction: (fn) => fn(),
-}));
+vi.mock("../src/database/connection.js", () =>
+  mockConnection({ withTransaction: (fn) => fn() }),
+);
 
 vi.mock("../src/repositories/portfolioBrokerRetagRepository.js", () => ({
   default: mocks,

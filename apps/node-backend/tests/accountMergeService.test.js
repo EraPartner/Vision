@@ -60,7 +60,7 @@ function happyPath({
 
 const clearAnchorCall = () =>
   mockClient.query.mock.calls.find(([sql]) =>
-    sql.includes("statement_balance = NULL"),
+    sql.includes("DELETE FROM account_statement_balances"),
   );
 
 beforeEach(() => {
@@ -243,7 +243,7 @@ describe("mergeAccounts (ADR-088)", () => {
     expect(result.stampsInterleaved).toBe(true);
     const clear = clearAnchorCall();
     expect(clear).toBeDefined();
-    expect(clear[0]).toContain("statement_balance_date = NULL");
+    expect(clear[0]).toContain("WHERE account_id = $1");
     expect(clear[1]).toEqual([2]); // clears the SURVIVOR's anchor only
 
     // Historical per-row stamps are never rewritten — no UPDATE touches

@@ -291,14 +291,16 @@ describe("statisticsRepository.getCategoryPivot", () => {
       excludedRecipientIds: [9],
     });
     const [sql, params] = query.mock.calls[0];
-    expect(sql).toContain("NOT IN ($1, $2)");
+    expect(sql).toContain(
+      "NOT EXISTS (SELECT 1 FROM category_ancestors excluded",
+    );
+    expect(sql).toContain("excluded.ancestor_id IN ($1, $2)");
     expect(sql).toContain("NOT IN ($3)");
     expect(params).toEqual([1, 2, 9]);
-    // Canonical semantics: 3-level category COALESCE + alias-aware recipient
-    // exclusion (was 2-level category + bare t.recipient_id NOT IN, which
-    // disagreed with the dashboard/forecast on merged recipients).
+    // Category exclusions include descendants and inherit recipient defaults.
+    // Recipient exclusions use the primary alias for merged recipients.
     expect(sql).toContain(
-      "COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN",
+      "excluded.category_id = COALESCE(t.category_id, r.default_category_id, pr.default_category_id)",
     );
     expect(sql).toContain(
       "COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN",

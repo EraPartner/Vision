@@ -1041,10 +1041,12 @@ describe("InfoRepository", () => {
       expect(fallbackSql).toContain(
         "LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id",
       );
-      // Canonical exclusion semantics: 3-level category COALESCE (alias-aware).
+      // Exclude the selected categories and their descendants using the
+      // effective category after recipient defaults.
       expect(fallbackSql).toContain(
-        "COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN ($1, $2)",
+        "excluded.category_id = COALESCE(t.category_id, r.default_category_id, pr.default_category_id)",
       );
+      expect(fallbackSql).toContain("excluded.ancestor_id IN ($1, $2)");
       // Aggregated per (date,currency) in the `daily` CTE, then joined by month.
       expect(fallbackSql).toContain(
         "LEFT JOIN daily d ON d.date >= m.month_start",

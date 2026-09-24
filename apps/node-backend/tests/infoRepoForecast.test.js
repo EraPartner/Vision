@@ -171,7 +171,10 @@ describe("getCashflowComparison", () => {
     setupEmpty();
     await getCashflowComparison([1, 2], [9], "EUR");
     const [pastSql, params] = query.mock.calls[0];
-    expect(pastSql).toContain("NOT IN ($1, $2)");
+    expect(pastSql).toContain(
+      "NOT EXISTS (SELECT 1 FROM category_ancestors excluded",
+    );
+    expect(pastSql).toContain("excluded.ancestor_id IN ($1, $2)");
     expect(pastSql).toContain("NOT IN ($3)");
     // The exclusion params keep $1..$k; the module's own bound values (anchor
     // date, then the window length) are allocated after them.

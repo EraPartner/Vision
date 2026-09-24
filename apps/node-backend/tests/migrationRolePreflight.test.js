@@ -60,17 +60,21 @@ describe("migration role preflight", () => {
   });
 
   it("routes automation and Demo schema writes through the guarded runner", () => {
-    const entrypoints = [
-      ".github/workflows/ci.yml",
-      ".github/workflows/release.yml",
-      "packaging/electron/runtime/native.js",
-    ];
-    for (const relativePath of entrypoints) {
-      const contents = readFileSync(
-        path.join(repositoryRoot, relativePath),
-        "utf8",
-      );
-      expect(contents).toContain("apps/node-backend/scripts/db-migrate.js");
+    const read = (relativePath) =>
+      readFileSync(path.join(repositoryRoot, relativePath), "utf8");
+    const ci = read(".github/workflows/ci.yml");
+    const release = read(".github/workflows/release.yml");
+    const testDb = read("scripts/with-test-db.sh");
+    const nativeStack = read(".github/scripts/with-native-stack.sh");
+    const demo = read("packaging/electron/runtime/native.js");
+
+    expect(ci).toContain("scripts/with-test-db.sh --coverage");
+    expect(ci).toContain(".github/scripts/with-native-stack.sh");
+    expect(release).toContain(".github/scripts/with-native-stack.sh");
+    for (const wrapper of [testDb, nativeStack, demo]) {
+      expect(wrapper).toContain("apps/node-backend/scripts/db-migrate.js");
+    }
+    for (const contents of [ci, release, testDb, nativeStack, demo]) {
       expect(contents).not.toMatch(
         /^\s*(?:\/venv\/bin\/alembic|"?\$ALEMBIC"?)\s+(?:upgrade|downgrade|stamp)\b/m,
       );

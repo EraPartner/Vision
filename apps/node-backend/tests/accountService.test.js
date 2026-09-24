@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { mockConnection } from "./helpers/repoMocks.js";
 
 vi.mock("../src/services/currency/currencyConversionService.js", () => ({
   loadCurrentRates: vi.fn(async () => ({ EUR: 1, USD: 0.5 })),
@@ -7,9 +8,9 @@ vi.mock("../src/services/currency/currencyConversionService.js", () => ({
   ),
 }));
 
-vi.mock("../src/database/connection.js", () => ({
-  withTransaction: vi.fn(async (fn) => fn()),
-}));
+vi.mock("../src/database/connection.js", () =>
+  mockConnection({ withTransaction: vi.fn(async (fn) => fn()) }),
+);
 
 vi.mock("../src/repositories/accountRepository.js", () => {
   const repo = {

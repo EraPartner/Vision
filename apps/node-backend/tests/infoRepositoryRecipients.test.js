@@ -213,8 +213,9 @@ describe("recipientInsightsRepository.getRecipientInsights", () => {
     const [momSql] = query.mock.calls[1];
     for (const sql of [topSql, momSql]) {
       expect(sql).toContain(
-        "COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN",
+        "excluded.category_id = COALESCE(t.category_id, r.default_category_id, pr.default_category_id)",
       );
+      expect(sql).toContain("excluded.ancestor_id IN ($1, $2)");
     }
     expect(topParams).toEqual([5, 7]);
   });
@@ -314,7 +315,7 @@ describe("recipientInsightsRepository.getRecipientByYear", () => {
     expect(sql).not.toContain("NOT IN");
   });
 
-  it("applies category exclusions (3-level alias-aware COALESCE) when provided", async () => {
+  it("excludes selected categories and descendants after recipient fallback", async () => {
     query.mockResolvedValueOnce({ rows: [] });
     convertRowsToEur.mockResolvedValueOnce([]);
     await recipientInsightsRepository.getRecipientByYear({
@@ -323,8 +324,9 @@ describe("recipientInsightsRepository.getRecipientByYear", () => {
     });
     const [sql, params] = query.mock.calls[0];
     expect(sql).toContain(
-      "COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN",
+      "excluded.category_id = COALESCE(t.category_id, r.default_category_id, pr.default_category_id)",
     );
+    expect(sql).toContain("excluded.ancestor_id IN ($1, $2)");
     expect(params).toEqual([5, 7]);
   });
 

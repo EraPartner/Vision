@@ -1,10 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
+import { mockTxConnection } from "./helpers/repoMocks.js";
 
 const mocked = vi.hoisted(() => ({ client: { query: vi.fn() } }));
-vi.mock("../src/database/connection.js", () => ({
-  query: vi.fn(),
-  withTransaction: (operation) => operation(mocked.client),
-}));
+vi.mock("../src/database/connection.js", () => mockTxConnection(mocked.client));
 
 import { reserveDisclosure } from "../src/repositories/aiDisclosureRepository.js";
 

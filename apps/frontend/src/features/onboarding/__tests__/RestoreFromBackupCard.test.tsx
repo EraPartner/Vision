@@ -27,7 +27,7 @@ type ElectronBackupMock = {
     loadSettings: ReturnType<typeof vi.fn>;
 };
 
-type ElectronUpdaterMock = {};
+type ElectronUpdaterMock = Record<string, never>;
 
 function installElectronMocks(overrides: Partial<ElectronBackupMock> = {}): {
     backup: ElectronBackupMock;

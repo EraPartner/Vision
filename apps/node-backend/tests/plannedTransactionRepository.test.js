@@ -336,7 +336,7 @@ describe("plannedTransactionService.create", () => {
 
     const result = await plannedTransactionRepository.create({
       planned_date: "2026-05-01",
-      bank_account: "be12",
+      account_id: 41,
       recipient_id: 3,
       amount: -100,
       memo: "mortgage",
@@ -371,8 +371,10 @@ describe("plannedTransactionService.create", () => {
     expect(clientQuery).toHaveBeenNthCalledWith(1, "BEGIN");
     expect(clientQuery).toHaveBeenNthCalledWith(
       2,
-      expect.stringContaining("INSERT INTO accounts"),
-      ["BE12", false],
+      expect.stringContaining(
+        "SELECT id FROM accounts WHERE id = $1 AND is_active = true",
+      ),
+      [41],
     );
     expect(clientQuery).toHaveBeenNthCalledWith(
       3,
@@ -419,7 +421,7 @@ describe("plannedTransactionService.create", () => {
     await expect(
       plannedTransactionRepository.create({
         planned_date: "2026-05-01",
-        bank_account: "BE12",
+        account_id: 41,
         recipient_id: 3,
         amount: -100,
         memo: "mortgage",
@@ -443,8 +445,10 @@ describe("plannedTransactionService.create", () => {
     expect(clientQuery).toHaveBeenNthCalledWith(1, "BEGIN");
     expect(clientQuery).toHaveBeenNthCalledWith(
       2,
-      expect.stringContaining("INSERT INTO accounts"),
-      ["BE12", false],
+      expect.stringContaining(
+        "SELECT id FROM accounts WHERE id = $1 AND is_active = true",
+      ),
+      [41],
     );
     expect(clientQuery).toHaveBeenNthCalledWith(
       3,
@@ -486,7 +490,7 @@ describe("plannedTransactionService.create", () => {
 
     const result = await plannedTransactionRepository.create({
       planned_date: "2026-05-01",
-      bank_account: "be56",
+      account_id: 42,
       recipient_id: 4,
       amount: 2200,
       memo: "salary",
@@ -504,8 +508,10 @@ describe("plannedTransactionService.create", () => {
     expect(clientQuery).toHaveBeenNthCalledWith(1, "BEGIN");
     expect(clientQuery).toHaveBeenNthCalledWith(
       2,
-      expect.stringContaining("INSERT INTO accounts"),
-      ["BE56", false],
+      expect.stringContaining(
+        "SELECT id FROM accounts WHERE id = $1 AND is_active = true",
+      ),
+      [42],
     );
     expect(clientQuery).toHaveBeenNthCalledWith(
       3,
