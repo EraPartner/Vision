@@ -2,7 +2,7 @@
 title: Application Updates
 type: feature
 status: active
-date: 2026-09-08
+date: 2026-09-24
 tags: [feature, updates, electron, native-runtime, backup, checksum, release]
 description: Native packaged and source-launcher update paths with backup, checksum verification, and rollback boundaries.
 aliases: [update system, application updater]
@@ -58,6 +58,13 @@ launcher validates the target checkout and performs the repository-specific upda
 running Electron process. Development mode reports update availability without treating a working
 tree as a packaged application.
 
+The source installer looks for Bun 1.3.14 on `PATH` or in `~/.bun/bin` before changing the
+checkout. It keeps a source and dependency backup until the frozen, script-disabled root and
+Electron dependency installs succeed and the pinned Electron binary is present. It restores the
+source and dependencies if a copy or install fails. The launcher also requires Bun 1.3.14,
+installs from committed lockfiles with general lifecycle scripts disabled, and runs the known
+Electron binary installer explicitly when needed. It does not run a fetched shell installer.
+
 ## Renderer behavior
 
 `UpdateNotification` displays availability, download, install, success, and failure states. It calls
@@ -71,7 +78,8 @@ installation, progress, and restart events. It does not expose an image-pull ope
 
 `.github/workflows/release.yml` verifies code and generated artifacts, runs native runtime checks,
 builds the macOS app and disk image plus source-launcher bundle, computes checksums, attests the
-artifacts, and creates the GitHub release. No application image is built or published.
+artifacts, generates separate app and source CycloneDX SBOMs, and creates the GitHub release. The
+release job verifies build provenance before publishing. No application image is built or published.
 
 ## Rollback boundaries
 
@@ -81,7 +89,12 @@ keeps the previous database until validation succeeds.
 
 ## Security properties
 
-- Release downloads use HTTPS and are pinned by an expected checksum.
+- GitHub's protected release process is the trusted publisher. The updater does not verify an
+  independent update-signing key or an attestation. An actor able to publish a new ZIP and matching
+  checksum through GitHub could supply a malicious update.
+- Release downloads use HTTPS and require the ZIP's sibling checksum from the same GitHub release.
+  Missing, malformed and mismatched checksums stop automatic installation; the checksum detects
+  corruption and asset mismatch within this trust boundary.
 - Archive extraction rejects traversal and unsupported entries.
 - Installation is gated on a successful backup.
 - The renderer cannot pass arbitrary commands to the main process.
@@ -94,3 +107,4 @@ keeps the previous database until validation succeeds.
 - [[docs/guides/cicd-pipelines|CI/CD Pipelines]]
 - [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]]
 - [[docs/adr/133-native-only-runtime-and-delivery|ADR-133]]
+- [[docs/adr/168-github-release-trust-boundary|ADR-168]]

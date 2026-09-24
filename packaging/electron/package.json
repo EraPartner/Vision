@@ -1,5 +1,6 @@
 {
   "name": "vision-desktop",
+  "private": true,
   "version": "1.0.2",
   "description": "Vision desktop wrapper",
   "main": "main.js",

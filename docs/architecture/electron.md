@@ -2,8 +2,8 @@
 title: Electron Desktop Architecture
 type: architecture-doc
 status: active
-date: 2026-09-20
-updated: 2026-09-20
+date: 2026-09-24
+updated: 2026-09-24
 tags:
   [
     architecture,
@@ -812,17 +812,19 @@ the source-launcher ZIP:
 - **Quarantine removal:** `xattr -rd com.apple.quarantine` applied to entire DEST_ROOT and launcher scripts
 - **Separation:** this helper is not the repository's `install.sh` source-build command
 
-#### Checksum Verification (ADR-023)
+#### Checksum Verification (ADR-023, ADR-168)
 
 When updating via shell installer:
 
 1. Download sibling `.sha256` file from GitHub release
 2. Compute SHA256 of downloaded ZIP
-3. **Hard verification:** If `.sha256` exists but is malformed or mismatches, abort immediately
-4. **Backward compat:** If `.sha256` absent, log warning and best-effort proceed
-5. On mismatch: delete ZIP, throw error, abort update
+3. Abort if the checksum is absent, malformed or mismatched
+4. On failure: delete ZIP, throw an error and leave the installed application in place
 
-See [[docs/adr/023-update-installer-checksum-verification|ADR-023]] for rationale.
+The ZIP and checksum share GitHub as their publisher; this is an integrity check within that
+trust boundary, not an independent release signature. See
+[[docs/adr/023-update-installer-checksum-verification|ADR-023]] for the historical checksum decision
+and [[docs/adr/168-github-release-trust-boundary|ADR-168]] for the current release trust boundary.
 
 #### Backup-Before-Update Pattern
 

@@ -72,7 +72,12 @@ function waitForExit(pid, timeoutMs = 60_000) {
   }
 }
 
-function installNativeUpdate({ sourceApp, destinationApp, hostPid }) {
+function installNativeUpdate({
+  sourceApp,
+  destinationApp,
+  hostPid,
+  spawnProcess = spawnSync,
+}) {
   const sourceStat = fs.statSync(sourceApp);
   const destinationStat = fs.statSync(destinationApp);
   if (!sourceStat.isDirectory() || !destinationStat.isDirectory()) {
@@ -96,12 +101,12 @@ function installNativeUpdate({ sourceApp, destinationApp, hostPid }) {
     fs.renameSync(stagingApp, destinationApp);
     stagingActivated = true;
 
-    spawnSync("/usr/bin/xattr", [
+    spawnProcess("/usr/bin/xattr", [
       "-rd",
       "com.apple.quarantine",
       destinationApp,
     ]);
-    const launched = spawnSync("/usr/bin/open", [destinationApp], {
+    const launched = spawnProcess("/usr/bin/open", [destinationApp], {
       stdio: "ignore",
     });
     if (launched.error || launched.status !== 0) {
@@ -128,7 +133,7 @@ function installNativeUpdate({ sourceApp, destinationApp, hostPid }) {
       !fs.existsSync(destinationApp)
     ) {
       fs.renameSync(backupApp, destinationApp);
-      spawnSync("/usr/bin/open", [destinationApp], { stdio: "ignore" });
+      spawnProcess("/usr/bin/open", [destinationApp], { stdio: "ignore" });
     }
     throw error;
   }

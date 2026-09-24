@@ -11,6 +11,7 @@ const { execFileSync, spawnSync } = require("node:child_process");
 const {
   init,
   pickNativeAppZip,
+  parseSha256Body,
   verifyUpdateChecksum,
   recordUpdateDecision,
   launchAuditedInstaller,
@@ -18,6 +19,22 @@ const {
   launchPreparedNativeInstaller,
   writeInstallerScript,
 } = require("./updater");
+
+test("update checksum must contain exactly one hash for the selected ZIP", () => {
+  const name = "Vision-1.2.3-arm64-mac.zip";
+  const valid = `${"A".repeat(64)}  ${name}\n`;
+  assert.equal(parseSha256Body(valid, name), "a".repeat(64));
+  for (const body of [
+    `${"a".repeat(64)}  other.zip\n`,
+    `${"a".repeat(64)}  ${name}\n${"b".repeat(64)}  ${name}\n`,
+    `prefix ${"a".repeat(64)}  ${name}\n`,
+    `${"a".repeat(64)}  ${name} extra\n`,
+    `${"a".repeat(64)} *${name}\n`,
+    `${"a".repeat(63)}  ${name}\n`,
+  ]) {
+    assert.equal(parseSha256Body(body, name), null);
+  }
+});
 
 test("update checksum decisions are recorded without file paths or URLs", async () => {
   const events = [];
@@ -85,7 +102,56 @@ test("installer launch follows the recorded decision and failure is recorded", a
 const {
   parseInstallerArgs,
   validateVisionAppPath,
+  installNativeUpdate,
 } = require("./native-update-installer");
+
+test("native installer activates a synthetic app and restores the old app on launch failure", async () => {
+  const temp = await fs.promises.mkdtemp(
+    path.join(os.tmpdir(), "vision-native-update-"),
+  );
+  const sourceApp = path.join(temp, "source", "Vision.app");
+  const destinationApp = path.join(temp, "installed", "Vision.app");
+  try {
+    await fs.promises.mkdir(sourceApp, { recursive: true });
+    await fs.promises.mkdir(destinationApp, { recursive: true });
+    await fs.promises.writeFile(path.join(sourceApp, "version"), "new");
+    await fs.promises.writeFile(path.join(destinationApp, "version"), "old");
+    let openings = 0;
+    assert.throws(
+      () =>
+        installNativeUpdate({
+          sourceApp,
+          destinationApp,
+          hostPid: 99999999,
+          spawnProcess: (command) => {
+            if (command === "/usr/bin/open" && openings++ === 0)
+              return { status: 1 };
+            return { status: 0 };
+          },
+        }),
+      /Updated Vision application did not open/,
+    );
+    assert.equal(
+      await fs.promises.readFile(path.join(destinationApp, "version"), "utf8"),
+      "old",
+    );
+    assert.equal(openings, 2);
+
+    const result = installNativeUpdate({
+      sourceApp,
+      destinationApp,
+      hostPid: 99999999,
+      spawnProcess: () => ({ status: 0 }),
+    });
+    assert.equal(result.status, "installed");
+    assert.equal(
+      await fs.promises.readFile(path.join(destinationApp, "version"), "utf8"),
+      "new",
+    );
+  } finally {
+    await fs.promises.rm(temp, { recursive: true, force: true });
+  }
+});
 
 test("native updater selects only the packaged macOS app ZIP", () => {
   const selected = pickNativeAppZip({
@@ -208,7 +274,12 @@ test("source updates preserve the generated native service payload", async () =>
   }
 });
 
-async function prepareSourceUpdateFixture({ failInstall = false } = {}) {
+async function prepareSourceUpdateFixture({
+  failInstall = false,
+  failBunInstall = false,
+  failElectronBinaryInstall = false,
+  bunVersion = "1.3.14",
+} = {}) {
   const temp = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision-source-updater-behavior-"),
   );
@@ -218,10 +289,34 @@ async function prepareSourceUpdateFixture({ failInstall = false } = {}) {
   await fs.promises.mkdir(source);
   await fs.promises.mkdir(destination);
   await fs.promises.mkdir(fakeBin);
-  await fs.promises.writeFile(path.join(destination, ".gitignore"), "venv/\n");
+  await fs.promises.writeFile(
+    path.join(destination, ".gitignore"),
+    "venv/\nnode_modules/\n",
+  );
   await fs.promises.writeFile(
     path.join(destination, "tracked.txt"),
     "old value\n",
+  );
+  await fs.promises.mkdir(path.join(destination, "node_modules"));
+  await fs.promises.writeFile(
+    path.join(destination, "node_modules/old.txt"),
+    "old dependency\n",
+  );
+  await fs.promises.mkdir(
+    path.join(destination, "apps/frontend/node_modules"),
+    { recursive: true },
+  );
+  await fs.promises.mkdir(
+    path.join(destination, "packaging/electron/node_modules"),
+    { recursive: true },
+  );
+  await fs.promises.writeFile(
+    path.join(destination, "packaging/electron/node_modules/old.txt"),
+    "old Electron dependency\n",
+  );
+  await fs.promises.writeFile(
+    path.join(destination, "apps/frontend/node_modules/old.txt"),
+    "old frontend dependency\n",
   );
   await fs.promises.mkdir(path.join(destination, "venv"));
   await fs.promises.writeFile(
@@ -235,13 +330,28 @@ async function prepareSourceUpdateFixture({ failInstall = false } = {}) {
   );
   execFileSync("git", ["init", "-q", destination]);
   execFileSync("git", ["-C", destination, "add", ".gitignore", "tracked.txt"]);
-  await fs.promises.writeFile(path.join(source, ".gitignore"), "venv/\n");
+  await fs.promises.writeFile(
+    path.join(source, ".gitignore"),
+    "venv/\nnode_modules/\n",
+  );
   await fs.promises.writeFile(path.join(source, "tracked.txt"), "new\n");
   await fs.promises.writeFile(path.join(source, "new.txt"), "new\n");
-  for (const command of ["bun", "open", "xattr"]) {
+  await fs.promises.mkdir(path.join(source, "packaging/electron"), {
+    recursive: true,
+  });
+  await fs.promises.writeFile(
+    path.join(source, "packaging/electron/package.json"),
+    '{"name":"vision-electron"}\n',
+  );
+  for (const command of ["open", "xattr"]) {
     const file = path.join(fakeBin, command);
     await fs.promises.writeFile(file, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
   }
+  await fs.promises.writeFile(
+    path.join(fakeBin, "bun"),
+    `#!/bin/sh\nif [ "$1" = "--version" ]; then echo ${bunVersion}; exit 0; fi\nif [ "$1" = "install" ]; then\n  if [ "$(basename "$PWD")" = electron ]; then\n    mkdir -p node_modules/.bin node_modules/electron\n    echo new > node_modules/new.txt\n    : > node_modules/.bin/electron\n    chmod +x node_modules/.bin/electron\n    : > node_modules/electron/install.js\n    exit 0\n  fi\n  mkdir -p node_modules apps/frontend/node_modules\n  echo new > node_modules/new.txt\n  echo new > apps/frontend/node_modules/new.txt\n  ${failBunInstall ? "exit 1" : "exit 0"}\nfi\ncase "$1" in\n  */electron/install.js)\n    ${failElectronBinaryInstall ? "exit 1" : "mkdir -p node_modules/electron/dist/Electron.app/Contents/MacOS; : > node_modules/electron/dist/Electron.app/Contents/MacOS/Electron; chmod +x node_modules/electron/dist/Electron.app/Contents/MacOS/Electron; exit 0"}\n    ;;\nesac\nexit 0\n`,
+    { mode: 0o755 },
+  );
   if (failInstall) {
     const wrapper = path.join(fakeBin, "rsync");
     const failedMarker = path.join(temp, "install-failed");
@@ -288,6 +398,44 @@ test("source install preserves pre-existing untracked content and deletes ordina
       ),
       "new\n",
     );
+    assert.equal(
+      fs.existsSync(path.join(fixture.destination, "node_modules/new.txt")),
+      true,
+    );
+    assert.equal(
+      fs.existsSync(path.join(fixture.destination, "node_modules/old.txt")),
+      false,
+    );
+    assert.equal(
+      fs.existsSync(
+        path.join(
+          fixture.destination,
+          "packaging/electron/node_modules/old.txt",
+        ),
+      ),
+      false,
+    );
+    assert.equal(
+      fs.existsSync(
+        path.join(
+          fixture.destination,
+          "packaging/electron/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron",
+        ),
+      ),
+      true,
+    );
+    assert.equal(
+      fs.existsSync(
+        path.join(fixture.destination, "apps/frontend/node_modules/new.txt"),
+      ),
+      true,
+    );
+    assert.equal(
+      fs.existsSync(
+        path.join(fixture.destination, "apps/frontend/node_modules/old.txt"),
+      ),
+      false,
+    );
   } finally {
     await fs.promises.rm(fixture.temp, { recursive: true, force: true });
   }
@@ -318,6 +466,163 @@ test("source rollback uses the same pre-update protection manifest", async () =>
     assert.equal(
       fs.existsSync(path.join(fixture.destination, "new.txt")),
       false,
+    );
+    assert.equal(
+      fs.existsSync(path.join(fixture.destination, "node_modules/old.txt")),
+      true,
+    );
+    assert.equal(
+      fs.existsSync(
+        path.join(fixture.destination, "apps/frontend/node_modules/old.txt"),
+      ),
+      true,
+    );
+  } finally {
+    await fs.promises.rm(fixture.temp, { recursive: true, force: true });
+  }
+});
+
+test("source rollback restores files when locked dependency installation fails", async () => {
+  const fixture = await prepareSourceUpdateFixture({ failBunInstall: true });
+  try {
+    const result = spawnSync("/bin/bash", [fixture.scriptPath], {
+      env: { ...process.env, PATH: `${fixture.fakeBin}:${process.env.PATH}` },
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 1, result.stderr);
+    assert.equal(
+      await fs.promises.readFile(
+        path.join(fixture.destination, "tracked.txt"),
+        "utf8",
+      ),
+      "old value\n",
+    );
+    assert.equal(
+      fs.existsSync(path.join(fixture.destination, "new.txt")),
+      false,
+    );
+    assert.equal(
+      fs.existsSync(path.join(fixture.destination, "node_modules/old.txt")),
+      true,
+    );
+    assert.equal(
+      fs.existsSync(path.join(fixture.destination, "node_modules/new.txt")),
+      false,
+    );
+    assert.equal(
+      fs.existsSync(
+        path.join(fixture.destination, "apps/frontend/node_modules/old.txt"),
+      ),
+      true,
+    );
+    assert.equal(
+      fs.existsSync(
+        path.join(fixture.destination, "apps/frontend/node_modules/new.txt"),
+      ),
+      false,
+    );
+    assert.equal(
+      await fs.promises.readFile(
+        path.join(fixture.destination, "venv/keep.txt"),
+        "utf8",
+      ),
+      "keep\n",
+    );
+  } finally {
+    await fs.promises.rm(fixture.temp, { recursive: true, force: true });
+  }
+});
+
+test("source rollback restores Electron dependencies when its binary install fails", async () => {
+  const fixture = await prepareSourceUpdateFixture({
+    failElectronBinaryInstall: true,
+  });
+  try {
+    const result = spawnSync("/bin/bash", [fixture.scriptPath], {
+      env: { ...process.env, PATH: `${fixture.fakeBin}:${process.env.PATH}` },
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 1, result.stderr);
+    assert.equal(
+      await fs.promises.readFile(
+        path.join(fixture.destination, "tracked.txt"),
+        "utf8",
+      ),
+      "old value\n",
+    );
+    assert.equal(
+      fs.existsSync(
+        path.join(
+          fixture.destination,
+          "packaging/electron/node_modules/old.txt",
+        ),
+      ),
+      true,
+    );
+    assert.equal(
+      fs.existsSync(
+        path.join(
+          fixture.destination,
+          "packaging/electron/node_modules/new.txt",
+        ),
+      ),
+      false,
+    );
+  } finally {
+    await fs.promises.rm(fixture.temp, { recursive: true, force: true });
+  }
+});
+
+test("source updater rejects an unexpected Bun version before changing files", async () => {
+  const fixture = await prepareSourceUpdateFixture({ bunVersion: "9.9.9" });
+  try {
+    const result = spawnSync("/bin/bash", [fixture.scriptPath], {
+      env: { ...process.env, PATH: `${fixture.fakeBin}:${process.env.PATH}` },
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /require installed Bun 1\.3\.14/);
+    assert.equal(
+      await fs.promises.readFile(
+        path.join(fixture.destination, "tracked.txt"),
+        "utf8",
+      ),
+      "old value\n",
+    );
+    assert.equal(
+      fs.existsSync(path.join(fixture.destination, "node_modules/old.txt")),
+      true,
+    );
+  } finally {
+    await fs.promises.rm(fixture.temp, { recursive: true, force: true });
+  }
+});
+
+test("source updater finds Bun in the launcher's home directory fallback", async () => {
+  const fixture = await prepareSourceUpdateFixture();
+  try {
+    const home = path.join(fixture.temp, "home");
+    const bunDirectory = path.join(home, ".bun/bin");
+    await fs.promises.mkdir(bunDirectory, { recursive: true });
+    await fs.promises.rename(
+      path.join(fixture.fakeBin, "bun"),
+      path.join(bunDirectory, "bun"),
+    );
+    const result = spawnSync("/bin/bash", [fixture.scriptPath], {
+      env: {
+        ...process.env,
+        HOME: home,
+        PATH: `${fixture.fakeBin}:/usr/bin:/bin:/usr/sbin:/sbin`,
+      },
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(
+      await fs.promises.readFile(
+        path.join(fixture.destination, "tracked.txt"),
+        "utf8",
+      ),
+      "new\n",
     );
   } finally {
     await fs.promises.rm(fixture.temp, { recursive: true, force: true });

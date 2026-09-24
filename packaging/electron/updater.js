@@ -275,12 +275,24 @@ function writeInstallerScript({
     `HOST_PID=${hostPid}`,
     'BAK_DIR="$(dirname "$DEST_ROOT")/.vision_update_bak_$$"',
     'PROTECT_FILE="${BAK_DIR}.protect"',
+    'BUN_VERSION="1.3.14"',
+    'DEPENDENCY_DIRS=("node_modules" "apps/frontend/node_modules" "apps/node-backend/node_modules" "packages/shared-utils/node_modules" "packages/types/node_modules" "packaging/electron/node_modules")',
+    "INSTALL_STARTED=0",
     "",
     "# Wait until the running app exits before replacing source files.",
-    "for i in {1..120}; do",
+    "for _ in {1..120}; do",
     '  if ! kill -0 "$HOST_PID" 2>/dev/null; then break; fi',
     "  sleep 0.5",
     "done",
+    "",
+    "# Check the existing toolchain before changing the installation.",
+    'if ! command -v bun >/dev/null 2>&1 && [ -x "$HOME/.bun/bin/bun" ]; then',
+    '  export PATH="$HOME/.bun/bin:$PATH"',
+    "fi",
+    'if ! command -v bun >/dev/null 2>&1 || [ "$(bun --version 2>/dev/null)" != "$BUN_VERSION" ]; then',
+    '  echo "ERROR: source updates require installed Bun $BUN_VERSION" >&2',
+    "  exit 1",
+    "fi",
     "",
     'mkdir -p "$DEST_ROOT"',
     ': > "$PROTECT_FILE"',
@@ -291,30 +303,57 @@ function writeInstallerScript({
     "# Snapshot current install for rollback on failure.",
     'rsync -a --exclude ".git" --exclude "node_modules" --exclude "postgres_data" --exclude "packaging/electron/native-runtime" "$DEST_ROOT/" "$BAK_DIR/"',
     "",
-    "# Install update — roll back automatically on any error.",
-    "rsync_ok=0",
-    'rsync -a --delete --filter="merge $PROTECT_FILE" --exclude ".env" --exclude "postgres_data" --exclude ".git" --exclude "node_modules" --exclude "packaging/electron/native-runtime" "$SRC_ROOT/" "$DEST_ROOT/" && rsync_ok=1',
-    'if [ "$rsync_ok" -ne 1 ]; then',
-    '  echo "ERROR: rsync failed — rolling back from backup" >&2',
-    '  rsync -a --delete --filter="merge $PROTECT_FILE" --exclude ".env" --exclude "postgres_data" --exclude ".git" --exclude "node_modules" "$BAK_DIR/" "$DEST_ROOT/" || true',
-    '  rm -rf "$BAK_DIR" "$PROTECT_FILE" 2>/dev/null || true',
-    "  exit 1",
-    "fi",
-    'rm -rf "$BAK_DIR" "$PROTECT_FILE" 2>/dev/null || true',
+    "# Keep the snapshot until dependency installation succeeds too.",
+    "rollback_source() {",
+    "  status=$?",
+    "  trap - EXIT",
+    '  if [ "$status" -ne 0 ]; then',
+    '    echo "ERROR: source update failed — restoring the previous source" >&2',
+    '    if ! rsync -a --delete --filter="merge $PROTECT_FILE" --exclude ".env" --exclude "postgres_data" --exclude ".git" --exclude "node_modules" --exclude "packaging/electron/native-runtime" "$BAK_DIR/" "$DEST_ROOT/"; then',
+    '      echo "ERROR: source rollback failed; backup remains at $BAK_DIR" >&2',
+    "    else",
+    '      for dep in "${DEPENDENCY_DIRS[@]}"; do',
+    '        if [ -e "$BAK_DIR/$dep" ] || [ -L "$BAK_DIR/$dep" ]; then',
+    '          rm -rf "${DEST_ROOT:?}/${dep:?}"',
+    '          mkdir -p "$DEST_ROOT/$(dirname "$dep")"',
+    '          mv "$BAK_DIR/$dep" "$DEST_ROOT/$dep"',
+    '        elif [ "$INSTALL_STARTED" -eq 1 ]; then',
+    '          rm -rf "${DEST_ROOT:?}/${dep:?}"',
+    "        fi",
+    "      done",
+    '      rm -rf "$BAK_DIR"',
+    "    fi",
+    "  else",
+    '    rm -rf "$BAK_DIR"',
+    "  fi",
+    '  rm -f "$PROTECT_FILE"',
+    '  exit "$status"',
+    "}",
+    "trap rollback_source EXIT",
+    'rsync -a --delete --filter="merge $PROTECT_FILE" --exclude ".env" --exclude "postgres_data" --exclude ".git" --exclude "node_modules" --exclude "packaging/electron/native-runtime" "$SRC_ROOT/" "$DEST_ROOT/"',
+    'for dep in "${DEPENDENCY_DIRS[@]}"; do',
+    '  if [ -e "$DEST_ROOT/$dep" ] || [ -L "$DEST_ROOT/$dep" ]; then',
+    '    mkdir -p "$BAK_DIR/$(dirname "$dep")"',
+    '    mv "$DEST_ROOT/$dep" "$BAK_DIR/$dep"',
+    "  fi",
+    "done",
+    "INSTALL_STARTED=1",
     "",
     "# Strip macOS quarantine from the updated source tree so launch.command",
     "# can be opened without Gatekeeper blocking it (macOS 12+).",
     'xattr -rd com.apple.quarantine "$DEST_ROOT" 2>/dev/null || true',
     "",
-    "# Install bun if missing (non-interactive).",
-    "if ! command -v bun >/dev/null 2>&1; then",
-    '  export BUN_INSTALL="$HOME/.bun"',
-    "  curl -fsSL https://bun.sh/install | bash",
-    '  export PATH="$BUN_INSTALL/bin:$PATH"',
-    "fi",
-    "",
     'cd "$DEST_ROOT"',
-    "bun install --ignore-scripts",
+    "bun install --frozen-lockfile --ignore-scripts",
+    'cd "$DEST_ROOT/packaging/electron"',
+    "bun install --frozen-lockfile --ignore-scripts",
+    'if [ ! -x "$DEST_ROOT/packaging/electron/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron" ]; then',
+    '  bun "$DEST_ROOT/packaging/electron/node_modules/electron/install.js"',
+    "fi",
+    'if [ ! -x "$DEST_ROOT/packaging/electron/node_modules/.bin/electron" ] || [ ! -x "$DEST_ROOT/packaging/electron/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron" ]; then',
+    '  echo "ERROR: pinned Electron binary is missing after installation" >&2',
+    "  exit 1",
+    "fi",
     "",
     'if [ -n "$SRC_LAUNCH" ] && [ -f "$SRC_LAUNCH" ]; then',
     '  cp "$SRC_LAUNCH" "$DEST_ROOT/launch.command" 2>/dev/null || true',
@@ -423,11 +462,10 @@ function computeFileSha256(filePath) {
   });
 }
 
-function parseSha256Body(body) {
-  const match = String(body || "")
-    .trim()
-    .match(/\b([a-fA-F0-9]{64})\b/);
-  return match ? match[1].toLowerCase() : null;
+function parseSha256Body(body, assetName) {
+  if (typeof body !== "string" || typeof assetName !== "string") return null;
+  const match = /^([a-fA-F0-9]{64})  ([^\r\n]+)(?:\r?\n)?(?![\s\S])/.exec(body);
+  return match?.[2] === assetName ? match[1].toLowerCase() : null;
 }
 
 async function prepareShellUpdateInstaller() {
@@ -497,7 +535,7 @@ async function prepareShellUpdateInstaller() {
       );
     }
     const body = await fetchUrlBody(checksumAsset.browser_download_url);
-    const expected = parseSha256Body(body);
+    const expected = parseSha256Body(body, sourceLauncherAsset.name);
     if (!expected) {
       await recordUpdateDecision("checksum_failed", latestVersion, "dev");
       throw new Error("Checksum file present but could not parse SHA256 hash");
@@ -606,6 +644,7 @@ async function prepareNativeUpdateInstaller() {
     }
     const expected = parseSha256Body(
       await fetchUrlBody(checksumAsset.browser_download_url),
+      asset.name,
     );
     if (!expected) {
       await recordUpdateDecision("checksum_failed", latestVersion, "native");
@@ -869,6 +908,7 @@ module.exports = {
   installPreparedShellUpdate,
   setupManualShellUpdater,
   pickNativeAppZip,
+  parseSha256Body,
   verifyUpdateChecksum,
   recordUpdateDecision,
   launchAuditedInstaller,
