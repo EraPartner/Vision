@@ -440,7 +440,7 @@ jobs:
 
       - name: Report coverage on PR
         if: always()
-        uses: davelosert/vitest-coverage-report-action@3c054a2d2e2ca45446417ad5d6d5eb33092af8f1 # v2
+        uses: davelosert/vitest-coverage-report-action@c4bbc33a89b7ace0e63d35f1f7d4bcee31155a73 # v2
         with:
           vite-config-path: apps/frontend/vite.config.ts
           json-summary-path: apps/frontend/coverage/coverage-summary.json
@@ -509,7 +509,7 @@ jobs:
 
       - name: Report backend coverage on PR
         if: always()
-        uses: davelosert/vitest-coverage-report-action@3c054a2d2e2ca45446417ad5d6d5eb33092af8f1 # v2
+        uses: davelosert/vitest-coverage-report-action@c4bbc33a89b7ace0e63d35f1f7d4bcee31155a73 # v2
         with:
           name: backend
           vite-config-path: apps/node-backend/vitest.config.js
