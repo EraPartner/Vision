@@ -47,6 +47,9 @@ const DRIFTING = {
     computed_balance: 1000,
     statement_balance: 980,
     statement_balance_date: "2026-06-03",
+    statement_balances: [
+        { currency: "EUR", balance: 980, balance_date: "2026-06-03" },
+    ],
     drift: -20,
     anchor_date: "2026-06-03",
     post_anchor_count: 4,

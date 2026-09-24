@@ -58,6 +58,9 @@ const ENTITY_ACCOUNTS = [
         // Fresh statement (10 days old) that disagrees with the ledger by -49,25.
         statement_balance: 2401.5,
         statement_balance_date: ymdDaysAgo(10),
+        statement_balances: [
+            { currency: "EUR", balance: 2401.5, balance_date: ymdDaysAgo(10) },
+        ],
         drift: -49.25,
         anchor_date: ymdDaysAgo(10),
         post_anchor_count: 3,
@@ -224,6 +227,7 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
                     computed_balance: 1234.5,
                     statement_balance: null,
                     statement_balance_date: null,
+                    statement_balances: [],
                     drift: null,
                 },
                 ENTITY_ACCOUNTS[1],
@@ -348,6 +352,13 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
                 {
                     ...ENTITY_ACCOUNTS[0],
                     statement_balance_date: ymdDaysAgo(90),
+                    statement_balances: [
+                        {
+                            currency: "EUR",
+                            balance: 2401.5,
+                            balance_date: ymdDaysAgo(90),
+                        },
+                    ],
                     anchor_date: ymdDaysAgo(90),
                 },
             ],

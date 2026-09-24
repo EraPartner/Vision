@@ -54,6 +54,9 @@ const DRIFTING = {
     display_name: "Drifty",
     statement_balance: 965.5,
     statement_balance_date: "2025-03-01",
+    statement_balances: [
+        { currency: "EUR", balance: 965.5, balance_date: "2025-03-01" },
+    ],
     drift: 15.5,
 };
 
@@ -526,6 +529,13 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
                     ...DRIFTING,
                     // Bare YYYY-MM-DD — accountRepository.js emits the DATE via to_char.
                     statement_balance_date: recentYmd,
+                    statement_balances: [
+                        {
+                            currency: "EUR",
+                            balance: 965.5,
+                            balance_date: recentYmd,
+                        },
+                    ],
                 },
             ],
         });

@@ -516,8 +516,8 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
     // ── WP-B5 §3 F1: drift badge carries its statement date + a stale tone ───
 
     // Realistic money: a positive drift on a checking account, negative ones on
-    // a mortgage. `statement_balance_date` is a bare YYYY-MM-DD on the wire
-    // (accountRepository.js emits it via to_char); "Day 44" keeps the ISO
+    // a mortgage. The per-currency `balance_date` is a bare YYYY-MM-DD on the
+    // wire; "Day 44" keeps the ISO
     // timestamp shape as the ONE fixture covering the defensive slice. "Day 46"
     // additionally sends drift/computed_balance as NUMERIC strings — how pg
     // actually returns them — to exercise normalizeAccount in the render path.
@@ -537,6 +537,9 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
             statement_balance: 1299.9,
             drift: 15.5,
             statement_balance_date: FRESH_YMD,
+            statement_balances: [
+                { currency: "EUR", balance: 1299.9, balance_date: FRESH_YMD },
+            ],
         },
         {
             ...ACCOUNT_STUB,
@@ -548,6 +551,13 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
             statement_balance: -8500,
             drift: -79.85,
             statement_balance_date: `${DAY_44_YMD}T00:00:00.000Z`,
+            statement_balances: [
+                {
+                    currency: "EUR",
+                    balance: -8500,
+                    balance_date: `${DAY_44_YMD}T00:00:00.000Z`,
+                },
+            ],
             // (ISO-timestamp shape — the defensive slice in statementYmd.)
         },
         {
@@ -560,6 +570,13 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
             statement_balance: "-8500.00",
             drift: "-79.85",
             statement_balance_date: DAY_46_YMD,
+            statement_balances: [
+                {
+                    currency: "EUR",
+                    balance: "-8500.00",
+                    balance_date: DAY_46_YMD,
+                },
+            ],
         },
         {
             ...ACCOUNT_STUB,
@@ -571,6 +588,9 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
             statement_balance: -8500,
             drift: -79.85,
             statement_balance_date: DAY_45_YMD,
+            statement_balances: [
+                { currency: "EUR", balance: -8500, balance_date: DAY_45_YMD },
+            ],
         },
         {
             ...ACCOUNT_STUB,
@@ -582,6 +602,7 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
             statement_balance: 312.4,
             drift: 12.4,
             statement_balance_date: null,
+            statement_balances: [],
         },
         {
             // The MISLABELLED-account topology (accountBalanceSql.js
@@ -603,6 +624,9 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
             reconcilable_currency: "USD",
             drift: 15.5,
             statement_balance_date: FRESH_YMD,
+            statement_balances: [
+                { currency: "USD", balance: 1299.9, balance_date: FRESH_YMD },
+            ],
         },
     ];
 
