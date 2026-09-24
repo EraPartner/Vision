@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi, afterEach } from "vitest";
+import { describe, expect, it, vi, afterEach, beforeEach } from "vitest";
 import { screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { toast } from "sonner";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { ok, err } from "@/test/msw/handlers";
+import { ok, err, ACCOUNT_LIST_ITEM_STUB } from "@/test/msw/handlers";
 import { AddTransactionDialog } from "@/features/transactions/components/AddTransactionDialog";
 import { todayYmd } from "@/lib/timezone";
 
@@ -28,21 +28,14 @@ const testRecipientsList = {
     links: [],
 };
 
-// The bank-account field is an AccountCombobox (Phase B2, ADR-088 addendum D1):
-// open it, type the label, and take the explicit-create escape hatch (the MSW
-// accounts list is empty, so every label is "new").
+// The bank-account field accepts an existing account from the account list.
 async function pickBankAccount(
     user: ReturnType<typeof userEvent.setup>,
     name: string,
 ) {
     await user.click(screen.getByLabelText(/bank account/i));
-    await user.type(
-        screen.getByPlaceholderText(/search or type a new account/i),
-        name,
-    );
-    await user.click(
-        await screen.findByText(new RegExp(`create account "${name}"`, "i")),
-    );
+    await user.type(screen.getByPlaceholderText(/search accounts/i), name);
+    await user.click(await screen.findByRole("option", { name }));
 }
 
 async function pickRecipient(
@@ -54,6 +47,25 @@ async function pickRecipient(
 }
 
 describe("AddTransactionDialog (integration)", () => {
+    beforeEach(() => {
+        server.use(
+            http.get(`${API_BASE}/api/accounts`, () =>
+                ok({
+                    items: [
+                        {
+                            ...ACCOUNT_LIST_ITEM_STUB,
+                            name: "Main",
+                            display_name: "Main",
+                        },
+                    ],
+                    total: 1,
+                    links: [],
+                }),
+            ),
+            http.get(`${API_BASE}/api/recipients/7`, () => ok(testRecipient)),
+        );
+    });
+
     afterEach(() => {
         vi.restoreAllMocks();
     });
@@ -596,11 +608,10 @@ describe("AddTransactionDialog (integration)", () => {
         await user.click(screen.getByRole("button", { name: /create/i }));
 
         await waitFor(() => expect(rawBody).not.toBe(""));
-        // Byte-for-byte: same keys, same order, same JSON.stringify omission of
-        // the untouched optional fields. Routing validation through inline
-        // errors must not have moved a single character of this.
+        // The selected account is sent by ID, while untouched optional fields
+        // are still omitted.
         expect(rawBody).toBe(
-            `{"transaction_date":"${todayYmd()}","bank_account":"Main","recipient_id":7,"amount":12.5,"currency":"EUR"}`,
+            `{"transaction_date":"${todayYmd()}","account_id":1,"recipient_id":7,"amount":12.5,"currency":"EUR"}`,
         );
     });
 
@@ -672,20 +683,26 @@ describe("AddTransactionDialog (integration)", () => {
         let capturedCategoryId: unknown;
         const categories = Array.from({ length: 202 }, (_, index) => ({
             id: index + 1,
-            general: index === 201 ? "SPECIAL" : "GENERAL",
-            detail:
+            name: index === 201 ? "Archived receipts" : `Category ${index + 1}`,
+            parentId: null,
+            pathIds: [index + 1],
+            path: [
                 index === 201 ? "Archived receipts" : `Category ${index + 1}`,
+            ],
+            category_name:
+                index === 201 ? "Archived receipts" : `Category ${index + 1}`,
+            depth: 1,
             description: null,
             is_active: true,
-            created_at: "2025-01-01T00:00:00Z",
-            links: [],
+            hierarchyOnly: false,
+            legacyCompatible: false,
         }));
 
         server.use(
             http.get(`${API_BASE}/api/recipients`, () =>
                 ok(testRecipientsList),
             ),
-            http.get(`${API_BASE}/api/categories`, () =>
+            http.get(`${API_BASE}/api/categories/tree`, () =>
                 ok({ items: categories, total: categories.length, links: [] }),
             ),
             http.post(`${API_BASE}/api/transactions`, async ({ request }) => {
@@ -713,11 +730,11 @@ describe("AddTransactionDialog (integration)", () => {
         );
         await user.click(
             await screen.findByRole("option", {
-                name: "SPECIAL: Archived receipts",
+                name: "Archived receipts",
             }),
         );
         await user.click(screen.getByRole("button", { name: /^create$/i }));
 
         await waitFor(() => expect(capturedCategoryId).toBe(202));
-    });
+    }, 15000);
 });

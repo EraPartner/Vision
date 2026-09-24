@@ -71,19 +71,21 @@ describe("BehaviorSection — cost basis method", () => {
 describe("BehaviorSection — brokerage cash categories", () => {
     beforeEach(() => {
         server.use(
-            http.get(`${API_BASE}/api/categories`, () =>
+            http.get(`${API_BASE}/api/categories/tree`, () =>
                 ok({
                     items: [
                         {
                             id: 7,
                             general: "INCOME",
                             detail: "DIVIDENDS",
+                            path: ["INCOME", "DIVIDENDS"],
                             is_active: true,
                         },
                         {
                             id: 8,
                             general: "INVESTMENTS",
                             detail: "FEES",
+                            path: ["INVESTMENTS", "FEES"],
                             is_active: true,
                         },
                     ],
@@ -110,11 +112,11 @@ describe("BehaviorSection — brokerage cash categories", () => {
             name: "Dividends",
         });
         await waitFor(() => {
-            expect(dividend).toHaveTextContent("INCOME: DIVIDENDS");
+            expect(dividend).toHaveTextContent("INCOME / DIVIDENDS");
         });
         await user.click(screen.getByRole("combobox", { name: "Fees" }));
         await user.click(
-            await screen.findByRole("option", { name: "INVESTMENTS: FEES" }),
+            await screen.findByRole("option", { name: "INVESTMENTS / FEES" }),
         );
 
         await waitFor(() => {

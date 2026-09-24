@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { err, ok } from "@/test/msw/handlers";
+import { err, ok, ACCOUNT_LIST_ITEM_STUB } from "@/test/msw/handlers";
 import PlannedPaymentsPage from "@/pages/PlannedPaymentsPage";
 import PlannedPaymentForm from "@/features/planned/PlannedPaymentForm";
 import { todayYmd } from "@/lib/timezone";
@@ -59,6 +59,19 @@ beforeEach(() => {
     server.use(
         http.get(`${API_BASE}/api/planned-transactions/match-suggestions`, () =>
             ok({ items: [], total: 0 }),
+        ),
+        http.get(`${API_BASE}/api/accounts`, () =>
+            ok({
+                items: [
+                    {
+                        ...ACCOUNT_LIST_ITEM_STUB,
+                        name: "Main",
+                        display_name: "Main",
+                    },
+                ],
+                total: 1,
+                links: [],
+            }),
         ),
     );
 });
@@ -460,21 +473,14 @@ describe("PlannedPaymentForm (inline validation)", () => {
         return message!;
     }
 
-    /** Bank account is an AccountCombobox: open it, type, take the create escape hatch. */
+    /** Choose an existing bank account from the account picker. */
     async function pickBankAccount(
         user: ReturnType<typeof userEvent.setup>,
         name: string,
     ) {
         await user.click(screen.getByLabelText(/bank account/i));
-        await user.type(
-            screen.getByPlaceholderText(/search or type a new account/i),
-            name,
-        );
-        await user.click(
-            await screen.findByText(
-                new RegExp(`create account "${name}"`, "i"),
-            ),
-        );
+        await user.type(screen.getByPlaceholderText(/search accounts/i), name);
+        await user.click(await screen.findByRole("option", { name }));
     }
 
     /** New payment, name + bank filled — the point where the submit button unlocks. */
@@ -655,8 +661,8 @@ describe("PlannedPaymentForm (inline validation)", () => {
         await user.click(submitBtn());
 
         await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
-        // Byte-for-byte: same keys, same order, same recurrence fields deleted
-        // for loans. Routing validation inline must not have touched this.
+        // Recurrence fields are deleted for loans, and the selected account is
+        // sent by ID.
         expect(JSON.stringify(onSubmit.mock.calls[0][0])).toBe(
             JSON.stringify({
                 name: "Mortgage",
@@ -677,7 +683,7 @@ describe("PlannedPaymentForm (inline validation)", () => {
                 loan_payment_day: new Date().getDate(),
                 recipient_id: undefined,
                 category_id: undefined,
-                bank_account: "Main",
+                account_id: 1,
                 tags: undefined,
                 notes: undefined,
                 is_active: true,
@@ -725,7 +731,7 @@ describe("PlannedPaymentForm (inline validation)", () => {
             planned_date: todayYmd(),
             is_recurring: false,
             is_loan: false,
-            bank_account: "Main",
+            account_id: 1,
         });
     });
 });

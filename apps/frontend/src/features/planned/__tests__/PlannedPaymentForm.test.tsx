@@ -9,7 +9,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
+import { server } from "@/test/msw/server";
+import { ok, ACCOUNT_LIST_ITEM_STUB } from "@/test/msw/handlers";
 import PlannedPaymentForm from "@/features/planned/PlannedPaymentForm";
 import type { PlannedPayment } from "@/hooks/usePlannedPayments";
 
@@ -20,6 +23,7 @@ const EXPENSE: PlannedPayment = {
     currency: "EUR",
     due_date: "2025-02-01",
     bank_account: "BE12345678901234",
+    account_id: 1,
     is_recurring: false,
     is_active: true,
     created_at: "2025-01-01T00:00:00.000Z",
@@ -77,21 +81,34 @@ function submitButton() {
 
 /**
  * Fill the two other required fields so submission is not blocked. Bank account
- * is an AccountCombobox — open it, type, take the create escape hatch (same
- * flow as PlannedPaymentsPage.integration.test.tsx).
+ * is an AccountCombobox that requires an existing account selection.
  */
 async function fillRequired(user: ReturnType<typeof userEvent.setup>) {
     await user.type(screen.getByLabelText("Name *"), "Rent");
     await user.click(screen.getByLabelText(/bank account/i));
-    await user.type(
-        screen.getByPlaceholderText(/search or type a new account/i),
-        "Main",
-    );
-    await user.click(await screen.findByText(/create account "Main"/i));
+    await user.type(screen.getByPlaceholderText(/search accounts/i), "Main");
+    await user.click(await screen.findByRole("option", { name: "Main" }));
 }
 
 describe("PlannedPaymentForm — amount direction", () => {
-    beforeEach(() => vi.clearAllMocks());
+    beforeEach(() => {
+        vi.clearAllMocks();
+        server.use(
+            http.get("http://localhost:3002/api/accounts", () =>
+                ok({
+                    items: [
+                        {
+                            ...ACCOUNT_LIST_ITEM_STUB,
+                            name: "Main",
+                            display_name: "Main",
+                        },
+                    ],
+                    total: 1,
+                    links: [],
+                }),
+            ),
+        );
+    });
 
     it("defaults to expense and negates a bare amount on save", async () => {
         const user = userEvent.setup();
