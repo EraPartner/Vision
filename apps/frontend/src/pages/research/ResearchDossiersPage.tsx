@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Download, Plus, RotateCcw, Save, Trash2 } from "lucide-react";
 import { apiClient, ApiClientError } from "@/lib/api";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
-import { pageIcon } from "@/lib/pageIcons";
+import { PAGE_ICONS } from "@/lib/pageIcons";
 import type {
     DossierContent,
     DossierEvidence,
@@ -255,7 +255,7 @@ export default function ResearchDossiersPage() {
             <PageHeader
                 title={t("dossiers.title")}
                 subtitle={t("dossiers.subtitle")}
-                icon={pageIcon("/research/dossiers")}
+                icon={PAGE_ICONS["/research/dossiers"]}
                 actions={
                     <>
                         <Button

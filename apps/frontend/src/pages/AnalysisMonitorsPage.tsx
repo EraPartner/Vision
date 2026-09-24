@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Play, Plus, Save, Trash2 } from "lucide-react";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
-import { pageIcon } from "@/lib/pageIcons";
+import { PAGE_ICONS } from "@/lib/pageIcons";
 import type { SavedAnalysis } from "@/lib/api/analysis";
 import type {
     MonitorCreate,
@@ -304,7 +304,7 @@ export default function AnalysisMonitorsPage() {
             <PageHeader
                 title={t("monitors.title")}
                 subtitle={t("monitors.subtitle")}
-                icon={pageIcon("/analysis/monitors")}
+                icon={PAGE_ICONS["/analysis/monitors"]}
             />
             {error && (
                 <p
