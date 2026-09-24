@@ -9,7 +9,7 @@
     "start": "bun run src/main.js",
     "dev": "VISION_DEV=true bun --watch src/main.js",
     "test": "bun vitest run",
-    "test:watch": "bun vitest",
+    "test:watch": "VISION_RUN_PERFORMANCE_PROBES=${VISION_RUN_PERFORMANCE_PROBES:-1} VISION_RUN_AUDIT_PERFORMANCE=${VISION_RUN_AUDIT_PERFORMANCE:-1} VISION_TEST_DB_WATCH=1 ../../scripts/with-test-db.sh",
     "db:migrate": "bun run scripts/db-migrate.js",
     "db:migrate:down": "bun run scripts/db-migrate.js downgrade",
     "db:new-migration": "cd ../.. && node apps/node-backend/scripts/alembic-command.js revision -m",

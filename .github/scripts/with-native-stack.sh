@@ -3,7 +3,7 @@ set -euo pipefail
 umask 077
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
-postgres_bin=${VISION_CI_POSTGRES_BIN:-/usr/lib/postgresql/18/bin}
+postgres_bin=${VISION_CI_POSTGRES_BIN:-}
 port=${VISION_CI_PORT:-3002}
 database_port=${VISION_CI_DATABASE_PORT:-55432}
 command_dir=${VISION_NATIVE_COMMAND_DIR:-.}
@@ -11,6 +11,31 @@ command_dir=${VISION_NATIVE_COMMAND_DIR:-.}
 if [[ $# -eq 0 ]]; then
   echo "Usage: $0 command [arguments ...]" >&2
   exit 2
+fi
+if ( : >"/dev/tcp/127.0.0.1/$port" ) 2>/dev/null; then
+  echo "Native stack cannot start: backend port $port is already in use." >&2
+  exit 1
+fi
+if [[ -z "$postgres_bin" ]]; then
+  command_postgres=$(command -v postgres 2>/dev/null || true)
+  for candidate in \
+    "${command_postgres%/postgres}" \
+    /usr/lib/postgresql/18/bin \
+    /opt/homebrew/opt/postgresql@18/bin \
+    /usr/local/opt/postgresql@18/bin \
+    /Applications/Postgres.app/Contents/Versions/18/bin
+  do
+    [[ -n "$candidate" ]] || continue
+    [[ -x "$candidate/postgres" ]] || continue
+    if [[ $("$candidate/postgres" --version 2>/dev/null) == *" 18."* ]]; then
+      postgres_bin=$candidate
+      break
+    fi
+  done
+fi
+if [[ -z "$postgres_bin" ]]; then
+  echo "Native PostgreSQL 18 tools were not found. Set VISION_CI_POSTGRES_BIN." >&2
+  exit 1
 fi
 case "$command_dir" in
   /*|*'..'*)
@@ -80,7 +105,7 @@ export DATABASE_URL_MIGRATIONS=$DATABASE_URL
 export ENVIRONMENT=production
 export SERVER_HOST=127.0.0.1
 export PORT=$port
-export VISION_DIST_DIR="$repo_root/dist"
+export VISION_DIST_DIR=${VISION_DIST_DIR:-$repo_root/dist}
 
 cd "$repo_root"
 bun run apps/node-backend/scripts/db-migrate.js
@@ -90,15 +115,19 @@ if [[ ${VISION_NATIVE_VERIFY_MIGRATIONS:-0} == 1 ]]; then
   bun run apps/node-backend/scripts/db-migrate.js upgrade head
 fi
 
-bun run backend >"$backend_log" 2>&1 &
+(
+  cd "$repo_root/apps/node-backend"
+  exec bun run src/main.js
+) >"$backend_log" 2>&1 &
 backend_pid=$!
 ready=0
 for _ in $(seq 1 60); do
-  if curl -fsS "http://127.0.0.1:${port}/health" >/dev/null; then
-    ready=1
+  if ! kill -0 "$backend_pid" 2>/dev/null; then
     break
   fi
-  if ! kill -0 "$backend_pid" 2>/dev/null; then
+  if curl -fsS "http://127.0.0.1:${port}/health" >/dev/null &&
+      kill -0 "$backend_pid" 2>/dev/null; then
+    ready=1
     break
   fi
   sleep 1

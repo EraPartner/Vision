@@ -1,7 +1,7 @@
 ---
 title: Scripts Reference
 type: reference
-date: 2026-09-20
+date: 2026-09-24
 tags:
   [
     reference,
@@ -70,11 +70,10 @@ Run root scripts with `bun run <name>`. Run workspace scripts with
 | Script                          | Purpose                                                                                                                        |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `test`                          | Backend Vitest suite                                                                                                           |
-| `test:frontend`                 | Frontend Vitest suite                                                                                                          |
+| `test:frontend`                 | Build and run the full frontend Vitest suite against a disposable PostgreSQL 18 backend, including live API contracts          |
+| `test:watch`                    | Watch the backend suite against a disposable PostgreSQL 18 database, including CI performance probes                           |
 | `test:electron`                 | Electron, backup, runtime, and packaging Node tests                                                                            |
 | `test:scripts`                  | Repository script tests                                                                                                        |
-| `test:e2e`                      | Playwright end-to-end suite                                                                                                    |
-| `test:e2e:visual`               | Manual visual snapshot suite                                                                                                   |
 | `test:db`                       | Backend suite against a disposable native PostgreSQL 18 cluster                                                                |
 | `native:db-smoke`               | Native migration, dump/restore, and attachment smoke                                                                           |
 | `native:isolated-smoke`         | Full smoke with a disposable native cluster                                                                                    |
@@ -85,9 +84,11 @@ Run root scripts with `bun run <name>`. Run workspace scripts with
 | `evaluate:codex-seatbelt-smoke` | Offline macOS file and network boundary probe for synthetic Codex                                                              |
 | `evaluate:codex-subscription`   | Opt-in device login and one fixed fictional Codex turn; requires `VISION_EXPERIMENTAL_CODEX_BINARY`                            |
 
-`scripts/with-test-db.sh` uses caller-supplied `TEST_DATABASE_URL` when present. Otherwise it
-creates a private native PostgreSQL 18 cluster, enables required extensions, migrates it, runs the
-requested test task, and removes it on exit. It never uses the user's Vision database.
+`scripts/with-test-db.sh` ignores inherited database URLs by default. It creates a private native
+PostgreSQL 18 cluster with a generated password and SCRAM authentication, enables required
+extensions, migrates it, runs the requested test task, and removes it on exit. An already-disposable
+caller database requires `VISION_TEST_DB_USE_CALLER=1`. It never uses the user's Vision database by
+default.
 
 For the guarded legacy-retirement migrations, run:
 
@@ -98,7 +99,10 @@ VISION_TEST_DB_TASK=statement-contract scripts/with-test-db.sh
 
 These modes refuse caller-managed databases. They create a disposable PostgreSQL 18 cluster and
 prove the 0104 through 0106 migration lifecycles or the dropped statement-scalar application and
-rollback contract.
+rollback contract. Legacy retirement starts at 0105 and downgrades to 0103 to reconstruct the
+empty legacy cache; ADR-090 starts at 0102. Their rollback checks do not cross the later
+forward-only audit-chain migration 0117. The ADR-088 contract task reconstructs its compatibility
+columns with the real rollback script before testing the guarded drop against the fresh baseline.
 
 ## Database
 

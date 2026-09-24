@@ -14,10 +14,11 @@
 # The Python Alembic toolchain must be available on PATH
 # (`pip install -r config/requirements.txt`) to build the schema.
 #
-# If TEST_DATABASE_URL is already exported, the script normally uses that
-# database as-is. The one exception is the fixed disposable native database
-# managed by Codex cloud: it is reset and migrated before every run so cached
-# tasks and interrupted suites cannot leak rows into the next test process.
+# An exported TEST_DATABASE_URL is ignored by default: this suite deletes test
+# tables and must not accidentally target a development or production database.
+# VISION_TEST_DB_USE_CALLER=1 explicitly opts into an already-disposable test
+# database. The fixed Codex cloud test database is recognized and reset before
+# each run without that opt-in.
 
 set -eu
 umask 077
@@ -30,6 +31,7 @@ PORT=${VISION_TEST_DB_PORT:-55432}
 KEEP=${VISION_TEST_DB_KEEP:-0}
 CHECK_ONLY=${VISION_TEST_DB_CHECK_ONLY:-0}
 TASK=${VISION_TEST_DB_TASK:-tests}
+WATCH=${VISION_TEST_DB_WATCH:-0}
 ACTIVE_PROVIDER=
 NATIVE_ROOT=
 NATIVE_DATA=
@@ -43,6 +45,17 @@ case "$TASK" in
     exit 1
     ;;
 esac
+case "$WATCH" in
+  0|1) ;;
+  *)
+    echo "[test-db] VISION_TEST_DB_WATCH must be 0 or 1." >&2
+    exit 1
+    ;;
+esac
+if [ "$WATCH" = 1 ] && [ "$TASK" != tests ]; then
+  echo "[test-db] Watch mode supports only VISION_TEST_DB_TASK=tests." >&2
+  exit 1
+fi
 
 case "$PORT" in
   ''|*[!0-9]*)
@@ -55,7 +68,12 @@ if [ "$PORT" -lt 1024 ] || [ "$PORT" -gt 65535 ]; then
   exit 1
 fi
 
-if [ -n "${TEST_DATABASE_URL:-}" ]; then
+if [ -n "${TEST_DATABASE_URL:-}" ] && {
+  [ "${VISION_TEST_DB_USE_CALLER:-0}" = 1 ] || {
+    [ "${CODEX_SESSION_ENV:-}" = cloud ] &&
+      [ "$TEST_DATABASE_URL" = 'postgresql://vision_test:vision_test@127.0.0.1:5432/vision_test' ];
+  };
+}; then
   if [ "$CHECK_ONLY" = 1 ]; then
     echo "[test-db] Caller-managed TEST_DATABASE_URL is available."
     exit 0
@@ -72,10 +90,21 @@ if [ -n "${TEST_DATABASE_URL:-}" ]; then
   else
     echo "[test-db] Using caller-managed TEST_DATABASE_URL; no database provider was started."
   fi
-  DATABASE_URL=${DATABASE_URL:-$TEST_DATABASE_URL}
+  DATABASE_URL=$TEST_DATABASE_URL
+  unset DATABASE_URL_MIGRATIONS DATABASE_URL_ANALYSIS VISION_BASELINE_BRIDGE_APPROVED
   export DATABASE_URL TEST_DATABASE_URL
-  cd apps/node-backend && exec bun vitest run "$@"
+  cd apps/node-backend
+  if [ "$WATCH" = 1 ]; then
+    exec bun vitest watch "$@"
+  fi
+  exec bun vitest run "$@"
 fi
+
+if [ -n "${TEST_DATABASE_URL:-}" ] || [ -n "${DATABASE_URL:-}" ] || \
+  [ -n "${DATABASE_URL_MIGRATIONS:-}" ] || [ -n "${DATABASE_URL_ANALYSIS:-}" ]; then
+  echo "[test-db] Ignoring inherited database URLs; starting a disposable native database."
+fi
+unset DATABASE_URL TEST_DATABASE_URL DATABASE_URL_MIGRATIONS DATABASE_URL_ANALYSIS
 
 postgres_bin_is_18() {
   candidate=$1
@@ -157,6 +186,8 @@ start_native_postgres() {
   NATIVE_DATA=$NATIVE_ROOT/data
   NATIVE_LOG=$NATIVE_ROOT/postgres.log
   chmod 700 "$NATIVE_ROOT"
+  VISION_TEST_DB_PASSWORD=$(node -e "process.stdout.write(require('node:crypto').randomUUID())")
+  printf '%s\n' "$VISION_TEST_DB_PASSWORD" > "$NATIVE_ROOT/superuser-password"
 
   if command -v nc >/dev/null 2>&1 && nc -z 127.0.0.1 "$PORT" >/dev/null 2>&1; then
     echo "[test-db] Port $PORT is already occupied; choose another VISION_TEST_DB_PORT." >&2
@@ -169,8 +200,9 @@ start_native_postgres() {
     --encoding=UTF8 \
     --locale=C \
     --auth-local=trust \
-    --auth-host=trust \
+    --auth-host=scram-sha-256 \
     --username=vision_test \
+    --pwfile="$NATIVE_ROOT/superuser-password" \
     --no-instructions >/dev/null
 
   {
@@ -190,7 +222,7 @@ start_native_postgres() {
     exit 1
   fi
 
-  "$POSTGRES_BIN/createdb" \
+  PGPASSWORD=$VISION_TEST_DB_PASSWORD "$POSTGRES_BIN/createdb" \
     -h 127.0.0.1 \
     -p "$PORT" \
     -U vision_test \
@@ -200,7 +232,7 @@ start_native_postgres() {
     --template=template0 \
     vision_test
   if [ "$TASK" != baseline-restore ]; then
-    "$POSTGRES_BIN/psql" \
+    PGPASSWORD=$VISION_TEST_DB_PASSWORD "$POSTGRES_BIN/psql" \
       -h 127.0.0.1 \
       -p "$PORT" \
       -U vision_test \
@@ -217,13 +249,13 @@ if ! find_native_postgres; then
 fi
 start_native_postgres
 
-URL="postgresql://vision_test@127.0.0.1:$PORT/vision_test"
+URL="postgresql://vision_test:$VISION_TEST_DB_PASSWORD@127.0.0.1:$PORT/vision_test"
 
 # Both names point to the same disposable database. DB-backed suites seed
 # through TEST_DATABASE_URL while the service under test uses DATABASE_URL.
 export DATABASE_URL="$URL"
 export TEST_DATABASE_URL="$URL"
-VISION_TEST_ANALYSIS_PASSWORD=$(bun -e "process.stdout.write(require('node:crypto').randomUUID())")
+VISION_TEST_ANALYSIS_PASSWORD=$(node -e "process.stdout.write(require('node:crypto').randomUUID())")
 export DATABASE_URL_ANALYSIS="postgresql://vision_analysis_executor:$VISION_TEST_ANALYSIS_PASSWORD@127.0.0.1:$PORT/vision_test"
 export VISION_TEST_DB_ISOLATED=1
 # The bridge is allowed only inside this script's disposable native cluster.
@@ -245,8 +277,13 @@ if [ "$TASK" = baseline-restore ]; then
   exit 0
 fi
 
-echo "[test-db] Migrating the disposable database to head."
-bun run apps/node-backend/scripts/db-migrate.js
+MIGRATION_TARGET='head'
+case "$TASK" in
+  legacy-retirements) MIGRATION_TARGET=0105_retire_legacy_exchange_rate_cache ;;
+  adr090-retirement) MIGRATION_TARGET=0102_retire_adr090_transaction_schema ;;
+esac
+echo "[test-db] Migrating the disposable database to $MIGRATION_TARGET."
+bun run apps/node-backend/scripts/db-migrate.js upgrade "$MIGRATION_TARGET"
 
 if [ "$TASK" = migration-fidelity ]; then
   echo "[test-db] Verifying latest-revision downgrade and upgrade fidelity."
@@ -289,6 +326,12 @@ if [ "$TASK" = adr090-retirement ]; then
 fi
 
 if [ "$TASK" = adr088-contract ]; then
+  # The reviewed fresh baseline already has the ADR-088 contract shape. Build
+  # the prior compatibility shape using its real rollback before exercising
+  # the guarded forward contract on this disposable database.
+  echo "[test-db] Restoring ADR-088 compatibility schema for the contract test."
+  "$POSTGRES_BIN/psql" "$TEST_DATABASE_URL" -X -v ON_ERROR_STOP=1 \
+    -f alembic/manual/contract_drop_bank_account/down.sql >/dev/null
   echo "[test-db] Applying the ADR-088 contract to the disposable database."
   # This database is created solely for this lifecycle test and is discarded by
   # the EXIT trap. Acknowledge the production backup gate explicitly so the
@@ -367,5 +410,11 @@ if [ "$TASK" = statement-contract ]; then
   exit 0
 fi
 
-echo "[test-db] Running backend suite with native PostgreSQL."
-cd apps/node-backend && bun vitest run "$@"
+cd apps/node-backend
+if [ "$WATCH" = 1 ]; then
+  echo "[test-db] Watching backend suite with native PostgreSQL."
+  bun vitest watch "$@"
+else
+  echo "[test-db] Running backend suite with native PostgreSQL."
+  bun vitest run "$@"
+fi

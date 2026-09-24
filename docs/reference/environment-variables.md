@@ -2,8 +2,8 @@
 title: Environment Variables Reference
 type: reference
 status: active
-date: 2026-09-14
-updated: 2026-09-20
+date: 2026-09-24
+updated: 2026-09-24
 tags:
   [
     reference,
@@ -230,14 +230,15 @@ See [[docs/adr/159-experimental-isolated-codex-route|ADR-159]].
 
 ## Test Database Variables
 
-These variables affect only `bun run test:db`. The native provider initializes a disposable PostgreSQL 18 cluster under the system temporary directory. It never starts or stops an installed PostgreSQL service and never uses Vision's application data.
+These variables affect only `bun run test:db`. By default, the runner ignores inherited database URLs and initializes a disposable PostgreSQL 18 cluster under the system temporary directory. The cluster uses a generated password and SCRAM authentication. It never starts or stops an installed PostgreSQL service. Only an explicit caller-database opt-in can use another database; those tests delete table contents.
 
-| Variable                    | Default    | Required | Description                                                                                                                                         | Code                                         |
-| --------------------------- | ---------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| `VISION_TEST_POSTGRES_BIN`  | discovered | No       | PostgreSQL 18 `bin` directory for the native test provider. Checked before `VISION_POSTGRES_BIN`, `PATH`, Homebrew keg paths, and Postgres.app.     | [[scripts/with-test-db.sh\|with-test-db.sh]] |
-| `VISION_TEST_DB_PORT`       | `55432`    | No       | Loopback port for the disposable test server. Values outside 1024 through 65535 are rejected, and native mode fails closed if the port is occupied. | [[scripts/with-test-db.sh\|with-test-db.sh]] |
-| `VISION_TEST_DB_KEEP`       | `0`        | No       | Set to `1` to retain the generated native cluster for diagnostics. The default removes only the generated test resource.                            | [[scripts/with-test-db.sh\|with-test-db.sh]] |
-| `VISION_TEST_DB_CHECK_ONLY` | `0`        | No       | Set to `1` to verify that the selected provider is available without initializing a cluster. Used by the pre-push database gate.                    | [[scripts/with-test-db.sh\|with-test-db.sh]] |
+| Variable                    | Default    | Required | Description                                                                                                                                                                            | Code                                         |
+| --------------------------- | ---------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| `VISION_TEST_POSTGRES_BIN`  | discovered | No       | PostgreSQL 18 `bin` directory for the native test provider. Checked before `VISION_POSTGRES_BIN`, `PATH`, Homebrew keg paths, and Postgres.app.                                        | [[scripts/with-test-db.sh\|with-test-db.sh]] |
+| `VISION_TEST_DB_PORT`       | `55432`    | No       | Loopback port for the disposable test server. Values outside 1024 through 65535 are rejected, and native mode fails closed if the port is occupied.                                    | [[scripts/with-test-db.sh\|with-test-db.sh]] |
+| `VISION_TEST_DB_KEEP`       | `0`        | No       | Set to `1` to retain the generated native cluster for diagnostics. The default removes only the generated test resource.                                                               | [[scripts/with-test-db.sh\|with-test-db.sh]] |
+| `VISION_TEST_DB_CHECK_ONLY` | `0`        | No       | Set to `1` to verify that the selected provider is available without initializing a cluster.                                                                                           | [[scripts/with-test-db.sh\|with-test-db.sh]] |
+| `VISION_TEST_DB_USE_CALLER` | `0`        | No       | Set to `1` only for an already-disposable, migrated test database named by `TEST_DATABASE_URL`. The fixed managed Codex cloud test database is recognized and reset without this flag. | [[scripts/with-test-db.sh\|with-test-db.sh]] |
 
 ## Source-of-Truth
 

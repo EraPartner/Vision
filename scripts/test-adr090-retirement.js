@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 import pg from "../apps/node-backend/node_modules/pg/esm/index.mjs";
 
 const { Client } = pg;
+const RETIREMENT_REVISION = "0102_retire_adr090_transaction_schema";
 const databaseUrl = process.env.TEST_DATABASE_URL;
 if (!databaseUrl) throw new Error("TEST_DATABASE_URL is required");
 const target = new URL(databaseUrl);
@@ -36,10 +37,10 @@ function migrate(args, { shouldPass }) {
 
 const client = new Client({ connectionString: databaseUrl });
 await client.connect();
-let atHead = true;
+let atRetirement = true;
 try {
   migrate(["downgrade", "-1"], { shouldPass: true });
-  atHead = false;
+  atRetirement = false;
 
   const recipient = await client.query(
     `INSERT INTO recipients (name, normalized_name)
@@ -55,7 +56,7 @@ try {
      RETURNING id`,
     [recipientId],
   );
-  migrate(["upgrade", "head"], { shouldPass: false });
+  migrate(["upgrade", RETIREMENT_REVISION], { shouldPass: false });
   expectSingle(
     await client.query(
       "SELECT portfolio_transaction_id FROM transactions WHERE id = $1 AND transfer_source = 'trade'",
@@ -74,7 +75,7 @@ try {
      RETURNING id`,
     [recipientId],
   );
-  migrate(["upgrade", "head"], { shouldPass: false });
+  migrate(["upgrade", RETIREMENT_REVISION], { shouldPass: false });
   expectSingle(
     await client.query(
       "SELECT portfolio_transaction_id FROM transactions WHERE id = $1 AND portfolio_transaction_id = 987654",
@@ -87,8 +88,8 @@ try {
   ]);
   await client.query("DELETE FROM recipients WHERE id = $1", [recipientId]);
 
-  migrate(["upgrade", "head"], { shouldPass: true });
-  atHead = true;
+  migrate(["upgrade", RETIREMENT_REVISION], { shouldPass: true });
+  atRetirement = true;
   const removed = await client.query(
     `SELECT 1 FROM information_schema.columns
       WHERE table_schema = 'public' AND table_name = 'transactions'
@@ -98,7 +99,7 @@ try {
     throw new Error("Successful upgrade did not remove the link column");
 
   migrate(["downgrade", "-1"], { shouldPass: true });
-  atHead = false;
+  atRetirement = false;
   const restored = await client.query(
     `SELECT pg_get_constraintdef(oid) AS definition
        FROM pg_constraint
@@ -133,13 +134,13 @@ try {
       "Downgrade restored the link index without its partial predicate",
     );
 
-  migrate(["upgrade", "head"], { shouldPass: true });
-  atHead = true;
+  migrate(["upgrade", RETIREMENT_REVISION], { shouldPass: true });
+  atRetirement = true;
   console.log(
     "ADR-090 migration refusal, rollback, and success lifecycle passed.",
   );
 } finally {
-  if (!atHead) {
+  if (!atRetirement) {
     await client
       .query(
         "DELETE FROM transactions WHERE portfolio_transaction_id = 987654 OR transfer_source = 'trade'",
@@ -150,7 +151,7 @@ try {
         "DELETE FROM recipients WHERE normalized_name = 'adr090 migration fixture'",
       )
       .catch(() => {});
-    migrate(["upgrade", "head"], { shouldPass: true });
+    migrate(["upgrade", RETIREMENT_REVISION], { shouldPass: true });
   }
   await client.end();
 }

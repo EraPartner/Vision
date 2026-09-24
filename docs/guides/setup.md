@@ -2,7 +2,7 @@
 title: Setup Guide
 type: guide
 status: active
-date: 2026-09-08
+date: 2026-09-24
 tags:
   [
     guide,
@@ -80,20 +80,21 @@ The Demo uses deterministic synthetic data and a separate native cluster below
 
 ## Common commands
 
-| Command                                  | Purpose                                                     |
-| ---------------------------------------- | ----------------------------------------------------------- |
-| `bun run dev`                            | Start the native development profile                        |
-| `bun run electron:dev`                   | Start Electron explicitly in the native development profile |
-| `bun run build`                          | Build the production frontend                               |
-| `bun run lint` / `bun run lint:backend`  | Lint frontend and backend                                   |
-| `bun run typecheck`                      | Type-check the frontend                                     |
-| `bun run test` / `bun run test:frontend` | Run backend or frontend tests                               |
-| `bun run test:electron`                  | Run Electron and native-runtime contract tests              |
-| `bun run test:db`                        | Run backend tests against disposable native PostgreSQL 18   |
-| `bun run native:prepare`                 | Prepare the pinned development/package payload              |
-| `bun run native:db-smoke`                | Check migrations, dump/restore, and attachments             |
-| `bun run native:isolated-smoke`          | Run the complete isolated native smoke                      |
-| `bun run native:smoke`                   | Run native backend and health checks                        |
+| Command                                  | Purpose                                                                              |
+| ---------------------------------------- | ------------------------------------------------------------------------------------ |
+| `bun run dev`                            | Start the native development profile                                                 |
+| `bun run electron:dev`                   | Start Electron explicitly in the native development profile                          |
+| `bun run build`                          | Build the production frontend                                                        |
+| `bun run lint` / `bun run lint:backend`  | Lint frontend and backend                                                            |
+| `bun run typecheck`                      | Type-check the frontend                                                              |
+| `bun run test` / `bun run test:frontend` | Run backend tests or the full frontend suite with a disposable PostgreSQL 18 backend |
+| `bun run test:watch`                     | Watch all backend tests with a disposable PostgreSQL 18 database                     |
+| `bun run test:electron`                  | Run Electron and native-runtime contract tests                                       |
+| `bun run test:db`                        | Run backend tests against disposable native PostgreSQL 18                            |
+| `bun run native:prepare`                 | Prepare the pinned development/package payload                                       |
+| `bun run native:db-smoke`                | Check migrations, dump/restore, and attachments                                      |
+| `bun run native:isolated-smoke`          | Run the complete isolated native smoke                                               |
+| `bun run native:smoke`                   | Run native backend and health checks                                                 |
 
 Alembic writes must go through `bun run db:migrate` or `bun run db:upgrade`; see
 [[docs/guides/migrations|Database Migrations]].

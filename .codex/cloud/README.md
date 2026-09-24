@@ -71,7 +71,9 @@ On a cached resume, maintenance installs only dependency layers whose fingerprin
 native database environment file already exists, maintenance resets that database directly.
 `bun run test:db` also resets this one fixed managed database
 before every suite, so rows from an interrupted or prior task cannot survive into the next run.
-Caller-supplied database URLs remain caller-managed and are never reset. Database migrations use a
+Other caller-supplied database URLs are ignored by `bun run test:db` unless
+`VISION_TEST_DB_USE_CALLER=1` explicitly opts into an already-disposable test database. Those
+opted-in databases are never reset by this runner. Database migrations use a
 persistent head cache under
 `~/.codex/vision-cloud-state/`. Installation and database lifecycle phases print timestamped
 `START`, `WAIT`, `DONE`, or `FAILED` messages. Setup merges standard error into standard output
@@ -100,8 +102,9 @@ PDF tests that use Puppeteer need a separately installed compatible browser conf
 `PUPPETEER_EXECUTABLE_PATH`.
 
 The setup does not create a repository `.env`. Never add production database credentials to the
-cloud environment. If you override `DATABASE_URL` or `TEST_DATABASE_URL`, use only a disposable,
-already-migrated test database; `bun run test:db` treats a pre-set URL as caller-managed.
+cloud environment. If you override `TEST_DATABASE_URL` and opt into it with
+`VISION_TEST_DB_USE_CALLER=1`, use only a disposable, already-migrated test database; the suite
+deletes test tables. Without that flag, `bun run test:db` provisions its own disposable cluster.
 
 Run `bun run test:db` to exercise the database-backed suite. Cloud setup exports a disposable
 native PostgreSQL 18 `TEST_DATABASE_URL` for later Bash sessions; it never points at user data.

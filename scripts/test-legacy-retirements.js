@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 import pg from "../apps/node-backend/node_modules/pg/esm/index.mjs";
 
 const { Client } = pg;
+const RETIREMENT_REVISION = "0106_remove_federal_pit_total_alias";
 const databaseUrl = process.env.TEST_DATABASE_URL;
 if (!databaseUrl) throw new Error("TEST_DATABASE_URL is required");
 const target = new URL(databaseUrl);
@@ -41,6 +42,8 @@ function expectCount(result, expected, message) {
 const client = new Client({ connectionString: databaseUrl });
 await client.connect();
 try {
+  // Unwind 0105 first to reconstruct the empty legacy exchange cache that a
+  // fresh 0001 baseline never had, then test the 0104-0106 upgrade path.
   migrate(["downgrade", "0103_import_identity_provenance"], true);
 
   await client.query(
@@ -106,7 +109,7 @@ try {
   await client.query(
     "INSERT INTO exchange_rate_cache (from_ccy, to_ccy, rate_date, rate) VALUES ('EUR', 'USD', CURRENT_DATE, 1.1)",
   );
-  migrate(["upgrade", "head"], false);
+  migrate(["upgrade", RETIREMENT_REVISION], false);
   expectCount(
     await client.query("SELECT count(*) FROM exchange_rate_cache"),
     1,
@@ -117,13 +120,13 @@ try {
   await client.query(
     "ALTER TABLE exchange_rate_cache ADD COLUMN unexpected text",
   );
-  migrate(["upgrade", "head"], false);
+  migrate(["upgrade", RETIREMENT_REVISION], false);
   await client.query("ALTER TABLE exchange_rate_cache DROP COLUMN unexpected");
 
   await client.query(
     "ALTER TABLE exchange_rate_cache ALTER COLUMN rate SET DEFAULT 1",
   );
-  migrate(["upgrade", "head"], false);
+  migrate(["upgrade", RETIREMENT_REVISION], false);
   await client.query(
     "ALTER TABLE exchange_rate_cache ALTER COLUMN rate DROP DEFAULT",
   );
@@ -131,7 +134,7 @@ try {
   await client.query(
     "ALTER TABLE exchange_rate_cache ALTER COLUMN id SET DEFAULT 42",
   );
-  migrate(["upgrade", "head"], false);
+  migrate(["upgrade", RETIREMENT_REVISION], false);
   await client.query(
     "ALTER TABLE exchange_rate_cache ALTER COLUMN id SET DEFAULT nextval('exchange_rate_cache_id_seq'::regclass)",
   );
@@ -140,7 +143,7 @@ try {
   await client.query(
     "CREATE INDEX idx_exchange_rate_cache_date ON exchange_rate_cache (to_ccy)",
   );
-  migrate(["upgrade", "head"], false);
+  migrate(["upgrade", RETIREMENT_REVISION], false);
   await client.query("DROP INDEX idx_exchange_rate_cache_date");
   await client.query(
     "CREATE INDEX idx_exchange_rate_cache_date ON exchange_rate_cache (rate_date)",
@@ -152,12 +155,12 @@ try {
   await client.query(
     "CREATE TRIGGER _retirement_trigger BEFORE INSERT ON exchange_rate_cache FOR EACH ROW EXECUTE FUNCTION _retirement_trigger()",
   );
-  migrate(["upgrade", "head"], false);
+  migrate(["upgrade", RETIREMENT_REVISION], false);
   await client.query("DROP TRIGGER _retirement_trigger ON exchange_rate_cache");
   await client.query("DROP FUNCTION _retirement_trigger()");
 
   await client.query("DROP TABLE exchange_rate_cache");
-  migrate(["upgrade", "head"], true);
+  migrate(["upgrade", RETIREMENT_REVISION], true);
   expectCount(
     await client.query(
       "SELECT count(*) FROM pg_class WHERE oid = to_regclass('public.exchange_rate_cache')",
@@ -184,7 +187,7 @@ try {
       "Downgrade did not restore the legacy fetched_at NOT NULL default shape",
     );
   }
-  migrate(["upgrade", "head"], true);
+  migrate(["upgrade", RETIREMENT_REVISION], true);
 
   migrate(["downgrade", "0105_retire_legacy_exchange_rate_cache"], true);
   await client.query(
@@ -202,7 +205,7 @@ try {
       }),
     ],
   );
-  migrate(["upgrade", "head"], false);
+  migrate(["upgrade", RETIREMENT_REVISION], false);
   expectCount(
     await client.query(
       `SELECT count(*) FROM user_settings
@@ -230,7 +233,7 @@ try {
       }),
     ],
   );
-  migrate(["upgrade", "head"], true);
+  migrate(["upgrade", RETIREMENT_REVISION], true);
   expectCount(
     await client.query(
       `SELECT count(*) FROM user_settings
@@ -250,7 +253,7 @@ try {
     1,
     "Downgrade did not recreate federalPITTotal from the canonical value",
   );
-  migrate(["upgrade", "head"], true);
+  migrate(["upgrade", RETIREMENT_REVISION], true);
 
   migrate(["downgrade", "0103_import_identity_provenance"], true);
   expectCount(
@@ -267,7 +270,7 @@ try {
     1,
     "Downgrade did not restore the bank-resolution index",
   );
-  migrate(["upgrade", "head"], true);
+  migrate(["upgrade", RETIREMENT_REVISION], true);
 
   console.log(
     "Guarded bank-resolution, exchange-cache, and federal-PIT-alias retirement lifecycles passed.",

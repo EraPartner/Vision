@@ -16,12 +16,7 @@ tags:
   ]
 description: Current GitHub Actions quality gates, native PostgreSQL verification, and macOS release flow.
 aliases: [CI, CD, GitHub Actions, release pipeline]
-related_code:
-  [
-    ".github/workflows/ci.yml",
-    ".github/workflows/e2e.yml",
-    ".github/workflows/release.yml",
-  ]
+related_code: [".github/workflows/ci.yml", ".github/workflows/release.yml"]
 ---
 
 # CI/CD Pipelines
@@ -63,7 +58,7 @@ requires removal of its baseline entry, so the same error cannot silently return
 
 The shared Bun setup runs a frozen install with lifecycle scripts disabled and does not restore a
 general Bun dependency cache. The Electron install in CI and release jobs is also frozen and
-script-disabled. Trusted jobs call the checked-in TypeScript and Playwright binaries instead of
+script-disabled. Trusted jobs call the checked-in TypeScript binary instead of
 using `bunx` fallback downloads.
 
 `scripts/check-package-boundaries.js` requires every tracked application/package manifest to be
@@ -95,9 +90,17 @@ needs to pass the release checks below before its artifacts are treated as verif
 
 Database-backed jobs install PostgreSQL 18 packages on the runner and use
 `scripts/with-test-db.sh` or the native runtime smoke harness. Each cluster is private, loopback
-only, migrated to the current Alembic head, and removed after the job. The test harness also
+only, migrated to the current Alembic head, and removed after the job. The test harness uses a
+generated password and SCRAM authentication so role-bootstrap password rejection is tested. It also
 enables the extensions required by production behavior. This is a real PostgreSQL check, not a
 mock and not a dependency on a pre-existing runner service.
+Direct `bun run test:db` runs also create a disposable cluster even if database URLs are exported;
+using a caller-managed test database requires `VISION_TEST_DB_USE_CALLER=1`.
+
+The backend CI job enables the audit and transaction performance probes, then runs migration
+fidelity, legacy retirement, ADR-088, ADR-090, and statement-scalar contract lifecycles in separate
+disposable clusters. Contract suites intentionally skip in the ordinary head-schema run because
+their fixtures require the guarded manual schema drop.
 
 ### Security scan
 
@@ -105,15 +108,6 @@ Trivy scans the checked-out filesystem for vulnerable dependencies and known sec
 uploaded to GitHub code scanning as SARIF when permitted. JavaScript and Python dependency audits
 remain separate gates so package-manager findings are visible even when the filesystem scan is
 unchanged.
-
-## Scheduled end-to-end testing
-
-`.github/workflows/e2e.yml` runs the Playwright end-to-end and accessibility suites on schedule or
-manual dispatch. It builds the production frontend and launches a native backend against a
-disposable PostgreSQL 18 cluster. The Playwright report is uploaded on failure, and the nightly
-workflow maintains its tracking issue.
-
-Visual snapshots remain manual because macOS and Linux render different baselines.
 
 ## Release workflow
 
@@ -189,8 +183,21 @@ bun run test:electron
 bun run native:isolated-smoke
 ```
 
-`bun run check` aggregates the portable repository checks. Database, packaging, signing, and live
-process claims still require their focused jobs.
+`bun run check` aggregates repository checks, including `test:frontend`, which requires native
+PostgreSQL 18 and runs live API contracts against a disposable backend. Packaging and signing
+claims still require their focused jobs.
+
+The pre-push hook runs workspace lint, typechecks, repository policy checks, script tests,
+frontend coverage, a production build and size check, Electron tests, backend coverage, database
+lifecycle and contract tests, and live API
+contracts on every content push. The production
+build and test reports use a temporary output directory.
+Backend and live API runs use disposable PostgreSQL 18 clusters and fail if PostgreSQL or Alembic is
+unavailable, so a green push cannot hide database or live-contract skips. The hook clears
+caller-provided database URLs before starting each cluster. The native stack finds
+PostgreSQL 18 on Linux or macOS; `VISION_CI_POSTGRES_BIN` can select another installation.
+It refuses an occupied backend port before starting, then tracks the backend process directly so
+cleanup cannot leave a server for the next run to mistake as its own.
 
 ## Pull-request completion and merge
 
@@ -202,7 +209,6 @@ bypass is permitted.
 ## Related
 
 - [[docs/testing/testing|Testing Guide]]
-- [[docs/testing/frontend/e2e|Frontend E2E Tests]]
 - [[docs/guides/deployment|Deployment Guide]]
 - [[docs/security/index|Security Documentation]]
 - [[docs/reference/scripts|Scripts Reference]]

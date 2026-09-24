@@ -496,7 +496,16 @@ jobs:
         run: bun run test:electron
 
       - name: Run backend tests with coverage
+        env:
+          VISION_RUN_PERFORMANCE_PROBES: "1"
+          VISION_RUN_AUDIT_PERFORMANCE: "1"
         run: scripts/with-test-db.sh --coverage
+
+      - name: Run database lifecycle and contract tests
+        run: |
+          for task in migration-fidelity legacy-retirements adr090-retirement adr088-contract statement-contract; do
+            VISION_TEST_DB_TASK="$task" scripts/with-test-db.sh
+          done
 
       - name: Report backend coverage on PR
         if: always()
