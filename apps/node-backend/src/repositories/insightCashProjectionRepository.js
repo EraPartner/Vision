@@ -12,7 +12,7 @@ export async function getProjection(month, currency, methodId) {
   return value == null ? undefined : Number(value);
 }
 
-export async function saveProjection(month, currency, methodId, value) {
+async function saveProjection(month, currency, methodId, value) {
   await query(
     `WITH saved AS (
        INSERT INTO insight_cash_projections
@@ -31,3 +31,7 @@ export async function saveProjection(month, currency, methodId, value) {
 }
 
 export default { getProjection, saveProjection };
+
+export {
+  saveProjection as __saveProjection,
+};

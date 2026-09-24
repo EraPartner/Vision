@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  classifyMonitorRun,
+  __classifyMonitorRun as classifyMonitorRun,
   createAnalysisMonitor,
-  evaluateThreshold,
+  __evaluateThreshold as evaluateThreshold,
   listMonitorObservations,
   readMonitorNotification,
 } from "../src/services/analysisMonitorService.js";

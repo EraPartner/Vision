@@ -75,10 +75,12 @@
     "check-endpoint-matrix": "node scripts/check-endpoint-matrix.js",
     "check-legacy-inventory": "node scripts/check-legacy-inventory.js",
     "check-test-only-exports": "node scripts/check-test-only-exports.js",
+    "check:package-boundaries": "node scripts/check-package-boundaries.js",
+    "check:workflow-supply-chain": "python3 scripts/check-workflow-supply-chain.py && python3 scripts/tests/workflow-supply-chain.test.py",
     "todo:list": "python3 scripts/todo-report.py",
     "todo:check": "python3 scripts/todo-report.py --check",
     "check-todo-stamps": "python3 scripts/check-todo-stamps.py",
-    "check": "bun run lint && bun run lint:backend && bun run typecheck && bun run validate-locales && bun run check-endpoint-matrix && bun run check-legacy-inventory && bun run check-test-only-exports && bun run todo:check && bun run db:check-destructive && bun run test:scripts && bun run test && bun run test:frontend && bun run test:electron"
+    "check": "bun run lint && bun run lint:backend && bun run typecheck && bun run validate-locales && bun run check-endpoint-matrix && bun run check-legacy-inventory && bun run check-test-only-exports && bun run check:package-boundaries && bun run check:workflow-supply-chain && bun run todo:check && bun run db:check-destructive && bun run test:scripts && bun run test && bun run test:frontend && bun run test:electron"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.1",

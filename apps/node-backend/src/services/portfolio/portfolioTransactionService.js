@@ -54,7 +54,7 @@ export async function create(input) {
 }
 
 /** @param {number} id @param {Record<string, any>} fields */
-export async function update(id, fields) {
+async function update(id, fields) {
   const existing = await getById(id);
   if (!existing) return null;
   if (
@@ -199,3 +199,7 @@ export async function validateImportBatchRemoval(batchId, legacyRows = []) {
 }
 
 export default { create, update, remove, validateImportBatchRemoval };
+
+export {
+  update as __update,
+};

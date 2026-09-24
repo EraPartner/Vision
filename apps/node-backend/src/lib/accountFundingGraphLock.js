@@ -6,10 +6,10 @@
  * Callers must already own a transaction: PostgreSQL releases the lock when
  * that transaction commits or rolls back.
  */
-export const ACCOUNT_FUNDING_GRAPH_LOCK_SQL =
+const ACCOUNT_FUNDING_GRAPH_LOCK_SQL =
   "SELECT pg_advisory_xact_lock($1::integer, $2::integer)";
 
-export const ACCOUNT_FUNDING_GRAPH_LOCK_PARAMS = Object.freeze([0x56495349, 1]);
+const ACCOUNT_FUNDING_GRAPH_LOCK_PARAMS = Object.freeze([0x56495349, 1]);
 
 /**
  * @param {(sql: string, params: readonly number[]) => Promise<unknown>} runQuery
@@ -34,3 +34,8 @@ export async function lockAccountFundingGraph(runQuery) {
 }
 import { ApiErrorCode } from "@vision/types/errors";
 import { AppError } from "../middleware/errorHandler.js";
+
+export {
+  ACCOUNT_FUNDING_GRAPH_LOCK_PARAMS as __ACCOUNT_FUNDING_GRAPH_LOCK_PARAMS,
+  ACCOUNT_FUNDING_GRAPH_LOCK_SQL as __ACCOUNT_FUNDING_GRAPH_LOCK_SQL,
+};

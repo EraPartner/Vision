@@ -56,7 +56,7 @@ export async function previewAccountPortfolioLots(accountId) {
 }
 
 /** @param {{ balance_handling?: unknown }} body */
-export function normalizeCloseAccount(body) {
+function normalizeCloseAccount(body) {
   const balanceHandling = String(body?.balance_handling ?? "");
   if (!VALID_BALANCE_HANDLING.has(balanceHandling)) {
     throw new ValidationError(
@@ -162,4 +162,8 @@ export default {
   closeAccount,
   normalizeCloseAccount,
   previewAccountPortfolioLots,
+};
+
+export {
+  normalizeCloseAccount as __normalizeCloseAccount,
 };

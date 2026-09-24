@@ -1244,9 +1244,9 @@
             "y": 852
           },
           {
-            "id": "build.todesktop",
-            "label": "ToDesktop CDN",
-            "sub": "macOS .app / .dmg distribution",
+            "id": "build.githubrelease",
+            "label": "GitHub Releases",
+            "sub": "macOS ZIP / DMG distribution",
             "kind": "build",
             "x": 580,
             "y": 852
@@ -1574,11 +1574,11 @@
           ["sv.backup", "db.attachments"],
           ["be.jobs", "sv.recurring"],
           ["sv.recurring", "be.repos"],
-          ["build.electron", "build.todesktop"],
+          ["build.electron", "build.githubrelease"],
           ["build.electron", "build.native"],
           ["build.native", "db.postgres"],
           ["build.native", "db.attachments"],
-          ["build.release", "build.todesktop"],
+          ["build.release", "build.githubrelease"],
           ["fe.hooks", "pkg.shared-utils"],
           ["be.routes", "pkg.shared-utils"],
           ["be.repos", "pkg.shared-utils"],
@@ -2629,7 +2629,7 @@
             ]
           },
           {
-            "id": "todesktop-release",
+            "id": "github-release",
             "name": "Build & ship a desktop release",
             "category": "Build",
             "summary": "GitHub Actions verifies the native runtime, builds the Electron bundle, and publishes the macOS release.",
@@ -2637,8 +2637,8 @@
               {
                 "from": "build.release",
                 "to": "build.electron",
-                "payload": "electron-builder  \u00b7  notarise",
-                "annotation": "macOS signing + Apple notarisation step."
+                "payload": "electron-builder \u00b7 ad hoc signing",
+                "annotation": "The macOS build is ad hoc signed and has no Apple Developer ID notarisation."
               },
               {
                 "from": "build.electron",
@@ -2648,15 +2648,15 @@
               },
               {
                 "from": "build.release",
-                "to": "build.todesktop",
-                "payload": "publish artefact + version manifest",
-                "annotation": "3-way version check: git tag \u2194 root package.json \u2194 electron/package.json."
+                "to": "build.githubrelease",
+                "payload": "draft assets + checksums, then publish",
+                "annotation": "release.yml checks the tag version and main ancestry, builds the exact verified commit, stages every asset in a draft, rechecks the tag, then publishes. Live immutable-release protection still needs readback."
               },
               {
-                "from": "build.todesktop",
+                "from": "build.githubrelease",
                 "to": "electron",
-                "payload": "auto-update \u2192 user gets new .dmg",
-                "annotation": "ToDesktop CDN serves the update channel."
+                "payload": "GitHub latest release ZIP + required checksum",
+                "annotation": "updater.js trusts GitHub as the publisher and checks the sibling checksum before installation; it does not verify a separate release-signing key."
               }
             ]
           },

@@ -60,7 +60,7 @@ const evidenceSchema = z
     notes: optionalText(8000),
   })
   .strict();
-export const dossierContentSchema = z
+const dossierContentSchema = z
   .object({
     title: nonempty(300),
     workspace: z.enum([
@@ -487,3 +487,7 @@ export async function exportResearchDossiers() {
     ),
   };
 }
+
+export {
+  dossierContentSchema as __dossierContentSchema,
+};

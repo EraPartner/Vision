@@ -326,7 +326,7 @@ export function splitCsvLines(content) {
  * @param {string} [delimiter]
  * @returns {string[]|null}
  */
-export function splitDelimitedRecord(line, delimiter = ";") {
+function splitDelimitedRecord(line, delimiter = ";") {
   try {
     // relax_quotes: bank exports occasionally leave a stray quote mid-field;
     // treat it as literal text instead of failing the whole row.
@@ -455,3 +455,7 @@ export function rawDataForCsvRecord(record) {
 export function buildRawRowString(row) {
   return Object.values(row).join("|");
 }
+
+export {
+  splitDelimitedRecord as __splitDelimitedRecord,
+};

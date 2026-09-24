@@ -1,5 +1,6 @@
 {
   "name": "financial-transaction-manager-node",
+  "private": true,
   "version": "1.0.0",
   "description": "Node.js backend for Vision",
   "license": "AGPL-3.0-only",

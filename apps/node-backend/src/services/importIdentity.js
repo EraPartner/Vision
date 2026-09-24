@@ -3,7 +3,7 @@
 import crypto from "node:crypto";
 import { parsedDateToYmd } from "../lib/importDates.js";
 
-export const IMPORT_FINGERPRINT_VERSION = 1;
+const IMPORT_FINGERPRINT_VERSION = 1;
 
 /** @param {unknown} value @returns {string} */
 export function normalizeIdentityText(value) {
@@ -28,7 +28,7 @@ export function normalizeIdentityDecimal(value) {
 }
 
 /** @param {unknown} rawData @returns {string|null} */
-export function computeSourceRecordHash(rawData) {
+function computeSourceRecordHash(rawData) {
   if (rawData === null || rawData === undefined) return null;
   return crypto
     .createHash("sha256")
@@ -143,3 +143,8 @@ export function assignImportIdentities(rows, baseFor) {
     };
   });
 }
+
+export {
+  computeSourceRecordHash as __computeSourceRecordHash,
+  IMPORT_FINGERPRINT_VERSION as __IMPORT_FINGERPRINT_VERSION,
+};

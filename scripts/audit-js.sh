@@ -16,7 +16,10 @@
 # ignores: all known HIGH advisories are resolved past their fix in-tree.
 #
 # Runs from the repo root; the workflows check out + install before invoking it.
+# The root and Electron package each have a committed Bun lockfile, so both
+# dependency graphs must be audited.
 
 set -eu
 
-exec bun audit --audit-level=high
+bun audit --audit-level=high
+(cd packaging/electron && bun audit --audit-level=high)

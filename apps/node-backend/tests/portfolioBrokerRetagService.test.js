@@ -30,10 +30,10 @@ vi.mock("../src/repositories/settingsRepository.js", () => ({
 }));
 
 import {
-  assertRetagPreservesPortfolioEconomics,
-  assertRetagPreservesPartitionUnits,
-  fingerprintRetagRequest,
-  retagPortfolioTransactions,
+  __assertRetagPreservesPortfolioEconomics as assertRetagPreservesPortfolioEconomics,
+  __assertRetagPreservesPartitionUnits as assertRetagPreservesPartitionUnits,
+  __fingerprintRetagRequest as fingerprintRetagRequest,
+  __retagPortfolioTransactions as retagPortfolioTransactions,
 } from "../src/services/portfolio/portfolioBrokerRetagService.js";
 import {
   ConflictError,

@@ -32,6 +32,8 @@ jobs:
   verify:
     name: Verify Release
     runs-on: ubuntu-24.04
+    outputs:
+      release_commit: ${{ steps.release_commit.outputs.sha }}
     # 40, not 30: this job now also runs the secrets scan, the backend JSDoc
     # type-check and the generated-artifact checks that ci.yml's quality tier
     # runs (they were missing here, so a tag pushed on a commit that never
@@ -57,6 +59,25 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require release commit on main
+        id: release_commit
+        run: |
+          set -euo pipefail
+          git show-ref --verify --quiet refs/remotes/origin/main
+          if ! git merge-base --is-ancestor HEAD refs/remotes/origin/main; then
+            echo "ERROR: release commit is not reachable from main"
+            exit 1
+          fi
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Enforce private internal package boundaries
+        run: node scripts/check-package-boundaries.js
+
+      - name: Enforce workflow supply-chain policy
+        run: python3 scripts/check-workflow-supply-chain.py
 
       # ci.yml's Secrets Scan job cannot stand in for this one: gitleaks-action
       # scans the push event's commit RANGE, and a tag push carries no commits,
@@ -183,7 +204,7 @@ jobs:
       # Both halves: the loose base program over all of src/, then the
       # noImplicitAny ratchet over the paths scripts/checkjs-ratchet.js lists.
       - name: Type-check backend (JSDoc)
-        run: cd apps/node-backend && bunx tsc -p tsconfig.check.json
+        run: apps/node-backend/node_modules/.bin/tsc -p apps/node-backend/tsconfig.check.json
 
       - name: Type-check backend (noImplicitAny ratchet)
         run: cd apps/node-backend && bun scripts/checkjs-ratchet.js
@@ -221,10 +242,14 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: read
+      id-token: write # keyless build attestations are created in the build job
+      attestations: write
+      artifact-metadata: write
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
         with:
-          ref: ${{ github.event.inputs.tag || github.ref }}
+          persist-credentials: false
+          ref: ${{ needs.verify.outputs.release_commit }}
 
       - name: Setup toolchain
         uses: ./.github/actions/setup
@@ -273,7 +298,8 @@ jobs:
           hdiutil attach -nobrowse -readonly -mountpoint "$PG_MOUNT" "$PG_DMG"
           trap 'hdiutil detach "$PG_MOUNT" >/dev/null' EXIT
           export VISION_POSTGRES_SOURCE_BIN="$PG_MOUNT/Postgres.app/Contents/Versions/18/bin"
-          export VISION_PYTHON_BIN="$(command -v python)"
+          VISION_PYTHON_BIN="$(command -v python)"
+          export VISION_PYTHON_BIN
           cd packaging/electron
           # Hardened install for the shipped artifact: pin to the committed
           # lockfile (--frozen-lockfile) and block transitive lifecycle scripts
@@ -296,11 +322,18 @@ jobs:
           VER="${TAG#v}"
           OUT="$GITHUB_WORKSPACE/dist/release"
           mkdir -p "$OUT"
-          DMG_SRC=$(ls packaging/electron/dist/*.dmg | head -1)
-          ZIP_SRC=$(ls packaging/electron/dist/*-arm64-mac.zip 2>/dev/null | head -1 \
-                    || ls packaging/electron/dist/*-mac.zip | head -1)
-          cp "$DMG_SRC" "$OUT/Vision-${VER}-arm64.dmg"
-          cp "$ZIP_SRC" "$OUT/Vision-${VER}-arm64-mac.zip"
+          shopt -s nullglob
+          DMG_FILES=(packaging/electron/dist/*.dmg)
+          ZIP_FILES=(packaging/electron/dist/*-arm64-mac.zip)
+          if [ "${#ZIP_FILES[@]}" -eq 0 ]; then
+            ZIP_FILES=(packaging/electron/dist/*-mac.zip)
+          fi
+          if [ "${#DMG_FILES[@]}" -ne 1 ] || [ "${#ZIP_FILES[@]}" -ne 1 ]; then
+            echo "ERROR: expected exactly one DMG and one macOS ZIP"
+            exit 1
+          fi
+          cp "${DMG_FILES[0]}" "$OUT/Vision-${VER}-arm64.dmg"
+          cp "${ZIP_FILES[0]}" "$OUT/Vision-${VER}-arm64-mac.zip"
           sed "s/__VERSION__/${VER}/g" packaging/release/README.md \
             > "$OUT/README.md"
 
@@ -349,15 +382,73 @@ jobs:
           fi
           echo "Source-launcher bundle OK: $(basename "$ZIP") ($(wc -l < "$STAGE/entries.txt") entries)"
 
+      - name: Generate shipped application and source SBOMs
+        env:
+          SYFT_VERSION: "1.52.0"
+          SYFT_SHA256: 014d561b6d13059124155f74a6c5a9a99501f5e209313638dd884f39eb418ee6
+        run: |
+          set -euo pipefail
+          if [ "$(uname -m)" != arm64 ]; then
+            echo "ERROR: the macOS release runner must be Apple Silicon"
+            exit 1
+          fi
+          SYFT_ARCHIVE="$RUNNER_TEMP/syft.tar.gz"
+          curl -sSfL --retry 3 --retry-all-errors -o "$SYFT_ARCHIVE" \
+            "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_darwin_arm64.tar.gz"
+          echo "$SYFT_SHA256  $SYFT_ARCHIVE" | shasum -a 256 -c -
+          mkdir -p "$RUNNER_TEMP/syft-bin"
+          tar -xzf "$SYFT_ARCHIVE" -C "$RUNNER_TEMP/syft-bin" syft
+          APP_DIRS=(packaging/electron/dist/mac*/Vision.app)
+          if [ "${#APP_DIRS[@]}" -ne 1 ] || [ ! -d "${APP_DIRS[0]}" ]; then
+            echo "ERROR: expected exactly one packaged Vision.app for the SBOM"
+            exit 1
+          fi
+          SYFT_CHECK_FOR_APP_UPDATE=false "$RUNNER_TEMP/syft-bin/syft" \
+            "dir:${APP_DIRS[0]}" -o "cyclonedx-json=dist/release/Vision-app.cdx.json"
+          SYFT_CHECK_FOR_APP_UPDATE=false "$RUNNER_TEMP/syft-bin/syft" \
+            "dir:$RUNNER_TEMP/source-launcher/unsigned/Vision" \
+            -o "cyclonedx-json=dist/release/Vision-source.cdx.json"
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          for name in ("Vision-app.cdx.json", "Vision-source.cdx.json"):
+              document = json.loads((Path("dist/release") / name).read_text())
+              if document.get("bomFormat") != "CycloneDX" or not document.get("components"):
+                  raise SystemExit(f"ERROR: {name} has no catalogued components")
+              print(f"{name}: {len(document['components'])} components")
+          PY
+
       - name: Compute SHA256 checksums
         run: |
           set -euo pipefail
           cd dist/release
-          for f in Vision-*.dmg Vision-*.zip vision-source-launcher-*.zip README.md; do
+          for f in Vision-*.dmg Vision-*.zip vision-source-launcher-*.zip Vision-*.cdx.json README.md; do
             shasum -a 256 "$f" > "${f}.sha256"
             echo "--- ${f} ---"
             cat "${f}.sha256"
           done
+
+      - name: Attest artifacts from the build job
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
+        with:
+          subject-path: |
+            dist/release/Vision-*.dmg
+            dist/release/Vision-*-arm64-mac.zip
+            dist/release/vision-source-launcher-*.zip
+
+      - name: Attest packaged application SBOM
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
+        with:
+          subject-path: |
+            dist/release/Vision-*.dmg
+            dist/release/Vision-*-arm64-mac.zip
+          sbom-path: dist/release/Vision-app.cdx.json
+
+      - name: Attest source bundle SBOM
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
+        with:
+          subject-path: dist/release/vision-source-launcher-*.zip
+          sbom-path: dist/release/Vision-source.cdx.json
 
       - name: Upload mac release artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
@@ -371,14 +462,13 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   release:
     name: Create GitHub Release
-    needs: [package-mac]
+    environment: release
+    needs: [verify, package-mac]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: write # required to create releases and upload assets
-      id-token: write # required for GitHub artifact attestations
-      attestations: write
-      artifact-metadata: write
+      attestations: read # verify build-job attestations before publication
     steps:
       - name: Download mac release artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4
@@ -389,25 +479,123 @@ jobs:
       - name: List downloaded artifacts
         run: find dist/ -type f | sort
 
-      - name: Attest macOS release artifacts
-        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
-        with:
-          subject-path: |
-            dist/mac/Vision-*.dmg
-            dist/mac/Vision-*-arm64-mac.zip
-            dist/mac/vision-source-launcher-*.zip
+      - name: Verify build-job provenance before publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          for file in dist/mac/Vision-*.dmg dist/mac/Vision-*-arm64-mac.zip dist/mac/vision-source-launcher-*.zip; do
+            gh attestation verify "$file" --repo "$GH_REPO" \
+              --signer-workflow "$GH_REPO/.github/workflows/release.yml"
+          done
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v2
+      - name: Stage GitHub Release with all assets
+        id: stage_release
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
           tag_name: ${{ github.event.inputs.tag || github.ref_name }}
           name: "Vision ${{ github.event.inputs.tag || github.ref_name }}"
-          draft: false
+          draft: true
           prerelease: false
           generate_release_notes: true
+          fail_on_unmatched_files: true
           files: |
             dist/mac/Vision-*.dmg
             dist/mac/Vision-*.zip
             dist/mac/vision-source-launcher-*.zip
             dist/mac/README.md
+            dist/mac/Vision-*.cdx.json
             dist/mac/*.sha256
+
+      - name: Publish immutable-ready release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+          EXPECTED_COMMIT: ${{ needs.verify.outputs.release_commit }}
+          RELEASE_ID: ${{ steps.stage_release.outputs.id }}
+        run: |
+          set -euo pipefail
+          # The release tag must still name the reviewed commit when the draft
+          # becomes public. `gh release edit` is the final publication step.
+          ACTUAL_COMMIT=$(gh api "repos/${GITHUB_REPOSITORY}/commits/tags/${TAG}" --jq '.sha')
+          if [ "$ACTUAL_COMMIT" != "$EXPECTED_COMMIT" ]; then
+            echo "ERROR: release tag changed after verification"
+            exit 1
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" > "$RUNNER_TEMP/vision-draft-release.json"
+          python3 - "$RUNNER_TEMP/vision-draft-release.json" dist/mac "$TAG" <<'PY'
+          import hashlib
+          import json
+          import pathlib
+          import sys
+
+          def sha256_file(file_path):
+              hasher = hashlib.sha256()
+              with file_path.open("rb") as source:
+                  for block in iter(lambda: source.read(1024 * 1024), b""):
+                      hasher.update(block)
+              return hasher.hexdigest()
+
+          release = json.loads(pathlib.Path(sys.argv[1]).read_text())
+          directory = pathlib.Path(sys.argv[2])
+          tag = sys.argv[3]
+          version = tag.removeprefix("v")
+          originals = {
+              f"Vision-{version}-arm64.dmg",
+              f"Vision-{version}-arm64-mac.zip",
+              f"vision-source-launcher-{version}-arm64.zip",
+              "Vision-app.cdx.json",
+              "Vision-source.cdx.json",
+              "README.md",
+          }
+          expected = originals | {f"{name}.sha256" for name in originals}
+          items = list(directory.iterdir())
+          local = {item.name for item in items}
+          if (local != expected or any(not item.is_file() or item.is_symlink() for item in items) or
+                  release.get("draft") is not True or release.get("tag_name") != tag):
+              raise SystemExit("ERROR: local release inventory, draft state or tag is unexpected")
+
+          for name in originals:
+              digest = sha256_file(directory / name)
+              if (directory / f"{name}.sha256").read_bytes() != f"{digest}  {name}\n".encode():
+                  raise SystemExit(f"ERROR: invalid checksum file for {name}")
+
+          assets = release.get("assets")
+          if not isinstance(assets, list) or len(assets) != len(expected):
+              raise SystemExit("ERROR: draft release has missing or extra assets")
+          names = [asset.get("name") for asset in assets]
+          if set(names) != expected or len(set(names)) != len(names):
+              raise SystemExit("ERROR: draft release asset names differ from the verified handoff")
+          for asset in assets:
+              name = asset["name"]
+              file_path = directory / name
+              digest = sha256_file(file_path)
+              if (asset.get("size") != file_path.stat().st_size or
+                      asset.get("digest") != f"sha256:{digest}" or
+                      asset.get("state") != "uploaded"):
+                  raise SystemExit(f"ERROR: draft release asset differs from verified handoff: {name}")
+          PY
+          # The release environment reviewer must confirm that repository
+          # immutability is enabled before approving this job. GITHUB_TOKEN
+          # cannot read that administration setting. If it drifted, retract
+          # a mutable publication immediately and fail the run.
+          retract_if_mutable() {
+            if [ "$(gh release view "$TAG" --json isImmutable --jq '.isImmutable' 2>/dev/null)" = "false" ]; then
+              if ! gh release edit "$TAG" --draft=true; then
+                echo "ERROR: published release could not be returned to draft; inspect it immediately" >&2
+              fi
+            fi
+          }
+          gh release edit "$TAG" --draft=false --verify-tag
+          if [ "$(gh release view "$TAG" --json isDraft,isImmutable --jq '.isDraft == false and .isImmutable == true')" != "true" ]; then
+            retract_if_mutable
+            echo "ERROR: published release is not immutable"
+            exit 1
+          fi
+          if [ "$(gh api "repos/${GITHUB_REPOSITORY}/commits/tags/${TAG}" --jq '.sha')" != "$EXPECTED_COMMIT" ]; then
+            retract_if_mutable
+            echo "ERROR: published release tag does not point to the verified commit"
+            exit 1
+          fi

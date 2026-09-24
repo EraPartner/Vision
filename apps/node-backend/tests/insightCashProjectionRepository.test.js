@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { mockConnection } from "./helpers/repoMocks.js";
 
 const query = vi.hoisted(() => vi.fn());
 
-vi.mock("../src/database/connection.js", () => ({ query }));
+vi.mock("../src/database/connection.js", () => mockConnection({ query }));
 
-import { saveProjection } from "../src/repositories/insightCashProjectionRepository.js";
+import { __saveProjection as saveProjection } from "../src/repositories/insightCashProjectionRepository.js";
 
 describe("insightCashProjectionRepository", () => {
   beforeEach(() => query.mockReset());

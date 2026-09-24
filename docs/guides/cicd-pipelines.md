@@ -2,7 +2,7 @@
 title: CI/CD Pipelines
 type: guide
 status: active
-date: 2026-09-08
+date: 2026-09-24
 tags:
   [
     guide,
@@ -35,8 +35,8 @@ scan, or publish a product container image. The required aggregate check remains
 
 | Area              | Jobs and evidence                                                              |
 | ----------------- | ------------------------------------------------------------------------------ |
-| Repository policy | cloud tooling, agent-instruction checks, commitlint, secrets scan              |
-| Dependencies      | Bun audit and pip-audit                                                        |
+| Repository policy | cloud tooling, package/workflow supply-chain checks, commitlint, secrets scan  |
+| Dependencies      | PR dependency review, Bun audit and pip-audit                                  |
 | Static checks     | frontend/backend lint, frontend/backend type checks, generated-artifact checks |
 | Builds and tests  | frontend build, frontend tests, Electron/runtime tests, backend tests          |
 | Database safety   | destructive-migration check against repository source                          |
@@ -47,6 +47,38 @@ scan, or publish a product container image. The required aggregate check remains
 `quality-gate` aggregates the portable pre-runtime checks. `CI Complete` aggregates every required
 stage and keeps a stable branch-protection name. A skipped path-filtered job is handled explicitly;
 an absent or failed required result is not treated as green.
+
+### Dependency and workflow admission
+
+The shared Bun setup runs a frozen install with lifecycle scripts disabled and does not restore a
+general Bun dependency cache. The Electron install in CI and release jobs is also frozen and
+script-disabled. Trusted jobs call the checked-in TypeScript and Playwright binaries instead of
+using `bunx` fallback downloads.
+
+`scripts/check-package-boundaries.js` requires every tracked application/package manifest to be
+reviewed and `private: true`. It rejects an internal `@vision/*` dependency that does not use a
+reviewed workspace and an internal name in either Bun lockfile that resolves from a registry.
+It also checks manifest and lockfile dependency agreement, requires integrity digests for registry
+packages, rejects direct external package sources, and admits only the two reviewed project install
+hooks. The pull-request-only GitHub dependency review job rejects new high or critical severity
+vulnerabilities in ecosystems GitHub supports, and `quality-gate` requires that job to succeed on
+every pull request. GitHub does not currently list `bun.lock` as a supported dependency graph
+format, so this check must not be treated as review of transitive Bun lockfile changes. The shared
+`scripts/audit-js.sh` audits both the root and Electron Bun lockfiles for known high or critical
+advisories. The package boundary check verifies their sources and integrity fields.
+`scripts/check-workflow-supply-chain.py` requires full commit SHA pins for external Actions,
+full commit SHA refs for external repository checkouts, `persist-credentials: false` on every
+checkout, and the frozen script-disabled shared install. The LockBox drift check executes its
+reviewed pinned revision; updating that revision requires an explicit workflow diff.
+Both checks run in CI and release verification; their adversarial tests run in CI.
+
+Dependabot delays routine version updates by seven days across the configured ecosystems. Security
+updates are not delayed by this setting. Updates are opened separately. Automatic dependency
+merging is disabled; every update requires human review. The sole maintainer reports that the
+live branch rules require `CI Complete`; this was not independently read back.
+
+The sole maintainer reports that the GitHub settings are enabled. The first hosted release still
+needs to pass the release checks below before its artifacts are treated as verified.
 
 ### Native database jobs
 
@@ -76,17 +108,56 @@ Visual snapshots remain manual because macOS and Linux render different baseline
 
 `.github/workflows/release.yml` runs for version tags and manual releases:
 
-1. **Verify Release** checks the tag and manifest versions, scans secrets and the release
+1. **Verify Release** checks that the tag's commit is reachable from `main`, checks the tag and
+   manifest versions, scans secrets and the release
    filesystem, audits dependencies, regenerates checked artifacts, runs lint/type checks, builds
    the frontend, exercises native health and migration reversibility, and runs the test suites.
-2. **Build mac .app + DMG** builds the signed/notarized native macOS artifacts and source-launcher
-   update bundle with pinned runtime inputs.
-3. **Create GitHub Release** downloads the staged artifacts, attests them, and publishes the GitHub
-   release.
+2. **Build mac .app + DMG** builds the ad-hoc signed native macOS artifacts and source-launcher
+   update bundle from the exact verified commit with pinned runtime inputs. It scans the packaged
+   app and source tree into separate CycloneDX software bills of materials (SBOMs), checks that
+   each contains components, and attests the artifacts and SBOMs through GitHub. The app does not
+   have Apple Developer ID signing or notarization.
+3. **Create GitHub Release** downloads the staged artifacts, verifies build provenance, and adds
+   every asset to a release-environment-gated draft. It checks exact asset names, sizes, digests
+   and checksum contents, rechecks the tag's commit, then publishes the draft. The release
+   environment reviewer must confirm that immutable releases are enabled before approving this
+   job. The workflow reads back the published release's immutable state; if it is mutable, it
+   immediately attempts to return it to draft and fails the run. This cannot erase downloads made
+   during that short public window. GitHub immutable releases must be read back live before
+   claiming published asset and tag immutability.
 
-Release artifacts include checksums. The workflow does not publish an application image or image
-metadata. See [[docs/features/application-updates|Application Updates]] and
+Release artifacts include checksums and the two SBOM files. To inspect one, download
+`Vision-app.cdx.json` or `Vision-source.cdx.json` from the release and view its `components` array.
+To verify a downloaded artifact against GitHub's build attestation, run
+`gh attestation verify FILE --repo EraPartner/Vision --signer-workflow EraPartner/Vision/.github/workflows/release.yml`.
+The SBOM attestations use the same artifact subject and include the corresponding CycloneDX file.
+GitHub is the trusted publisher; the updater does not verify
+an independent signing key or attestation. The workflow does not publish an application image or
+image metadata. See [[docs/features/application-updates|Application Updates]],
+[[docs/adr/168-github-release-trust-boundary|ADR-168]], and
 [[docs/adr/133-native-only-runtime-and-delivery|ADR-133]].
+
+### GitHub settings required before the first protected release
+
+These settings live on GitHub; the workflow file cannot enable them.
+
+1. In **Settings → Rules → Rulesets**, make an active branch ruleset targeting `main`. Require a
+   pull request and the `CI Complete` status check, and block force pushes and deletion.
+2. Make an active tag ruleset targeting `v*`. Restrict tag updates and deletion. Keep release tag
+   creation available to the maintainer.
+3. In **Settings → Environments**, create `release`. Add the sole maintainer as a required reviewer
+   and leave **Prevent self-review** off, so a release they trigger can be approved. Limit deployment
+   branches/tags to version tags if that option is available in the repository settings. Before
+   approving each release job, confirm step 4 is still enabled; the workflow token cannot read
+   this administration setting.
+4. In **Settings → General → Releases**, enable release immutability before publishing a new
+   version. It applies to future releases, not releases already published.
+
+Record the sole maintainer's confirmation that these settings are enabled. This confirmation does
+not independently prove ruleset enforcement or detect later settings changes. After a release,
+verify the published release's immutable state, its tag commit and the release asset list; download
+an artifact and run the attestation command above. A failed hosted build or missing setting blocks
+release acceptance until the cause is fixed.
 
 ## Local verification
 

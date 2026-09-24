@@ -33,6 +33,23 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  dependency-review:
+    name: Dependency Review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+        with:
+          persist-credentials: false
+      - name: Reject vulnerable dependency changes
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+
   cloud-tooling:
     name: Cloud Tooling
     runs-on: ubuntu-24.04
@@ -41,6 +58,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+        with:
+          persist-credentials: false
       - name: Check generated cloud agreement
         run: python3 .codex/cloud/check-instructions.py
       - name: Check cloud shell syntax and mocked regressions
@@ -52,11 +71,19 @@ jobs:
         run: |
           python3 scripts/check-agent-instructions.py
           python3 scripts/tests/ci-classify.test.py
-      - name: Check LockBox vendored files against canonical main
+      - name: Enforce private internal package boundaries
+        run: |
+          node scripts/check-package-boundaries.js
+          node --test scripts/tests/package-boundaries.test.js
+      - name: Enforce workflow supply-chain policy
+        run: |
+          python3 scripts/check-workflow-supply-chain.py
+          python3 scripts/tests/workflow-supply-chain.test.py
+      - name: Check LockBox vendored files against reviewed revision
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
         with:
           repository: EraPartner/Lockbox
-          ref: main
+          ref: 33f65aec8761f94089bd47fe8d476e0c501a7136
           path: .lockbox-canonical
           persist-credentials: false
       - name: Reject LockBox fleet drift
@@ -92,6 +119,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Classify changed paths
@@ -119,6 +147,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Setup toolchain
@@ -164,6 +193,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
@@ -187,6 +217,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+        with:
+          persist-credentials: false
 
       - name: Setup toolchain
         uses: ./.github/actions/setup
@@ -209,6 +241,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+        with:
+          persist-credentials: false
 
       - name: Setup Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v5
@@ -231,6 +265,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+        with:
+          persist-credentials: false
 
       - name: Setup toolchain
         uses: ./.github/actions/setup
@@ -254,6 +290,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+        with:
+          persist-credentials: false
 
       - name: Setup toolchain
         uses: ./.github/actions/setup
@@ -285,12 +323,14 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+        with:
+          persist-credentials: false
 
       - name: Setup toolchain
         uses: ./.github/actions/setup
 
       - name: Type-check backend (JSDoc)
-        run: cd apps/node-backend && bunx tsc -p tsconfig.check.json
+        run: apps/node-backend/node_modules/.bin/tsc -p apps/node-backend/tsconfig.check.json
 
       - name: Type-check backend (noImplicitAny ratchet)
         run: cd apps/node-backend && bun scripts/checkjs-ratchet.js
@@ -311,6 +351,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+        with:
+          persist-credentials: false
 
       - name: Setup toolchain
         uses: ./.github/actions/setup
@@ -357,6 +399,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+        with:
+          persist-credentials: false
 
       - name: Setup toolchain
         uses: ./.github/actions/setup
@@ -384,6 +428,8 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+        with:
+          persist-credentials: false
 
       - name: Setup toolchain
         uses: ./.github/actions/setup
@@ -426,6 +472,8 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+        with:
+          persist-credentials: false
 
       - name: Setup toolchain
         uses: ./.github/actions/setup
@@ -442,13 +490,6 @@ jobs:
 
       - name: Install native PostgreSQL 18
         run: bash .github/scripts/install-postgres-18.sh
-
-      - name: Cache electron Bun dependencies
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
-        with:
-          path: packaging/electron/node_modules
-          key: ${{ runner.os }}-bun-electron-${{ hashFiles('packaging/electron/bun.lock') }}
-          restore-keys: ${{ runner.os }}-bun-electron-
 
       - name: Install electron workspace dependencies
         run: bun install --frozen-lockfile --ignore-scripts --cwd packaging/electron
@@ -576,6 +617,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+        with:
+          persist-credentials: false
 
       # No setup-python step on purpose: the checker is stdlib-only (ast + re) and
       # ubuntu-24.04 ships python3, so this stays dependency-free.
@@ -600,6 +643,7 @@ jobs:
       - changes
       - commitlint
       - cloud-tooling
+      - dependency-review
       - secrets-scan
       - deps-audit
       - pip-audit
@@ -614,6 +658,8 @@ jobs:
     if: always()
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+        with:
+          persist-credentials: false
 
       - name: Check all gates passed
         # Values reach the script through env, never via ${{ }} interpolation
@@ -626,8 +672,13 @@ jobs:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
           CLOUD_TOOLING_RESULT: ${{ needs.cloud-tooling.result }}
+          DEPENDENCY_REVIEW_RESULT: ${{ needs.dependency-review.result }}
         run: |
           set -euo pipefail
+          if [ "$EVENT_NAME" = pull_request ] && [ "$DEPENDENCY_REVIEW_RESULT" != success ]; then
+            echo "Dependency review did not pass: $DEPENDENCY_REVIEW_RESULT"
+            exit 1
+          fi
           # Cancellation passes only after the existing superseded-PR policy
           # below verifies a newer live head. Skipping is never allowed.
           case "$CLOUD_TOOLING_RESULT" in
@@ -664,6 +715,8 @@ jobs:
       security-events: write # required to upload SARIF to GitHub Security
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+        with:
+          persist-credentials: false
 
       - name: Run Trivy vulnerability scan (table — fail on HIGH/CRITICAL)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -708,6 +761,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+        with:
+          persist-credentials: false
 
       - name: Setup toolchain
         uses: ./.github/actions/setup
@@ -745,6 +800,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+        with:
+          persist-credentials: false
 
       - name: Setup toolchain
         uses: ./.github/actions/setup
@@ -793,6 +850,8 @@ jobs:
     if: always()
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+        with:
+          persist-credentials: false
 
       - name: Check all CI stages passed
         # Values reach the script through env, never via ${{ }} interpolation

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseBrokerRetagBody } from "../src/services/investmentService.js";
+import { __parseBrokerRetagBody as parseBrokerRetagBody } from "../src/services/investmentService.js";
 import { ValidationError } from "../src/middleware/errorHandler.js";
 
 const valid = {

@@ -18,8 +18,8 @@ import { accountService } from "../../src/services/accountService.js";
 import { mergeAccounts } from "../../src/services/accountMergeService.js";
 import { closePool } from "../../src/database/connection.js";
 import {
-  ACCOUNT_FUNDING_GRAPH_LOCK_PARAMS,
-  ACCOUNT_FUNDING_GRAPH_LOCK_SQL,
+  __ACCOUNT_FUNDING_GRAPH_LOCK_PARAMS as ACCOUNT_FUNDING_GRAPH_LOCK_PARAMS,
+  __ACCOUNT_FUNDING_GRAPH_LOCK_SQL as ACCOUNT_FUNDING_GRAPH_LOCK_SQL,
 } from "../../src/lib/accountFundingGraphLock.js";
 
 async function insertAccount(name, fundingAccountId = null) {

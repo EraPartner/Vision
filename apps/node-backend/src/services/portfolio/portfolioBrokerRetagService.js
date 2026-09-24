@@ -39,7 +39,7 @@ function rateOnOrBefore(index, currency, date) {
 }
 
 /** @param {object} value */
-export function fingerprintRetagRequest(value) {
+function fingerprintRetagRequest(value) {
   return crypto
     .createHash("sha256")
     .update(
@@ -60,7 +60,7 @@ export function fingerprintRetagRequest(value) {
  * @param {Set<number>} selectedIds
  * @param {number|null} toAccountId
  */
-export function assertRetagPreservesPartitionUnits(
+function assertRetagPreservesPartitionUnits(
   rows,
   selectedIds,
   toAccountId,
@@ -103,7 +103,7 @@ export function assertRetagPreservesPartitionUnits(
  * @param {string} todayYmd
  * @param {any[]} historicalRates
  */
-export function assertRetagPreservesPortfolioEconomics(
+function assertRetagPreservesPortfolioEconomics(
   rows,
   selectedIds,
   toAccountId,
@@ -225,7 +225,7 @@ function mapReceipt(row, replayed) {
 /**
  * @param {{ transaction_ids:number[], from_account_id:number|null, to_account_id:number|null, idempotency_key:string }} request
  */
-export async function retagPortfolioTransactions(request) {
+async function retagPortfolioTransactions(request) {
   const transactionIds = [...request.transaction_ids].sort((a, b) => a - b);
   const fingerprint = fingerprintRetagRequest({
     ...request,
@@ -363,3 +363,10 @@ export async function retagPortfolioTransactions(request) {
 }
 
 export default { retagPortfolioTransactions };
+
+export {
+  assertRetagPreservesPartitionUnits as __assertRetagPreservesPartitionUnits,
+  assertRetagPreservesPortfolioEconomics as __assertRetagPreservesPortfolioEconomics,
+  fingerprintRetagRequest as __fingerprintRetagRequest,
+  retagPortfolioTransactions as __retagPortfolioTransactions,
+};

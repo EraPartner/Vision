@@ -393,7 +393,7 @@ export async function readMonitorNotification(id) {
   return mapNotification(row);
 }
 
-export function evaluateThreshold({
+function evaluateThreshold({
   previousValue,
   currentValue,
   operator,
@@ -563,7 +563,7 @@ async function inspectAnalysis(row) {
   };
 }
 
-export function classifyMonitorRun(run, fieldId) {
+function classifyMonitorRun(run, fieldId) {
   if (run.status !== "completed")
     return {
       status: "partial",
@@ -854,3 +854,8 @@ export async function checkDueAnalysisMonitors() {
   for (const id of ids) await checkAnalysisMonitor(id, { dueOnly: true });
   return ids.length;
 }
+
+export {
+  classifyMonitorRun as __classifyMonitorRun,
+  evaluateThreshold as __evaluateThreshold,
+};

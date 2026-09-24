@@ -14,7 +14,7 @@ const writes = vi.hoisted(() => ({
 vi.mock("../src/repositories/portfolioTxRepo.reads.js", () => reads);
 vi.mock("../src/repositories/portfolioTxRepo.writes.js", () => writes);
 
-import { update } from "../src/services/portfolio/portfolioTransactionService.js";
+import { __update as update } from "../src/services/portfolio/portfolioTransactionService.js";
 
 describe("portfolioTransactionService recurrence compatibility", () => {
   beforeEach(() => {

@@ -4,7 +4,7 @@ import os from "os";
 import path from "path";
 import {
   splitCsvLines,
-  splitDelimitedRecord,
+  __splitDelimitedRecord as splitDelimitedRecord,
   parseCommaDecimal,
   parseDateWithFormat,
   readTextWithEncodingFallback,

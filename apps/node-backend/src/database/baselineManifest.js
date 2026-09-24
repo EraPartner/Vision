@@ -76,7 +76,7 @@ export async function readBaselineSchemaInventory({
 }
 
 /** Read only; never returns financial rows, only counts and order-independent digests. */
-export async function readBaselineManifest({
+async function readBaselineManifest({
   connectionString,
   repoRoot,
   timestampUtcColumns = {},
@@ -155,3 +155,7 @@ export async function readBaselineManifest({
     await client.end();
   }
 }
+
+export {
+  readBaselineManifest as __readBaselineManifest,
+};

@@ -59,8 +59,8 @@ cloud "Build & Distribution" as DevToolsCloud {
   node "Native runtime provider\n(PostgreSQL 18 + Bun lifecycle)" as NativeRuntime
   node "Bun (runtime + workspaces)" as Bun
   node "Electron (packaging/electron)" as Electron
-  node "electron-builder + notarisation" as Builder
-  node "ToDesktop CDN" as ToDesktop
+  node "electron-builder\n(ad hoc signing)" as Builder
+  node "GitHub Releases\n(trusted publisher)" as GitHubReleases
   node "Vitest 4 + property tests" as Vitest
   node "Trivy filesystem scan" as Trivy
   node "ESLint / openapi-typescript" as Lint

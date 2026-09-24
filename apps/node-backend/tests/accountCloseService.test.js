@@ -15,7 +15,7 @@ vi.mock("../src/repositories/recipientRepository.js", () => ({
 import { query, withTransaction } from "../src/database/connection.js";
 import {
   closeAccount,
-  normalizeCloseAccount,
+  __normalizeCloseAccount as normalizeCloseAccount,
   previewAccountPortfolioLots,
 } from "../src/services/accountCloseService.js";
 

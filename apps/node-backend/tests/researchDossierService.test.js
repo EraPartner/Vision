@@ -8,7 +8,7 @@ vi.mock("../src/database/connection.js", () =>
 
 import {
   createResearchDossier,
-  dossierContentSchema,
+  __dossierContentSchema as dossierContentSchema,
   exportResearchDossiers,
   getResearchDossier,
   listResearchDossiers,

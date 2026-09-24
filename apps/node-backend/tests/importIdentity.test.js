@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  IMPORT_FINGERPRINT_VERSION,
+  __IMPORT_FINGERPRINT_VERSION as IMPORT_FINGERPRINT_VERSION,
   assignImportIdentities,
   budgetingIdentityBase,
-  computeSourceRecordHash,
+  __computeSourceRecordHash as computeSourceRecordHash,
   portfolioIdentityBase,
 } from "../src/services/importIdentity.js";
 

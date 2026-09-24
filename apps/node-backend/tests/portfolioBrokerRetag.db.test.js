@@ -8,7 +8,7 @@ import {
   releaseDbSuiteLock,
 } from "./setup/db.js";
 import { closePool } from "../src/database/connection.js";
-import { retagPortfolioTransactions } from "../src/services/portfolio/portfolioBrokerRetagService.js";
+import { __retagPortfolioTransactions as retagPortfolioTransactions } from "../src/services/portfolio/portfolioBrokerRetagService.js";
 
 const pool = getTestPool();
 const describeDb = hasTestDatabase() ? describe : describe.skip;

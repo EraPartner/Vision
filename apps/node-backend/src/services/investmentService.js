@@ -220,7 +220,7 @@ function parseInvestmentBody(body) {
  * @param {unknown} body
  * @returns {{ transaction_ids:number[], from_account_id:number|null, to_account_id:number|null, idempotency_key:string }}
  */
-export function parseBrokerRetagBody(body) {
+function parseBrokerRetagBody(body) {
   const result = brokerRetagBodySchema.safeParse(body);
   if (!result.success) {
     const message = result.error.issues
@@ -1075,4 +1075,8 @@ export async function getInvestmentSummary(req, res) {
 export {
   parsePortfolioTransactionBody as __parsePortfolioTransactionBody,
   parseDefaultListOptions as __parseDefaultListOptions,
+};
+
+export {
+  parseBrokerRetagBody as __parseBrokerRetagBody,
 };

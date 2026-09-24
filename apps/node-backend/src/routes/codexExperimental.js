@@ -16,7 +16,7 @@ const session = createExperimentalCodexSession({
 });
 
 /** @param {{flag?: string, binary?: string, token?: string, peer?: string}} options */
-export function experimentalAccessDecision({ flag, binary, token, peer }) {
+function experimentalAccessDecision({ flag, binary, token, peer }) {
   if (flag !== "1" || typeof binary !== "string" || !isAbsolute(binary))
     return "disabled";
   if (!isLoopbackHost(peer)) return "forbidden";
@@ -104,3 +104,7 @@ router.post(
 );
 
 export default router;
+
+export {
+  experimentalAccessDecision as __experimentalAccessDecision,
+};
