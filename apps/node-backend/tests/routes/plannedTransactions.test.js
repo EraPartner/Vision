@@ -251,7 +251,7 @@ describe("Planned Transaction Routes", () => {
 
       const res = await post({
         planned_date: "2026-03-15",
-        bank_account: "Chase",
+        account_id: 7,
         amount: 50,
       }).expect(201);
 
@@ -267,7 +267,7 @@ describe("Planned Transaction Routes", () => {
     it("rejects a zero amount (meaningless, never auto-matches)", async () => {
       await post({
         planned_date: "2026-03-15",
-        bank_account: "Chase",
+        account_id: 7,
         amount: 0,
       }).expect(400);
       expect(plannedTransactionRepository.create).not.toHaveBeenCalled();
@@ -276,7 +276,7 @@ describe("Planned Transaction Routes", () => {
     it("rejects an absurd amount above the money-column ceiling", async () => {
       await post({
         planned_date: "2026-03-15",
-        bank_account: "Chase",
+        account_id: 7,
         amount: 1e15,
       }).expect(400);
       expect(plannedTransactionRepository.create).not.toHaveBeenCalled();
@@ -285,7 +285,7 @@ describe("Planned Transaction Routes", () => {
     it("rejects a negative reminder_days_before", async () => {
       await post({
         planned_date: "2026-03-15",
-        bank_account: "Chase",
+        account_id: 7,
         amount: 50,
         reminder_days_before: -1,
       }).expect(400);
@@ -304,7 +304,7 @@ describe("Planned Transaction Routes", () => {
       });
 
       await post({
-        bank_account: "Mortgage",
+        account_id: 8,
         is_loan: true,
         loan_type: "amortizing",
         loan_principal: 10000,
@@ -326,7 +326,7 @@ describe("Planned Transaction Routes", () => {
     it("rejects an invalid recurrence_pattern (fortnightly) with a 400", async () => {
       await post({
         planned_date: "2026-03-15",
-        bank_account: "Chase",
+        account_id: 7,
         amount: 50,
         is_recurring: true,
         recurrence_pattern: "fortnightly",
@@ -337,7 +337,7 @@ describe("Planned Transaction Routes", () => {
     it("rejects is_recurring:true with no recurrence_pattern (would be perpetually due)", async () => {
       await post({
         planned_date: "2026-03-15",
-        bank_account: "Chase",
+        account_id: 7,
         amount: 50,
         is_recurring: true,
       }).expect(400);
@@ -356,7 +356,7 @@ describe("Planned Transaction Routes", () => {
 
       await post({
         planned_date: "2026-03-15",
-        bank_account: "Chase",
+        account_id: 7,
         amount: 50,
         is_recurring: true,
         recurrence_pattern: "every 10 days",
@@ -376,7 +376,7 @@ describe("Planned Transaction Routes", () => {
       });
 
       await post({
-        bank_account: "Mortgage",
+        account_id: 8,
         is_loan: true,
         loan_type: "amortizing",
         loan_principal: 10000,
@@ -399,7 +399,7 @@ describe("Planned Transaction Routes", () => {
 
     it("should return 400 when loan_term_months is out of bounds", async () => {
       await post({
-        bank_account: "Mortgage",
+        account_id: 8,
         is_loan: true,
         loan_term_months: 601,
       }).expect(400);
@@ -413,7 +413,7 @@ describe("Planned Transaction Routes", () => {
   describe("loan schedule failures keep their own class and message", () => {
     it("surfaces the generator ValidationError verbatim — one prefix, not two", async () => {
       const res = await post({
-        bank_account: "Mortgage",
+        account_id: 8,
         is_loan: true,
         loan_type: "amortizing",
         loan_principal: -1,
@@ -436,7 +436,7 @@ describe("Planned Transaction Routes", () => {
       });
 
       const res = await post({
-        bank_account: "Mortgage",
+        account_id: 8,
         is_loan: true,
         loan_type: "amortizing",
         loan_principal: 10000,
@@ -479,7 +479,7 @@ describe("Planned Transaction Routes", () => {
   describe("POST / validation pins", () => {
     const validBody = {
       planned_date: "2026-03-15",
-      bank_account: "Chase",
+      account_id: 7,
       amount: 50,
     };
 
@@ -579,7 +579,7 @@ describe("Planned Transaction Routes", () => {
 
     it("drops truthy recurrence bounds on a loan instead of validating them", async () => {
       await post({
-        bank_account: "Mortgage",
+        account_id: 8,
         is_loan: true,
         loan_type: "amortizing",
         loan_principal: 10000,
@@ -605,7 +605,7 @@ describe("Planned Transaction Routes", () => {
 
     it("still rejects a falsy-but-present max_occurrences on a loan (not dropped)", async () => {
       await post({
-        bank_account: "Mortgage",
+        account_id: 8,
         is_loan: true,
         loan_type: "amortizing",
         loan_principal: 10000,

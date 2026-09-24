@@ -53,9 +53,8 @@ async function seedRecipient() {
 
 /**
  * Create an accounts row with explicit population attributes. Accounts are
- * pre-created (rather than left to the dual-write trigger) because this suite
- * is about the population GATES — type, in_net_worth, statement_balance — which
- * the trigger's onboarding INSERT does not set.
+ * pre-created because this suite exercises the population gates — type,
+ * in_net_worth, and statement balances.
  */
 async function addAccount(
   name,
@@ -66,23 +65,23 @@ async function addAccount(
     currency = "EUR",
     statementBalance = null,
     statementBalanceDate = null,
+    statementCurrency = currency,
   } = {},
 ) {
   const { rows } = await getTestPool().query(
-    `INSERT INTO accounts (name, display_name, type, in_net_worth, currency,
-                           statement_balance, statement_balance_date)
-     VALUES ($1, $2, $3::account_type, $4, $5, $6, $7) RETURNING id`,
-    [
-      name,
-      displayName,
-      type,
-      inNetWorth,
-      currency,
-      statementBalance,
-      statementBalanceDate,
-    ],
+    `INSERT INTO accounts (name, display_name, type, in_net_worth, currency)
+     VALUES ($1, $2, $3::account_type, $4, $5) RETURNING id`,
+    [name, displayName, type, inNetWorth, currency],
   );
-  return rows[0].id;
+  const id = rows[0].id;
+  if (statementBalance != null) {
+    await getTestPool().query(
+      `INSERT INTO account_statement_balances (account_id, currency, balance, balance_date)
+       VALUES ($1, $2, $3, $4)`,
+      [id, statementCurrency, statementBalance, statementBalanceDate],
+    );
+  }
+  return id;
 }
 
 /**
@@ -100,8 +99,10 @@ async function insertTxn({
   isActive = true,
 }) {
   const { rows } = await getTestPool().query(
-    `INSERT INTO transactions (date, amount, currency, recipient_id, bank_account, balance, is_active)
-     VALUES ((${dateExpr})::date, $1, $2, $3, $4, $5, $6) RETURNING id`,
+    `INSERT INTO transactions (date, amount, currency, recipient_id, account_id, balance, is_active)
+     VALUES ((${dateExpr})::date, $1, $2, $3,
+             (SELECT id FROM accounts WHERE lower(btrim(name)) = lower(btrim($4))),
+             $5, $6) RETURNING id`,
     [amount, currency, rec.misc, bank, balance, isActive],
   );
   return rows[0].id;
@@ -749,6 +750,7 @@ describe.skipIf(!hasTestDatabase())(
           currency: "EUR",
           statementBalance: "90.00",
           statementBalanceDate: await ymdFromToday(),
+          statementCurrency: "USD",
         });
         await insertRate("USD", "CURRENT_DATE", "0.5");
         await insertTxn({

@@ -81,10 +81,9 @@ const ALL_ROLES = [APP_ROLE, PLAIN_MIG_ROLE, PRE_ROLE];
 describe.skipIf(!hasTestDatabase())("roleBootstrap (real Postgres)", () => {
   /** @type {import('pg').Pool} */
   let pool;
-  // Whether the server actually verifies passwords. The with-test-db.sh /CI
-  // container does (scram); a local scratch cluster may run `trust`, where a
-  // wrong password still connects — password-rejection assertions self-skip
-  // there (the role/grant behaviour under test is auth-mode independent).
+  // Whether the server actually verifies passwords. The disposable
+  // with-test-db.sh cluster does (SCRAM); a caller-managed cluster may run
+  // `trust`, where wrong passwords still connect.
   let authEnforced = false;
 
   async function dropTestRoles() {

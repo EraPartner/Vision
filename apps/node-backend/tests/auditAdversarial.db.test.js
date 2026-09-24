@@ -169,7 +169,7 @@ describe("audit chain adversarial PostgreSQL verification", () => {
             readSegment,
             runQuery: (sql, params) => client.query(sql, params),
           });
-        expect((await verify()).status).toBe("verified");
+        expect(await verify()).toMatchObject({ status: "verified" });
 
         async function mutated(sql, expectedCodes) {
           await client.query("SAVEPOINT audit_attack");
@@ -279,8 +279,8 @@ describe("audit chain adversarial PostgreSQL verification", () => {
         client.release();
       }
       expect(
-        (await verifyAuditHistory({ trustedCheckpoint: checkpoint })).status,
-      ).toBe("verified");
+        await verifyAuditHistory({ trustedCheckpoint: checkpoint }),
+      ).toMatchObject({ status: "verified" });
       const plan = await planAuditRetention(checkpoint);
       expect(plan).toMatchObject({ eligible: true, through });
       const signed = {

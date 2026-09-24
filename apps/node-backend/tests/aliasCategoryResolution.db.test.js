@@ -120,13 +120,15 @@ async function seedBase() {
   rec.misc = await addRecipient("Misc Payee");
 }
 
-/** Pre-create the accounts row (the sync trigger's own INSERT is broken at head). */
+/** Resolve the canonical account ID used by transaction fixtures. */
 async function ensureAccount(name) {
-  await getTestPool().query(
+  const { rows } = await getTestPool().query(
     `INSERT INTO accounts (name, display_name) VALUES ($1, $1)
-     ON CONFLICT (lower(btrim(name))) DO NOTHING`,
+     ON CONFLICT (lower(btrim(name))) DO UPDATE SET name = EXCLUDED.name
+     RETURNING id`,
     [name],
   );
+  return rows[0].id;
 }
 
 /**
@@ -146,23 +148,31 @@ async function insertTxn({
   isActive = true,
   isTransfer = false,
 }) {
-  if (bank) await ensureAccount(bank);
+  const accountId = bank ? await ensureAccount(bank) : null;
   const dateExpr = dateSql ?? "$1";
   const params = dateSql
-    ? [amount, currency, recipientId, categoryId, bank, isActive, isTransfer]
+    ? [
+        amount,
+        currency,
+        recipientId,
+        categoryId,
+        accountId,
+        isActive,
+        isTransfer,
+      ]
     : [
         date,
         amount,
         currency,
         recipientId,
         categoryId,
-        bank,
+        accountId,
         isActive,
         isTransfer,
       ];
   const n = dateSql ? 0 : 1;
   const { rows } = await getTestPool().query(
-    `INSERT INTO transactions (date, amount, currency, recipient_id, category_id, bank_account, is_active, is_transfer)
+    `INSERT INTO transactions (date, amount, currency, recipient_id, category_id, account_id, is_active, is_transfer)
      VALUES (${dateExpr}, $${n + 1}, $${n + 2}, $${n + 3}, $${n + 4}, $${n + 5}, $${n + 6}, $${n + 7}) RETURNING id`,
     params,
   );

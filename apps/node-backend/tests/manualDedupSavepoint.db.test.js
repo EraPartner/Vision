@@ -124,7 +124,7 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
     });
   });
 
-  it("serializes concurrent legacy-label and canonical-id creates", async () => {
+  it("serializes concurrent canonical-account creates", async () => {
     const pool = getTestPool();
     const { rows: recipientRows } = await pool.query(
       `INSERT INTO recipients (name, normalized_name)
@@ -145,7 +145,7 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
     const results = await Promise.allSettled([
       transactionService.createManualTransaction({
         ...common,
-        bank_account: "Mixed Representation Account",
+        account_id: accountId,
       }),
       transactionService.createManualTransaction({
         ...common,

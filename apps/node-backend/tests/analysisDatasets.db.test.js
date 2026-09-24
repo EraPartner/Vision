@@ -201,10 +201,10 @@ describe.skipIf(!hasTestDatabase())(
       const january = report.months.find(
         ({ year, month }) => year === 2026 && month === 1,
       );
-      expect(Number(viewRows[0].spending)).toBe(january.total_spending);
+      expect(Number(viewRows[0].spending)).toBe(-january.total_spending);
       expect(Number(viewRows[0].positive_flow)).toBe(january.total_income);
       expect(january).toMatchObject({
-        total_spending: 100,
+        total_spending: -100,
         total_income: 25,
         transaction_count: 2,
       });

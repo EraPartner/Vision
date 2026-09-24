@@ -20,7 +20,7 @@
  * registry resets.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { mockPooledTxConnection } from '../helpers/repoMocks.js';
+import { mockTxConnection } from '../helpers/repoMocks.js';
 import {
   mockTransactionRepository,
   mockDeduplication,
@@ -31,11 +31,18 @@ import { mockLogger } from '../helpers/mockLogger.js';
 import { routeAgent } from '../helpers/routeApp.js';
 
 vi.mock('../../src/repositories/transactionRepository.js', () => mockTransactionRepository());
-vi.mock('../../src/services/deduplication.js', () => mockDeduplication());
+vi.mock('../../src/services/deduplication.js', () => ({
+  ...mockDeduplication(),
+  lockManualTransactionIdentity: vi.fn(async () => undefined),
+}));
 vi.mock('../../src/config/logger.js', () => ({ logger: mockLogger() }));
 vi.mock('../../src/services/transferReconciliationService.js', () => mockTransferReconciliation());
 vi.mock('../../src/services/currency/currencyConversionService.js', () => mockCurrencyConversion());
-vi.mock('../../src/database/connection.js', () => mockPooledTxConnection());
+vi.mock('../../src/database/connection.js', () => mockTxConnection());
+vi.mock('../../src/repositories/accountRepository.js', () => {
+  const accountRepository = { findActiveId: vi.fn(async () => 1) };
+  return { accountRepository, default: accountRepository };
+});
 vi.mock('../../src/services/plannedMatchService.js', () => ({
   autoLinkTransactions: vi.fn(async () => ({ autoLinkedCount: 0, links: [] })),
 }));
@@ -50,7 +57,7 @@ const api = routeAgent(transactionsRouter, { mountPath: '/api/transactions' });
 const patch = (body) => api.patch('/api/transactions/1').send(body);
 const post = (body) => api.post('/api/transactions/').send({
   transaction_date: '2026-01-15',
-  bank_account: 'Chase',
+  account_id: 1,
   recipient_id: 1,
   amount: -50,
   ...body,

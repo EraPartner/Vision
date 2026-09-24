@@ -272,7 +272,7 @@ describe.skipIf(!hasTestDatabase())("analysis monitors (real Postgres)", () => {
       transactionId = (
         await getTestPool().query(
           `INSERT INTO transactions
-      (date,amount,currency,recipient_id,bank_account,is_active,is_transfer,memo)
+      (date,amount,currency,recipient_id,account_id,is_active,is_transfer,memo)
       VALUES ('2026-09-19',1,'EUR',$1,NULL,true,false,$2) RETURNING id`,
           [recipientId, marker],
         )

@@ -118,9 +118,7 @@ async function seedBase() {
 }
 
 /**
- * Ensure an accounts row exists for a label (the transactions dual-write trigger
- * resolves `bank_account` → `account_id`; pre-creating keeps fixture setup
- * independent of the trigger).
+ * Ensure an accounts row exists for a label and return its canonical ID.
  */
 async function ensureAccount(name) {
   await getTestPool().query(
@@ -128,6 +126,11 @@ async function ensureAccount(name) {
      ON CONFLICT (lower(btrim(name))) DO NOTHING`,
     [name],
   );
+  const { rows } = await getTestPool().query(
+    `SELECT id FROM accounts WHERE lower(btrim(name)) = lower(btrim($1))`,
+    [name],
+  );
+  return rows[0].id;
 }
 
 async function insertTxn({
@@ -140,16 +143,16 @@ async function insertTxn({
   isActive = true,
   isTransfer = false,
 }) {
-  if (bank) await ensureAccount(bank);
+  const accountId = bank ? await ensureAccount(bank) : null;
   const { rows } = await getTestPool().query(
-    `INSERT INTO transactions (date, amount, currency, recipient_id, category_id, bank_account, is_active, is_transfer)
+    `INSERT INTO transactions (date, amount, currency, recipient_id, category_id, account_id, is_active, is_transfer)
      VALUES ((${anchored(dateExpr)})::date, $1, $2, $3, $4, $5, $6, $7) RETURNING id`,
     [
       amount,
       currency,
       recipientId ?? rec.misc,
       categoryId,
-      bank,
+      accountId,
       isActive,
       isTransfer,
     ],

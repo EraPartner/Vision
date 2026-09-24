@@ -36,6 +36,12 @@ const ALEMBIC_CONFIG = path.join(REPO_ROOT, "config/alembic.ini");
 
 const REV_BEFORE_LEGACY_BRANCHES = "0051_account_id_dual_write_trigger";
 const REV_BEFORE_CONVERSION = "0086_portfolio_transactions_import_batch_id";
+// Exercise the 0087 rollback before 0117 starts recording forward-only audit
+// entries for every later Alembic revision.
+const REV_AFTER_CONVERSION = "0090_constraint_index_naming";
+// The historical scratch schema has not run the guarded out-of-band contracts.
+// 0119 deliberately refuses to bridge it to the reviewed fresh baseline.
+const REV_BEFORE_GUARDED_BRIDGE = "0118_audit_retention_pruner";
 
 /** Throwaway database, derived from TEST_DATABASE_URL so host/credentials match. */
 function scratchDbName() {
@@ -324,7 +330,7 @@ describe.skipIf(!haveDb)("ADR-109 conversion migration (0087)", () => {
   async function expectUpgradeRefused(pattern) {
     let err = null;
     try {
-      await alembic("upgrade", "head");
+      await alembic("upgrade", REV_AFTER_CONVERSION);
     } catch (e) {
       err = e;
     }
@@ -407,7 +413,7 @@ describe.skipIf(!haveDb)("ADR-109 conversion migration (0087)", () => {
     await q("SELECT setval('investments_base_id_seq', 500)");
 
     // ------------------------------------------------------------------ upgrade
-    await alembic("upgrade", "head");
+    await alembic("upgrade", REV_AFTER_CONVERSION);
 
     // Flat tables took the canonical names; legacy relations renamed aside.
     expect(
@@ -608,9 +614,8 @@ describe.skipIf(!haveDb)("ADR-109 conversion migration (0087)", () => {
     ).toBe(false);
 
     // ---------------------------------------------------------------- downgrade
-    // Back to the revision BEFORE the conversion (not `-1`: head has moved past
-    // 0087 — e.g. 0088's money-precision alignment — and those later downgrades
-    // must also unwind for the legacy shape to be restorable).
+    // Back to the revision BEFORE the conversion (not `-1`: the historical
+    // chain moved past 0087, so later downgrades must also unwind).
     await alembic("downgrade", REV_BEFORE_CONVERSION);
 
     expect(
@@ -663,7 +668,7 @@ describe.skipIf(!haveDb)("ADR-109 conversion migration (0087)", () => {
     ).toBe("investments_legacy");
 
     // --------------------------------------------------------------- re-upgrade
-    await alembic("upgrade", "head");
+    await alembic("upgrade", REV_AFTER_CONVERSION);
     expect(
       await scalar(
         "SELECT relkind::text FROM pg_class WHERE oid = to_regclass('public.investments')",
@@ -690,10 +695,23 @@ describe.skipIf(!haveDb)("ADR-109 conversion migration (0087)", () => {
     const before = await scalar(
       "SELECT md5(string_agg(c.relname || ':' || c.relkind::text, ',' ORDER BY c.relname)) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public'",
     );
-    await alembic("upgrade", "head");
+    await alembic("upgrade", REV_AFTER_CONVERSION);
     const after = await scalar(
       "SELECT md5(string_agg(c.relname || ':' || c.relkind::text, ',' ORDER BY c.relname)) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public'",
     );
     expect(after).toBe(before);
+    expect(await scalar("SELECT version_num FROM alembic_version")).toBe(
+      REV_AFTER_CONVERSION,
+    );
+
+    // The 0119 bridge must still reject this synthetic legacy upgrade: its
+    // fingerprint intentionally requires the reviewed manual contracts.
+    await alembic("upgrade", REV_BEFORE_GUARDED_BRIDGE);
+    await expect(alembic("upgrade", "head")).rejects.toThrow(
+      /Schema differs from the reviewed baseline/,
+    );
+    expect(await scalar("SELECT version_num FROM alembic_version")).toBe(
+      REV_BEFORE_GUARDED_BRIDGE,
+    );
   });
 });

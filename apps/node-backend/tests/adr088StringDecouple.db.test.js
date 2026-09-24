@@ -1,20 +1,9 @@
 /**
- * Real-Postgres tests for the ADR-088 contract-phase READ decouple outside
- * transactionRepository (which pins its own flip in
- * transactionRepository.db.test.js): plannedTransactionRepository,
- * splitRepository's owed views, the CSV/NDJSON export SQL, and the recurring
- * detection feed must all bind to `account_id` + `accounts.name`, never to the
- * retired `bank_account` string.
- *
- * The falsification pattern mirrors transactionRepository.db.test.js: a
- * raw-SQL UPDATE stamps a stale label with NO matching account onto a row —
- * the 0062 lookup-only trigger leaves account_id untouched — so any read that
- * still consults the string is betrayed by 'STALE LABEL' surfacing (or by the
- * real account failing to match).
- *
- * Also pins the runbook's parity/soak invariant on the corpus these suites
- * write: no row may carry a label string without a resolved account_id
- * (alembic/manual/contract_drop_bank_account/README.md §"Do NOT run until").
+ * Real-Postgres tests for the ADR-088 account_id contract across planned
+ * transactions, split owed views, and transaction export. Both the fresh
+ * compatibility schema and the manually contracted schema must work: the
+ * canonical tables are written through account_id only, while API-facing
+ * bank_account labels are projected from accounts.name.
  */
 
 import {
@@ -58,8 +47,7 @@ async function seedCorpus() {
   );
   fx.recipientId = rec[0].id;
 
-  // Two accounts with mixed-case display names, pre-created so the sync
-  // trigger resolves rather than mints (0066 normalized identity).
+  // Two accounts with mixed-case display names and stable IDs.
   for (const name of ["KBC Current", "Wise USD"]) {
     await pool.query(
       `INSERT INTO accounts (name, display_name) VALUES ($1, $1)
@@ -70,25 +58,25 @@ async function seedCorpus() {
   const { rows: accounts } = await pool.query("SELECT id, name FROM accounts");
   for (const row of accounts) fx[row.name] = row.id;
 
-  // Transactions on both accounts + currencies (the trigger resolves the FK
-  // from the label case-insensitively, as production inserts do).
+  // Transactions on both accounts + currencies. Canonical writes do not
+  // require the retired compatibility column or its trigger.
   const t = await pool.query(
-    `INSERT INTO transactions (date, amount, currency, recipient_id, bank_account, memo)
-     VALUES ('2026-01-10', '-750.00', 'EUR', $1, 'KBC CURRENT', 'RENT JANUARY'),
-            ('2026-01-12', '-45.10', 'USD', $1, 'WISE USD', 'US SUBSCRIPTION')
+    `INSERT INTO transactions (date, amount, currency, recipient_id, account_id, memo)
+     VALUES ('2026-01-10', '-750.00', 'EUR', $1, $2, 'RENT JANUARY'),
+            ('2026-01-12', '-45.10', 'USD', $1, $3, 'US SUBSCRIPTION')
      RETURNING id`,
-    [fx.recipientId],
+    [fx.recipientId, fx["KBC Current"], fx["Wise USD"]],
   );
   fx.txnKbc = t.rows[0].id;
   fx.txnWise = t.rows[1].id;
 
   // Planned rows on both accounts.
   const p = await pool.query(
-    `INSERT INTO planned_transactions (planned_date, amount, currency, recipient_id, bank_account, memo, is_executed, is_active)
-     VALUES ('2026-02-01', '-750.00', 'EUR', $1, 'KBC CURRENT', 'RENT FEBRUARY', false, true),
-            ('2026-02-05', '-45.10', 'USD', $1, 'WISE USD', 'US SUB FEBRUARY', false, true)
+    `INSERT INTO planned_transactions (planned_date, amount, currency, recipient_id, account_id, memo, is_executed, is_active)
+     VALUES ('2026-02-01', '-750.00', 'EUR', $1, $2, 'RENT FEBRUARY', false, true),
+            ('2026-02-05', '-45.10', 'USD', $1, $3, 'US SUB FEBRUARY', false, true)
      RETURNING id`,
-    [fx.recipientId],
+    [fx.recipientId, fx["KBC Current"], fx["Wise USD"]],
   );
   fx.plannedKbc = p.rows[0].id;
   fx.plannedWise = p.rows[1].id;
@@ -102,22 +90,11 @@ async function seedCorpus() {
   fx.splitId = s.rows[0].id;
 }
 
-/**
- * Desynchronize a row's string from its FK: the stale label matches no
- * account, and the lookup-only UPDATE trigger leaves account_id alone.
- */
-async function desync(table, id) {
-  const pool = getTestPool();
-  await pool.query(
-    `UPDATE ${table} SET bank_account = 'STALE LABEL' WHERE id = $1`,
-    [id],
+async function renameKbc(name) {
+  await getTestPool().query(
+    "UPDATE accounts SET name = $1, display_name = $1 WHERE id = $2",
+    [name, fx["KBC Current"]],
   );
-  const { rows } = await pool.query(
-    `SELECT account_id, bank_account FROM ${table} WHERE id = $1`,
-    [id],
-  );
-  expect(rows[0].bank_account).toBe("STALE LABEL");
-  expect(rows[0].account_id).toBe(fx["KBC Current"]);
 }
 
 /** Minimal Express-response stand-in capturing the streamed body. */
@@ -165,63 +142,61 @@ describeDb(
     });
 
     describe("plannedTransactionRepository", () => {
-      it("bankAccount filter matches via accounts.name, not the row string", async () => {
-        await desync("planned_transactions", fx.plannedKbc);
+      it("bankAccount filter follows accounts.name after a rename", async () => {
+        await renameKbc("KBC Renamed");
         const kbc = await plannedTransactionRepository.getAll({
-          bankAccount: "kbc",
+          bankAccount: "renamed",
         });
         expect(kbc.items.map((r) => r.id)).toEqual([fx.plannedKbc]);
         expect(kbc.total).toBe(1);
-        const stale = await plannedTransactionRepository.getAll({
-          bankAccount: "stale",
+        const oldName = await plannedTransactionRepository.getAll({
+          bankAccount: "current",
         });
-        expect(stale.items).toHaveLength(0);
-        expect(stale.total).toBe(0);
+        expect(oldName.items).toHaveLength(0);
+        expect(oldName.total).toBe(0);
       });
 
-      it("search matches the canonical account name, not the stale string", async () => {
-        await desync("planned_transactions", fx.plannedKbc);
+      it("search follows the canonical account name after a rename", async () => {
+        await renameKbc("KBC Renamed");
         const byName = await plannedTransactionRepository.getAll({
-          search: "kbc curr",
+          search: "kbc renamed",
         });
         expect(byName.items.map((r) => r.id)).toEqual([fx.plannedKbc]);
-        const byStale = await plannedTransactionRepository.getAll({
-          search: "stale lab",
+        const byOldName = await plannedTransactionRepository.getAll({
+          search: "kbc current",
         });
-        expect(byStale.items).toHaveLength(0);
+        expect(byOldName.items).toHaveLength(0);
       });
 
       it("getAll/getById/getDueSoon project bank_account from accounts.name", async () => {
-        await desync("planned_transactions", fx.plannedKbc);
+        await renameKbc("KBC Renamed");
         const { items } = await plannedTransactionRepository.getAll({});
         const byId = Object.fromEntries(items.map((r) => [r.id, r]));
-        expect(byId[fx.plannedKbc].bank_account).toBe("KBC Current");
+        expect(byId[fx.plannedKbc].bank_account).toBe("KBC Renamed");
         expect(byId[fx.plannedWise].bank_account).toBe("Wise USD");
         expect(
           (await plannedTransactionRepository.getById(fx.plannedKbc))
             .bank_account,
-        ).toBe("KBC Current");
+        ).toBe("KBC Renamed");
         // Both rows are in the future relative to 2026-02 fixtures only when
         // CURRENT_DATE precedes them; getDueSoon is exercised for projection
         // shape only when it returns rows, so guard on that.
         const due = await plannedTransactionRepository.getDueSoon(365);
         for (const row of due) {
-          expect(["KBC Current", "Wise USD"]).toContain(row.bank_account);
+          expect(["KBC Renamed", "Wise USD"]).toContain(row.bank_account);
         }
       });
 
-      it("update() returns the canonical label, and creating against an existing account reuses it", async () => {
+      it("update() and create() project the selected account's name", async () => {
         const updated = await plannedTransactionRepository.update(
           fx.plannedKbc,
           { memo: "RENT FEB (EDITED)" },
         );
         expect(updated.bank_account).toBe("KBC Current");
 
-        // Contract-phase create resolves the compatibility label directly to
-        // account_id; the pre-drop column is intentionally no longer written.
         const created = await plannedTransactionRepository.create({
           planned_date: "2026-03-01",
-          bank_account: "kbc current",
+          account_id: fx["KBC Current"],
           recipient_id: fx.recipientId,
           amount: "-750.00",
           memo: "rent march",
@@ -230,129 +205,129 @@ describeDb(
         expect(created.account_id).toBe(fx["KBC Current"]);
         expect(created.bank_account).toBe("KBC Current");
         const { rows } = await getTestPool().query(
-          "SELECT bank_account FROM planned_transactions WHERE id = $1",
+          "SELECT account_id FROM planned_transactions WHERE id = $1",
           [created.id],
         );
-        expect(rows[0].bank_account).toBeNull();
+        expect(rows[0].account_id).toBe(fx["KBC Current"]);
       });
     });
 
-    describe("UPDATE-path FK resolution (ghost-row fix)", () => {
-      // The 0062 sync trigger is lookup-only on UPDATE (never creates), so a
-      // PATCH that renames a row to a FIRST-SEEN label used to leave the FK
-      // stale/NULL — the edit "took" in the string but every flipped read kept
-      // showing the old account, and no filter could find the typed label.
-      // update()/updateWithLoanSchedule now resolve-or-create and stamp
-      // account_id in the same SET (stampAccountIdForUpdate).
-
-      it("transaction PATCH to a first-seen label mints the account, moves the FK, and is visible on read", async () => {
+    describe("UPDATE-path FK integrity", () => {
+      it("transaction update repoints the FK and exposes the target account's label", async () => {
         const updated = await transactionRepository.update(fx.txnKbc, {
-          bank_account: "Brand New Label",
+          account_id: fx["Wise USD"],
         });
-        expect(updated.bank_account).toBe("Brand New Label"); // the PATCH response itself
+        expect(updated.account_id).toBe(fx["Wise USD"]);
+        expect(updated.bank_account).toBe("Wise USD");
 
         const { rows } = await getTestPool().query(
-          `SELECT t.bank_account, t.account_id, a.name
+          `SELECT t.account_id, a.name
            FROM transactions t JOIN accounts a ON a.id = t.account_id WHERE t.id = $1`,
           [fx.txnKbc],
         );
-        // The pre-drop compatibility column is left untouched. Runtime reads
-        // follow the newly resolved FK and the lockstep drop removes the string.
-        expect(rows[0].bank_account).toBe("KBC CURRENT");
-        expect(rows[0].name).toBe("Brand New Label"); // FK moved to the minted account
-
-        // Reads see the edit — and the label is findable.
+        expect(rows[0].account_id).toBe(fx["Wise USD"]);
+        expect(rows[0].name).toBe("Wise USD");
         expect(
           (await transactionRepository.getById(fx.txnKbc)).bank_account,
-        ).toBe("Brand New Label");
+        ).toBe("Wise USD");
         const filtered = await transactionRepository.getAll({
-          bankAccount: "brand new",
+          bankAccount: "wise usd",
         });
-        expect(filtered.map((r) => r.id)).toEqual([fx.txnKbc]);
-        // Exactly one account minted for the label.
-        const { rows: n } = await getTestPool().query(
-          `SELECT count(*)::int AS n FROM accounts WHERE lower(btrim(name)) = 'brand new label'`,
+        expect(filtered.map((r) => r.id).sort()).toEqual(
+          [fx.txnKbc, fx.txnWise].sort(),
         );
-        expect(n[0].n).toBe(1);
       });
 
-      it("transaction PATCH to an existing label (case variant) reuses the account", async () => {
+      it("transaction update to an existing account_id does not mint an account", async () => {
+        const { rows: before } = await getTestPool().query(
+          "SELECT count(*)::int AS n FROM accounts",
+        );
         const updated = await transactionRepository.update(fx.txnKbc, {
-          bank_account: "wise usd",
+          account_id: fx["Wise USD"],
         });
         expect(updated.account_id).toBe(fx["Wise USD"]);
-        expect(updated.bank_account).toBe("Wise USD"); // canonical casing on read
+        expect(updated.bank_account).toBe("Wise USD");
+        const { rows: after } = await getTestPool().query(
+          "SELECT count(*)::int AS n FROM accounts",
+        );
+        expect(after[0].n).toBe(before[0].n);
       });
 
-      it("planned PATCH (update and updateWithLoanSchedule) resolves first-seen labels onto the FK", async () => {
+      it("planned update and updateWithLoanSchedule repoint by account_id", async () => {
         const updated = await plannedTransactionRepository.update(
           fx.plannedKbc,
-          { bank_account: "Planned Fresh Label" },
+          { account_id: fx["Wise USD"] },
         );
         const { rows } = await getTestPool().query(
           `SELECT p.account_id, a.name FROM planned_transactions p
            JOIN accounts a ON a.id = p.account_id WHERE p.id = $1`,
           [fx.plannedKbc],
         );
-        expect(rows[0].name).toBe("Planned Fresh Label");
-        expect(updated.bank_account).toBe("Planned Fresh Label");
+        expect(rows[0].account_id).toBe(fx["Wise USD"]);
+        expect(rows[0].name).toBe("Wise USD");
+        expect(updated.bank_account).toBe("Wise USD");
         const filtered = await plannedTransactionRepository.getAll({
-          bankAccount: "planned fresh",
+          bankAccount: "wise usd",
         });
-        expect(filtered.items.map((r) => r.id)).toEqual([fx.plannedKbc]);
+        expect(filtered.items.map((r) => r.id).sort()).toEqual(
+          [fx.plannedKbc, fx.plannedWise].sort(),
+        );
 
         const viaSchedule =
           await plannedTransactionRepository.updateWithLoanSchedule(
             fx.plannedWise,
-            { bank_account: "Sched Fresh Label" },
+            { account_id: fx["KBC Current"] },
             [],
           );
-        expect(viaSchedule.bank_account).toBe("Sched Fresh Label");
+        expect(viaSchedule.account_id).toBe(fx["KBC Current"]);
+        expect(viaSchedule.bank_account).toBe("KBC Current");
         const { rows: sched } = await getTestPool().query(
-          `SELECT a.name FROM planned_transactions p JOIN accounts a ON a.id = p.account_id WHERE p.id = $1`,
+          `SELECT p.account_id, a.name FROM planned_transactions p JOIN accounts a ON a.id = p.account_id WHERE p.id = $1`,
           [fx.plannedWise],
         );
-        expect(sched[0].name).toBe("Sched Fresh Label");
+        expect(sched[0].account_id).toBe(fx["KBC Current"]);
+        expect(sched[0].name).toBe("KBC Current");
       });
 
-      it("a PATCH label edit keeps the parity invariant (no string-without-FK ghosts)", async () => {
+      it("a legacy label-only repository update cannot change canonical identity", async () => {
         await transactionRepository.update(fx.txnKbc, {
-          bank_account: "Parity Probe Label",
+          bank_account: "Ignored Label",
         });
         await plannedTransactionRepository.update(fx.plannedKbc, {
-          bank_account: "Parity Probe Label",
+          bank_account: "Ignored Label",
         });
         const { rows } = await getTestPool().query(
-          `SELECT (SELECT count(*) FROM transactions WHERE bank_account IS NOT NULL AND account_id IS NULL)::int
-              + (SELECT count(*) FROM planned_transactions WHERE bank_account IS NOT NULL AND account_id IS NULL)::int AS n`,
+          `SELECT (SELECT account_id FROM transactions WHERE id = $1) AS transaction_account_id,
+                  (SELECT account_id FROM planned_transactions WHERE id = $2) AS planned_account_id`,
+          [fx.txnKbc, fx.plannedKbc],
         );
-        expect(rows[0].n).toBe(0);
-        // And both rows share ONE account.
+        expect(rows[0].transaction_account_id).toBe(fx["KBC Current"]);
+        expect(rows[0].planned_account_id).toBe(fx["KBC Current"]);
         const { rows: n } = await getTestPool().query(
-          `SELECT count(*)::int AS n FROM accounts WHERE lower(btrim(name)) = 'parity probe label'`,
+          `SELECT count(*)::int AS n FROM accounts WHERE lower(btrim(name)) = 'ignored label'`,
         );
-        expect(n[0].n).toBe(1);
+        expect(n[0].n).toBe(0);
       });
     });
 
     describe("splitRepository owed views", () => {
       it("getOwedByRecipient / export rows read the label via the FK", async () => {
-        await desync("transactions", fx.txnKbc);
+        await renameKbc("KBC Renamed");
         const owed = await splitRepository.getOwedByRecipient(fx.recipientId);
         expect(owed).toHaveLength(1);
-        expect(owed[0].bank_account).toBe("KBC Current");
+        expect(owed[0].bank_account).toBe("KBC Renamed");
 
         const exportRows = await splitRepository.getOwedExportRowsByRecipient(
           fx.recipientId,
         );
         expect(exportRows).toHaveLength(1);
-        expect(exportRows[0].bank_account).toBe("KBC Current");
+        expect(exportRows[0].bank_account).toBe("KBC Renamed");
       });
     });
 
     describe("transaction CSV export", () => {
       it("streams the canonical account label and filters bank_accounts via the FK", async () => {
-        await desync("transactions", fx.txnKbc);
+        await renameKbc("KBC Renamed");
 
         // Unfiltered: both rows, labels from accounts.name.
         const resAll = captureRes();
@@ -362,15 +337,14 @@ describeDb(
           params: whereAll.params,
           nextParamIdx: whereAll.nextParamIdx,
         });
-        expect(resAll.body()).toContain("KBC Current");
+        expect(resAll.body()).toContain("KBC Renamed");
         expect(resAll.body()).toContain("Wise USD");
-        expect(resAll.body()).not.toContain("STALE LABEL");
+        expect(resAll.body()).not.toContain("KBC Current");
 
-        // Plural exact filter (legacy escape hatch) resolves names → ids: the
-        // desynced KBC row still matches its account's canonical name.
+        // The label filter resolves names to canonical account IDs.
         const resKbc = captureRes();
         const whereKbc = buildTransactionWhere({
-          bankAccounts: ["KBC Current"],
+          bankAccounts: ["KBC Renamed"],
         });
         await streamCsvExport(resKbc, {
           whereSql: whereKbc.sql,
@@ -382,14 +356,22 @@ describeDb(
       });
     });
 
-    describe("runbook parity invariant", () => {
-      it("the soak queries return zero on everything these fixtures wrote", async () => {
+    describe("canonical identity invariant", () => {
+      it("all fixture transactions and plans have valid account foreign keys", async () => {
         const pool = getTestPool();
         const { rows: a } = await pool.query(
-          `SELECT count(*)::int AS n FROM transactions WHERE bank_account IS NOT NULL AND account_id IS NULL`,
+          `SELECT count(*)::int AS n FROM transactions t
+           LEFT JOIN accounts a ON a.id = t.account_id
+           WHERE t.id = ANY($1::bigint[])
+             AND (t.account_id IS NULL OR a.id IS NULL)`,
+          [[fx.txnKbc, fx.txnWise]],
         );
         const { rows: b } = await pool.query(
-          `SELECT count(*)::int AS n FROM planned_transactions WHERE bank_account IS NOT NULL AND account_id IS NULL`,
+          `SELECT count(*)::int AS n FROM planned_transactions p
+           LEFT JOIN accounts a ON a.id = p.account_id
+           WHERE p.id = ANY($1::bigint[])
+             AND (p.account_id IS NULL OR a.id IS NULL)`,
+          [[fx.plannedKbc, fx.plannedWise]],
         );
         expect(a[0].n).toBe(0);
         expect(b[0].n).toBe(0);

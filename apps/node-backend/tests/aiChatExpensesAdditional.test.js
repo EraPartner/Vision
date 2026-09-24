@@ -7,7 +7,17 @@ vi.mock('../src/repositories/transactionRepository.js', () => ({
   },
 }));
 
+vi.mock('../src/repositories/infoRepository.js', () => ({
+  default: { getMonthlyFinancialSummary: vi.fn() },
+}));
+
+vi.mock('../src/services/aiChat/tools/_financialMetrics.js', () => ({
+  getAiDisplayCurrency: vi.fn(),
+}));
+
 import { transactionRepository } from '../src/repositories/transactionRepository.js';
+import infoRepository from '../src/repositories/infoRepository.js';
+import { getAiDisplayCurrency } from '../src/services/aiChat/tools/_financialMetrics.js';
 import {
   getSpendByCategory,
   getTopRecipients,
@@ -20,7 +30,10 @@ import {
   getNetCashflow,
 } from '../src/services/aiChat/tools/expenses.js';
 
-beforeEach(() => vi.resetAllMocks());
+beforeEach(() => {
+  vi.resetAllMocks();
+  getAiDisplayCurrency.mockResolvedValue('EUR');
+});
 afterEach(() => vi.useRealTimers());
 
 describe('fetchTransactionsInRange per-turn memoization', () => {
@@ -303,30 +316,28 @@ describe('getUncategorisedTransactions', () => {
 });
 
 describe('getNetCashflow', () => {
-  it('groups income/expenses by month with totals', async () => {
-    transactionRepository.getAll.mockResolvedValueOnce([
-      { amount: '500', date: '2025-04-01' },
-      { amount: '-200', date: '2025-04-15' },
-      { amount: '600', date: '2025-05-01' },
-    ]);
+  it('groups canonical income/expenses by month with totals', async () => {
+    infoRepository.getMonthlyFinancialSummary.mockResolvedValueOnce({ months: [
+      { year: 2025, month: 4, total_income: 500, total_spending: 200, net_amount: 300 },
+      { year: 2025, month: 5, total_income: 600, total_spending: 0, net_amount: 600 },
+    ] });
     const r = await getNetCashflow.run({ from: '2025-04-01', to: '2025-05-31' });
     expect(r.data).toEqual([
       { period: '2025-04', income: 500, expenses: 200, net: 300 },
       { period: '2025-05', income: 600, expenses: 0, net: 600 },
     ]);
-    expect(r.meta).toMatchObject({
-      totalIncome: 1100,
-      totalExpenses: 200,
-      totalNet: 900,
-    });
+    expect(r.meta).toMatchObject({ totalIncome: 1100, totalExpenses: 200, totalNet: 900 });
+    expect(infoRepository.getMonthlyFinancialSummary).toHaveBeenCalledWith(
+      [], 'EUR', [], false, '2025-04-01', '2025-05-31',
+    );
   });
 
-  it('groups by quarter when groupBy=quarter', async () => {
-    transactionRepository.getAll.mockResolvedValueOnce([
-      { amount: '500', date: '2025-01-15' }, // Q1
-      { amount: '-200', date: '2025-04-15' }, // Q2
-      { amount: '300', date: '2025-09-01' }, // Q3
-    ]);
+  it('groups canonical months by quarter when groupBy=quarter', async () => {
+    infoRepository.getMonthlyFinancialSummary.mockResolvedValueOnce({ months: [
+      { year: 2025, month: 1, total_income: 500, total_spending: 0, net_amount: 500 },
+      { year: 2025, month: 4, total_income: 0, total_spending: 200, net_amount: -200 },
+      { year: 2025, month: 9, total_income: 300, total_spending: 0, net_amount: 300 },
+    ] });
     const r = await getNetCashflow.run({ from: '2025-01-01', to: '2025-12-31', groupBy: 'quarter' });
     expect(r.data.map((d) => d.period)).toEqual(['2025-Q1', '2025-Q2', '2025-Q3']);
   });
@@ -335,10 +346,10 @@ describe('getNetCashflow', () => {
     await expect(getNetCashflow.run({ from: '2025-01-01', to: '2025-12-31', groupBy: 'weekly' })).rejects.toThrow(/groupBy/);
   });
 
-  it('handles null amount as zero', async () => {
-    transactionRepository.getAll.mockResolvedValueOnce([
-      { amount: null, date: '2025-01-01' },
-    ]);
+  it('handles missing canonical totals as zero', async () => {
+    infoRepository.getMonthlyFinancialSummary.mockResolvedValueOnce({ months: [
+      { year: 2025, month: 1, total_income: null, total_spending: null, net_amount: null },
+    ] });
     const r = await getNetCashflow.run({ from: '2025-01-01', to: '2025-01-31' });
     expect(r.data[0]).toMatchObject({ income: 0, expenses: 0, net: 0 });
   });

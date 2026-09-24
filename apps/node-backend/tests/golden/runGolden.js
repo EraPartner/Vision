@@ -23,36 +23,44 @@
  *   });
  */
 
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { expect } from 'vitest';
+import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { expect } from "vitest";
 
-const FIXTURE_ROOT = join(dirname(fileURLToPath(import.meta.url)), '__fixtures__');
+const FIXTURE_ROOT = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "__fixtures__",
+);
 
 /**
  * Run a fixture-backed regression check.
  * @param {string} name fixture slug, e.g. "loanSchedule/amortizing-standard"
  * @param {(input: any) => any | Promise<any>} fn function under test
+ * @param {string} [fixtureRoot] alternate root for harness self-tests
  */
-export async function runGolden(name, fn) {
-  const inputPath = join(FIXTURE_ROOT, `${name}.input.json`);
-  const expectedPath = join(FIXTURE_ROOT, `${name}.expected.json`);
+export async function runGolden(name, fn, fixtureRoot = FIXTURE_ROOT) {
+  const inputPath = join(fixtureRoot, `${name}.input.json`);
+  const expectedPath = join(fixtureRoot, `${name}.expected.json`);
 
-  const input = JSON.parse(await readFile(inputPath, 'utf8'));
+  const input = JSON.parse(await readFile(inputPath, "utf8"));
   const actual = await fn(input);
 
-  if (process.env.UPDATE_GOLDENS === '1') {
+  if (process.env.UPDATE_GOLDENS === "1") {
     await mkdir(dirname(expectedPath), { recursive: true });
-    await writeFile(expectedPath, `${JSON.stringify(actual, null, 2)}\n`, 'utf8');
+    await writeFile(
+      expectedPath,
+      `${JSON.stringify(actual, null, 2)}\n`,
+      "utf8",
+    );
     return;
   }
 
   let expected;
   try {
-    expected = JSON.parse(await readFile(expectedPath, 'utf8'));
+    expected = JSON.parse(await readFile(expectedPath, "utf8"));
   } catch (err) {
-    if (err.code === 'ENOENT') {
+    if (err.code === "ENOENT") {
       throw new Error(
         `Missing golden fixture at ${expectedPath}. Run with UPDATE_GOLDENS=1 to create it.`,
       );

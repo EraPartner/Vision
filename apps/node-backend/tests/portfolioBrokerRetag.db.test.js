@@ -1,5 +1,6 @@
 /** Real-PostgreSQL atomicity, idempotency, and lock coverage for WP-C3. */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { randomBytes } from "node:crypto";
 import {
   acquireDbSuiteLock,
   closeTestPool,
@@ -12,11 +13,14 @@ import { __retagPortfolioTransactions as retagPortfolioTransactions } from "../s
 
 const pool = getTestPool();
 const describeDb = hasTestDatabase() ? describe : describe.skip;
-const uuid = (suffix) => `75557a9d-4dee-453a-9ef6-${suffix.padStart(12, "0")}`;
+const runId = randomBytes(4).toString("hex");
+const uuid = (suffix) =>
+  `75557a9d-4dee-453a-9ef6-${runId}${suffix.padStart(4, "0")}`;
 let fixture;
 
 async function wipe() {
-  await pool.query("DELETE FROM portfolio_retag_audit");
+  // Audit receipts are linked from the immutable chain. Preserve them so a
+  // later verifier can still resolve every signed domain event.
   await pool.query("DELETE FROM portfolio_transactions");
   await pool.query("DELETE FROM investments WHERE name LIKE 'WPC3 %'");
   await pool.query("DELETE FROM accounts WHERE name LIKE 'WPC3 %'");
@@ -108,7 +112,8 @@ describeDb("portfolio broker bulk re-tag (real Postgres)", () => {
       "SELECT account_id FROM portfolio_transactions ORDER BY id",
     );
     const audits = await pool.query(
-      "SELECT count(*)::int AS count FROM portfolio_retag_audit",
+      "SELECT count(*)::int AS count FROM portfolio_retag_audit WHERE idempotency_key = $1",
+      [uuid("1")],
     );
 
     expect(rows.rows.map((row) => Number(row.account_id))).toEqual([
@@ -150,7 +155,8 @@ describeDb("portfolio broker bulk re-tag (real Postgres)", () => {
     const rejected = outcomes.find((outcome) => outcome.status === "rejected");
     expect(rejected.reason).toMatchObject({ code: "CONFLICT" });
     const audits = await pool.query(
-      "SELECT count(*)::int AS count FROM portfolio_retag_audit",
+      "SELECT count(*)::int AS count FROM portfolio_retag_audit WHERE idempotency_key = ANY($1::uuid[])",
+      [[uuid("3"), uuid("4")]],
     );
     expect(audits.rows[0].count).toBe(1);
   });

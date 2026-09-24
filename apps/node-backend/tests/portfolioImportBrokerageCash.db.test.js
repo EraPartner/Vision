@@ -75,13 +75,13 @@ async function newBrokerageBatch(accountId) {
 }
 
 /** Stage one 'matched' CASH row. */
-async function stageCash(batchId, rowIndex, { typeRaw = 'deposit', amount = 1000, note = null, txHash = null } = {}) {
+async function stageCash(batchId, rowIndex, { typeRaw = 'deposit', amount = 1000, note = null } = {}) {
   const { rows } = await pool.query(
     `INSERT INTO portfolio_import_staging_rows
-       (batch_id, row_index, status, tx_date, type_raw, route, amount, currency, note, tx_hash)
-     VALUES ($1, $2, 'matched', '2026-02-01', $3, 'cash', $4, 'EUR', $5, $6)
+       (batch_id, row_index, status, tx_date, type_raw, route, amount, currency, note)
+     VALUES ($1, $2, 'matched', '2026-02-01', $3, 'cash', $4, 'EUR', $5)
      RETURNING id`,
-    [batchId, rowIndex, typeRaw, amount, note, txHash],
+    [batchId, rowIndex, typeRaw, amount, note],
   );
   return Number(rows[0].id);
 }

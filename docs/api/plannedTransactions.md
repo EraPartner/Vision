@@ -4,8 +4,8 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/planned-transactions
 description: Scheduled and recurring payment management
-date: 2026-04-23
-updated: 2026-09-04
+date: 2026-09-24
+updated: 2026-09-24
 tags: [api, planned, recurring, schedule, phase-3, idempotency, phase-9, decimal, money, auto-link, planned-match, june-2026]
 status: active
 aliases: [planned-transactions-api, planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loans]
@@ -109,7 +109,7 @@ Create a planned transaction.
 ```json
 {
   "planned_date": "2026-02-01",
-  "bank_account": "BE12 3456...",
+  "account_id": 1,
   "recipient_id": 1,
   "amount": -85.0,
   "memo": "Monthly electricity",
@@ -125,7 +125,7 @@ Create a planned transaction.
 
 ```json
 {
-  "bank_account": "BE12 3456...",
+  "account_id": 1,
   "recipient_id": 2,
   "memo": "Car loan",
   "is_loan": true,
@@ -140,9 +140,12 @@ Create a planned transaction.
 
 **Required Fields:**
 
-- bank_account
+- account_id
 - planned_date (non-loan)
 - amount (non-loan)
+
+`bank_account` is a response and list-filter field. POST and PATCH bodies use the canonical
+`account_id`; the write routes reject `bank_account`.
 
 **Loan Fields:**
 

@@ -1,7 +1,8 @@
 /**
  * Real-Postgres pins for migration 0088 (ADR-060 D7): NUMERIC(18,4) is the domain
- * precision for money columns, and every (15,2) sibling of transactions.amount is
- * aligned to it.
+ * precision for money columns, and every surviving (15,2) sibling of
+ * transactions.amount is aligned to it. Later guarded contracts retired the
+ * provider raw tables and accounts.statement_balance.
  *
  * What only a real database can verify here:
  *   1. The widened types themselves (information_schema) — the whole point of the
@@ -24,8 +25,10 @@
  *      untouched) when a sub-cent split would round to 0.00 under
  *      USING round(amount, 2) and violate chk_split_amount_positive.
  *   7. A pre-squash database carrying the legacy overpayment trigger migrates
- *      through 0088, 0089, and 0090 to head; 0088 removes the trigger rather
+ *      through 0088, 0089, and 0090 to 0118; 0088 removes the trigger rather
  *      than letting its UPDATE-OF column dependency block the amount retype.
+ *      The 0119 baseline bridge intentionally refuses historical scratch
+ *      schemas that have not completed the manual contracts.
  *
  * Isolation: fixtures carry a unique memo/name marker; afterAll deletes only what
  * this suite created (transactions cascade to splits → payments → agg rows). The
@@ -56,9 +59,8 @@ const splitRepository = { ...splitPersistence, ...splitService };
 const MARK = `_0088_precision_${process.pid}`;
 
 /**
- * Mirror of MONEY_COLUMNS in alembic/versions/0088_money_precision_alignment.py —
- * the full D7 alignment inventory. Kept literal on purpose: if the migration's
- * list and this one drift, the schema pin below fails.
+ * Surviving MONEY_COLUMNS from migration 0088. The guarded raw-provider and
+ * statement-scalar contracts removed the omitted tables/column afterward.
  */
 const WIDENED = [
   ["transactions", "balance"],
@@ -74,25 +76,6 @@ const WIDENED = [
   ["agg_split_outstanding", "original_amount"],
   ["agg_split_outstanding", "paid_amount"],
   ["agg_split_outstanding", "outstanding_amount"],
-  ["accounts", "statement_balance"],
-  ["belfius_raw_transactions", "amount"],
-  ["belfius_raw_transactions", "balance"],
-  ["custom_raw_transactions", "amount"],
-  ["custom_raw_transactions", "balance"],
-  ["kbc_raw_transactions", "amount"],
-  ["kbc_raw_transactions", "balance"],
-  ["kbc_raw_transactions", "credit_amount"],
-  ["kbc_raw_transactions", "debit_amount"],
-  ["manual_raw_transactions", "amount"],
-  ["revolut_raw_transactions", "amount"],
-  ["revolut_raw_transactions", "fee"],
-  ["revolut_raw_transactions", "balance"],
-  ["sabb_raw_transactions", "amount"],
-  ["vision_raw_transactions", "amount"],
-  ["vision_raw_transactions", "balance"],
-  ["wise_raw_transactions", "source_amount"],
-  ["wise_raw_transactions", "target_amount"],
-  ["wise_raw_transactions", "source_fee_amount"],
 ];
 
 describeDb("migration 0088: money columns aligned to NUMERIC(18,4)", () => {
@@ -425,6 +408,8 @@ const REPO_ROOT = path.resolve(
 const ALEMBIC_BIN = process.env.ALEMBIC_BIN || "alembic";
 const ALEMBIC_CONFIG = path.join(REPO_ROOT, "config/alembic.ini");
 const execFileAsync = promisify(execFile);
+// Keep the 0088 downgrade check below the forward-only 0117 audit chain.
+const REV_AFTER_PRECISION_UPGRADE = "0090_constraint_index_naming";
 
 function scratchDbName() {
   const base = new URL(
@@ -504,7 +489,7 @@ describeDb("migration 0088 legacy-trigger upgrade and downgrade safety", () => {
     );
     await alembic("upgrade", "0087_flat_investments_conversion");
     await db.query(LEGACY_OVERPAYMENT_GUARD_SQL);
-    await alembic("upgrade", "head");
+    await alembic("upgrade", REV_AFTER_PRECISION_UPGRADE);
   }, 240_000);
 
   afterAll(async () => {
@@ -519,9 +504,9 @@ describeDb("migration 0088 legacy-trigger upgrade and downgrade safety", () => {
     await admin.end();
   });
 
-  it("removes the legacy blocker and completes the migration chain to head", async () => {
+  it("removes the legacy blocker and completes the historical chain through 0090", async () => {
     const version = await db.query(`SELECT version_num FROM alembic_version`);
-    expect(version.rows[0].version_num).toBe("0098_account_statement_balances");
+    expect(version.rows[0].version_num).toBe(REV_AFTER_PRECISION_UPGRADE);
 
     const legacyGuard = await db.query(`
       SELECT

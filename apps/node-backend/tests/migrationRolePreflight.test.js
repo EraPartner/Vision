@@ -127,18 +127,26 @@ describe("migration role preflight", () => {
   });
 
   it("refuses to stamp an old revision before a restore-tested bridge", async () => {
+    const previousBridgeApproval = process.env.VISION_BASELINE_BRIDGE_APPROVED;
+    delete process.env.VISION_BASELINE_BRIDGE_APPROVED;
     mocks.migrationQuery
       .mockResolvedValueOnce({ rows: [{ present: true }] })
       .mockResolvedValueOnce({ rows: [{ version_num: "0002_add_url" }] });
 
-    await expect(stampBaselineIfLegacy()).rejects.toThrow(
-      "requires an explicit, restore-tested bridge",
-    );
-    expect(mocks.migrationQuery).toHaveBeenCalledTimes(2);
-    expect(mocks.migrationQuery).not.toHaveBeenCalledWith(
-      expect.stringMatching(/^ALTER TABLE|^UPDATE alembic_version/),
-      expect.anything(),
-    );
+    try {
+      await expect(stampBaselineIfLegacy()).rejects.toThrow(
+        "requires an explicit, restore-tested bridge",
+      );
+      expect(mocks.migrationQuery).toHaveBeenCalledTimes(2);
+      expect(mocks.migrationQuery).not.toHaveBeenCalledWith(
+        expect.stringMatching(/^ALTER TABLE|^UPDATE alembic_version/),
+        expect.anything(),
+      );
+    } finally {
+      if (previousBridgeApproval === undefined)
+        delete process.env.VISION_BASELINE_BRIDGE_APPROVED;
+      else process.env.VISION_BASELINE_BRIDGE_APPROVED = previousBridgeApproval;
+    }
   });
 
   it("runs database-wide ANALYZE through the migration role", async () => {

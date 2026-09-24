@@ -80,6 +80,11 @@ async function ensureAccount(name) {
      ON CONFLICT (lower(btrim(name))) DO NOTHING`,
     [name],
   );
+  const { rows } = await getTestPool().query(
+    `SELECT id FROM accounts WHERE lower(btrim(name)) = lower(btrim($1))`,
+    [name],
+  );
+  return rows[0].id;
 }
 
 /**
@@ -98,21 +103,21 @@ async function insertTxn({
   isActive = true,
   isTransfer = false,
 }) {
-  if (bank) await ensureAccount(bank);
+  const accountId = bank ? await ensureAccount(bank) : null;
   const dateSql = dateExpr ? `(${dateExpr})::date` : "$6::date";
   const params = [
     amount,
     currency,
     recipientId,
     categoryId,
-    bank,
+    accountId,
     ...(dateExpr ? [] : [date]),
     isActive,
     isTransfer,
   ];
   const n = dateExpr ? 6 : 7;
   const { rows } = await getTestPool().query(
-    `INSERT INTO transactions (amount, currency, recipient_id, category_id, bank_account, date, is_active, is_transfer)
+    `INSERT INTO transactions (amount, currency, recipient_id, category_id, account_id, date, is_active, is_transfer)
      VALUES ($1, $2, $3, $4, $5, ${dateSql}, $${n}, $${n + 1}) RETURNING id`,
     params,
   );
@@ -765,7 +770,13 @@ describe.skipIf(!hasTestDatabase())(
           targetCurrency: "EUR",
           recipientIds: [2147483646],
         });
-        expect(none).toEqual({ recipientPivot: {} });
+        expect(none).toEqual({
+          recipientPivot: {},
+          conversion: {
+            affectedCurrencies: [],
+            usedHistoricalFallback: false,
+          },
+        });
       });
 
       it("applies inclusive start/end date filters and recipient exclusions together", async () => {

@@ -66,9 +66,8 @@ async function seedRecipient() {
 
 /**
  * Create an accounts row. Accounts are pre-created (rather than left to the
- * dual-write trigger) because these surfaces are gated on account attributes —
- * spendable / in_net_worth / statement_balance — that the trigger's onboarding
- * INSERT does not set.
+ * name resolver) because these surfaces are gated on account attributes and
+ * statement readings that a bare transaction INSERT does not set.
  */
 async function addAccount(
   name,
@@ -80,17 +79,24 @@ async function addAccount(
     isActive = true,
     statementBalance = null,
     statementBalanceDate = null,
+    statementCurrency = currency,
   } = {},
 ) {
   const { rows } = await getTestPool().query(
-    `INSERT INTO accounts (name, type, currency, spendable, in_net_worth, is_active,
-                           statement_balance, statement_balance_date)
-     VALUES ($1, $2::account_type, $3, $4, $5, $6, $7,
-             CASE WHEN $7::numeric IS NULL THEN NULL ELSE (${statementBalanceDate ?? "CURRENT_DATE"})::date END)
+    `INSERT INTO accounts (name, type, currency, spendable, in_net_worth, is_active)
+     VALUES ($1, $2::account_type, $3, $4, $5, $6)
      RETURNING id`,
-    [name, type, currency, spendable, inNetWorth, isActive, statementBalance],
+    [name, type, currency, spendable, inNetWorth, isActive],
   );
-  return rows[0].id;
+  const id = rows[0].id;
+  if (statementBalance != null) {
+    await getTestPool().query(
+      `INSERT INTO account_statement_balances (account_id, currency, balance, balance_date)
+       VALUES ($1, $2, $3, (${statementBalanceDate ?? "CURRENT_DATE"})::date)`,
+      [id, statementCurrency, statementBalance],
+    );
+  }
+  return id;
 }
 
 /** `balance` NULL means "not stamped by a bank import" — the anchor distinction. */
@@ -102,10 +108,15 @@ async function insertTxn({
   balance = null,
   isActive = true,
 }) {
+  const account = await getTestPool().query(
+    `SELECT id FROM accounts WHERE name = $1`,
+    [bank],
+  );
+  expect(account.rows).toHaveLength(1);
   await getTestPool().query(
-    `INSERT INTO transactions (date, amount, currency, recipient_id, bank_account, balance, is_active)
+    `INSERT INTO transactions (date, amount, currency, recipient_id, account_id, balance, is_active)
      VALUES ((${dateExpr})::date, $1, $2, $3, $4, $5, $6)`,
-    [amount, currency, rec.misc, bank, balance, isActive],
+    [amount, currency, rec.misc, account.rows[0].id, balance, isActive],
   );
 }
 
@@ -175,12 +186,14 @@ describe.skipIf(!hasTestDatabase())(
     // Surface 1 — accounts hub (accountService.list)
     // ───────────────────────────────────────────────────────────────────────────
     describe("accounts hub", () => {
-      it("keeps legacy scalar create, update, clear, and currency changes in sync", async () => {
+      it("keeps independent statement readings across currency changes", async () => {
         const created = await accountService.create({
           name: "COMPAT PRIMARY",
           currency: "EUR",
-          statement_balance: 10,
-          statement_balance_date: "2026-09-01",
+        });
+        await accountService.setStatementBalance(created.id, "EUR", {
+          balance: 10,
+          date: "2026-09-01",
         });
         await accountService.setStatementBalance(created.id, "USD", {
           balance: 20,
@@ -188,13 +201,15 @@ describe.skipIf(!hasTestDatabase())(
         });
 
         await accountService.update(created.id, { currency: "USD" });
-        let account = await accountRepository.getById(created.id);
-        expect(Number(account.statement_balance)).toBe(20);
-        expect(account.statement_balance_date).toBe("2026-09-02");
+        let account = (await listAccounts())[0];
+        expect(account.statement_balances).toEqual([
+          { currency: "EUR", balance: 10, balance_date: "2026-09-01" },
+          { currency: "USD", balance: 20, balance_date: "2026-09-02" },
+        ]);
 
-        await accountService.update(created.id, {
-          statement_balance: 25,
-          statement_balance_date: "2026-09-03",
+        await accountService.setStatementBalance(created.id, "USD", {
+          balance: 25,
+          date: "2026-09-03",
         });
         let { rows } = await getTestPool().query(
           `SELECT currency, balance::text AS balance,
@@ -208,13 +223,11 @@ describe.skipIf(!hasTestDatabase())(
           { currency: "USD", balance: "25.0000", balance_date: "2026-09-03" },
         ]);
 
-        await accountService.update(created.id, {
-          statement_balance: null,
-          statement_balance_date: null,
-        });
-        account = await accountRepository.getById(created.id);
-        expect(account.statement_balance).toBeNull();
-        expect(account.statement_balance_date).toBeNull();
+        await accountService.removeStatementBalance(created.id, "USD");
+        account = (await listAccounts())[0];
+        expect(account.statement_balances).toEqual([
+          { currency: "EUR", balance: 10, balance_date: "2026-09-01" },
+        ]);
         ({ rows } = await getTestPool().query(
           `SELECT currency FROM account_statement_balances
             WHERE account_id = $1 ORDER BY currency`,
@@ -274,9 +287,9 @@ describe.skipIf(!hasTestDatabase())(
         // reading of 120 the server would stamp as +20).
         expect(row.reconcilable_balance).toBe(100);
         expect(row.reconcilable_currency).toBe("EUR");
-        expect(row.statement_balance - row.reconcilable_balance).toBe(
-          row.drift,
-        );
+        expect(
+          row.statement_balances[0].balance - row.reconcilable_balance,
+        ).toBe(row.drift);
       });
 
       // The zero-sum-partition discontinuity: an offsetting foreign transfer pair
@@ -288,6 +301,7 @@ describe.skipIf(!hasTestDatabase())(
         await addAccount("NOISY", {
           currency: "GBP",
           statementBalance: "100.00",
+          statementCurrency: "USD",
         });
         await insertRate("USD", "CURRENT_DATE", "0.5");
         await insertTxn({
@@ -478,7 +492,7 @@ describe.skipIf(!hasTestDatabase())(
           { currency: "EUR", balance: 120, balance_date: "2026-09-01" },
           { currency: "USD", balance: 80, balance_date: "2026-09-02" },
         ]);
-        expect(before.statement_balance).toBe(120);
+        expect(before.statement_balances[0].balance).toBe(120);
 
         await reconcileAccount(id, { mode: "accept", currency: "USD" });
         const { rows } = await getTestPool().query(
@@ -533,7 +547,7 @@ describe.skipIf(!hasTestDatabase())(
         });
         const [after] = await listAccounts();
         expect(after.drift).toBe(0);
-        expect(Number(after.statement_balance)).toBe(0);
+        expect(after.statement_balances[0].balance).toBe(0);
       });
 
       it("'accept' adopts the own-currency partition as the statement of record", async () => {
@@ -852,7 +866,7 @@ describe.skipIf(!hasTestDatabase())(
       // contradict: drift = statement − base, all in reconcilable_currency.
       expect(hub.reconcilable_balance).toBe(100);
       expect(hub.reconcilable_currency).toBe("EUR");
-      expect(Number(hub.statement_balance) - hub.reconcilable_balance).toBe(
+      expect(hub.statement_balances[0].balance - hub.reconcilable_balance).toBe(
         hub.drift,
       );
     });

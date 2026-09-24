@@ -100,10 +100,8 @@ Card Payment,Current,2026-03-04 10:00:00,2026-03-04 10:00:00,Delta Cafe,-5.00,0.
  * The NEXT export from the same account — Revolut exports are rolling windows,
  * so it repeats every row of V1 and adds one: a −25.00 **USD** card payment at
  * Alpha Shop on 2026-03-01. That row is identical to V1's first row on every
- * field the field-based dup check reads except its currency, and the
- * differing-tx_hash exemption does not cover it (that exemption is scoped to
- * the CURRENT batch, and the EUR row it collides with was committed by an
- * earlier one). It is a real transaction and must land.
+ * financial field except its currency. The versioned import identity includes
+ * currency, so this real transaction must land.
  */
 const EXPORT_V2 = `${EXPORT_V1}Card Payment,Current,2026-03-01 10:00:00,2026-03-01 10:00:00,Alpha Shop,-25.00,0.00,USD,COMPLETED,275.00
 `;
@@ -163,8 +161,7 @@ async function importExport(csv) {
 /** Every active ledger row, in ledger order. */
 async function ledger() {
   const { rows } = await pool.query(
-    `SELECT to_char(t.date, 'YYYY-MM-DD') AS date, t.bank_account,
-            a.name AS account_name,
+    `SELECT to_char(t.date, 'YYYY-MM-DD') AS date, a.name AS account_name,
             t.amount::text AS amount, t.currency, t.balance::text AS balance
        FROM transactions t
        JOIN accounts a ON a.id = t.account_id
@@ -218,11 +215,10 @@ describeDb("Revolut multi-currency import (real DB)", () => {
 
     const rows = await ledger();
     // One canonical account for all four rows (D2), each row carrying its OWN
-    // currency. The compatibility string is no longer written.
+    // currency.
     expect(rows.map((r) => r.account_name)).toEqual(
       Array(4).fill("REVOLUT CURRENT"),
     );
-    expect(rows.map((r) => r.bank_account)).toEqual(Array(4).fill(null));
     expect(rows.map((r) => `${r.date} ${r.amount} ${r.currency}`)).toEqual([
       "2026-03-01 -25.0000 EUR",
       "2026-03-02 50.0000 EUR",
@@ -292,10 +288,7 @@ describeDb("Revolut multi-currency import (real DB)", () => {
   });
 
   it("re-importing the same export is still a no-op", async () => {
-    // The narrower dup identity must not cost idempotency. (This path is
-    // adjudicated by tx_hash — identical source rows hash identically — so it
-    // guards the pipeline as a whole rather than the field check specifically;
-    // the test below isolates the field check.)
+    // A complete re-import has the same versioned occurrence fingerprints.
     expect(await importExport(EXPORT_V1)).toEqual({
       imported: 4,
       duplicates: 0,
@@ -333,13 +326,11 @@ describeDb("Revolut multi-currency import (real DB)", () => {
       filePath: writeCsv(EXPORT_EUR_ONLY),
       adapterName: "revolut",
     });
-    // Drop the staged currency (the no-currency-column adapter's state) AND the
-    // hash, so the hash short-circuits cannot decide the verdict and the
-    // field-based check — the thing under test — is the sole adjudicator.
-    // Both columns are nullable; validate.js documents the hash-less row as the
-    // "adapter kept no raw record" case.
+    // Drop the staged currency (the no-currency-column adapter's state).
+    // The versioned fingerprint was computed during validation from EUR, so
+    // this isolates the commit-time currency default.
     await pool.query(
-      `UPDATE import_staging_rows SET currency = NULL, tx_hash = NULL WHERE batch_id = $1`,
+      `UPDATE import_staging_rows SET currency = NULL WHERE batch_id = $1`,
       [batchId],
     );
 
@@ -369,10 +360,10 @@ describeDb("Revolut multi-currency import (real DB)", () => {
         filePath: writeCsv(EXPORT_EUR_ONLY),
         adapterName: "revolut",
       });
-      // Untrimmed currency from a hypothetical sloppy adapter; hash dropped so
-      // the field check is the sole adjudicator (as in the EUR-default test).
+      // Untrimmed currency from a hypothetical sloppy adapter; validation
+      // computed the versioned identity from the normalized source value.
       await pool.query(
-        `UPDATE import_staging_rows SET currency = 'EUR ', tx_hash = NULL WHERE batch_id = $1`,
+        `UPDATE import_staging_rows SET currency = 'EUR ' WHERE batch_id = $1`,
         [batchId],
       );
       return commitImport({ batchId });

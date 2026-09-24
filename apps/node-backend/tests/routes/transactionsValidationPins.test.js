@@ -12,7 +12,7 @@
  * rather than a hand-replayed approximation.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mockPooledTxConnection } from "../helpers/repoMocks.js";
+import { mockTxConnection } from "../helpers/repoMocks.js";
 import {
   mockTransactionRepository,
   mockDeduplication,
@@ -26,7 +26,10 @@ vi.mock("../../src/repositories/transactionRepository.js", () =>
   mockTransactionRepository(),
 );
 
-vi.mock("../../src/services/deduplication.js", () => mockDeduplication());
+vi.mock("../../src/services/deduplication.js", () => ({
+  ...mockDeduplication(),
+  lockManualTransactionIdentity: vi.fn(async () => undefined),
+}));
 
 vi.mock("../../src/config/logger.js", () => ({
   logger: mockLogger(),
@@ -40,7 +43,12 @@ vi.mock("../../src/services/currency/currencyConversionService.js", () =>
   mockCurrencyConversion(),
 );
 
-vi.mock("../../src/database/connection.js", () => mockPooledTxConnection());
+vi.mock("../../src/database/connection.js", () => mockTxConnection());
+
+vi.mock("../../src/repositories/accountRepository.js", () => {
+  const accountRepository = { findActiveId: vi.fn(async () => 1) };
+  return { accountRepository, default: accountRepository };
+});
 
 vi.mock("../../src/services/plannedMatchService.js", () => ({
   autoLinkTransactions: vi.fn(async () => ({ autoLinkedCount: 0, links: [] })),
@@ -59,7 +67,7 @@ const api = routeAgent(transactionsRouter, { mountPath: "/api/transactions" });
 
 const validPostBody = () => ({
   transaction_date: "2026-01-15",
-  bank_account: "Chase",
+  account_id: 1,
   recipient_id: 1,
   amount: -50,
 });
@@ -106,7 +114,7 @@ describe("POST / — validation pins", () => {
   it("rejects when any required field is absent", async () => {
     for (const missing of [
       "transaction_date",
-      "bank_account",
+      "account_id",
       "recipient_id",
       "amount",
     ]) {
@@ -214,9 +222,9 @@ describe("POST / — validation pins", () => {
     );
   });
 
-  it("rejects a bank_account longer than 100 characters", async () => {
+  it("rejects the removed bank_account write field", async () => {
     const res = await expectValidationError(
-      post({ ...validPostBody(), bank_account: "a".repeat(101) }),
+      post({ ...validPostBody(), bank_account: "Chase" }),
     );
     expect(res.body.error.message).toMatch(/bank_account/);
   });
@@ -260,14 +268,10 @@ describe("PATCH /:id — validation pins", () => {
     await expectValidationError(patch({ amount: "Infinity" }));
   });
 
-  it("caps bank_account at 100 chars but lets null through untouched", async () => {
-    await expectValidationError(patch({ bank_account: "a".repeat(101) }));
-
-    await patch({ bank_account: null }).expect(200);
-    expect(transactionRepository.update).toHaveBeenCalledWith(
-      1,
-      expect.objectContaining({ bank_account: null }),
-    );
+  it("rejects the removed bank_account write field", async () => {
+    await expectValidationError(patch({ bank_account: "Chase" }));
+    await expectValidationError(patch({ bank_account: null }));
+    expect(transactionRepository.update).not.toHaveBeenCalled();
   });
 
   it("rejects non-array tags and passes arrays through", async () => {

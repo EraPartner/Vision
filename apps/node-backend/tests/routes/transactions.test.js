@@ -9,7 +9,7 @@
  * tested path. Repositories/services are still mocked.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mockConnection } from "../helpers/repoMocks.js";
+import { mockTxConnection } from "../helpers/repoMocks.js";
 import {
   mockTransactionRepository,
   mockDeduplication,
@@ -29,7 +29,10 @@ vi.mock("../../src/config/logger.js", () => ({
   logger: mockLogger(),
 }));
 
-vi.mock("../../src/services/deduplication.js", () => mockDeduplication());
+vi.mock("../../src/services/deduplication.js", () => ({
+  ...mockDeduplication(),
+  lockManualTransactionIdentity: vi.fn(async () => undefined),
+}));
 
 vi.mock("../../src/services/materializedViewService.js", () =>
   mockMaterializedViews(),
@@ -39,7 +42,12 @@ vi.mock("../../src/services/currency/currencyConversionService.js", () =>
   mockCurrencyConversion(),
 );
 
-vi.mock("../../src/database/connection.js", () => mockConnection());
+vi.mock("../../src/database/connection.js", () => mockTxConnection());
+
+vi.mock("../../src/repositories/accountRepository.js", () => {
+  const accountRepository = { findActiveId: vi.fn(async () => 1) };
+  return { accountRepository, default: accountRepository };
+});
 
 vi.mock("../../src/services/attachmentRecordService.js", () =>
   mockAttachmentRecordService(),
@@ -557,7 +565,7 @@ describe("Transaction Routes", () => {
         .post("/api/transactions/")
         .send({
           transaction_date: "2026-01-15",
-          bank_account: "Chase",
+          account_id: 1,
           recipient_id: 1,
           amount: -50.0,
           memo: "Test",
@@ -615,7 +623,7 @@ describe("Transaction Routes", () => {
         .post("/api/transactions/")
         .send({
           transaction_date: "2026-01-15",
-          bank_account: "Chase",
+          account_id: 1,
           recipient_id: 1,
           amount: -50,
         })
@@ -757,6 +765,7 @@ describe("Transaction Routes", () => {
     });
 
     it("should return 400 for invalid category_name format", async () => {
+      dbQuery.mockResolvedValueOnce({ rows: [] });
       await api
         .patch("/api/transactions/1")
         .send({ category_name: "INVALID" })
@@ -767,6 +776,7 @@ describe("Transaction Routes", () => {
 
     it("should return 400 when category_name does not exist", async () => {
       dbQuery.mockResolvedValueOnce({ rows: [{ id: 11 }] });
+      dbQuery.mockResolvedValueOnce({ rows: [] });
       dbQuery.mockResolvedValueOnce({ rows: [] });
 
       await api

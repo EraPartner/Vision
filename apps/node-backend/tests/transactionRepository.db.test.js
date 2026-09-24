@@ -8,14 +8,12 @@
  * Everything here runs the same behaviours against a migrated schema with
  * realistic fixtures: NUMERIC amounts as strings with cents, real DATE columns
  * spanning a (leap-year) month boundary, multiple accounts and currencies,
- * alias recipients, inactive rows mixed in, and the dual-write account trigger
- * (migration 0051) live.
+ * alias recipients and inactive rows mixed in. Account writes use account_id
+ * so the suite also runs after the retired bank_account column is dropped.
  *
  * Isolation strategy (per the setup/db.js contract): per-test targeted DELETEs
  * rather than a wrapping transaction — create()/update() open their own
- * withTransaction, which would nest, and the account-sync trigger's
- * INSERT ... ON CONFLICT into accounts is easier to reason about against a
- * corpus each test fully owns.
+ * withTransaction, which would nest, against a corpus each test fully owns.
  */
 
 import {
@@ -53,10 +51,8 @@ const T = {}; // t1..t7
  * Ensure an accounts row exists for a label, returning its id. Uses the
  * 0066 normalized-identity arbiter (lower(btrim(name))) directly.
  *
- * The fixtures PRE-CREATE accounts rather than letting the sync trigger mint
- * them, so corpus setup stays independent of the trigger under test. (The
- * trigger's own onboarding path — once broken at head by the 0076 ON CONFLICT
- * regression, fixed by migration 0083 — has its own dedicated test below.)
+ * Fixtures pre-create accounts and write their IDs directly, matching the
+ * current repository contract without depending on the compatibility trigger.
  */
 async function ensureAccount(name) {
   const pool = getTestPool();
@@ -74,10 +70,8 @@ async function ensureAccount(name) {
 
 /**
  * Insert one transaction through plain SQL (NOT the repository, so repository
- * behaviour is never asserted against itself). `bank_account` is written as
- * the raw string and account_id left NULL: the trg_transactions_account_sync
- * trigger resolves the account exactly as production inserts do (the account
- * row itself is pre-created — see ensureAccount).
+ * behaviour is never asserted against itself). Link the pre-created account
+ * through account_id, as current production inserts do.
  */
 async function insertTxn({
   date,
@@ -90,9 +84,9 @@ async function insertTxn({
   isActive = true,
   isTransfer = false,
 }) {
-  if (bank) await ensureAccount(bank);
+  const accountId = bank ? await ensureAccount(bank) : null;
   const { rows } = await getTestPool().query(
-    `INSERT INTO transactions (date, amount, currency, recipient_id, category_id, bank_account, memo, is_active, is_transfer)
+    `INSERT INTO transactions (date, amount, currency, recipient_id, category_id, account_id, memo, is_active, is_transfer)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING id`,
     [
@@ -101,7 +95,7 @@ async function insertTxn({
       currency,
       recipientId,
       categoryId,
-      bank,
+      accountId,
       memo,
       isActive,
       isTransfer,
@@ -222,7 +216,7 @@ async function seedCorpus() {
     memo: "ELECTRABEL DOMICILIERING",
   });
 
-  // Account ids as resolved by the dual-write trigger.
+  // Account ids linked by the fixture inserts.
   const accounts = await pool.query("SELECT id, name FROM accounts");
   for (const row of accounts.rows) acc[row.name] = row.id;
 
@@ -325,7 +319,7 @@ describe.skipIf(!hasTestDatabase())(
         expect(byId[T.t4].tags).toEqual([]);
       });
 
-      it("filters by accountId (FK, trigger-resolved) and bankAccount (ILIKE substring)", async () => {
+      it("filters by accountId and bankAccount (ILIKE substring)", async () => {
         const wise = await transactionRepository.getAll({
           accountId: acc["WISE USD"],
         });
@@ -475,66 +469,68 @@ describe.skipIf(!hasTestDatabase())(
     // ───────────────────────────────────────────────────────────────────────────
     // Pagination — the tiebreaker behaviour the ordering suite pins as SQL text
     // ───────────────────────────────────────────────────────────────────────────
-    describe("ADR-088 string decouple (reads bind to account_id, never the string)", () => {
-      // Falsification setup: desynchronize one row's stale string from its FK.
-      // A raw-SQL UPDATE to a label with no matching account leaves account_id
-      // untouched (the 0062 lookup-only trigger never creates on UPDATE), so
-      // the row ends with bank_account='STALE LABEL' while still pointing at
-      // KBC CURRENT. Every read below must follow the FK, not the string.
-      async function desyncT1() {
+    describe("ADR-088 account label projection (reads bind to account_id)", () => {
+      // Repoint only t1 to another account. Its displayed label, search,
+      // filtering and sorting must follow that FK. This uses the same path on
+      // compatibility schemas and schemas without the old string column.
+      async function repointT1() {
+        const canonicalId = await ensureAccount("CANONICAL KBC");
         await getTestPool().query(
-          `UPDATE transactions SET bank_account = 'STALE LABEL' WHERE id = $1`,
-          [T.t1],
+          "UPDATE transactions SET account_id = $1 WHERE id = $2",
+          [canonicalId, T.t1],
         );
         const { rows } = await getTestPool().query(
-          "SELECT account_id, bank_account FROM transactions WHERE id = $1",
+          "SELECT account_id FROM transactions WHERE id = $1",
           [T.t1],
         );
-        expect(rows[0].account_id).toBe(acc["KBC CURRENT"]);
-        expect(rows[0].bank_account).toBe("STALE LABEL");
+        expect(rows[0].account_id).toBe(canonicalId);
       }
 
-      it("bankAccount filter matches via accounts.name, not the row string", async () => {
-        await desyncT1();
-        const kbc = await transactionRepository.getAll({ bankAccount: "kbc" });
-        expect(kbc.map((r) => r.id)).toContain(T.t1); // FK still points at KBC
-        const stale = await transactionRepository.getAll({
-          bankAccount: "stale",
+      it("bankAccount filter matches the linked accounts.name", async () => {
+        await repointT1();
+        const canonical = await transactionRepository.getAll({
+          bankAccount: "canonical",
         });
-        expect(stale).toHaveLength(0); // no account is named that
+        expect(canonical.map((r) => r.id)).toContain(T.t1);
+        const previous = await transactionRepository.getAll({
+          bankAccount: "kbc current",
+        });
+        expect(previous.map((r) => r.id)).not.toContain(T.t1);
       });
 
       it("projects bank_account from accounts.name across getAll/getById/getAllWithCount/getUncategorised", async () => {
-        await desyncT1();
+        await repointT1();
         const all = await transactionRepository.getAll({});
-        expect(all.find((r) => r.id === T.t1).bank_account).toBe("KBC CURRENT");
+        expect(all.find((r) => r.id === T.t1).bank_account).toBe(
+          "CANONICAL KBC",
+        );
         expect((await transactionRepository.getById(T.t1)).bank_account).toBe(
-          "KBC CURRENT",
+          "CANONICAL KBC",
         );
         const { rows } = await transactionRepository.getAllWithCount({});
         expect(rows.find((r) => r.id === T.t1).bank_account).toBe(
-          "KBC CURRENT",
+          "CANONICAL KBC",
         );
         const unc = await transactionRepository.getUncategorised({});
-        expect(unc.find((r) => r.id === T.t1).bank_account).toBe("KBC CURRENT");
+        expect(unc.find((r) => r.id === T.t1).bank_account).toBe(
+          "CANONICAL KBC",
+        );
       });
 
-      it("free-text search matches the account name, not the stale string", async () => {
-        await desyncT1();
+      it("free-text search matches the linked account name", async () => {
+        await repointT1();
         const byName = await transactionRepository.getAll({
-          search: "kbc curr",
+          search: "canonical kbc",
         });
         expect(byName.map((r) => r.id)).toContain(T.t1);
-        const byStale = await transactionRepository.getAll({
-          search: "stale lab",
+        const byPrevious = await transactionRepository.getAll({
+          search: "kbc current",
         });
-        expect(byStale).toHaveLength(0);
+        expect(byPrevious.map((r) => r.id)).not.toContain(T.t1);
       });
 
       it("sorts by the canonical account name", async () => {
-        // 'KBC CURRENT' < 'WISE USD'; the stale string ('STALE LABEL') would
-        // order t1 between them and betray a string-backed sort.
-        await desyncT1();
+        await repointT1();
         const rows = await transactionRepository.getAll({
           sortBy: "bank",
           sortDir: "asc",
@@ -543,7 +539,7 @@ describe.skipIf(!hasTestDatabase())(
         expect(banks).toEqual([...banks].sort());
         expect(rows[rows.length - 1].bank_account).toBe("WISE USD");
         expect(banks).toContain("KBC CURRENT");
-        expect(banks).not.toContain("STALE LABEL");
+        expect(banks).toContain("CANONICAL KBC");
       });
 
       it("projects null for rows with no account", async () => {
@@ -1039,12 +1035,11 @@ describe.skipIf(!hasTestDatabase())(
     });
 
     describe("create", () => {
-      it("normalizes memo/currency and resolves the account case-insensitively", async () => {
-        // Pre-existing account stored with different casing than the write.
+      it("normalizes memo/currency and projects the linked account label", async () => {
         const revolutId = await ensureAccount("Revolut Main");
         const row = await transactionRepository.create({
           transaction_date: "2024-03-10",
-          bank_account: "revolut main",
+          account_id: revolutId,
           recipient_id: rec.delhaize,
           amount: "-3.20",
           memo: "coffee",
@@ -1053,11 +1048,6 @@ describe.skipIf(!hasTestDatabase())(
           comment: "espresso",
         });
         expect(row).toMatchObject({
-          // ADR-088 contract phase: the returned label is the CANONICAL
-          // accounts.name over the FK ('Revolut Main', first-seen casing), not
-          // the row's raw uppercased string — reads no longer touch the retired
-          // bank_account column, so a case-variant write surfaces the account's
-          // stored display casing.
           bank_account: "Revolut Main",
           memo: "COFFEE",
           currency: "USD",
@@ -1067,68 +1057,45 @@ describe.skipIf(!hasTestDatabase())(
           tags: [],
         });
         expect(row.balance).toBeNull(); // manual rows never carry a bank stamp
-        // 'REVOLUT MAIN' reuses 'Revolut Main' instead of minting a twin (0076 fix #2).
         expect(row.account_id).toBe(revolutId);
         const { rows } = await getTestPool().query(
           `SELECT count(*)::int AS n FROM accounts WHERE lower(name) = 'revolut main'`,
         );
         expect(rows[0].n).toBe(1);
-        // The dual-write string itself (pre-drop) still carries the uppercased
-        // input — the trigger keeps deriving the FK from it until the manual
-        // contract drop removes the column.
         const { rows: stored } = await getTestPool().query(
-          "SELECT bank_account FROM transactions WHERE id = $1",
+          "SELECT account_id FROM transactions WHERE id = $1",
           [row.id],
         );
-        // Contract-phase code no longer writes the compatibility column. It is
-        // removed in the same maintenance operation as this code is deployed.
-        expect(stored[0].bank_account).toBeNull();
+        expect(stored[0].account_id).toBe(revolutId);
       });
 
-      // Regression coverage for the (fixed) 0076 ON CONFLICT arbiter finding:
-      // migration 0066 dropped uq_accounts_name for the expression index
-      // uq_accounts_name_norm on lower(btrim(name)), and the trigger rewrite in
-      // 0076 regressed the onboarding INSERT's arbiter back to
-      // `ON CONFLICT (name)` — matching NO unique index, so every first-seen
-      // label raised 42P10 at schema head ("there is no unique or exclusion
-      // constraint matching the ON CONFLICT specification"). Fixed by migration
-      // 0083 (CREATE OR REPLACE for already-migrated installs) plus an in-place
-      // edit of 0076 (fresh installs). This test formerly PINNED the failure;
-      // it now asserts the repaired behaviour: a brand-new label onboards
-      // exactly one account (trimmed name, 0066 normalized-identity dedup
-      // across casings). No mock suite could see this: the arbiter is only
-      // validated when the trigger actually executes against the real schema.
-      it("onboards a NEW account for a first-seen bank label (0076 ON CONFLICT regression, fixed by 0083)", async () => {
-        const row = await transactionRepository.create({
+      it("reuses normalized account identity for account_id writes", async () => {
+        const firstId = await ensureAccount("BRAND NEW BANK");
+        const sameId = await ensureAccount("  Brand New Bank  ");
+        expect(sameId).toBe(firstId);
+        const first = await transactionRepository.create({
           transaction_date: "2024-03-10",
-          bank_account: "BRAND NEW BANK",
+          account_id: firstId,
           recipient_id: rec.delhaize,
           amount: "-1.00",
           category_id: null,
           comment: null,
         });
-        // The trigger onboarded the account and stamped the FK on the row.
+        const second = await transactionRepository.create({
+          transaction_date: "2024-03-11",
+          account_id: sameId,
+          recipient_id: rec.delhaize,
+          amount: "-2.00",
+          category_id: null,
+          comment: null,
+        });
         const { rows: accounts } = await getTestPool().query(
           `SELECT id, name FROM accounts WHERE lower(btrim(name)) = 'brand new bank'`,
         );
         expect(accounts).toHaveLength(1);
-        expect(accounts[0].name).toBe("BRAND NEW BANK"); // trimmed by the trigger
-        expect(row.account_id).toBe(accounts[0].id);
-
-        // A second casing/spacing of the SAME new label (raw SQL, bypassing the
-        // repository's toUpperCase) resolves to the existing account instead of
-        // minting a twin — the 0066 dedup semantics survive the 0083 fix.
-        const { rows: second } = await getTestPool().query(
-          `INSERT INTO transactions (date, amount, currency, recipient_id, bank_account)
-         VALUES ('2024-03-11', -2.00, 'EUR', $1, '  Brand New Bank ')
-         RETURNING account_id`,
-          [rec.delhaize],
-        );
-        expect(second[0].account_id).toBe(accounts[0].id);
-        const { rows: count } = await getTestPool().query(
-          `SELECT count(*)::int AS n FROM accounts WHERE lower(btrim(name)) = 'brand new bank'`,
-        );
-        expect(count[0].n).toBe(1); // ONE account across both casings
+        expect(accounts[0].name).toBe("BRAND NEW BANK");
+        expect(first.account_id).toBe(accounts[0].id);
+        expect(second.account_id).toBe(accounts[0].id);
       });
 
       it("defaults currency to EUR and nulls bank/memo when absent", async () => {
@@ -1142,7 +1109,7 @@ describe.skipIf(!hasTestDatabase())(
         expect(row.currency).toBe("EUR");
         expect(row.bank_account).toBeNull();
         expect(row.memo).toBeNull();
-        expect(row.account_id).toBeNull(); // no bank string → trigger leaves the FK alone
+        expect(row.account_id).toBeNull();
       });
 
       it("resolves the effective category through the recipient on the returned row", async () => {

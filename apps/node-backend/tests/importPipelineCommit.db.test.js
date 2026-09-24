@@ -6,15 +6,12 @@
  * actually returns. Commit is the phase that decides which real bank rows
  * enter the ledger and which are silently discarded as duplicates, and its
  * verdicts depend on genuine NUMERIC equality, genuine NULL semantics, the
- * partial unique index over `tx_hash`, and the visibility of rows inserted
+ * partial unique index over versioned fingerprints, and rows inserted
  * earlier in the same transaction. All four are invisible to a mock.
  *
- * This suite exists specifically because the commit phase was rewritten from a
- * per-row loop (dup-check SELECT + SAVEPOINT + INSERT + staging UPDATE +
- * RELEASE, five round trips per row) to a per-chunk plan (two pre-load SELECTs
- * + one multi-row INSERT + batched staging UPDATEs). Every semantic the old
- * loop got from the database — and one it got from three-valued logic almost
- * by accident — is pinned here against the real schema.
+ * The current commit phase groups rows into chunks, resolves account IDs, and
+ * uses versioned occurrence fingerprints with a legacy field-count fallback.
+ * These tests exercise those verdicts against the real schema.
  *
  * Isolation: per-test targeted DELETEs of the corpus this suite owns.
  * commitBatch opens its own transactions, so a wrapping transaction would
@@ -42,6 +39,10 @@ import {
 import { commitBatch } from "../src/services/importPipeline/commit.js";
 import { transactionRepository } from "../src/repositories/transactionRepository.js";
 import { closePool } from "../src/database/connection.js";
+import {
+  assignImportIdentities,
+  budgetingIdentityBase,
+} from "../src/services/importIdentity.js";
 
 // The post-commit fan-out (MV refresh, planned-payment auto-link) is not what
 // this suite measures and would need materialized views this database does not
@@ -56,6 +57,28 @@ const describeDb = hasTestDatabase() ? describe : describe.skip;
 
 /** Ids seeded by `seedFixtures()`. */
 const fx = {};
+const stagedByBatch = new Map();
+
+function identityFor(row, priorRows = []) {
+  return assignImportIdentities(
+    [...priorRows, row].map((r) => ({ ...r, source_id: r.sourceId })),
+    (r) => budgetingIdentityBase(r, "belfius"),
+  ).at(-1);
+}
+
+async function ensureAccount(name) {
+  if (name == null || name.trim() === "") return null;
+  await pool.query(
+    `INSERT INTO accounts (name, display_name) VALUES ($1, $1)
+     ON CONFLICT (lower(btrim(name))) DO NOTHING`,
+    [name],
+  );
+  const { rows } = await pool.query(
+    `SELECT id FROM accounts WHERE lower(btrim(name)) = lower(btrim($1))`,
+    [name],
+  );
+  return rows[0].id;
+}
 
 async function seedFixtures() {
   const { rows: cat } = await pool.query(
@@ -75,6 +98,7 @@ async function seedFixtures() {
 }
 
 async function wipe() {
+  stagedByBatch.clear();
   await pool.query(`DELETE FROM transactions`);
   await pool.query(`DELETE FROM import_staging_rows`);
   await pool.query(`DELETE FROM import_batches`);
@@ -107,19 +131,31 @@ async function stageRow(batchId, rowIndex, over = {}) {
     currency: "EUR",
     balance: "1000.00",
     comment: null,
-    tx_hash: null,
+    sourceId: null,
     resolved_recipient_id: fx.recipientId,
     user_override_recipient_id: null,
     matched_pattern_id: null,
     override_category_id: null,
     ...over,
   };
+  const byIdentity = stagedByBatch.get(batchId) ?? new Map();
+  const base = budgetingIdentityBase(
+    { ...r, source_id: r.sourceId },
+    "belfius",
+  ).base;
+  const priorRows = byIdentity.get(base) ?? [];
+  const identity = identityFor(r, priorRows);
+  byIdentity.set(base, [...priorRows, r]);
+  stagedByBatch.set(batchId, byIdentity);
   const { rows } = await pool.query(
     `INSERT INTO import_staging_rows
        (batch_id, row_index, status, tx_date, bank_account, recipient_raw, memo, amount,
-        currency, balance, comment, tx_hash, resolved_recipient_id,
-        user_override_recipient_id, matched_pattern_id, override_category_id)
-     VALUES ($1, $2, 'matched', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        currency, balance, comment, source_transaction_id, source_record_hash,
+        dedup_fingerprint, dedup_fingerprint_version, dedup_occurrence,
+        resolved_recipient_id, user_override_recipient_id, matched_pattern_id,
+        override_category_id)
+     VALUES ($1, $2, 'matched', $3, $4, $5, $6, $7, $8, $9, $10,
+             $11, $12, $13, $14, $15, $16, $17, $18, $19)
      RETURNING id`,
     [
       batchId,
@@ -132,7 +168,11 @@ async function stageRow(batchId, rowIndex, over = {}) {
       r.currency,
       r.balance,
       r.comment,
-      r.tx_hash,
+      r.sourceId,
+      identity.sourceRecordHash,
+      identity.fingerprint,
+      identity.version,
+      identity.occurrence,
       r.resolved_recipient_id,
       r.user_override_recipient_id,
       r.matched_pattern_id,
@@ -154,18 +194,22 @@ async function insertTxn(over = {}) {
     memo: "CARD PAYMENT - CURRENT",
     comment: null,
     import_batch_id: null,
-    tx_hash: null,
+    sourceId: null,
     is_active: true,
     ...over,
   };
+  const accountId = await ensureAccount(t.bank_account);
+  const identity = t.sourceId
+    ? identityFor({ ...t, sourceId: t.sourceId })
+    : null;
   const { rows } = await pool.query(
     `INSERT INTO transactions
-       (date, bank_account, recipient_id, category_id, amount, currency, memo, comment,
-        import_batch_id, tx_hash, is_active)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+       (date, account_id, recipient_id, category_id, amount, currency, memo, comment,
+        import_batch_id, dedup_fingerprint, dedup_fingerprint_version, is_active)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
     [
       t.date,
-      t.bank_account,
+      accountId,
       t.recipient_id,
       t.category_id,
       t.amount,
@@ -173,7 +217,8 @@ async function insertTxn(over = {}) {
       t.memo,
       t.comment,
       t.import_batch_id,
-      t.tx_hash,
+      identity?.fingerprint ?? null,
+      identity?.version ?? null,
       t.is_active,
     ],
   );
@@ -200,10 +245,12 @@ async function batchCounters(batchId) {
 
 async function committedTxns(batchId) {
   const { rows } = await pool.query(
-    `SELECT id, to_char(date,'YYYY-MM-DD') AS date, amount::text AS amount, memo,
-            bank_account, recipient_id, category_id, currency, balance::text AS balance,
-            tx_hash, matched_pattern_id
-       FROM transactions WHERE import_batch_id = $1 ORDER BY id`,
+    `SELECT t.id, to_char(t.date,'YYYY-MM-DD') AS date,
+            t.amount::text AS amount, t.memo,
+            a.name AS bank_account, t.recipient_id, t.category_id, t.currency,
+            t.balance::text AS balance, t.dedup_fingerprint, t.matched_pattern_id
+       FROM transactions t LEFT JOIN accounts a ON a.id = t.account_id
+       WHERE t.import_batch_id = $1 ORDER BY t.id`,
     [batchId],
   );
   return rows;
@@ -251,38 +298,33 @@ describeDb("importPipeline commit (real Postgres)", () => {
     expect(after.rows[0].multi_currency_cash).toBe(true);
   });
 
-  it("marks the second of an intra-chunk identical pair as a duplicate", async () => {
+  it("keeps two legitimate identical occurrences in one chunk", async () => {
     const batchId = await newBatch();
     await stageRow(batchId, 0);
     await stageRow(batchId, 1);
 
     expect(await commitBatch({ batchId })).toEqual({
-      imported: 1,
-      duplicates: 1,
+      imported: 2,
+      duplicates: 0,
       errors: 0,
       autoLinkedCount: 0,
     });
 
-    expect(await committedTxns(batchId)).toHaveLength(1);
+    expect(await committedTxns(batchId)).toHaveLength(2);
     expect((await stagingStatuses(batchId)).map((r) => r.status)).toEqual([
       "committed",
-      "duplicate",
+      "committed",
     ]);
     const counters = await batchCounters(batchId);
-    expect(counters.rows_imported).toBe(1);
-    expect(counters.rows_duplicate).toBe(1);
+    expect(counters.rows_imported).toBe(2);
+    expect(counters.rows_duplicate).toBe(0);
     expect(counters.rows_error).toBe(0);
   });
 
-  it("keeps both same-batch rows whose field tuple is identical but tx_hash differs", async () => {
-    // The regression class this dedup was hardened against: two same-day card
-    // payments carry the identical date/amount/recipient/memo/account (Revolut
-    // stamps one memo on every card payment) and differ only by the running
-    // balance folded into tx_hash. Collapsing them silently drops a REAL
-    // transaction.
+  it("keeps same-field rows with distinct source IDs", async () => {
     const batchId = await newBatch();
-    await stageRow(batchId, 0, { tx_hash: "hash-a", balance: "1000.00" });
-    await stageRow(batchId, 1, { tx_hash: "hash-b", balance: "957.50" });
+    await stageRow(batchId, 0, { sourceId: "hash-a", balance: "1000.00" });
+    await stageRow(batchId, 1, { sourceId: "hash-b", balance: "957.50" });
 
     expect(await commitBatch({ batchId })).toEqual({
       imported: 2,
@@ -293,36 +335,32 @@ describeDb("importPipeline commit (real Postgres)", () => {
 
     const txns = await committedTxns(batchId);
     expect(txns).toHaveLength(2);
-    expect(txns.map((t) => t.tx_hash).sort()).toEqual(["hash-a", "hash-b"]);
+    expect(new Set(txns.map((t) => t.dedup_fingerprint)).size).toBe(2);
     expect((await stagingStatuses(batchId)).map((r) => r.status)).toEqual([
       "committed",
       "committed",
     ]);
   });
 
-  it("treats a cross-batch field duplicate as a duplicate even when both carry a tx_hash", async () => {
-    // The hash exemption is scoped to THIS batch on purpose: tx_hash is a hash
-    // of the source-format row, so a re-import from another export format
-    // carries a different hash for the same transaction. Without the batch
-    // scope, "re-import is a no-op" would break.
+  it("keeps distinct provider source IDs even when fields match", async () => {
     const priorBatch = await newBatch();
     await insertTxn({
       import_batch_id: priorBatch,
-      tx_hash: "bank-format-hash",
+      sourceId: "bank-format-hash",
     });
 
     const batchId = await newBatch();
-    await stageRow(batchId, 0, { tx_hash: "vision-format-hash" });
+    await stageRow(batchId, 0, { sourceId: "vision-format-hash" });
 
     expect(await commitBatch({ batchId })).toEqual({
-      imported: 0,
-      duplicates: 1,
+      imported: 1,
+      duplicates: 0,
       errors: 0,
       autoLinkedCount: 0,
     });
-    expect(await committedTxns(batchId)).toHaveLength(0);
+    expect(await committedTxns(batchId)).toHaveLength(1);
     expect((await stagingStatuses(batchId)).map((r) => r.status)).toEqual([
-      "duplicate",
+      "committed",
     ]);
   });
 
@@ -338,10 +376,9 @@ describeDb("importPipeline commit (real Postgres)", () => {
       autoLinkedCount: 0,
     });
 
-    // Two labels resolve to two canonical account IDs. The compatibility
-    // column is deliberately no longer written before the contract drop.
+    // Two labels resolve to two canonical account IDs.
     const { rows } = await pool.query(
-      `SELECT t.bank_account, t.account_id, a.name
+      `SELECT t.account_id, a.name
          FROM transactions t JOIN accounts a ON a.id = t.account_id
         WHERE t.import_batch_id = $1 ORDER BY t.id`,
       [batchId],
@@ -350,7 +387,6 @@ describeDb("importPipeline commit (real Postgres)", () => {
     expect(rows[0].account_id).not.toBe(rows[1].account_id);
     for (const r of rows) {
       expect(r.name).toMatch(/^BE/);
-      expect(r.bank_account).toBeNull();
     }
   });
 
@@ -398,25 +434,18 @@ describeDb("importPipeline commit (real Postgres)", () => {
     });
   });
 
-  it("dedups against a row whose label was set by an API edit (ghost-row regression, direction A)", async () => {
-    // Ghost scenario the UPDATE-path fix closes: a PATCH renames a stored
-    // row's bank_account to a FIRST-SEEN label. The 0062 trigger is
-    // lookup-only on UPDATE (never creates), so pre-fix the row kept its
-    // STALE account_id while the import minted a fresh account — the FK
-    // probe compared fresh-id vs stale-id and MISSED the duplicate, double
-    // counting money the old string compare caught. Post-fix the PATCH
-    // itself resolves-or-creates and stamps the FK, so both sides land on
-    // the same account and the re-import is a no-op again.
+  it("dedups against a row repointed to the importing account", async () => {
     const txnId = await insertTxn({ bank_account: "BE68 5390 0754 7034" });
+    const newAccountId = await ensureAccount("Fresh Edited Account");
     await transactionRepository.update(txnId, {
-      bank_account: "Fresh Edited Account",
+      account_id: newAccountId,
     });
 
     const { rows: edited } = await pool.query(
       `SELECT t.account_id, a.name FROM transactions t JOIN accounts a ON a.id = t.account_id WHERE t.id = $1`,
       [txnId],
     );
-    expect(edited[0].name).toBe("Fresh Edited Account"); // FK moved WITH the edit
+    expect(edited[0].name).toBe("Fresh Edited Account");
 
     const batchId = await newBatch();
     await stageRow(batchId, 0, { bank_account: "Fresh Edited Account" });
@@ -427,30 +456,25 @@ describeDb("importPipeline commit (real Postgres)", () => {
       errors: 0,
       autoLinkedCount: 0,
     });
-    // Exactly one account for the label — the import resolved onto the one
-    // the PATCH created, no twin.
+    // The import resolved onto the account selected by the update.
     const { rows } = await pool.query(
       `SELECT count(*)::int AS n FROM accounts WHERE lower(btrim(name)) = 'fresh edited account'`,
     );
     expect(rows[0].n).toBe(1);
   });
 
-  it("an API label edit cannot create a NULL-FK ghost that false-dups a label-less row (direction B)", async () => {
-    // Pre-fix, editing a label onto a previously label-less row left
-    // account_id NULL (lookup-only trigger, no account to find) — and a
-    // label-less incoming row then matched it NULL-to-NULL, silently
-    // discarding a GENUINE transaction. Post-fix the edit stamps the FK, so
-    // the label-less incoming row shares no account identity with it.
+  it("repointing a label-less row avoids a false duplicate for a later label-less import", async () => {
     const txnId = await insertTxn({ bank_account: null });
+    const newAccountId = await ensureAccount("Another Fresh Account");
     await transactionRepository.update(txnId, {
-      bank_account: "Another Fresh Account",
+      account_id: newAccountId,
     });
 
     const { rows: edited } = await pool.query(
       "SELECT account_id FROM transactions WHERE id = $1",
       [txnId],
     );
-    expect(edited[0].account_id).not.toBeNull();
+    expect(edited[0].account_id).toBe(newAccountId);
 
     const batchId = await newBatch();
     await stageRow(batchId, 0, { bank_account: null });
@@ -464,12 +488,7 @@ describeDb("importPipeline commit (real Postgres)", () => {
   });
 
   it("a label padded with non-ASCII whitespace resolves to ONE account and re-imports as a duplicate", async () => {
-    // btrim-parity regression: SQL btrim strips U+0020 only, JS String#trim
-    // strips all Unicode whitespace. With a trailing NBSP the JS resolver
-    // used to normalize to 'NBSP Bank' while the trigger kept 'NBSP Bank\u00A0'
-    // — two accounts minted, the trigger overwrote the explicitly-written
-    // account_id, and the re-import missed the dup. The resolver now
-    // pre-trims with btrim semantics, so both identities are the same row.
+    // The account resolver uses SQL btrim semantics, which preserve NBSP.
     const label = "NBSP Bank\u00A0"; // trailing U+00A0 (NBSP), not an ASCII space
     const batchId = await newBatch();
     await stageRow(batchId, 0, { bank_account: label });
@@ -480,8 +499,7 @@ describeDb("importPipeline commit (real Postgres)", () => {
       autoLinkedCount: 0,
     });
 
-    // One account, name keeps the NBSP (btrim does not strip it), and the
-    // committed row's FK agrees with the trigger's own resolution.
+    // One account, name keeps the NBSP, and the committed row links to it.
     const { rows: accounts } = await pool.query(
       `SELECT id, name FROM accounts WHERE lower(btrim(name)) = lower(btrim($1))`,
       [label],
@@ -510,11 +528,11 @@ describeDb("importPipeline commit (real Postgres)", () => {
     expect(after[0].n).toBe(1);
   });
 
-  it("deduplicates a repeated tx_hash inside the same chunk before the field check", async () => {
+  it("deduplicates a repeated source ID inside the same chunk", async () => {
     const batchId = await newBatch();
-    // Field tuples differ (different memo), so ONLY the hash can catch this.
-    await stageRow(batchId, 0, { tx_hash: "same-hash", memo: "A" });
-    await stageRow(batchId, 1, { tx_hash: "same-hash", memo: "B" });
+    // Field tuples differ, so only the shared source identity can catch this.
+    await stageRow(batchId, 0, { sourceId: "same-hash", memo: "A" });
+    await stageRow(batchId, 1, { sourceId: "same-hash", memo: "B" });
 
     expect(await commitBatch({ batchId })).toEqual({
       imported: 1,
@@ -525,18 +543,17 @@ describeDb("importPipeline commit (real Postgres)", () => {
     expect(await committedTxns(batchId)).toHaveLength(1);
   });
 
-  it("marks a row whose tx_hash already exists on an INACTIVE transaction as a duplicate", async () => {
-    // uq_transactions_tx_hash is partial on `tx_hash IS NOT NULL` with no
-    // is_active predicate, so a soft-deleted row still blocks the insert. The
-    // field check (is_active = true) cannot see it — the hash check must.
+  it("marks a fingerprint already on an inactive transaction as a duplicate", async () => {
+    // The partial fingerprint index has no is_active predicate, so a
+    // soft-deleted row still blocks the same source identity.
     await insertTxn({
-      tx_hash: "seen-before",
+      sourceId: "seen-before",
       is_active: false,
       memo: "ARCHIVED",
     });
 
     const batchId = await newBatch();
-    await stageRow(batchId, 0, { tx_hash: "seen-before" });
+    await stageRow(batchId, 0, { sourceId: "seen-before" });
 
     expect(await commitBatch({ batchId })).toEqual({
       imported: 0,
@@ -549,24 +566,13 @@ describeDb("importPipeline commit (real Postgres)", () => {
     ]);
   });
 
-  // ── constraint checks happen BEFORE conflict resolution ───────────────────
-  //
-  // Postgres forms and validates the tuple (NOT NULL, CHECK, numeric overflow)
-  // before it looks for an ON CONFLICT arbiter, but foreign keys are AFTER
-  // triggers that never fire for a row DO NOTHING skipped. So a row that both
-  // conflicts on tx_hash AND violates a constraint is an ERROR for the first
-  // class and a DUPLICATE for the second. A commit path that decides "this
-  // hash already exists, skip the insert" in JS collapses the first class into
-  // 'duplicate' and the user silently loses the failure signal.
+  // ── validation failures stay isolated ────────────────────────────────────
 
-  it("reports a hash-conflicting row that also violates a CHECK as an error, not a duplicate", async () => {
+  it("reports an invalid currency CHECK as an error", async () => {
     // Live vector: a bank adapter that hands through an unnormalized currency
     // ('eur') trips chk_transactions_currency_iso.
-    await insertTxn({ tx_hash: "clash", memo: "ALREADY IMPORTED" });
-
     const batchId = await newBatch();
     await stageRow(batchId, 0, {
-      tx_hash: "clash",
       currency: "eur",
       memo: "INCOMING",
     });
@@ -583,15 +589,12 @@ describeDb("importPipeline commit (real Postgres)", () => {
     expect((await batchCounters(batchId)).rows_error).toBe(1);
   });
 
-  it("reports a hash-conflicting row that overflows NUMERIC(18,4) balance as an error", async () => {
-    await insertTxn({ tx_hash: "clash-2", memo: "ALREADY IMPORTED" });
-
+  it("reports a row that overflows NUMERIC(18,4) balance as an error", async () => {
     // import_staging_rows.balance is NUMERIC(20,4) — deliberately wider than its
     // commit target, transactions.balance at NUMERIC(18,4) since migration 0088
     // (ADR-060 D7; 15 integer digits fit staging but overflow the target).
     const batchId = await newBatch();
     await stageRow(batchId, 0, {
-      tx_hash: "clash-2",
       memo: "INCOMING",
       balance: "999999999999999.0000",
     });
@@ -607,13 +610,10 @@ describeDb("importPipeline commit (real Postgres)", () => {
     ]);
   });
 
-  it("keeps the rest of the chunk when a constraint-violating conflict row sits among clean rows", async () => {
-    await insertTxn({ tx_hash: "clash-3", memo: "ALREADY IMPORTED" });
-
+  it("keeps clean rows when a constraint-violating row sits among them", async () => {
     const batchId = await newBatch();
     await stageRow(batchId, 0, { memo: "GOOD ONE" });
     await stageRow(batchId, 1, {
-      tx_hash: "clash-3",
       currency: "eur",
       memo: "BAD",
     });
@@ -636,34 +636,30 @@ describeDb("importPipeline commit (real Postgres)", () => {
     ]);
   });
 
-  it("applies the hash exemption only when the STORED row also carries a hash", async () => {
-    // The exemption needs a hash on BOTH sides (`t.tx_hash IS NOT NULL AND
-    // $6 IS NOT NULL AND t.tx_hash <> $6`). A same-batch row committed without
-    // one therefore still field-matches a later hashed row — an asymmetry a
-    // symmetric "hashes differ ⇒ distinct" rewrite would silently lose.
+  it("keeps a distinct source ID beside a fallback occurrence", async () => {
     const batchId = await newBatch();
-    await stageRow(batchId, 0, { tx_hash: null });
-    await stageRow(batchId, 1, { tx_hash: "later-hash" });
+    await stageRow(batchId, 0, { sourceId: null });
+    await stageRow(batchId, 1, { sourceId: "later-hash" });
 
     expect(await commitBatch({ batchId })).toEqual({
-      imported: 1,
-      duplicates: 1,
+      imported: 2,
+      duplicates: 0,
       errors: 0,
       autoLinkedCount: 0,
     });
     expect((await stagingStatuses(batchId)).map((r) => r.status)).toEqual([
       "committed",
-      "duplicate",
+      "committed",
     ]);
   });
 
-  it("trims surrounding ASCII whitespace consistently on both memo sides", async () => {
+  it("preserves repeated normalized memo occurrences and dedups a complete re-import", async () => {
     const spaceBatch = await newBatch();
     await stageRow(spaceBatch, 0, { memo: "COFFEE " });
     await stageRow(spaceBatch, 1, { memo: "COFFEE " });
     expect(await commitBatch({ batchId: spaceBatch })).toEqual({
-      imported: 1,
-      duplicates: 1,
+      imported: 2,
+      duplicates: 0,
       errors: 0,
       autoLinkedCount: 0,
     });
@@ -672,39 +668,41 @@ describeDb("importPipeline commit (real Postgres)", () => {
     await stageRow(tabBatch, 0, { memo: "TEA\t", bank_account: "BE00 OTHER" });
     await stageRow(tabBatch, 1, { memo: "TEA\t", bank_account: "BE00 OTHER" });
     expect(await commitBatch({ batchId: tabBatch })).toEqual({
-      imported: 1,
-      duplicates: 1,
+      imported: 2,
+      duplicates: 0,
       errors: 0,
       autoLinkedCount: 0,
     });
+
+    const reimport = await newBatch();
+    await stageRow(reimport, 0, { memo: "TEA\t", bank_account: "BE00 OTHER" });
+    await stageRow(reimport, 1, { memo: "TEA\t", bank_account: "BE00 OTHER" });
+    expect(await commitBatch({ batchId: reimport })).toMatchObject({
+      imported: 0,
+      duplicates: 2,
+      errors: 0,
+    });
   });
 
-  it("field-matches an orphaned hashed row after its batch metadata is deleted", async () => {
-    // transactions_import_batch_id_fkey is ON DELETE SET NULL, so deleting an
-    // import batch leaves its rows with a tx_hash and no import_batch_id. In
-    // batch leaves its transaction in place. Deleting metadata must not make
-    // the transaction silently re-importable merely because its source hash
-    // differs from a round-trip export hash.
-    await insertTxn({ import_batch_id: null, tx_hash: "orphaned-hash" });
+  it("keeps distinct source IDs even when an older imported row lost its batch link", async () => {
+    await insertTxn({ import_batch_id: null, sourceId: "orphaned-hash" });
 
     const batchId = await newBatch();
-    await stageRow(batchId, 0, { tx_hash: "incoming-hash" });
+    await stageRow(batchId, 0, { sourceId: "incoming-hash" });
 
     expect(await commitBatch({ batchId })).toEqual({
-      imported: 0,
-      duplicates: 1,
+      imported: 1,
+      duplicates: 0,
       errors: 0,
       autoLinkedCount: 0,
     });
   });
 
-  it("field-matches an orphaned UNHASHED row (the manual-entry case)", async () => {
-    // Same orphan, no tx_hash: `t.tx_hash IS NOT NULL` is FALSE, the exemption
-    // collapses to FALSE, and the candidate matches normally.
-    await insertTxn({ import_batch_id: null, tx_hash: null });
+  it("field-matches an older unversioned row (the manual-entry case)", async () => {
+    await insertTxn({ import_batch_id: null, sourceId: null });
 
     const batchId = await newBatch();
-    await stageRow(batchId, 0, { tx_hash: "incoming-hash" });
+    await stageRow(batchId, 0, { sourceId: "incoming-hash" });
 
     expect(await commitBatch({ batchId })).toEqual({
       imported: 0,
@@ -780,10 +778,8 @@ describeDb("importPipeline commit (real Postgres)", () => {
   });
 
   it("does not let a poison row change the verdict of a row that follows it", async () => {
-    // The batched planner speculates that every planned insert lands, so a
-    // failed insert could otherwise make the NEXT identical row look like a
-    // duplicate of a transaction that never existed. The per-row replay is
-    // what makes both rows fail instead.
+    // A failed insert must not make the NEXT identical row look like a
+    // duplicate of a transaction that never existed.
     const batchId = await newBatch();
     await stageRow(batchId, 0, { currency: "eur" });
     await stageRow(batchId, 1, { currency: "eur" });
@@ -806,16 +802,16 @@ describeDb("importPipeline commit (real Postgres)", () => {
     const batchId = await newBatch();
     await stageRow(batchId, 0, { memo: "ALREADY THERE" }); // cross-batch dup
     await stageRow(batchId, 1, { memo: "FRESH A" }); // insert
-    await stageRow(batchId, 2, { memo: "FRESH A" }); // intra-chunk dup
+    await stageRow(batchId, 2, { memo: "FRESH A" }); // second occurrence
     await stageRow(batchId, 3, { memo: "FRESH B", currency: "eur" }); // error
-    await stageRow(batchId, 4, { memo: "FRESH C", tx_hash: "x1" }); // insert
-    await stageRow(batchId, 5, { memo: "FRESH D", tx_hash: "x1" }); // hash dup
+    await stageRow(batchId, 4, { memo: "FRESH C", sourceId: "x1" }); // insert
+    await stageRow(batchId, 5, { memo: "FRESH D", sourceId: "x1" }); // source ID dup
 
     const result = await commitBatch({ batchId });
     expect(result.imported + result.duplicates + result.errors).toBe(6);
     expect(result).toEqual({
-      imported: 2,
-      duplicates: 3,
+      imported: 3,
+      duplicates: 2,
       errors: 1,
       autoLinkedCount: 0,
     });
@@ -823,7 +819,7 @@ describeDb("importPipeline commit (real Postgres)", () => {
     expect((await stagingStatuses(batchId)).map((r) => r.status)).toEqual([
       "duplicate",
       "committed",
-      "duplicate",
+      "committed",
       "error",
       "committed",
       "duplicate",
@@ -836,21 +832,19 @@ describeDb("importPipeline commit (real Postgres)", () => {
 
   // ── unresolved recipients ─────────────────────────────────────────────────
 
-  it("decides a row with no recipient into 'error' up front, keeping its chunk on the batched path", async () => {
+  it("decides a row with no recipient into 'error' before its chunk is committed", async () => {
     // The matcher stamps a row it could not resolve 'matched' with a NULL
     // resolved_recipient_id (that is what keeps it fixable in review); if the
     // user commits without assigning one, commit must DECIDE the row into
-    // 'error' rather than let it 23502 on transactions.recipient_id NOT NULL
-    // inside the bulk INSERT — which would also demote the whole chunk to the
-    // per-row replay. The decided error carries the decision's message, not a
-    // constraint-violation string, which is what this pins.
+    // 'error' before any INSERT attempts a NOT NULL violation. The decided
+    // error carries the decision's message, not a constraint-violation string.
     const batchId = await newBatch();
     await stageRow(batchId, 0, {
       recipient_raw: "",
       resolved_recipient_id: null,
     });
-    await stageRow(batchId, 1, { tx_hash: "hash-a", balance: "1000.00" });
-    await stageRow(batchId, 2, { tx_hash: "hash-b", balance: "957.50" });
+    await stageRow(batchId, 1, { sourceId: "hash-a", balance: "1000.00" });
+    await stageRow(batchId, 2, { sourceId: "hash-b", balance: "957.50" });
 
     expect(await commitBatch({ batchId })).toEqual({
       imported: 2,
@@ -903,7 +897,7 @@ describeDb("importPipeline commit (real Postgres)", () => {
       comment: "holiday",
       currency: null, // must default to EUR, never NULL
       balance: "1234.56",
-      tx_hash: "h-cols",
+      sourceId: "h-cols",
     });
 
     expect(await commitBatch({ batchId })).toEqual({
@@ -918,13 +912,13 @@ describeDb("importPipeline commit (real Postgres)", () => {
       date: "2026-03-04",
       amount: "-42.5000",
       memo: "CARD PAYMENT - CURRENT",
-      bank_account: null,
+      bank_account: "BE68 5390 0754 7034",
       recipient_id: fx.recipientId,
       // ADR-046: no per-row override → the recipient's default category.
       category_id: fx.categoryId,
       currency: "EUR",
       balance: "1234.5600", // transactions.balance NUMERIC(18,4) since migration 0088
-      tx_hash: "h-cols",
+      dedup_fingerprint: expect.stringMatching(/^[0-9a-f]{64}$/),
     });
   });
 
@@ -951,11 +945,13 @@ describeDb("importPipeline commit (real Postgres)", () => {
     const batchId = await newBatch();
     const rows = [];
     for (let i = 0; i < 1002; i++) {
-      // Row 1001 lands in the SECOND chunk and repeats row 0 exactly, so its
-      // duplicate verdict can only come from the previous chunk's committed
-      // rows being re-read by the next chunk's pre-load.
+      // Row 1001 lands in the SECOND chunk and repeats row 0's source ID,
+      // so its duplicate verdict must see the first chunk's committed row.
       rows.push(
-        stageRow(batchId, i, { memo: i === 1001 ? "ROW 0" : `ROW ${i}` }),
+        stageRow(batchId, i, {
+          memo: i === 1001 ? "ROW 0" : `ROW ${i}`,
+          sourceId: i === 0 || i === 1001 ? "row-zero" : null,
+        }),
       );
     }
     await Promise.all(rows);
@@ -988,7 +984,7 @@ describeDb("importPipeline commit (real Postgres)", () => {
       errors: 0,
     });
     expect(progress).toHaveLength(3);
-  });
+  }, 30_000);
 
   it("returns zeroes and touches nothing for a batch with no matched rows", async () => {
     const batchId = await newBatch();

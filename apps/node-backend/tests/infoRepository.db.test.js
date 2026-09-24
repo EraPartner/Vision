@@ -92,15 +92,21 @@ async function insertTxn({
   isActive = true,
   isTransfer = false,
 }) {
+  let accountId = null;
   if (bank) {
     await getTestPool().query(
       `INSERT INTO accounts (name, display_name) VALUES ($1, $1)
        ON CONFLICT (lower(btrim(name))) DO NOTHING`,
       [bank],
     );
+    const { rows } = await getTestPool().query(
+      `SELECT id FROM accounts WHERE lower(btrim(name)) = lower(btrim($1))`,
+      [bank],
+    );
+    accountId = rows[0].id;
   }
   const { rows } = await getTestPool().query(
-    `INSERT INTO transactions (date, amount, currency, recipient_id, category_id, bank_account, balance, is_active, is_transfer)
+    `INSERT INTO transactions (date, amount, currency, recipient_id, category_id, account_id, balance, is_active, is_transfer)
      VALUES ($1::date, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
     [
       date,
@@ -108,7 +114,7 @@ async function insertTxn({
       currency,
       rec.misc,
       categoryId,
-      bank,
+      accountId,
       balance,
       isActive,
       isTransfer,
@@ -612,17 +618,13 @@ describe.skipIf(!hasTestDatabase())(
         async function build({ withUnattributed }) {
           await seedBase();
           if (withUnattributed) {
-            // account_id NULL behind a bank_account string with no accounts row —
-            // a synthetic legacy shape (the trigger only resolves an UPDATE
-            // against an existing account).
+            // A transaction with no owning account exercises the unattributed
+            // ledger path.
             await insertTxn({
               date: addDaysYmd(monthStart, -400),
               amount: "7.00",
               bank: null,
             });
-            await getTestPool().query(
-              `UPDATE transactions SET bank_account = 'LEGACY BANK'`,
-            );
             expect(
               (
                 await getTestPool().query(
@@ -673,9 +675,6 @@ describe.skipIf(!hasTestDatabase())(
         const today = TODAY();
         const d12 = addDaysYmd(today, -12);
         await insertTxn({ date: d12, amount: "1200.00", bank: null });
-        await getTestPool().query(
-          `UPDATE transactions SET bank_account = 'LEGACY BANK'`,
-        );
         await addAccount("KBC");
         await insertTxn({
           date: addDaysYmd(today, 5),
@@ -736,9 +735,6 @@ describe.skipIf(!hasTestDatabase())(
           currency: "USD",
           bank: null,
         });
-        await getTestPool().query(
-          `UPDATE transactions SET bank_account = 'LEGACY BANK' WHERE account_id IS NULL`,
-        );
         expect(
           (
             await getTestPool().query(
@@ -813,19 +809,13 @@ describe.skipIf(!hasTestDatabase())(
       // rows that are NOT positively attributed to a tracking-only account. A
       // bare inner join to `accounts` would have dropped exactly these — the
       // unattributed ledger the fallback exists to serve.
-      it("still sums unattributed rows whose bank_account has no accounts row", async () => {
+      it("still sums unattributed rows with no owning account", async () => {
         await seedBase();
         const today = TODAY();
         const d1 = addDaysYmd(today, -1);
-        // Written with no bank label (account_id NULL), then relabelled: the
-        // sync trigger only ever resolves an UPDATE against an EXISTING account,
-        // so the row keeps account_id NULL behind a bank_account string with no
-        // accounts row — the shape a pre-accounts ledger carries.
+        // Rows with account_id NULL are the unattributed ledger.
         await insertTxn({ date: d1, amount: "1200.00", bank: null });
         await insertTxn({ date: today, amount: "300.00", bank: null });
-        await getTestPool().query(
-          `UPDATE transactions SET bank_account = 'LEGACY BANK'`,
-        );
         expect(
           (
             await getTestPool().query(
@@ -866,16 +856,9 @@ describe.skipIf(!hasTestDatabase())(
       it("leaves un-attributable fallback rows in liquid, not liabilities", async () => {
         await seedBase();
         const today = TODAY();
-        // The synthetic legacy shape: a big negative running balance behind a
-        // bank_account string with no accounts row. There is no `accounts.type` to
-        // read, so there is nothing to split on — the documented resolution is
-        // `false` (liquid), which is also what keeps this ledger's reported
-        // buckets identical to what it has always reported. netWorth is the same
-        // number either way; only the split between the two buckets is at stake.
+        // No account owns this row, so there is no `accounts.type` to split on.
+        // The fallback puts it in liquid.
         await insertTxn({ date: today, amount: "-5000.00", bank: null });
-        await getTestPool().query(
-          `UPDATE transactions SET bank_account = 'LEGACY MORTGAGE'`,
-        );
         expect(
           (
             await getTestPool().query(

@@ -4,9 +4,9 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/transactions
 description: CRUD operations for financial transactions, including CSV and NDJSON export, bulk operations
-date: 2026-04-24
-updated: 2026-09-11
-last_modified: 2026-09-11
+date: 2026-09-24
+updated: 2026-09-24
+last_modified: 2026-09-24
 tags: [api, transactions, finance, phase-5a, phase-9, phase-13, phase-q, decimal, money, export, drillthrough, filters, recipient-groups, bulk-actions, amount-filter, date-search, tag-search]
 status: active
 aliases: [transactions-api, transaction-crud, financial-records, income, expenses]
@@ -282,7 +282,7 @@ Create a new transaction.
 ```json
 {
   "date": "2026-01-15",
-  "bank_account": "BE12 3456...",
+  "account_id": 1,
   "recipient_id": 1,
   "amount": -75.5,
   "memo": "Weekly shopping",
@@ -293,7 +293,10 @@ Create a new transaction.
 }
 ```
 
-**Required Fields:** date, bank_account, recipient_id, amount
+**Required Fields:** date, account_id, recipient_id, amount
+
+`account_id` identifies the active account used for the transaction. `bank_account` remains a
+response and filter field, but POST and PATCH reject it as a write field.
 
 **Body FK ids are strict (changed 2026-08-11, breaking for malformed ids).** `recipient_id` and `category_id` must each be a plain base-10 integer in 1..2,147,483,647 — the same rule the id path/query params follow. `0`, negatives and `''` are rejected too. See [[docs/security/input-validation#FK ids in write bodies (`parseOverrideId` and the zod FK fields)|Input Validation]].
 

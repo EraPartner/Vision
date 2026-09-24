@@ -51,24 +51,34 @@ async function seedRecipient() {
 
 async function addAccount(
   name,
-  { currency = "EUR", statementBalance = null } = {},
+  {
+    currency = "EUR",
+    statementBalance = null,
+    statementCurrency = currency,
+  } = {},
 ) {
   const { rows } = await getTestPool().query(
-    `INSERT INTO accounts (name, type, currency, spendable, in_net_worth, is_active,
-                           statement_balance, statement_balance_date)
-     VALUES ($1, 'checking'::account_type, $2, true, true, true, $3,
-             CASE WHEN $3::numeric IS NULL THEN NULL ELSE CURRENT_DATE END)
+    `INSERT INTO accounts (name, type, currency, spendable, in_net_worth, is_active)
+     VALUES ($1, 'checking'::account_type, $2, true, true, true)
      RETURNING id`,
-    [name, currency, statementBalance],
+    [name, currency],
   );
-  return rows[0].id;
+  const id = rows[0].id;
+  if (statementBalance != null) {
+    await getTestPool().query(
+      `INSERT INTO account_statement_balances (account_id, currency, balance, balance_date)
+       VALUES ($1, $2, $3, CURRENT_DATE)`,
+      [id, statementCurrency, statementBalance],
+    );
+  }
+  return id;
 }
 
-async function insertTxn({ dateExpr, amount, currency = "EUR", bank }) {
+async function insertTxn({ dateExpr, amount, currency = "EUR", accountId }) {
   await getTestPool().query(
-    `INSERT INTO transactions (date, amount, currency, recipient_id, bank_account, is_active)
+    `INSERT INTO transactions (date, amount, currency, recipient_id, account_id, is_active)
      VALUES ((${dateExpr})::date, $1, $2, $3, $4, true)`,
-    [amount, currency, rec.misc, bank],
+    [amount, currency, rec.misc, accountId],
   );
 }
 
@@ -150,7 +160,7 @@ describe.skipIf(!hasTestDatabase())(
         await insertTxn({
           dateExpr: "CURRENT_DATE - interval '2 days'",
           amount: "100.00",
-          bank: "CHECKING",
+          accountId: id,
         });
 
         const before = (await listAccounts())[0];
@@ -191,13 +201,13 @@ describe.skipIf(!hasTestDatabase())(
           dateExpr: "CURRENT_DATE - interval '2 days'",
           amount: "100.00",
           currency: "EUR",
-          bank: "WISE MULTI",
+          accountId: id,
         });
         await insertTxn({
           dateExpr: "CURRENT_DATE - interval '1 day'",
           amount: "100.00",
           currency: "USD",
-          bank: "WISE MULTI",
+          accountId: id,
         });
 
         await reconcileAccount(id, { mode: "adjustment" });
@@ -220,16 +230,17 @@ describe.skipIf(!hasTestDatabase())(
         const id = await addAccount("MISLABELLED", {
           currency: "EUR",
           statementBalance: "120.00",
+          statementCurrency: "USD",
         });
         await insertRate("USD", "0.5");
         await insertTxn({
           dateExpr: "CURRENT_DATE - interval '1 day'",
           amount: "100.00",
           currency: "USD",
-          bank: "MISLABELLED",
+          accountId: id,
         });
 
-        await reconcileAccount(id, { mode: "adjustment" });
+        await reconcileAccount(id, { mode: "adjustment", currency: "USD" });
 
         const [row] = await systemRows();
         expect(row.currency).toBe("USD");
@@ -244,7 +255,7 @@ describe.skipIf(!hasTestDatabase())(
         await insertTxn({
           dateExpr: "CURRENT_DATE - interval '2 days'",
           amount: "100.00",
-          bank: "CHECKING",
+          accountId: id,
         });
 
         await reconcileAccount(id, { mode: "adjustment" });
@@ -266,7 +277,7 @@ describe.skipIf(!hasTestDatabase())(
         await insertTxn({
           dateExpr: "CURRENT_DATE - interval '1 day'",
           amount: "-25.00",
-          bank: "WALLET",
+          accountId: id,
         });
 
         const { transaction, warning } = await setOpeningBalance(id, {
@@ -436,7 +447,7 @@ describe.skipIf(!hasTestDatabase())(
         await insertTxn({
           dateExpr: "CURRENT_DATE - interval '2 days'",
           amount: "100.00",
-          bank: "CHECKING",
+          accountId: id,
         });
 
         await reconcileAccount(id, { mode: "adjustment" });
