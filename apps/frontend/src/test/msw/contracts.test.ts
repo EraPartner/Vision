@@ -22,6 +22,7 @@ import {
     collectionSchema,
     InvestmentItemSchema,
     LinkSchema,
+    linkedCollectionOf,
     paginatedOf,
     PlannedTransactionItemSchema,
     RecipientItemSchema,
@@ -304,12 +305,13 @@ describe("GET list endpoints — strict item schemas (E1)", () => {
         ],
         ["/api/investments", InvestmentItemSchema, INVESTMENT_STUB, 100],
     ])("%s", (path, ItemSchema, STUB, limit) => {
+        const isUnpaginatedCategory = path === "/api/categories";
+        const schema = isUnpaginatedCategory
+            ? linkedCollectionOf(ItemSchema)
+            : paginatedOf(ItemSchema);
+
         it("empty list envelope is valid", async () => {
-            validate(
-                paginatedOf(ItemSchema),
-                await getEnvelope(path),
-                `${path} empty`,
-            );
+            validate(schema, await getEnvelope(path), `${path} empty`);
         });
 
         it("item shape matches schema", async () => {
@@ -320,19 +322,16 @@ describe("GET list endpoints — strict item schemas (E1)", () => {
                         data: {
                             items: [STUB],
                             total: 1,
-                            limit,
-                            offset: 0,
+                            ...(isUnpaginatedCategory
+                                ? {}
+                                : { limit, offset: 0 }),
                             links: [],
                         },
                     }),
                 ),
             );
             const data = await getEnvelope(path);
-            const parsed = validate(
-                paginatedOf(ItemSchema),
-                data,
-                `${path} item`,
-            );
+            const parsed = validate(schema, data, `${path} item`);
             expect(parsed.items).toHaveLength(1);
         });
     });

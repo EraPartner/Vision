@@ -2,8 +2,8 @@
 title: API Client Unit Tests (E10)
 type: testing
 status: active
-date: 2026-05-01
-updated: 2026-09-11
+date: 2026-09-24
+updated: 2026-09-24
 tags:
   - testing
   - frontend
@@ -632,8 +632,8 @@ await expect(promise).rejects.toThrow();
 # Run all API client tests
 bun vitest run apps/frontend/src/lib/api/client.test.ts
 
-# Watch mode
-bun test:watch
+# Watch this frontend test from the frontend workspace
+cd apps/frontend && bun vitest watch src/lib/api/client.test.ts
 
 # With coverage
 bun vitest run --coverage apps/frontend/src/lib/api/client.test.ts

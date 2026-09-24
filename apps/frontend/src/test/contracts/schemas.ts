@@ -18,6 +18,10 @@ export const collectionSchema = (item: z.ZodTypeAny = z.unknown()) =>
         total: z.number().int().nonnegative(),
     });
 
+/** Category lists include hypermedia links even when pagination is omitted. */
+export const linkedCollectionOf = <T extends z.ZodTypeAny>(item: T) =>
+    collectionSchema(item).extend({ links: z.array(LinkSchema) });
+
 export const CategoryItemSchema = z.strictObject({
     id: z.number().int().positive(),
     general: z.string(),

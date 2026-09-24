@@ -42,7 +42,7 @@ note is only the pointer.
     ported from the money forms; `Loading` aria-label localized across 31 consumers.
 11. **Test-infra trio** (`95149fa1`) — shared DB `wipeAll()` helper; validate-locales
     exact-match key matcher (closed the substring hole, unmasked 63 confirmed-dead keys);
-    e2e combobox driven through its real popover flow.
+    browser combobox driven through its real popover flow.
 12. **Error taxonomy** (`e24c47dd`) — `UpstreamError` 502 / `UpstreamTimeoutError` 504
     added with deliberate prod masking; AI error shim deleted; price-provider throws typed.
 13. **AI tool-call coercion** (`4576259c`) — single coercion point in `dispatchTool`;

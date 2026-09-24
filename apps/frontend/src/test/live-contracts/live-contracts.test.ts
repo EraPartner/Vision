@@ -5,9 +5,9 @@
  * schemas used in MSW fixture contracts.  Catches divergence between the MSW
  * stubs and actual backend responses BEFORE the fix lands in CI.
  *
- * Skipped automatically when LIVE_API_BASE is not set (normal unit-test runs).
- * In CI the `test-live-api-contracts` job sets LIVE_API_BASE=http://localhost:3002
- * and starts a native PostgreSQL-backed production stack before running this file.
+ * The fast workspace unit suite excludes this file. The root test:frontend
+ * command and CI's test-live-api-contracts job set LIVE_API_BASE and start a
+ * disposable native PostgreSQL-backed stack before running it.
  */
 // @vitest-environment node
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -17,6 +17,7 @@ import {
     CategoryItemSchema as StrictCategoryItemSchema,
     collectionSchema,
     InvestmentItemSchema as StrictInvestmentItemSchema,
+    linkedCollectionOf,
     paginatedOf,
     RecipientItemSchema as StrictRecipientItemSchema,
     TransactionItemSchema as StrictTransactionItemSchema,
@@ -118,7 +119,7 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
     it("GET /api/categories returns full collection when unpaginated", async () => {
         const data = await get("/api/categories");
         validate(
-            collectionSchema(CategoryItemSchema),
+            linkedCollectionOf(CategoryItemSchema),
             data,
             "GET /api/categories",
         );

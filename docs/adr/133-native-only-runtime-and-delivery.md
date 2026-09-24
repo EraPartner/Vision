@@ -45,7 +45,7 @@ native database over that state would be unsafe.
 ## Decision
 
 - The Electron app and Demo support only the native runtime.
-- Development, cloud setup, continuous integration, live API contracts, and end-to-end tests use
+- Development, cloud setup, continuous integration, and live API contracts use
   disposable native PostgreSQL 18 clusters.
 - Releases contain macOS native artifacts and source artifacts. They do not build or publish an
   application container image.

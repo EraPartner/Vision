@@ -175,16 +175,12 @@ flowchart TD
     end
 
     CC{"ci-complete — the ONLY required check"}
-    E2E["e2e.yml — NIGHTLY cron 03:17<br/>18 cases · retries 2<br/>GATES NOTHING"]
 
     T --> t1 --> QG --> BI --> t3 --> CC
-    T -.->|"never on PR"| E2E
-    E2E -.->|"failure opens<br/>a GitHub issue"| X["(no merge impact)"]
 
     style QG fill:#78350f,color:#fff
     style A5 fill:#78350f,color:#fff
     style A6 fill:#7f1d1d,color:#fff
-    style E2E fill:#7f1d1d,color:#fff
     style DV fill:#78350f,color:#fff
 ```
 
@@ -293,17 +289,13 @@ Three layers, **one** shared unchecked dependency: the hostname the request arri
 
 ```mermaid
 flowchart TB
-    E["E2E · 18 cases · NIGHTLY · gates nothing<br/>onboarding actively bypassed · no CSV-import journey"]
-    VIS["Visual regression · 5 asserts · 0 baselines · never runs"]
     MUT["Mutation (Stryker) · 2 files · break:null · never run"]
     INT["'Integration' — Express, DB, and every<br/>collaborator MOCKED · 0 real Postgres anywhere"]
     UNIT["~4,800 unit cases · genuinely strong<br/>belgianTax vs external PwC sample<br/>recurrence goldens · dedup goldens"]
     GAP["NO correctness coverage:<br/>aggregations · snapshotBuilder (657 LOC)<br/>packages/shared-utils · 82 migrations"]
 
-    E --- VIS --- MUT --- INT --- UNIT --- GAP
+    MUT --- INT --- UNIT --- GAP
 
-    style E fill:#7f1d1d,color:#fff
-    style VIS fill:#7f1d1d,color:#fff
     style MUT fill:#78350f,color:#fff
     style INT fill:#78350f,color:#fff
     style UNIT fill:#14532d,color:#fff
@@ -401,7 +393,6 @@ Severity counts: **14 CRITICAL · 52 HIGH · 72 MEDIUM · 23 LOW**. Every CRITIC
 
 **Testing / DevOps**
 
-- **Backend coverage excludes `src/routes/**`** (30 files, 5,999 lines, 12% of the backend) on the stated grounds that Playwright covers them — but `e2e.yml` is nightly-only and gates nothing. The 85/88 figure omits the entire HTTP surface. NEW.
 - **`UPDATE_GOLDENS=1` makes `runGolden` write the fixture and `return` before asserting**, so such a run is unconditionally green — with no CI guard and no `CODEOWNERS` on `__fixtures__/`. The dedup-hash backward-compatibility lock can be silently rebaselined. NEW.
 - **No test executes SQL against a real Postgres** (`TEST_DATABASE_URL` appears in zero workflows and zero scripts; `ci.yml` has no `services:` block), so all 82 migrations are untested and repository "correctness" is asserted by string-matching generated SQL. ✅ NEW
 - **Mutation contracts are validated only against hand-written mocks**; the one real-backend suite is GET-only, 34/212 operations, and `skipped` counts as pass on draft PRs. NEW.
@@ -451,7 +442,6 @@ Theme variants are structurally worse: **nordDark `--loss` is 2.20–2.96:1** (e
 
 - **The accounts hub card is a `role="button"` containing two real buttons** (`AccountsPage.tsx:96-113` wrapping the drift chip at `:138` and the ⋮ menu at `:180`) — an axe `nested-interactive` **serious** violation. Its `aria-label` is name-only, so a screen reader announces "Open Checking details, button" and **never the balance** — the only reason the card exists. Notably the author *was* aware of the nesting (the `onKeyDown` comment at `:104-106` handles event bubbling correctly) — the interaction logic is careful, the ARIA semantics are the gap. Fix: plain `<div>` + a real `<Link>` on the account name. Visually free, and gains cmd/middle-click.
 - **The drift chip fails WCAG 2.5.3 Label in Name** — `aria-label="Open reconcile"` over visible text `Drift: +€412,50`; the accessible name shares no words with the visible label and drops the amount. Same at `AccountDetailPage.tsx:371`.
-- **The two heaviest new pages are outside the axe sweep.** `e2e/pages.ts` covers 10 routes; `/accounts` (490 rewritten lines) and `/accounts/:id` (584 new) are absent, as are `/tax`, `/settings`, `/portfolio/net-worth`, `/ai-chat`. The gate already fails on serious violations, so the `nested-interactive` bug would have been caught the day it landed — the route just isn't scanned. Compounded by `TODO.md:3924`: the suite has **never executed**.
 - **`aria-invalid` and validation `aria-describedby` appear zero times in the entire frontend.** Money fields' `pattern="^-?[0-9]+([.,][0-9]+)?$"` also *rejects* `1.234,56` — exactly what a Dutch user pastes back — and because the field sits in a `<form>`, failure triggers Chromium's untranslated "Please match the requested format." The app's own `parseLocaleNumber` handles grouped input correctly; the `pattern` is stricter than the parser it feeds.
 - **Three `aria-live` regions app-wide.** Dismissals, "Applied" swaps, load-more appends and error swap-ins are all silent; `PageError` has no `role="alert"`.
 - **Both new insight surfaces render `null` on API failure** — indistinguishable from "no insights". For tax this is substantive: absence reads as "no deductions found", a wrong claim about the user's return.

@@ -360,9 +360,16 @@ export const defaultHandlers = [
     ),
     http.get(`${API_BASE}/api/info/health`, () => ok({ status: "ok" })),
 
-    http.get(`${API_BASE}/api/categories`, () =>
-        ok({ items: [], total: 0, limit: 200, offset: 0, links: [] }),
-    ),
+    http.get(`${API_BASE}/api/categories`, ({ request }) => {
+        const params = new URL(request.url).searchParams;
+        const paginated = params.has("limit") || params.has("offset");
+        return ok({
+            items: [],
+            total: 0,
+            ...(paginated ? { limit: 200, offset: 0 } : {}),
+            links: [],
+        });
+    }),
     http.get(`${API_BASE}/api/categories/tree`, () =>
         ok({ items: [], total: 0 }),
     ),

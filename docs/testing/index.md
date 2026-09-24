@@ -2,15 +2,14 @@
 title: Testing Documentation Index
 type: testing-index
 status: active
-date: 2026-09-11
-updated: 2026-09-11
-last-updated: 2026-09-11
-modified: 2026-09-11
-last_updated_timestamp: 2026-09-11T00:00:00Z
+date: 2026-09-24
+updated: 2026-09-24
+last-updated: 2026-09-24
+modified: 2026-09-24
+last_updated_timestamp: 2026-09-24T00:00:00Z
 added_phase_f1_backend_drift_detection: 2026-05-02
 added_phase_f2_stale_refetch: 2026-05-02
 added_phase_f3_dialog_completeness: 2026-05-02
-added_phase_f4_playwright_parity: 2026-05-02
 added_phase_f5_property_chaos: 2026-05-02
 added_phase_f6_mutation_testing: 2026-05-02
 added_dialog_integration_tests: 2026-05-01
@@ -24,13 +23,9 @@ tags:
   - index
   - quality
   - vitest
-  - playwright
   - a11y
-  - visual-regression
   - phase-1
   - frontend-phase-a
-  - frontend-phase-b
-  - frontend-phase-c
   - frontend-phase-d
   - frontend-phase-e
   - frontend-phase-f
@@ -76,15 +71,14 @@ SORT title ASC
 
 ## Test Types
 
-| Type                            | Scope                               | Framework                                                                       |
-| ------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------- |
-| **Unit Tests**                  | Individual functions/services       | Vitest                                                                          |
-| **Integration Tests**           | API endpoints                       | Vitest + Supertest                                                              |
-| **Component Tests**             | Frontend UI atoms                   | React Testing Library                                                           |
-| **Component-Integration Tests** | Frontend pages w/ network mocked    | Vitest + RTL + MSW (see [[docs/testing/frontend-component-integration\|guide]]) |
-| **E2E Tests**                   | Critical user flows w/ real backend | Playwright (see [[docs/testing/frontend/e2e\|guide]])                           |
-| **Property Tests**              | Pure-calc invariants (Phase 8)      | Vitest + mulberry32 seeded PRNG                                                 |
-| **Golden Fixtures**             | Pure-calc regression lock           | Vitest + JSON snapshots (`UPDATE_GOLDENS=1`)                                    |
+| Type                            | Scope                            | Framework                                                                       |
+| ------------------------------- | -------------------------------- | ------------------------------------------------------------------------------- |
+| **Unit Tests**                  | Individual functions/services    | Vitest                                                                          |
+| **Integration Tests**           | API endpoints                    | Vitest + Supertest                                                              |
+| **Component Tests**             | Frontend UI atoms                | React Testing Library                                                           |
+| **Component-Integration Tests** | Frontend pages w/ network mocked | Vitest + RTL + MSW (see [[docs/testing/frontend-component-integration\|guide]]) |
+| **Property Tests**              | Pure-calc invariants (Phase 8)   | Vitest + mulberry32 seeded PRNG                                                 |
+| **Golden Fixtures**             | Pure-calc regression lock        | Vitest + JSON snapshots (`UPDATE_GOLDENS=1`)                                    |
 
 ## Test Coverage Areas
 
@@ -102,16 +96,15 @@ SORT title ASC
 - **Vitest** - Backend unit tests; frontend unit and integration tests
 - **React Testing Library** - Frontend component unit and integration tests
 - **MSW** - HTTP mocking for component-integration tests (Phase A)
-- **Playwright** - E2E tests for critical user flows (Phase B)
 - **Bun** - Test runner
 
 ## Running Tests
 
 ```bash
-# All tests
+# Backend tests without a database (DB-backed cases self-skip)
 bun test
 
-# Watch mode
+# Backend watch mode with disposable PostgreSQL 18
 bun test:watch
 
 # Specific file
@@ -143,22 +136,14 @@ bun vitest run src/path/to/test.test.js
 
 2. **Contract Tests Expanded** (`src/test/msw/contracts.test.ts`) — Two new describe blocks (Phase F1: extended GET + extended mutations): 40 → **120 total contract tests**. One Zod schema per endpoint validates fixture shape on every PR.
 
-3. **Live-API Contract Tests** (`src/test/live-contracts/live-contracts.test.ts`) — 13 → **37 live tests** hitting real backend on CI (skipped locally unless `LIVE_API_BASE` set).
+3. **Live-API Contract Tests** (`src/test/live-contracts/live-contracts.test.ts`) — 13 → **37 live tests** run by root `bun run test:frontend` and CI against disposable backends. The fast workspace test command excludes this file.
 
-4. **Playwright E2E Expanded** — Two new spec files:
-   - `e2e/dialogs-edge.spec.ts` — backdrop click, Escape, focus-trap Tab/Shift-Tab, autofocus
-   - `e2e/critical-flows.spec.ts` — page-load smoke (catches pageerrors) and retired-route/settings-alias checks; mutation roundtrips live in `mutations-parity.spec.ts`
-   - Now discovered automatically by the non-visual `chromium` project used by `test:e2e`
-
-**Test count delta:** 1147 → **1204 vitest tests** (+57 contract-level). +24 live-API. +9 Playwright specs (3 files total).
+**Test count delta:** 1147 → **1204 vitest tests** (+57 contract-level). +24 live-API.
 
 **How drift is caught:**
 
 - Field renamed/type changed → MSW contract test + live-API contract test fire
 - Endpoint removed → Live-API `404` or `ok=false`
-- Page crashes from undefined data → `critical-flows.spec.ts` `pageerror` listener
-- Dialog behavior regression → `dialogs-edge.spec.ts` keyboard/focus tests
-- Visual layout drift → manual `visual-chromium` screenshot comparison
 
 **Details:** [[docs/testing/test-inventory#phase-f1--backend-drift-detection-sweep-2026-05-02|Phase F1 in Test Inventory]]
 
@@ -204,21 +189,6 @@ bun vitest run src/path/to/test.test.js
 **Test count delta:** Baseline 1046 → Post-sweep 1147 frontend tests (+101 tests across 30 files). 100% pass rate maintained.
 
 **Details:** [[docs/testing/test-inventory#edge-coverage-sweep-2026-05-02--phase-e16|Edge-Coverage Sweep in Test Inventory]]
-
-## Phase F4: Playwright Parity Expansion (2026-05-02)
-
-**Status: COMPLETE** — Push browser-only edges (real backdrop, real focus trap, network drift, a11y scanning) to Playwright E2E. Vitest covers unit/component layer; Playwright closes the loop on real-browser signals.
-
-**What's new (3 new e2e specs, 32 new tests):**
-
-- `e2e/mutations-parity.spec.ts` — Full CRUD lifecycle in real browser (4 tests: Category create, Recipient create + persist-after-reload, Planned payment create, navigate-away-and-back invariant)
-- `e2e/a11y.spec.ts` — Originally 9 page scans; the current shared catalog has 11, including Tax (zero critical or serious violations required)
-- `e2e/network-drift.spec.ts` — Originally 10 page checks; it now consumes the same 11-page catalog and catches frontend → backend route mismatches
-- `test:e2e` script now runs all 3 new specs alongside smoke, dialogs-edge, critical-flows
-
-**Test count delta:** 1219 → **1219 vitest** (unchanged); +**32 Playwright e2e tests**.
-
-**Details:** [[docs/testing/test-inventory#phase-f4--playwright-parity-expansion-2026-05-02|Phase F4 in Test Inventory]]
 
 ## Phase F5: Property + Chaos Tests (2026-05-02)
 
@@ -309,78 +279,6 @@ Fixed critical Bun/Vitest v1.3.13 mock bleed issue in [[apps/node-backend/tests/
 - **Impact:** All 46 tests in aiChatTools suite now pass cleanly.
 
 See [[docs/testing/testing#mock-isolation-gotcha-bun--vitest-v1313-critical|Mock Isolation Gotcha (CRITICAL)]] for full mitigation strategy and detection patterns.
-
-## Frontend Phase C: Accessibility & Visual Regression (2026-04-30)
-
-This section is the historical Phase C delivery record. Its original commands and CI jobs were
-superseded on 2026-08-26. Current behavior is documented in
-[[docs/testing/frontend/e2e#Current execution contract|the E2E execution contract]]: `test:e2e`
-auto-discovers every non-visual spec in the `chromium` project and runs nightly or on manual
-dispatch, while the platform-sensitive `visual-chromium` project is manual only.
-
-Added automated accessibility checks (axe-core) and visual regression testing to the E2E suite.
-
-**What's new:**
-
-1. **Accessibility Checks (Axe-Core)** — Every smoke test calls `checkA11y(page)` using `@axe-core/playwright@4.11.2`. Scans for WCAG 2.1 violations (critical/serious fail; minors/warnings informational). Integration in `smoke.spec.ts`.
-
-2. **Visual Regression Tests** — New `visual.spec.ts` captures full-page screenshots of 5 critical pages (dashboard, transactions, import, planned, portfolio). Uses `toHaveScreenshot({ fullPage: true })` with 2% pixel tolerance.
-
-3. **Updated Playwright Configuration** — `apps/frontend/playwright.config.ts` now includes `snapshotDir: './e2e/__screenshots__'` and `expect.toHaveScreenshot.maxDiffPixelRatio: 0.02`.
-
-4. **NPM Scripts** — `apps/frontend/package.json` adds `"test:e2e:visual": "playwright test e2e/visual.spec.ts --update-snapshots"` and `"test:e2e:update-snapshots": "playwright test --update-snapshots"`. Root `package.json` adds `"test:e2e:visual"` workspace script.
-
-5. **CI/CD Jobs** —
-   - Existing `test-e2e` job (smoke + a11y) unchanged: runs on all pushes/PRs.
-   - New `test-e2e-visual` job: runs on main branch pushes only (`if: github.event_name == 'push'`), automatically updates baselines with `--update-snapshots`, uploads artifacts with 30-day retention.
-
-6. **Baseline Storage** — `apps/frontend/e2e/__screenshots__/` holds baseline PNG snapshots.
-
-**Running locally (smoke + a11y):**
-
-```bash
-bun run test:e2e  # Auto-boots dev server
-```
-
-**Running locally (visual regression with update):**
-
-```bash
-bun run test:e2e:visual  # Updates baselines
-```
-
-**Current CI:** the non-visual suite runs in `.github/workflows/e2e.yml` nightly or on manual
-dispatch. Visual regression does not run in CI.
-
-**Reference:** [[docs/testing/frontend/e2e|E2E Test Guide]], `.github/workflows/ci.yml`, `apps/frontend/playwright.config.ts`, `apps/frontend/e2e/smoke.spec.ts`, `apps/frontend/e2e/visual.spec.ts`
-
-## Frontend Phase B: E2E Testing with Playwright (2026-04-30)
-
-Introduced Playwright E2E layer to test critical user flows against a real backend (local native
-development or the scheduled native CI stack).
-
-**What's new:**
-
-1. **Playwright Configuration** — `apps/frontend/playwright.config.ts` with baseURL from env (default `http://localhost:8080` locally, `http://localhost:3002` in CI), Chromium only, auto-boot `bun run dev` when not in CI.
-
-2. **Smoke Tests** — `apps/frontend/e2e/smoke.spec.ts` with 5 critical route tests: dashboard, transactions, import, planned, portfolio. Each asserts the page heading is visible.
-
-3. **NPM Scripts** — `apps/frontend/package.json` adds `"test:e2e": "playwright test"`, root `package.json` adds `"test:e2e": "bun run --filter 'vision-frontend' test:e2e"`.
-
-4. **CI/CD Job** — `.github/workflows/e2e.yml` provisions PostgreSQL 18, builds the production
-   frontend, starts the native backend, runs Playwright, and uploads its report on the scheduled or
-   manually dispatched workflow.
-
-**Running locally:**
-
-```bash
-bun run test:e2e  # Auto-boots dev server
-# OR
-PLAYWRIGHT_BASE_URL=http://localhost:3002 bun run test:e2e  # Use existing backend
-```
-
-**Running in CI:** Automatic via GitHub Actions (smoke tests + a11y checks added in Phase C).
-
-**Reference:** [[docs/testing/frontend/e2e|E2E Test Guide]], Phase B baseline (now superseded by Phase C)
 
 ## Frontend Phase E10: API Client Unit Tests (2026-05-01)
 

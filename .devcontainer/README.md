@@ -374,10 +374,9 @@ set up.
 - **App `fetch` to non-allowlisted hosts** — works for allowlisted hosts
   via `NODE_USE_ENV_PROXY=1` (e.g. yahoo-finance reaches `*.finance.yahoo.com`
   through the proxy); anything not in `allowlist.txt` is denied.
-- **Browser workloads (Playwright and Puppeteer)** — Chromium and its system
-  libraries are not installed, and their download hosts are not allowlisted.
-  Run E2E tests and PDF-rendering development on the host. The scheduled E2E
-  workflow remains the supported Linux browser environment.
+- **PDF rendering with Puppeteer** — Chromium and its system libraries are not
+  installed, and their download hosts are not allowlisted. Run PDF-rendering
+  development on the host.
 - **Electron `.dmg` build (`bun run dist`)** — needs macOS native tools;
   run on the host, not in this container.
 - **Changing the egress allowlist** — edit `.devcontainer/allowlist.extra.txt`,

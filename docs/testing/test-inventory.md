@@ -2,11 +2,11 @@
 title: Test Inventory
 type: testing
 status: active
-date: 2026-09-12
-last_modified: 2026-09-12
-updated: 2026-09-12
-last-updated: 2026-09-12
-last_updated_timestamp: 2026-09-12T00:00:00Z
+date: 2026-09-24
+last_modified: 2026-09-24
+updated: 2026-09-24
+last-updated: 2026-09-24
+last_updated_timestamp: 2026-09-24T00:00:00Z
 added_portfolio_tax_pure_module_tests: 2026-05-29
 added_chart_aria_tests: 2026-05-29
 added_portfolio_math_tests: 2026-05-05
@@ -21,7 +21,6 @@ added_component_integration_tests_e13: 2026-05-01
 added_component_integration_tests_e15: 2026-05-01
 added_edge_coverage_sweep_e16: 2026-05-02
 added_phase_f1_backend_drift_detection: 2026-05-02
-added_phase_f4_playwright_parity: 2026-05-02
 added_phase_f5_property_chaos: 2026-05-02
 added_phase_f6_mutation_testing: 2026-05-02
 added_parselocale_number_single_comma_fix: 2026-05-08
@@ -31,20 +30,15 @@ tags:
   - inventory
   - coverage
   - vitest
-  - playwright
   - react-testing-library
   - a11y
-  - visual-regression
   - phase-1
   - frontend-phase-a
-  - frontend-phase-b
-  - frontend-phase-c
   - frontend-phase-d
   - frontend-phase-f
   - contract-testing
   - context-testing
   - react-contexts
-  - e2e-testing
   - property-testing
   - mutation-testing
 description: Inventory of existing tests and coverage areas across frontend and backend
@@ -688,33 +682,31 @@ New unit tests for the `chartAria.ts` accessibility helper module:
 
 ### Test Suite Summary (2026-05-01, Phase F1 backend-drift detection 2026-05-02)
 
-| Layer                                                           | Files            | Tests                                                 | Status                                                                                                                                                                                                                                                                            |
-| --------------------------------------------------------------- | ---------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Dialog integration tests (Phase A)                              | 3                | 27                                                    | All passing (NEW 2026-05-03: AddCategoryDialog +1 (422 error), AddRecipientDialog +1 (422 error), WidgetVisibilityDialog)                                                                                                                                                         |
-| Phase A (Component-Integration)                                 | 20               | 381                                                   | All passing (COMPLETE, updated 2026-05-03 with dialog 422 tests and AddTransactionDialog 422 test)                                                                                                                                                                                |
-| Phase B/C (E2E + a11y + visual)                                 | 2                | 5 smoke + visual                                      | All passing                                                                                                                                                                                                                                                                       |
-| Phase D (Contract tests)                                        | 1                | 40                                                    | All passing (EXPANDED: E1 strict schemas 10, E2 mutations 15, E3 error envelopes 4)                                                                                                                                                                                               |
-| Phase E8+ (Hook unit tests)                                     | 5                | 64                                                    | All passing (NEW 2026-05-03: useInvestments portfolio hook; earlier: useDebounce, useCountUp, useOnlineStatus, useIsMobile, useChartCurrencyFormatter, usePlannedPayments, useQueryHooks)                                                                                         |
-| Phase E10 (API client unit tests)                               | 1                | 46                                                    | All passing (NEW: backoff delay, request ID, error parsing, envelope unwrap, apiRequest orchestration)                                                                                                                                                                            |
-| Phase E11 (VirtualDataTable integration tests)                  | 1                | 23                                                    | All passing (NEW: rendering, local search, server search/sort, inline editing, clear-all)                                                                                                                                                                                         |
-| Phase E13 (Deep component-integration)                          | 3                | 28                                                    | All passing (NEW 2026-05-01: CustomChartBuilderModal 9, LinkTransactionDialog 9, TaxProfileDialog 10)                                                                                                                                                                             |
-| Phase E14 (Portfolio/Recipients/Statistics/Planned/Tax dialogs) | 11               | 88                                                    | All passing (NEW 2026-05-01: Portfolio 6 files 60 tests, Recipients 1 file 10 tests, Statistics 1 file 9 tests, Planned 1 file 9 tests, Tax 1 file 10 tests)                                                                                                                      |
-| Phase E15 (Onboarding/Notification/Chat/Backup/Import dialogs)  | 6                | 54                                                    | All passing (NEW 2026-05-01: OnboardingWizard 11, UpdateNotification 8, ChatConversationList 10, RestoreFromBackupCard 8, BackupTab 9, ImportHistoryCard 8)                                                                                                                       |
-| Phase E16 (Edge-coverage sweep)                                 | 30               | +101                                                  | All passing (NEW 2026-05-02): per-surface fills covering Escape close, Submit error, data-state open guard, keyboard nav, 4xx/5xx page errors, refetch invalidation, context mutation/boot/persistence error paths                                                                |
-| Context unit tests                                              | 5                | 37                                                    | All passing (NEW: Belgian tax, app settings, language, preload, workspace contexts)                                                                                                                                                                                               |
-| Earlier unit/component tests                                    | 6+               | 10+                                                   | All passing (utils, hooks, components)                                                                                                                                                                                                                                            |
-| Phase F1 (Backend drift detection)                              | 4                | +57 vitest, +24 live, +9 Playwright                   | All passing (NEW 2026-05-02): MSW contract + live-API contract + Playwright dialog/page e2e                                                                                                                                                                                       |
-| Phase F2 (Stale refetch / mutation invalidation)                | 4                | +6                                                    | All passing (NEW 2026-05-02): RecipientsPage create, OwesPage settle-all, Watchlist delete, CryptoPage create, StocksPage create, StatisticsPage year-param contract                                                                                                              |
-| Phase F3 (Dialog field validation + submit error)               | 5                | +6                                                    | All passing (NEW 2026-05-02): TransactionInfoDialog cancel-no-submit, AddInvestmentFromMarketDialog blank-name guard, LinkTransactionDialog disabled-no-selection + execute-failure-keeps-open, ExecutionHistoryDialog 5xx tolerance, CustomChartBuilderModal POST 5xx stays open |
-| Phase F4 (Playwright parity expansion)                          | 3                | +13 mutations + 11 a11y + 11 network-drift Playwright | NEW 2026-05-02: e2e/mutations-parity.spec.ts (CRUD lifecycles in real browser), e2e/a11y.spec.ts (axe WCAG 2.1 A/AA scans on 11 pages, including Tax), e2e/network-drift.spec.ts (boot-time fetch listener catching 5xx/4xx drift on the same catalog)                            |
-| Phase F5 (Property + chaos)                                     | 3                | +14 vitest                                            | All passing (NEW 2026-05-02): currency.property.test.ts (8 fast-check parseLocaleNumber properties), envelope.property.test.ts (4 unwrapEnvelope properties), chaos-resilience.test.tsx (2 random-fault-injection page boots via chaos() MSW wrapper in src/test/msw/chaos.ts)    |
-| Phase F6 (Mutation testing — Stryker)                           | config + harness | runs on `bun run test:mutation`                       | NEW 2026-05-02: stryker.config.json scoped to currency.ts + lib/api/client.ts, vitest runner, TS checker, perTest coverage, html report; opt-in (not in CI yet — first baseline run before gating)                                                                                |
-| Phase F7 (Coverage matrix gap-fill)                             | 3                | +5                                                    | All passing (NEW 2026-05-02): TransactionsPage refetch revision + offset/limit pagination contract + loading skeleton; RecipientsPage limit pagination + loading; StatisticsPage multi-filter combo (monthly + category-pivot + recipient-by-year fan-out across tab switches)    |
-| Portfolio tax pure-module tests (2026-05-29)                    | 1                | 12                                                    | All passing (NEW: portfolioTax.ts golden-output cases, 8 dp precision, Decimal accumulation)                                                                                                                                                                                      |
-| Chart aria-label helper tests (2026-05-29)                      | 1                | 6                                                     | All passing (NEW: summarizeSeriesChart, summarizeProportionChart, summarizeSparkline)                                                                                                                                                                                             |
-| **Frontend Total**                                              | **83**           | **1256**                                              | **All passing (Phase F1–F7 complete + 2026-05-29: portfolio-tax pure-module +12, chart-aria +6)**                                                                                                                                                                                 |
-| **Backend**                                                     | 56+              | 882+                                                  | All passing (NEW 2026-05-05: portfolioMath.test.js 21 tests, importPipeline.test.js 11 tests)                                                                                                                                                                                     |
-| **Grand Total**                                                 | **139+**         | **2138**                                              | **All passing (1256 frontend vitest + 882 backend; +24 live-API + ~41 Playwright in CI; mutation runner opt-in)**                                                                                                                                                                 |
+| Layer                                                           | Files            | Tests                           | Status                                                                                                                                                                                                                                                                            |
+| --------------------------------------------------------------- | ---------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dialog integration tests (Phase A)                              | 3                | 27                              | All passing (NEW 2026-05-03: AddCategoryDialog +1 (422 error), AddRecipientDialog +1 (422 error), WidgetVisibilityDialog)                                                                                                                                                         |
+| Phase A (Component-Integration)                                 | 20               | 381                             | All passing (COMPLETE, updated 2026-05-03 with dialog 422 tests and AddTransactionDialog 422 test)                                                                                                                                                                                |
+| Phase D (Contract tests)                                        | 1                | 40                              | All passing (EXPANDED: E1 strict schemas 10, E2 mutations 15, E3 error envelopes 4)                                                                                                                                                                                               |
+| Phase E8+ (Hook unit tests)                                     | 5                | 64                              | All passing (NEW 2026-05-03: useInvestments portfolio hook; earlier: useDebounce, useCountUp, useOnlineStatus, useIsMobile, useChartCurrencyFormatter, usePlannedPayments, useQueryHooks)                                                                                         |
+| Phase E10 (API client unit tests)                               | 1                | 46                              | All passing (NEW: backoff delay, request ID, error parsing, envelope unwrap, apiRequest orchestration)                                                                                                                                                                            |
+| Phase E11 (VirtualDataTable integration tests)                  | 1                | 23                              | All passing (NEW: rendering, local search, server search/sort, inline editing, clear-all)                                                                                                                                                                                         |
+| Phase E13 (Deep component-integration)                          | 3                | 28                              | All passing (NEW 2026-05-01: CustomChartBuilderModal 9, LinkTransactionDialog 9, TaxProfileDialog 10)                                                                                                                                                                             |
+| Phase E14 (Portfolio/Recipients/Statistics/Planned/Tax dialogs) | 11               | 88                              | All passing (NEW 2026-05-01: Portfolio 6 files 60 tests, Recipients 1 file 10 tests, Statistics 1 file 9 tests, Planned 1 file 9 tests, Tax 1 file 10 tests)                                                                                                                      |
+| Phase E15 (Onboarding/Notification/Chat/Backup/Import dialogs)  | 6                | 54                              | All passing (NEW 2026-05-01: OnboardingWizard 11, UpdateNotification 8, ChatConversationList 10, RestoreFromBackupCard 8, BackupTab 9, ImportHistoryCard 8)                                                                                                                       |
+| Phase E16 (Edge-coverage sweep)                                 | 30               | +101                            | All passing (NEW 2026-05-02): per-surface fills covering Escape close, Submit error, data-state open guard, keyboard nav, 4xx/5xx page errors, refetch invalidation, context mutation/boot/persistence error paths                                                                |
+| Context unit tests                                              | 5                | 37                              | All passing (NEW: Belgian tax, app settings, language, preload, workspace contexts)                                                                                                                                                                                               |
+| Earlier unit/component tests                                    | 6+               | 10+                             | All passing (utils, hooks, components)                                                                                                                                                                                                                                            |
+| Phase F1 (Backend drift detection)                              | 2                | +57 vitest, +24 live            | All passing (NEW 2026-05-02): MSW contract + live-API contract                                                                                                                                                                                                                    |
+| Phase F2 (Stale refetch / mutation invalidation)                | 4                | +6                              | All passing (NEW 2026-05-02): RecipientsPage create, OwesPage settle-all, Watchlist delete, CryptoPage create, StocksPage create, StatisticsPage year-param contract                                                                                                              |
+| Phase F3 (Dialog field validation + submit error)               | 5                | +6                              | All passing (NEW 2026-05-02): TransactionInfoDialog cancel-no-submit, AddInvestmentFromMarketDialog blank-name guard, LinkTransactionDialog disabled-no-selection + execute-failure-keeps-open, ExecutionHistoryDialog 5xx tolerance, CustomChartBuilderModal POST 5xx stays open |
+| Phase F5 (Property + chaos)                                     | 3                | +14 vitest                      | All passing (NEW 2026-05-02): currency.property.test.ts (8 fast-check parseLocaleNumber properties), envelope.property.test.ts (4 unwrapEnvelope properties), chaos-resilience.test.tsx (2 random-fault-injection page boots via chaos() MSW wrapper in src/test/msw/chaos.ts)    |
+| Phase F6 (Mutation testing — Stryker)                           | config + harness | runs on `bun run test:mutation` | NEW 2026-05-02: stryker.config.json scoped to currency.ts + lib/api/client.ts, vitest runner, TS checker, perTest coverage, html report; opt-in (not in CI yet — first baseline run before gating)                                                                                |
+| Phase F7 (Coverage matrix gap-fill)                             | 3                | +5                              | All passing (NEW 2026-05-02): TransactionsPage refetch revision + offset/limit pagination contract + loading skeleton; RecipientsPage limit pagination + loading; StatisticsPage multi-filter combo (monthly + category-pivot + recipient-by-year fan-out across tab switches)    |
+| Portfolio tax pure-module tests (2026-05-29)                    | 1                | 12                              | All passing (NEW: portfolioTax.ts golden-output cases, 8 dp precision, Decimal accumulation)                                                                                                                                                                                      |
+| Chart aria-label helper tests (2026-05-29)                      | 1                | 6                               | All passing (NEW: summarizeSeriesChart, summarizeProportionChart, summarizeSparkline)                                                                                                                                                                                             |
+| **Frontend Total**                                              | **83**           | **1256**                        | **All passing (Vitest phases complete + 2026-05-29: portfolio-tax pure-module +12, chart-aria +6)**                                                                                                                                                                               |
+| **Backend**                                                     | 56+              | 882+                            | All passing (NEW 2026-05-05: portfolioMath.test.js 21 tests, importPipeline.test.js 11 tests)                                                                                                                                                                                     |
+| **Grand Total**                                                 | **139+**         | **2138**                        | **All passing (1256 frontend vitest + 882 backend; +24 live-API; mutation runner opt-in)**                                                                                                                                                                                        |
 
 ### Phase F1 — Backend Drift Detection Sweep (2026-05-02)
 
@@ -724,26 +716,19 @@ New unit tests for the `chartAria.ts` accessibility helper module:
 
 - **MSW handlers expanded** (`src/test/msw/handlers.ts`): default handlers for every frontend-used endpoint that was previously unstubbed (admin update-check + vacuum, all aggregations including cashflow forecast methods/rolling/accuracy + sankey + pivot variants, AI chat/conversation/models, attachments, categories sub-routes, imports CRUD, info portfolio-summary + refresh-views + exchange-rates refresh, investments providers/refresh-prices/transactions/transactions-by-id, recipients clusters/aliases/merge/unmerge/patterns/preview, reports financial/portfolio/tax, saved-charts CRUD, splits batch/pay/settle/owed-by-recipient, transactions sub-routes including export endpoints, watchlist CRUD, market chart, planned-transactions execute + due-soon).
 - **Contract tests expanded** (`src/test/msw/contracts.test.ts` — `Phase F1: extended GET endpoint contracts` + `Phase F1: extended mutation contracts`): one Zod schema per frontend-used endpoint. Strict shared collection, pagination, link, and resource shapes live in `src/test/contracts/schemas.ts`, reject unknown fields, and keep fixtures and live responses from drifting between separate schema copies. Current contract test count: **131**.
-- **Live-API contract tests expanded** (`src/test/live-contracts/live-contracts.test.ts`): reduced live checks derive validators from the strict shared resource schemas with `.pick().passthrough()`, so selected fields stay contract-checked while other valid fields in the full backend resource remain allowed. They hit the real backend on CI. Total live tests: 13 → **37**. Skipped automatically when `LIVE_API_BASE` is not set.
-- **Playwright e2e** for browser-only edges:
-  - `e2e/dialogs-edge.spec.ts` — backdrop click, Escape (real browser), focus-trap Tab/Shift-Tab, autofocus on open
-  - `e2e/critical-flows.spec.ts` — page-load smoke for major pages (catches `pageerror`s) plus checks that retired routes and settings aliases no longer redirect; mutation roundtrips live in `mutations-parity.spec.ts`
-  - Discovered automatically by the non-visual `chromium` project used by `test:e2e`
-- **CI already wired:** `test-frontend` (vitest contract + integration) runs on every PR, `test-live-api-contracts` runs against Docker Compose on non-draft PRs, and the separate scheduled E2E workflow runs every non-visual spec nightly or on manual dispatch. The browser suite includes CSV upload → review → commit → transaction visibility and transaction create → edit → delete journeys. Visual snapshots stay in the manual `visual-chromium` project because Linux CI and local macOS rendering require different baselines; backup/restore remains covered by the Electron native smoke and frontend IPC component suites.
+- **Live-API contract tests expanded** (`src/test/live-contracts/live-contracts.test.ts`): reduced live checks derive validators from the strict shared resource schemas with `.pick().passthrough()`, so selected fields stay contract-checked while other valid fields in the full backend resource remain allowed. They hit disposable backends through root `bun run test:frontend` and CI. Total live tests: 13 → **37**. The fast workspace unit command excludes this file.
+- **CI coverage:** frontend contract and component tests run with Vitest; live API contract tests exercise the native backend. Backup and restore are covered by Electron native smoke and frontend IPC component suites.
 
 **How drift is caught now:**
 
-| Type of backend change                             | Test that fires                                                    |
-| -------------------------------------------------- | ------------------------------------------------------------------ |
-| Field renamed in response payload                  | MSW contract test (Zod schema mismatch) AND live-API contract test |
-| Field type changed                                 | Same as above                                                      |
-| Endpoint removed                                   | Live-API contract fails on `HTTP 404 / envelope.ok=false`          |
-| New required query param                           | Live-API contract fails on `4xx`                                   |
-| Page crashes from undefined data                   | `critical-flows.spec.ts` `pageerror` listener                      |
-| Dialog behavior regression (focus/escape/backdrop) | `dialogs-edge.spec.ts`                                             |
-| Visual layout drift                                | Manual `visual-chromium` screenshot comparison                     |
+| Type of backend change            | Test that fires                                                    |
+| --------------------------------- | ------------------------------------------------------------------ |
+| Field renamed in response payload | MSW contract test (Zod schema mismatch) AND live-API contract test |
+| Field type changed                | Same as above                                                      |
+| Endpoint removed                  | Live-API contract fails on `HTTP 404 / envelope.ok=false`          |
+| New required query param          | Live-API contract fails on `4xx`                                   |
 
-**Coverage delta this phase:** baseline 1147 → **1204** vitest tests (+57 contract-level, no jsdom regressions). +24 live-API tests (skipped locally, run on CI). +9 Playwright tests across 2 new files.
+**Coverage delta this phase:** baseline 1147 → **1204** vitest tests (+57 contract-level, no jsdom regressions). +24 live-API tests (run by root `test:frontend` and CI; excluded from the fast workspace unit command).
 
 ### Phase F2 — Stale Refetch / Mutation Invalidation Sweep (2026-05-02)
 
@@ -780,24 +765,10 @@ New unit tests for the `chartAria.ts` accessibility helper module:
 
 **Skipped intentionally:**
 
-- TransactionInfoDialog PATCH 5xx — `mutateAsync` rejection inside an onClick handler creates an unhandled Promise rejection in jsdom; covered indirectly by `useUpdateTransaction` hook test + Playwright `dialogs-edge.spec.ts`.
+- TransactionInfoDialog PATCH 5xx — `mutateAsync` rejection inside an onClick handler creates an unhandled Promise rejection in jsdom; covered indirectly by the `useUpdateTransaction` hook test.
 - TransactionInfoDialog NaN amount guard — `<input type="number">` blocks alpha input at the DOM level, so the `Number.isNaN(parsed)` branch is unreachable through user interaction. Source guard is dead code for UI but defensive for programmatic invocation.
 
 **Coverage delta this phase:** baseline 1204 → **1219** vitest tests; F2 +9 (incl. 3 housekeeping fixes for multi-heading queries), F3 +6.
-
-### Phase F4 — Playwright Parity Expansion (2026-05-02)
-
-**Goal:** push browser-only edges (real backdrop, real focus trap, network drift, a11y) to Playwright. Vitest covers the unit / component layer; Playwright closes the loop on real-browser-only signal.
-
-**What landed (3 new e2e specs, 32 new tests across 9–13 pages):**
-
-| File                           | Coverage                                                                                                                                                                                                                                                              |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `e2e/mutations-parity.spec.ts` | Full CRUD lifecycle in a real browser (Category create, Recipient create + persist-after-reload, Planned payment create, navigate-away-and-back invariant). 4 tests.                                                                                                  |
-| `e2e/a11y.spec.ts`             | Axe WCAG 2.1 A/AA scan on 11 key pages (Dashboard, Transactions, Import, Categories, Recipients, Statistics, Owes, Tax, PortfolioOverview, Watchlist, Planned). Asserts zero `impact: critical` or `serious` violations. Uses `@axe-core/playwright`. 11 tests.       |
-| `e2e/network-drift.spec.ts`    | `page.on("response")` listener flags any `/api/` 5xx or unexpected 4xx during page boot. Uses the same 11-page catalog as axe. Catches frontend → backend route mismatches that contract tests can't see (because the route never gets called by the test). 11 tests. |
-
-`test:e2e` discovers these specs through the non-visual `chromium` project, so later non-visual `e2e/*.spec.ts` files join the suite without another package-script edit. `visual.spec.ts` is isolated in the manual `visual-chromium` project.
 
 ### Phase F5 — Property + Chaos Tests (2026-05-02)
 
@@ -827,7 +798,7 @@ New unit tests for the `chartAria.ts` accessibility helper module:
 
 **Not in CI yet:** opt-in via `bun run test:mutation` from `apps/frontend`. First baseline run before deciding whether to gate.
 
-**Coverage delta this phase:** baseline 1219 → **1233** vitest tests (+14 from F5); +32 Playwright tests (F4); +mutation harness (F6).
+**Coverage delta this phase:** baseline 1219 → **1233** vitest tests (+14 from F5);; +mutation harness (F6).
 
 ### Edge-Coverage Sweep (2026-05-02 — Phase E16)
 
@@ -852,8 +823,6 @@ A coverage-matrix audit found stale claims (matrix said contexts had ZERO tests;
 
 **Skipped intentionally:**
 
-- True backdrop click on Radix Dialog overlay — jsdom + Radix `onPointerDownOutside` is unreliable; covered indirectly via `data-state="open"` modality guard, deferred to Playwright e2e for canonical signal.
-- Deep keyboard-nav focus order — fragile in jsdom, deferred to Playwright + `axe`.
 - Optimistic-rollback paths for mutations without explicit rollback in implementation.
 
 **Coverage delta:** baseline 1046 → post-sweep 1147 frontend tests; 100% pass rate maintained.
@@ -996,10 +965,10 @@ The Transaction Tags feature test suite is now **complete and passing**. All tes
 ## Running Tests
 
 ```bash
-# All backend tests
+# Backend tests without a database (DB-backed cases self-skip)
 bun run test
 
-# Watch mode
+# Backend watch mode with disposable PostgreSQL 18
 bun run test:watch
 
 # Single test file
@@ -1176,7 +1145,7 @@ Loop artifacts:
 - Functions: **11.03%** (Phase C baseline, ratcheted to 10)
 - Lines: **19%** (Phase C baseline, ratcheted to 18)
 
-**Total frontend tests (Phase D):** 24 test files, 421 tests (376 component-integration/E2E + 40 contract + 5 smoke), all passing (2026-05-02 update: 40 contract tests expanded from 16)
+**Total frontend tests (Phase D):** 24 test files, 421 tests (376 component-integration + 40 contract + 5 smoke), all passing (2026-05-02 update: 40 contract tests expanded from 16)
 
 **Rationale for contract test expansion:**
 

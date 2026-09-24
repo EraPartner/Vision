@@ -1,6 +1,6 @@
-import { defineConfig } from 'vitest/config';
+import { defineConfig } from "vitest/config";
 
-import { createDbSkipBannerReporter } from './tests/setup/dbSkipBanner.js';
+import { createDbSkipBannerReporter } from "./tests/setup/dbSkipBanner.js";
 
 // Append the DB-skip banner reporter instead of declaring `test.reporters`.
 // Declaring that key would replace vitest's own choice of default reporter
@@ -13,13 +13,13 @@ import { createDbSkipBannerReporter } from './tests/setup/dbSkipBanner.js';
 // quietly fails to attach is worse than none: shout if the list is not there.
 function dbSkipBannerPlugin() {
   return {
-    name: 'vision:db-skip-banner',
+    name: "vision:db-skip-banner",
     configureVitest({ vitest }) {
       const reporters = vitest?.config?.reporters;
       if (!Array.isArray(reporters)) {
         process.stdout.write(
-          '[db-skip-banner] could not attach to vitest reporters -- ' +
-            'DB-backed skips will NOT be announced. Fix tests/setup/dbSkipBanner.js.\n',
+          "[db-skip-banner] could not attach to vitest reporters -- " +
+            "DB-backed skips will NOT be announced. Fix tests/setup/dbSkipBanner.js.\n",
         );
         return;
       }
@@ -34,11 +34,15 @@ export default defineConfig({
   plugins: [dbSkipBannerPlugin()],
   test: {
     globals: true,
-    environment: 'node',
-    include: ['src/**/*.test.js', 'tests/**/*.test.js', 'tests/**/**/*.test.js'],
+    environment: "node",
+    include: [
+      "src/**/*.test.js",
+      "tests/**/*.test.js",
+      "tests/**/**/*.test.js",
+    ],
     coverage: {
-      provider: 'v8',
-      reporter: ['text-summary', 'json-summary', 'json', 'html'],
+      provider: "v8",
+      reporter: ["text-summary", "json-summary", "json", "html"],
       // Explicit denominator: every source file under src/ counts, whether or
       // not a test happens to import it. Without `include`, v8 only reports on
       // modules loaded during the run, so an entirely untested new service or
@@ -46,21 +50,19 @@ export default defineConfig({
       // of the files we happen to test" rather than coverage of the codebase.
       //
       // What this gate guarantees: the ratio of src/ lines executed by the
-      // Vitest suite. It says nothing about HTTP-level behaviour — the frontend
-      // Playwright suite is page-load smoke, dialog UX, a11y scans and a handful
-      // of CRUD writes, not route coverage, so routes are counted here like any
-      // other source file rather than being waved through as "covered by e2e".
-      include: ['src/**/*.js'],
+      // Vitest suite. It says nothing about HTTP-level behaviour, so routes
+      // count here like any other source file.
+      include: ["src/**/*.js"],
       exclude: [
         // Test code is never part of the denominator.
-        'src/**/*.test.js',
-        'tests/**',
+        "src/**/*.test.js",
+        "tests/**",
         // Process entrypoint: invokes start() at import time and installs
         // process.exit handlers, so it cannot be imported by a unit test.
-        'src/main.js',
+        "src/main.js",
         // Migration glue: execFile()s the alembic CLI against a live database
         // and a Python toolchain; exercised by migration runs, not by Vitest.
-        'src/database/migrate.js',
+        "src/database/migrate.js",
       ],
       // Ratchet gate — tracks current actual coverage so regressions are caught
       // immediately. Bump after each phase adds meaningful tests; never lower

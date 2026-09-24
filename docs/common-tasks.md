@@ -2,8 +2,8 @@
 title: Common Tasks Quick Reference
 type: map-of-content
 status: active
-date: 2026-04-22
-updated: 2026-09-08
+date: 2026-09-24
+updated: 2026-09-24
 tags:
   [
     moc,
@@ -18,7 +18,6 @@ tags:
     updates,
     april-2026,
     testing,
-    e2e-testing,
     mutation-testing,
     bulk-actions,
     belgian-tax,
@@ -117,17 +116,14 @@ aliases:
 
 ## Testing Tasks
 
-| I want to...                                                            | Start here                                                                                        | Also check                                                                                                   |
-| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Run all local checks (lint, typecheck, locales, endpoint matrix, tests) | `bun run check`                                                                                   | [[docs/reference/scripts\|Scripts Reference]]                                                                |
-| Run all tests                                                           | [[docs/reference/scripts\|Scripts Reference]]                                                     | `bun run test`                                                                                               |
-| Run E2E tests                                                           | [[docs/testing/frontend/e2e#Current execution contract\|E2E execution contract]]                  | Host: `bun run test:e2e`; scheduled CI for Linux                                                             |
-| Run mutation tests                                                      | [[docs/testing/testing#phase-f6-mutation-testing-harness-2026-05-02--complete\|Mutation Testing]] | `bun run --filter 'vision-frontend' test:mutation`                                                           |
-| Write a unit test                                                       | [[docs/testing/testing\|Testing Documentation]]                                                   | [[docs/reference/code-patterns\|Code Patterns]]                                                              |
-| Write an integration test                                               | [[docs/testing/frontend-component-integration\|Component-Integration Test Guide]]                 | [[docs/testing/test-inventory\|Test Inventory]]                                                              |
-| Write an E2E test                                                       | [[docs/testing/frontend/e2e\|E2E Test Guide]]                                                     | [[docs/testing/test-inventory#phase-f4--playwright-parity-expansion-2026-05-02\|Phase F4: Playwright Specs]] |
-| Check test coverage                                                     | `bun run test:coverage`                                                                           | [[docs/reference/scripts\|Scripts Reference]]                                                                |
-| Update Playwright snapshots                                             | `bun run --filter 'vision-frontend' test:e2e:update-snapshots`                                    | [[docs/testing/testing#phase-c-accessibility--visual-regression-2026-04-30--complete\|Visual Regression]]    |
+| I want to...                                                            | Start here                                                                                        | Also check                                         |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| Run all local checks (lint, typecheck, locales, endpoint matrix, tests) | `bun run check`                                                                                   | [[docs/reference/scripts\|Scripts Reference]]      |
+| Run all tests                                                           | [[docs/reference/scripts\|Scripts Reference]]                                                     | `bun run test`                                     |
+| Run mutation tests                                                      | [[docs/testing/testing#phase-f6-mutation-testing-harness-2026-05-02--complete\|Mutation Testing]] | `bun run --filter 'vision-frontend' test:mutation` |
+| Write a unit test                                                       | [[docs/testing/testing\|Testing Documentation]]                                                   | [[docs/reference/code-patterns\|Code Patterns]]    |
+| Write an integration test                                               | [[docs/testing/frontend-component-integration\|Component-Integration Test Guide]]                 | [[docs/testing/test-inventory\|Test Inventory]]    |
+| Check test coverage                                                     | `bun run test:coverage`                                                                           | [[docs/reference/scripts\|Scripts Reference]]      |
 
 ## Debugging Tasks
 
@@ -160,9 +156,8 @@ bun run db:upgrade       # Run migrations
 
 # Testing
 bun run check            # Run all local checks (lint, typecheck, locales, endpoint matrix, tests)
-bun run test             # Run all tests
-bun run test:watch       # Watch mode
-bun run test:e2e         # Run E2E tests on the host (Playwright)
+bun run test             # Backend suite without a database; DB cases self-skip
+bun run test:watch       # Backend watch mode with disposable PostgreSQL 18
 bun run --filter 'vision-frontend' test:mutation    # Run mutation tests (Stryker; frontend workspace only)
 
 # Building

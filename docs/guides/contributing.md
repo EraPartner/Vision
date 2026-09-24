@@ -2,10 +2,28 @@
 title: Contributing Guide
 type: guide
 status: active
-date: 2026-08-17
-tags: [guide, contributing, development, workflow, code-standards, typescript, error-handling, type-safety]
+date: 2026-09-24
+tags:
+  [
+    guide,
+    contributing,
+    development,
+    workflow,
+    code-standards,
+    typescript,
+    error-handling,
+    type-safety,
+  ]
 description: How to contribute to Vision — development workflow, code standards, testing, and type-safe TypeScript patterns
-aliases: [contributing-guide, development-workflow, code-standards, pull-requests, typescript-standards, error-handling-guide]
+aliases:
+  [
+    contributing-guide,
+    development-workflow,
+    code-standards,
+    pull-requests,
+    typescript-standards,
+    error-handling-guide,
+  ]
 related_code: [[AGENTS.md]]
 ---
 
@@ -32,6 +50,7 @@ git remote add upstream https://github.com/original/Vision.git
 Follow the [[docs/guides/setup|Setup Guide]] to configure your local development environment.
 
 **Install pre-commit hooks:**
+
 ```bash
 # Configure git to use hooks from .githooks directory
 git config core.hooksPath .githooks
@@ -95,6 +114,7 @@ Use conventional commits:
 ```
 
 **Types:**
+
 - `feat`: New feature
 - `fix`: Bug fix
 - `docs`: Documentation
@@ -124,7 +144,7 @@ interface TransactionFormProps {
 }
 
 // Use union types for variants
-type ButtonVariant = 'default' | 'destructive' | 'outline';
+type ButtonVariant = "default" | "destructive" | "outline";
 
 // Type-safe error handling (Phase 5+)
 try {
@@ -135,18 +155,19 @@ try {
 }
 
 // Explicit type annotations for variables
-let currentValue: number;  // ✅ Clear intent
-let values: string[] = [];  // ✅ Explicit type
+let currentValue: number; // ✅ Clear intent
+let values: string[] = []; // ✅ Explicit type
 
 // Avoid:
-let count = 0;  // ❌ Looks uninitialized
-const data: any = {};  // ❌ Disables type checking
+let count = 0; // ❌ Looks uninitialized
+const data: any = {}; // ❌ Disables type checking
 
 // Path alias: @/* maps to apps/frontend/src/*
-import { useTransaction } from '@/hooks/useTransaction';
+import { useTransaction } from "@/hooks/useTransaction";
 ```
 
 **Type Safety Rules:**
+
 - Always use `catch (err: unknown)` instead of `catch (err: any)`
 - Avoid `as any` casts — use type guards instead
 - Explicitly type variables on declaration when not initialized
@@ -158,7 +179,7 @@ See [[docs/reference/code-patterns#typescript-type-annotation-best-practices-pha
 
 ```javascript
 // ES2022+ with ESM modules
-import { Router } from 'express';
+import { Router } from "express";
 
 // Use async/await
 async function createTransaction(data) {
@@ -179,12 +200,12 @@ function findTransaction(id) {
 // Functional components with hooks
 export function TransactionList({ filters }) {
   const { data, isLoading } = useTransactions(filters);
-  
+
   if (isLoading) return <Spinner />;
-  
+
   return (
     <ul>
-      {data.map(tx => (
+      {data.map((tx) => (
         <TransactionItem key={tx.id} transaction={tx} />
       ))}
     </ul>
@@ -196,21 +217,21 @@ export function TransactionList({ filters }) {
 
 ```tsx
 // Use Tailwind with clsx and tailwind-merge
-import { clsx } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import { clsx } from "clsx";
+import { twMerge } from "tailwind-merge";
 
 function cn(...inputs) {
   return twMerge(clsx(inputs));
 }
 
 // Use cva for component variants
-import { cva } from 'class-variance-authority';
+import { cva } from "class-variance-authority";
 
-const buttonVariants = cva('base-styles', {
+const buttonVariants = cva("base-styles", {
   variants: {
     variant: {
-      default: 'bg-primary',
-      destructive: 'bg-red-500',
+      default: "bg-primary",
+      destructive: "bg-red-500",
     },
   },
 });
@@ -221,10 +242,10 @@ const buttonVariants = cva('base-styles', {
 ### Backend Tests
 
 ```bash
-# Run all tests
+# Run backend tests without a database (DB-backed cases self-skip)
 bun run test
 
-# Watch mode during development
+# Watch all backend tests with disposable PostgreSQL 18 during development
 bun run test:watch
 
 # Run specific test file
@@ -234,20 +255,20 @@ bun vitest run src/services/transactionService.test.js
 #### Test Structure
 
 ```javascript
-import { describe, it, expect, beforeEach } from 'vitest';
-import { calculateBalance } from './calculations';
+import { describe, it, expect, beforeEach } from "vitest";
+import { calculateBalance } from "./calculations";
 
-describe('calculateBalance', () => {
+describe("calculateBalance", () => {
   let transactions;
-  
+
   beforeEach(() => {
     transactions = [
-      { amount: -50 },  // expense
+      { amount: -50 }, // expense
       { amount: 100 }, // income
     ];
   });
-  
-  it('should calculate net balance', () => {
+
+  it("should calculate net balance", () => {
     const balance = calculateBalance(transactions);
     expect(balance).toBe(50);
   });
@@ -259,21 +280,21 @@ describe('calculateBalance', () => {
 Use React Testing Library:
 
 ```tsx
-import { render, screen, fireEvent } from '@testing-library/react';
-import { TransactionForm } from './TransactionForm';
+import { render, screen, fireEvent } from "@testing-library/react";
+import { TransactionForm } from "./TransactionForm";
 
-it('should submit form with correct data', () => {
+it("should submit form with correct data", () => {
   const onSubmit = vi.fn();
   render(<TransactionForm onSubmit={onSubmit} />);
-  
-  fireEvent.change(screen.getByLabelText('Amount'), {
-    target: { value: '100' }
+
+  fireEvent.change(screen.getByLabelText("Amount"), {
+    target: { value: "100" },
   });
-  
-  fireEvent.click(screen.getByText('Submit'));
-  
+
+  fireEvent.click(screen.getByText("Submit"));
+
   expect(onSubmit).toHaveBeenCalledWith(
-    expect.objectContaining({ amount: 100 })
+    expect.objectContaining({ amount: 100 }),
   );
 });
 ```
@@ -306,12 +327,12 @@ bun run db:revision -- "add new_column to transactions"
 
 ### Documentation Types
 
-| Type | Location | Description |
-|------|----------|-------------|
-| API Docs | `docs/api/` | Endpoint documentation |
-| Features | `docs/features/` | Feature overviews |
-| ADRs | `docs/adr/` | Architecture decisions |
-| Guides | `docs/guides/` | How-to guides |
+| Type     | Location         | Description            |
+| -------- | ---------------- | ---------------------- |
+| API Docs | `docs/api/`      | Endpoint documentation |
+| Features | `docs/features/` | Feature overviews      |
+| ADRs     | `docs/adr/`      | Architecture decisions |
+| Guides   | `docs/guides/`   | How-to guides          |
 
 ### Using Wiki Links
 
@@ -349,6 +370,7 @@ Before submitting a PR, verify:
 ### Bug Reports
 
 Include:
+
 - Steps to reproduce
 - Expected vs actual behavior
 - Environment details
@@ -357,6 +379,7 @@ Include:
 ### Feature Requests
 
 Include:
+
 - Use case description
 - Proposed solution
 - Alternative considerations

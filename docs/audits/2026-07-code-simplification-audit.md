@@ -3,7 +3,7 @@
 **Audited at:** `main@1e494de` (2026-07-13). All line numbers below refer to this commit.
 **Cross-checked against:** PR **#84** (`claude/review-todo-backlog-jrbvpo@413d40e`, the open integration branch) — see [PR #84 cross-check](#pr-84-cross-check). **Every finding below is still present on #84's tree**; none of them are fixed there.
 **Scope:** All hand-written source — `apps/frontend/src`, `apps/node-backend/src`, `packages/*`, `scripts/`, root shell scripts, and compose files (~200k LOC total; codegen output and locales excluded).
-**Method:** Three audit rounds, each of four parallel dimension sweeps. **Round 1** (SIMP-01…22): backend data layer, frontend components/hooks, frontend pages/lib, scripts & cross-app duplication (tests excluded). **Round 2** (SIMP-23…46): backend services not covered in round 1 (AI chat, price providers, importers), frontend infrastructure (vendored UI, dependencies, API/MSW plumbing), the test suites, and repo-wide dead weight (lockfiles, generated artifacts, CI config). **Round 3** (SIMP-47…58): dead declarative surface (i18n keys, API endpoints), electron/packaging code, alembic, e2e specs, the remaining frontend feature directories, and the remaining backend services/repositories (`infoRepo.*` family, snapshot builder, transfers, env config). Every finding was verified by reading the code at HEAD; the highest-impact claims (dead-code reachability, byte-identical duplicates, dependency availability) were independently re-verified with grep, and then re-verified a second time against PR #84's tree. Read-only — no code was changed.
+**Method:** Three audit rounds, each of four parallel dimension sweeps. **Round 1** (SIMP-01…22): backend data layer, frontend components/hooks, frontend pages/lib, scripts & cross-app duplication (tests excluded). **Round 2** (SIMP-23…46): backend services not covered in round 1 (AI chat, price providers, importers), frontend infrastructure (vendored UI, dependencies, API/MSW plumbing), the test suites, and repo-wide dead weight (lockfiles, generated artifacts, CI config). **Round 3** (SIMP-47…58): dead declarative surface (i18n keys, API endpoints), electron/packaging code, alembic, the remaining frontend feature directories, and the remaining backend services/repositories (`infoRepo.*` family, snapshot builder, transfers, env config). Every finding was verified by reading the code at HEAD; the highest-impact claims (dead-code reachability, byte-identical duplicates, dependency availability) were independently re-verified with grep, and then re-verified a second time against PR #84's tree. Read-only — no code was changed.
 
 ---
 
@@ -13,7 +13,7 @@ Each finding has a stable ID (`SIMP-01` … `SIMP-84`; rounds 1–3 are SIMP-01�
 
 1. **Pick a finding** from the [status ledger](#status-ledger) with status `OPEN`, lowest tier first (Tier 1 is zero-risk).
 2. **Re-verify before changing anything.** Line numbers are pinned to `main@1e494de`. If PR #84 has merged (it rewrites 279 files, splits `portfolioTxRepo` into `.common`/`.reads`/`.writes`, and adds `apps/node-backend/src/lib/dateFormat.js`), re-locate the code by the grep patterns given in each finding, not by line number. Per-finding `#84 note` rows call out where the fix should differ on #84's tree.
-3. **One finding (or one coherent group) per PR**, following the [suggested sequencing](#suggested-sequencing). Run the repo's standard gates (`bun run test`, `bun run lint`, `bun run typecheck`; visual e2e for SIMP-13).
+3. **One finding (or one coherent group) per PR**, following the [suggested sequencing](#suggested-sequencing). Run the repo's standard gates (`bun run test`, `bun run lint`, `bun run typecheck`).
 4. **Update the ledger row** in this file in the same PR: set status to `FIXED (<PR #>)` — the repo's `TODO.md` uses the same resolving-commit convention.
 
 ## Status ledger
@@ -46,7 +46,7 @@ Each finding has a stable ID (`SIMP-01` … `SIMP-84`; rounds 1–3 are SIMP-01�
 | SIMP-24 | Stale electron `package-lock.json` beside `bun.lock`                                                                                                 | `packaging/electron/package-lock.json`                                                       | 170 KB                  | None          | Yes — both tracked                      | FIXED (#92)                                                                                                                |
 | SIMP-25 | Generated electron i18n JSON checked in (byte-identical to source)                                                                                   | `packaging/electron/i18n/{en,nl}.json`                                                       | ~418 KB                 | None          | Yes — present                           | FIXED (#92)                                                                                                                |
 | SIMP-26 | Dead exports in shared packages + dead re-export barrel                                                                                              | `packages/types`, `packages/shared-utils`, `frontend/src/utils/downsample.ts`                | ~30                     | None          | Yes                                     | FIXED (#92)                                                                                                                |
-| SIMP-27 | CI setup prelude copy-pasted across 9+ jobs                                                                                                          | `.github/workflows/ci.yml` (+e2e/release)                                                    | ~100 YAML               | Low           | Yes — 9 sites                           | FIXED (#92)                                                                                                                |
+| SIMP-27 | CI setup prelude copy-pasted across 9+ jobs                                                                                                          | `.github/workflows/ci.yml` (+release)                                                        | ~100 YAML               | Low           | Yes — 9 sites                           | FIXED (#92)                                                                                                                |
 | SIMP-28 | Generated frontend locales not verified in CI (drift gap)                                                                                            | `apps/frontend/src/locales/{en,nl}.ts`, `ci.yml`                                             | correctness             | Low           | Yes — same gap                          | FIXED (#92)                                                                                                                |
 | SIMP-29 | `archiver`/`yauzl` are root runtime deps, used only by one test                                                                                      | root `package.json`                                                                          | 2 deps                  | Low           | Yes                                     | FIXED (#92)                                                                                                                |
 | SIMP-30 | Parser-config CRUD duplicated across both import routers                                                                                             | `routes/importRoutes.js:167-235`, `routes/portfolioImportRoutes.js:242-300`                  | ~70                     | Low           | Yes — 2×2 handlers                      | FIXED (#92)                                                                                                                |
@@ -73,7 +73,6 @@ Each finding has a stable ID (`SIMP-01` … `SIMP-84`; rounds 1–3 are SIMP-01�
 | SIMP-51 | Backend hygiene: dead `IMPORT_PIPELINE_V2` env key, duplicate net-worth query, per-account await loop, double export                                 | `config/env.js:108`, `infoRepositoryNetWorth.js`, `portfolioPerformanceSnapshotService.js`   | ~20 + perf              | Low           | Yes — env key present                   | FIXED (#92)                                                                                                                |
 | SIMP-52 | Backup AES-256 crypto fully duplicated between electron main and bundle                                                                              | `packaging/electron/main.js:669-975`, `backup/bundle.js:80-416`                              | ~150                    | Medium        | Yes — same KDF consts ×2                | DEFERRED                                                                                                                   |
 | SIMP-53 | Electron backup/restore plumbing copy-pasted (restore-SQL ×2, pg_dump ×2, .env creds ×4)                                                             | `packaging/electron/main.js`                                                                 | ~110                    | Medium        | Yes                                     | DEFERRED                                                                                                                   |
-| SIMP-54 | E2E page catalog redeclared 3-4×; critical-flows unrolls 13 identical tests                                                                          | `apps/frontend/e2e/*.spec.ts`                                                                | ~105–125                | Low           | Yes — grew to 15 tests                  | FIXED (#92)                                                                                                                |
 | SIMP-55 | Dead alembic autogenerate block imports a nonexistent Python backend                                                                                 | `alembic/env.py:31-51`                                                                       | ~20                     | None          | Yes                                     | FIXED (#92)                                                                                                                |
 | SIMP-56 | Portfolio transaction form fields triplicated across add/edit/from-market dialogs                                                                    | `components/portfolio/{Add,Edit}PortfolioTxnDialog.tsx`, `AddInvestmentFromMarketDialog.tsx` | ~180–200                | Low           | Yes                                     | FIXED (#92)                                                                                                                |
 | SIMP-57 | EditInvestmentDialog reimplements InvestmentFormFields' provider block; `PRICE_PROVIDERS` ×3                                                         | `components/portfolio/EditInvestmentDialog.tsx:175-297`                                      | ~110                    | Low           | Yes — dup intact                        | FIXED (#92)                                                                                                                |
@@ -101,7 +100,6 @@ Each finding has a stable ID (`SIMP-01` … `SIMP-84`; rounds 1–3 are SIMP-01�
 | SIMP-79 | R4: small JSX/logic collapses (admin cards, CommandPalette groups, dialogs, belgianTax, account form mapping, SelectSettingRow hoist)                | see finding                                                                                  | ~150                    | Low           | n/a                                     | FIXED (#103)                                                                                                               |
 | SIMP-80 | R4: backend service batch (SSE dup + drifted error detail, report KPI cards + escaping, plannedTxRepo update dup, rateFetcher binary search)         | see finding                                                                                  | ~140–150                | Low           | n/a                                     | FIXED (#103)                                                                                                               |
 | SIMP-81 | R4: test-suite dedup round 2 (transactions preamble ×6, `withTransaction` ×17, logger ×23, contracts `it.each` completion, 10 re-inlined sites)      | `apps/node-backend/tests/**`, `contracts.test.ts`                                            | ~530–610 test           | Low           | n/a                                     | FIXED (#103)                                                                                                               |
-| SIMP-82 | R4: e2e — `smoke.spec.ts` subsumed by a11y suite; duplicated create flows                                                                            | `apps/frontend/e2e/*`                                                                        | ~80–100                 | Low           | n/a                                     | FIXED (#103)                                                                                                               |
 | SIMP-83 | R4: electron IPC handler boilerplate + `electron-builder-demo.json` re-declaration                                                                   | `packaging/electron/main.js`, `electron-builder-demo.json`                                   | ~55–75                  | Medium        | n/a                                     | FIXED (#103)                                                                                                               |
 | SIMP-84 | R4: CI compose bring-up ×3 → composite action; no-op compose logging blocks                                                                          | `.github/workflows/*`, `docker-compose.*.yml`                                                | ~40–50                  | Low           | n/a                                     | FIXED (#103)                                                                                                               |
 
@@ -127,7 +125,7 @@ The dominant smell is **not** clever over-abstraction — it is **unfinished ded
 | R2-infra    | Round 2: CI prelude, locales drift guard, App.tsx, judgment calls          | SIMP-27, 28, 44…46 | ~150 + ~1.1 MB           | Low–medium                       |
 | R3-i18n     | Round 3: dead translation keys + unused-key validator pass                 | SIMP-47            | ~3,042 data lines        | Low                              |
 | R3-backend  | Round 3: finish the filterBuilder migration, info-repo shaping, hygiene    | SIMP-48…51         | ~250                     | Low–medium                       |
-| R3-electron | Round 3: backup crypto/plumbing dedup, e2e page table, alembic dead block  | SIMP-52…55         | ~390                     | Low–medium                       |
+| R3-electron | Round 3: backup crypto/plumbing dedup and alembic dead block               | SIMP-52…55         | ~390                     | Low–medium                       |
 | R3-frontend | Round 3: portfolio dialog extractions + small dedups                       | SIMP-56…58         | ~420–440                 | Low                              |
 
 ---
@@ -218,7 +216,7 @@ Identical inline `matchMedia("(prefers-reduced-motion)")` check in `hooks/useCou
 
 `components/charts/AreaChart.tsx` (566), `LineChart.tsx` (483), and `ComposedChart.tsx` (353) each duplicate the full block: `xScale`/`yScale` `useMemo` (domain padding + `nice`), `bisector` setup, hover-index state, `indexAtClientX`/move/leave/down/up handlers, the cross-chart `syncedIndex` nearest-point loop, the `tooltipItems` builder, grid-line map, axis block, scrub-range band, hover-capture `<rect>`, and scrub-delta pill. AreaChart ~125–283 and LineChart ~100–234 are near-verbatim copies (only variable-name drift: `hoverIndex` vs `hoverIdx`); ComposedChart ~92–171 repeats the scale/hover/tooltip subset. (Re-confirmed on #84: `bisector`/`indexAtClientX` still per-file; no shared frame exists there either.)
 
-**Fix:** one `useCartesianChartFrame(props)` hook returning `{xScale, yScale, hoverDatum, handlers, tooltipItems}` plus a `<ChartFrame>` wrapper for grid/axes/capture-rect/scrub/tooltip; each chart keeps only its series rendering. Land only with the visual-regression e2e suite green.
+**Fix:** one `useCartesianChartFrame(props)` hook returning `{xScale, yScale, hoverDatum, handlers, tooltipItems}` plus a `<ChartFrame>` wrapper for grid/axes/capture-rect/scrub/tooltip; each chart keeps only its series rendering.
 
 ### SIMP-14 — Inheritance-table CRUD duplicated across two repositories — superseded
 
@@ -319,7 +317,7 @@ Deleting them also orphans their backing npm packages, plus five deps that never
 
 ### SIMP-27 — CI setup prelude copy-pasted across 9+ jobs — ~100 YAML lines
 
-`bun install --frozen-lockfile` appears 9× in `.github/workflows/ci.yml` (plus e2e/release), each preceded by the same pinned `actions/checkout` + toolchain setup (~10 lines/job). No `.github/actions/` composite exists. **Fix:** one composite action (`.github/actions/setup`); each job becomes `- uses: ./.github/actions/setup`.
+`bun install --frozen-lockfile` appears 9× in `.github/workflows/ci.yml` (plus release), each preceded by the same pinned `actions/checkout` + toolchain setup (~10 lines/job). No `.github/actions/` composite exists. **Fix:** one composite action (`.github/actions/setup`); each job becomes `- uses: ./.github/actions/setup`.
 
 ### SIMP-28 — Generated frontend locales are not drift-checked in CI
 
@@ -475,7 +473,7 @@ Meanwhile `services/filterBuilder.js` exports `buildExclusionClauses` (line 243)
 
 ---
 
-## Round 3 — electron, e2e, alembic (SIMP-52…55)
+## Round 3 — electron and alembic (SIMP-52…55)
 
 ### SIMP-52 — Backup AES-256 crypto fully duplicated between electron main and bundle — ~150 lines
 
@@ -486,10 +484,6 @@ Meanwhile `services/filterBuilder.js` exports `buildExclusionClauses` (line 243)
 - `runBundleRestore` (2286-2347) is a near-verbatim copy of `runRestore` (2480-2558): stop app → terminate connections + DROP/CREATE DATABASE → resolve pg image tag + network via `docker inspect` → `psql -f` via throwaway container → restart app → `restoreSqlIntoDb(sqlPath, opts)`.
 - The pg_dump-to-file spawn block is duplicated between `runBackup` (2067-2091) and `runBundleBackup` (2149-2165) → `pgDumpToFile(outPath, opts)`.
 - The `.env` DB-credential parse preamble appears 4× (2046-2051, 2130-2135, 2262-2268, 2469-2475) → `resolveDbCreds()`.
-
-### SIMP-54 — E2E page catalog redeclared; critical-flows unrolls identical tests — ~105–125 lines
-
-`critical-flows.spec.ts:12-117` hand-writes 13 tests (15 on #84's tree) with the identical 6-line body, differing only in path + heading regex — while the exact `{name, path, heading}` table already exists in `a11y.spec.ts:11-21` and `network-drift.spec.ts:12-23`, both of which correctly loop. **Fix:** one `e2e/pages.ts` exporting `PAGES`; every spec imports and loops/filters. Smaller siblings: the create-category/recipient dialog flow is duplicated between `critical-flows.spec.ts:119-147` and `mutations-parity.spec.ts:20-71`, and `dialogs-edge.spec.ts:15-37` has four copies of an open-dialog helper.
 
 ### SIMP-55 — Dead alembic autogenerate block — ~20 lines, zero risk
 
@@ -562,13 +556,13 @@ Wait for PR #84 to merge first (or branch from it) — see the cross-check secti
 
 1. **PR: dead code & artifact deletion** (SIMP-01, 02, 03 + SIMP-23, 24, 25, 26, 29 + SIMP-51's env key, SIMP-55) — ~2,000 lines + ~590 KB + 15 deps, zero-to-minimal behavioral risk, immediate.
 2. **PR: unused-key validator pass, then dead i18n keys** (SIMP-47) — extend `validate-locales.js` first (with a dynamic-prefix allowlist), then delete the machine-generated dead-key list (~3,000 data lines). Do after step 1 so keys referenced only by the deleted scripts are included.
-3. **PR: formatting stragglers** (SIMP-05…12) — mechanical swaps to existing hooks/deps; verify with `bun run test:frontend` + visual e2e.
+3. **PR: formatting stragglers** (SIMP-05…12) — mechanical swaps to existing hooks/deps; verify with `bun run test:frontend` and visual review.
 4. **PR: kill `DataTable`** (SIMP-04) — migrate `DashboardPage` to `VirtualDataTable`, delete the copy.
 5. **PR: CI hygiene** (SIMP-27 composite setup action, SIMP-28 verify-locales job) — tooling only; pairs naturally with step 2.
 6. **PR per backend extraction** (SIMP-14…17, 19 round 1; SIMP-30…38 round 2; SIMP-48…51 round 3) — small, each independently testable. Start with SIMP-30 and SIMP-48: both are "finish a migration whose shared home already exists" (`lib/parserConfigRoutes.js`, `services/filterBuilder.js`). For SIMP-48, diff the generated SQL per call site — it intentionally harmonizes a `COALESCE` inconsistency.
-7. **PR: test-harness helpers** (SIMP-39…43) — create `apps/node-backend/tests/helpers/` + frontend `queryWrapper`; then the `contracts.test.ts` tables. Coverage-neutral by construction. Include the e2e page-table consolidation (SIMP-54).
+7. **PR: test-harness helpers** (SIMP-39…43) — create `apps/node-backend/tests/helpers/` + frontend `queryWrapper`; then the `contracts.test.ts` tables. Coverage-neutral by construction.
 8. **PR: portfolio dialog extractions** (SIMP-56, 57) — the two biggest frontend wins after the charts; both reuse components already in the same directory.
-9. **PR: chart frame extraction** (SIMP-13) — the largest single win; do it after the visual-regression e2e suite is green so scrub/hover/sync behavior is pinned.
+9. **PR: chart frame extraction** (SIMP-13) — the largest single win; verify scrub, hover, and sync behavior before landing.
 10. **PR: tax page dedup** (SIMP-18), debounce/installers (SIMP-20), App.tsx routes (SIMP-44), small dedups (SIMP-58) — UI-only / tooling-only, config-driven rewrites.
 11. **Careful, each in its own PR:** cost-basis merge (SIMP-21) under golden fixtures; locale-lexer swap (SIMP-22) with a key-extraction diff; **electron backup crypto dedup (SIMP-52/53) with explicit decrypt tests for v1+v2 legacy backups**. SIMP-45/46 are optional judgment calls — decide, don't default.
 
@@ -579,7 +573,7 @@ When a finding lands, update its row in the [status ledger](#status-ledger) to `
 # Round 4 — post-remediation audit (SIMP-59…84)
 
 **Audited at:** `main@6be1ee6` (2026-07-16). All line numbers below refer to this commit — the tree has moved ~24k insertions / ~26k deletions since the round 1–3 baseline (`1e494de`), so rounds 1–3 line numbers no longer apply.
-**Scope & method:** five parallel dimension sweeps over the post-#92 tree — backend, frontend, library-reimplementation ("1 line replaces 100"), tests/e2e/CI/electron, and dead-code/dependency/drift — each finding verified by reading the code at HEAD; the highest-impact claims (dead reachability, dep installation, helper call-site counts) were independently re-verified with grep by the coordinating pass. Read-only — no code was changed.
+**Scope & method:** five parallel dimension sweeps over the post-#92 tree — backend, frontend, library-reimplementation ("1 line replaces 100"), tests/CI/electron, and dead-code/dependency/drift — each finding verified by reading the code at HEAD; the highest-impact claims (dead reachability, dep installation, helper call-site counts) were independently re-verified with grep by the coordinating pass. Read-only — no code was changed.
 
 **What changed since rounds 1–3:** PR #92 landed the bulk of SIMP-01…58; #93/#99/#100/#101 landed ~230 TODO-backlog fixes, the timezone (ADR-009) routing, and the accounts epic follow-ups. Round 4's dominant theme is therefore different from round 1's: it is **stragglers of the remediation itself** — helpers that #92 created and migrated 7 call sites onto while leaving 7 more on the old idiom (SIMP-68), shared components adopted by two of three intended consumers (SIMP-76), test helpers adopted by 25 files while 23 still inline the old mock (SIMP-81) — plus a second stratum of dead code that only _became_ dead when the fix PRs deleted the last caller (SIMP-60, 62).
 
@@ -600,7 +594,7 @@ When a finding lands, update its row in the [status ledger](#status-ledger) to `
 | R4-library    | Hand-rolled code an installed dep replaces                       | SIMP-72…74  | ~240–335         | Low–medium  |
 | R4-frontend   | Copy-paste collapse (dialogs, pages, comboboxes, micro-patterns) | SIMP-75…79  | ~600–800         | Low–medium  |
 | R4-backend    | Service-layer batch                                              | SIMP-80     | ~140–150         | Low         |
-| R4-tests      | Test/e2e dedup round 2                                           | SIMP-81, 82 | ~610–710 test    | Low         |
+| R4-tests      | Test dedup round 2                                               | SIMP-81, 82 | ~610–710 test    | Low         |
 | R4-infra      | Electron IPC/builder + CI/compose                                | SIMP-83, 84 | ~95–125          | Low–medium  |
 
 ---
@@ -651,7 +645,7 @@ Each has **zero production importers** (verified: the only importer of each is i
 
 ### SIMP-65 — Dead deps, orphaned overrides, dead config — ~90 lines + 7 deps/override entries
 
-**Dead frontend devDependencies** (each verified zero imports and zero config references): `@tailwindcss/typography` (no `@plugin`/`prose` usage anywhere), `jest-axe` + `@types/jest-axe` (a11y runs exclusively through `@axe-core/playwright`). `@vitest/ui` is a judgment call (no script uses `--ui`; docs mention it once for manual use).
+**Dead frontend devDependencies** (each verified zero imports and zero config references): `@tailwindcss/typography` (no `@plugin`/`prose` usage anywhere), `jest-axe` + `@types/jest-axe`. `@vitest/ui` is a judgment call (no script uses `--ui`; docs mention it once for manual use).
 
 **Redundant electron declarations:** `packaging/electron/package.json` directly declares `archiver-utils`, `compress-commons`, `readable-stream`, `zip-stream` — zero requires anywhere; all four are transitives of `archiver` (verify no deliberate version pin against `packaging/electron/bun.lock` before dropping).
 
@@ -767,7 +761,7 @@ Lines 46–230 (`assertFiniteNumberInRange`, `assertBelgianTaxProfileValue`, `as
 
 ---
 
-## Round 4 — tests & e2e (SIMP-81, 82)
+## Round 4 — tests (SIMP-81, 82)
 
 ### SIMP-81 — Test-suite dedup round 2 — ~530–610 test lines
 
@@ -778,15 +772,6 @@ Post-#92 helper adoption is largely healthy (25 files on `routeHarness`, `queryW
 - **`contracts.test.ts`:** #92 converted only the first block to `it.each`; E4 (:400-620) and both Phase F1 blocks (:624-1180) remain ~50 tests of identical 5-line ceremony with the path duplicated 2–3× per test → extend the existing table style. ~150–200 lines.
 - **Re-inlined sites added after #92** (~10 files, ~60 lines): inline loggers in `dataFetcherFinancial.test.js`, `portfolioImportValidateFutureDate.test.js`; inline `withTransaction` in `openingBalanceService.test.js`, `reconcileService.test.js`; inline QueryClient wrapper in `usePlannedPayments.test.ts:12-13`; never-converted stubs in `main.test.js`, `transactionPatchValidation.test.js`, `settingsStorage.test.js`, `rateLimiter.test.js`, `validation.test.js`.
 
-### SIMP-82 — E2E: `smoke.spec.ts` is subsumed; create-flows duplicated — ~80–100 lines
-
-- `smoke.spec.ts` (53 lines) is ~90% subsumed by `a11y.spec.ts` + `pages.ts` running in the same `test:e2e` invocation (same goto+heading+axe, stricter gate, 4 of its 5 pages already in `PAGES`); heading regexes are now maintained in **three** places (`pages.ts:16`, `smoke.spec.ts:26`, `critical-flows.spec.ts:19`). **Fix:** add an Import entry to `PAGES`, delete `smoke.spec.ts`. Optionally loop `visual.spec.ts`'s 5 identical blocks.
-- The create-category/create-recipient steps in `critical-flows.spec.ts:50-77` are a byte-equivalent subset of `mutations-parity.spec.ts:21-70` (which also tracks pageerrors and cleans up) → delete the two critical-flows tests or share `createCategory()`/`createRecipient()` helpers.
-
----
-
-## Round 4 — electron & CI infra (SIMP-83, 84)
-
 ### SIMP-83 — Electron IPC boilerplate + builder-config re-declaration — ~55–75 lines
 
 - The sender guard `if (!mainWindow || event.sender !== mainWindow.webContents)` appears at `main.js:3235, 3302, 3336, 3401, 3463, 3660, 3681, 3689` with **three divergent return shapes**; uniform try/catch→`{success:false, error}` shells ×7; `workDir not set` precondition ×3 → `registerHandler(channel, fn, { requireMainSender, requireWorkDir })`. Migrate only the uniform handlers — return shapes are load-bearing for `electron.ts`. Medium risk.
@@ -794,7 +779,7 @@ Post-#92 helper adoption is largely healthy (25 files on `routeHarness`, `queryW
 
 ### SIMP-84 — CI compose bring-up ×3 + no-op compose logging blocks — ~40–50 lines
 
-- `.github/workflows/ci.yml:449-500` (`docker-verify`) vs `:522-569` (`test-live-api-contracts`) duplicate verbatim the artifact-download + `docker load` + stub-`.env` + `compose up -d` + 30-attempt `/health` loop + `down -v`; near-copy again in `e2e.yml:49-81` → composite action `.github/actions/compose-up` (the repo already proved the pattern with `.github/actions/setup`).
+- `.github/workflows/ci.yml:449-500` (`docker-verify`) vs `:522-569` (`test-live-api-contracts`) duplicate the artifact-download + `docker load` + stub-`.env` + `compose up -d` + 30-attempt `/health` loop + `down -v` → composite action `.github/actions/compose-up` (the repo already proved the pattern with `.github/actions/setup`).
 - `docker-compose.dev.yml:19-23` and `docker-compose.clean.yml:16-20, 28-32` carry exact copies of the base's `logging:` blocks, which Compose merge already supplies (overlays never run standalone) → delete; verify with `docker compose config` before/after.
 
 ---

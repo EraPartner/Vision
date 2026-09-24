@@ -18,9 +18,7 @@
         "build",
         ".vite",
         "node_modules",
-        "coverage",
-        "playwright-report",
-        "test-results"
+        "coverage"
     ],
     "thresholds": {
         "high": 80,

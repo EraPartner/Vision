@@ -3,9 +3,9 @@ title: Frontend Component-Integration Tests (RTL + MSW)
 type: testing
 status: active
 date: 2026-04-30
-updated: 2026-08-26
-last-updated: 2026-08-26
-last_updated_timestamp: 2026-08-26T00:00:00Z
+updated: 2026-09-24
+last-updated: 2026-09-24
+last_updated_timestamp: 2026-09-24T00:00:00Z
 added_dashboard_error_state_tests: 2026-05-02
 added_dialog_integration_tests: 2026-05-01
 added_edge_coverage_sweep_e16: 2026-05-02
@@ -17,8 +17,6 @@ tags:
   - rtl
   - integration
   - phase-a
-  - phase-b
-  - phase-c
 description: Render full pages with the real provider stack and HTTP mocked at the network boundary via MSW, validate shared Zod contracts, drive via userEvent, and enforce the frontend coverage ratchet.
 ---
 
@@ -30,7 +28,6 @@ description: Render full pages with the real provider stack and HTTP mocked at t
 > It complements:
 >
 > - **Unit tests** — pure functions / hooks (existing pattern, keep using).
-> - **E2E tests** — Playwright + real backend (Phase B); includes smoke tests with a11y checks and visual regression (Phase C; see [[docs/testing/frontend/e2e|E2E Test Guide]]).
 
 ## Building Blocks
 
@@ -264,7 +261,7 @@ Add new defaults sparingly — most flows belong in per-test overrides via `serv
 | Functions  | 54%                  |
 | Lines      | 64%                  |
 
-The measured scope includes components, hooks, libraries, pages, utilities, features, contexts, stores, and `App.tsx`. `main.tsx` and `theme-flash.ts` are explicitly excluded because importing either immediately performs boot-time document side effects; their dependencies remain measured, while their execution belongs to end-to-end coverage. Thresholds follow the config's `floor(measured) - 2` convention, so they act as a regression ratchet rather than an aspirational target.
+The measured scope includes components, hooks, libraries, pages, utilities, features, contexts, stores, and `App.tsx`. `main.tsx` and `theme-flash.ts` are explicitly excluded because importing either immediately performs boot-time document side effects; their dependencies remain measured, but their boot execution is outside the Vitest coverage gate. Thresholds follow the config's `floor(measured) - 2` convention, so they act as a regression ratchet rather than an aspirational target.
 
 ## Dialog Component Integration Tests (2026-05-01 — Phase A)
 
@@ -399,8 +396,6 @@ During Phase A completion, four key gotchas were documented for future test auth
 | Phase | Focus                                                                                                                                                                                                                                                                                                                                                                 | Status                |
 | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
 | **A** | MSW + `renderWithApp` infrastructure + jsdom Radix polyfills + envelope helpers (`ok`, `err`). 31 page-level component-integration tests covering Transactions, Import, Language Switch, Tax Overview, Add Transaction Dialog, Planned Payments, Portfolio Overview. All tests passing. Infrastructure: Vitest + RTL + MSW v2 with `server.use()` per-test overrides. | COMPLETE (2026-04-30) |
-| **B** | Playwright E2E: `playwright.config.ts` + `apps/frontend/e2e/` with five smoke tests (route walk: dashboard, transactions, import, planned, portfolio). Auto-boot dev server locally; scheduled CI uses native PostgreSQL and backend processes.                                                                                                                       | COMPLETE (2026-04-30) |
-| **C** | Visual regression via Playwright screenshots + axe-core accessibility checks. Baselines in `apps/frontend/e2e/__screenshots__/`. CI auto-updates on main branch.                                                                                                                                                                                                      | COMPLETE (2026-04-30) |
 | **D** | Coverage threshold ratchet + contract tests (zod-validate every MSW fixture against backend's real responses in CI). Thresholds: 17/11/10/18 (statements/branches/functions/lines). 16 contract tests, all passing.                                                                                                                                                   | COMPLETE (2026-04-30) |
 
 ## MSW & RTL Advanced Patterns (2026-04-30)
@@ -563,6 +558,5 @@ Covers: Export button in recipient detail view integrating with `GET /api/splits
 ## Related
 
 - [[docs/testing/testing|Testing Guide]]
-- [[docs/testing/frontend/e2e|E2E Test Guide (Playwright)]]
 - [[docs/testing/test-inventory|Test Inventory]]
 - [[docs/adr/026-unified-api-response-envelope|ADR-026: Unified API Response Envelope]]

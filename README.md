@@ -196,12 +196,10 @@ bun run typecheck            # frontend TypeScript typecheck
 # Testing
 bun run test                 # backend Vitest suite
 bun run test:db              # backend suite with a private temporary PostgreSQL 18
-bun run test:frontend        # frontend Vitest suite
-bun run test:all             # backend + frontend (concurrent)
-bun run test:coverage        # frontend coverage report
-bun run test:watch           # backend watch mode
-bun run test:e2e             # frontend Playwright end-to-end tests
-bun run test:e2e:visual      # frontend visual-regression tests
+bun run test:frontend        # full frontend suite with disposable PostgreSQL 18 and live API contracts
+bun run test:all             # backend + full frontend suites (concurrent)
+bun run test:coverage        # frontend unit/integration coverage report; CI runs live contracts separately
+bun run test:watch           # backend watch mode with disposable PostgreSQL 18
 
 # Database (Alembic / PostgreSQL)
 bun run db:upgrade           # apply all pending migrations

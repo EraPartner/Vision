@@ -78,10 +78,8 @@ replace these rules.
 - Do not wipe or mutate the Demo database merely to make it boot. Inspect the native Demo logs and
   seed activation state first. When a canonical synthetic reset is intended, use
   `bun run demo:reset-native` and reopen the Demo app. Never apply that workflow to real Vision.
-- Charts render lazily. Scroll a chart into view before capturing an in-viewport screenshot and
-  store browser artifacts under `.playwright-mcp/`.
-- Codex browser tooling is the supported replacement for Claude's Playwright plugin. There is no
-  Codex TypeScript-LSP plugin in this project; `bun run typecheck` and the relevant build/test
+- Charts render lazily. Scroll a chart into view before capturing an in-viewport screenshot.
+- There is no Codex TypeScript-LSP plugin in this project; `bun run typecheck` and the relevant build/test
   commands are the authoritative diagnostics and must not be skipped because editor diagnostics
   appear clean.
 

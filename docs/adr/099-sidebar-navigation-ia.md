@@ -2,7 +2,18 @@
 title: ADR-099 Sidebar / Navigation Information Architecture
 type: adr
 date: 2026-06-18
-tags: [adr, navigation, sidebar, ia, workspaces, accounts, cross-workspace, adr-084, adr-088]
+tags:
+  [
+    adr,
+    navigation,
+    sidebar,
+    ia,
+    workspaces,
+    accounts,
+    cross-workspace,
+    adr-084,
+    adr-088,
+  ]
 description: Records the navigation IA after the account epic — a minimal workspace-agnostic top zone (AI Chat + Accounts), cross-workspace analytics placed in their most-natural workspace section rather than as new top-level items, and the per-workspace grouping kept intact.
 aliases: [sidebar IA, navigation IA, nav layout]
 ---
@@ -10,9 +21,11 @@ aliases: [sidebar IA, navigation IA, nav layout]
 # ADR-099: Sidebar / Navigation Information Architecture
 
 ## Status
+
 Accepted
 
 ## Date
+
 2026-06-18
 
 ## Context
@@ -49,21 +62,25 @@ anywhere.
 ## Consequences
 
 **Positive**
+
 - Predictable IA: global entities up top; analytics where their data lives; no duplicated nav
   destinations.
 - New ADR-096/097/098 surfaces have a defined home before their UIs are built.
 
 **Negative / cost**
+
 - Unified tax spans budgeting + portfolio but is reached via Budgeting — a deliberate trade-off
   (one home, not two) documented here.
 
 **Risks / mitigations**
-- *Discoverability* of cross-workspace features inside a workspace → validate ≤2-click reach on
-  the running app (Playwright) when the ADR-096/097/098 UIs land (runtime follow-on).
-- *Future sprawl* → this ADR is the gate: new cross-cutting analytics default to a workspace
+
+- _Discoverability_ of cross-workspace features inside a workspace → validate ≤2-click reach on
+  the running app when the ADR-096/097/098 UIs land (runtime follow-on).
+- _Future sprawl_ → this ADR is the gate: new cross-cutting analytics default to a workspace
   section unless they are a global entity/tool.
 
 ## Related
+
 - [[docs/adr/index|All ADRs]]
 - [[docs/adr/088-account-entity|ADR-088: Accounts hub placement]]
 - [[docs/adr/084-settings-instant-apply-sidebar|ADR-084: Settings (config home)]]

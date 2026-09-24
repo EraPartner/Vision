@@ -2,31 +2,26 @@
 title: Testing Documentation
 type: testing
 status: active
-date: 2026-09-11
-updated: 2026-09-11
-last-updated: 2026-09-11
-last_updated_timestamp: 2026-09-11T00:00:00Z
+date: 2026-09-24
+updated: 2026-09-24
+last-updated: 2026-09-24
+last_updated_timestamp: 2026-09-24T00:00:00Z
 added_portfolio_math_tests: 2026-05-05
 added_import_pipeline_tests: 2026-05-05
 wired_real_db_harness: 2026-07-27
 tags:
   - testing
   - vitest
-  - playwright
   - quality
   - a11y
-  - visual-regression
   - phase-0
   - phase-1
   - frontend-phase-a
-  - frontend-phase-b
-  - frontend-phase-c
   - frontend-phase-d
   - frontend-phase-f
   - contract-testing
   - context-testing
   - react-contexts
-  - e2e-testing
   - property-testing
   - mutation-testing
 aliases:
@@ -54,7 +49,6 @@ Vision uses comprehensive testing to ensure code quality and prevent regressions
 | **Vitest**                | Backend unit tests; frontend unit/integration tests                | `apps/node-backend/tests/`, `apps/frontend/src/` |
 | **React Testing Library** | Frontend component unit and integration tests                      | `apps/frontend/src/`                             |
 | **MSW**                   | Network mocking at the HTTP boundary (component-integration tests) | `apps/frontend/src/test/msw/`                    |
-| **Playwright**            | E2E tests for critical user flows w/ real backend                  | `apps/frontend/e2e/`                             |
 | **Bun**                   | Test runner                                                        | `package.json`                                   |
 
 ## Running Tests
@@ -62,11 +56,11 @@ Vision uses comprehensive testing to ensure code quality and prevent regressions
 ### Backend Tests
 
 ```bash
-# Run all tests
+# Run the backend suite without a database (DB-backed cases self-skip)
 bun test
 
-# Watch mode
-bun test:watch
+# Watch all backend tests against a disposable database
+bun run test:watch
 
 # Run specific test file
 bun vitest run src/path/to/test.test.js
@@ -78,7 +72,8 @@ bun vitest run --test-name-pattern="testName"
 #### Against a real Postgres
 
 Suites gated on `TEST_DATABASE_URL` (see [Database Fixture Helper](#database-fixture-helper-phase-0))
-**skip** in a plain `bun test` run. To execute them, use the disposable-database wrapper. It
+**skip** in a plain `bun test` run. Both `bun run test:watch` and `bun run test:db` use the
+disposable-database wrapper. It
 requires native PostgreSQL 18 tools, initializes a private cluster under the system temporary
 directory, binds it only to loopback, migrates it to head, runs Vitest, and removes the cluster on
 exit. It does not start or require the Homebrew service:
@@ -86,6 +81,9 @@ exit. It does not start or require the Homebrew service:
 ```bash
 # Whole backend suite, DB-backed cases included
 bun run test:db
+
+# Interactive watch mode, including DB-backed cases and CI performance probes
+bun run test:watch
 
 # A single DB-backed suite (arguments are forwarded to vitest)
 bun run test:db tests/services/transferReconciliation.db.test.js
@@ -101,21 +99,25 @@ The `legacy-retirements` task refuses caller-managed database URLs. It verifies 
 fail-closed upgrades, downgrade shape restoration, and re-upgrade for the dormant import staging
 field and the upgraded-install-only exchange-rate cache.
 
+Watch mode keeps the same private cluster for reruns and removes it when Vitest exits. It clears
+inherited database URLs by default. The ADR-088 and statement-scalar contract cases need their
+separate `VISION_TEST_DB_TASK` schema modes and remain task-gated in the general suite.
+
 Requires the Python Alembic toolchain (`pip install -r config/requirements.txt`) because migrations are Alembic even though the backend is Node. `config/requirements.txt` is an exact, hash-verified lock compiled from `config/requirements.in`. The migration runner uses an explicit `ALEMBIC_BIN` first, then a tool beside `VISION_PYTHON_BIN`, `.venv-native-build`, the prepared standalone native runtime, a runnable repository `venv`, and finally `alembic` on `PATH`. It probes a candidate before selecting it, so a stale container-created virtual environment cannot cause an `ENOENT` failure.
 
 PostgreSQL discovery checks `VISION_TEST_POSTGRES_BIN`, `VISION_POSTGRES_BIN`, `postgres` on
 `PATH`, the Homebrew PostgreSQL 18 keg paths, and Postgres.app. `VISION_TEST_DB_PORT` selects the
 loopback port and fails closed on a collision.
 
-If `TEST_DATABASE_URL` is already exported, the script normally uses that database as-is and starts
-no provider. The Codex cloud setup uses this mode with a fixed native PostgreSQL 18 database; see
-[[.codex/cloud/README|Codex cloud environment]]. That managed database is reset and migrated before
-each `bun run test:db`, and cloud maintenance resets it after a cached branch resume. Other pre-set
-URLs remain caller-managed and are never reset.
+The wrapper ignores inherited database URLs by default and creates a private cluster. Set
+`VISION_TEST_DB_USE_CALLER=1` only for an already-disposable `TEST_DATABASE_URL`; this skips native
+provisioning. The Codex cloud setup recognizes its fixed disposable PostgreSQL 18 database and
+resets it before each run; see [[.codex/cloud/README|Codex cloud environment]]. Destructive
+migration lifecycle tasks refuse caller-managed databases.
 
 #### The skip banner
 
-A plain `bun run test` exits 0 while omitting several hundred DB-backed cases, and vitest's `N passed | M skipped` line reads as routine. To stop a partial run being mistaken for a complete one, `tests/setup/dbSkipBanner.js` prints a banner **after** the summary whenever DB-backed cases were skipped for want of a database:
+A plain `bun run test` exits 0 while omitting several hundred DB-backed cases, and vitest's `N passed | M skipped` line reads as routine. To stop a partial run being mistaken for a complete one, `tests/setup/dbSkipBanner.js` prints a banner **after** the summary whenever DB-backed cases were skipped for want of a database. `bun run test:watch` now provides the database, so it does not trigger this banner:
 
 ```
 ==============================================================================
@@ -137,25 +139,25 @@ Alembic is unavailable. Skip it with `SKIP_DB_TESTS=1`.
 ### Frontend Tests
 
 ```bash
-# Run frontend unit/integration tests (Vitest + React Testing Library + MSW)
-bun test:frontend
+# Run all frontend tests, including the live API contracts, against a disposable backend
+bun run test:frontend
 
-# Run E2E tests (Playwright)
-bun run test:e2e
-
-# Run E2E tests with headed browser (see what Playwright sees)
-bun exec playwright test --headed
-
-# Run E2E tests in debug mode (step through)
-bun exec playwright test --debug
+# Run only frontend unit/integration tests (Vitest + React Testing Library + MSW)
+bun run --filter 'vision-frontend' test
 ```
 
-#### The live-contract skip banner
+The root command builds the frontend, starts a disposable native PostgreSQL 18 cluster and
+backend, then runs the complete frontend Vitest suite with `LIVE_API_BASE` set. It clears inherited
+database URLs and fails if the native stack cannot start. The workspace command excludes the
+live-contract file; CI runs the same unit suite with coverage and runs the live contracts in its separate native-stack
+job.
+
+#### The direct Vitest skip banner
 
 The frontend live-contract suite needs a real backend and therefore self-skips when
-`LIVE_API_BASE` is absent. A normal `bun test:frontend` run remains fast and exits successfully,
-but `src/test/live-contracts/liveContractSkipBanner.ts` now prints an explicit banner after the
-Vitest summary:
+`LIVE_API_BASE` is absent. A direct unfiltered `bun vitest run` from `apps/frontend` still prints
+an explicit banner after the Vitest summary when it selects the live-contract file without a
+backend:
 
 ```text
 ==============================================================================
@@ -169,17 +171,15 @@ Vitest summary:
 
 - Counts come from the current run; the reporter does not hardcode the example's 36 tests.
 - Other skipped frontend tests do not trigger this banner.
-- The reporter is silent when `LIVE_API_BASE` is set. CI runs the suite against its disposable
-  native stack; local macOS validation may use the Vision Demo app and its synthetic data.
+- The reporter is silent when `LIVE_API_BASE` is set or the live-contract file is excluded.
+  `bun run test:frontend` and CI run the live tests against disposable native stacks.
 - `vite.config.ts` appends the reporter in `configureVitest`. It does not replace Vitest's default
   reporter or GitHub Actions annotations.
 
-To run only the live contracts from the repository root, replace the port with the Demo app's
-persisted port or another disposable Vision backend:
+To run only the live contracts against a disposable backend from the repository root:
 
 ```bash
-LIVE_API_BASE=http://localhost:<port> bun run --filter 'vision-frontend' test \
-  src/test/live-contracts/live-contracts.test.ts
+bun run test:frontend src/test/live-contracts/live-contracts.test.ts
 ```
 
 The installed Vision Demo is a native-runtime test target. It uses deterministic synthetic data
@@ -234,9 +234,6 @@ apps/frontend/
 │       └── msw/
 │           ├── server.ts           # MSW server
 │           └── handlers.ts         # Default HTTP handlers
-├── e2e/                            # E2E tests (Playwright)
-│   └── smoke.spec.ts               # Smoke tests: 5 critical routes
-├── playwright.config.ts            # Playwright configuration
 └── package.json
 ```
 
@@ -1060,31 +1057,6 @@ Four key testing gotchas discovered during Phase A completion:
 - **Default handlers:** 13 endpoints with paginated/envelope-conformant shapes
 - **Pages covered:** Transactions, Import, Language Switch, Tax Overview, Add Transaction Dialog, Planned Payments, Portfolio Overview
 
-### Phase B: E2E Testing (2026-04-30) — COMPLETE
-
-- Playwright configuration with auto-boot dev server locally and a native scheduled CI stack
-- 5 smoke E2E tests covering critical routes: dashboard, transactions, import, planned, portfolio
-- Scheduled CI job provisions PostgreSQL 18, starts the backend, runs tests, and uploads artifacts
-- See [[docs/testing/frontend/e2e|E2E Test Guide]] for running locally and adding new tests
-
-### Phase C: Accessibility & Visual Regression (2026-04-30) — COMPLETE
-
-**Accessibility Checks (Axe-Core):**
-
-- Every smoke test in `smoke.spec.ts` calls `checkA11y(page)` using `@axe-core/playwright@4.11.2`
-- Scans for WCAG 2.1 violations (fails on critical/serious, warns on minor/warning)
-- Integrated into all 5 smoke tests (dashboard, transactions, import, planned, portfolio)
-
-**Visual Regression Tests:**
-
-- New `visual.spec.ts` captures full-page screenshots of 5 critical pages
-- Playwright `toHaveScreenshot({ fullPage: true })` with 2% pixel tolerance
-- Baselines stored in `apps/frontend/e2e/__screenshots__/`
-- NPM scripts: `bun run test:e2e:visual` (with update), `bun run test:e2e:update-snapshots` (emergency refresh)
-- CI job `test-e2e-visual`: Runs on main branch pushes only, automatically updates baselines
-
-See [[docs/testing/frontend/e2e|E2E Test Guide]] for running, debugging, and updating baselines.
-
 ### Phase D: Coverage Threshold Ratchet & Contract Tests (2026-04-30, updated 2026-05-02) — COMPLETE
 
 **Coverage Threshold Ratchet** (`apps/frontend/vite.config.ts`):
@@ -1166,10 +1138,9 @@ See [[docs/testing/frontend/e2e|E2E Test Guide]] for running, debugging, and upd
 
 - **MSW handlers expanded** to ~50 previously-unstubbed endpoints (admin, aggregations, AI chat, attachments, categories, imports, info, investments, recipients, reports, splits, transactions, watchlist, planned-transactions)
 - **Contract tests expanded** (`apps/frontend/src/test/msw/contracts.test.ts`): 16 → **120 tests** (E1: 10 list schemas, E2: 15 mutation contracts, E3: 4 error envelopes)
-- **Live-API contract tests** (`apps/frontend/src/test/live-contracts/live-contracts.test.ts`): 13 → **37 tests** (skipped locally unless `LIVE_API_BASE` set; run on CI against real backend)
-- **Playwright e2e specs:** `dialogs-edge.spec.ts` (focus/escape/backdrop), `critical-flows.spec.ts` (page smoke + retired deep-link checks), and `mutations-parity.spec.ts` (mutation roundtrips)
+- **Live-API contract tests** (`apps/frontend/src/test/live-contracts/live-contracts.test.ts`): 13 → **37 tests** (run by the root `test:frontend` command and CI against disposable backends)
 
-**Coverage delta:** 1147 → **1204 vitest** (+57 contract-level). +24 live-API tests. +9 Playwright tests.
+**Coverage delta:** 1147 → **1204 vitest** (+57 contract-level). +24 live-API tests..
 
 See [[docs/testing/test-inventory#phase-f1--backend-drift-detection-sweep-2026-05-02|Phase F1 in Test Inventory]]
 
@@ -1192,22 +1163,6 @@ See [[docs/testing/test-inventory#phase-f2--stale-refetch--mutation-invalidation
 **Coverage delta:** 1210 → **1219 vitest** (+9).
 
 See [[docs/testing/test-inventory#phase-f3--dialog-completeness-sweep-2026-05-02|Phase F3 in Test Inventory]]
-
-### Phase F4: Playwright Parity Expansion (2026-05-02) — COMPLETE
-
-**Goal:** Push browser-only edges (real backdrop, real focus trap, network drift, a11y scanning) to Playwright.
-
-**What landed (3 new e2e specs, 32 new tests):**
-
-- `e2e/mutations-parity.spec.ts` — Full CRUD lifecycle in real browser (4 tests: Category/Recipient/Planned create, persist-after-reload invariant)
-- `e2e/a11y.spec.ts` — Originally 9 page scans; the current shared catalog has 11, including Tax (zero critical or serious violations required)
-- `e2e/network-drift.spec.ts` — Originally 10 page checks; it now consumes the same 11-page catalog and catches frontend → backend route mismatches
-
-**Updated:** `test:e2e` script now runs all 3 new specs alongside smoke, dialogs-edge, critical-flows.
-
-**Coverage delta:** 1219 vitest (unchanged); +**32 Playwright e2e tests**.
-
-See [[docs/testing/test-inventory#phase-f4--playwright-parity-expansion-2026-05-02|Phase F4 in Test Inventory]]
 
 ### Phase F5: Property + Chaos Tests (2026-05-02) — COMPLETE
 
@@ -1242,12 +1197,11 @@ See [[docs/testing/test-inventory#phase-f6--mutation-testing-stryker-2026-05-02|
 
 ### Next Steps (Phase E+)
 
-- E2E performance profiling (LCP, INP, CLS assertions)
 - Coverage expansion beyond 17% statements (Phase E goal: 25%+)
 - Additional component-integration tests for complex pages (Settings, Analytics, etc.)
 - Mutation testing scope expansion (identify low-kill modules from baseline run)
 
-Reference: [[docs/testing/frontend-component-integration|Component-Integration Test Guide]], [[docs/testing/frontend/e2e|E2E Test Guide]], [[docs/testing/test-inventory|Test Inventory]], [[docs/reference/scripts|Scripts Reference]], [[apps/frontend/src/test-setup.ts]], [[apps/frontend/src/test/msw/handlers.ts]], [[apps/frontend/src/test/msw/contracts.test.ts]], [[apps/frontend/e2e/]], [[apps/frontend/stryker.config.json]]
+Reference: [[docs/testing/frontend-component-integration|Component-Integration Test Guide]], [[docs/testing/test-inventory|Test Inventory]], [[docs/reference/scripts|Scripts Reference]], [[apps/frontend/src/test-setup.ts]], [[apps/frontend/src/test/msw/handlers.ts]], [[apps/frontend/src/test/msw/contracts.test.ts]], [[apps/frontend/stryker.config.json]]
 
 ## Test Examples
 

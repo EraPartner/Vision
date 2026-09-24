@@ -39,7 +39,7 @@ dist/
 AGENTS.local.md
 CLAUDE.*
 !CLAUDE.md
-.playwright-mcp
+.*-mcp/
 
 # OS
 .DS_Store

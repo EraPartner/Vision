@@ -1,24 +1,25 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { Route, Routes } from "react-router";
-import { screen } from "@testing-library/react";
-import { renderWithApp } from "@/test/renderWithApp";
+import { MemoryRouter, Route, Routes } from "react-router";
+import { render, screen } from "@testing-library/react";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { RequireAdmin } from "../RequireAdmin";
 
 function adminTree() {
     return (
-        <Routes>
-            <Route path="/" element={<div>home</div>} />
-            <Route
-                path="/admin"
-                element={
-                    <RequireAdmin>
-                        <div>admin secret</div>
-                    </RequireAdmin>
-                }
-            />
-        </Routes>
+        <MemoryRouter initialEntries={["/admin"]}>
+            <Routes>
+                <Route path="/" element={<div>home</div>} />
+                <Route
+                    path="/admin"
+                    element={
+                        <RequireAdmin>
+                            <div>admin secret</div>
+                        </RequireAdmin>
+                    }
+                />
+            </Routes>
+        </MemoryRouter>
     );
 }
 
@@ -26,10 +27,13 @@ describe("RequireAdmin", () => {
     it("redirects to / when adminMode is off", async () => {
         useSettingsStore.setState({
             isAppSettingsLoading: false,
-            appSettings: { ...useSettingsStore.getState().appSettings, adminMode: false },
+            appSettings: {
+                ...useSettingsStore.getState().appSettings,
+                adminMode: false,
+            },
         });
 
-        renderWithApp(adminTree(), { initialEntries: ["/admin"] });
+        render(adminTree());
 
         expect(await screen.findByText("home")).toBeInTheDocument();
         expect(screen.queryByText("admin secret")).not.toBeInTheDocument();
@@ -38,10 +42,13 @@ describe("RequireAdmin", () => {
     it("renders children when adminMode is on", async () => {
         useSettingsStore.setState({
             isAppSettingsLoading: false,
-            appSettings: { ...useSettingsStore.getState().appSettings, adminMode: true },
+            appSettings: {
+                ...useSettingsStore.getState().appSettings,
+                adminMode: true,
+            },
         });
 
-        renderWithApp(adminTree(), { initialEntries: ["/admin"] });
+        render(adminTree());
 
         expect(await screen.findByText("admin secret")).toBeInTheDocument();
     });

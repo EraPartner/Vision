@@ -3,7 +3,7 @@ title: Devcontainer Guide
 type: guide
 status: active
 date: 2026-08-13
-updated: 2026-08-27
+updated: 2026-09-24
 tags:
   [
     guide,
@@ -197,10 +197,8 @@ The container can **read** git history but cannot change it: `.git` is mounted r
 
 ## Known limitations
 
-**Browser workloads (Playwright and Puppeteer)** — Chromium and its system libraries are not
-installed, and the hardened egress allowlist excludes browser download hosts. Run E2E tests and
-PDF-rendering development on the host. The scheduled E2E workflow remains the supported Linux
-browser environment.
+**PDF rendering with Puppeteer** — Chromium and its system libraries are not installed, and the
+hardened egress allowlist excludes browser download hosts. Run PDF-rendering development on the host.
 
 **Electron `.dmg` build** — `bun run dist` requires macOS native tools. Run on the host, not in this container.
 

@@ -199,12 +199,7 @@ export function AppSidebar() {
                                                         handleNavHover(item.url)
                                                     }
                                                     className="relative"
-                                                    aria-label={
-                                                        item.url ===
-                                                        "/analysis/monitors"
-                                                            ? undefined
-                                                            : title
-                                                    }
+                                                    aria-label={title}
                                                 >
                                                     {isActive && <ActiveRail />}
                                                     <item.icon
