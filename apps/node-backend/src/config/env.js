@@ -153,6 +153,10 @@ const envSchema = z
     BRAVE_SEARCH_API_KEY: optionalStringEnv,
 
     AI_REFERENCE_MAPPING_KEY: optionalStringEnv,
+    AGENTCLOAK_PREFLIGHT_ENABLED: booleanEnv(false),
+    AGENTCLOAK_MCP_URL: optionalStringEnv,
+    AGENTCLOAK_MCP_API_KEY: optionalStringEnv,
+    AGENTCLOAK_TIMEOUT_MS: intEnv(10000),
 
     OPENAI_API_ENABLED: booleanEnv(false),
     OPENAI_API_KEY: optionalStringEnv,

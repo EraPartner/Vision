@@ -3,9 +3,9 @@ title: AI Research API
 type: api
 status: active
 date: 2026-09-14
-updated: 2026-09-20
-tags: [api, ai, research, jobs, documents, disclosure, openai]
-description: Recoverable AI investigations, local research documents, consent-bound cloud disclosure, and scoped reversible-reference endpoints.
+updated: 2026-09-25
+tags: [api, ai, research, jobs, documents, disclosure, openai, agentcloak]
+description: Recoverable AI investigations, local research documents, consent-bound cloud disclosure, scoped reversible references, and optional AgentCloak preflight.
 aliases: [AI investigation API, research document API, disclosure API]
 ---
 
@@ -22,20 +22,20 @@ not the API operation or response schema.
 
 ## Endpoints
 
-| Method        | Path                                             | Purpose                                                                   |
-| ------------- | ------------------------------------------------ | ------------------------------------------------------------------------- |
-| `GET`         | `/api/ai-research/status`                        | Effective local, web, OpenAI, and reversible-reference capabilities       |
-| `GET, POST`   | `/api/ai-research/investigations`                | List or start bounded jobs                                                |
-| `GET, DELETE` | `/api/ai-research/investigations/:id`            | Inspect evidence/steps or delete local history                            |
-| `POST`        | `/api/ai-research/investigations/:id/resume`     | Reuse completed checkpoints                                               |
-| `POST`        | `/api/ai-research/investigations/:id/cancel`     | Stop queued or active work                                                |
-| `POST`        | `/api/ai-research/disclosures/preview`           | Canonical exact cloud payload, digest, and optional local reference scope |
-| `GET, POST`   | `/api/ai-research/disclosures/grants`            | Inspect or create a digest-bound grant                                    |
-| `POST`        | `/api/ai-research/disclosures/grants/:id/revoke` | Stop later sends and retries                                              |
-| `GET, DELETE` | `/api/ai-research/disclosures/records`           | Inspect metadata or delete all records and grants                         |
-| `GET, POST`   | `/api/ai-research/documents`                     | List or upload a text, Markdown, or HTML document                         |
-| `GET, DELETE` | `/api/ai-research/documents/:id`                 | Inspect metadata or delete it and derived passages                        |
-| `POST`        | `/api/ai-research/documents/search/passages`     | Keyword, semantic, or hybrid passage retrieval                            |
+| Method        | Path                                             | Purpose                                                                                     |
+| ------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| `GET`         | `/api/ai-research/status`                        | Effective local, web, OpenAI, reversible-reference, and AgentCloak capabilities             |
+| `GET, POST`   | `/api/ai-research/investigations`                | List or start bounded jobs                                                                  |
+| `GET, DELETE` | `/api/ai-research/investigations/:id`            | Inspect evidence/steps or delete local history                                              |
+| `POST`        | `/api/ai-research/investigations/:id/resume`     | Reuse completed checkpoints                                                                 |
+| `POST`        | `/api/ai-research/investigations/:id/cancel`     | Stop queued or active work                                                                  |
+| `POST`        | `/api/ai-research/disclosures/preview`           | Canonical exact cloud payload, digest, optional local reference scope, and AgentCloak check |
+| `GET, POST`   | `/api/ai-research/disclosures/grants`            | Inspect or create a digest-bound grant                                                      |
+| `POST`        | `/api/ai-research/disclosures/grants/:id/revoke` | Stop later sends and retries                                                                |
+| `GET, DELETE` | `/api/ai-research/disclosures/records`           | Inspect metadata or delete all records and grants                                           |
+| `GET, POST`   | `/api/ai-research/documents`                     | List or upload a text, Markdown, or HTML document                                           |
+| `GET, DELETE` | `/api/ai-research/documents/:id`                 | Inspect metadata or delete it and derived passages                                          |
+| `POST`        | `/api/ai-research/documents/search/passages`     | Keyword, semantic, or hybrid passage retrieval                                              |
 
 Investigation input includes `question`, `route`, `researchMode`, `model`, `depth`, `language`, typed scope
 with separate bank `accountIds` and portfolio `investmentIds`,
@@ -75,6 +75,16 @@ An OpenAI investigation may select only one of those IDs. The selected model is 
 preview and consent digest, and its own prices drive spend reservation and final accounting. The
 request contract accepts exactly one of `publicQuestion`, `selectedSummary`, or `selectedEvidence`
 for the OpenAI route; mixed modes are rejected. These API additions are backward-compatible.
+
+When configured, `status.data.openai.agentCloakPreflight` reports `enabled`,
+`mode: "block-on-change"`, and `location: "operator-managed-loopback"`; it exposes no URL or API
+key. Cloud preview adds `agentCloakPreflight: { enabled: false }` when disabled, or
+`{ enabled: true, status: "passed" }` after a successful check. A changed AgentCloak result returns
+`400 AGENTCLOAK_SENSITIVE_TEXT`; an unavailable or invalid check returns an upstream error. The
+check runs again before OpenAI send, including retries. It checks user-authored cloud text after
+reference tokenization and does not alter the previewed payload or SHA-256 grant digest. These
+response additions are backward-compatible. See
+[[docs/adr/169-operator-managed-agentcloak-preflight|ADR-169]].
 
 ## Scoped reversible references
 
@@ -126,6 +136,7 @@ operations. Generation is local and read-only; applying the inspected proposal i
 - [[docs/adr/145-bounded-ai-research-orchestration|ADR-145]]
 - [[docs/adr/147-allowlisted-openai-model-selection|ADR-147]]
 - [[docs/adr/151-scoped-reversible-ai-references|ADR-151]]
+- [[docs/adr/169-operator-managed-agentcloak-preflight|ADR-169]]
 - [[docs/api/analysis|Analysis API]]
 - [[docs/features/ai-chat|AI Chat and Investigations]]
 - [[docs/security/ai-data-access|AI Data Access Policy]]

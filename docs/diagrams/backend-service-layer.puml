@@ -224,7 +224,7 @@ package "AI & Observability" {
     +dispatchTool(name, args): ToolResult
   }
 
-  class AiInvestigationService <<ADR-145, ADR-151>> {
+  class AiInvestigationService <<ADR-145, ADR-151, ADR-169>> {
     +createInvestigation(input): Promise<Job>
     +runInvestigationJob(id): Promise<Job>
     +resumeRecoverableInvestigations(): Promise<number>
@@ -235,6 +235,14 @@ package "AI & Observability" {
     +validateReferenceRequest(request): Promise<Scope>
     +claimReferenceScope(scopeId, jobId): Promise<Scope>
     +restoreAnswerForJob(jobId, answer): Promise<AiAnswer>
+  }
+
+  class AiProviderAdapters {
+    +generateWithProvider(request): Promise<ProviderResult>
+  }
+
+  class AgentCloakPreflight <<ADR-169>> {
+    +checkAgentCloakPreflight(disclosedPayload): Promise<Status>
   }
 
   class ProviderHealthService {
@@ -412,6 +420,9 @@ AiChatService --> InfoRepository : canonical cash flow
 AiChatService --> PortfolioSummaryService : canonical portfolio metrics
 
 AiInvestigationService --> AiReferenceService : claim and local restoration
+AiInvestigationService --> AiProviderAdapters : consent-bound cloud generation
+AiProviderAdapters --> AgentCloakPreflight : before each OpenAI attempt
+AgentCloakPreflight --> "Operator-managed AgentCloak MCP" : loopback cloak check
 AiInvestigationService --> AiInvestigationRepository : provider-form checkpoint
 AiReferenceService --> AiReferenceRepository : encrypted scoped mappings
 

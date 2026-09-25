@@ -7,8 +7,13 @@ import {
   aiInvestigationRequestSchema,
   aiInvestigationScopeSchema,
 } from "@vision/types/aiResearch";
-import { ValidationError, NotFoundError } from "../middleware/errorHandler.js";
+import {
+  ValidationError,
+  NotFoundError,
+  UpstreamError,
+} from "../middleware/errorHandler.js";
 import { disclosurePayload } from "../services/aiProviderAdapters.js";
+import { checkAgentCloakPreflight } from "../services/agentCloakPreflight.js";
 import {
   createInvestigation,
   listInvestigations,
@@ -124,6 +129,11 @@ router.get("/status", async (_req, res) => {
         markerSyntax: "[[vision-ref:type|value]]",
         classification: "pseudonymized-not-anonymous",
       },
+      agentCloakPreflight: {
+        enabled: Boolean(settings.aiResearch.agentCloak?.enabled),
+        mode: "block-on-change",
+        location: "operator-managed-loopback",
+      },
     },
     web: {
       enabled: settings.aiResearch.web.enabled,
@@ -155,6 +165,18 @@ router.post("/disclosures/preview", async (req, res) => {
   const prepared = await prepareReferencePreview(request);
   await validateReferenceRequest(prepared.request);
   const preview = disclosurePayload(prepared.request);
+  let agentCloakPreflight;
+  try {
+    agentCloakPreflight = await checkAgentCloakPreflight(
+      preview.disclosedPayload,
+    );
+  } catch (error) {
+    if (error?.code === "AGENTCLOAK_SENSITIVE_TEXT")
+      throw new ValidationError(error.message, { code: error.code });
+    throw new UpstreamError("AgentCloak preflight is unavailable", {
+      code: error?.code || "AGENTCLOAK_PREFLIGHT_FAILED",
+    });
+  }
   res.ok({
     payload: preview.payload,
     payloadSha256: preview.payloadSha256,
@@ -164,6 +186,7 @@ router.post("/disclosures/preview", async (req, res) => {
     disclosureUnits: preview.disclosureUnits,
     referenceScope: prepared.scope,
     outboundRequest: prepared.request,
+    agentCloakPreflight,
   });
 });
 router.post("/disclosures/grants", async (req, res) => {

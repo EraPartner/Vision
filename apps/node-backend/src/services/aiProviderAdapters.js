@@ -12,6 +12,7 @@ import {
   updateDisclosureRecord,
 } from "../repositories/aiDisclosureRepository.js";
 import { getPublicCloudAnalysisCatalog } from "./cloudAnalysisPlan.js";
+import { checkAgentCloakPreflight } from "./agentCloakPreflight.js";
 
 function outputText(response) {
   return String(response?.content ?? response?.outputText ?? "").trim();
@@ -201,6 +202,7 @@ export async function generateWithProvider({
     attempt <= settings.aiResearch.openai.maxRetries;
     attempt += 1
   ) {
+    await checkAgentCloakPreflight(preview.disclosedPayload, { signal });
     const record = await reserveDisclosure({
       grantId: request.grantId,
       jobId,

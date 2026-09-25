@@ -4871,7 +4871,7 @@ paths:
       tags: [AIResearch]
       responses:
         "200":
-          description: Configured capabilities without credentials
+          description: Configured capabilities without credentials, including optional AgentCloak preflight mode and location
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Envelope" }
@@ -5082,7 +5082,7 @@ paths:
 
   /api/ai-research/disclosures/preview:
     post:
-      summary: Preview the exact canonical payload proposed for cloud egress
+      summary: Preview the exact canonical payload proposed for cloud egress and run optional AgentCloak preflight
       operationId: previewAiDisclosure
       tags: [AIResearch]
       requestBody:
@@ -5092,11 +5092,19 @@ paths:
             schema: { $ref: "#/components/schemas/AiInvestigationRequest" }
       responses:
         "200":
-          description: Payload, digest, field manifest, disclosure units, and any encrypted local reference scope
+          description: Payload, digest, field manifest, disclosure units, any encrypted local reference scope, and AgentCloak preflight status
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Envelope" }
-        "400": { description: Invalid or non-cloud request }
+        "400":
+          {
+            description: Invalid or non-cloud request,
+            or AgentCloak flagged user-authored cloud text,
+          }
+        "502":
+          {
+            description: Enabled AgentCloak preflight was unavailable or returned an invalid response,
+          }
         "503": { description: Reversible-reference key unavailable }
 
   /api/ai-research/disclosures/grants:

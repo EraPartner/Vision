@@ -677,7 +677,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Preview the exact canonical payload proposed for cloud egress */
+        /** Preview the exact canonical payload proposed for cloud egress and run optional AgentCloak preflight */
         post: operations["previewAiDisclosure"];
         delete?: never;
         options?: never;
@@ -7524,7 +7524,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Configured capabilities without credentials */
+            /** @description Configured capabilities without credentials, including optional AgentCloak preflight mode and location */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -7874,7 +7874,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Payload, digest, field manifest, disclosure units, and any encrypted local reference scope */
+            /** @description Payload, digest, field manifest, disclosure units, any encrypted local reference scope, and AgentCloak preflight status */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -7885,6 +7885,13 @@ export interface operations {
             };
             /** @description Invalid or non-cloud request */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Enabled AgentCloak preflight was unavailable or returned an invalid response */
+            502: {
                 headers: {
                     [name: string]: unknown;
                 };

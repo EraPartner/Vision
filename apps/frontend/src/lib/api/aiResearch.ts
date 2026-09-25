@@ -72,6 +72,11 @@ export interface AiResearchStatus {
             markerSyntax: string;
             classification: "pseudonymized-not-anonymous";
         };
+        agentCloakPreflight?: {
+            enabled: boolean;
+            mode: "block-on-change";
+            location: "operator-managed-loopback";
+        };
     };
 }
 export interface InvestigationInput {
@@ -146,6 +151,7 @@ export const previewDisclosure = (body: InvestigationInput) =>
             count: number;
         } | null;
         outboundRequest: InvestigationInput;
+        agentCloakPreflight: { enabled: boolean; status?: "passed" };
     }>("/api/ai-research/disclosures/preview", {
         method: "POST",
         body: JSON.stringify(body),

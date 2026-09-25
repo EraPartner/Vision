@@ -3,7 +3,7 @@ title: AI Data Access Policy
 type: security
 status: active
 date: 2026-09-14
-updated: 2026-09-20
+updated: 2026-09-25
 tags:
   [
     security,
@@ -30,6 +30,7 @@ related_code:
     "apps/node-backend/src/services/aiEvaluation/localReliability.js",
     "apps/node-backend/src/services/aiEvaluation/cloudPrivacy.js",
     "apps/node-backend/src/services/aiReferenceService.js",
+    "apps/node-backend/src/services/agentCloakPreflight.js",
     "apps/node-backend/src/repositories/aiReferenceRepository.js",
     "apps/node-backend/tests/aiReferenceService.test.js",
   ]
@@ -103,6 +104,26 @@ This is **pseudonymization, not anonymity**. A token discloses its declared type
 amounts, dates, holdings, prose, and cross-field patterns can still identify the underlying subject.
 Users must inspect the complete preview, not treat markers as a general privacy filter. See
 [[docs/adr/151-scoped-reversible-ai-references|ADR-151]].
+
+### Optional AgentCloak gate
+
+`AGENTCLOAK_PREFLIGHT_ENABLED` adds a check before cloud preview completes and before each OpenAI
+send attempt. Vision calls an operator-managed AgentCloak MCP endpoint on an exact loopback `/mcp`
+endpoint. The request carries only present user-authored cloud text fields: `question`,
+`selectedSummary`, and `selectedEvidence`. It runs after Vision's reference-token replacement, and
+substitutes `REFERENCE` for token identifiers in the check request. AgentCloak does not receive the
+encrypted map or its key. The AgentCloak API credential is sent in a request header, not returned in
+status or preview.
+
+Vision accepts only a well-formed successful `cloak` result whose text exactly matches the text
+checked. A proposed change blocks the disclosure; malformed responses, timeouts, and connection
+failures also block it when enabled. Vision does not apply AgentCloak's transformation to the
+OpenAI payload, so its exact preview digest and grant still bind the send. The enabled check is a
+second filter with possible missed detections. It is not anonymity or a substitute for reviewing
+the selected text. The loopback restriction does not prove where the endpoint processes the text.
+The operator must verify its upstream behavior, retention, and logs because it receives the checked
+text. See
+[[docs/adr/169-operator-managed-agentcloak-preflight|ADR-169]].
 
 6. **Canonical financial math where shared.** Portfolio metrics and monthly cash-flow tools delegate currency conversion, transfer treatment, cost basis, partial-sale basis, and totals to the same calculation services used by Vision's screens. Tool names are not permission to redefine a metric.
 
@@ -247,3 +268,4 @@ already contains the restored answer and does not need the map for display.
 - [[docs/api/ai-research|AI Research API]]
 - [[docs/adr/145-bounded-ai-research-orchestration|ADR-145]]
 - [[docs/adr/151-scoped-reversible-ai-references|ADR-151]]
+- [[docs/adr/169-operator-managed-agentcloak-preflight|ADR-169: Operator-managed AgentCloak Preflight]]

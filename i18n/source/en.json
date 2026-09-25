@@ -469,6 +469,8 @@
   "aiChat.toolsOn": "Tools on",
   "aiChat.untitled": "Untitled conversation",
   "aiResearch.addDocument": "Add local research document",
+  "aiResearch.agentCloakPassed": "AgentCloak preflight passed. Review the exact OpenAI request below before approving it.",
+  "aiResearch.agentCloakPreflight": "Before showing the OpenAI preview, Vision sends the selected cloud text through an operator-managed loopback endpoint to AgentCloak. If AgentCloak would change the text, Vision blocks the request. It checks again before each OpenAI attempt.",
   "aiResearch.apiOnlyBilling": "API models use separate OpenAI API billing. A ChatGPT subscription or ChatGPT usage credits do not pay for these requests. The selected model is included in the exact payload preview and consent digest.",
   "aiResearch.assumptions": "Assumptions",
   "aiResearch.calculations": "Deterministic calculations",

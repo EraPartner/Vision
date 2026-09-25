@@ -122,6 +122,12 @@ const settings = deepFreeze({
 
   aiResearch: {
     referenceMappingKey: env.AI_REFERENCE_MAPPING_KEY,
+    agentCloak: {
+      enabled: env.AGENTCLOAK_PREFLIGHT_ENABLED,
+      url: env.AGENTCLOAK_MCP_URL,
+      apiKey: env.AGENTCLOAK_MCP_API_KEY,
+      timeoutMs: env.AGENTCLOAK_TIMEOUT_MS,
+    },
     web: {
       enabled: env.AI_WEB_RESEARCH_ENABLED,
       maxSearches: env.AI_WEB_RESEARCH_MAX_SEARCHES,

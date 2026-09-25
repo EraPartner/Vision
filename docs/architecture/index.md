@@ -2,8 +2,8 @@
 title: Architecture Diagrams
 type: architecture-index
 status: active
-date: 2026-09-20
-updated: 2026-09-20
+date: 2026-09-25
+updated: 2026-09-25
 tags: [architecture, index, uml, plantuml, diagrams, phase-1, phase-2, phase-3, phase-e, frontend, api-client, openapi, domain-split, repository-split, statistics-refactoring, component-decomposition, refactoring, bug-fixes, csv, formula-injection, parallelization, deployment, container-hardening, backup, restore, bundle, electron, tags, tagging, orthogonal-dimension, may-2026, june-2026, route-service-boundary, thin-seams, global-rate-limiter, shared-utils, mv-recipient-monthly-drop, skin-v2, dense-fintech, css-scoping, inline-token-constraint, feature-flag, apple-refined, jewel-emerald, glass-differentiation, refined-geometry, hairlines, motion-spring]
 description: Index of all UML diagrams for the Vision project - backend, frontend, system, and sequence diagrams. June 2026 updates: ADR-105 Apple-refined visual pass baked into base design (--radius 0.625rem; Card rounded-[0.75rem]; differentiated glass-regular/glass-elevated shadows; jewel emerald primary 164 78% 26% light / 160 74% 52% dark; ease-out-quint/expo → cubic-bezier(0.32,0.72,0,1); press-feedback:active scale 0.97; tabular-nums letter-spacing -0.006em; 0.5px hairlines on hi-dpi; aurora/glass/hover retained). VITE_SKIN_V2 (ADR-104) now gates only colorblind-safe gain/loss recoloring; flatten direction abandoned. backend-service-layer.puml adds 14 thin route-seam services (ADR-067); backend-api-layer.puml adds globalRateLimiter on /api + TRUSTED_PROXIES XFF handling + VISION_DEV dev-bypass flag.
 aliases: [architecture, diagrams, UML, system design, backup architecture, electron IPC]
@@ -57,7 +57,14 @@ Located in `docs/diagrams/`:
 
 ## Interactive Flow Visualizer
 
-For an interactive companion to these diagrams, open `docs/flow-visualizer.html` — a single-page HTML map of all packages (75 components) and 38 end-to-end flows, including category hierarchy editing, persistent research dossiers, local analysis monitoring, the restricted manual and cloud-authored analysis runtime, explicit portfolio look-through exposure, bounded AI research, scoped local reference restoration, optional egress, forward-only broker history, native runtime, and atomic native Demo seed activation. Click a flow to highlight the path, step through it, and inspect the payload at every hop. Data lives in an embedded JSON block; extending it is a copy-paste.
+For an interactive companion to these diagrams, open `docs/flow-visualizer.html` — a single-page HTML map of all packages (77 components) and 38 end-to-end flows, including category hierarchy editing, persistent research dossiers, local analysis monitoring, the restricted manual and cloud-authored analysis runtime, explicit portfolio look-through exposure, bounded AI research, scoped local reference restoration, optional AgentCloak preflight before cloud egress, forward-only broker history, native runtime, and atomic native Demo seed activation. Click a flow to highlight the path, step through it, and inspect the payload at every hop. Data lives in an embedded JSON block; extending it is a copy-paste.
+
+The system and backend service diagrams include the optional AgentCloak dependency. Its loopback
+endpoint is a connection boundary; deployment and retention require operator verification.
+
+![[docs/diagrams/system-architecture.puml]]
+
+![[docs/diagrams/backend-service-layer.puml]]
 
 ## Frontend Diagrams
 

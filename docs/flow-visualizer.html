@@ -1454,6 +1454,25 @@
             "y": 1310
           },
           {
+            "id": "sv.agentcloak",
+            "label": "AgentCloak preflight",
+            "sub": "block on change · exact digest kept",
+            "kind": "service",
+            "path": "apps/node-backend/src/services/agentCloakPreflight.js",
+            "desc": "ADR-169: checks present user-authored cloud text after Vision reference tokenization at preview and before each OpenAI attempt. It substitutes REFERENCE for token identifiers, blocks changed or invalid results, and never rewrites the consent-bound payload.",
+            "x": 940,
+            "y": 1310
+          },
+          {
+            "id": "ex.agentcloak",
+            "label": "AgentCloak endpoint",
+            "sub": "operator-managed loopback MCP /mcp",
+            "kind": "external",
+            "desc": "Optional operator-managed loopback endpoint receives checked user-authored cloud text. Loopback does not prove that the service processes it locally; operators must verify forwarding, retention, and logs.",
+            "x": 1120,
+            "y": 1310
+          },
+          {
             "id": "sv.codexsession",
             "label": "Codex experiment",
             "sub": "synthetic-only · disposable",
@@ -1589,8 +1608,11 @@
           ["sv.research", "sv.providerhealth"],
           ["be.routes", "sv.airesearch"],
           ["be.routes", "sv.aireference"],
+          ["be.routes", "sv.agentcloak"],
           ["sv.airesearch", "be.repos"],
           ["sv.airesearch", "sv.aireference"],
+          ["sv.airesearch", "sv.agentcloak"],
+          ["sv.agentcloak", "ex.agentcloak"],
           ["sv.aireference", "be.repos"],
           ["sv.airesearch", "sv.research"],
           ["sv.airesearch", "be.ollamaclient"],
@@ -2044,8 +2066,20 @@
             "id": "cloud-catalog-analysis",
             "name": "Execute a cloud-authored catalog analysis locally",
             "category": "AI",
-            "summary": "OpenAI receives public catalog identifiers only; Vision validates, scopes, executes, stores, and synthesizes the private result locally.",
+            "summary": "The optional AgentCloak endpoint checks present user-authored cloud text first. OpenAI receives public catalog identifiers only; Vision validates, scopes, executes, stores, and synthesizes the private result locally.",
             "steps": [
+              {
+                "from": "sv.airesearch",
+                "to": "sv.agentcloak",
+                "payload": "optional preflight of user-authored cloud text before each send attempt",
+                "annotation": "aiProviderAdapters.js invokes checkAgentCloakPreflight() inside the OpenAI retry loop before reservation. The gate does not rewrite the exact consent-bound payload."
+              },
+              {
+                "from": "sv.agentcloak",
+                "to": "ex.agentcloak",
+                "payload": "MCP cloak check through the operator-managed loopback endpoint",
+                "annotation": "agentCloakPreflight.js requires unchanged text and fails closed on a change or invalid response. The operator must verify whether its service forwards or retains the text."
+              },
               {
                 "from": "sv.airesearch",
                 "to": "ex.openai",
@@ -3388,7 +3422,7 @@
             "id": "ai-research-investigation",
             "name": "Run a bounded AI research investigation",
             "category": "AI and research",
-            "summary": "A user selects scope, evidence access, depth, a visible privacy profile, and an approved API model; explicitly marked literals can cross the exact consent boundary as one-job pseudonymous tokens and are restored only in local allowlisted answer text.",
+            "summary": "A user selects scope, evidence access, depth, a visible privacy profile, and an approved API model. Explicit reference markers become one-job tokens; optional operator-managed AgentCloak preflight blocks changed user-authored cloud text without rewriting the consent-bound OpenAI payload.",
             "steps": [
               {
                 "from": "browser",
@@ -3415,10 +3449,22 @@
                 "annotation": "aiReferenceRepository.js stores a random scope UUID and 18-byte CSPRNG token payloads. Scope, token, and type are authenticated additional data; AI_REFERENCE_MAPPING_KEY stays outside PostgreSQL and database backup."
               },
               {
-                "from": "sv.aireference",
+                "from": "be.routes",
+                "to": "sv.agentcloak",
+                "payload": "optional preview check of present user-authored cloud fields",
+                "annotation": "routes/aiResearch.js calls checkAgentCloakPreflight() after disclosurePayload() has built the tokenized exact payload. The check never alters its digest."
+              },
+              {
+                "from": "sv.agentcloak",
+                "to": "ex.agentcloak",
+                "payload": "MCP cloak calls over loopback with token IDs replaced by REFERENCE",
+                "annotation": "agentCloakPreflight.js checks question, selectedSummary, and selectedEvidence when present. A changed, invalid, or unavailable result blocks preview; an unchanged result returns passed status."
+              },
+              {
+                "from": "be.routes",
                 "to": "fe.apiclient",
-                "payload": "tokenized outboundRequest + referenceScope { id, expiresAt, count }",
-                "annotation": "previewDisclosure() returns the exact request that must be used for the grant and job. A request without markers has a null scope."
+                "payload": "tokenized outboundRequest + referenceScope + preflight status",
+                "annotation": "previewDisclosure() returns the exact request that must be used for the grant and job only after the optional check passes. A request without markers has a null scope."
               },
               {
                 "from": "fe.apiclient",
@@ -3455,6 +3501,18 @@
                 "to": "ex.brave",
                 "payload": "optional public-only query",
                 "annotation": "Private-looking queries are rejected. Search and page fetches have destination, redirect, media-type, byte and per-run limits."
+              },
+              {
+                "from": "sv.airesearch",
+                "to": "sv.agentcloak",
+                "payload": "fresh optional check before each OpenAI send attempt and budget reservation",
+                "annotation": "aiProviderAdapters.js calls checkAgentCloakPreflight() inside the retry loop. The checked text is derived from the canonical disclosed payload; AgentCloak output is never used as the provider payload."
+              },
+              {
+                "from": "sv.agentcloak",
+                "to": "ex.agentcloak",
+                "payload": "present user-authored cloud text only",
+                "annotation": "agentCloakPreflight.js sends an authenticated MCP cloak request to the operator-managed loopback /mcp endpoint and fails closed on changes or errors."
               },
               {
                 "from": "sv.airesearch",

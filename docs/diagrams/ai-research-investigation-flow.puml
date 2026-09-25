@@ -6,6 +6,8 @@ participant "Investigation panel" as UI
 participant "AI research routes" as API
 participant "Investigation service\n(serial queue)" as Orchestrator
 participant "Reference service\n(scoped local restoration)" as References
+participant "AgentCloak preflight\n(Vision service)" as Preflight
+participant "Operator-managed AgentCloak\n(loopback MCP server)" as AgentCloak
 database "PostgreSQL\njobs, passages, disclosure metadata,\nencrypted reference maps" as DB
 participant "Bounded typed tools" as Tools
 participant "Restricted analysis runtime" as Analysis
@@ -16,13 +18,23 @@ participant "OpenAI Responses API" as OpenAI
 User -> UI: Select scope, depth, language,\nresearch mode, route, and approved API model
 opt Selected summary or evidence contains explicit private literals
   User -> UI: Wrap literals as\n[[vision-ref:type|value]]
-  UI -> API: POST /disclosures/preview\nwith full investigation request
+end
+UI -> API: POST /disclosures/preview\nwith full investigation request
+opt Selected text contains explicit markers
   API -> References: Parse supported typed markers
   References -> References: Create scope UUID and\n18-byte CSPRNG tokens
   References -> DB: Store 15-minute unclaimed scope +\nAES-256-GCM ciphertext, nonce, and tag
   References --> API: Tokenized outboundRequest +\nscope id, expiry, and count
-  API --> UI: Exact tokenized payload and warning
 end
+opt AgentCloak preflight enabled
+  API -> Preflight: Present user-authored cloud fields\nafter Vision tokenization
+  Preflight -> AgentCloak: MCP cloak for each present text field\nwith token identifiers replaced by REFERENCE
+  AgentCloak --> Preflight: Unchanged text or proposed change
+  alt Changed text, unavailable, or invalid response
+    Preflight --> API: Block cloud preview
+  end
+end
+API --> UI: Exact tokenized payload, digest,\nreference warning, and preflight status
 UI -> API: POST /investigations\nwith preview outboundRequest
 API -> Orchestrator: Strict typed request
 Orchestrator -> DB: Persist queued job
@@ -38,7 +50,7 @@ else Scope is sufficient
     User -> UI: Enter exact task and evidence
     User -> UI: Inspect exact synthesis payload
     UI -> API: Create dedicated digest-bound grant
-    API -> DB: Reserve disclosure and spend budgets
+    API -> DB: Create digest-bound grant
     Orchestrator -> DB: Checkpoint selected evidence
   else Local planning
     Orchestrator -> Ollama: Candidate step identifiers
@@ -46,7 +58,13 @@ else Scope is sufficient
   else Opt-in OpenAI planning
     User -> UI: Inspect exact outbound planning payload
     UI -> API: Create digest-bound grant
-    API -> DB: Reserve disclosure and spend budgets
+    API -> DB: Create digest-bound grant
+    opt AgentCloak preflight enabled, for each send attempt
+      Orchestrator -> Preflight: Check canonical user-authored cloud text
+      Preflight -> AgentCloak: MCP cloak on token-safe check text
+      AgentCloak --> Preflight: Unchanged or block; no rewrite
+    end
+    Orchestrator -> DB: Reserve disclosure and spend budgets
     Orchestrator -> Egress: Canonical allowlisted planning payload\nwith selected model and its price
     Egress -> OpenAI: POST /v1/responses\nstore=false, tools=[]
     OpenAI --> Egress: Prioritized identifiers, catalog plans, and usage
@@ -55,6 +73,12 @@ else Scope is sufficient
   Orchestrator -> DB: Persist constrained plan
 end
 alt Selected-evidence cloud synthesis
+  opt AgentCloak preflight enabled, for each send attempt
+    Orchestrator -> Preflight: Check canonical selected evidence
+    Preflight -> AgentCloak: MCP cloak on token-safe check text
+    AgentCloak --> Preflight: Unchanged or block; no rewrite
+  end
+  Orchestrator -> DB: Reserve disclosure and spend budgets
   Orchestrator -> Egress: Canonical selected-evidence payload\nwith selected model and its price
   Egress -> OpenAI: POST /v1/responses\nstore=false, tools=[]
   OpenAI --> Egress: Structured final answer and usage
@@ -108,6 +132,8 @@ Cloud-authored analysis rows remain private and are synthesized locally.
 Selected models come from the server allowlist.
 Per-model prices drive spend reservation.
 Explicit markers become typed one-job tokens; this is pseudonymization, not anonymity.
+Optional AgentCloak checks user-authored cloud text and blocks changed or unverified text.
+It never rewrites the digest-bound OpenAI payload. Local chat is untouched.
 The AES-256-GCM key is installation state outside PostgreSQL and database backup.
 Restart validates the provider-form checkpoint and restores locally without another model call.
 Job deletion cascades to its claimed scope and encrypted entries.

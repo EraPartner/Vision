@@ -632,6 +632,11 @@ export function AIInvestigationPanel() {
                                 : "aiResearch.cloudRetention",
                         )}
                     </p>
+                    {aiResearchStatus?.openai.agentCloakPreflight?.enabled && (
+                        <p className="text-xs text-muted-foreground">
+                            {t("aiResearch.agentCloakPreflight")}
+                        </p>
+                    )}
                     {(disclosureMode === "selected-summary" ||
                         disclosureMode === "cloud-synthesis-selected") && (
                         <p className="text-xs text-muted-foreground">
@@ -642,6 +647,11 @@ export function AIInvestigationPanel() {
             )}
             {route === "openai-api" && preview && (
                 <div className="mt-2 space-y-1">
+                    {preview.agentCloakPreflight.enabled && (
+                        <p className="text-xs text-muted-foreground">
+                            {t("aiResearch.agentCloakPassed")}
+                        </p>
+                    )}
                     {preview.referenceScope && (
                         <p className="text-xs text-warning">
                             {t("aiResearch.reversibleReferenceWarning", {

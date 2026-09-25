@@ -469,6 +469,8 @@
   "aiChat.toolsOn": "Tools aan",
   "aiChat.untitled": "Naamloos gesprek",
   "aiResearch.addDocument": "Lokaal onderzoeksdocument toevoegen",
+  "aiResearch.agentCloakPassed": "De AgentCloak-controle is geslaagd. Controleer hieronder het exacte OpenAI-verzoek voordat je het goedkeurt.",
+  "aiResearch.agentCloakPreflight": "Voordat Vision het OpenAI-voorbeeld toont, stuurt het de geselecteerde cloudtekst via een door de beheerder beheerd loopback-eindpunt naar AgentCloak. Als AgentCloak de tekst zou wijzigen, blokkeert Vision het verzoek. Vóór elke poging om naar OpenAI te verzenden controleert Vision de tekst opnieuw.",
   "aiResearch.apiOnlyBilling": "API-modellen gebruiken afzonderlijke OpenAI-API-facturatie. Een ChatGPT-abonnement of ChatGPT-gebruikstegoed betaalt deze aanvragen niet. Het gekozen model staat in het exacte gegevensvoorbeeld en de toestemming-digest.",
   "aiResearch.assumptions": "Aannames",
   "aiResearch.calculations": "Deterministische berekeningen",

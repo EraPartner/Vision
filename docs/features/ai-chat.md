@@ -3,8 +3,8 @@ title: Feature - AI Chat
 type: feature
 status: active
 date: 2026-09-14
-updated: 2026-09-20
-last_modified: 2026-09-20
+updated: 2026-09-25
+last_modified: 2026-09-25
 tags:
   [
     feature,
@@ -80,6 +80,9 @@ related_code:
 - Exact cloud-payload preview, revocable grants, and deletable local disclosure metadata.
 - Optional scoped reversible references replace explicitly marked selected-text literals with
   one-job random tokens and restore allowlisted answer text locally.
+- Optional operator-managed AgentCloak preflight checks user-authored cloud text after tokenization
+  at preview and before the provider send. A suggested change blocks disclosure; Vision does not
+  silently rewrite the previewed OpenAI payload.
 - Four visible model privacy profiles: fully local, public-question cloud planning, selected-summary
   cloud planning, and final cloud synthesis from exact selected evidence.
 - Each profile states its capability, exact cloud data, privacy boundary, and local retention. A
@@ -133,6 +136,26 @@ cross-job, or undecryptable token fails the job visibly. Vision never shows a pa
 The feature is pseudonymization, not anonymity: unmarked amounts, dates, holdings, and behavioral
 patterns still cross the exact selected disclosure boundary. See
 [[docs/adr/151-scoped-reversible-ai-references|ADR-151]].
+
+### Optional AgentCloak preflight
+
+An operator can enable an AgentCloak MCP endpoint as another gate on the OpenAI route. Vision
+sends the cloud request's user-authored `question`, `selectedSummary`, or `selectedEvidence` text to
+the operator-managed loopback service after replacing explicit reference markers with scoped tokens.
+It replaces the token strings with `REFERENCE` for this check. A changed AgentCloak result tells the
+user to revise the text or add markers before preview or send can proceed. If the service is
+unavailable or returns an invalid response, the enabled route stops. An unchanged response is only
+a passed check, not proof that all private information was found.
+
+The OpenAI payload shown in preview stays byte-for-byte governed by Vision's existing digest and
+grant. Vision never sends AgentCloak's rewritten output to OpenAI. The check does not affect
+ordinary local Ollama chat or local-only investigations. See
+[[docs/adr/169-operator-managed-agentcloak-preflight|ADR-169]] and
+[[docs/security/ai-data-access|AI Data Access Policy]].
+The loopback URL limits Vision's first hop; the operator must verify that the AgentCloak deployment
+does not forward the checked text or retain it contrary to their privacy policy.
+
+![[docs/diagrams/ai-research-investigation-flow.puml]]
 
 ## Architecture
 
@@ -402,6 +425,7 @@ See [[docs/security/ai-data-access|AI Data Access Policy]] for the full security
 - [[docs/adr/145-bounded-ai-research-orchestration|ADR-145: Bounded AI Research Orchestration]]
 - [[docs/adr/147-allowlisted-openai-model-selection|ADR-147: Allowlisted OpenAI Model Selection]]
 - [[docs/adr/151-scoped-reversible-ai-references|ADR-151: Scoped Reversible AI References]]
+- [[docs/adr/169-operator-managed-agentcloak-preflight|ADR-169: Operator-managed AgentCloak Preflight]]
 - [[docs/features/transactions|Transactions]] — data surfaced by expense tools
 - [[docs/features/portfolio|Portfolio & Investments]] — data surfaced by portfolio tools
 - [[docs/features/plannedTransactions|Planned Transactions]] — data surfaced by planned tools
