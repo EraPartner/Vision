@@ -2,35 +2,66 @@
 title Bounded AI Research Investigation
 
 actor User
+participant "AI settings" as SettingsUI
 participant "Investigation panel" as UI
 participant "AI research routes" as API
+participant "AgentCloak Desktop setup\n(Vision service)" as Setup
 participant "Investigation service\n(serial queue)" as Orchestrator
 participant "Reference service\n(scoped local restoration)" as References
 participant "AgentCloak preflight\n(Vision service)" as Preflight
-participant "Operator-managed AgentCloak\n(loopback MCP server)" as AgentCloak
+participant "AgentCloak endpoint\n(Desktop /detect or MCP /mcp)" as AgentCloak
 database "PostgreSQL\njobs, passages, disclosure metadata,\nencrypted reference maps" as DB
 participant "Bounded typed tools" as Tools
 participant "Restricted analysis runtime" as Analysis
 participant "Local Ollama" as Ollama
 participant "Egress helper\n(short-lived process)" as Egress
 participant "OpenAI Responses API" as OpenAI
+collections "Private runtime env\n(reference key, provider config)" as Env
+
+opt User enables AgentCloak Desktop in AI settings
+  SettingsUI -> API: GET /agentcloak-desktop\nread effective state and fresh probe
+  API -> Setup: Probe /detect and read preference
+  Setup -> AgentCloak: Bounded loopback detection probe
+  Setup --> API: enabled, available, mappingKeyConfigured, openAiEnabled
+  API --> SettingsUI: Status without secrets
+  SettingsUI -> API: PUT /agentcloak-desktop {enabled:true}
+  API -> Setup: Probe then ensure reference key
+  Setup -> AgentCloak: Bounded loopback detection probe
+  Setup -> Env: Fill missing or blank key; preserve nonblank invalid key
+  Setup -> DB: Save enabled boolean only
+  Setup --> API: Updated status without secrets
+  API --> SettingsUI: Status response
+end
 
 User -> UI: Select scope, depth, language,\nresearch mode, route, and approved API model
 opt Selected summary or evidence contains explicit private literals
   User -> UI: Wrap literals as\n[[vision-ref:type|value]]
 end
 UI -> API: POST /disclosures/preview\nwith full investigation request
-opt Selected text contains explicit markers
+opt Selected text has markers or Desktop mode is enabled
   API -> References: Parse supported typed markers
+  opt Desktop mode
+    References -> Preflight: Detect selected-summary and evidence spans\nwith token identifiers masked
+    Preflight -> AgentCloak: POST /detect over loopback
+    AgentCloak --> Preflight: Validated spans or block
+    References -> References: Replace findings with scoped subject tokens
+  end
   References -> References: Create scope UUID and\n18-byte CSPRNG tokens
-  References -> DB: Store 15-minute unclaimed scope +\nAES-256-GCM ciphertext, nonce, and tag
+  opt Markers or detections created tokens
+    References -> DB: Store 15-minute unclaimed scope +\nAES-256-GCM ciphertext, nonce, and tag
+  end
   References --> API: Tokenized outboundRequest +\nscope id, expiry, and count
 end
 opt AgentCloak preflight enabled
   API -> Preflight: Present user-authored cloud fields\nafter Vision tokenization
-  Preflight -> AgentCloak: MCP cloak for each present text field\nwith token identifiers replaced by REFERENCE
-  AgentCloak --> Preflight: Unchanged text or proposed change
-  alt Changed text, unavailable, or invalid response
+  alt Desktop mode
+    Preflight -> AgentCloak: POST /detect with token identifiers masked
+    AgentCloak --> Preflight: No spans or remaining finding
+  else MCP mode
+    Preflight -> AgentCloak: MCP cloak with token identifiers replaced by REFERENCE
+    AgentCloak --> Preflight: Unchanged text or proposed change
+  end
+  alt Finding, changed text, unavailable, or invalid response
     Preflight --> API: Block cloud preview
   end
 end
@@ -61,8 +92,8 @@ else Scope is sufficient
     API -> DB: Create digest-bound grant
     opt AgentCloak preflight enabled, for each send attempt
       Orchestrator -> Preflight: Check canonical user-authored cloud text
-      Preflight -> AgentCloak: MCP cloak on token-safe check text
-      AgentCloak --> Preflight: Unchanged or block; no rewrite
+      Preflight -> AgentCloak: Desktop /detect or MCP cloak on token-safe text
+      AgentCloak --> Preflight: Clean or block; no payload rewrite
     end
     Orchestrator -> DB: Reserve disclosure and spend budgets
     Orchestrator -> Egress: Canonical allowlisted planning payload\nwith selected model and its price
@@ -75,8 +106,8 @@ end
 alt Selected-evidence cloud synthesis
   opt AgentCloak preflight enabled, for each send attempt
     Orchestrator -> Preflight: Check canonical selected evidence
-    Preflight -> AgentCloak: MCP cloak on token-safe check text
-    AgentCloak --> Preflight: Unchanged or block; no rewrite
+    Preflight -> AgentCloak: Desktop /detect or MCP cloak on token-safe text
+    AgentCloak --> Preflight: Clean or block; no payload rewrite
   end
   Orchestrator -> DB: Reserve disclosure and spend budgets
   Orchestrator -> Egress: Canonical selected-evidence payload\nwith selected model and its price
@@ -132,7 +163,8 @@ Cloud-authored analysis rows remain private and are synthesized locally.
 Selected models come from the server allowlist.
 Per-model prices drive spend reservation.
 Explicit markers become typed one-job tokens; this is pseudonymization, not anonymity.
-Optional AgentCloak checks user-authored cloud text and blocks changed or unverified text.
+Optional Desktop detection protects selected text before preview and blocks remaining findings.
+The MCP option blocks changed or unverified text. Vision performs local restoration.
 It never rewrites the digest-bound OpenAI payload. Local chat is untouched.
 The AES-256-GCM key is installation state outside PostgreSQL and database backup.
 Restart validates the provider-form checkpoint and restores locally without another model call.

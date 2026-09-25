@@ -321,6 +321,11 @@ package "Routes" {
     +GET /health : Ollama reachability probe
   }
 
+  class AiResearchRouter <<ADR-171>> {
+    +GET /agentcloak-desktop : effective status and fresh Desktop probe
+    +PUT /agentcloak-desktop : enable or disable Desktop protection
+  }
+
   class AttachmentsRouter <<Phase 5A>> {
     +POST /transaction/:id : upload receipt (attachmentRateLimiter 60/min)
     +GET /transaction/:id : list attachments
@@ -420,6 +425,7 @@ Main --> InternalAuditRouter : /api/internal/audit
 Main --> AggregationsRouter
 Main --> ReportsRouter
 Main --> AiRouter
+Main --> AiResearchRouter : /api/ai-research
 Main --> AttachmentsRouter
 Main --> TagsRouter
 TransactionsRouter ..> BulkActionsRoutes : mounts bulk endpoints

@@ -173,6 +173,26 @@ components:
         error:
           $ref: "#/components/schemas/ErrorPayload"
 
+    AgentCloakDesktopStatus:
+      type: object
+      additionalProperties: false
+      required: [enabled, available, mappingKeyConfigured, openAiEnabled]
+      properties:
+        enabled:
+          { type: boolean, description: Effective Desktop preference and mode }
+        available:
+          { type: boolean, description: Fresh bounded loopback detection probe }
+        mappingKeyConfigured:
+          {
+            type: boolean,
+            description: Valid local reference mapping key exists,
+          }
+        openAiEnabled:
+          {
+            type: boolean,
+            description: Effective OpenAI API route availability,
+          }
+
     ErrorPayload:
       type: object
       required: [message]
@@ -4871,10 +4891,62 @@ paths:
       tags: [AIResearch]
       responses:
         "200":
-          description: Configured capabilities without credentials, including optional AgentCloak preflight mode and location
+          description: Configured capabilities without credentials, including optional AgentCloak mode and location. Desktop mode reports protect-and-block; MCP mode reports block-on-change.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Envelope" }
+
+  /api/ai-research/agentcloak-desktop:
+    get:
+      summary: Inspect AgentCloak Desktop availability and protection state
+      operationId: getAgentCloakDesktopStatus
+      tags: [AIResearch]
+      responses:
+        "200":
+          description: Effective Desktop preference, fresh availability probe, mapping key state, and OpenAI route state; no secret values
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        { $ref: "#/components/schemas/AgentCloakDesktopStatus" }
+    put:
+      summary: Enable or disable AgentCloak Desktop protection
+      description: Enabling probes the Desktop loopback endpoint and ensures a local encrypted-reference mapping key before saving the boolean preference. Disabling saves the preference without deleting the key.
+      operationId: configureAgentCloakDesktop
+      tags: [AIResearch]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [enabled]
+              properties:
+                enabled: { type: boolean }
+      responses:
+        "200":
+          description: Updated Desktop status; no secret values
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        { $ref: "#/components/schemas/AgentCloakDesktopStatus" }
+        "400": { description: Invalid request body }
+        "409": { description: Existing local mapping key is invalid }
+        "502":
+          { description: AgentCloak Desktop is unavailable during enablement }
+        "503": { description: Local mapping key could not be stored }
 
   /api/ai-research/investigations:
     get:
@@ -5082,7 +5154,7 @@ paths:
 
   /api/ai-research/disclosures/preview:
     post:
-      summary: Preview the exact canonical payload proposed for cloud egress and run optional AgentCloak preflight
+      summary: Protect selected text when Desktop mode is enabled, then preview the exact canonical cloud payload and run AgentCloak preflight
       operationId: previewAiDisclosure
       tags: [AIResearch]
       requestBody:
@@ -5092,18 +5164,18 @@ paths:
             schema: { $ref: "#/components/schemas/AiInvestigationRequest" }
       responses:
         "200":
-          description: Payload, digest, field manifest, disclosure units, any encrypted local reference scope, and AgentCloak preflight status
+          description: Payload, digest, field manifest, disclosure units, any encrypted local reference scope including Desktop-detected values, and AgentCloak preflight status
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Envelope" }
         "400":
           {
             description: Invalid or non-cloud request,
-            or AgentCloak flagged user-authored cloud text,
+            or AgentCloak flagged public or remaining cloud text,
           }
         "502":
           {
-            description: Enabled AgentCloak preflight was unavailable or returned an invalid response,
+            description: Enabled AgentCloak detection or preflight was unavailable or returned an invalid response,
           }
         "503": { description: Reversible-reference key unavailable }
 

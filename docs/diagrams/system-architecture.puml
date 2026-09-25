@@ -27,7 +27,7 @@ package "Server" {
     node "Express.js" as Express
     node "Middleware Stack\nadminAuth · requestId · metrics\nCORS · rate limit · envelope · errors" as Middleware
     node "Routes\ntransactions · planning · portfolio · imports\nreports · AI · settings · admin · private audit" as Routes
-    node "Services\nimports · prices · FX · tax · snapshots\nbackup · AI orchestration + references · reports · attachments" as Services
+    node "Services\nimports · prices · FX · tax · snapshots\nbackup · AI orchestration + references + Desktop setup · reports · attachments" as Services
     node "Repositories\ntransaction · recipient · planning · portfolio\nimports · AI jobs + reference maps · attachments · settings · info" as Repos
     node "Background Jobs\nrefreshCashflowForecastMc · local analysis monitor scheduler" as Jobs
   }
@@ -51,7 +51,7 @@ cloud "External Services" as External {
   node "FRED / St. Louis Fed (macro series, ADR-082)" as FRED
   node "DBnomics (ECB/OECD/IMF macro, keyless, ADR-082)" as DBnomics
   node "Local Ollama (LLM, 127.0.0.1:11434)" as Ollama
-  node "Operator-managed AgentCloak\nloopback MCP /mcp, optional" as AgentCloak
+  node "AgentCloak\nDesktop /detect or MCP /mcp, optional" as AgentCloak
   node "OpenAI Responses API\nopt-in planning or selected-evidence synthesis" as OpenAI
   node "Codex App Server provider\nexperimental synthetic-only" as CodexProvider
 }
@@ -108,7 +108,8 @@ package "Database Access" {
 package "External Services" {
   Services --> External : HTTPS / local HTTP (Ollama)
   External --> Services : JSON
-  Services --> AgentCloak : optional preflight after tokenization\npreview + each OpenAI attempt
+  Services --> AgentCloak : optional Desktop detection before protection\nfinal preview check + each OpenAI attempt
+  Services --> AgentCloak : Desktop setup availability probe\nbefore saving enabled preference
 }
 
 note right of External
@@ -124,9 +125,10 @@ note right of External
     public catalog identifiers only; private analysis results stay local (ADR-149)
   - Explicit selected-text markers may become one-job typed tokens.
     AES-256-GCM mappings and answer restoration stay local (ADR-151).
-  - Optional operator-managed AgentCloak receives token-safe user-authored
-    cloud text over loopback. A changed result or check failure blocks egress;
-    Vision never applies AgentCloak's rewrite (ADR-169).
+  - Optional AgentCloak Desktop detects selected-text spans before preview;
+    Vision encrypts their scoped token mapping and restores locally (ADR-170).
+    The MCP mode checks token-safe text without applying its rewrite (ADR-169).
+    Remaining findings, changed text, or check failure block egress.
 end note
 
 note right of Tables

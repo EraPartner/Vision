@@ -154,8 +154,10 @@ const envSchema = z
 
     AI_REFERENCE_MAPPING_KEY: optionalStringEnv,
     AGENTCLOAK_PREFLIGHT_ENABLED: booleanEnv(false),
+    AGENTCLOAK_PREFLIGHT_MODE: z.enum(["mcp", "desktop"]).default("mcp"),
     AGENTCLOAK_MCP_URL: optionalStringEnv,
     AGENTCLOAK_MCP_API_KEY: optionalStringEnv,
+    AGENTCLOAK_DESKTOP_URL: optionalStringEnv,
     AGENTCLOAK_TIMEOUT_MS: intEnv(10000),
 
     OPENAI_API_ENABLED: booleanEnv(false),
@@ -195,6 +197,7 @@ const envSchema = z
     ALEMBIC_CONFIG: optionalStringEnv, // database/migrate.js
     VISION_CACHE_DIR: optionalStringEnv, // database/migrate.js
     VISION_RUNTIME_ROOT: optionalStringEnv, // packaged native runtime resources
+    VISION_NATIVE_ENV_FILE: optionalStringEnv, // packaged private runtime environment
     VISION_DIST_DIR: optionalStringEnv, // packaged production frontend
   })
   .passthrough();

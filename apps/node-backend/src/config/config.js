@@ -124,8 +124,10 @@ const settings = deepFreeze({
     referenceMappingKey: env.AI_REFERENCE_MAPPING_KEY,
     agentCloak: {
       enabled: env.AGENTCLOAK_PREFLIGHT_ENABLED,
+      mode: env.AGENTCLOAK_PREFLIGHT_MODE,
       url: env.AGENTCLOAK_MCP_URL,
       apiKey: env.AGENTCLOAK_MCP_API_KEY,
+      desktopUrl: env.AGENTCLOAK_DESKTOP_URL || "http://127.0.0.1:8787/detect",
       timeoutMs: env.AGENTCLOAK_TIMEOUT_MS,
     },
     web: {

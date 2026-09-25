@@ -3,13 +3,25 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("../src/config/config.js", () => ({
   default: { aiResearch: { agentCloak: { enabled: false } } },
 }));
+vi.mock("../src/services/agentCloakRuntimeConfig.js", () => ({
+  getAgentCloakConfig: vi.fn(async () => ({ enabled: false })),
+}));
 
-import { checkAgentCloakPreflight } from "../src/services/agentCloakPreflight.js";
+import {
+  checkAgentCloakPreflight,
+  detectAgentCloakDesktopSpans,
+} from "../src/services/agentCloakPreflight.js";
 
 const config = {
   enabled: true,
   url: "http://127.0.0.1:8765/mcp",
   apiKey: "synthetic-agentcloak-key",
+  timeoutMs: 1000,
+};
+const desktopConfig = {
+  enabled: true,
+  mode: "desktop",
+  desktopUrl: "http://127.0.0.1:8787/detect",
   timeoutMs: 1000,
 };
 
@@ -85,6 +97,91 @@ describe("AgentCloak cloud disclosure preflight", () => {
         { config, fetchImpl },
       ),
     ).rejects.toMatchObject({ code: "AGENTCLOAK_SENSITIVE_TEXT" });
+  });
+
+  it("uses Desktop detect without an MCP key or reference identifiers", async () => {
+    const token = "[[VR1:recipient:AAAAAAAAAAAAAAAAAAAAAAAA]]";
+    const fetchImpl = vi.fn(async () => Response.json({ spans: [] }));
+    await expect(
+      checkAgentCloakPreflight(
+        { selectedEvidence: `Pay ${token} tomorrow` },
+        { config: desktopConfig, fetchImpl },
+      ),
+    ).resolves.toEqual({ enabled: true, status: "passed" });
+    const [url, init] = fetchImpl.mock.calls[0];
+    expect(url).toBe(desktopConfig.desktopUrl);
+    expect(init.headers).not.toHaveProperty("x-inc-agentcloak-api-key");
+    expect(JSON.parse(init.body)).toEqual({
+      text: `Pay ${" ".repeat(token.length)} tomorrow`,
+    });
+  });
+
+  it("blocks Desktop findings and malformed Desktop responses", async () => {
+    const message = "Pay Alice Johnson";
+    const flagged = vi.fn(async () =>
+      Response.json({
+        spans: [{ start: 4, end: 17, label: "NAME", text: "Alice Johnson" }],
+      }),
+    );
+    await expect(
+      checkAgentCloakPreflight(
+        { selectedEvidence: message },
+        { config: desktopConfig, fetchImpl: flagged },
+      ),
+    ).rejects.toMatchObject({ code: "AGENTCLOAK_SENSITIVE_TEXT" });
+    await expect(
+      checkAgentCloakPreflight(
+        { selectedEvidence: message },
+        {
+          config: desktopConfig,
+          fetchImpl: vi.fn(async () => Response.json({ spans: null })),
+        },
+      ),
+    ).rejects.toMatchObject({ code: "AGENTCLOAK_PREFLIGHT_FAILED" });
+  });
+
+  it("rejects Desktop offsets that overlap masked references or overlap each other", async () => {
+    const token = "[[VR1:subject:AAAAAAAAAAAAAAAAAAAAAAAA]]";
+    const masked = `Pay ${" ".repeat(token.length)} tomorrow`;
+    const overlappingToken = vi.fn(async () =>
+      Response.json({
+        spans: [{ start: 4, end: 7, label: "NAME", text: masked.slice(4, 7) }],
+      }),
+    );
+    await expect(
+      detectAgentCloakDesktopSpans(`Pay ${token} tomorrow`, {
+        config: desktopConfig,
+        fetchImpl: overlappingToken,
+      }),
+    ).rejects.toMatchObject({ code: "AGENTCLOAK_PREFLIGHT_FAILED" });
+    const overlap = vi.fn(async () =>
+      Response.json({
+        spans: [
+          { start: 0, end: 3, label: "NAME", text: "Pay" },
+          { start: 2, end: 5, label: "NAME", text: "y A" },
+        ],
+      }),
+    );
+    await expect(
+      detectAgentCloakDesktopSpans("Pay Alice", {
+        config: desktopConfig,
+        fetchImpl: overlap,
+      }),
+    ).rejects.toMatchObject({ code: "AGENTCLOAK_PREFLIGHT_FAILED" });
+  });
+
+  it("rejects non-loopback Desktop URLs before sending text", async () => {
+    const fetchImpl = vi.fn();
+    await expect(
+      detectAgentCloakDesktopSpans("Synthetic", {
+        config: {
+          ...desktopConfig,
+          desktopUrl: "http://agentcloak.example/detect",
+        },
+        fetchImpl,
+      }),
+    ).rejects.toMatchObject({ code: "AGENTCLOAK_CONFIGURATION_INVALID" });
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 
   it.each([

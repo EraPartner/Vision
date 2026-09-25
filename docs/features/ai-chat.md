@@ -49,9 +49,9 @@ related_code:
 
 > [!abstract] Overview
 > Natural-language chat remains local via Ollama. The separate investigation panel adds recoverable,
-> evidence-backed local work. The consent-bound OpenAI API code remains available for source
-> development, but [[docs/adr/167-packaged-openai-api-release-gate|ADR-167]] disables that route
-> in packaged Vision for this release. The Codex experiment is synthetic-only.
+> evidence-backed local work. The packaged OpenAI API investigation route is code-capable only with
+> explicit private runtime configuration. Live synthetic route acceptance is still pending; see
+> [[docs/adr/171-packaged-openai-explicit-configuration|ADR-171]]. The Codex experiment is synthetic-only.
 
 ## Feature Overview
 
@@ -80,9 +80,9 @@ related_code:
 - Exact cloud-payload preview, revocable grants, and deletable local disclosure metadata.
 - Optional scoped reversible references replace explicitly marked selected-text literals with
   one-job random tokens and restore allowlisted answer text locally.
-- Optional operator-managed AgentCloak preflight checks user-authored cloud text after tokenization
-  at preview and before the provider send. A suggested change blocks disclosure; Vision does not
-  silently rewrite the previewed OpenAI payload.
+- Optional AgentCloak protection uses Desktop detection to replace selected-text findings with
+  Vision's encrypted scoped tokens before preview. The MCP mode remains a block-on-change check.
+  Both modes recheck user-authored cloud text before each OpenAI send.
 - Four visible model privacy profiles: fully local, public-question cloud planning, selected-summary
   cloud planning, and final cloud synthesis from exact selected evidence.
 - Each profile states its capability, exact cloud data, privacy boundary, and local retention. A
@@ -121,7 +121,10 @@ Selected-summary planning and selected-evidence synthesis show an optional marke
 write `[[vision-ref:type|value]]` in the selected summary or selected evidence. Types are `account`,
 `recipient`, `investment`, `holding`, `category`, `document`, `subject`, `amount`, and `date`.
 Preview replaces each marker with a typed random token, warns with the number of scoped references,
-and returns the tokenized `outboundRequest` used for both the grant and investigation.
+and returns the tokenized `outboundRequest` used for both the grant and investigation. When
+AgentCloak Desktop mode is enabled, detected literals in selected summary or evidence become
+`subject` tokens in the same scope. A clean Desktop scan needs no mapping key unless the text
+contains explicit markers.
 
 The mapping stays in PostgreSQL as AES-256-GCM ciphertext under the installation's
 `AI_REFERENCE_MAPPING_KEY`. An unclaimed preview is usable for 15 minutes and can be claimed by one
@@ -137,25 +140,34 @@ The feature is pseudonymization, not anonymity: unmarked amounts, dates, holding
 patterns still cross the exact selected disclosure boundary. See
 [[docs/adr/151-scoped-reversible-ai-references|ADR-151]].
 
-### Optional AgentCloak preflight
+### Optional AgentCloak protection
 
-An operator can enable an AgentCloak MCP endpoint as another gate on the OpenAI route. Vision
-sends the cloud request's user-authored `question`, `selectedSummary`, or `selectedEvidence` text to
-the operator-managed loopback service after replacing explicit reference markers with scoped tokens.
-It replaces the token strings with `REFERENCE` for this check. A changed AgentCloak result tells the
-user to revise the text or add markers before preview or send can proceed. If the service is
-unavailable or returns an invalid response, the enabled route stops. An unchanged response is only
-a passed check, not proof that all private information was found.
+An operator can enable `desktop` or `mcp` mode on the OpenAI route. Desktop mode calls the installed
+AgentCloak Desktop app's experimental loopback `/detect` endpoint during preview. For selected
+summary or evidence, Vision validates detected spans and replaces their literals with encrypted,
+job-scoped reference tokens. The preview and grant bind the resulting exact OpenAI payload. A
+public question is checked but is not automatically changed. Desktop checks the tokenized payload
+again before preview completes and before each OpenAI send; any remaining finding blocks cloud
+disclosure. Vision locally restores answer display text from its own encrypted map. It does not use
+Desktop's `/protect` or `/reveal` mapping. Desktop mode needs the backend on the same host as the
+Desktop app, and the undocumented interface may change.
 
-The OpenAI payload shown in preview stays byte-for-byte governed by Vision's existing digest and
-grant. Vision never sends AgentCloak's rewritten output to OpenAI. The check does not affect
-ordinary local Ollama chat or local-only investigations. See
-[[docs/adr/169-operator-managed-agentcloak-preflight|ADR-169]] and
-[[docs/security/ai-data-access|AI Data Access Policy]].
-The loopback URL limits Vision's first hop; the operator must verify that the AgentCloak deployment
-does not forward the checked text or retain it contrary to their privacy policy.
+MCP mode keeps the operator-managed loopback `cloak` check from
+[[docs/adr/169-operator-managed-agentcloak-preflight|ADR-169]]. It checks the user-authored
+`question`, `selectedSummary`, and `selectedEvidence` after Vision's explicit marker replacement,
+using `REFERENCE` in place of token identifiers. A proposed change blocks the request; Vision never
+applies that rewrite. In either mode, an unavailable or invalid enabled check stops cloud work.
+Neither a clean scan nor tokenization proves anonymity. Local Ollama chat and local-only
+investigations are unaffected. See [[docs/adr/170-agentcloak-desktop-detection-and-scoped-protection|ADR-170]]
+and [[docs/security/ai-data-access|AI Data Access Policy]].
 
 ![[docs/diagrams/ai-research-investigation-flow.puml]]
+
+AI settings also shows a fresh AgentCloak Desktop availability probe and an enable or disable
+control. Enabling can happen before OpenAI is configured: Vision first probes Desktop, then creates
+a local reference mapping key if none exists. The control saves only the enabled preference in the
+settings database. See [[docs/features/settings|Settings]] and
+[[docs/api/ai-research|AI Research API]].
 
 ## Architecture
 
@@ -426,6 +438,8 @@ See [[docs/security/ai-data-access|AI Data Access Policy]] for the full security
 - [[docs/adr/147-allowlisted-openai-model-selection|ADR-147: Allowlisted OpenAI Model Selection]]
 - [[docs/adr/151-scoped-reversible-ai-references|ADR-151: Scoped Reversible AI References]]
 - [[docs/adr/169-operator-managed-agentcloak-preflight|ADR-169: Operator-managed AgentCloak Preflight]]
+- [[docs/adr/170-agentcloak-desktop-detection-and-scoped-protection|ADR-170: AgentCloak Desktop Detection with Scoped Vision Protection]]
+- [[docs/adr/171-packaged-openai-explicit-configuration|ADR-171: Explicitly Configured Packaged OpenAI API Route]]
 - [[docs/features/transactions|Transactions]] — data surfaced by expense tools
 - [[docs/features/portfolio|Portfolio & Investments]] — data surfaced by portfolio tools
 - [[docs/features/plannedTransactions|Planned Transactions]] — data surfaced by planned tools

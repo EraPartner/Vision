@@ -1454,21 +1454,31 @@
             "y": 1310
           },
           {
+            "id": "sv.agentcloaksetup",
+            "label": "AgentCloak setup",
+            "sub": "Desktop probe · private key",
+            "kind": "service",
+            "path": "apps/node-backend/src/services/agentCloakDesktopSetupService.js",
+            "desc": "ADR-171: AI settings probes Desktop /detect, creates a missing or blank Vision reference key in the private runtime environment, and stores only the enabled preference in PostgreSQL. Setup can precede OpenAI configuration.",
+            "x": 760,
+            "y": 1310
+          },
+          {
             "id": "sv.agentcloak",
             "label": "AgentCloak preflight",
-            "sub": "block on change · exact digest kept",
+            "sub": "Desktop detect · MCP gate",
             "kind": "service",
             "path": "apps/node-backend/src/services/agentCloakPreflight.js",
-            "desc": "ADR-169: checks present user-authored cloud text after Vision reference tokenization at preview and before each OpenAI attempt. It substitutes REFERENCE for token identifiers, blocks changed or invalid results, and never rewrites the consent-bound payload.",
+            "desc": "ADR-169/170: Desktop detects selected-text spans before Vision creates encrypted scoped tokens, then checks for remaining findings at preview and before each OpenAI attempt. MCP mode blocks changed results. Neither mode rewrites the consent-bound send payload.",
             "x": 940,
             "y": 1310
           },
           {
             "id": "ex.agentcloak",
             "label": "AgentCloak endpoint",
-            "sub": "operator-managed loopback MCP /mcp",
+            "sub": "Desktop /detect or MCP /mcp",
             "kind": "external",
-            "desc": "Optional operator-managed loopback endpoint receives checked user-authored cloud text. Loopback does not prove that the service processes it locally; operators must verify forwarding, retention, and logs.",
+            "desc": "Optional Desktop /detect receives selected text on experimental unauthenticated loopback; MCP /mcp receives checked user-authored text through an operator-managed endpoint. Loopback alone does not prove forwarding or retention behavior.",
             "x": 1120,
             "y": 1310
           },
@@ -1609,8 +1619,12 @@
           ["be.routes", "sv.airesearch"],
           ["be.routes", "sv.aireference"],
           ["be.routes", "sv.agentcloak"],
+          ["be.routes", "sv.agentcloaksetup"],
+          ["sv.agentcloaksetup", "ex.agentcloak"],
+          ["sv.agentcloaksetup", "db.postgres"],
           ["sv.airesearch", "be.repos"],
           ["sv.airesearch", "sv.aireference"],
+          ["sv.aireference", "sv.agentcloak"],
           ["sv.airesearch", "sv.agentcloak"],
           ["sv.agentcloak", "ex.agentcloak"],
           ["sv.aireference", "be.repos"],
@@ -2066,7 +2080,7 @@
             "id": "cloud-catalog-analysis",
             "name": "Execute a cloud-authored catalog analysis locally",
             "category": "AI",
-            "summary": "The optional AgentCloak endpoint checks present user-authored cloud text first. OpenAI receives public catalog identifiers only; Vision validates, scopes, executes, stores, and synthesizes the private result locally.",
+            "summary": "Optional Desktop detection protects selected summary text before consent, while MCP mode blocks proposed changes. Both modes check again before send. OpenAI receives public catalog identifiers only; Vision executes and synthesizes private results locally.",
             "steps": [
               {
                 "from": "sv.airesearch",
@@ -2077,8 +2091,8 @@
               {
                 "from": "sv.agentcloak",
                 "to": "ex.agentcloak",
-                "payload": "MCP cloak check through the operator-managed loopback endpoint",
-                "annotation": "agentCloakPreflight.js requires unchanged text and fails closed on a change or invalid response. The operator must verify whether its service forwards or retains the text."
+                "payload": "Desktop /detect or MCP cloak check over loopback",
+                "annotation": "agentCloakPreflight.js blocks residual Desktop findings or MCP changes, and fails closed on invalid responses. The operator must verify endpoint forwarding and retention."
               },
               {
                 "from": "sv.airesearch",
@@ -3419,10 +3433,60 @@
             ]
           },
           {
+            "id": "agentcloak-desktop-setup",
+            "name": "Enable AgentCloak Desktop in AI settings",
+            "category": "AI and research",
+            "summary": "The user enables Desktop protection. Vision probes the loopback detector, ensures a private reference key, and stores only the preference in PostgreSQL; OpenAI configuration is optional at setup time.",
+            "steps": [
+              {
+                "from": "browser",
+                "to": "fe.pages",
+                "payload": "Open AI settings and review AgentCloak Desktop status",
+                "annotation": "apps/frontend/src/features/settings/AgentCloakDesktopSettingsSection.tsx presents the Desktop control and the current enabled, available, mappingKeyConfigured, and openAiEnabled values."
+              },
+              {
+                "from": "fe.pages",
+                "to": "fe.apiclient",
+                "payload": "GET /api/ai-research/agentcloak-desktop, then PUT {enabled:true}",
+                "annotation": "apps/frontend/src/lib/api/aiResearch.ts requests a fresh status and sends only the requested boolean when the user enables protection."
+              },
+              {
+                "from": "fe.apiclient",
+                "to": "be.routes",
+                "payload": "Authenticated Desktop setup request",
+                "annotation": "apps/node-backend/src/routes/aiResearch.js validates the strict boolean body and delegates to configureAgentCloakDesktop()."
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.agentcloaksetup",
+                "payload": "Probe Desktop, ensure reference key, save enabled preference",
+                "annotation": "apps/node-backend/src/services/agentCloakDesktopSetupService.js performs the enable sequence; an unavailable detector, invalid existing key, or storage error fails closed."
+              },
+              {
+                "from": "sv.agentcloaksetup",
+                "to": "ex.agentcloak",
+                "payload": "Bounded loopback POST /detect probe",
+                "annotation": "The Desktop probe checks current reachability. A loopback address alone does not prove that upstream processing or retention stays local."
+              },
+              {
+                "from": "sv.agentcloaksetup",
+                "to": "db.postgres",
+                "payload": "Persist enabled boolean only",
+                "annotation": "The setup service stores the preference in settings after aiReferenceKeySetup.js creates or validates the installation-held key in backend .env.local or native private runtime.env. No key material enters PostgreSQL."
+              },
+              {
+                "from": "be.routes",
+                "to": "fe.apiclient",
+                "payload": "{enabled,available,mappingKeyConfigured,openAiEnabled}",
+                "annotation": "The response contains booleans only. OpenAI can still be unconfigured; live packaged synthetic API acceptance remains pending under ADR-171."
+              }
+            ]
+          },
+          {
             "id": "ai-research-investigation",
             "name": "Run a bounded AI research investigation",
             "category": "AI and research",
-            "summary": "A user selects scope, evidence access, depth, a visible privacy profile, and an approved API model. Explicit reference markers become one-job tokens; optional operator-managed AgentCloak preflight blocks changed user-authored cloud text without rewriting the consent-bound OpenAI payload.",
+            "summary": "A user selects scope, evidence access, depth, a privacy profile, and an approved API model. In Desktop mode, detected selected text becomes encrypted one-job tokens before consent; MCP mode blocks proposed changes. Vision restores answer text locally.",
             "steps": [
               {
                 "from": "browser",
@@ -3439,8 +3503,20 @@
               {
                 "from": "be.routes",
                 "to": "sv.aireference",
-                "payload": "selected text with explicit typed markers",
-                "annotation": "aiReferenceService.js accepts account, recipient, investment, holding, category, document, subject, amount, and date markers; malformed or unsupported markers fail explicitly."
+                "payload": "selected text with explicit markers or Desktop detection enabled",
+                "annotation": "aiReferenceService.js accepts supported explicit typed markers and, in Desktop mode, protects validated selected-text spans with scoped subject tokens before disclosurePayload() computes the digest."
+              },
+              {
+                "from": "sv.aireference",
+                "to": "sv.agentcloak",
+                "payload": "optional selected-summary and evidence scan before scope creation",
+                "annotation": "aiReferenceService.js calls detectAgentCloakDesktopSpans() during preview, after explicit marker tokenization and before storing the mapping. Token identifiers are masked with spaces."
+              },
+              {
+                "from": "sv.agentcloak",
+                "to": "ex.agentcloak",
+                "payload": "experimental Desktop POST /detect on selected text",
+                "annotation": "agentCloakPreflight.js validates span offsets and text. Vision stores detected originals only in its encrypted scoped mapping, not in Desktop's protect/reveal map."
               },
               {
                 "from": "sv.aireference",
@@ -3452,19 +3528,19 @@
                 "from": "be.routes",
                 "to": "sv.agentcloak",
                 "payload": "optional preview check of present user-authored cloud fields",
-                "annotation": "routes/aiResearch.js calls checkAgentCloakPreflight() after disclosurePayload() has built the tokenized exact payload. The check never alters its digest."
+                "annotation": "routes/aiResearch.js calls checkAgentCloakPreflight() on the exact payload after Vision finishes selected-text protection; the final check never alters its digest."
               },
               {
                 "from": "sv.agentcloak",
                 "to": "ex.agentcloak",
-                "payload": "MCP cloak calls over loopback with token IDs replaced by REFERENCE",
-                "annotation": "agentCloakPreflight.js checks question, selectedSummary, and selectedEvidence when present. A changed, invalid, or unavailable result blocks preview; an unchanged result returns passed status."
+                "payload": "Desktop /detect with masked tokens or MCP cloak with REFERENCE",
+                "annotation": "agentCloakPreflight.js checks present user-authored cloud fields. Remaining Desktop spans, MCP changes, invalid responses, or an unavailable endpoint block preview."
               },
               {
                 "from": "be.routes",
                 "to": "fe.apiclient",
                 "payload": "tokenized outboundRequest + referenceScope + preflight status",
-                "annotation": "previewDisclosure() returns the exact request that must be used for the grant and job only after the optional check passes. A request without markers has a null scope."
+                "annotation": "previewDisclosure() returns the exact request used for the grant and job only after the optional check passes. A request without markers or Desktop findings has a null scope."
               },
               {
                 "from": "fe.apiclient",
@@ -3512,13 +3588,13 @@
                 "from": "sv.agentcloak",
                 "to": "ex.agentcloak",
                 "payload": "present user-authored cloud text only",
-                "annotation": "agentCloakPreflight.js sends an authenticated MCP cloak request to the operator-managed loopback /mcp endpoint and fails closed on changes or errors."
+                "annotation": "agentCloakPreflight.js calls Desktop /detect or authenticated MCP /mcp over loopback and fails closed on remaining findings, proposed changes, or errors."
               },
               {
                 "from": "sv.airesearch",
                 "to": "ex.openai",
                 "payload": "optional preview-hash-bound payload with scoped tokens, never marked literals",
-                "annotation": "Only an unexpired mode-specific grant matching the exact final request bytes and cumulative budgets can cross the short-lived Seatbelt sandbox. Reversible tokens hide only explicitly marked literals; surrounding amounts, dates, holdings, prose, and patterns can still identify the subject."
+                "annotation": "Only an unexpired mode-specific grant matching exact request bytes and budgets can cross the short-lived Seatbelt sandbox. Tokens hide marked literals and optional Desktop-detected spans; surrounding context can still identify the subject."
               },
               {
                 "from": "sv.airesearch",

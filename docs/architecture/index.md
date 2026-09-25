@@ -57,10 +57,11 @@ Located in `docs/diagrams/`:
 
 ## Interactive Flow Visualizer
 
-For an interactive companion to these diagrams, open `docs/flow-visualizer.html` — a single-page HTML map of all packages (77 components) and 38 end-to-end flows, including category hierarchy editing, persistent research dossiers, local analysis monitoring, the restricted manual and cloud-authored analysis runtime, explicit portfolio look-through exposure, bounded AI research, scoped local reference restoration, optional AgentCloak preflight before cloud egress, forward-only broker history, native runtime, and atomic native Demo seed activation. Click a flow to highlight the path, step through it, and inspect the payload at every hop. Data lives in an embedded JSON block; extending it is a copy-paste.
+For an interactive companion to these diagrams, open `docs/flow-visualizer.html` — a single-page HTML map of all packages (78 components) and 39 end-to-end flows, including category hierarchy editing, persistent research dossiers, local analysis monitoring, the restricted manual and cloud-authored analysis runtime, explicit portfolio look-through exposure, AgentCloak Desktop setup, bounded AI research, scoped local reference restoration, optional AgentCloak Desktop protection or MCP preflight before cloud egress, forward-only broker history, native runtime, and atomic native Demo seed activation. Click a flow to highlight the path, step through it, and inspect the payload at every hop. Data lives in an embedded JSON block; extending it is a copy-paste.
 
-The system and backend service diagrams include the optional AgentCloak dependency. Its loopback
-endpoint is a connection boundary; deployment and retention require operator verification.
+The system and backend service diagrams include the optional AgentCloak dependency. Desktop mode
+detects selected-text spans before Vision creates encrypted reference tokens; MCP mode keeps the
+block-on-change gate. The loopback endpoint is a connection boundary, not a retention guarantee.
 
 ![[docs/diagrams/system-architecture.puml]]
 

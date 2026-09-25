@@ -20,7 +20,11 @@ function fail(message, code, status = 400) {
   return Object.assign(new Error(message), { code, status });
 }
 
-export function mappingKey(raw = settings.aiResearch.referenceMappingKey) {
+// UI setup can install the key after startup; the frozen env schema cannot see it.
+export function mappingKey(
+  raw = process.env.AI_REFERENCE_MAPPING_KEY ||
+    settings.aiResearch.referenceMappingKey,
+) {
   if (!raw) return null;
   if (!/^[A-Za-z0-9+/]{43}=$/.test(raw)) return null;
   const key = Buffer.from(raw, "base64");
@@ -85,6 +89,60 @@ function tokenizeText(text, createToken) {
   return { text: tokenized, entries };
 }
 
+/**
+ * @param {string | null | undefined} text
+ * @param {((text: string) => Promise<Array<{start: number, end: number, text: string, label: string}>>) | undefined} detectSensitiveSpans
+ * @param {(referenceType: string, value: string) => {token: string, referenceType: string, ciphertext: Buffer, nonce: Buffer, authTag: Buffer}} createToken
+ */
+async function tokenizeDetectedText(text, detectSensitiveSpans, createToken) {
+  if (!text || !detectSensitiveSpans)
+    return {
+      text,
+      entries: /** @type {Array<ReturnType<typeof createToken>>} */ ([]),
+    };
+  const spans = await detectSensitiveSpans(text);
+  if (!Array.isArray(spans))
+    throw fail(
+      "The local privacy scan returned invalid spans",
+      "REFERENCE_DETECTION_INVALID",
+      503,
+    );
+  const entries = [];
+  let end = 0;
+  let result = "";
+  for (const span of spans) {
+    if (
+      !Number.isInteger(span?.start) ||
+      !Number.isInteger(span?.end) ||
+      span.start < end ||
+      span.end <= span.start ||
+      span.end > text.length ||
+      span.text !== text.slice(span.start, span.end)
+    )
+      throw fail(
+        "The local privacy scan returned invalid spans",
+        "REFERENCE_DETECTION_INVALID",
+        503,
+      );
+    const entry = createToken("subject", span.text);
+    entries.push(entry);
+    result += text.slice(end, span.start) + entry.token;
+    end = span.end;
+  }
+  return { text: result + text.slice(end), entries };
+}
+
+/**
+ * @param {any} request
+ * @param {{
+ *   key?: Buffer | null,
+ *   random?: (size: number) => Buffer,
+ *   createId?: () => string,
+ *   createScope?: typeof repository.createScope,
+ *   cleanup?: typeof repository.deleteExpiredUnclaimed,
+ *   detectSensitiveSpans?: (text: string) => Promise<Array<{start: number, end: number, text: string, label: string}>>,
+ * }} [options]
+ */
 export async function prepareReferencePreview(
   request,
   {
@@ -93,6 +151,7 @@ export async function prepareReferencePreview(
     createId = randomUUID,
     createScope = repository.createScope,
     cleanup = repository.deleteExpiredUnclaimed,
+    detectSensitiveSpans,
   } = {},
 ) {
   if (
@@ -106,18 +165,17 @@ export async function prepareReferencePreview(
   const sourceValues = [request.selectedSummary, request.selectedEvidence]
     .filter(Boolean)
     .join("\n");
-  if (!sourceValues.includes(PRIVATE_MARKER_PREFIX))
+  if (!sourceValues.includes(PRIVATE_MARKER_PREFIX) && !detectSensitiveSpans)
     return { request: { ...request, referenceScopeId: null }, scope: null };
-  if (!key)
-    throw fail(
-      "Reversible references require a configured local mapping key",
-      "REFERENCE_KEY_UNAVAILABLE",
-      503,
-    );
-  await cleanup();
   const scopeId = createId();
   const byValue = new Map();
   const createToken = (referenceType, value) => {
+    if (!key)
+      throw fail(
+        "Reversible references require a configured local mapping key",
+        "REFERENCE_KEY_UNAVAILABLE",
+        503,
+      );
     const identity = `${referenceType}\0${value}`;
     if (byValue.has(identity)) return byValue.get(identity);
     const token = `[[VR1:${referenceType}:${random(18).toString("base64url")}]]`;
@@ -134,7 +192,27 @@ export async function prepareReferencePreview(
   };
   const summary = tokenizeText(request.selectedSummary, createToken);
   const evidence = tokenizeText(request.selectedEvidence, createToken);
-  const entries = [...new Set([...summary.entries, ...evidence.entries])];
+  const protectedSummary = await tokenizeDetectedText(
+    summary.text,
+    detectSensitiveSpans,
+    createToken,
+  );
+  const protectedEvidence = await tokenizeDetectedText(
+    evidence.text,
+    detectSensitiveSpans,
+    createToken,
+  );
+  const entries = [
+    ...new Set([
+      ...summary.entries,
+      ...evidence.entries,
+      ...protectedSummary.entries,
+      ...protectedEvidence.entries,
+    ]),
+  ];
+  if (entries.length === 0)
+    return { request: { ...request, referenceScopeId: null }, scope: null };
+  await cleanup();
   const expiresAt = new Date(Date.now() + PREVIEW_TTL_MS).toISOString();
   try {
     await createScope({ id: scopeId, expiresAt, entries });
@@ -150,8 +228,8 @@ export async function prepareReferencePreview(
   return {
     request: {
       ...request,
-      selectedSummary: summary.text,
-      selectedEvidence: evidence.text,
+      selectedSummary: protectedSummary.text,
+      selectedEvidence: protectedEvidence.text,
       referenceScopeId: scopeId,
     },
     scope: { id: scopeId, expiresAt, count: entries.length },

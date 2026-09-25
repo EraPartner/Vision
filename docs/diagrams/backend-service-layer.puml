@@ -241,8 +241,18 @@ package "AI & Observability" {
     +generateWithProvider(request): Promise<ProviderResult>
   }
 
-  class AgentCloakPreflight <<ADR-169>> {
+  class AgentCloakPreflight <<ADR-169, ADR-170>> {
     +checkAgentCloakPreflight(disclosedPayload): Promise<Status>
+    +detectAgentCloakDesktopSpans(text): Promise<Spans>
+  }
+
+  class AgentCloakDesktopSetupService <<ADR-171>> {
+    +agentCloakDesktopStatus(): Promise<Status>
+    +configureAgentCloakDesktop(enabled): Promise<Status>
+  }
+
+  class AiReferenceKeySetup <<ADR-171>> {
+    +ensureReferenceMappingKey(): Created | Existing
   }
 
   class ProviderHealthService {
@@ -420,9 +430,14 @@ AiChatService --> InfoRepository : canonical cash flow
 AiChatService --> PortfolioSummaryService : canonical portfolio metrics
 
 AiInvestigationService --> AiReferenceService : claim and local restoration
+AiReferenceService --> AgentCloakPreflight : Desktop span detection at preview
 AiInvestigationService --> AiProviderAdapters : consent-bound cloud generation
 AiProviderAdapters --> AgentCloakPreflight : before each OpenAI attempt
-AgentCloakPreflight --> "Operator-managed AgentCloak MCP" : loopback cloak check
+AgentCloakPreflight --> "AgentCloak Desktop or MCP" : loopback detect or cloak check
+AgentCloakDesktopSetupService --> AgentCloakPreflight : fresh bounded probe
+AgentCloakDesktopSetupService --> AiReferenceKeySetup : ensure key on enable
+AgentCloakDesktopSetupService --> SettingsRepository : persist boolean only
+AiReferenceKeySetup --> "Private environment file" : create missing or blank key
 AiInvestigationService --> AiInvestigationRepository : provider-form checkpoint
 AiReferenceService --> AiReferenceRepository : encrypted scoped mappings
 

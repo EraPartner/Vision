@@ -5,7 +5,7 @@ status: active
 date: 2026-09-14
 updated: 2026-09-25
 tags: [api, ai, research, jobs, documents, disclosure, openai, agentcloak]
-description: Recoverable AI investigations, local research documents, consent-bound cloud disclosure, scoped reversible references, and optional AgentCloak preflight.
+description: Recoverable AI investigations, local research documents, consent-bound cloud disclosure, scoped reversible references, and optional AgentCloak Desktop protection or MCP preflight.
 aliases: [AI investigation API, research document API, disclosure API]
 ---
 
@@ -15,16 +15,18 @@ aliases: [AI investigation API, research document API, disclosure API]
 > `/api/ai-research` is the provider-neutral investigation and disclosure surface.
 > `/api/ai-research/documents` owns the local passage library. Both use the normal response envelope.
 
-Packaged Vision reports the `openai-api` provider as `disabled` and refuses its execution with
-`OPENAI_DISABLED` for this release, regardless of a private runtime setting. See
-[[docs/adr/167-packaged-openai-api-release-gate|ADR-167]]. This changes deployment availability,
-not the API operation or response schema.
+Packaged Vision can enable the `openai-api` route when its private native runtime environment
+explicitly supplies `OPENAI_API_ENABLED=true` and `OPENAI_API_KEY`. Otherwise it remains disabled.
+The selected model, prices, spend budget, and consent grant still gate actual sends. This is code
+capability; live synthetic route acceptance has not yet been recorded for this release. See
+[[docs/adr/171-packaged-openai-explicit-configuration|ADR-171]].
 
 ## Endpoints
 
 | Method        | Path                                             | Purpose                                                                                     |
 | ------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------- |
 | `GET`         | `/api/ai-research/status`                        | Effective local, web, OpenAI, reversible-reference, and AgentCloak capabilities             |
+| `GET, PUT`    | `/api/ai-research/agentcloak-desktop`            | Probe Desktop and inspect or change its protection preference                               |
 | `GET, POST`   | `/api/ai-research/investigations`                | List or start bounded jobs                                                                  |
 | `GET, DELETE` | `/api/ai-research/investigations/:id`            | Inspect evidence/steps or delete local history                                              |
 | `POST`        | `/api/ai-research/investigations/:id/resume`     | Reuse completed checkpoints                                                                 |
@@ -76,35 +78,62 @@ preview and consent digest, and its own prices drive spend reservation and final
 request contract accepts exactly one of `publicQuestion`, `selectedSummary`, or `selectedEvidence`
 for the OpenAI route; mixed modes are rejected. These API additions are backward-compatible.
 
-When configured, `status.data.openai.agentCloakPreflight` reports `enabled`,
-`mode: "block-on-change"`, and `location: "operator-managed-loopback"`; it exposes no URL or API
-key. Cloud preview adds `agentCloakPreflight: { enabled: false }` when disabled, or
-`{ enabled: true, status: "passed" }` after a successful check. A changed AgentCloak result returns
-`400 AGENTCLOAK_SENSITIVE_TEXT`; an unavailable or invalid check returns an upstream error. The
-check runs again before OpenAI send, including retries. It checks user-authored cloud text after
-reference tokenization and does not alter the previewed payload or SHA-256 grant digest. These
+When configured, `status.data.openai.agentCloakPreflight` reports `enabled`, mode, and location;
+it exposes no URL or API key. MCP mode reports `mode: "block-on-change"` and
+`location: "operator-managed-loopback"`. Desktop mode reports `mode: "protect-and-block"` and
+`location: "desktop-loopback"`. Cloud preview adds `agentCloakPreflight: { enabled: false }` when
+disabled, or `{ enabled: true, status: "passed" }` after a successful check. A remaining Desktop
+finding or a proposed MCP change returns `400 AGENTCLOAK_SENSITIVE_TEXT`; an unavailable or invalid
+check returns an upstream error. The check runs again before OpenAI send, including retries. These
 response additions are backward-compatible. See
-[[docs/adr/169-operator-managed-agentcloak-preflight|ADR-169]].
+[[docs/adr/169-operator-managed-agentcloak-preflight|ADR-169]] and
+[[docs/adr/170-agentcloak-desktop-detection-and-scoped-protection|ADR-170]].
+
+## AgentCloak Desktop setup
+
+`GET /api/ai-research/agentcloak-desktop` returns the normal envelope with `data` containing four
+booleans: `enabled`, `available`, `mappingKeyConfigured`, and `openAiEnabled`. `available` is a fresh
+bounded probe of the configured Desktop loopback `/detect` endpoint. Status does not return the
+mapping key, provider credential, or URL. A reachable endpoint is not a guarantee of future
+availability or complete detection.
+
+`PUT /api/ai-research/agentcloak-desktop` accepts only `{ "enabled": boolean }` and returns the
+same status shape. Enabling probes Desktop and ensures a valid Vision reference mapping key before
+saving the enabled preference. If no key exists, Vision generates one in backend `.env.local` during
+source development or in the private native `runtime.env` when packaged. A blank key entry is
+filled, but a nonblank invalid key is never replaced. The settings database stores only the
+boolean; disabling does not delete the
+key. Setup works before OpenAI is configured, although cloud requests still require separate
+provider configuration and consent.
+
+An invalid body returns `400`; an invalid existing key returns `409 REFERENCE_KEY_INVALID`;
+unavailable Desktop returns `502 AGENTCLOAK_DESKTOP_UNAVAILABLE`; and key storage failure returns
+`503 REFERENCE_KEY_STORAGE_UNAVAILABLE`. These operations are additive and nonbreaking for existing
+clients. See [[docs/adr/171-packaged-openai-explicit-configuration|ADR-171]].
 
 ## Scoped reversible references
 
 For `selected-summary` and `cloud-synthesis-selected`, callers may wrap a literal inside
 `selectedSummary` or `selectedEvidence` as `[[vision-ref:type|value]]`. Allowed types are `account`,
 `recipient`, `investment`, `holding`, `category`, `document`, `subject`, `amount`, and `date`.
-The marker is explicit: Vision does not infer private values or scan the question and public-query
-fields for replacements.
+Markers are explicit. In optional AgentCloak Desktop mode, Vision also scans selected summary and
+evidence for spans to protect automatically before computing the preview digest. It does not
+replace text in the question or public-query fields. The public question and any findings left in
+the tokenized selected text block preview.
 
 `POST /api/ai-research/disclosures/preview` accepts the full `AiInvestigationRequest`. Its response
 adds:
 
 - `outboundRequest`: the request that must be used for grant creation and investigation creation;
-  marked literals are replaced with typed `[[VR1:type:<24 base64url characters>]]` tokens;
+  marked literals and, in Desktop mode, detected selected-text literals are replaced with
+  `[[VR1:type:<24 base64url characters>]]` tokens;
 - `referenceScope`: either `null`, or `{ id, expiresAt, count }` for the encrypted local mapping;
 - the existing exact payload, SHA-256 digest, byte count, field manifest, and disclosure units,
   computed from that tokenized outbound request.
 
-When markers are present, `AI_REFERENCE_MAPPING_KEY` must decode to exactly 32 bytes. Missing or
-invalid key material returns `503 REFERENCE_KEY_UNAVAILABLE`. Unsupported or malformed markers
+When markers or Desktop detections create a scope, `AI_REFERENCE_MAPPING_KEY` must decode to
+exactly 32 bytes. Missing or invalid key material returns `503 REFERENCE_KEY_UNAVAILABLE`. A clean
+Desktop scan without markers needs no mapping key. Unsupported or malformed markers
 return `400`. The unclaimed scope is usable for 15 minutes. Investigation creation rejects raw
 markers, malformed or unknown tokens, a token from another scope, and an expired or already claimed
 scope. A successful create atomically claims the scope for that one job and extends its restoration
@@ -117,11 +146,12 @@ conflict descriptions; and evidence excerpts. It never rewrites evidence identif
 locators, kinds, dates, availability, or answer structure. Unknown, cross-job, malformed, expired,
 or undecryptable response tokens fail the job visibly; no partly restored answer is returned.
 
-This feature is **pseudonymization, not anonymity**. It hides only explicitly marked literals. The
+This feature is **pseudonymization, not anonymity**. It hides only marked literals and optional
+Desktop-detected spans. The
 surrounding disclosure can still reveal amounts, dates, holdings, writing style, and behavioral
 patterns. See [[docs/adr/151-scoped-reversible-ai-references|ADR-151]]. The API change is additive
-and backward-compatible; clients that do not use markers receive `referenceScope: null` and an
-equivalent `outboundRequest`.
+and backward-compatible; requests without markers or Desktop findings receive
+`referenceScope: null` and an equivalent `outboundRequest`.
 
 ## Analysis extensions
 
@@ -137,6 +167,8 @@ operations. Generation is local and read-only; applying the inspected proposal i
 - [[docs/adr/147-allowlisted-openai-model-selection|ADR-147]]
 - [[docs/adr/151-scoped-reversible-ai-references|ADR-151]]
 - [[docs/adr/169-operator-managed-agentcloak-preflight|ADR-169]]
+- [[docs/adr/170-agentcloak-desktop-detection-and-scoped-protection|ADR-170]]
+- [[docs/adr/171-packaged-openai-explicit-configuration|ADR-171]]
 - [[docs/api/analysis|Analysis API]]
 - [[docs/features/ai-chat|AI Chat and Investigations]]
 - [[docs/security/ai-data-access|AI Data Access Policy]]

@@ -13,7 +13,15 @@ import {
   UpstreamError,
 } from "../middleware/errorHandler.js";
 import { disclosurePayload } from "../services/aiProviderAdapters.js";
-import { checkAgentCloakPreflight } from "../services/agentCloakPreflight.js";
+import {
+  checkAgentCloakPreflight,
+  detectAgentCloakDesktopSpans,
+} from "../services/agentCloakPreflight.js";
+import { getAgentCloakConfig } from "../services/agentCloakRuntimeConfig.js";
+import {
+  agentCloakDesktopStatus,
+  configureAgentCloakDesktop,
+} from "../services/agentCloakDesktopSetupService.js";
 import {
   createInvestigation,
   listInvestigations,
@@ -35,8 +43,14 @@ import {
   validateReferenceRequest,
 } from "../services/aiReferenceService.js";
 
+/**
+ * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ */
+
 const router = Router();
 const uuid = z.string().uuid();
+const desktopPreferenceSchema = z.strictObject({ enabled: z.boolean() });
 function parse(schema, value) {
   const result = schema.safeParse(value);
   if (!result.success)
@@ -49,7 +63,29 @@ function id(req) {
   return parse(uuid, req.params.id);
 }
 
+router.get(
+  "/agentcloak-desktop",
+  /** @param {ExpressRequest} _req @param {ExpressResponse} res */ async (
+    _req,
+    res,
+  ) => {
+    res.ok(await agentCloakDesktopStatus());
+  },
+);
+
+router.put(
+  "/agentcloak-desktop",
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
+    req,
+    res,
+  ) => {
+    const { enabled } = parse(desktopPreferenceSchema, req.body);
+    res.ok(await configureAgentCloakDesktop(enabled));
+  },
+);
+
 router.get("/status", async (_req, res) => {
+  const agentCloakConfig = await getAgentCloakConfig();
   let localModels = [];
   let localStatus;
   try {
@@ -130,9 +166,15 @@ router.get("/status", async (_req, res) => {
         classification: "pseudonymized-not-anonymous",
       },
       agentCloakPreflight: {
-        enabled: Boolean(settings.aiResearch.agentCloak?.enabled),
-        mode: "block-on-change",
-        location: "operator-managed-loopback",
+        enabled: Boolean(agentCloakConfig.enabled),
+        mode:
+          agentCloakConfig.mode === "desktop"
+            ? "protect-and-block"
+            : "block-on-change",
+        location:
+          agentCloakConfig.mode === "desktop"
+            ? "desktop-loopback"
+            : "operator-managed-loopback",
       },
     },
     web: {
@@ -162,13 +204,30 @@ router.post("/disclosures/preview", async (req, res) => {
     throw new ValidationError(
       "Preview is only needed for the OpenAI API route",
     );
-  const prepared = await prepareReferencePreview(request);
+  const agentCloakConfig = await getAgentCloakConfig();
+  let prepared;
+  try {
+    prepared = await prepareReferencePreview(request, {
+      detectSensitiveSpans:
+        agentCloakConfig.enabled && agentCloakConfig.mode === "desktop"
+          ? (text) =>
+              detectAgentCloakDesktopSpans(text, { config: agentCloakConfig })
+          : undefined,
+    });
+  } catch (error) {
+    if (error?.code?.startsWith?.("AGENTCLOAK_"))
+      throw new UpstreamError("AgentCloak Desktop is unavailable", {
+        code: error.code,
+      });
+    throw error;
+  }
   await validateReferenceRequest(prepared.request);
   const preview = disclosurePayload(prepared.request);
   let agentCloakPreflight;
   try {
     agentCloakPreflight = await checkAgentCloakPreflight(
       preview.disclosedPayload,
+      { config: agentCloakConfig },
     );
   } catch (error) {
     if (error?.code === "AGENTCLOAK_SENSITIVE_TEXT")

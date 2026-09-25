@@ -3,7 +3,7 @@ title: OpenAI and Codex Assistance Profiles
 type: reference
 status: active
 date: 2026-09-12
-updated: 2026-09-20
+updated: 2026-09-25
 tags:
   [
     reference,
@@ -27,11 +27,12 @@ aliases:
 
 # OpenAI and Codex Assistance Profiles
 
-> [!warning] Packaged API route disabled for this release
-> [[docs/adr/167-packaged-openai-api-release-gate|ADR-167]] keeps the OpenAI API route disabled in
-> packaged Vision even if a runtime file requests it. Source development can exercise the adapter
-> with explicit configuration. Live synthetic API acceptance remains a gate before any packaged
-> release enables it. The Codex App Server route remains a synthetic-only experiment.
+> [!warning] Packaged API capability and release acceptance
+> [[docs/adr/171-packaged-openai-explicit-configuration|ADR-171]] permits the OpenAI API route in
+> packaged Vision only with explicit private runtime configuration. This supersedes ADR-167's
+> unconditional disablement. Live synthetic route acceptance has not been completed in this
+> session, so code capability is not yet release acceptance or authorization for private financial
+> data. The Codex App Server route remains a synthetic-only experiment.
 
 ## Evidence Scope
 

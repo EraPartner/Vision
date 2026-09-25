@@ -634,7 +634,12 @@ export function AIInvestigationPanel() {
                     </p>
                     {aiResearchStatus?.openai.agentCloakPreflight?.enabled && (
                         <p className="text-xs text-muted-foreground">
-                            {t("aiResearch.agentCloakPreflight")}
+                            {t(
+                                aiResearchStatus.openai.agentCloakPreflight
+                                    .location === "desktop-loopback"
+                                    ? "aiResearch.agentCloakDesktopPreflight"
+                                    : "aiResearch.agentCloakPreflight",
+                            )}
                         </p>
                     )}
                     {(disclosureMode === "selected-summary" ||

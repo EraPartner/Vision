@@ -43,8 +43,10 @@ Security policies governing the AI chat feature introduced by [[docs/adr/024-loc
 ## Core Guarantees
 
 1. **Ordinary chat is local.** `/api/ai` contacts only configured Ollama. The separate
-   `/api/ai-research` OpenAI route is disabled in packaged Vision for this release, even if its
-   runtime environment requests it. Source development still requires the boundary below.
+   `/api/ai-research` OpenAI route can be enabled in packaged Vision only with explicit private
+   runtime configuration. It remains off by default and still requires the boundary below.
+   Code capability does not establish live synthetic release acceptance; see
+   [[docs/adr/171-packaged-openai-explicit-configuration|ADR-171]].
 2. **No raw SQL from LLM output.** The LLM cannot emit SQL. It selects from a fixed tool registry; every tool is backed by existing parameterized repository queries.
 3. **Parameterized queries only.** All tool dispatch goes through `query(text, params)` / `queryPrepared()` in [apps/node-backend/src/database/connection.js](apps/node-backend/src/database/connection.js). No string concatenation.
 4. **Audit trail.** Every `tool_call` and `tool_result` persists in `ai_messages` (role `tool`, with `tool_name`, `tool_args`, `tool_result` JSONB columns). Forensic review is possible per-conversation.
@@ -85,6 +87,8 @@ The two selected-text profiles accept explicit `[[vision-ref:type|value]]` marke
 summary or selected evidence. Preview changes them to fresh typed tokens. Each token contains 18
 cryptographically secure random bytes encoded as 24 base64url characters and belongs to one random
 preview UUID. Equal type/value pairs reuse a token only inside that preview.
+Optional Desktop mode also turns validated detected spans in those selected fields into `subject`
+tokens in the same scope before the exact consent payload is computed.
 
 The value map is local authenticated ciphertext. AES-256-GCM uses a fresh 12-byte nonce and binds
 the scope UUID, complete token, and declared type as authenticated additional data. The
@@ -105,25 +109,33 @@ amounts, dates, holdings, prose, and cross-field patterns can still identify the
 Users must inspect the complete preview, not treat markers as a general privacy filter. See
 [[docs/adr/151-scoped-reversible-ai-references|ADR-151]].
 
-### Optional AgentCloak gate
+### Optional AgentCloak gate and protection
 
 `AGENTCLOAK_PREFLIGHT_ENABLED` adds a check before cloud preview completes and before each OpenAI
-send attempt. Vision calls an operator-managed AgentCloak MCP endpoint on an exact loopback `/mcp`
-endpoint. The request carries only present user-authored cloud text fields: `question`,
-`selectedSummary`, and `selectedEvidence`. It runs after Vision's reference-token replacement, and
-substitutes `REFERENCE` for token identifiers in the check request. AgentCloak does not receive the
-encrypted map or its key. The AgentCloak API credential is sent in a request header, not returned in
-status or preview.
+send attempt. The default `mcp` mode calls an authenticated operator-managed AgentCloak loopback
+`/mcp` endpoint. It sends present user-authored `question`, `selectedSummary`, and
+`selectedEvidence` after Vision's explicit marker replacement, with `REFERENCE` in place of token
+identifiers. Vision accepts only a well-formed `cloak` result whose text exactly matches the checked
+text. A proposed change blocks disclosure. AgentCloak does not receive Vision's encrypted map or
+mapping key. The MCP credential is sent in a header, not returned in status or preview.
 
-Vision accepts only a well-formed successful `cloak` result whose text exactly matches the text
-checked. A proposed change blocks the disclosure; malformed responses, timeouts, and connection
-failures also block it when enabled. Vision does not apply AgentCloak's transformation to the
-OpenAI payload, so its exact preview digest and grant still bind the send. The enabled check is a
-second filter with possible missed detections. It is not anonymity or a substitute for reviewing
-the selected text. The loopback restriction does not prove where the endpoint processes the text.
-The operator must verify its upstream behavior, retention, and logs because it receives the checked
-text. See
-[[docs/adr/169-operator-managed-agentcloak-preflight|ADR-169]].
+The optional `desktop` mode calls the installed app's experimental loopback `/detect` endpoint. At
+preview, Vision checks selected summary and evidence after explicit marker replacement and validates
+the detected spans. It replaces those literals with scoped random `subject` tokens and stores their
+mapping as AES-256-GCM ciphertext under `AI_REFERENCE_MAPPING_KEY`. The exact cloud payload and
+grant digest are computed after protection. A public question is checked but never automatically
+rewritten. Desktop checks the tokenized text again before preview completes and before each OpenAI
+send; any remaining finding blocks disclosure. Existing token identifiers are masked before the
+Desktop call. Vision restores allowlisted answer text from its own scope after checkpointing the
+provider-form answer; it never calls Desktop `/protect` or `/reveal` or depends on its map.
+
+Malformed responses, timeouts, and connection failures block enabled cloud work in either mode.
+Desktop `/detect` is undocumented for third-party use and has no request authentication; other
+local processes may be able to call the app. A loopback address only constrains Vision's first hop
+and does not prove a service's forwarding or retention behavior. Detection can miss private values,
+and tokenized context can still identify a person. The user must inspect the full preview. See
+[[docs/adr/169-operator-managed-agentcloak-preflight|ADR-169]] and
+[[docs/adr/170-agentcloak-desktop-detection-and-scoped-protection|ADR-170]].
 
 6. **Canonical financial math where shared.** Portfolio metrics and monthly cash-flow tools delegate currency conversion, transfer treatment, cost basis, partial-sale basis, and totals to the same calculation services used by Vision's screens. Tool names are not permission to redefine a metric.
 
@@ -269,3 +281,4 @@ already contains the restored answer and does not need the map for display.
 - [[docs/adr/145-bounded-ai-research-orchestration|ADR-145]]
 - [[docs/adr/151-scoped-reversible-ai-references|ADR-151]]
 - [[docs/adr/169-operator-managed-agentcloak-preflight|ADR-169: Operator-managed AgentCloak Preflight]]
+- [[docs/adr/170-agentcloak-desktop-detection-and-scoped-protection|ADR-170: AgentCloak Desktop Detection with Scoped Vision Protection]]

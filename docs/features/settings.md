@@ -3,7 +3,7 @@ title: Settings Feature
 type: feature
 status: active
 date: 2026-06-19
-updated: 2026-09-14
+updated: 2026-09-25
 tags:
   [
     feature,
@@ -45,6 +45,7 @@ related_code:
   - apps/frontend/src/features/settings/sections/AboutSection.tsx
   - apps/frontend/src/features/settings/AIChatSettingsSection.tsx
   - apps/frontend/src/features/settings/OpenAiSettingsSection.tsx
+  - apps/frontend/src/features/settings/AgentCloakDesktopSettingsSection.tsx
   - apps/frontend/src/stores/hydration/AppSettingsHydration.tsx
   - apps/frontend/src/stores/hydration/SettingsHydration.tsx
   - apps/frontend/src/contexts/SettingsPreloadContext.tsx
@@ -328,15 +329,24 @@ each tab controls the active tab panel, and Arrow keys plus Home/End move focus 
 
 ### Section Taxonomy
 
-| Section             | File                             | Contents                                                                                                                                                                                               |
-| ------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| General             | `sections/GeneralSection.tsx`    | Currency, number/decimal/date format, language, start of week, page size                                                                                                                               |
-| Appearance          | `sections/AppearanceSection.tsx` | Theme variant, color mode + schedule, macOS system accent, visual-effects tier, auto-adapt; **Accessibility** group: gain & loss colors (colorblind-safe vs classic)                                   |
-| Statistics          | `sections/StatisticsSection.tsx` | Exclusion scope, exclude-hidden, internal transfers toggle, excluded categories/recipients (was "Dashboard" tab)                                                                                       |
-| Behavior            | `sections/BehaviorSection.tsx`   | Startup section, cost-basis method, auto-clear planned, brokerage cash category mappings, reset recurring dismissals                                                                                   |
-| AI & Research       | `sections/AiSection.tsx`         | Analysis defaults, Ollama and OpenAI default models, plus research provider keys (composes `AnalysisPreferencesSettings`, `AIChatSettingsSection`, `OpenAiSettingsSection`, and `ResearchKeysSection`) |
-| Backup              | `sections/BackupSection.tsx`     | Directory, backup-on-quit, passphrase, run/restore (Electron only)                                                                                                                                     |
-| About & Maintenance | `sections/AboutSection.tsx`      | Vision mark, canonical build version, AGPL-3.0-only identity, source/documentation links, app updates, restart onboarding, developer/admin mode, reset-all (danger zone)                               |
+| Section       | File                             | Contents                                                                                                                                                             |
+| ------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| General       | `sections/GeneralSection.tsx`    | Currency, number/decimal/date format, language, start of week, page size                                                                                             |
+| Appearance    | `sections/AppearanceSection.tsx` | Theme variant, color mode + schedule, macOS system accent, visual-effects tier, auto-adapt; **Accessibility** group: gain & loss colors (colorblind-safe vs classic) |
+| Statistics    | `sections/StatisticsSection.tsx` | Exclusion scope, exclude-hidden, internal transfers toggle, excluded categories/recipients (was "Dashboard" tab)                                                     |
+| Behavior      | `sections/BehaviorSection.tsx`   | Startup section, cost-basis method, auto-clear planned, brokerage cash category mappings, reset recurring dismissals                                                 |
+| AI & Research | `sections/AiSection.tsx`         | Analysis defaults, Ollama and OpenAI default models, AgentCloak Desktop status and protection control, and research provider keys                                    |
+
+| Backup | `sections/BackupSection.tsx` | Directory, backup-on-quit, passphrase, run/restore (Electron only) |
+| About & Maintenance | `sections/AboutSection.tsx` | Vision mark, canonical build version, AGPL-3.0-only identity, source/documentation links, app updates, restart onboarding, developer/admin mode, reset-all (danger zone) |
+
+The AgentCloak Desktop group shows a fresh availability check, effective protection state, local
+reference-key state, and whether the OpenAI route is enabled. Check Again repeats the probe.
+Enable probes the Desktop loopback interface and creates a Vision reference mapping key when none
+exists, then saves the enabled preference. It works even when OpenAI is not configured. Disable
+leaves the key in place for existing token-bearing investigations. See
+[[docs/adr/171-packaged-openai-explicit-configuration|ADR-171]] and
+[[docs/api/ai-research|AI Research API]].
 
 ### Instant-Apply Model
 
@@ -400,6 +410,7 @@ The **BackupSection** integrates encrypted backup restore with a **passphrase mo
 
 - [[docs/adr/084-settings-instant-apply-sidebar|ADR-084: Settings dialog sidebar + instant-apply]]
 - [[docs/adr/148-user-default-openai-model|ADR-148: User default OpenAI model]]
+- [[docs/adr/171-packaged-openai-explicit-configuration|ADR-171: Explicitly configured packaged OpenAI API route]]
 - [[docs/features/appearance|Appearance]] — Theme variant, color palette mode, and schedule settings
 - [[docs/features/statistics|Statistics]] — Uses exclusions and currency settings
 - [[docs/features/portfolio-tax|Portfolio Tax]] — Uses tax adjustments stored as settings

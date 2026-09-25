@@ -74,10 +74,16 @@ export interface AiResearchStatus {
         };
         agentCloakPreflight?: {
             enabled: boolean;
-            mode: "block-on-change";
-            location: "operator-managed-loopback";
+            mode: "block-on-change" | "protect-and-block";
+            location: "operator-managed-loopback" | "desktop-loopback";
         };
     };
+}
+export interface AgentCloakDesktopStatus {
+    enabled: boolean;
+    available: boolean;
+    mappingKeyConfigured: boolean;
+    openAiEnabled: boolean;
 }
 export interface InvestigationInput {
     question: string;
@@ -109,6 +115,15 @@ export interface InvestigationInput {
 
 export const getAiResearchStatus = () =>
     apiRequest<AiResearchStatus>("/api/ai-research/status");
+
+export const getAgentCloakDesktopStatus = () =>
+    apiRequest<AgentCloakDesktopStatus>("/api/ai-research/agentcloak-desktop");
+
+export const setAgentCloakDesktopEnabled = (enabled: boolean) =>
+    apiRequest<AgentCloakDesktopStatus>("/api/ai-research/agentcloak-desktop", {
+        method: "PUT",
+        body: JSON.stringify({ enabled }),
+    });
 
 export const createInvestigation = (body: InvestigationInput) =>
     apiRequest<AiInvestigation>("/api/ai-research/investigations", {

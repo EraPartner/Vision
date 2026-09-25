@@ -97,6 +97,94 @@ describe("scoped reversible references", () => {
     expect(restored.evidence[0].locator).toBe("stable:locator");
   });
 
+  it("protects Desktop findings in the preview and reveals them from the encrypted scope", async () => {
+    let persisted;
+    const detected = [];
+    const prepared = await prepareReferencePreview(
+      {
+        selectedSummary: "Pay Alice Johnson from the local account.",
+        selectedEvidence: "Evidence for Alice Johnson.",
+        referenceScopeId: null,
+      },
+      {
+        key: KEY,
+        random: randomFactory(),
+        createId: () => SCOPE_ID,
+        cleanup: async () => 0,
+        createScope: async (scope) => {
+          persisted = scope;
+        },
+        detectSensitiveSpans: async (text) => {
+          detected.push(text);
+          const start = text.indexOf("Alice Johnson");
+          return start < 0
+            ? []
+            : [
+                {
+                  start,
+                  end: start + 13,
+                  text: "Alice Johnson",
+                  label: "GIVEN_NAME",
+                },
+              ];
+        },
+      },
+    );
+    expect(detected).toHaveLength(2);
+    expect(prepared.scope).toMatchObject({ id: SCOPE_ID, count: 1 });
+    expect(prepared.request.selectedSummary).not.toContain("Alice Johnson");
+    expect(prepared.request.selectedEvidence).not.toContain("Alice Johnson");
+    const token = persisted.entries[0].token;
+    expect(prepared.request.selectedSummary).toContain(token);
+    expect(prepared.request.selectedEvidence).toContain(token);
+    expect(persisted.entries[0].ciphertext.toString("utf8")).not.toContain(
+      "Alice Johnson",
+    );
+    const restored = await restoreAnswerForJob(
+      "job-1",
+      answer(`Pay ${token}`),
+      {
+        key: KEY,
+        getScope: async () => ({
+          id: SCOPE_ID,
+          expiresAt: new Date(Date.now() + 60_000).toISOString(),
+          entries: persisted.entries,
+        }),
+      },
+    );
+    expect(restored.summary).toBe("Pay Alice Johnson");
+  });
+
+  it("fails closed when Desktop needs a missing key or reports invalid offsets", async () => {
+    const request = {
+      selectedSummary: "Pay Alice Johnson",
+      selectedEvidence: null,
+    };
+    const detection = async () => [
+      { start: 4, end: 17, text: "Alice Johnson", label: "GIVEN_NAME" },
+    ];
+    await expect(
+      prepareReferencePreview(request, {
+        key: null,
+        detectSensitiveSpans: detection,
+        createScope: async () => {
+          throw new Error("should not persist");
+        },
+      }),
+    ).rejects.toMatchObject({ code: "REFERENCE_KEY_UNAVAILABLE" });
+    await expect(
+      prepareReferencePreview(request, {
+        key: KEY,
+        detectSensitiveSpans: async () => [
+          { start: 5, end: 17, text: "Alice Johnson", label: "GIVEN_NAME" },
+        ],
+        createScope: async () => {
+          throw new Error("should not persist");
+        },
+      }),
+    ).rejects.toMatchObject({ code: "REFERENCE_DETECTION_INVALID" });
+  });
+
   it("rejects malformed markers before a scope is persisted", async () => {
     await expect(
       prepareReferencePreview(

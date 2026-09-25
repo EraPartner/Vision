@@ -306,6 +306,8 @@ export const apiClient = {
     deleteConversation: ai.deleteConversation,
     streamChat: ai.streamChat,
     getAiResearchStatus: aiResearch.getAiResearchStatus,
+    getAgentCloakDesktopStatus: aiResearch.getAgentCloakDesktopStatus,
+    setAgentCloakDesktopEnabled: aiResearch.setAgentCloakDesktopEnabled,
     createInvestigation: aiResearch.createInvestigation,
     getInvestigation: aiResearch.getInvestigation,
     deleteInvestigation: aiResearch.deleteInvestigation,

@@ -537,6 +537,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ai-research/agentcloak-desktop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect AgentCloak Desktop availability and protection state */
+        get: operations["getAgentCloakDesktopStatus"];
+        /**
+         * Enable or disable AgentCloak Desktop protection
+         * @description Enabling probes the Desktop loopback endpoint and ensures a local encrypted-reference mapping key before saving the boolean preference. Disabling saves the preference without deleting the key.
+         */
+        put: operations["configureAgentCloakDesktop"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ai-research/investigations": {
         parameters: {
             query?: never;
@@ -677,7 +698,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Preview the exact canonical payload proposed for cloud egress and run optional AgentCloak preflight */
+        /** Protect selected text when Desktop mode is enabled, then preview the exact canonical cloud payload and run AgentCloak preflight */
         post: operations["previewAiDisclosure"];
         delete?: never;
         options?: never;
@@ -4312,6 +4333,16 @@ export interface components {
             data?: unknown;
             error?: components["schemas"]["ErrorPayload"];
         };
+        AgentCloakDesktopStatus: {
+            /** @description Effective Desktop preference and mode */
+            enabled: boolean;
+            /** @description Fresh bounded loopback detection probe */
+            available: boolean;
+            /** @description Valid local reference mapping key exists */
+            mappingKeyConfigured: boolean;
+            /** @description Effective OpenAI API route availability */
+            openAiEnabled: boolean;
+        };
         ErrorPayload: {
             message: string;
             code?: string;
@@ -7524,7 +7555,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Configured capabilities without credentials, including optional AgentCloak preflight mode and location */
+            /** @description Configured capabilities without credentials, including optional AgentCloak mode and location. Desktop mode reports protect-and-block; MCP mode reports block-on-change. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -7532,6 +7563,84 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"];
                 };
+            };
+        };
+    };
+    getAgentCloakDesktopStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Effective Desktop preference, fresh availability probe, mapping key state, and OpenAI route state; no secret values */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data: components["schemas"]["AgentCloakDesktopStatus"];
+                    };
+                };
+            };
+        };
+    };
+    configureAgentCloakDesktop: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    enabled: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated Desktop status; no secret values */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data: components["schemas"]["AgentCloakDesktopStatus"];
+                    };
+                };
+            };
+            /** @description Invalid request body */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Existing local mapping key is invalid */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description AgentCloak Desktop is unavailable during enablement */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Local mapping key could not be stored */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -7874,7 +7983,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Payload, digest, field manifest, disclosure units, any encrypted local reference scope, and AgentCloak preflight status */
+            /** @description Payload, digest, field manifest, disclosure units, any encrypted local reference scope including Desktop-detected values, and AgentCloak preflight status */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -7890,7 +7999,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Enabled AgentCloak preflight was unavailable or returned an invalid response */
+            /** @description Enabled AgentCloak detection or preflight was unavailable or returned an invalid response */
             502: {
                 headers: {
                     [name: string]: unknown;

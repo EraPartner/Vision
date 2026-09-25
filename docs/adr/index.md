@@ -26,6 +26,15 @@ SORT date DESC
 
 ## Active Decisions
 
+[[docs/adr/171-packaged-openai-explicit-configuration|ADR-171]] (Accepted for implementation)
+permits the packaged OpenAI API route only with explicit private runtime configuration. It
+supersedes ADR-167's unconditional packaged disablement; live synthetic route acceptance is
+still pending review.
+
+[[docs/adr/170-agentcloak-desktop-detection-and-scoped-protection|ADR-170]] (Accepted) adds
+experimental AgentCloak Desktop detection. Vision protects selected findings with encrypted scoped
+tokens before consent and restores answer text locally; the MCP gate remains available.
+
 [[docs/adr/169-operator-managed-agentcloak-preflight|ADR-169]] (Accepted) adds an optional
 operator-managed loopback AgentCloak check before cloud preview and send. It blocks a changed
 result while preserving Vision's exact OpenAI payload and grant.
@@ -407,6 +416,6 @@ reviewed maintained legacy installation to the exact fresh `0119` shape during a
 maintenance window. Old timestamps are interpreted as UTC; the 390-row archive is exported and
 verified. A full backup, retained prior database, and guarded rollback remain available.
 
-[[docs/adr/167-packaged-openai-api-release-gate|ADR-167]] (Accepted) — Keeps the OpenAI API
-investigation route disabled in packaged Vision until a separately approved live synthetic test.
-The release evaluation covers offline API boundary checks and the synthetic-only Codex experiment.
+[[docs/adr/167-packaged-openai-api-release-gate|ADR-167]] (Accepted historical decision;
+packaged disablement superseded by ADR-171) — Kept the OpenAI API investigation route disabled
+when live synthetic acceptance had been declined. Its evaluation evidence remains historical.
