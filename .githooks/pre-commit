@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 #
-# Vision pre-commit -- fast, staged-only checks. The heavier gate (typecheck,
-# endpoint matrix, backend tests) lives in .githooks/pre-push.
+# Vision pre-commit -- fast, staged-only checks. Run broader checks explicitly
+# before publication; CI enforces the required checks after a push.
 #
 # Wiring:   git config core.hooksPath .githooks   (done by scripts/setup-git-hooks.js)
 # Bypass:   git commit --no-verify        or       SKIP_HOOKS=1 git commit ...

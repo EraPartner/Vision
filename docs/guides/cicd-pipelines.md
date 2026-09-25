@@ -2,7 +2,7 @@
 title: CI/CD Pipelines
 type: guide
 status: active
-date: 2026-09-24
+date: 2026-09-25
 tags:
   [
     guide,
@@ -187,14 +187,10 @@ bun run native:isolated-smoke
 PostgreSQL 18 and runs live API contracts against a disposable backend. Packaging and signing
 claims still require their focused jobs.
 
-The pre-push hook runs workspace lint, typechecks, repository policy checks, script tests,
-frontend coverage, a production build and size check, Electron tests, backend coverage, database
-lifecycle and contract tests, and live API
-contracts on every content push. The production
-build and test reports use a temporary output directory.
-Backend and live API runs use disposable PostgreSQL 18 clusters and fail if PostgreSQL or Alembic is
-unavailable, so a green push cannot hide database or live-contract skips. The hook clears
-caller-provided database URLs before starting each cluster. The native stack finds
+There is no local pre-push gate. Run the relevant lint, typecheck, build, and test commands
+explicitly before publication, scaled to the change as described in `AGENTS.md`. GitHub Actions
+runs the required checks after a push; a successful local push does not establish that they passed.
+Database-backed and live API checks use disposable PostgreSQL 18 clusters. The native stack finds
 PostgreSQL 18 on Linux or macOS; `VISION_CI_POSTGRES_BIN` can select another installation.
 It refuses an occupied backend port before starting, then tracks the backend process directly so
 cleanup cannot leave a server for the next run to mistake as its own.

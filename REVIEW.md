@@ -34,8 +34,8 @@ behind each item is in `AGENTS.md` (Conventions, Verification, Security) and `do
 - [ ] `bun run test` (backend vitest) and `bun run test:frontend` — scale depth to risk per AGENTS.md.
 - [ ] `bun run validate-locales` and `bun run check-endpoint-matrix` pass.
 - [ ] High-risk (security / migration / destructive) also: `bun run build`. One-shot: `bun run check`.
-- [ ] CI (workflow **CI**, required check **CI Complete**) expected green; `.githooks/pre-push`
-      mirrors the cheap jobs locally.
+- [ ] CI (workflow **CI**, required check **CI Complete**) expected green; run the relevant local
+      checks explicitly before publication because pushes do not run a local gate.
 
 ## Hygiene
 

@@ -2,10 +2,10 @@
 title: Testing Documentation
 type: testing
 status: active
-date: 2026-09-24
-updated: 2026-09-24
-last-updated: 2026-09-24
-last_updated_timestamp: 2026-09-24T00:00:00Z
+date: 2026-09-25
+updated: 2026-09-25
+last-updated: 2026-09-25
+last_updated_timestamp: 2026-09-25T00:00:00Z
 added_portfolio_math_tests: 2026-05-05
 added_import_pipeline_tests: 2026-05-05
 wired_real_db_harness: 2026-07-27
@@ -130,11 +130,10 @@ A plain `bun run test` exits 0 while omitting several hundred DB-backed cases, a
 
 - Counts are derived from the run, never hardcoded; a module counts as DB-backed when its source imports `tests/setup/db.js` (so `tests/services/aggregationRefresh.test.js` is included despite not being named `*.db.test.js`).
 - Silent when `TEST_DATABASE_URL` is set, so `bun run test:db` and CI stay clean.
-- Attached in `vitest.config.js` through a `configureVitest` plugin hook that _appends_ to the resolved reporter list rather than declaring `test.reporters` — declaring that key would replace vitest's own default choice (`default` / `agent`, plus `github-actions` under Actions). It therefore fires for every entry point that uses the config: `bun run test`, a bare `bun vitest run`, and the pre-push hook.
+- Attached in `vitest.config.js` through a `configureVitest` plugin hook that _appends_ to the resolved reporter list rather than declaring `test.reporters` — declaring that key would replace vitest's own default choice (`default` / `agent`, plus `github-actions` under Actions). It therefore fires for every entry point that uses the config, including `bun run test` and a bare `bun vitest run`.
 
-The pre-push gate also runs `bun run test:db` when the push touches a `*.db.test.js` file,
-`tests/setup/db.js`, or `alembic/versions/**`. It degrades to a loud warning when PostgreSQL 18 or
-Alembic is unavailable. Skip it with `SKIP_DB_TESTS=1`.
+Run `bun run test:db` explicitly when database behavior or migrations change. It creates a
+disposable PostgreSQL cluster; `bun run test` alone reports skipped database-backed cases.
 
 ### Frontend Tests
 
