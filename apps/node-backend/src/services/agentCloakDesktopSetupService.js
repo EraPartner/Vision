@@ -15,7 +15,7 @@ import {
 const PROBE_TEXT = "Vision privacy connection check";
 
 /** @param {object} [options] @param {typeof detectAgentCloakDesktopSpans} [options.detect] */
-export async function probeAgentCloakDesktop({
+async function probeAgentCloakDesktop({
   detect = detectAgentCloakDesktopSpans,
 } = {}) {
   const configured = settings.aiResearch.agentCloak;
@@ -33,6 +33,8 @@ export async function probeAgentCloakDesktop({
     return false;
   }
 }
+
+export { probeAgentCloakDesktop as __probeAgentCloakDesktop };
 
 export async function agentCloakDesktopStatus() {
   const [config, available] = await Promise.all([

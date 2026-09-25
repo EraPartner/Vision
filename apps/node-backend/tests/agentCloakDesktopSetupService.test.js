@@ -37,7 +37,7 @@ vi.mock("../src/services/aiReferenceService.js", () => ({
 import {
   agentCloakDesktopStatus,
   configureAgentCloakDesktop,
-  probeAgentCloakDesktop,
+  __probeAgentCloakDesktop,
 } from "../src/services/agentCloakDesktopSetupService.js";
 
 beforeEach(() => {
@@ -48,7 +48,7 @@ beforeEach(() => {
 
 describe("AgentCloak Desktop setup", () => {
   it("probes with synthetic text and a bounded timeout", async () => {
-    expect(await probeAgentCloakDesktop()).toBe(true);
+    expect(await __probeAgentCloakDesktop()).toBe(true);
     expect(calls.detect).toHaveBeenCalledWith(
       "Vision privacy connection check",
       expect.objectContaining({
