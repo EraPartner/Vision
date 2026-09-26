@@ -1,6 +1,6 @@
 # Self-contained Vision sandbox with pinned tools and allowlisted egress.
 
-FROM debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818
+FROM debian:bookworm-slim@sha256:3783cc01769c7b2b1b83a5c5ad96c815348e28ed7da68e2e3687004faa906251
 
 ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
 
