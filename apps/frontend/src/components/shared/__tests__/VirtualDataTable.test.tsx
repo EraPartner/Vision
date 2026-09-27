@@ -3,7 +3,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithApp } from "@/test/renderWithApp";
-import { useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import {
     VirtualDataTable,
     SERVER_SEARCH_MIN_LENGTH,
@@ -167,6 +167,34 @@ describe("VirtualDataTable — rendering", () => {
         expect(
             screen.getByRole("heading", { name: "No data to display" }),
         ).toHaveClass("font-display");
+    });
+
+    it("renders first results in the same commit as the new data", () => {
+        const committedText: string[] = [];
+        function FirstResults() {
+            const [rows, setRows] = useState<TestRow[]>([]);
+            useLayoutEffect(() => {
+                if (rows.length)
+                    committedText.push(document.body.textContent ?? "");
+            }, [rows]);
+            return (
+                <>
+                    <button
+                        onClick={() =>
+                            setRows([{ id: 1, name: "First result", value: 1 }])
+                        }
+                    >
+                        Load results
+                    </button>
+                    <VirtualDataTable data={rows} columns={COLUMNS} />
+                </>
+            );
+        }
+        renderWithApp(<FirstResults />);
+        fireEvent.click(screen.getByRole("button", { name: "Load results" }));
+        expect(committedText).toHaveLength(1);
+        expect(committedText[0]).toContain("First result");
+        expect(committedText[0]).not.toContain("No data to display");
     });
 
     it("shows custom empty message when provided", () => {

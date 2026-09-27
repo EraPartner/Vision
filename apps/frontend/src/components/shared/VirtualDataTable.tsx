@@ -140,6 +140,8 @@ interface VirtualDataTableProps<T> {
     emptyMessage?: React.ReactNode;
     emptyIcon?: LucideIcon;
     actions?: React.ReactNode;
+    /** Context for row action accessible names. */
+    getRowLabel?: (row: T) => string;
     onRowUpdate?: (index: number, updatedRow: T) => void;
     /** Called when a row is double-clicked */
     onRowDoubleClick?: (row: T, index: number) => void;
@@ -437,6 +439,7 @@ function VirtualizedTableRow<T extends Record<string, unknown>>({
                                 variant="ghost"
                                 size="icon"
                                 aria-label={saveLabel}
+                                title={saveLabel}
                                 className="icon-touch-target text-accent hover:text-accent hover:bg-accent/10"
                                 onClick={() => saveEditing?.(sourceIndex, row)}
                             >
@@ -446,6 +449,7 @@ function VirtualizedTableRow<T extends Record<string, unknown>>({
                                 variant="ghost"
                                 size="icon"
                                 aria-label={cancelLabel}
+                                title={cancelLabel}
                                 className="icon-touch-target text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                                 onClick={cancelEditing}
                             >
@@ -457,6 +461,7 @@ function VirtualizedTableRow<T extends Record<string, unknown>>({
                             variant="ghost"
                             size="icon"
                             aria-label={editLabel}
+                            title={editLabel}
                             className="icon-touch-target text-muted-foreground hover:text-primary hover:bg-primary/10"
                             onClick={() => startEditing(sourceIndex, row)}
                         >
@@ -492,6 +497,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
     emptyIcon: EmptyIcon = Inbox,
     actions,
     onRowUpdate,
+    getRowLabel,
     onRowDoubleClick,
     onRowOpen,
     onRowQuickLook,
@@ -866,7 +872,10 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
         );
     }, [data, columns, openFilter]);
 
-    const deferredData = useDeferredValue(data);
+    const previousData = useDeferredValue(data);
+    // First results should replace an empty table immediately. Deferring them
+    // briefly announces an empty result alongside the new server total.
+    const deferredData = previousData.length === 0 ? data : previousData;
 
     // In server-search mode the localSearchQuery filter branch below is skipped
     // entirely, so the query text must not re-run the O(n) pipeline on every
@@ -1592,9 +1601,21 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                                     ? focusRowByIndex
                                                     : undefined
                                             }
-                                            saveLabel={t("aria.save")}
-                                            cancelLabel={t("aria.cancel")}
-                                            editLabel={t("aria.edit")}
+                                            saveLabel={
+                                                getRowLabel
+                                                    ? `${t("aria.save")}: ${getRowLabel(row)}`
+                                                    : t("aria.save")
+                                            }
+                                            cancelLabel={
+                                                getRowLabel
+                                                    ? `${t("aria.cancel")}: ${getRowLabel(row)}`
+                                                    : t("aria.cancel")
+                                            }
+                                            editLabel={
+                                                getRowLabel
+                                                    ? `${t("aria.edit")}: ${getRowLabel(row)}`
+                                                    : t("aria.edit")
+                                            }
                                             numberFormat={
                                                 appSettings.numberFormat
                                             }
