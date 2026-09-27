@@ -48,6 +48,7 @@ export function SegmentedButtons<T>({
                         isSelected(option) ? selectedVariant : unselectedVariant
                     }
                     className={buttonClassName}
+                    aria-pressed={isSelected(option)}
                     onClick={() => onSelect(option)}
                 >
                     {getLabel(option)}

@@ -2,8 +2,8 @@
 title: Chart Primitives
 type: component
 status: active
-date: 2026-04-24
-updated: 2026-09-08
+date: 2026-09-27
+updated: 2026-09-27
 tags: [components, charts, visx, d3, visualization, phase-9, phase-h, accessibility, aria-label, screen-reader, i18n, localization, premium-v3, chart-scrub, chart-sync, chart-skeleton, sweep-reveal, sparkline-scrub, keyboard-navigation, june-2026]
 description: Low-level chart primitives built on visx + d3, replacing Recharts with design-token-aware styling. 2026-05-29: chartAria.ts generators now accept t()/kindKey for fully localized chart screen-reader summaries across all 7 chart types and both supported languages. June 2026 Premium v3 (ADR-071): scrubbable prop + useChartScrub (scrub-to-compare), syncId prop + ChartSyncContext (synced crosshairs), sweep reveal on AreaChart, ChartSkeleton ghost waveform. V9: Sparkline activeIndex prop (hairline + dot indicator for stat-card scrub). 2026-08-27: keyboardNav.ts provides shared keyboard access to per-point values across all interactive visx primitives and the NetSummaryCard sparkline scrub. 2026-08-23: ChartPeriodSelector uses native toggle-button semantics with aria-pressed instead of incomplete ARIA tab semantics.
 aliases: [charts, chart-components, visx-charts, charting, visualization]
@@ -524,3 +524,8 @@ Renders an SVG ghost waveform path with a shimmer animation as a chart loading s
 - [[docs/features/sankey-flow|Sankey Flow Feature]]
 - [[docs/features/portfolio|Portfolio Feature]]
 - [[docs/performance/chart-downsampling|Chart Downsampling (LTTB)]]
+
+
+## Clarity and recovery feedback
+
+BottomAxis selects readable ticks using estimated formatted-label widths and their positions on the scale. It reduces labels at narrow widths without removing data points or changing the scale. Forecast uses short month/year axis labels in the app language and retains full dates in tooltips.

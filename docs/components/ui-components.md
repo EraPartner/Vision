@@ -2,8 +2,8 @@
 title: UI Components
 type: component
 status: active
-date: 2026-04-17
-updated: 2026-09-08
+date: 2026-09-27
+updated: 2026-09-27
 tags:
   [
     components,
@@ -848,6 +848,14 @@ When any of `onRowDoubleClick`, `onRowOpen`, or `onRowQuickLook` is present, row
 - Keys are suppressed if the event target is a descendant (e.g., an inline-edit input), so typing in edit fields is not hijacked.
 
 Rows display the shared `focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2` ring when keyboard-focused.
+
+### Inline editing
+
+Built-in text, number, and date editors use the column label and optional `getRowLabel(row)` context
+as their accessible name. Entering edit mode focuses the first built-in editor; cancelling
+returns focus to the same row's Edit button. Custom editor renderers retain responsibility for
+their own accessible labels. Recipients supplies its name as row context; Transactions supplies
+the formatted date, recipient, and amount.
 
 ### Per-Row Context Menu
 

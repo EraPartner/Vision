@@ -1,3 +1,11 @@
+import {
+    DropdownMenu,
+    DropdownMenuTrigger,
+    DropdownMenuContent,
+    DropdownMenuLabel,
+    DropdownMenuRadioGroup,
+    DropdownMenuRadioItem,
+} from "@/components/ui/dropdown-menu";
 import { useCallback, useMemo } from "react";
 import { NavLink, useLocation } from "react-router";
 import {
@@ -255,23 +263,43 @@ export function AppSidebar() {
                     )}
                     {collapsed && (
                         <div className="flex justify-center pt-3 px-1.5">
-                            {/* Cycles to the next workspace; shows the current one. */}
-                            <button
-                                onClick={() => {
-                                    const idx = NAV_WORKSPACES.findIndex(
-                                        (ws) => ws.id === workspace,
-                                    );
-                                    setWorkspace(
-                                        NAV_WORKSPACES[
-                                            (idx + 1) % NAV_WORKSPACES.length
-                                        ].id,
-                                    );
-                                }}
-                                className="w-9 h-9 flex items-center justify-center rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-                                title={t(activeWorkspace.labelKey)}
-                            >
-                                <activeWorkspace.icon className="h-4 w-4" />
-                            </button>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <button
+                                        type="button"
+                                        className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors hover:bg-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2"
+                                        aria-label={`${t("nav.chooseWorkspace")}: ${t(activeWorkspace.labelKey)}`}
+                                        title={t("nav.chooseWorkspace")}
+                                    >
+                                        <activeWorkspace.icon className="h-4 w-4" />
+                                    </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent side="right" align="start">
+                                    <DropdownMenuLabel>
+                                        {t("nav.chooseWorkspace")}
+                                    </DropdownMenuLabel>
+                                    <DropdownMenuRadioGroup
+                                        value={workspace}
+                                        onValueChange={(value) => {
+                                            const selected =
+                                                NAV_WORKSPACES.find(
+                                                    (item) => item.id === value,
+                                                );
+                                            if (selected)
+                                                setWorkspace(selected.id);
+                                        }}
+                                    >
+                                        {NAV_WORKSPACES.map((item) => (
+                                            <DropdownMenuRadioItem
+                                                key={item.id}
+                                                value={item.id}
+                                            >
+                                                {t(item.labelKey)}
+                                            </DropdownMenuRadioItem>
+                                        ))}
+                                    </DropdownMenuRadioGroup>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                         </div>
                     )}
 
@@ -434,10 +462,11 @@ function WorkspaceTab({
         <button
             onClick={onClick}
             title={label}
+            aria-pressed={active}
             className={cn(
                 // Transition list composed via --press-compose (press-feedback owns the
                 // `transition` shorthand — see index.css); press entry restated verbatim.
-                "press-feedback [--press-compose:background-color_var(--duration-normal)_var(--ease-glide),color_var(--duration-normal)_var(--ease-glide),box-shadow_var(--duration-normal)_var(--ease-glide),scale_var(--duration-normal)_var(--ease-glide),transform_var(--duration-press)_ease-out] min-w-0 flex-1 flex items-center justify-center gap-1 rounded-lg px-1.5 py-1.5 text-xs font-medium tracking-tight",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 press-feedback [--press-compose:background-color_var(--duration-normal)_var(--ease-glide),color_var(--duration-normal)_var(--ease-glide),box-shadow_var(--duration-normal)_var(--ease-glide),scale_var(--duration-normal)_var(--ease-glide),transform_var(--duration-press)_ease-out] min-w-0 flex-1 flex items-center justify-center gap-1 rounded-lg px-1.5 py-1.5 text-xs font-medium tracking-tight",
                 active
                     ? "bg-background/90 text-foreground shadow-[0_6px_18px_-8px_hsl(var(--primary)/0.35)] ring-1 ring-primary/25 scale-[1.02]"
                     : "text-muted-foreground hover:text-foreground hover:bg-background/40",

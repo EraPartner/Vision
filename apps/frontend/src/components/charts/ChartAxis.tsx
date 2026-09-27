@@ -2,6 +2,7 @@
  * ChartAxis — token-styled wrappers around @visx/axis.
  */
 import { AxisBottom, AxisLeft, AxisRight } from "@visx/axis";
+import { getTicks } from "@visx/scale";
 import type { AxisScale } from "@visx/axis";
 
 export interface ChartAxisProps<Scale extends AxisScale> {
@@ -48,12 +49,30 @@ export function BottomAxis<Scale extends AxisScale>({
     hideTicks,
     label,
 }: ChartAxisProps<Scale>) {
+    // D3's tick count is a suggestion; retain only labels with room to read.
+    let previousRight = -Infinity;
+    const readableTicks = (tickValues ?? getTicks(scale, numTicks)).filter(
+        (value, index) => {
+            const position = Number(scale(value as never));
+            const labelText = tickFormat
+                ? tickFormat(value, index)
+                : String(value);
+            const halfWidth = Array.from(labelText).length * 3.5;
+            if (
+                !Number.isFinite(position) ||
+                position - halfWidth < previousRight + 12
+            )
+                return false;
+            previousRight = position + halfWidth;
+            return true;
+        },
+    );
     return (
         <AxisBottom
             scale={scale}
             top={top}
             numTicks={numTicks}
-            tickValues={tickValues as never}
+            tickValues={readableTicks as never}
             tickFormat={tickFormat as never}
             stroke={AXIS_COLOR}
             tickStroke={AXIS_COLOR}
@@ -61,7 +80,11 @@ export function BottomAxis<Scale extends AxisScale>({
             hideTicks={hideTicks}
             tickLabelProps={tickLabelProps}
             label={label}
-            labelProps={{ fill: TICK_COLOR, fontSize: 11, textAnchor: "middle" }}
+            labelProps={{
+                fill: TICK_COLOR,
+                fontSize: 11,
+                textAnchor: "middle",
+            }}
         />
     );
 }
@@ -89,7 +112,11 @@ export function LeftAxis<Scale extends AxisScale>({
             hideTicks={hideTicks}
             tickLabelProps={() => tickLabelPropsSide("end")}
             label={label}
-            labelProps={{ fill: TICK_COLOR, fontSize: 11, textAnchor: "middle" }}
+            labelProps={{
+                fill: TICK_COLOR,
+                fontSize: 11,
+                textAnchor: "middle",
+            }}
         />
     );
 }
@@ -117,7 +144,11 @@ export function RightAxis<Scale extends AxisScale>({
             hideTicks={hideTicks}
             tickLabelProps={() => tickLabelPropsSide("start")}
             label={label}
-            labelProps={{ fill: TICK_COLOR, fontSize: 11, textAnchor: "middle" }}
+            labelProps={{
+                fill: TICK_COLOR,
+                fontSize: 11,
+                textAnchor: "middle",
+            }}
         />
     );
 }
