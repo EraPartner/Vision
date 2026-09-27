@@ -274,7 +274,8 @@ const noServiceImportFromRepo = {
  * no-raw-money-arithmetic
  *
  * Warns when monetary identifiers (amount, price, fee, balance, cost, gain,
- * loss, total, sum, cents) appear on either side of a `+ - * /` BinaryExpression.
+ * loss, total, sum, cents) appear on either side of `+ - * /` arithmetic,
+ * including compound assignments and statically named object properties.
  * Encourages migration to Decimal helpers in `lib/money.js`. Allowed in
  * `lib/money.js` itself and in test files.
  */
@@ -298,20 +299,42 @@ const noRawMoneyArithmetic = {
     schema: [],
   },
   create(context) {
-    return {
-      BinaryExpression(node) {
-        if (!MATH_OPS.has(node.operator)) return;
-        for (const side of [node.left, node.right]) {
-          if (side?.type === "Identifier" && MONEY_NAME.test(side.name)) {
-            context.report({
-              node,
-              messageId: "rawMoney",
-              data: { name: side.name },
-            });
-            return;
-          }
+    function moneyName(operand) {
+      const expression =
+        operand?.type === "ChainExpression" ? operand.expression : operand;
+      let name;
+      if (expression?.type === "Identifier") {
+        name = expression.name;
+      } else if (expression?.type === "MemberExpression") {
+        if (!expression.computed && expression.property.type === "Identifier") {
+          name = expression.property.name;
+        } else if (
+          expression.computed &&
+          expression.property.type === "Literal" &&
+          typeof expression.property.value === "string"
+        ) {
+          name = expression.property.value;
         }
-      },
+      }
+      return typeof name === "string" && MONEY_NAME.test(name)
+        ? name
+        : undefined;
+    }
+
+    function checkArithmetic(node) {
+      const operator =
+        node.type === "AssignmentExpression"
+          ? node.operator.slice(0, -1)
+          : node.operator;
+      if (!MATH_OPS.has(operator)) return;
+      const name = moneyName(node.left) ?? moneyName(node.right);
+      if (name === undefined) return;
+      context.report({ node, messageId: "rawMoney", data: { name } });
+    }
+
+    return {
+      BinaryExpression: checkArithmetic,
+      AssignmentExpression: checkArithmetic,
     };
   },
 };

@@ -40,6 +40,11 @@ const FIXTURE_ROOT = join(
  * @param {string} [fixtureRoot] alternate root for harness self-tests
  */
 export async function runGolden(name, fn, fixtureRoot = FIXTURE_ROOT) {
+  if (process.env.UPDATE_GOLDENS === "1" && process.env.CI) {
+    throw new Error(
+      "UPDATE_GOLDENS=1 cannot run in CI; golden verification must compare existing fixtures",
+    );
+  }
   const inputPath = join(fixtureRoot, `${name}.input.json`);
   const expectedPath = join(fixtureRoot, `${name}.expected.json`);
 

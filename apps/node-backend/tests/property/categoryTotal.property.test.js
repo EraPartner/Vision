@@ -1,16 +1,14 @@
 /**
- * Property test: sum(category_breakdown) + excluded == transaction_total (Phase 8).
- *
- * Invariant from plan: the category breakdown plus whatever is excluded via
- * exclusion filters must reconcile exactly to the unfiltered transaction total
- * within 1 cent. Any aggregator that emits `by_category[]` + `excluded_total`
- * must preserve this conservation law so the dashboard subtotals never silently
- * drop (or double-count) transactions.
+ * Category projection properties for the production materialized-view helper.
+ * Inputs have already been filtered and converted to EUR. These tests cover
+ * grouping and totals, not database exclusions or currency conversion.
  */
+import { describe, expect, it, vi } from "vitest";
+import { mockConnection } from "../helpers/repoMocks.js";
 
-import { describe, it, expect } from 'vitest';
+vi.mock("../../src/database/connection.js", () => mockConnection());
 
-const CENT = 0.01;
+import { buildCategoryFromConvertedRows } from "../../src/repositories/infoRepositoryHelpers.js";
 
 function seeded(seed) {
   let t = seed >>> 0;
@@ -23,79 +21,94 @@ function seeded(seed) {
   };
 }
 
-function roundCents(x) {
-  return Math.round(x * 100) / 100;
-}
+describe("property: production category totals", () => {
+  it("conserves signed cents and counts across repeated category rows", () => {
+    const rng = seeded(0xca1ec0e);
+    const categories = [-1, 1, 2, 3, 4];
 
-/**
- * Bucket random transactions by category; mark a random subset as excluded.
- */
-function generateTransactions(rng, count) {
-  const CATEGORIES = ['groceries', 'rent', 'utilities', 'leisure', 'salary', 'misc', null];
-  const EXCLUDED = new Set(['rent']);
-  const rows = [];
-  for (let i = 0; i < count; i++) {
-    const category = CATEGORIES[Math.floor(rng() * CATEGORIES.length)];
-    const amount = roundCents((rng() - 0.5) * 5000); // positive + negative
-    rows.push({ category, amount, is_excluded: category !== null && EXCLUDED.has(category) });
-  }
-  return rows;
-}
+    for (let trial = 0; trial < 100; trial++) {
+      const entries = Array.from(
+        { length: 50 + Math.floor(rng() * 500) },
+        () => {
+          const id = categories[Math.floor(rng() * categories.length)];
+          return {
+            id,
+            cents: Math.floor(rng() * 500001) - 250000,
+            count: 1 + Math.floor(rng() * 10),
+            stringify: rng() < 0.5,
+          };
+        },
+      );
+      const rows = entries.map(({ id, cents, count, stringify }) => ({
+        category_id: id !== -1 && stringify ? String(id) : id,
+        name: id === -1 ? "Uncategorized" : `Category ${id}`,
+        amount_eur: cents / 100,
+        count: stringify ? String(count) : count,
+      }));
+      const result = buildCategoryFromConvertedRows(rows);
 
-function aggregate(rows) {
-  const byCategory = new Map();
-  let excludedTotal = 0;
-  let grandTotal = 0;
-
-  for (const row of rows) {
-    grandTotal += row.amount;
-    if (row.is_excluded) {
-      excludedTotal += row.amount;
-      continue;
-    }
-    const key = row.category ?? '__uncategorized__';
-    byCategory.set(key, (byCategory.get(key) ?? 0) + row.amount);
-  }
-
-  return {
-    by_category: Array.from(byCategory.entries()).map(([category, total]) => ({
-      category,
-      total: roundCents(total),
-    })),
-    excluded_total: roundCents(excludedTotal),
-    grand_total: roundCents(grandTotal),
-  };
-}
-
-describe('property: sum(category_breakdown) + excluded == grand_total', () => {
-  it('reconciles within 1 cent across 100 random datasets', () => {
-    const rng = seeded(0xCA1EC0E);
-    for (let seed = 0; seed < 100; seed++) {
-      const count = 50 + Math.floor(rng() * 500);
-      const rows = generateTransactions(rng, count);
-      const agg = aggregate(rows);
-
-      const sumCategories = agg.by_category.reduce((a, r) => a + r.total, 0);
-      const reconstructed = roundCents(sumCategories + agg.excluded_total);
-      expect(Math.abs(reconstructed - agg.grand_total)).toBeLessThanOrEqual(CENT);
+      expect(result).toHaveLength(categories.length);
+      for (const id of categories) {
+        const expectedEntries = entries.filter((entry) => entry.id === id);
+        const expectedCents = expectedEntries.reduce(
+          (total, entry) => total + BigInt(entry.cents),
+          0n,
+        );
+        const category = result.find(
+          (entry) => entry.id === (id === -1 ? null : id),
+        );
+        expect(category?.name).toBe(
+          id === -1 ? "Uncategorized" : `Category ${id}`,
+        );
+        expect(Math.round(category.total * 100)).toBe(Number(expectedCents));
+        expect(category.count).toBe(
+          expectedEntries.reduce((total, entry) => total + entry.count, 0),
+        );
+      }
+      expect(
+        Math.round(
+          result.reduce((total, entry) => total + entry.total, 0) * 100,
+        ),
+      ).toBe(entries.reduce((total, entry) => total + entry.cents, 0));
+      expect(buildCategoryFromConvertedRows([...rows].reverse())).toEqual(
+        expect.arrayContaining(
+          result.map((entry) =>
+            expect.objectContaining({
+              id: entry.id,
+              count: entry.count,
+              total: expect.closeTo(entry.total, 8),
+            }),
+          ),
+        ),
+      );
     }
   });
 
-  it('empty dataset produces zero totals', () => {
-    const agg = aggregate([]);
-    expect(agg.by_category).toEqual([]);
-    expect(agg.excluded_total).toBe(0);
-    expect(agg.grand_total).toBe(0);
+  it("preserves duplicate contributions and negative uncategorized amounts", () => {
+    const duplicate = {
+      category_id: "7",
+      name: "Food",
+      amount_eur: 0.1,
+      count: "2",
+    };
+    expect(
+      buildCategoryFromConvertedRows([
+        duplicate,
+        duplicate,
+        {
+          category_id: -1,
+          name: "Uncategorized",
+          amount_eur: -0.03,
+          count: "1",
+        },
+      ]),
+    ).toEqual([
+      { id: 7, name: "Food", total: 0.2, count: 4 },
+      { id: null, name: "Uncategorized", total: -0.03, count: 1 },
+    ]);
   });
 
-  it('all-excluded dataset has empty category breakdown', () => {
-    const rows = [
-      { category: 'rent', amount: 1000, is_excluded: true },
-      { category: 'rent', amount: 750, is_excluded: true },
-    ];
-    const agg = aggregate(rows);
-    expect(agg.by_category).toEqual([]);
-    expect(agg.excluded_total).toBe(1750);
-    expect(agg.grand_total).toBe(1750);
+  it("returns no categories for empty input", () => {
+    expect(buildCategoryFromConvertedRows([])).toEqual([]);
   });
 });

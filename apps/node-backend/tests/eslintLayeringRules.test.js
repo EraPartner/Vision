@@ -128,3 +128,54 @@ describe("no-null-route-filter", () => {
     },
   );
 });
+
+describe("no-raw-money-arithmetic", () => {
+  const ruleId = "vision-local-money/no-raw-money-arithmetic";
+
+  function moneyMessages(code, sourceFilename = "src/services/example.js") {
+    return linter
+      .verify(code, backendEslintConfig, { filename: sourceFilename })
+      .filter((message) => message.ruleId === ruleId);
+  }
+
+  it.each([
+    "amount + 1;",
+    "1 - row.price;",
+    "row.balance * 2;",
+    "row['fees'] / 2;",
+    "row?.cost + 1;",
+    "amount += 1;",
+    "row.total -= 1;",
+    "row['fee'] *= 2;",
+    "row.price /= 2;",
+    "counter += row.amount;",
+  ])("warns about monetary arithmetic: %s", (code) => {
+    expect(moneyMessages(code)).toEqual([
+      expect.objectContaining({ messageId: "rawMoney", severity: 1 }),
+    ]);
+  });
+
+  it.each([
+    "counter += 1;",
+    "counter + 1;",
+    "amount = 1;",
+    "row.amount = 1;",
+    "row[dynamicProperty] + 1;",
+    "row.amount_eur + 1;",
+    "amount > 1;",
+    "row.amount ?? 0;",
+  ])("keeps the existing scoped name and operator policy: %s", (code) => {
+    expect(moneyMessages(code)).toEqual([]);
+  });
+
+  it.each(["src/lib/money.js", "src/lib/example.test.js", "tests/example.js"])(
+    "keeps the existing exemption for %s",
+    (sourceFilename) => {
+      expect(moneyMessages("amount += row.price;", sourceFilename)).toEqual([]);
+    },
+  );
+
+  it("reports a single warning when both operands are monetary", () => {
+    expect(moneyMessages("row.amount += row.price;")).toHaveLength(1);
+  });
+});

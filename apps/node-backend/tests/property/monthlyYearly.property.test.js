@@ -1,20 +1,14 @@
 /**
- * Property test: sum(monthly_data) == yearly_data (Phase 8).
- *
- * Invariant from plan: monthly aggregates must reconcile to the yearly total
- * for every year. The aggregation sources (mv_monthly_summary, live fallback)
- * are DB-bound, but the reducer shape is stable: summing {income, expense,
- * net} across 12 months of a given year must equal the yearly row.
- *
- * This test exercises the invariant against a pure JS rollup over synthetic
- * monthly rows. Any aggregation layer that emits monthly + yearly projections
- * must satisfy this identity — locking the test here prevents a future
- * refactor from silently diverging the two reducers.
+ * Summary properties for the production monthly repository helper shared by
+ * live and materialized-view paths. This does not claim to compare yearly SQL
+ * or validate database grouping and exclusions.
  */
+import { describe, expect, it, vi } from "vitest";
+import { mockConnection } from "../helpers/repoMocks.js";
 
-import { describe, it, expect } from 'vitest';
+vi.mock("../../src/database/connection.js", () => mockConnection());
 
-const CENT = 0.01;
+import { buildMonthlySummary } from "../../src/repositories/infoRepositoryHelpers.js";
 
 function seeded(seed) {
   let t = seed >>> 0;
@@ -27,78 +21,81 @@ function seeded(seed) {
   };
 }
 
-function roundCents(x) {
-  return Math.round(x * 100) / 100;
-}
-
-function generateMonthlyRows(rng, year) {
-  const rows = [];
-  for (let month = 1; month <= 12; month++) {
-    rows.push({
-      year,
-      month,
-      income: roundCents(rng() * 5000),
-      expense: roundCents(rng() * 4000),
-    });
-  }
-  return rows.map((r) => ({ ...r, net: roundCents(r.income - r.expense) }));
-}
-
-function rollupYearly(monthlyRows) {
-  const byYear = new Map();
-  for (const row of monthlyRows) {
-    const bucket = byYear.get(row.year) ?? { income: 0, expense: 0, net: 0 };
-    bucket.income += row.income;
-    bucket.expense += row.expense;
-    bucket.net += row.net;
-    byYear.set(row.year, bucket);
-  }
-  return Array.from(byYear.entries()).map(([year, b]) => ({
-    year,
-    income: roundCents(b.income),
-    expense: roundCents(b.expense),
-    net: roundCents(b.net),
-  }));
-}
-
-describe('property: sum(monthly) == yearly', () => {
-  it('monthly → yearly rollup preserves income, expense, net within 1 cent across 100 random years', () => {
+describe("property: production monthly summary", () => {
+  it("preserves signed cents, counts and bounds across variable summary windows", () => {
     const rng = seeded(0x20251231);
-    for (let seed = 0; seed < 100; seed++) {
-      const year = 2000 + Math.floor(rng() * 40);
-      const monthly = generateMonthlyRows(rng, year);
-      const [yearly] = rollupYearly(monthly);
 
-      const sumIncome = monthly.reduce((a, r) => a + r.income, 0);
-      const sumExpense = monthly.reduce((a, r) => a + r.expense, 0);
-      const sumNet = monthly.reduce((a, r) => a + r.net, 0);
+    for (let trial = 0; trial < 100; trial++) {
+      const entries = Array.from(
+        { length: 1 + Math.floor(rng() * 36) },
+        (_, index) => ({
+          incomeCents: Math.floor(rng() * 500001) - 50000,
+          spendingCents: Math.floor(rng() * 400001) - 50000,
+          count: Math.floor(rng() * 100),
+          period: `${2023 + Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, "0")}-01`,
+        }),
+      );
+      const months = entries.map((entry) => ({
+        total_spending: entry.spendingCents / 100,
+        total_income: entry.incomeCents / 100,
+        net_amount: (entry.incomeCents - entry.spendingCents) / 100,
+        transaction_count: entry.count,
+        period_start: entry.period,
+        period_end: entry.period,
+      }));
+      const summary = buildMonthlySummary(months);
 
-      expect(Math.abs(yearly.income - sumIncome)).toBeLessThanOrEqual(CENT);
-      expect(Math.abs(yearly.expense - sumExpense)).toBeLessThanOrEqual(CENT);
-      expect(Math.abs(yearly.net - sumNet)).toBeLessThanOrEqual(CENT);
-
-      // net identity
-      expect(Math.abs(yearly.net - (yearly.income - yearly.expense))).toBeLessThanOrEqual(CENT);
+      for (const [field, centsField] of [
+        ["total_spending", "spendingCents"],
+        ["total_income", "incomeCents"],
+      ]) {
+        const expectedCents = entries.reduce(
+          (total, entry) => total + BigInt(entry[centsField]),
+          0n,
+        );
+        expect(summary[field]).toBe(Number(expectedCents) / 100);
+      }
+      const expectedNetCents = entries.reduce(
+        (total, entry) =>
+          total + BigInt(entry.incomeCents - entry.spendingCents),
+        0n,
+      );
+      expect(summary.net_amount).toBe(Number(expectedNetCents) / 100);
+      expect(summary.transaction_count).toBe(
+        entries.reduce((total, entry) => total + entry.count, 0),
+      );
+      expect(summary.period_start).toBe(months[0].period_start);
+      expect(summary.period_end).toBe(months.at(-1).period_end);
     }
   });
 
-  it('empty dataset reduces to zero yearly rows', () => {
-    expect(rollupYearly([])).toEqual([]);
+  it("counts repeated rows and retains the caller's window bounds", () => {
+    const month = {
+      total_income: 0.3,
+      total_spending: -0.2,
+      net_amount: 0.5,
+      transaction_count: 2,
+      period_start: "2026-01-01",
+      period_end: "2026-01-31",
+    };
+    expect(buildMonthlySummary([month, month])).toEqual({
+      total_income: 0.6,
+      total_spending: -0.4,
+      net_amount: 1,
+      transaction_count: 4,
+      period_start: "2026-01-01",
+      period_end: "2026-01-31",
+    });
   });
 
-  it('multi-year rollup partitions cleanly', () => {
-    const rng = seeded(0xFADEFEED);
-    const rows = [
-      ...generateMonthlyRows(rng, 2023),
-      ...generateMonthlyRows(rng, 2024),
-    ];
-    const yearly = rollupYearly(rows);
-    expect(yearly).toHaveLength(2);
-    const y2023 = yearly.find((r) => r.year === 2023);
-    const y2024 = yearly.find((r) => r.year === 2024);
-    const sum2023 = rows.filter((r) => r.year === 2023).reduce((a, r) => a + r.income, 0);
-    const sum2024 = rows.filter((r) => r.year === 2024).reduce((a, r) => a + r.income, 0);
-    expect(Math.abs(y2023.income - sum2023)).toBeLessThanOrEqual(CENT);
-    expect(Math.abs(y2024.income - sum2024)).toBeLessThanOrEqual(CENT);
+  it("returns zero totals and absent bounds for empty input", () => {
+    expect(buildMonthlySummary([])).toEqual({
+      total_spending: 0,
+      total_income: 0,
+      net_amount: 0,
+      transaction_count: 0,
+      period_start: undefined,
+      period_end: undefined,
+    });
   });
 });
