@@ -4,9 +4,9 @@ type: endpoint
 method: POST, GET, PATCH, DELETE
 path: /api/portfolio/import
 description: CSV import of brokerage/exchange trades with review, exact source provenance, versioned duplicate identity, and saved portfolio parser configs
-date: 2026-09-11
-updated: 2026-09-12
-last_modified: 2026-09-12
+date: 2026-09-27
+updated: 2026-09-27
+last_modified: 2026-09-27
 tags:
   [
     api,
@@ -116,6 +116,17 @@ field. Query fields are ignored. This is a breaking request-contract change unde
 
 > [!warning] Symbol or name required
 > At least one of `symbol_column` or `name_column` must be provided. Both may be mapped simultaneously for best matching.
+
+Generic uploads accept optional `number_format`: `auto` (default), `decimal_dot`, or
+`decimal_comma`, independent of `separator`. Saved parser configurations retain
+`config.number_format`; missing values use `auto`. Every mapped generic numeric field uses it.
+Ambiguous old inputs such as `1,234` now reject the entire file with 400 before staging instead
+of guessing. Select an explicit format and retry. The diagnostic names the data-row ordinal and
+column without the numeric value. Maintained preset numeric rules remain unchanged.
+
+`skip_rows` counts physical lines before the header. Encoding choices include UTF-8
+(`utf-8`/`utf8`), Latin-1 (`latin1`/`latin-1`/`iso-8859-1`), and true `windows-1252` decoding.
+Unsupported encodings return 400. See [[docs/features/portfolio-import]].
 
 The IBKR preset supplies the compatibility mapping fields but parses the multi-section statement
 with format-specific rules. Each accepted `Transaction History,Data` record is retained literally

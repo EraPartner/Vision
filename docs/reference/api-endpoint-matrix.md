@@ -2,12 +2,12 @@
 title: API Endpoint Matrix
 type: reference
 status: active
-date: 2026-09-20
-updated: 2026-09-25
-last_modified: 2026-09-25
+date: 2026-09-27
+updated: 2026-09-27
+last_modified: 2026-09-27
 adr-reference: 026
-# Authoritative HTTP-operation count, derived from openapi.yaml and enforced by
-# scripts/check-endpoint-matrix.js (CI verify-generated). Bump when routes change.
+# Authoritative HTTP-operation count from openapi.yaml. The CI checker also
+# compares every method/path pair; update concrete resource rows when routes change.
 api_operation_count: 295
 tags:
   [
@@ -72,7 +72,7 @@ tags:
     auto-link,
     planned-match,
   ]
-description: Complete matrix of all 293 HTTP API operations (authoritative count from openapi.yaml), 2 health endpoints, and 25 Electron IPC invoke channels. The Electron contract also defines 6 renderer event channels.
+description: Complete matrix of all 295 HTTP API operations (authoritative count from openapi.yaml), 2 health endpoints, and 25 Electron IPC invoke channels. The Electron contract also defines 6 renderer event channels.
 aliases:
   [api matrix, endpoint matrix, all endpoints, api overview, endpoint list]
 ---
@@ -80,7 +80,7 @@ aliases:
 # API Endpoint Matrix
 
 > [!abstract] Overview
-> **293 HTTP API operations** (authoritative count = operations in `openapi.yaml`, enforced by `scripts/check-endpoint-matrix.js` in CI), 2 unversioned `/health` endpoints, and 25 Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
+> **295 HTTP API operations** (the count and concrete method/path pairs in `openapi.yaml` are checked by `scripts/check-endpoint-matrix.js` in CI), 2 unversioned `/health` endpoints, and 25 Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
 >
 > **Note:** As of Phase 2.4, `openapi.yaml` is the authoritative API specification. This matrix provides a quick lookup; see the OpenAPI spec for formal schemas and examples.
 >
@@ -135,7 +135,14 @@ aliases:
 >
 > **Absent and empty are unchanged** — `?category_ids=`, `?category_id=` still mean "no filter" and answer 200. Non-breaking for shipped callers: the Transactions page and the Imports Export card build these with `ids.join(',')` from `number[]` state and omit empty values; nothing in the frontend sends `account_ids`. `openapi.yaml` already typed the four scalars `integer` (now annotated `format: int32, minimum: 1`, and the two comma lists carry a documented `pattern`), so the implementation moved _onto_ the published contract. See [[docs/security/input-validation#Comma-separated ID Query Params (transactions list + export)|Input Validation]].
 
-## Accounts (12 endpoints)
+Every HTTP operation first checks its destination Host authority. Unlisted, malformed, or
+duplicate authorities return 403 before CORS and body parsing. See
+[[docs/security/data-protection]] and [[docs/guides/deployment]] for exact hostname permissions.
+Generic custom CSV uploads accept `number_format`; ambiguous automatic values and unsupported
+encodings return 400. Saved parser configs retain this option. See [[docs/api/imports]] and
+[[docs/api/portfolio-imports]].
+
+## Accounts (13 endpoints)
 
 | Method | Path                                             | Description                                                                                                                                                      | Rate Limit | Doc                             |
 | ------ | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------- |
@@ -160,30 +167,42 @@ aliases:
 | POST   | `/api/cross-workspace/rebalance`             | Cash-aware rebalancing: deploy spendable cash into underweight sleeves toward a target allocation, no sells; supports Awesome's five 20% sleeves (ADR-098) | —          | [[docs/features/portfolio\|Portfolio]] |
 | POST   | `/api/cross-workspace/commitment-aware-cash` | Estimate a 90-day candidate cash cap from spendable balances, pending planned and recurring items, and an editable reserve floor                           | —          | [[docs/features/portfolio\|Portfolio]] |
 
-## Analysis Workspace (11 endpoints — ADR-144)
+## Analysis Workspace (17 operations — ADR-144)
 
-| Method            | Path                                         | Description                                                                          | Rate Limit          | Doc                                   |
-| ----------------- | -------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------- | ------------------------------------- |
-| GET               | `/api/analysis/catalog`                      | Approved dataset, field, measure, and join catalog                                   | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
-| POST              | `/api/analysis/compile`                      | Visual plan to inspectable generated SQL                                             | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
-| POST              | `/api/analysis/execute`                      | Bounded visual or custom SQL execution                                               | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
-| POST              | `/api/analysis/cancel/:requestId`            | Same-role PostgreSQL cancellation                                                    | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
-| POST              | `/api/analysis/drill`                        | Grouped row to bounded contributing records                                          | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
-| GET, POST         | `/api/analysis/saved`                        | List or create reusable analyses                                                     | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
-| GET, PUT, DELETE  | `/api/analysis/saved/:id`                    | Read, version, or delete one analysis                                                | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
-| POST              | `/api/analysis/saved/:id/run`                | Refresh and record success or failure                                                | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
-| POST              | `/api/analysis/formulas/evaluate`            | Evaluate bounded spreadsheet-style formulas                                          | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
-| POST              | `/api/analysis/ai-proposals/preview`         | Preview a version-bound AI edit                                                      | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
-| POST              | `/api/analysis/ai-proposals/apply`           | Apply an inspected version-bound AI edit                                             | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
-| GET               | `/api/analysis/saved/:id/versions`           | List immutable definition versions                                                   | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
-| POST              | `/api/analysis/saved/:id/restore`            | Restore a prior definition as a new version                                          | 600 req/min         | [[docs/api/analysis\|Analysis]]       |
-| GET, POST         | `/api/ai-research/investigations`            | List or start recoverable jobs; create may claim one preview scope                   | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
-| GET, PUT          | `/api/ai-research/agentcloak-desktop`        | Probe Desktop and inspect or change its protection preference                        | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
-| GET, DELETE       | `/api/ai-research/investigations/:id`        | Inspect or delete one investigation                                                  | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
-| POST              | `/api/ai-research/investigations/:id/resume` | Resume completed checkpoints                                                         | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
-| POST              | `/api/ai-research/investigations/:id/cancel` | Cancel queued or active work                                                         | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
-| GET, POST, DELETE | `/api/ai-research/disclosures/*`             | Preview exact payloads; optional Desktop protection or MCP gate; digest-bound egress | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
-| GET, POST, DELETE | `/api/ai-research/documents/*`               | Manage documents and retrieve cited passages                                         | attachment/standard | [[docs/api/ai-research\|AI Research]] |
+| Method           | Path                                  | Description                                        | Rate Limit  | Doc                             |
+| ---------------- | ------------------------------------- | -------------------------------------------------- | ----------- | ------------------------------- |
+| GET              | `/api/analysis/catalog`               | Approved dataset, field, measure, and join catalog | 600 req/min | [[docs/api/analysis\|Analysis]] |
+| POST             | `/api/analysis/compile`               | Visual plan to inspectable generated SQL           | 600 req/min | [[docs/api/analysis\|Analysis]] |
+| POST             | `/api/analysis/execute`               | Bounded visual or custom SQL execution             | 600 req/min | [[docs/api/analysis\|Analysis]] |
+| POST             | `/api/analysis/cancel/:requestId`     | Same-role PostgreSQL cancellation                  | 600 req/min | [[docs/api/analysis\|Analysis]] |
+| POST             | `/api/analysis/drill`                 | Grouped row to bounded contributing records        | 600 req/min | [[docs/api/analysis\|Analysis]] |
+| GET, POST        | `/api/analysis/saved`                 | List or create reusable analyses                   | 600 req/min | [[docs/api/analysis\|Analysis]] |
+| GET, PUT, DELETE | `/api/analysis/saved/:id`             | Read, version, or delete one analysis              | 600 req/min | [[docs/api/analysis\|Analysis]] |
+| POST             | `/api/analysis/saved/:id/run`         | Refresh and record success or failure              | 600 req/min | [[docs/api/analysis\|Analysis]] |
+| POST             | `/api/analysis/formulas/evaluate`     | Evaluate bounded spreadsheet-style formulas        | 600 req/min | [[docs/api/analysis\|Analysis]] |
+| POST             | `/api/analysis/ai-proposals/preview`  | Preview a version-bound AI edit                    | 600 req/min | [[docs/api/analysis\|Analysis]] |
+| POST             | `/api/analysis/ai-proposals/apply`    | Apply an inspected version-bound AI edit           | 600 req/min | [[docs/api/analysis\|Analysis]] |
+| GET              | `/api/analysis/saved/:id/versions`    | List immutable definition versions                 | 600 req/min | [[docs/api/analysis\|Analysis]] |
+| POST             | `/api/analysis/saved/:id/restore`     | Restore a prior definition as a new version        | 600 req/min | [[docs/api/analysis\|Analysis]] |
+| POST             | `/api/analysis/saved/:id/ai-proposal` | Generate an inspectable local-model edit proposal  | 600 req/min | [[docs/api/analysis\|Analysis]] |
+
+## AI Research (20 operations)
+
+| Method      | Path                                             | Description                                                        | Rate Limit          | Doc                                   |
+| ----------- | ------------------------------------------------ | ------------------------------------------------------------------ | ------------------- | ------------------------------------- |
+| GET         | `/api/ai-research/status`                        | Inspect local research and provider readiness                      | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
+| GET, POST   | `/api/ai-research/investigations`                | List or start recoverable jobs; create may claim one preview scope | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
+| GET, PUT    | `/api/ai-research/agentcloak-desktop`            | Probe Desktop and inspect or change its protection preference      | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
+| GET, DELETE | `/api/ai-research/investigations/:id`            | Inspect or delete one investigation                                | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
+| POST        | `/api/ai-research/investigations/:id/resume`     | Resume completed checkpoints                                       | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
+| POST        | `/api/ai-research/investigations/:id/cancel`     | Cancel queued or active work                                       | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
+| POST        | `/api/ai-research/disclosures/preview`           | Preview the exact protected cloud payload and disclosure units     | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
+| GET, POST   | `/api/ai-research/disclosures/grants`            | List grants or approve bounded digest-bound egress                 | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
+| POST        | `/api/ai-research/disclosures/grants/:id/revoke` | Revoke a grant before queued egress or retry                       | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
+| GET, DELETE | `/api/ai-research/disclosures/records`           | Inspect disclosure metadata or delete records and revoke grants    | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
+| GET, POST   | `/api/ai-research/documents`                     | List or locally index selected research documents                  | attachment/standard | [[docs/api/ai-research\|AI Research]] |
+| GET, DELETE | `/api/ai-research/documents/:id`                 | Inspect or delete a document and its derived passages              | attachment/standard | [[docs/api/ai-research\|AI Research]] |
+| POST        | `/api/ai-research/documents/search/passages`     | Retrieve cited local document passages                             | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
 
 ## Research Dossiers (9 operations — ADR-153)
 
@@ -271,7 +290,7 @@ history. This group uses the aggregation rate limiter.
 | GET    | `/api/recipients/:id`                     | Get single                                          | —          | [[docs/api/recipients\|Recipients]] |
 | PATCH  | `/api/recipients/:id`                     | Update                                              | —          | [[docs/api/recipients\|Recipients]] |
 | DELETE | `/api/recipients/:id`                     | Hard delete                                         | —          | [[docs/api/recipients\|Recipients]] |
-| POST   | `/api/recipients/:id/merge`               | Merge aliases into primary                          | —          | [[docs/api/recipients\|Recipients]] |
+| POST   | `/api/recipients/:id/merge`               | Merge aliases with ordered participant locks; 404 removed target, 409 concurrent alias target | —          | [[docs/api/recipients\|Recipients]] |
 | POST   | `/api/recipients/:id/unmerge`             | Unmerge from primary                                | —          | [[docs/api/recipients\|Recipients]] |
 | GET    | `/api/recipients/:id/aliases`             | Get aliases                                         | —          | [[docs/api/recipients\|Recipients]] |
 | GET    | `/api/recipients/clusters`                | Identify merge-candidate clusters                   | —          | [[docs/api/recipients\|Recipients]] |
@@ -283,16 +302,16 @@ history. This group uses the aggregation rate limiter.
 
 ## Planned Transactions (8 endpoints) — Phase 3 / Phase 6 / June 2026
 
-| Method | Path                                          | Description                                                                                | Rate Limit | Doc                                                    |
-| ------ | --------------------------------------------- | ------------------------------------------------------------------------------------------ | ---------- | ------------------------------------------------------ |
-| GET    | `/api/planned-transactions`                   | List                                                                                       | —          | [[docs/api/plannedTransactions\|Planned Transactions]] |
-| POST   | `/api/planned-transactions`                   | Create (supports loans)                                                                    | —          | [[docs/api/plannedTransactions\|Planned Transactions]] |
-| GET    | `/api/planned-transactions/:id`               | Get single                                                                                 | —          | [[docs/api/plannedTransactions\|Planned Transactions]] |
-| PATCH  | `/api/planned-transactions/:id`               | Update                                                                                     | 30 req/min | [[docs/api/plannedTransactions\|Planned Transactions]] |
-| POST   | `/api/planned-transactions/:id/execute`       | Execute (atomic, idempotent — Phase 3)                                                     | —          | [[docs/api/plannedTransactions\|Planned Transactions]] |
-| DELETE | `/api/planned-transactions/:id`               | Hard delete                                                                                | —          | [[docs/api/plannedTransactions\|Planned Transactions]] |
-| GET    | `/api/planned-transactions/due-soon`          | Upcoming bills within N days (Phase 6)                                                     | —          | [[docs/api/plannedTransactions\|Planned Transactions]] |
-| GET    | `/api/planned-transactions/match-suggestions` | Ambiguous auto-link candidates for user confirmation (June 2026; registered before `/:id`) | —          | [[docs/api/plannedTransactions\|Planned Transactions]] |
+| Method | Path                                          | Description                                                                                 | Rate Limit | Doc                                                    |
+| ------ | --------------------------------------------- | ------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------ |
+| GET    | `/api/planned-transactions`                   | List                                                                                        | —          | [[docs/api/plannedTransactions\|Planned Transactions]] |
+| POST   | `/api/planned-transactions`                   | Create (supports loans)                                                                     | —          | [[docs/api/plannedTransactions\|Planned Transactions]] |
+| GET    | `/api/planned-transactions/:id`               | Get single                                                                                  | —          | [[docs/api/plannedTransactions\|Planned Transactions]] |
+| PATCH  | `/api/planned-transactions/:id`               | Update                                                                                      | 30 req/min | [[docs/api/plannedTransactions\|Planned Transactions]] |
+| POST   | `/api/planned-transactions/:id/execute`       | Link and advance under parent lock; completed bounded series return 409; replay returns 200 | —          | [[docs/api/plannedTransactions\|Planned Transactions]] |
+| DELETE | `/api/planned-transactions/:id`               | Hard delete                                                                                 | —          | [[docs/api/plannedTransactions\|Planned Transactions]] |
+| GET    | `/api/planned-transactions/due-soon`          | Upcoming bills within N days (Phase 6)                                                      | —          | [[docs/api/plannedTransactions\|Planned Transactions]] |
+| GET    | `/api/planned-transactions/match-suggestions` | Ambiguous auto-link candidates for user confirmation (June 2026; registered before `/:id`)  | —          | [[docs/api/plannedTransactions\|Planned Transactions]] |
 
 ## Investments (17 endpoints)
 
@@ -381,7 +400,7 @@ Provider-agnostic research surface mounted at `/api/research` under `marketRateL
 | PATCH  | `/api/import/parsers/:id`                               | Update saved parser name and/or config; 404 if missing; 409 on name conflict | —          | [[docs/api/imports\|Imports]] |
 | DELETE | `/api/import/parsers/:id`                               | Delete saved parser; 204 on success; 404 if missing                          | —          | [[docs/api/imports\|Imports]] |
 
-## Portfolio Import (12 endpoints) — ADR-078
+## Portfolio Import (13 endpoints) — ADR-078
 
 All routes mounted at `/api/portfolio/import` with `importRateLimiter`. Parallel pipeline to the budgeting import: stage → validate → matchInvestments → (review|autoCommit) → commit. Auto-commit only when all rows matched by exact symbol with zero errors; otherwise batch goes to `awaiting_review`. See [[docs/api/portfolio-imports|Portfolio Imports API]] and [[docs/features/portfolio-import|Portfolio Import Feature]].
 
@@ -462,7 +481,7 @@ All routes mounted at `/api/portfolio/import` with `importRateLimiter`. Parallel
 | GET    | `/health`          | Health check (backend ready)             | —          | [[docs/api/health\|Health]] |
 | GET    | `/health/detailed` | Detailed health with cache warmup status | —          | [[docs/api/health\|Health]] |
 
-## Private Electron Audit Bridge (3 endpoints)
+## Private Electron Audit Bridge (6 endpoints)
 
 These routes are for the native Electron main process. They require a loopback socket peer and a per-launch Bearer token that differs from `ADMIN_AUTH_TOKEN`. An HTTP 200 verification response can contain a failed or unavailable audit status.
 
@@ -536,7 +555,7 @@ Server-computed aggregations with materialized-view/live/cache distinction. Prod
 | GET    | `/api/aggregations/category-pivot`             | Spending by category with exclusion filter support                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | —          | [[docs/api/aggregations\|Aggregations]] |
 | GET    | `/api/aggregations/recipient-by-year`          | Per-recipient spending broken out by calendar year with exclusion filter support                                                                                                                                                                                                                                                                                                                                                                                                                                               | —          | [[docs/api/aggregations\|Aggregations]] |
 
-## Info/Statistics (15 endpoints — Phase 9 Aggregation Cutover, Phase 14+ Portfolio Totals)
+## Info/Statistics (17 endpoints — Phase 9 Aggregation Cutover, Phase 14+ Portfolio Totals)
 
 Aggregation routes removed in Phase 9 as migration to `/api/aggregations/*` is complete. These endpoints remain for non-aggregation queries only: portfolio-performance, portfolio-summary (realtime totals, Phase 14), net-worth, exchange-rates, inflation-rates, and supporting refresh endpoints. Portfolio-summary endpoint added 2026-04-29 as single source of truth for dashboard and performance page headline metrics. 2026-06-11 (ADR-074): both portfolio-performance and portfolio-summary gain FX attribution fields (assetGain, fxGain, nativeCurrentValue, usedFallbackRate); flows now converted at transaction-date FX rates; no new endpoints added. Phase 9 cutover also removed `GET /api/info` (general statistics) and `GET /api/info/transaction-summary` (summary with filters).
 
@@ -621,38 +640,40 @@ equal the main senders and preload subscriptions.
 
 ## Summary
 
-| Resource                             | Endpoints | Rate-Limited |
-| ------------------------------------ | --------- | ------------ |
-| Accounts (ADR-088)                   | 13        | 0            |
-| Analysis Workspace (ADR-144)         | 11        | 11           |
-| Analysis Monitors (ADR-154)          | 8         | 8            |
-| Cross-Workspace (ADR-098)            | 2         | 0            |
-| Transactions (incl. Tags)            | 18        | 2            |
-| Categories                           | 12        | 0            |
-| Recipients                           | 14        | 0            |
-| Planned Transactions                 | 8         | 1            |
-| Investments                          | 17        | 0            |
-| Watchlist                            | 5         | 0            |
-| Market Lookup                        | 4         | 0            |
-| Research (ADR-079/081/082)           | 18        | 0            |
-| Import                               | 16        | 0            |
-| Portfolio Import (ADR-078)           | 13        | 2            |
-| Attachments (Phase 5A)               | 4         | 0            |
-| Saved Charts                         | 4         | 0            |
-| Settings                             | 5         | 0            |
-| Recipient Bank Accounts              | 5         | 0            |
-| Admin (incl. DB Data Editor ADR-101) | 17        | 3            |
-| Private Electron Audit Bridge        | 4         | 0            |
-| Splits                               | 11        | 0            |
-| Health                               | 2         | 0            |
-| Aggregations (Phase 2/6/10/D)        | 15        | 0            |
-| Reports (Phase 3/7)                  | 3         | 0            |
-| Info/Statistics (Phase 14)           | 17        | 5            |
-| AI Chat                              | 9         | 2            |
-| Electron IPC invoke channels         | 25        | 0            |
-| **Total**                            | **279**   | **34**       |
+| Resource                             | Operations or invoke channels |
+| ------------------------------------ | ----------------------------- |
+| Accounts (ADR-088)                   | 13                            |
+| Analysis Workspace (ADR-144)         | 17                            |
+| AI Research                          | 20                            |
+| Research Dossiers (ADR-153)          | 9                             |
+| Analysis Monitors (ADR-154)          | 8                             |
+| Cross-Workspace (ADR-098)            | 2                             |
+| Transactions (incl. Tags)            | 18                            |
+| Categories                           | 12                            |
+| Recipients                           | 14                            |
+| Planned Transactions                 | 8                             |
+| Investments                          | 17                            |
+| Watchlist                            | 5                             |
+| Market Lookup                        | 4                             |
+| Research (ADR-079/081/082)           | 18                            |
+| Import                               | 16                            |
+| Portfolio Import (ADR-078)           | 13                            |
+| Attachments (Phase 5A)               | 4                             |
+| Saved Charts                         | 4                             |
+| Settings                             | 5                             |
+| Recipient Bank Accounts              | 5                             |
+| Admin (incl. DB Data Editor ADR-101) | 22                            |
+| Private Electron Audit Bridge        | 6                             |
+| Splits                               | 11                            |
+| Health                               | 2                             |
+| Aggregations (Phase 2/6/10/D)        | 15                            |
+| Reports (Phase 3/7)                  | 3                             |
+| Info/Statistics (Phase 14)           | 17                            |
+| AI Chat                              | 9                             |
+| Electron IPC invoke channels         | 25                            |
+| **Total**                            | **322**                       |
 
-> **286** versioned `/api` HTTP operations are declared in `openapi.yaml` and enforced by `scripts/check-endpoint-matrix.js`. The summary rows are a hand-maintained navigation aid and are not the authoritative operation count. The 6 Electron event channels are documented separately and are not request endpoints. (The Rate-Limited column is approximate and not gate-checked.)
+> **295** versioned `/api` HTTP operations are declared in `openapi.yaml`. The checker compares their concrete method/path pairs with the resource tables and also checks `api_operation_count`. The 2 health routes and 25 Electron invoke channels are separate contracts; the 6 Electron event channels are not request endpoints. Resource summary counts and rate-limit descriptions are navigation aids and are not independently gate-checked.
 
 ## Phase G Endpoint Consolidation (April 2026)
 

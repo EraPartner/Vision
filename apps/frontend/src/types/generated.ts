@@ -1738,7 +1738,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Execute planned transaction (creates real transaction) */
+        /** Link a real transaction and advance the planned payment */
         post: operations["executePlannedTransaction"];
         delete?: never;
         options?: never;
@@ -4256,6 +4256,12 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * @description Generic custom numeric grammar, independent of the CSV delimiter. Auto rejects values with conflicting valid decimal/grouping interpretations. Choose decimal_dot or decimal_comma to disambiguate. Ambiguity rejects the complete import with a row/column diagnostic before staging.
+         * @default auto
+         * @enum {string}
+         */
+        CsvNumberFormat: "auto" | "decimal_dot" | "decimal_comma";
         AuditTrustedCheckpoint: {
             sequence: number;
             hash: string;
@@ -5401,6 +5407,8 @@ export interface components {
             id: number;
             name: string;
             config: {
+                number_format?: components["schemas"]["CsvNumberFormat"];
+            } & {
                 [key: string]: unknown;
             };
             /** Format: date-time */
@@ -6131,9 +6139,16 @@ export interface components {
             date_format?: string;
             /** @description Single-character CSV delimiter, default ',' */
             separator?: string;
-            /** @default utf-8 */
+            /**
+             * @description UTF-8, Latin-1 (latin1, latin-1, iso-8859-1), or windows-1252; unsupported values reject with 400.
+             * @default utf-8
+             */
             encoding: string;
-            /** @default 0 */
+            number_format?: components["schemas"]["CsvNumberFormat"];
+            /**
+             * @description Physical leading lines before the CSV header.
+             * @default 0
+             */
             skip_rows: number;
             date_column: string;
             type_column?: string;
@@ -8826,7 +8841,7 @@ export interface operations {
                 amount_exact?: number;
                 /** @description When true, amount_* compare signed values; otherwise magnitude */
                 amount_signed?: boolean;
-                /** @description When true, return only uncategorised transactions */
+                /** @description When true, return the active uncategorised queue and its filtered size as total; category filters are ignored consistently and pagination affects items only. */
                 uncategorised?: boolean;
                 /** @description Convert amounts to EUR (or target_currency) at read time */
                 normalize_to_eur?: boolean;
@@ -10200,6 +10215,20 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Primary recipient does not exist, including removal before row locking. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Primary became an alias while waiting for merge locks; no references are reassigned. Retry using its primary. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     unmergeRecipient: {
@@ -10756,25 +10785,49 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: {
+        requestBody: {
             content: {
                 "application/json": {
+                    executed_transaction_id: number;
                     /** Format: date */
                     execution_date?: string;
                 };
             };
         };
         responses: {
-            /** @description Executed — real transaction created */
-            201: {
+            /** @description Execution recorded or replayed; completed recurring series accept only existing execution pairs */
+            200: {
                 headers: {
+                    /** @description Present with value true for an existing execution pair */
+                    "Idempotent-Replay"?: "true";
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["Transaction"];
+                        data?: components["schemas"]["PlannedTransaction"];
                     };
                 };
+            };
+            /** @description Missing or invalid transaction ID or execution date */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Planned transaction not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description New execution rejected because the recurring series is complete */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -13134,9 +13187,16 @@ export interface operations {
                     memo_column?: string;
                     /** @description Single-character CSV delimiter, default ',' */
                     separator?: string;
-                    /** @default utf-8 */
+                    /**
+                     * @description UTF-8, Latin-1 (latin1, latin-1, iso-8859-1), or windows-1252; unsupported values reject with 400.
+                     * @default utf-8
+                     */
                     encoding?: string;
-                    /** @default 0 */
+                    number_format?: components["schemas"]["CsvNumberFormat"];
+                    /**
+                     * @description Physical leading lines before the CSV header.
+                     * @default 0
+                     */
                     skip_rows?: number;
                 };
             };
@@ -13163,6 +13223,13 @@ export interface operations {
                         data?: components["schemas"]["ImportCsvReviewRequired"];
                     };
                 };
+            };
+            /** @description Invalid configuration, unsupported encoding, or ambiguous generic number; no rows staged. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -13300,6 +13367,8 @@ export interface operations {
                 "application/json": {
                     name: string;
                     config: {
+                        number_format?: components["schemas"]["CsvNumberFormat"];
+                    } & {
                         [key: string]: unknown;
                     };
                 };
@@ -13367,6 +13436,8 @@ export interface operations {
                 "application/json": {
                     name?: string;
                     config?: {
+                        number_format?: components["schemas"]["CsvNumberFormat"];
+                    } & {
                         [key: string]: unknown;
                     };
                 };
@@ -13726,6 +13797,8 @@ export interface operations {
                 "application/json": {
                     name: string;
                     config: {
+                        number_format?: components["schemas"]["CsvNumberFormat"];
+                    } & {
                         [key: string]: unknown;
                     };
                 };
@@ -13793,6 +13866,8 @@ export interface operations {
                 "application/json": {
                     name?: string;
                     config?: {
+                        number_format?: components["schemas"]["CsvNumberFormat"];
+                    } & {
                         [key: string]: unknown;
                     };
                 };

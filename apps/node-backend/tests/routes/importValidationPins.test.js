@@ -137,6 +137,32 @@ const api = routeAgent(importRouter, {
 const seg = (v) => encodeURIComponent(String(v));
 
 describe("multipart body parameters", () => {
+  it.each([
+    ["latin-1", "latin1"],
+    ["ISO-8859-1", "latin1"],
+    ["windows-1252", "windows-1252"],
+    [" UTF8 ", "utf-8"],
+  ])(
+    "normalizes a supported encoding without a listener: %s",
+    (encoding, expected) => {
+      expect(__parseCsvImportOptionsForTests({ body: { encoding } })).toEqual({
+        separator: ",",
+        encoding: expected,
+      });
+    },
+  );
+
+  it("rejects unsupported encoding with status 400 without a listener", () => {
+    expect(() =>
+      __parseCsvImportOptionsForTests({ body: { encoding: "bogus" } }),
+    ).toThrow(
+      expect.objectContaining({
+        status: 400,
+        message: expect.stringContaining("Unsupported CSV encoding"),
+      }),
+    );
+  });
+
   it("resolves CSV import options from the body without a listener", () => {
     expect(
       __parseCsvImportOptionsForTests({
@@ -640,6 +666,7 @@ describe("normalizeParserConfig pins (POST /parsers)", () => {
       "dateFormat",
       "encoding",
       "memoColumn",
+      "number_format",
       "recipientColumn",
       "separator",
       "skipRows",

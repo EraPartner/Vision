@@ -7,6 +7,9 @@ info:
     Self-hosted financial transaction manager.
     All responses are wrapped in the ADR-026 envelope:
     `{ ok: true, data: T }` on success, `{ ok: false, error: {...} }` on failure.
+    Every request must have one valid Host authority targeting loopback, the configured
+    listener hostname/address, or an exact SERVER_ALLOWED_HOSTS entry. Rejected
+    destinations receive 403 before CORS, body parsing, health and routes.
 
 servers:
   - url: http://localhost:3000
@@ -46,6 +49,15 @@ components:
       description: Rows to skip. Omit (together with limit) to receive the whole collection.
 
   schemas:
+    CsvNumberFormat:
+      type: string
+      enum: [auto, decimal_dot, decimal_comma]
+      default: auto
+      description: >-
+        Generic custom numeric grammar, independent of the CSV delimiter.
+        Auto rejects values with conflicting valid decimal/grouping interpretations.
+        Choose decimal_dot or decimal_comma to disambiguate. Ambiguity rejects
+        the complete import with a row/column diagnostic before staging.
     AuditTrustedCheckpoint:
       type: object
       additionalProperties: false
@@ -2156,6 +2168,9 @@ components:
         config:
           type: object
           additionalProperties: true
+          properties:
+            number_format:
+              $ref: "#/components/schemas/CsvNumberFormat"
         created_at:
           type: string
           format: date-time
@@ -3840,9 +3855,14 @@ components:
         encoding:
           type: string
           default: utf-8
+          description: UTF-8, Latin-1 (latin1, latin-1, iso-8859-1), or windows-1252; unsupported values reject with 400.
+        number_format:
+          $ref: "#/components/schemas/CsvNumberFormat"
         skip_rows:
           type: integer
           default: 0
+          minimum: 0
+          description: Physical leading lines before the CSV header.
         date_column: { type: string }
         type_column: { type: string }
         symbol_column: { type: string }
@@ -5982,7 +6002,7 @@ paths:
             type: boolean
         - in: query
           name: uncategorised
-          description: When true, return only uncategorised transactions
+          description: When true, return the active uncategorised queue and its filtered size as total; category filters are ignored consistently and pagination affects items only.
           schema:
             type: boolean
         - in: query
@@ -7274,6 +7294,10 @@ paths:
                 $ref: "#/components/schemas/Envelope"
         "400":
           description: alias_ids is missing, empty, or contains a malformed or out-of-range id; no recipients are merged
+        "404":
+          description: Primary recipient does not exist, including removal before row locking.
+        "409":
+          description: Primary became an alias while waiting for merge locks; no references are reassigned. Retry using its primary.
 
   /api/recipients/{id}/unmerge:
     parameters:
@@ -7870,21 +7894,32 @@ paths:
           format: int32
           minimum: 1
     post:
-      summary: Execute planned transaction (creates real transaction)
+      summary: Link a real transaction and advance the planned payment
       operationId: executePlannedTransaction
       tags: [PlannedTransactions]
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               type: object
+              required: [executed_transaction_id]
               properties:
+                executed_transaction_id:
+                  type: integer
+                  minimum: 1
                 execution_date:
                   type: string
                   format: date
       responses:
-        "201":
-          description: Executed — real transaction created
+        "200":
+          description: Execution recorded or replayed; completed recurring series accept only existing execution pairs
+          headers:
+            Idempotent-Replay:
+              description: Present with value true for an existing execution pair
+              schema:
+                type: string
+                enum: ["true"]
           content:
             application/json:
               schema:
@@ -7893,7 +7928,13 @@ paths:
                   - type: object
                     properties:
                       data:
-                        $ref: "#/components/schemas/Transaction"
+                        $ref: "#/components/schemas/PlannedTransaction"
+        "400":
+          description: Missing or invalid transaction ID or execution date
+        "404":
+          description: Planned transaction not found
+        "409":
+          description: New execution rejected because the recurring series is complete
 
   # ─── Info ─────────────────────────────────────────────────────────────────────
   /api/info/banks:
@@ -10430,11 +10471,17 @@ paths:
                 encoding:
                   type: string
                   default: utf-8
+                  description: UTF-8, Latin-1 (latin1, latin-1, iso-8859-1), or windows-1252; unsupported values reject with 400.
+                number_format:
+                  $ref: "#/components/schemas/CsvNumberFormat"
                 skip_rows:
                   type: integer
                   default: 0
                   minimum: 0
+                  description: Physical leading lines before the CSV header.
       responses:
+        "400":
+          description: Invalid configuration, unsupported encoding, or ambiguous generic number; no rows staged.
         "201":
           description: All rows matched exactly — batch committed immediately
           content:
@@ -10601,6 +10648,9 @@ paths:
                 config:
                   type: object
                   additionalProperties: true
+                  properties:
+                    number_format:
+                      $ref: "#/components/schemas/CsvNumberFormat"
       responses:
         "201":
           description: Created parser config
@@ -10641,6 +10691,9 @@ paths:
                 config:
                   type: object
                   additionalProperties: true
+                  properties:
+                    number_format:
+                      $ref: "#/components/schemas/CsvNumberFormat"
       responses:
         "200":
           description: Updated parser config
@@ -11021,6 +11074,9 @@ paths:
                 config:
                   type: object
                   additionalProperties: true
+                  properties:
+                    number_format:
+                      $ref: "#/components/schemas/CsvNumberFormat"
       responses:
         "201":
           description: Created parser config
@@ -11061,6 +11117,9 @@ paths:
                 config:
                   type: object
                   additionalProperties: true
+                  properties:
+                    number_format:
+                      $ref: "#/components/schemas/CsvNumberFormat"
       responses:
         "200":
           description: Updated parser config

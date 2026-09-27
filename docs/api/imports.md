@@ -4,9 +4,9 @@ type: endpoint
 method: POST, GET, PATCH, DELETE
 path: /api/import
 description: CSV import for transactions, recipients, and categories; CRUD for saved named custom CSV parsers
-date: 2026-09-11
-updated: 2026-09-11
-last_modified: 2026-09-11
+date: 2026-09-27
+updated: 2026-09-27
+last_modified: 2026-09-27
 tags:
   [
     api,
@@ -111,6 +111,18 @@ All configuration fields are multipart body fields. Query fields are ignored.
 | separator        | string  | No       | CSV separator (default: ,)     |
 | encoding         | string  | No       | File encoding (default: utf-8) |
 | skip_rows        | integer | No       | Rows to skip (default: 0)      |
+
+`skip_rows` counts physical lines before the header. `number_format` is an optional multipart
+field with `auto` (default), `decimal_dot`, or `decimal_comma`. It applies to every mapped generic
+numeric column and is saved as `config.number_format` in custom parser configurations. Old
+configurations default to `auto`. This additive field changes ambiguous old input deliberately:
+values such as `1,234` fail the entire import with 400 until the user selects an explicit format.
+Errors identify the data-row ordinal and mapped column without echoing the number. Maintained
+bank parsers retain their own numeric rules.
+
+`encoding` accepts UTF-8 (`utf-8`/`utf8`), Latin-1 (`latin1`/`latin-1`/`iso-8859-1`), and
+`windows-1252`. Windows-1252 is decoded as that encoding, including euro/punctuation. Unsupported
+names return 400 rather than a Buffer decoding error. See [[docs/features/import]].
 
 ### POST /api/import/csv/stream
 

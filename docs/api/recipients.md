@@ -4,8 +4,8 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/recipients
 description: Recipient (payee/payer) management with atomic merge and normalization-based matching
-date: 2026-09-04
-updated: 2026-09-04
+date: 2026-09-27
+updated: 2026-09-27
 tags: [api, recipients, payees, merge, atomic, phase-6, recipient-clusters]
 status: active
 aliases: [recipients-api, payee, payer, counterparty, recipient-management]
@@ -182,7 +182,11 @@ integer in 1..2,147,483,647. Digit strings are normalized to numbers. One malfor
 
 - All FK reassignments execute within a single database transaction.
 - If any step fails, the entire merge rolls back (no partial state).
-- Concurrent merges into the same primary are serialized via row-level locking (FOR UPDATE).
+- All primary and alias participants are locked in ascending ID order before writes.
+  Overlapping merges serialize, and the freshly locked primary must still be a root recipient.
+  If it became an alias while waiting, the request returns `409 CONFLICT` before reassigning any
+  reference. A removed primary returns 404. Use the surviving primary and retry. The earlier
+  route-level rejection of an already-known alias remains 400.
 - Bank account deduplication is race-safe (INSERT ... ON CONFLICT).
 
 **Response:**

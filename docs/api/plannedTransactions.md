@@ -4,8 +4,8 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/planned-transactions
 description: Scheduled and recurring payment management
-date: 2026-09-24
-updated: 2026-09-24
+date: 2026-09-26
+updated: 2026-09-26
 tags: [api, planned, recurring, schedule, phase-3, idempotency, phase-9, decimal, money, auto-link, planned-match, june-2026]
 status: active
 aliases: [planned-transactions-api, planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loans]
@@ -202,7 +202,7 @@ Mark a planned transaction as executed. **Atomic and idempotent as of Phase 3.**
 
 **Behavior:**
 
-- For recurring: Calculates next occurrence and resets `is_executed = false` to re-arm for next cycle
+- For recurring: Advances one occurrence, or completes the series at its maximum count or end date. A new execution of a completed bounded series returns `409 CONFLICT`.
 - For one-time: Sets `is_executed = true`
 - Records execution in `planned_transaction_executions` table
 - **Idempotency:** Database UNIQUE constraint on `(planned_transaction_id, executed_transaction_id)` prevents duplicate execution rows. A duplicate execution request (same planned ID + transaction ID) returns 200 OK with the current planned state + `Idempotent-Replay: true` header instead of creating a duplicate row or error.
@@ -220,19 +220,22 @@ Mark a planned transaction as executed. **Atomic and idempotent as of Phase 3.**
 | 200  | Execution recorded or replayed (idempotent) |
 | 400  | Missing `executed_transaction_id`           |
 | 404  | Planned transaction not found               |
+| 409  | New execution on a completed bounded series |
 | 500  | Database or calculation error               |
 
 **Idempotency Guarantee:**
 The endpoint is safe to retry without risk of creating duplicate rows. Multiple requests with the same `(planned_id, executed_transaction_id)` pair always return the same result.
 
-Implementation note (Phase 3 — verified Phase 5):
+Implementation:
 
 - Service method `executeAndAdvance(plannedTransactionId, executedTransactionId, executionDate, updateFields = {}, tagIdsToInherit = null)` wraps the insert-execution, parent advance, and inherited-tag writes in one transaction using client-aware repository primitives.
+- The shared `executePlanned` service locks the parent before reading recurrence state and calculating the next date. This outer transaction includes the nested execute-and-advance call and final read. Concurrent distinct payments advance from successive states.
+- Existing execution pairs are replayed before the completion guard, so the final permitted payment can still be retried safely.
 - The optional `updateFields` advances recurring state in the same atomic call; optional tag IDs are copied to the executed transaction before commit.
 - The execution insert uses `ON CONFLICT DO NOTHING`; an existing pair returns `{ duplicate: true }` without advancing the parent or copying tags.
 - Route checks for `duplicate` flag and sets the `Idempotent-Replay` header before responding.
-- Internal route refactor also uses shared `getCurrentDateString()` fallback helper for `execution_date` defaulting; response/side-effect behavior remains unchanged ([[apps/node-backend/src/routes/plannedTransactions.js]]).
-- Test suite ([[apps/node-backend/tests/routes/plannedTransactions.test.js]]) verifies atomic execution via mocked `getById` chained calls (pre-exec + post-exec for response envelope) and `is_executed` advancement assertions from `executeAndAdvance.mock.calls` inspection.
+- `todayAppDateString()` supplies a missing execution date in the shared service.
+- Mocked service and route tests cover bounds and response behavior. [[apps/node-backend/tests/plannedExecutionConcurrency.db.test.js]] verifies persisted concurrent advancement on disposable PostgreSQL; its live run remains pending in [[TODO]].
 
 ### DELETE /api/planned-transactions/:id
 

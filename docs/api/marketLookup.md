@@ -2,8 +2,8 @@
 title: Market Lookup API
 type: endpoint
 status: active
-date: 2026-04-10
-updated: 2026-08-26
+date: 2026-09-27
+updated: 2026-09-27
 tags:
   - api
   - market
@@ -37,9 +37,9 @@ Search for stock tickers and companies.
 
 **Query Parameters:**
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `q` | string | Yes | Search query (e.g., "apple") |
+| Parameter | Type   | Required | Description                  |
+| --------- | ------ | -------- | ---------------------------- |
+| `q`       | string | Yes      | Search query (e.g., "apple") |
 
 **Response:** `200 OK`
 
@@ -66,19 +66,26 @@ Get quotes (and optionally fundamentals) for one or more symbols. Supports a `de
 
 **Query Parameters:**
 
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `symbols` | string | Yes | — | Comma-separated list of symbols (e.g., `"AAPL,MSFT"`) |
-| `detail` | string | No | `"full"` | Response mode: `"basic"` or `"full"`. See below. |
+| Parameter | Type   | Required | Default  | Description                                           |
+| --------- | ------ | -------- | -------- | ----------------------------------------------------- |
+| `symbols` | string | Yes      | —        | Comma-separated list of symbols (e.g., `"AAPL,MSFT"`) |
+| `detail`  | string | No       | `"full"` | Response mode: `"basic"` or `"full"`. See below.      |
 
 **Detail modes:**
 
-| Mode | Yahoo calls per symbol | Fields returned |
-|------|------------------------|-----------------|
+| Mode               | Yahoo calls per symbol           | Fields returned                                             |
+| ------------------ | -------------------------------- | ----------------------------------------------------------- |
 | `"full"` (default) | 2 — `quote()` + `quoteSummary()` | All fields: core price fields + fundamentals/analyst fields |
-| `"basic"` | 1 — `quote()` only | Core price fields only (no fundamentals/analyst fields) |
+| `"basic"`          | 1 — `quote()` only               | Core price fields only (no fundamentals/analyst fields)     |
 
 Use `detail=basic` for price-only views such as benchmark strips, watchlist previews, and chart dialogs. This roughly halves outbound Yahoo Finance calls for those surfaces. The Market Lookup detail page uses the default `full` mode to render fundamentals and analyst data.
+
+Each request runs at most six basic symbol lookups or three full lookups concurrently. Full
+lookups make two parallel upstream calls, so either mode bounds active Yahoo calls to six per
+request. Output preserves input order and duplicate entries. Repeated symbols share one lookup,
+including failures; per-symbol failure, cached results, and overlapping-request coalescing retain
+their existing behavior. This is a per-request bound, not a process-wide quota or a symbol-count
+cap.
 
 **Response — `detail=full` (default):** `200 OK`
 
@@ -94,9 +101,9 @@ Use `detail=basic` for price-only views such as benchmark strips, watchlist prev
       "currency": "USD",
       "exchange": "NASDAQ",
       "type": "EQUITY",
-      "open": 173.50,
-      "dayHigh": 176.20,
-      "dayLow": 173.00,
+      "open": 173.5,
+      "dayHigh": 176.2,
+      "dayLow": 173.0,
       "prevClose": 173.28,
       "volume": 52436789,
       "avgVolume": 61234567,
@@ -123,7 +130,7 @@ Use `detail=basic` for price-only views such as benchmark strips, watchlist prev
           "toGrade": "Overweight",
           "fromGrade": "Equal-Weight",
           "action": "upgrade",
-          "priceTarget": 200.00
+          "priceTarget": 200.0
         }
       ]
     }
@@ -148,9 +155,9 @@ Same canonical collection body (`{ "items": [ … ], "total": n }`), but each qu
       "currency": "USD",
       "exchange": "NASDAQ",
       "type": "EQUITY",
-      "open": 173.50,
-      "dayHigh": 176.20,
-      "dayLow": 173.00,
+      "open": 173.5,
+      "dayHigh": 176.2,
+      "dayLow": 173.0,
       "prevClose": 173.28,
       "volume": 52436789,
       "avgVolume": 61234567,
@@ -165,19 +172,20 @@ Same canonical collection body (`{ "items": [ … ], "total": n }`), but each qu
 **Error Response:** `502 Bad Gateway` - Market quote unavailable
 
 **Validation Notes:**
+
 - The `symbols` parameter must be a non-empty string. If `symbols` is missing or not a string, returns `400 Bad Request` with `ValidationError`. If the string cannot be split (malformed), returns `502 Bad Gateway` with `AppError`.
 - An unrecognised `detail` value is treated as `"full"` (permissive fallback).
 
 **Frontend callers and detail mode:**
 
-| Caller | Mode |
-|---|---|
-| Research home benchmark strip (`^GSPC`, `^STOXX50E`, `^FTSE`, `^BFX`, `BTC-USD`) | `basic` |
-| Research home watchlist preview tiles | `basic` |
-| Watchlist page quote rows | `basic` |
-| Watchlist chart dialog | `basic` |
-| Add-to-watchlist dialog | `basic` |
-| Market Lookup detail page (`MarketLookupPage`) | `full` (default) |
+| Caller                                                                           | Mode             |
+| -------------------------------------------------------------------------------- | ---------------- |
+| Research home benchmark strip (`^GSPC`, `^STOXX50E`, `^FTSE`, `^BFX`, `BTC-USD`) | `basic`          |
+| Research home watchlist preview tiles                                            | `basic`          |
+| Watchlist page quote rows                                                        | `basic`          |
+| Watchlist chart dialog                                                           | `basic`          |
+| Add-to-watchlist dialog                                                          | `basic`          |
+| Market Lookup detail page (`MarketLookupPage`)                                   | `full` (default) |
 
 ---
 
@@ -187,11 +195,11 @@ Get historical price chart data for a symbol.
 
 **Query Parameters:**
 
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `symbol` | string | Yes | - | Stock symbol (e.g., "AAPL") |
-| `range` | string | No | `1mo` | Time range: `1d`, `5d`, `1mo`, `3mo`, `6mo`, `1y`, `2y`, `5y`, `max` |
-| `interval` | string | No | `1d` | Data interval: `1d`, `1wk`, `1mo` |
+| Parameter  | Type   | Required | Default | Description                                                          |
+| ---------- | ------ | -------- | ------- | -------------------------------------------------------------------- |
+| `symbol`   | string | Yes      | -       | Stock symbol (e.g., "AAPL")                                          |
+| `range`    | string | No       | `1mo`   | Time range: `1d`, `5d`, `1mo`, `3mo`, `6mo`, `1y`, `2y`, `5y`, `max` |
+| `interval` | string | No       | `1d`    | Data interval: `1d`, `1wk`, `1mo`                                    |
 
 **Response:** `200 OK`
 
@@ -203,8 +211,8 @@ Get historical price chart data for a symbol.
     {
       "time": 1709246400000,
       "close": 175.43,
-      "high": 176.20,
-      "low": 173.00,
+      "high": 176.2,
+      "low": 173.0,
       "volume": 52436789
     }
   ],
@@ -222,10 +230,10 @@ Get news articles for one or more symbols.
 
 **Query Parameters:**
 
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `symbols` | string | No | `SPY,QQQ,DIA` | Comma-separated symbols (max 10) |
-| `count` | number | No | 20 | Number of articles (max 50) |
+| Parameter | Type   | Required | Default       | Description                      |
+| --------- | ------ | -------- | ------------- | -------------------------------- |
+| `symbols` | string | No       | `SPY,QQQ,DIA` | Comma-separated symbols (max 10) |
+| `count`   | number | No       | 20            | Number of articles (max 50)      |
 
 **Response:** `200 OK`
 
@@ -283,6 +291,7 @@ Data is provided by Yahoo Finance via the `yahoo-finance2` library. Some data ma
 ### Error Handling Improvements (2026-04-22)
 
 The `GET /api/market/quote` handler now performs safe parameter validation:
+
 - Missing or non-string `symbols` parameter validation occurs early and throws `ValidationError` (400).
 - The `symbols.split()` operation is now wrapped inside the try-catch block, so malformed string operations return `AppError(502)` instead of raw TypeErrors escaping to the error handler.
 - This follows the **envelope-aware error handling** pattern documented in [[docs/adr/026-unified-api-response-envelope|ADR-026]].
@@ -290,6 +299,7 @@ The `GET /api/market/quote` handler now performs safe parameter validation:
 ### Test Migration (2026-04-22)
 
 Backend import route tests were updated to validate the unified API response envelope (ADR-026):
+
 - Validation errors use `.rejects.toBeInstanceOf(ValidationError)` to assert exception type.
 - Success responses check `body.data.xxx` fields instead of `body.xxx` (envelope wrapping).
 - Mock response helper now includes `res.ok(data, meta)` method to wrap responses in the envelope.
