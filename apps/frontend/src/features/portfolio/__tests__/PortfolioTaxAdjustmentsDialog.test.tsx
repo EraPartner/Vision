@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
@@ -125,6 +125,49 @@ describe("PortfolioTaxAdjustmentsDialog", () => {
         expect(
             await screen.findByText("Emerging Markets ETF"),
         ).toBeInTheDocument();
+    });
+
+    it("keeps amounts visible and preserves optional treatment values when collapsed", async () => {
+        const user = userEvent.setup();
+        renderWithApp(
+            <PortfolioTaxAdjustmentsDialog
+                investments={[INVESTMENT_A, INVESTMENT_B]}
+            />,
+        );
+        await user.click(
+            await screen.findByRole("button", { name: /manual adjustments/i }),
+        );
+        const row = screen.getByRole("group", { name: "MSCI World ETF" });
+        expect(
+            within(row).getByRole("textbox", { name: "Taxes: MSCI World ETF" }),
+        ).toBeVisible();
+        expect(
+            within(row).getByRole("textbox", { name: "Fees: MSCI World ETF" }),
+        ).toBeVisible();
+        const summary = within(row).getByText("Tax treatment");
+        const details = summary.closest("details")!;
+        expect(details).not.toHaveAttribute("open");
+        // jsdom does not implement the native summary keyboard default action.
+        await user.click(summary);
+        expect(details).toHaveAttribute("open");
+        const classification = within(row).getByRole("combobox", {
+            name: /Reynders 30% applies.*MSCI World ETF/i,
+        });
+        await user.click(classification);
+        await user.click(await screen.findByRole("option", { name: /^yes/i }));
+        const portion = within(row).getByRole("spinbutton");
+        await user.clear(portion);
+        await user.type(portion, "35");
+        await user.click(summary);
+        expect(details).not.toHaveAttribute("open");
+        await user.click(summary);
+        expect(portion).toHaveValue(35);
+        await user.clear(portion);
+        await user.type(portion, "101");
+        await user.click(summary);
+        fireEvent.invalid(portion);
+        expect(details).toHaveAttribute("open");
+        expect(portion).toHaveFocus();
     });
 
     it("cancel button closes dialog", async () => {

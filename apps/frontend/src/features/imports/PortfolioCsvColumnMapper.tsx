@@ -222,7 +222,10 @@ export function PortfolioCsvColumnMapper({
                                     value={config.typeMapping?.[raw] ?? NONE}
                                     onValueChange={(v) => setMapping(raw, v)}
                                 >
-                                    <SelectTrigger className="h-8 w-[150px] text-xs">
+                                    <SelectTrigger
+                                        className="h-8 w-[150px] text-xs"
+                                        aria-label={`${t("portfolioImport.typeMappingTitle")}: ${raw}`}
+                                    >
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>

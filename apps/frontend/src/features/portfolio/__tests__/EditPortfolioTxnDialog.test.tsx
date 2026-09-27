@@ -87,6 +87,81 @@ describe("EditPortfolioTxnDialog", () => {
         vi.restoreAllMocks();
     });
 
+    it.each(["real_estate", "savings"] as const)(
+        "saves amount-only purchases for %s without unit guidance",
+        async (assetClass) => {
+            const user = userEvent.setup();
+            let patched: Record<string, unknown> | undefined;
+            server.use(
+                http.patch(
+                    `${API_BASE}/api/investments/transactions/101`,
+                    async ({ request }) => {
+                        patched = (await request.json()) as Record<
+                            string,
+                            unknown
+                        >;
+                        return ok(PORTFOLIO_TXN_STUB);
+                    },
+                ),
+            );
+            renderWithApp(
+                <EditPortfolioTxnDialog
+                    investment={{
+                        ...INVESTMENT,
+                        assetClass,
+                        asset_class: assetClass,
+                    }}
+                    transaction={{
+                        ...TRANSACTION,
+                        units: undefined,
+                        price_per_unit: undefined,
+                    }}
+                />,
+            );
+            await user.click(
+                await screen.findByRole("button", { name: /edit/i }),
+            );
+            expect(screen.queryByLabelText(/units/i)).not.toBeInTheDocument();
+            expect(
+                screen.queryByText(/enter any two/i),
+            ).not.toBeInTheDocument();
+            const amount = screen.getByLabelText(/total amount/i);
+            await user.clear(amount);
+            await user.type(amount, "1250");
+            await user.click(screen.getByRole("button", { name: /save/i }));
+            await waitFor(() =>
+                expect(patched).toMatchObject({ amount: 1250 }),
+            );
+            expect(patched).not.toHaveProperty("units");
+            expect(patched).not.toHaveProperty("price_per_unit");
+        },
+    );
+
+    it("labels an appreciation edit as the increase in property value", async () => {
+        const user = userEvent.setup();
+        renderWithApp(
+            <EditPortfolioTxnDialog
+                investment={{
+                    ...INVESTMENT,
+                    assetClass: "real_estate",
+                    asset_class: "real_estate",
+                }}
+                transaction={{
+                    ...TRANSACTION,
+                    type: "appreciation",
+                    units: undefined,
+                    price_per_unit: undefined,
+                }}
+            />,
+        );
+        await user.click(await screen.findByRole("button", { name: /edit/i }));
+        expect(
+            screen.getByLabelText(/increase in value/i),
+        ).toHaveAccessibleDescription(
+            /increase since the last recorded value/i,
+        );
+    });
+
     it("renders trigger button", async () => {
         // Arrange + Act
         renderWithApp(

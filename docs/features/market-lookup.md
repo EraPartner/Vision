@@ -2,8 +2,8 @@
 title: Market Lookup Feature
 type: feature
 status: active
-date: 2026-06-05
-updated: 2026-09-11
+date: 2026-09-27
+updated: 2026-09-27
 tags: [feature, market, lookup, stocks, search, frontend, research, security-detail, url-state]
 description: Market Lookup (/research/market) is the consolidated security-detail surface for the Research workspace. It provides symbol search, a live price chart, a tabbed Details card (Fundamentals / Analyst / News via the multi-provider research aggregator), a Trading info card, and a Map-provider dialog. It is the canonical deep-link target from the Markets Overview heat-map and ResearchHomePage search/watchlist tiles. Aug 2026: the Details card's active tab is mirrored to `?tab=` via useTabParam.
 aliases: [stock lookup, market search, security search, ticker search, market lookup]
@@ -47,6 +47,10 @@ The page has two rendering paths:
 1. **Quote header** — symbol, name, live price + change, currency; actions: Add to watchlist (`Star` icon → `AddToWatchlistDialog`) and Add to portfolio (`AddInvestmentFromMarketDialog`).
 2. **Map provider button** (`Link2` icon, `t('research.mapping.button')`) in the header actions area — opens `ResearchMappingDialog` for ISIN-anchored cross-provider symbol mapping. `?investmentId=` is forwarded so the dialog can pre-seed the held investment's provider as already confirmed.
 3. **Price chart + volume bars** — historical candlestick/line chart from Yahoo via `GET /api/market/quote` with `detail=basic` (switched from `quoteSummary` to halve outbound Yahoo calls).
+   Axis labels use the app number-format locale and adapt to the selected range: time for one day,
+   day and short month for five days through six months, and short month plus year for one year,
+   five years, and Max. Tooltips retain the full timestamp in the configured date format and the
+   price currency. This keeps long-range axes compact without removing precise point details.
 4. **Tabbed Details card** (`t('research.details')`) with three lazy-loaded tabs:
    - **Fundamentals** (default) — `ResearchFundamentalsTab`: graded 0–100 health panel (`ResearchScorecard`) + grouped fundamentals fields, sourced from `GET /api/research/scorecard`.
    - **Analyst** — `ResearchAnalystTab`: consensus ratings + target price + recent analyst actions, sourced from `GET /api/research/analyst`.
@@ -151,3 +155,11 @@ When a user selects a security from search results:
 - [[docs/features/watchlist|Watchlist]] — Watchlist surface; tiles deep-link to Market Lookup
 - [[docs/integrations/price-providers|Price Providers]] — Market data sources
 - [[docs/api/research|Research API]] — aggregator endpoints (scorecard, analyst, news) consumed by the tabbed Details card
+
+## Search feedback
+
+Symbol search shows an explicit empty-result message or an unavailable-search message. Results from the previous query are hidden while the new query is debouncing.
+
+### Shareable chart range
+
+The chart range is mirrored to `?range=` alongside symbol and Details tab state. Supported values restore on load; an unsupported value falls back to the one-month default. Changing range preserves other query parameters and uses history replacement. Selecting the default removes the range parameter.

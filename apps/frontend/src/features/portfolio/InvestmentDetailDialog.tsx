@@ -8,6 +8,11 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { Money } from "@/components/shared/Money";
 import { Badge } from "@/components/ui/badge";
@@ -137,6 +142,9 @@ const TransactionRow = memo(function TransactionRow({
 }) {
     const fmtNum = (val: number, decimals = 2) =>
         getNumberFmt(locale, decimals).format(val);
+    const transactionLabel = `${getTxnTypeLabel(t, txn.type as PortfolioTxnType)} · ${formatDateStringWithAppSettings(txn.date, dateFormat)}`;
+    const editLabel = `${t("aria.editTransaction")}: ${transactionLabel}`;
+    const deleteLabel = `${t("aria.deleteTransaction")}: ${transactionLabel}`;
     return (
         <div className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors">
             <div className="flex-1 min-w-0">
@@ -222,39 +230,49 @@ const TransactionRow = memo(function TransactionRow({
 
             {!readOnly && (
                 <div className="flex items-center gap-1">
-                    {!nestedEdit ? (
-                        <Button
-                            size="icon"
-                            variant="ghost"
-                            className="icon-touch-target shrink-0 text-muted-foreground hover:text-foreground"
-                            onClick={(event) => onEdit(txn, event)}
-                            aria-label={t("aria.editTransaction")}
-                        >
-                            <Pencil className="h-4 w-4" />
-                        </Button>
-                    ) : (
-                        <Button
-                            size="icon"
-                            variant="ghost"
-                            className="icon-touch-target shrink-0 text-muted-foreground hover:text-foreground"
-                            aria-label={t("aria.editTransaction")}
-                            type="button"
-                            aria-haspopup="dialog"
-                            aria-expanded={editDialogOpen}
-                            onClick={(event) => onEdit(txn, event)}
-                        >
-                            <Pencil className="h-4 w-4" />
-                        </Button>
-                    )}
-                    <Button
-                        size="icon"
-                        variant="ghost"
-                        className="icon-touch-target shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                        onClick={() => onDelete(txn)}
-                        aria-label={t("aria.deleteTransaction")}
-                    >
-                        <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            {!nestedEdit ? (
+                                <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="icon-touch-target shrink-0 text-muted-foreground hover:text-foreground"
+                                    onClick={(event) => onEdit(txn, event)}
+                                    aria-label={editLabel}
+                                >
+                                    <Pencil className="h-4 w-4" />
+                                </Button>
+                            ) : (
+                                <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="icon-touch-target shrink-0 text-muted-foreground hover:text-foreground"
+                                    aria-label={editLabel}
+                                    type="button"
+                                    aria-haspopup="dialog"
+                                    aria-expanded={editDialogOpen}
+                                    onClick={(event) => onEdit(txn, event)}
+                                >
+                                    <Pencil className="h-4 w-4" />
+                                </Button>
+                            )}
+                        </TooltipTrigger>
+                        <TooltipContent>{editLabel}</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Button
+                                size="icon"
+                                variant="ghost"
+                                className="icon-touch-target shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => onDelete(txn)}
+                                aria-label={deleteLabel}
+                            >
+                                <Trash2 className="h-4 w-4" />
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{deleteLabel}</TooltipContent>
+                    </Tooltip>
                 </div>
             )}
         </div>
@@ -583,6 +601,7 @@ export function InvestmentDetailDialog({
                                             size="sm"
                                             variant="outline"
                                             className="gap-1.5"
+                                            aria-label={`${t("common.edit")}: ${investment.name}`}
                                             onClick={() =>
                                                 onEditInvestment(investment)
                                             }
@@ -595,6 +614,7 @@ export function InvestmentDetailDialog({
                                             size="sm"
                                             variant="outline"
                                             className="gap-1.5"
+                                            aria-label={`${t("common.edit")}: ${investment.name}`}
                                             type="button"
                                             aria-haspopup="dialog"
                                             aria-expanded={editInvestmentOpen}
@@ -610,6 +630,7 @@ export function InvestmentDetailDialog({
                                         size="sm"
                                         variant="outline"
                                         className="gap-1.5"
+                                        aria-label={`${t("portfolio.archiveInvestment")}: ${investment.name}`}
                                         disabled={isUpdatingInvestment}
                                         onClick={() => void handleArchive()}
                                     >

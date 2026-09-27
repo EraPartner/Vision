@@ -191,6 +191,57 @@ describe("InvestmentDetailDialog", () => {
         expect(await screen.findByText("Initial buy")).toBeInTheDocument();
     });
 
+    it("identifies transaction actions and shows their tooltips on keyboard focus", async () => {
+        const user = userEvent.setup();
+        const onEditTransaction = vi.fn();
+        const second = {
+            ...TXN,
+            id: 102,
+            type: "sell" as const,
+            date: "2025-02-11",
+        };
+        renderWithApp(
+            <InvestmentDetailDialog
+                investment={{ ...INVESTMENT, transactions: [TXN, second] }}
+                onEditTransaction={onEditTransaction}
+            />,
+        );
+        await user.click(
+            await screen.findByRole("button", { name: /details/i }),
+        );
+        expect(
+            screen.getByRole("button", { name: "Edit: MSCI World ETF" }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: /archive.*MSCI World ETF/i }),
+        ).toBeInTheDocument();
+        await user.click(
+            await screen.findByRole("tab", { name: /transactions/i }),
+        );
+        const edit = screen.getByRole("button", {
+            name: /Edit transaction: Buy · .*2025/,
+        });
+        const sell = screen.getByRole("button", {
+            name: /Edit transaction: Sell · .*2025/,
+        });
+        // Reach the action with Tab to test the same focus tooltip used by keyboard users.
+        for (let step = 0; step < 12 && document.activeElement !== edit; step++)
+            await user.tab();
+        expect(edit).toHaveFocus();
+        expect(await screen.findByRole("tooltip")).toHaveTextContent(
+            edit.getAttribute("aria-label")!,
+        );
+        await user.tab();
+        expect(await screen.findByRole("tooltip")).toHaveTextContent(
+            /Delete transaction: Buy/,
+        );
+        await user.click(sell);
+        expect(onEditTransaction).toHaveBeenCalledWith(
+            expect.objectContaining({ id: 102 }),
+            expect.objectContaining({ id: 1 }),
+        );
+    });
+
     it("keeps archived history visible while disabling portfolio changes", async () => {
         const user = userEvent.setup();
         renderWithApp(
@@ -210,7 +261,7 @@ describe("InvestmentDetailDialog", () => {
             screen.getByText(/excluded from current totals/i),
         ).toBeInTheDocument();
         expect(
-            screen.queryByRole("button", { name: /^edit$/i }),
+            screen.queryByRole("button", { name: /^edit: MSCI World ETF$/i }),
         ).not.toBeInTheDocument();
         expect(
             screen.queryByRole("button", { name: /add transaction/i }),
@@ -298,7 +349,9 @@ describe("InvestmentDetailDialog", () => {
         await screen.findByRole("dialog");
 
         // common.edit = "Edit"
-        const editBtn = await screen.findByRole("button", { name: /^edit$/i });
+        const editBtn = await screen.findByRole("button", {
+            name: /^edit: MSCI World ETF$/i,
+        });
         await user.click(editBtn);
 
         // Assert
@@ -485,7 +538,9 @@ describe("InvestmentDetailDialog", () => {
         await screen.findByRole("dialog");
 
         // These controls used to be the nested dialogs' own DialogTriggers.
-        await user.click(screen.getByRole("button", { name: /^edit$/i }));
+        await user.click(
+            screen.getByRole("button", { name: /^edit: MSCI World ETF$/i }),
+        );
         expect(
             await screen.findByRole("dialog", { name: /edit investment/i }),
         ).toBeInTheDocument();

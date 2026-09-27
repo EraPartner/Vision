@@ -142,8 +142,21 @@ export default function MarketLookupPage() {
     // Mirrors the symbol's URL-first treatment below: a shared /research/market
     // link reopens the same tab the sender was reading.
     const [activeTab, setActiveTab] = useTabParam(MARKET_TABS, "fundamentals");
-    const [selectedRange, setSelectedRange] = useState(RANGES[2]); // 1M default
-    const [searchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const selectedRange =
+        RANGES.find((option) => option.range === searchParams.get("range")) ??
+        RANGES[2]; // 1M default
+    const setSelectedRange = (option: (typeof RANGES)[number]) => {
+        setSearchParams(
+            (previous) => {
+                const next = new URLSearchParams(previous);
+                if (option.range === RANGES[2].range) next.delete("range");
+                else next.set("range", option.range);
+                return next;
+            },
+            { replace: true },
+        );
+    };
     // The selected symbol lives entirely in the URL, so a looked-up view is
     // shareable and survives reload. Picking a result (handleSelect) rewrites it.
     const effectiveSelectedSymbol =
@@ -184,6 +197,7 @@ export default function MarketLookupPage() {
         setSearchText,
         searchResult: searchResults,
         isFetching: isSearching,
+        isError: searchFailed,
         isOpen,
     } = useSymbolSearch(apiClient.searchMarket, {
         queryKey: "market-search",
@@ -271,9 +285,21 @@ export default function MarketLookupPage() {
                 value={searchText}
                 onChange={setSearchText}
                 loading={isSearching && searchText.length > 0}
-                open={isOpen && (searchResults?.items?.length ?? 0) > 0}
+                open={isOpen}
                 onDismiss={() => setSearchText("")}
             >
+                {!isSearching && (searchResults?.items?.length ?? 0) === 0 && (
+                    <p
+                        role="status"
+                        className="px-3 py-3 text-sm text-muted-foreground"
+                    >
+                        {t(
+                            searchFailed
+                                ? "research.searchFailed"
+                                : "research.noResults",
+                        )}
+                    </p>
+                )}
                 {searchResults?.items?.map((item) => (
                     <SymbolSearchResultItem
                         key={item.symbol}

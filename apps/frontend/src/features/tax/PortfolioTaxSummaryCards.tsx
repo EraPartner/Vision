@@ -90,5 +90,22 @@ export function PortfolioTaxSummaryCards({
         },
     ];
 
-    return <TaxSummaryCard cards={cards} />;
+    return (
+        <div className="space-y-4">
+            <TaxSummaryCard cards={cards.slice(0, 3)} />
+            <dl className="grid gap-4 rounded-lg border border-border/50 p-4 sm:grid-cols-3">
+                {cards.slice(3).map((card) => (
+                    <div key={card.title} className="space-y-1">
+                        <dt className="text-sm text-muted-foreground">
+                            {card.title}
+                        </dt>
+                        <dd className="text-lg font-semibold">{card.value}</dd>
+                        <dd className="text-xs text-muted-foreground">
+                            {card.desc}
+                        </dd>
+                    </div>
+                ))}
+            </dl>
+        </div>
+    );
 }

@@ -26,6 +26,61 @@ describe("BrokerTransferDialog", () => {
         );
     });
 
+    it("requires loaded destination accounts and allows retry without transferring", async () => {
+        const user = userEvent.setup();
+        server.use(
+            http.get(
+                `${API_BASE}/api/accounts/7/portfolio-lot-retag-preview`,
+                () =>
+                    ok({
+                        account_id: 7,
+                        eligible_count: 1,
+                        transaction_ids: [11],
+                        limit: 500,
+                    }),
+            ),
+            http.get(`${API_BASE}/api/accounts`, () => err(403, "Unavailable")),
+        );
+        renderWithApp(
+            <BrokerTransferDialog
+                account={source}
+                open
+                onOpenChange={() => {}}
+            />,
+        );
+        expect(
+            await screen.findByText(/could not load destination accounts/i),
+        ).toBeVisible();
+        expect(
+            screen.queryByRole("combobox", {
+                name: "Portfolio lot destination",
+            }),
+        ).not.toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: "Transfer lots" }),
+        ).toBeDisabled();
+        server.use(
+            http.get(`${API_BASE}/api/accounts`, () =>
+                ok({ items: [source], total: 1, links: [] }),
+            ),
+        );
+        await user.click(screen.getByRole("button", { name: "Retry" }));
+        await user.click(
+            await screen.findByRole("combobox", {
+                name: "Portfolio lot destination",
+            }),
+        );
+        await user.click(
+            await screen.findByRole("option", { name: "Move to Unassigned" }),
+        );
+        expect(
+            screen.getByRole("button", { name: "Transfer lots" }),
+        ).toBeEnabled();
+        expect(
+            screen.queryByText(/could not load destination accounts/i),
+        ).not.toBeInTheDocument();
+    });
+
     it("re-tags the complete selection and renders the immutable receipt", async () => {
         const user = userEvent.setup();
         let body: unknown;

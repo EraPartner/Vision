@@ -32,6 +32,7 @@ vi.mock("../src/repositories/settingsRepository.js", () => ({
   settingsRepository: { get: vi.fn(async () => null) },
 }));
 
+import { __storeCurrentBrokerSnapshot } from "../src/services/portfolioPerformanceSnapshotService.js";
 import { query } from "../src/database/connection.js";
 import { settingsRepository } from "../src/repositories/settingsRepository.js";
 import {
@@ -110,6 +111,56 @@ describe("getPortfolioSummary", () => {
       usedFallbackRate: false,
     });
     expect(result.currency).toBe("EUR");
+    expect(result).not.toHaveProperty("brokerSnapshotParity");
+  });
+
+  it("stores broker snapshots despite accumulated investment display rounding", async () => {
+    query
+      .mockResolvedValueOnce({
+        rows: Array.from({ length: 6 }, (_, index) =>
+          investmentRow({
+            id: index + 1,
+            currency: "EUR",
+            current_price: "100.006",
+          }),
+        ),
+      })
+      .mockResolvedValueOnce({
+        rows: Array.from({ length: 6 }, (_, index) =>
+          txnRow({
+            id: index + 1,
+            investment_id: index + 1,
+            type: "buy",
+            amount: 100,
+            units: 1,
+            currency: "EUR",
+            account_id: 7,
+          }),
+        ),
+      });
+    const result = await getPortfolioSummary("EUR", {
+      includeBrokerSnapshotParity: true,
+    });
+    expect(result.totals.totalPortfolioValue).toBe(600.06);
+    expect(result.byAccount[0].currentValue).toBe(600.04);
+    expect(result.brokerSnapshotParity).toEqual({
+      totalValue: "600.036",
+      partitionValue: "600.036",
+    });
+    query
+      .mockResolvedValueOnce({
+        rows: [{ relation: "portfolio_broker_snapshots" }],
+      })
+      .mockResolvedValueOnce({ rows: [{ id: 7, display_name: "Test broker" }] })
+      .mockResolvedValueOnce({ rows: [{ today: "2026-09-27" }] })
+      .mockResolvedValue({ rows: [] });
+    await expect(
+      __storeCurrentBrokerSnapshot("EUR", result),
+    ).resolves.toMatchObject({ stored: true, rows: 1 });
+    const insert = query.mock.calls.find(([sql]) =>
+      sql.includes("INSERT INTO portfolio_broker_snapshots"),
+    );
+    expect(insert[1][5]).toBe("600.04");
   });
 
   it("computes single-currency stock totals correctly", async () => {

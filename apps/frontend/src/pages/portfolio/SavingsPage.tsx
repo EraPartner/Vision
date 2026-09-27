@@ -154,7 +154,11 @@ export default function SavingsPage() {
                 <PageHeader
                     title={t("savings.title")}
                     icon={PAGE_ICONS["/portfolio/savings"]}
-                    actions={<AddInvestmentDialog />}
+                    actions={
+                        <AddInvestmentDialog
+                            allowedAssetClasses={["savings", "bond"]}
+                        />
+                    }
                 />
 
                 {/* Summary Cards */}

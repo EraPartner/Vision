@@ -11,255 +11,330 @@ import { AddToWatchlistDialog } from "@/features/portfolio/AddToWatchlistDialog"
 const API_BASE = "http://localhost:3002";
 
 const MARKET_SEARCH_RESULT = {
-  symbol: "AAPL",
-  name: "Apple Inc.",
-  type: "stock",
-  exchange: "NASDAQ",
+    symbol: "AAPL",
+    name: "Apple Inc.",
+    type: "stock",
+    exchange: "NASDAQ",
 };
 
 const WATCHLIST_STUB = {
-  id: 1,
-  symbol: "AAPL",
-  name: "Apple Inc.",
-  asset_class: "stock",
-  currency: "USD",
-  target_price: 200,
-  notes: null,
-  price_provider_id: "AAPL",
-  created_at: "2025-01-01T00:00:00Z",
-  updated_at: null,
+    id: 1,
+    symbol: "AAPL",
+    name: "Apple Inc.",
+    asset_class: "stock",
+    currency: "USD",
+    target_price: 200,
+    notes: null,
+    price_provider_id: "AAPL",
+    created_at: "2025-01-01T00:00:00Z",
+    updated_at: null,
 };
 
 afterEach(() => vi.restoreAllMocks());
 
 describe("AddToWatchlistDialog", () => {
-  it("renders dialog when open=true", async () => {
-    // Arrange + Act
-    const onOpenChange = vi.fn();
-    renderWithApp(<AddToWatchlistDialog open={true} onOpenChange={onOpenChange} />);
+    it("does not present invalid target text as a price comparison", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/market/quote`, () =>
+                ok({
+                    items: [{ symbol: "AAPL", price: 200, currency: "USD" }],
+                    total: 1,
+                }),
+            ),
+        );
+        const user = userEvent.setup();
+        renderWithApp(
+            <AddToWatchlistDialog
+                open={true}
+                onOpenChange={vi.fn()}
+                prefill={{
+                    symbol: "AAPL",
+                    name: "Apple",
+                    type: "stock",
+                    price: 100,
+                    currency: "USD",
+                }}
+            />,
+        );
+        await screen.findByText(/below current price/);
+        const input = screen.getByLabelText(/target buy price/i);
+        await user.clear(input);
+        await user.type(input, "abc");
+        expect(
+            screen.queryByText(/below current price|above current price/),
+        ).not.toBeInTheDocument();
+    });
 
-    // Assert — dialog content is present
-    expect(await screen.findByRole("dialog")).toBeInTheDocument();
-  });
+    it("renders dialog when open=true", async () => {
+        // Arrange + Act
+        const onOpenChange = vi.fn();
+        renderWithApp(
+            <AddToWatchlistDialog open={true} onOpenChange={onOpenChange} />,
+        );
 
-  it("close button calls onOpenChange(false)", async () => {
-    // Arrange
-    const user = userEvent.setup();
-    const onOpenChange = vi.fn();
-    renderWithApp(<AddToWatchlistDialog open={true} onOpenChange={onOpenChange} />);
-    await screen.findByRole("dialog");
+        // Assert — dialog content is present
+        expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    });
 
-    // Act — click the dialog close button (radix renders it with aria-label "Close")
-    const closeButton = screen.getByRole("button", { name: /close/i });
-    await user.click(closeButton);
+    it("close button calls onOpenChange(false)", async () => {
+        // Arrange
+        const user = userEvent.setup();
+        const onOpenChange = vi.fn();
+        renderWithApp(
+            <AddToWatchlistDialog open={true} onOpenChange={onOpenChange} />,
+        );
+        await screen.findByRole("dialog");
 
-    // Assert
-    expect(onOpenChange).toHaveBeenCalledWith(false);
-  });
+        // Act — click the dialog close button (radix renders it with aria-label "Close")
+        const closeButton = screen.getByRole("button", { name: /close/i });
+        await user.click(closeButton);
 
-  it("search input is visible and typing triggers search results display", async () => {
-    // Arrange
-    server.use(
-      http.get(`${API_BASE}/api/market/search`, () =>
-        ok({ items: [MARKET_SEARCH_RESULT] }),
-      ),
-    );
-    const user = userEvent.setup();
-    const onOpenChange = vi.fn();
-    renderWithApp(<AddToWatchlistDialog open={true} onOpenChange={onOpenChange} />);
+        // Assert
+        expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
 
-    // Act
-    const searchInput = await screen.findByRole("textbox");
-    await user.type(searchInput, "AAPL");
+    it("search input is visible and typing triggers search results display", async () => {
+        // Arrange
+        server.use(
+            http.get(`${API_BASE}/api/market/search`, () =>
+                ok({ items: [MARKET_SEARCH_RESULT] }),
+            ),
+        );
+        const user = userEvent.setup();
+        const onOpenChange = vi.fn();
+        renderWithApp(
+            <AddToWatchlistDialog open={true} onOpenChange={onOpenChange} />,
+        );
 
-    // Assert — search result appears
-    expect(await screen.findByText("AAPL")).toBeInTheDocument();
-    expect(await screen.findByText("Apple Inc.")).toBeInTheDocument();
-  });
+        // Act
+        const searchInput = await screen.findByRole("textbox");
+        await user.type(searchInput, "AAPL");
 
-  it("clicking a search result transitions to details phase (shows targetPrice input)", async () => {
-    // Arrange
-    server.use(
-      http.get(`${API_BASE}/api/market/search`, () =>
-        ok({ items: [MARKET_SEARCH_RESULT] }),
-      ),
-    );
-    const user = userEvent.setup();
-    const onOpenChange = vi.fn();
-    renderWithApp(<AddToWatchlistDialog open={true} onOpenChange={onOpenChange} />);
+        // Assert — search result appears
+        expect(await screen.findByText("AAPL")).toBeInTheDocument();
+        expect(await screen.findByText("Apple Inc.")).toBeInTheDocument();
+    });
 
-    // Act — type to trigger search, then click result
-    const searchInput = await screen.findByRole("textbox");
-    await user.type(searchInput, "AAPL");
-    const result = await screen.findByText("Apple Inc.");
-    await user.click(result);
+    it("clicking a search result transitions to details phase (shows targetPrice input)", async () => {
+        // Arrange
+        server.use(
+            http.get(`${API_BASE}/api/market/search`, () =>
+                ok({ items: [MARKET_SEARCH_RESULT] }),
+            ),
+        );
+        const user = userEvent.setup();
+        const onOpenChange = vi.fn();
+        renderWithApp(
+            <AddToWatchlistDialog open={true} onOpenChange={onOpenChange} />,
+        );
 
-    // Assert — details phase: target price input is present
-    expect(await screen.findByLabelText(/target buy price/i)).toBeInTheDocument();
-  });
+        // Act — type to trigger search, then click result
+        const searchInput = await screen.findByRole("textbox");
+        await user.type(searchInput, "AAPL");
+        const result = await screen.findByText("Apple Inc.");
+        await user.click(result);
 
-  it("submit button is disabled when targetPrice is empty", async () => {
-    // Arrange
-    server.use(
-      http.get(`${API_BASE}/api/market/search`, () =>
-        ok({ items: [MARKET_SEARCH_RESULT] }),
-      ),
-    );
-    const user = userEvent.setup();
-    const onOpenChange = vi.fn();
-    renderWithApp(<AddToWatchlistDialog open={true} onOpenChange={onOpenChange} />);
+        // Assert — details phase: target price input is present
+        expect(
+            await screen.findByLabelText(/target buy price/i),
+        ).toBeInTheDocument();
+    });
 
-    // Act — reach details phase without filling targetPrice
-    const searchInput = await screen.findByRole("textbox");
-    await user.type(searchInput, "AAPL");
-    await user.click(await screen.findByText("Apple Inc."));
+    it("submit button is disabled when targetPrice is empty", async () => {
+        // Arrange
+        server.use(
+            http.get(`${API_BASE}/api/market/search`, () =>
+                ok({ items: [MARKET_SEARCH_RESULT] }),
+            ),
+        );
+        const user = userEvent.setup();
+        const onOpenChange = vi.fn();
+        renderWithApp(
+            <AddToWatchlistDialog open={true} onOpenChange={onOpenChange} />,
+        );
 
-    // Assert — wait for details phase, then check submit is disabled
-    await screen.findByLabelText(/target buy price/i);
-    const submitButton = await screen.findByRole("button", { name: /add to watchlist/i });
-    expect(submitButton).toBeDisabled();
-  });
+        // Act — reach details phase without filling targetPrice
+        const searchInput = await screen.findByRole("textbox");
+        await user.type(searchInput, "AAPL");
+        await user.click(await screen.findByText("Apple Inc."));
 
-  it("successful submit calls POST /api/watchlist and calls onOpenChange(false)", async () => {
-    // Arrange
-    server.use(
-      http.get(`${API_BASE}/api/market/search`, () =>
-        ok({ items: [MARKET_SEARCH_RESULT] }),
-      ),
-      http.post(`${API_BASE}/api/watchlist`, () => ok(WATCHLIST_STUB)),
-    );
-    const user = userEvent.setup();
-    const onOpenChange = vi.fn();
-    renderWithApp(<AddToWatchlistDialog open={true} onOpenChange={onOpenChange} />);
+        // Assert — wait for details phase, then check submit is disabled
+        await screen.findByLabelText(/target buy price/i);
+        const submitButton = await screen.findByRole("button", {
+            name: /add to watchlist/i,
+        });
+        expect(submitButton).toBeDisabled();
+    });
 
-    // Act — search, select, fill target price, submit
-    const searchInput = await screen.findByRole("textbox");
-    await user.type(searchInput, "AAPL");
-    await user.click(await screen.findByText("Apple Inc."));
+    it("successful submit calls POST /api/watchlist and calls onOpenChange(false)", async () => {
+        // Arrange
+        server.use(
+            http.get(`${API_BASE}/api/market/search`, () =>
+                ok({ items: [MARKET_SEARCH_RESULT] }),
+            ),
+            http.post(`${API_BASE}/api/watchlist`, () => ok(WATCHLIST_STUB)),
+        );
+        const user = userEvent.setup();
+        const onOpenChange = vi.fn();
+        renderWithApp(
+            <AddToWatchlistDialog open={true} onOpenChange={onOpenChange} />,
+        );
 
-    const targetPriceInput = await screen.findByLabelText(/target buy price/i);
-    await user.type(targetPriceInput, "200");
+        // Act — search, select, fill target price, submit
+        const searchInput = await screen.findByRole("textbox");
+        await user.type(searchInput, "AAPL");
+        await user.click(await screen.findByText("Apple Inc."));
 
-    const submitButton = await screen.findByRole("button", { name: /add to watchlist/i });
-    await user.click(submitButton);
+        const targetPriceInput =
+            await screen.findByLabelText(/target buy price/i);
+        await user.type(targetPriceInput, "200");
 
-    // Assert
-    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
-  });
+        const submitButton = await screen.findByRole("button", {
+            name: /add to watchlist/i,
+        });
+        await user.click(submitButton);
 
-  it("API failure does not call onOpenChange(false)", async () => {
-    // Arrange
-    server.use(
-      http.get(`${API_BASE}/api/market/search`, () =>
-        ok({ items: [MARKET_SEARCH_RESULT] }),
-      ),
-      http.post(`${API_BASE}/api/watchlist`, () =>
-        err(500, "Internal server error"),
-      ),
-    );
-    const user = userEvent.setup();
-    const onOpenChange = vi.fn();
-    renderWithApp(<AddToWatchlistDialog open={true} onOpenChange={onOpenChange} />);
+        // Assert
+        await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    });
 
-    // Act — search, select, fill target price, submit
-    const searchInput = await screen.findByRole("textbox");
-    await user.type(searchInput, "AAPL");
-    await user.click(await screen.findByText("Apple Inc."));
+    it("API failure does not call onOpenChange(false)", async () => {
+        // Arrange
+        server.use(
+            http.get(`${API_BASE}/api/market/search`, () =>
+                ok({ items: [MARKET_SEARCH_RESULT] }),
+            ),
+            http.post(`${API_BASE}/api/watchlist`, () =>
+                err(500, "Internal server error"),
+            ),
+        );
+        const user = userEvent.setup();
+        const onOpenChange = vi.fn();
+        renderWithApp(
+            <AddToWatchlistDialog open={true} onOpenChange={onOpenChange} />,
+        );
 
-    const targetPriceInput = await screen.findByLabelText(/target buy price/i);
-    await user.type(targetPriceInput, "200");
+        // Act — search, select, fill target price, submit
+        const searchInput = await screen.findByRole("textbox");
+        await user.type(searchInput, "AAPL");
+        await user.click(await screen.findByText("Apple Inc."));
 
-    const submitButton = await screen.findByRole("button", { name: /add to watchlist/i });
-    await user.click(submitButton);
+        const targetPriceInput =
+            await screen.findByLabelText(/target buy price/i);
+        await user.type(targetPriceInput, "200");
 
-    // Assert — onOpenChange(false) is NOT called after error
-    await waitFor(() => expect(submitButton).not.toBeDisabled());
-    expect(onOpenChange).not.toHaveBeenCalledWith(false);
-  });
+        const submitButton = await screen.findByRole("button", {
+            name: /add to watchlist/i,
+        });
+        await user.click(submitButton);
 
-  it("rejects a 0 target price — no POST, dialog stays open (regression)", async () => {
-    // parseDecimal's 0-fallback used to POST target_price: 0 for garbage
-    // input like "1e999"; a 0/non-finite target must now be rejected.
-    let posted = false;
-    server.use(
-      http.get(`${API_BASE}/api/market/search`, () =>
-        ok({ items: [MARKET_SEARCH_RESULT] }),
-      ),
-      http.post(`${API_BASE}/api/watchlist`, () => {
-        posted = true;
-        return ok(WATCHLIST_STUB);
-      }),
-    );
-    const user = userEvent.setup();
-    const onOpenChange = vi.fn();
-    renderWithApp(<AddToWatchlistDialog open={true} onOpenChange={onOpenChange} />);
+        // Assert — onOpenChange(false) is NOT called after error
+        await waitFor(() => expect(submitButton).not.toBeDisabled());
+        expect(onOpenChange).not.toHaveBeenCalledWith(false);
+    });
 
-    // Act — search, select, set a 0 target price (paste-equivalent), submit
-    const searchInput = await screen.findByRole("textbox");
-    await user.type(searchInput, "AAPL");
-    await user.click(await screen.findByText("Apple Inc."));
+    it("rejects a 0 target price — no POST, dialog stays open (regression)", async () => {
+        // parseDecimal's 0-fallback used to POST target_price: 0 for garbage
+        // input like "1e999"; a 0/non-finite target must now be rejected.
+        let posted = false;
+        server.use(
+            http.get(`${API_BASE}/api/market/search`, () =>
+                ok({ items: [MARKET_SEARCH_RESULT] }),
+            ),
+            http.post(`${API_BASE}/api/watchlist`, () => {
+                posted = true;
+                return ok(WATCHLIST_STUB);
+            }),
+        );
+        const user = userEvent.setup();
+        const onOpenChange = vi.fn();
+        renderWithApp(
+            <AddToWatchlistDialog open={true} onOpenChange={onOpenChange} />,
+        );
 
-    const targetPriceInput = await screen.findByLabelText(/target buy price/i);
-    fireEvent.change(targetPriceInput, { target: { value: "0" } });
+        // Act — search, select, set a 0 target price (paste-equivalent), submit
+        const searchInput = await screen.findByRole("textbox");
+        await user.type(searchInput, "AAPL");
+        await user.click(await screen.findByText("Apple Inc."));
 
-    const submitButton = await screen.findByRole("button", { name: /add to watchlist/i });
-    await user.click(submitButton);
+        const targetPriceInput =
+            await screen.findByLabelText(/target buy price/i);
+        fireEvent.change(targetPriceInput, { target: { value: "0" } });
 
-    // Assert — dialog stays open, no POST sent
-    await waitFor(() => expect(submitButton).not.toBeDisabled());
-    expect(posted).toBe(false);
-    expect(onOpenChange).not.toHaveBeenCalledWith(false);
-  });
+        const submitButton = await screen.findByRole("button", {
+            name: /add to watchlist/i,
+        });
+        await user.click(submitButton);
 
-  it("back navigation from phase 2 returns to phase 1 (search input visible)", async () => {
-    // Arrange
-    server.use(
-      http.get(`${API_BASE}/api/market/search`, () =>
-        ok({ items: [MARKET_SEARCH_RESULT] }),
-      ),
-    );
-    const user = userEvent.setup();
-    const onOpenChange = vi.fn();
-    renderWithApp(<AddToWatchlistDialog open={true} onOpenChange={onOpenChange} />);
+        // Assert — dialog stays open, no POST sent
+        await waitFor(() => expect(submitButton).not.toBeDisabled());
+        expect(posted).toBe(false);
+        expect(onOpenChange).not.toHaveBeenCalledWith(false);
+    });
 
-    // Act — reach details phase, then click "Change" button to go back
-    const searchInput = await screen.findByRole("textbox");
-    await user.type(searchInput, "AAPL");
-    await user.click(await screen.findByText("Apple Inc."));
-    await screen.findByLabelText(/target buy price/i); // wait for phase 2
+    it("back navigation from phase 2 returns to phase 1 (search input visible)", async () => {
+        // Arrange
+        server.use(
+            http.get(`${API_BASE}/api/market/search`, () =>
+                ok({ items: [MARKET_SEARCH_RESULT] }),
+            ),
+        );
+        const user = userEvent.setup();
+        const onOpenChange = vi.fn();
+        renderWithApp(
+            <AddToWatchlistDialog open={true} onOpenChange={onOpenChange} />,
+        );
 
-    const changeButton = await screen.findByRole("button", { name: /change/i });
-    await user.click(changeButton);
+        // Act — reach details phase, then click "Change" button to go back
+        const searchInput = await screen.findByRole("textbox");
+        await user.type(searchInput, "AAPL");
+        await user.click(await screen.findByText("Apple Inc."));
+        await screen.findByLabelText(/target buy price/i); // wait for phase 2
 
-    // Assert — back to search phase: textbox (search input) is visible again
-    expect(await screen.findByRole("textbox")).toBeInTheDocument();
-    expect(screen.queryByLabelText(/target buy price/i)).not.toBeInTheDocument();
-  });
+        const changeButton = await screen.findByRole("button", {
+            name: /change/i,
+        });
+        await user.click(changeButton);
 
-  // ─── Edge cases ────────────────────────────────────────────────────────────
+        // Assert — back to search phase: textbox (search input) is visible again
+        expect(await screen.findByRole("textbox")).toBeInTheDocument();
+        expect(
+            screen.queryByLabelText(/target buy price/i),
+        ).not.toBeInTheDocument();
+    });
 
-  it("Escape key calls onOpenChange(false)", async () => {
-    const user = userEvent.setup();
-    const onOpenChange = vi.fn();
-    renderWithApp(<AddToWatchlistDialog open={true} onOpenChange={onOpenChange} />);
-    await screen.findByRole("dialog");
-    await user.keyboard("{Escape}");
-    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
-  });
+    // ─── Edge cases ────────────────────────────────────────────────────────────
 
-  it("dialog renders in open state (a11y / backdrop guard)", async () => {
-    renderWithApp(<AddToWatchlistDialog open={true} onOpenChange={vi.fn()} />);
-    const dialog = await screen.findByRole("dialog");
-    expect(dialog).toHaveAttribute("data-state", "open");
-  });
+    it("Escape key calls onOpenChange(false)", async () => {
+        const user = userEvent.setup();
+        const onOpenChange = vi.fn();
+        renderWithApp(
+            <AddToWatchlistDialog open={true} onOpenChange={onOpenChange} />,
+        );
+        await screen.findByRole("dialog");
+        await user.keyboard("{Escape}");
+        await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    });
 
-  it("first focusable element is reachable by Tab (keyboard nav)", async () => {
-    const user = userEvent.setup();
-    renderWithApp(<AddToWatchlistDialog open={true} onOpenChange={vi.fn()} />);
-    await screen.findByRole("dialog");
-    // Auto-focus is on the search input; one Tab moves to next focusable.
-    await user.tab();
-    expect(document.activeElement).toBeDefined();
-    expect(document.activeElement?.tagName).toMatch(/INPUT|BUTTON|SELECT|TEXTAREA/i);
-  });
+    it("dialog renders in open state (a11y / backdrop guard)", async () => {
+        renderWithApp(
+            <AddToWatchlistDialog open={true} onOpenChange={vi.fn()} />,
+        );
+        const dialog = await screen.findByRole("dialog");
+        expect(dialog).toHaveAttribute("data-state", "open");
+    });
+
+    it("first focusable element is reachable by Tab (keyboard nav)", async () => {
+        const user = userEvent.setup();
+        renderWithApp(
+            <AddToWatchlistDialog open={true} onOpenChange={vi.fn()} />,
+        );
+        await screen.findByRole("dialog");
+        // Auto-focus is on the search input; one Tab moves to next focusable.
+        await user.tab();
+        expect(document.activeElement).toBeDefined();
+        expect(document.activeElement?.tagName).toMatch(
+            /INPUT|BUTTON|SELECT|TEXTAREA/i,
+        );
+    });
 });

@@ -33,6 +33,11 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Scale, Loader2, Plus, Trash2, Save } from "lucide-react";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
@@ -719,7 +724,10 @@ export default function RebalancePage() {
                                             updateRow(i, { sleeve: v })
                                         }
                                     >
-                                        <SelectTrigger className="w-44">
+                                        <SelectTrigger
+                                            className="w-44"
+                                            aria-label={`${t("rebalance.sleeve")} ${i + 1}: ${row.sleeve ? t(`rebalance.sleeve.${row.sleeve}`) : t("rebalance.editor.sleevePlaceholder")}`}
+                                        >
                                             <SelectValue
                                                 placeholder={t(
                                                     "rebalance.editor.sleevePlaceholder",
@@ -745,22 +753,27 @@ export default function RebalancePage() {
                                                 })
                                             }
                                             className="pr-6 text-right tabular-nums"
-                                            aria-label={t("rebalance.target")}
+                                            aria-label={`${t("rebalance.target")} ${i + 1}: ${row.sleeve ? t(`rebalance.sleeve.${row.sleeve}`) : t("rebalance.editor.sleevePlaceholder")} (%)`}
                                         />
                                         <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
                                             %
                                         </span>
                                     </div>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => removeRow(i)}
-                                        aria-label={t(
-                                            "rebalance.editor.removeSleeve",
-                                        )}
-                                    >
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={() => removeRow(i)}
+                                                aria-label={`${t("rebalance.editor.removeSleeve")} ${i + 1}: ${row.sleeve ? t(`rebalance.sleeve.${row.sleeve}`) : t("rebalance.editor.sleevePlaceholder")}`}
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                            {`${t("rebalance.editor.removeSleeve")} ${i + 1}: ${row.sleeve ? t(`rebalance.sleeve.${row.sleeve}`) : t("rebalance.editor.sleevePlaceholder")}`}
+                                        </TooltipContent>
+                                    </Tooltip>
                                 </div>
                             ))}
                             <div className="flex items-center justify-between pt-1">

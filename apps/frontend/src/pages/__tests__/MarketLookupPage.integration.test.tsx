@@ -2,11 +2,17 @@
 import { describe, expect, it, vi } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useLocation } from "react-router";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { INVESTMENT_STUB, ok, err } from "@/test/msw/handlers";
 import MarketLookupPage from "@/pages/research/MarketLookupPage";
+
+function LocationProbe() {
+    const location = useLocation();
+    return <output data-testid="location">{location.search}</output>;
+}
 
 const API_BASE = "http://localhost:3002";
 
@@ -40,6 +46,32 @@ const appleQuote = {
 };
 
 describe("MarketLookupPage (integration)", () => {
+    it("explains when a symbol search has no matches", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/market/search`, () => ok({ items: [] })),
+        );
+        const user = userEvent.setup();
+        renderWithApp(<MarketLookupPage />);
+        await user.type(await screen.findByRole("combobox"), "ZZNOMATCH");
+        expect(await screen.findByText(/no results/i)).toBeInTheDocument();
+    });
+
+    it("distinguishes an unavailable search from no matches", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/market/search`, () =>
+                err(503, "Unavailable"),
+            ),
+        );
+        const user = userEvent.setup();
+        renderWithApp(<MarketLookupPage />);
+        await user.type(await screen.findByRole("combobox"), "ZZNOMATCH");
+        expect(
+            await screen.findByText(
+                "Search is unavailable. Try again shortly.",
+            ),
+        ).toBeInTheDocument();
+    });
+
     it("renders page heading", async () => {
         renderWithApp(<MarketLookupPage />);
         // marketLookup.title = "Market Lookup"
@@ -445,4 +477,65 @@ describe("MarketLookupPage (integration)", () => {
         ).toBeInTheDocument();
         errSpy.mockRestore();
     });
+    it.each(["1y", "invalid"])(
+        "restores the URL range %s and preserves unrelated parameters",
+        async (range) => {
+            const requests: string[] = [];
+            server.use(
+                http.get(`${API_BASE}/api/market/quote`, () =>
+                    ok({ items: [appleQuote], total: 1 }),
+                ),
+                http.get(`${API_BASE}/api/market/chart`, ({ request }) => {
+                    requests.push(
+                        new URL(request.url).searchParams.get("range") ?? "",
+                    );
+                    return ok({
+                        symbol: "AAPL",
+                        currency: "USD",
+                        items: [],
+                        total: 0,
+                    });
+                }),
+                http.get(`${API_BASE}/api/market/news`, () =>
+                    ok({ items: [], total: 0 }),
+                ),
+            );
+            const user = userEvent.setup({ delay: null });
+            renderWithApp(
+                <>
+                    <MarketLookupPage />
+                    <LocationProbe />
+                </>,
+                {
+                    initialEntries: [
+                        `/?symbol=AAPL&range=${range}&context=retained`,
+                    ],
+                },
+            );
+            const initial = range === "1y" ? "1y" : "1m";
+            expect(
+                await screen.findByRole("button", {
+                    name: initial,
+                }),
+            ).toHaveAttribute("aria-pressed", "true");
+            await waitFor(() =>
+                expect(requests).toContain(range === "1y" ? "1y" : "1mo"),
+            );
+            await user.click(screen.getByRole("button", { name: /^5y$/i }));
+            await waitFor(() => expect(requests).toContain("5y"));
+            let params = new URLSearchParams(
+                screen.getByTestId("location").textContent ?? "",
+            );
+            expect(params.get("range")).toBe("5y");
+            expect(params.get("symbol")).toBe("AAPL");
+            expect(params.get("context")).toBe("retained");
+            await user.click(screen.getByRole("button", { name: /^1m$/i }));
+            params = new URLSearchParams(
+                screen.getByTestId("location").textContent ?? "",
+            );
+            expect(params.has("range")).toBe(false);
+            expect(params.get("symbol")).toBe("AAPL");
+            expect(params.get("context")).toBe("retained");
+        },
+    );
 });

@@ -2,9 +2,9 @@
 title: Watchlist Feature
 type: feature
 status: active
-date: 2026-09-26
-last_modified: 2026-09-26
-updated: 2026-09-26
+date: 2026-09-27
+last_modified: 2026-09-27
+updated: 2026-09-27
 tags: [feature, watchlist, investments, tracking, alerts, phase-3.6, offline-resilience, online-status-detection, api-client-migration, validation, june-2026, backtest, added-price, adr-097, destructive-confirm]
 description: Investment watchlist for tracking securities not yet in the portfolio with target price alerts. June 2026: POST/PATCH return 400 ValidationError for invalid fields; what-if backtest shows return since add date using added_price (migration 0058, ADR-097).
 aliases: [watch list, price alerts, investment tracking]
@@ -103,6 +103,13 @@ The watchlist page uses a smart display strategy:
 This provides actionable information: either "it's cheap enough" (price shown) or "it's gone up X%" (percentage shown).
 Target distance and since-added change use the shared `DeltaPill`: direction, semantic gain/loss
 tone, neutral zero, and locale-aware precision therefore match the other market-change surfaces.
+
+## Keyboard controls
+
+Open chart and Remove controls identify the item's name and symbol; Remove also has a
+keyboard-focus tooltip. In the chart dialog, the target-price button identifies the edit action,
+item, and current value, with a visible focus ring and tooltip. Opening its editor focuses the
+labelled price input immediately.
 
 ## API Integration (Phase 3.6)
 
@@ -231,3 +238,8 @@ Users can promote a watchlist item to a full portfolio investment with one click
 - [[docs/integrations/price-providers|Price Providers]] — Live price fetching
 - [[docs/adr/097-portfolio-research-analytics|ADR-097]] — Watchlist backtest decision (added_price approach)
 - [[docs/api/watchlist|Watchlist API]] — added_price field and updated POST/PATCH contract
+
+
+## Clarity and recovery feedback
+
+Watchlist list-query failures have a retry action and do not appear as empty onboarding. Cached rows remain visible after refresh failure. Target-price comparisons appear only for finite positive input, so invalid text is not interpreted as a zero target.

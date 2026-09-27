@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
+import { useSettingsStore } from "@/stores/settingsStore";
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PortfolioExposureCard } from "./PortfolioExposureCard";
@@ -33,10 +34,10 @@ vi.mock("@/hooks/portfolio/usePortfolioExposure", () => ({
         isError: false,
         data: {
             totalValue: 100,
-            uncoveredValue: 100,
-            uncoveredWeightPercent: 100,
-            coveredCashValue: 0,
-            coveredCashWeightPercent: 0,
+            uncoveredValue: 99.94,
+            uncoveredWeightPercent: 99.94,
+            coveredCashValue: 0.06,
+            coveredCashWeightPercent: 0.06,
             warnings: [{ code: "STALE_FUND_SOURCE" }],
             fundSources: [
                 {
@@ -76,6 +77,23 @@ vi.mock("@/hooks/portfolio/usePortfolioExposure", () => ({
 }));
 
 describe("PortfolioExposureCard", () => {
+    it("uses the selected number format for exposure percentages", () => {
+        render(
+            <QueryClientProvider client={new QueryClient()}>
+                <PortfolioExposureCard currency="EUR" />
+            </QueryClientProvider>,
+        );
+        expect(screen.getByText("99,94%")).toBeInTheDocument();
+        expect(screen.getByText("0,06%")).toBeInTheDocument();
+        act(() =>
+            useSettingsStore
+                .getState()
+                .updateAppSettings({ numberFormat: "us" }),
+        );
+        expect(screen.getByText("99.94%")).toBeInTheDocument();
+        expect(screen.getByText("0.06%")).toBeInTheDocument();
+    });
+
     it("keeps stale-source warnings visible and source details expandable", async () => {
         render(
             <QueryClientProvider client={new QueryClient()}>

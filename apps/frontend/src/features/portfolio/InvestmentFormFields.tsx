@@ -55,6 +55,7 @@ interface InvestmentFormFieldsProps {
     computedPricePerUnit: string;
     t: (key: string, params?: Record<string, string | number>) => string;
     initialBrokerField?: ReactNode;
+    errors?: Record<string, string>;
 }
 
 export function InvestmentFormFields({
@@ -66,6 +67,7 @@ export function InvestmentFormFields({
     computedPricePerUnit,
     t,
     initialBrokerField,
+    errors = {},
 }: InvestmentFormFieldsProps) {
     return (
         <>
@@ -145,6 +147,12 @@ export function InvestmentFormFields({
                             </Label>
                             <Input
                                 id="inv-rate"
+                                aria-invalid={Boolean(errors["inv-rate"])}
+                                aria-describedby={
+                                    errors["inv-rate"]
+                                        ? "inv-rate-error"
+                                        : undefined
+                                }
                                 type="text"
                                 inputMode="decimal"
                                 placeholder="3.50"
@@ -156,6 +164,15 @@ export function InvestmentFormFields({
                                     }))
                                 }
                             />
+                            {errors["inv-rate"] && (
+                                <p
+                                    id="inv-rate-error"
+                                    role="alert"
+                                    className="text-sm text-destructive"
+                                >
+                                    {errors["inv-rate"]}
+                                </p>
+                            )}
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="inv-maturity">
@@ -233,6 +250,14 @@ export function InvestmentFormFields({
                                 </Label>
                                 <Input
                                     id="inv-cadastral-income"
+                                    aria-invalid={Boolean(
+                                        errors["inv-cadastral-income"],
+                                    )}
+                                    aria-describedby={
+                                        errors["inv-cadastral-income"]
+                                            ? "inv-cadastral-income-error"
+                                            : undefined
+                                    }
                                     type="text"
                                     inputMode="decimal"
                                     placeholder={t(
@@ -246,6 +271,15 @@ export function InvestmentFormFields({
                                         }))
                                     }
                                 />
+                                {errors["inv-cadastral-income"] && (
+                                    <p
+                                        id="inv-cadastral-income-error"
+                                        role="alert"
+                                        className="text-sm text-destructive"
+                                    >
+                                        {errors["inv-cadastral-income"]}
+                                    </p>
+                                )}
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="inv-municipality-tax-rate">
@@ -253,6 +287,14 @@ export function InvestmentFormFields({
                                 </Label>
                                 <Input
                                     id="inv-municipality-tax-rate"
+                                    aria-invalid={Boolean(
+                                        errors["inv-municipality-tax-rate"],
+                                    )}
+                                    aria-describedby={
+                                        errors["inv-municipality-tax-rate"]
+                                            ? "inv-municipality-tax-rate-error"
+                                            : undefined
+                                    }
                                     type="text"
                                     inputMode="decimal"
                                     placeholder={t(
@@ -266,6 +308,15 @@ export function InvestmentFormFields({
                                         }))
                                     }
                                 />
+                                {errors["inv-municipality-tax-rate"] && (
+                                    <p
+                                        id="inv-municipality-tax-rate-error"
+                                        role="alert"
+                                        className="text-sm text-destructive"
+                                    >
+                                        {errors["inv-municipality-tax-rate"]}
+                                    </p>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -316,6 +367,11 @@ export function InvestmentFormFields({
 
                 {form.addInitialPurchase && (
                     <div className="space-y-3 pt-2 border-t border-border">
+                        {isUnitBased && (
+                            <p className="text-xs text-muted-foreground">
+                                {t("addInv.initial.unitHelp")}
+                            </p>
+                        )}
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             <div className="space-y-2">
                                 <Label htmlFor="init-date" className="text-xs">
@@ -356,6 +412,15 @@ export function InvestmentFormFields({
                                 </Label>
                                 <Input
                                     id="init-amount"
+                                    aria-required="true"
+                                    aria-invalid={Boolean(
+                                        errors["init-amount"],
+                                    )}
+                                    aria-describedby={
+                                        errors["init-amount"]
+                                            ? "init-amount-error"
+                                            : undefined
+                                    }
                                     type="text"
                                     inputMode="decimal"
                                     className="h-9"
@@ -368,6 +433,15 @@ export function InvestmentFormFields({
                                         }))
                                     }
                                 />
+                                {errors["init-amount"] && (
+                                    <p
+                                        id="init-amount-error"
+                                        role="alert"
+                                        className="text-sm text-destructive"
+                                    >
+                                        {errors["init-amount"]}
+                                    </p>
+                                )}
                             </div>
                         </div>
 
@@ -378,10 +452,19 @@ export function InvestmentFormFields({
                                         htmlFor="init-units"
                                         className="text-xs"
                                     >
-                                        {t("addInv.label.units")}
+                                        {t("addInv.label.units")} *
                                     </Label>
                                     <Input
                                         id="init-units"
+                                        aria-required="true"
+                                        aria-invalid={Boolean(
+                                            errors["init-units"],
+                                        )}
+                                        aria-describedby={
+                                            errors["init-units"]
+                                                ? "init-units-error"
+                                                : undefined
+                                        }
                                         type="text"
                                         inputMode="decimal"
                                         className="h-9"
@@ -394,6 +477,15 @@ export function InvestmentFormFields({
                                             }))
                                         }
                                     />
+                                    {errors["init-units"] && (
+                                        <p
+                                            id="init-units-error"
+                                            role="alert"
+                                            className="text-sm text-destructive"
+                                        >
+                                            {errors["init-units"]}
+                                        </p>
+                                    )}
                                 </div>
                                 <div className="space-y-2">
                                     <p className="text-xs font-medium">
@@ -412,6 +504,12 @@ export function InvestmentFormFields({
                             </Label>
                             <Input
                                 id="init-fees"
+                                aria-invalid={Boolean(errors["init-fees"])}
+                                aria-describedby={
+                                    errors["init-fees"]
+                                        ? "init-fees-error"
+                                        : undefined
+                                }
                                 type="text"
                                 inputMode="decimal"
                                 className="h-9"
@@ -424,6 +522,15 @@ export function InvestmentFormFields({
                                     }))
                                 }
                             />
+                            {errors["init-fees"] && (
+                                <p
+                                    id="init-fees-error"
+                                    role="alert"
+                                    className="text-sm text-destructive"
+                                >
+                                    {errors["init-fees"]}
+                                </p>
+                            )}
                         </div>
                         {initialBrokerField}
                     </div>
@@ -437,6 +544,7 @@ export function InvestmentFormFields({
                     form={form}
                     setForm={setForm}
                     showManualPrice
+                    currentPriceError={errors["inv-price"]}
                     t={t}
                 />
             )}

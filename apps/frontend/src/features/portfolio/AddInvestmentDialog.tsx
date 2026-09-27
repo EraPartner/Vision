@@ -107,9 +107,17 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
     const computedInitialUnits = parseDecimal(
         form.initialUnits,
         appSettings.numberFormat,
+        NaN,
+    );
+    const computedAmount = parseDecimal(
+        form.initialAmount,
+        appSettings.numberFormat,
+        NaN,
     );
     const computedPricePerUnit =
-        form.initialAmount && computedInitialUnits > 0
+        Number.isFinite(computedAmount) &&
+        computedAmount > 0 &&
+        computedInitialUnits > 0
             ? formatEditableNumber(
                   Number(
                       (
@@ -123,7 +131,40 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
               )
             : "";
 
+    const [submitted, setSubmitted] = useState(false);
+    const numericErrors: Record<string, string> = {};
+    const checkNumber = (id: string, value: string) => {
+        if (
+            value &&
+            !Number.isFinite(parseDecimal(value, appSettings.numberFormat, NaN))
+        ) {
+            numericErrors[id] = t("addInv.error.numberInvalid");
+        }
+    };
+    if (fixedIncome) checkNumber("inv-rate", form.interestRate);
+    if (realEstate) {
+        checkNumber("inv-cadastral-income", form.cadastralIncome);
+        checkNumber("inv-municipality-tax-rate", form.municipalityTaxRate);
+    }
+    if (form.addInitialPurchase) {
+        if (
+            parsePositive(form.initialAmount, appSettings.numberFormat) ===
+            undefined
+        )
+            numericErrors["init-amount"] = t("addPortTxn.error.amountRequired");
+        if (
+            unitBased &&
+            parsePositive(form.initialUnits, appSettings.numberFormat) ===
+                undefined
+        )
+            numericErrors["init-units"] = t("addPortTxn.error.unitsRequired");
+        checkNumber("init-fees", form.initialFees);
+    }
+    if (unitBased && form.priceProvider === "manual")
+        checkNumber("inv-price", form.currentPrice);
+
     const reset = () => {
+        setSubmitted(false);
         setForm(makeEmptyForm(defaultCurrency));
         createdInvestmentIdRef.current = null;
         setStep("type");
@@ -136,6 +177,15 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
         // name passed it and this guard then silently no-op'd the Create.
         if (!form.name.trim()) {
             toast.error(t("addInv.nameRequired"));
+            return;
+        }
+
+        setSubmitted(true);
+        const firstInvalid = Object.keys(numericErrors)[0];
+        if (firstInvalid) {
+            e.currentTarget
+                .querySelector<HTMLInputElement>(`#${firstInvalid}`)
+                ?.focus();
             return;
         }
 
@@ -165,7 +215,7 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
             if (unitBased) {
                 const math = deriveUnitMath({ amount, units });
                 if (!math.isConsistent || math.effectiveAmount === undefined) {
-                    toast.error(t("addPortTxn.error.twoOfThreeRequired"));
+                    toast.error(t("addInv.initial.unitHelp"));
                     return;
                 }
                 initialBuy = {
@@ -189,33 +239,39 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
                     symbol: form.symbol.trim() || undefined,
                     asset_class: form.assetClass as AssetClass,
                     currency: form.currency || defaultCurrency,
-                    current_price: form.currentPrice
-                        ? parseDecimal(
-                              form.currentPrice,
-                              appSettings.numberFormat,
-                          )
-                        : undefined,
-                    interest_rate: form.interestRate
-                        ? parseDecimal(
-                              form.interestRate,
-                              appSettings.numberFormat,
-                          )
-                        : undefined,
+                    current_price:
+                        unitBased &&
+                        form.priceProvider === "manual" &&
+                        form.currentPrice
+                            ? parseDecimal(
+                                  form.currentPrice,
+                                  appSettings.numberFormat,
+                              )
+                            : undefined,
+                    interest_rate:
+                        fixedIncome && form.interestRate
+                            ? parseDecimal(
+                                  form.interestRate,
+                                  appSettings.numberFormat,
+                              )
+                            : undefined,
                     maturity_date: form.maturityDate || undefined,
                     location: form.location.trim() || undefined,
                     municipality: form.municipality.trim() || undefined,
-                    cadastral_income: form.cadastralIncome
-                        ? parseDecimal(
-                              form.cadastralIncome,
-                              appSettings.numberFormat,
-                          )
-                        : undefined,
-                    municipality_tax_rate: form.municipalityTaxRate
-                        ? parseDecimal(
-                              form.municipalityTaxRate,
-                              appSettings.numberFormat,
-                          )
-                        : undefined,
+                    cadastral_income:
+                        realEstate && form.cadastralIncome
+                            ? parseDecimal(
+                                  form.cadastralIncome,
+                                  appSettings.numberFormat,
+                              )
+                            : undefined,
+                    municipality_tax_rate:
+                        realEstate && form.municipalityTaxRate
+                            ? parseDecimal(
+                                  form.municipalityTaxRate,
+                                  appSettings.numberFormat,
+                              )
+                            : undefined,
                     notes: form.notes.trim() || undefined,
                     ...priceProviderPayload(form),
                 });
@@ -343,6 +399,7 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
                 ) : (
                     <form onSubmit={handleSubmit} className="space-y-5">
                         <InvestmentFormFields
+                            errors={submitted ? numericErrors : {}}
                             form={form}
                             setForm={setForm}
                             isUnitBased={unitBased}

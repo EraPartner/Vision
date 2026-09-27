@@ -460,8 +460,6 @@ export default function PortfolioOverviewPage() {
                         isRefreshing={isRefreshingPrices}
                     />
 
-                    <PortfolioExposureCard currency={targetCurrency} />
-
                     {isVisible("ticker") && (
                         <PortfolioTicker items={summaries} />
                     )}
@@ -547,6 +545,8 @@ export default function PortfolioOverviewPage() {
                             </div>
                         </div>
                     )}
+
+                    <PortfolioExposureCard currency={targetCurrency} />
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:[&>*:only-child]:col-span-2">
                         {isVisible("allocation") &&

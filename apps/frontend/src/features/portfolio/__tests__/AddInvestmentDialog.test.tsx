@@ -37,7 +37,9 @@ describe("AddInvestmentDialog", () => {
         renderWithApp(<AddInvestmentDialog />);
 
         // Act
-        await user.click(await screen.findByRole("button", { name: /add investment/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add investment/i }),
+        );
 
         // Assert
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
@@ -49,14 +51,18 @@ describe("AddInvestmentDialog", () => {
         renderWithApp(<AddInvestmentDialog />);
 
         // Act
-        await user.click(await screen.findByRole("button", { name: /add investment/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add investment/i }),
+        );
         await screen.findByRole("dialog");
 
         // Assert — type selector heading and at least one asset class button
         expect(
             await screen.findByRole("heading", { name: /choose asset type/i }),
         ).toBeInTheDocument();
-        expect(screen.getByRole("button", { name: /^etf/i })).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: /^etf/i }),
+        ).toBeInTheDocument();
     });
 
     it("selecting an asset class advances to details step", async () => {
@@ -65,7 +71,9 @@ describe("AddInvestmentDialog", () => {
         renderWithApp(<AddInvestmentDialog />);
 
         // Act
-        await user.click(await screen.findByRole("button", { name: /add investment/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add investment/i }),
+        );
         await screen.findByRole("heading", { name: /choose asset type/i });
         await user.click(screen.getByRole("button", { name: /^etf/i }));
 
@@ -79,7 +87,9 @@ describe("AddInvestmentDialog", () => {
         renderWithApp(<AddInvestmentDialog />);
 
         // Act — open, advance to details, click Back
-        await user.click(await screen.findByRole("button", { name: /add investment/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add investment/i }),
+        );
         await screen.findByRole("heading", { name: /choose asset type/i });
         await user.click(screen.getByRole("button", { name: /^etf/i }));
         await screen.findByLabelText(/name \*/i);
@@ -97,7 +107,9 @@ describe("AddInvestmentDialog", () => {
         renderWithApp(<AddInvestmentDialog />);
 
         // Act — open, select ETF, fill name, uncheck initial purchase, submit
-        await user.click(await screen.findByRole("button", { name: /add investment/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add investment/i }),
+        );
         await screen.findByRole("heading", { name: /choose asset type/i });
         await user.click(screen.getByRole("button", { name: /^etf/i }));
 
@@ -121,13 +133,17 @@ describe("AddInvestmentDialog", () => {
     it("submit error shows dialog stays open", async () => {
         // Arrange
         server.use(
-            http.post(`${API_BASE}/api/investments`, () => err(500, "insert failed")),
+            http.post(`${API_BASE}/api/investments`, () =>
+                err(500, "insert failed"),
+            ),
         );
         const user = userEvent.setup();
         renderWithApp(<AddInvestmentDialog />);
 
         // Act — open, advance to details, fill name, uncheck initial purchase, submit
-        await user.click(await screen.findByRole("button", { name: /add investment/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add investment/i }),
+        );
         await screen.findByRole("heading", { name: /choose asset type/i });
         await user.click(screen.getByRole("button", { name: /^etf/i }));
 
@@ -153,7 +169,9 @@ describe("AddInvestmentDialog", () => {
         renderWithApp(<AddInvestmentDialog />);
 
         // Act
-        await user.click(await screen.findByRole("button", { name: /add investment/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add investment/i }),
+        );
         await screen.findByRole("dialog");
         await user.keyboard("{Escape}");
 
@@ -167,7 +185,9 @@ describe("AddInvestmentDialog", () => {
         // Arrange
         const user = userEvent.setup();
         renderWithApp(<AddInvestmentDialog />);
-        const triggerButton = await screen.findByRole("button", { name: /add investment/i });
+        const triggerButton = await screen.findByRole("button", {
+            name: /add investment/i,
+        });
 
         // Act — open, advance to details, close via Escape
         await user.click(triggerButton);
@@ -175,7 +195,9 @@ describe("AddInvestmentDialog", () => {
         await user.click(screen.getByRole("button", { name: /^etf/i }));
         await screen.findByLabelText(/name \*/i);
         await user.keyboard("{Escape}");
-        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+        );
 
         // Reopen
         await user.click(triggerButton);
@@ -185,4 +207,96 @@ describe("AddInvestmentDialog", () => {
             await screen.findByRole("heading", { name: /choose asset type/i }),
         ).toBeInTheDocument();
     });
+});
+
+describe("investment numeric validation", () => {
+    it("rejects malformed fees before creating a holding, focuses the field, and preserves the purchase", async () => {
+        const create = vi.fn(() => ok({ id: 23 }));
+        server.use(http.post(`${API_BASE}/api/investments`, create));
+        const user = userEvent.setup();
+        renderWithApp(<AddInvestmentDialog allowedAssetClasses={["etf"]} />);
+        await user.click(
+            await screen.findByRole("button", { name: /add investment/i }),
+        );
+        await user.type(await screen.findByLabelText(/name \*/i), "Test ETF");
+        await user.type(screen.getByLabelText(/total cost/i), "100");
+        await user.type(screen.getByLabelText(/^units/i), "2");
+        const fees = screen.getByLabelText(/fees/i);
+        await user.type(fees, "abc");
+        await user.click(screen.getByRole("button", { name: /^add$/i }));
+        expect(fees).toHaveAttribute("aria-invalid", "true");
+        expect(fees).toHaveFocus();
+        expect(screen.getByLabelText(/total cost/i)).toHaveValue("100");
+        expect(create).not.toHaveBeenCalled();
+        await user.clear(fees);
+        await user.type(fees, "0");
+        await user.click(screen.getByRole("button", { name: /^add$/i }));
+        await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+        await waitFor(() =>
+            expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+        );
+    });
+
+    it("requires both editable initial purchase values without suggesting a read-only price input", async () => {
+        const create = vi.fn(() => ok({ id: 23 }));
+        server.use(http.post(`${API_BASE}/api/investments`, create));
+        const user = userEvent.setup();
+        renderWithApp(<AddInvestmentDialog allowedAssetClasses={["etf"]} />);
+        await user.click(
+            await screen.findByRole("button", { name: /add investment/i }),
+        );
+        await user.type(await screen.findByLabelText(/name \*/i), "Test ETF");
+        await user.type(screen.getByLabelText(/total cost/i), "100");
+        await user.click(screen.getByRole("button", { name: /^add$/i }));
+        const units = screen.getByLabelText(/^units/i);
+        expect(units).toHaveAttribute("aria-required", "true");
+        expect(units).toHaveAttribute("aria-invalid", "true");
+        expect(units).toHaveFocus();
+        expect(create).not.toHaveBeenCalled();
+    });
+
+    it("rejects malformed optional interest instead of saving zero", async () => {
+        const create = vi.fn(() => ok({ id: 23 }));
+        server.use(http.post(`${API_BASE}/api/investments`, create));
+        const user = userEvent.setup();
+        renderWithApp(
+            <AddInvestmentDialog allowedAssetClasses={["savings"]} />,
+        );
+        await user.click(
+            await screen.findByRole("button", { name: /add investment/i }),
+        );
+        await user.type(await screen.findByLabelText(/name \*/i), "Savings");
+        await user.click(screen.getByRole("switch"));
+        const rate = screen.getByLabelText(/interest rate/i);
+        await user.type(rate, "abc");
+        await user.click(screen.getByRole("button", { name: /^add$/i }));
+        expect(rate).toHaveAttribute("aria-invalid", "true");
+        expect(rate).toHaveFocus();
+        expect(create).not.toHaveBeenCalled();
+    });
+    it.each([/cadastral income/i, /municipal tax rate/i])(
+        "rejects malformed property numbers in %s",
+        async (label) => {
+            const create = vi.fn(() => ok({ id: 23 }));
+            server.use(http.post(`${API_BASE}/api/investments`, create));
+            const user = userEvent.setup();
+            renderWithApp(
+                <AddInvestmentDialog allowedAssetClasses={["real_estate"]} />,
+            );
+            await user.click(
+                await screen.findByRole("button", { name: /add investment/i }),
+            );
+            await user.type(
+                await screen.findByLabelText(/name \*/i),
+                "Property",
+            );
+            await user.click(screen.getByRole("switch"));
+            const field = screen.getByLabelText(label);
+            await user.type(field, "abc");
+            await user.click(screen.getByRole("button", { name: /^add$/i }));
+            expect(field).toHaveAttribute("aria-invalid", "true");
+            expect(field).toHaveFocus();
+            expect(create).not.toHaveBeenCalled();
+        },
+    );
 });

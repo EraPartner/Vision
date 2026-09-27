@@ -126,6 +126,11 @@ export function AddToWatchlistDialog({
         setAssetClass(detectAssetClass(result.type));
     };
 
+    const previewTarget = parseDecimal(
+        targetPrice,
+        appSettings.numberFormat,
+        NaN,
+    );
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedAsset || !targetPrice) return;
@@ -378,21 +383,16 @@ export function AddToWatchlistDialog({
                                 {quoteData &&
                                     Number.isFinite(quoteData.price) &&
                                     quoteData.price > 0 &&
-                                    targetPrice && (
+                                    Number.isFinite(previewTarget) &&
+                                    previewTarget > 0 && (
                                         <p className="text-xs text-muted-foreground">
-                                            {parseDecimal(
-                                                targetPrice,
-                                                appSettings.numberFormat,
-                                            ) < quoteData.price
+                                            {previewTarget < quoteData.price
                                                 ? t(
                                                       "addWatchlist.belowCurrent",
                                                       {
                                                           n: formatPercent(
                                                               (1 -
-                                                                  parseDecimal(
-                                                                      targetPrice,
-                                                                      appSettings.numberFormat,
-                                                                  ) /
+                                                                  previewTarget /
                                                                       quoteData.price) *
                                                                   100,
                                                               { digits: 1 },
@@ -403,10 +403,7 @@ export function AddToWatchlistDialog({
                                                       "addWatchlist.aboveCurrent",
                                                       {
                                                           n: formatPercent(
-                                                              (parseDecimal(
-                                                                  targetPrice,
-                                                                  appSettings.numberFormat,
-                                                              ) /
+                                                              (previewTarget /
                                                                   quoteData.price -
                                                                   1) *
                                                                   100,

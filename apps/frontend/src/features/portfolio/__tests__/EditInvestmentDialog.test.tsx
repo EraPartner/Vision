@@ -6,7 +6,7 @@ import { http } from "msw";
 import { toast } from "sonner";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { err } from "@/test/msw/handlers";
+import { err, ok } from "@/test/msw/handlers";
 import { EditInvestmentDialog } from "@/features/portfolio/EditInvestmentDialog";
 import type { InvestmentSummary } from "@/types/portfolio";
 
@@ -73,15 +73,23 @@ describe("EditInvestmentDialog", () => {
         // The editor must show/save the native one — otherwise a save overwrites
         // the real currency with the display currency.
         const user = userEvent.setup();
-        const foreign: InvestmentSummary = { ...INVESTMENT, currency: "EUR", originalCurrency: "USD" };
+        const foreign: InvestmentSummary = {
+            ...INVESTMENT,
+            currency: "EUR",
+            originalCurrency: "USD",
+        };
         renderWithApp(<EditInvestmentDialog investment={foreign} />);
 
-        await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /^edit$/i }),
+        );
         await screen.findByRole("dialog");
 
         // The currency field's displayed value is the native USD, not the EUR
         // display currency.
-        const currencyField = screen.getByRole("combobox", { name: /currency/i });
+        const currencyField = screen.getByRole("combobox", {
+            name: /currency/i,
+        });
         expect(currencyField).toHaveTextContent("USD");
         expect(currencyField).not.toHaveTextContent("EUR");
     });
@@ -92,7 +100,9 @@ describe("EditInvestmentDialog", () => {
         renderWithApp(<EditInvestmentDialog investment={INVESTMENT} />);
 
         // Act
-        await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /^edit$/i }),
+        );
 
         // Assert
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
@@ -104,7 +114,9 @@ describe("EditInvestmentDialog", () => {
         renderWithApp(<EditInvestmentDialog investment={INVESTMENT} />);
 
         // Act
-        await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /^edit$/i }),
+        );
         await screen.findByRole("dialog");
 
         // Assert
@@ -117,7 +129,9 @@ describe("EditInvestmentDialog", () => {
         renderWithApp(<EditInvestmentDialog investment={INVESTMENT} />);
 
         // Act
-        await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /^edit$/i }),
+        );
         await screen.findByRole("dialog");
 
         // Assert — symbol field is pre-populated for ETF (unit-based)
@@ -130,7 +144,9 @@ describe("EditInvestmentDialog", () => {
         renderWithApp(<EditInvestmentDialog investment={INVESTMENT} />);
 
         // Act
-        await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /^edit$/i }),
+        );
         await screen.findByRole("dialog");
         await user.click(screen.getByRole("button", { name: /^save$/i }));
 
@@ -146,7 +162,9 @@ describe("EditInvestmentDialog", () => {
         renderWithApp(<EditInvestmentDialog investment={INVESTMENT} />);
 
         // Act — open, clear symbol, submit
-        await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /^edit$/i }),
+        );
         await screen.findByRole("dialog");
 
         const symbolInput = screen.getByDisplayValue("IWDA");
@@ -165,7 +183,9 @@ describe("EditInvestmentDialog", () => {
         const user = userEvent.setup();
         renderWithApp(<EditInvestmentDialog investment={INVESTMENT} />);
 
-        await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /^edit$/i }),
+        );
         await screen.findByRole("dialog");
 
         // `required` on the input blocks a truly EMPTY submit natively, but
@@ -177,7 +197,9 @@ describe("EditInvestmentDialog", () => {
         await user.click(screen.getByRole("button", { name: /^save$/i }));
 
         // Dialog stays open and the user gets explicit feedback.
-        await waitFor(() => expect(toastError).toHaveBeenCalledWith("Name is required"));
+        await waitFor(() =>
+            expect(toastError).toHaveBeenCalledWith("Name is required"),
+        );
         expect(screen.getByRole("dialog")).toBeInTheDocument();
     });
 
@@ -187,7 +209,9 @@ describe("EditInvestmentDialog", () => {
         renderWithApp(<EditInvestmentDialog investment={INVESTMENT} />);
 
         // Act
-        await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /^edit$/i }),
+        );
         await screen.findByRole("dialog");
         await user.click(screen.getByRole("button", { name: /^cancel$/i }));
 
@@ -200,13 +224,17 @@ describe("EditInvestmentDialog", () => {
     it("submit error keeps dialog open", async () => {
         // Arrange
         server.use(
-            http.patch(`${API_BASE}/api/investments/:id`, () => err(500, "fail")),
+            http.patch(`${API_BASE}/api/investments/:id`, () =>
+                err(500, "fail"),
+            ),
         );
         const user = userEvent.setup();
         renderWithApp(<EditInvestmentDialog investment={INVESTMENT} />);
 
         // Act
-        await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /^edit$/i }),
+        );
         await screen.findByRole("dialog");
         await user.click(screen.getByRole("button", { name: /^save$/i }));
 
@@ -222,7 +250,9 @@ describe("EditInvestmentDialog", () => {
         renderWithApp(<EditInvestmentDialog investment={INVESTMENT} />);
 
         // Act
-        await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /^edit$/i }),
+        );
         await screen.findByRole("dialog");
         await user.keyboard("{Escape}");
 
@@ -244,13 +274,17 @@ describe("EditInvestmentDialog", () => {
         renderWithApp(<EditInvestmentDialog investment={INVESTMENT} />);
 
         // Act — rename, then lose the dialog to a stray click
-        await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /^edit$/i }),
+        );
         await screen.findByRole("dialog");
         const nameInput = screen.getByDisplayValue("MSCI World ETF");
         await user.clear(nameInput);
         await user.type(nameInput, "World Equity");
         await user.click(overlay());
-        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+        );
         await user.click(screen.getByRole("button", { name: /^edit$/i }));
 
         // Assert — the rename survived
@@ -261,25 +295,38 @@ describe("EditInvestmentDialog", () => {
     it("re-seeds from the investment when opened for a different one", async () => {
         // Arrange
         const user = userEvent.setup();
-        const { rerender } = renderWithApp(<EditInvestmentDialog investment={INVESTMENT} />);
+        const { rerender } = renderWithApp(
+            <EditInvestmentDialog investment={INVESTMENT} />,
+        );
 
         // Act — dirty the form, dismiss, then point this instance at another holding
-        await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /^edit$/i }),
+        );
         await screen.findByRole("dialog");
         const nameInput = screen.getByDisplayValue("MSCI World ETF");
         await user.clear(nameInput);
         await user.type(nameInput, "World Equity");
         await user.click(overlay());
-        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+        );
 
-        const other: InvestmentSummary = { ...INVESTMENT, id: 99, name: "Gold ETC", symbol: "SGLN" };
+        const other: InvestmentSummary = {
+            ...INVESTMENT,
+            id: 99,
+            name: "Gold ETC",
+            symbol: "SGLN",
+        };
         rerender(<EditInvestmentDialog investment={other} />);
         await user.click(screen.getByRole("button", { name: /^edit$/i }));
 
         // Assert — keeping input must never mean editing the wrong holding
         await screen.findByRole("dialog");
         expect(screen.getByDisplayValue("Gold ETC")).toBeInTheDocument();
-        expect(screen.queryByDisplayValue("World Equity")).not.toBeInTheDocument();
+        expect(
+            screen.queryByDisplayValue("World Equity"),
+        ).not.toBeInTheDocument();
     });
 
     // ─── Edge cases ────────────────────────────────────────────────────────
@@ -287,7 +334,9 @@ describe("EditInvestmentDialog", () => {
     it("dialog renders in open state (a11y / backdrop guard)", async () => {
         const user = userEvent.setup();
         renderWithApp(<EditInvestmentDialog investment={INVESTMENT} />);
-        await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /^edit$/i }),
+        );
         const dialog = await screen.findByRole("dialog");
         expect(dialog).toHaveAttribute("data-state", "open");
     });
@@ -295,9 +344,123 @@ describe("EditInvestmentDialog", () => {
     it("first focusable element exists for keyboard nav", async () => {
         const user = userEvent.setup();
         renderWithApp(<EditInvestmentDialog investment={INVESTMENT} />);
-        await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /^edit$/i }),
+        );
         await screen.findByRole("dialog");
         const inputs = screen.getAllByRole("textbox");
         expect(inputs.length).toBeGreaterThan(0);
+    });
+});
+
+describe("manual price validation", () => {
+    it("keeps invalid text for correction without saving zero and accepts an explicit zero", async () => {
+        const update = vi.fn(async ({ request }: { request: Request }) => {
+            const body = await request.json();
+            expect(body.current_price).toBe(0);
+            return new Response(
+                JSON.stringify({ data: { ...INVESTMENT, ...body } }),
+                { headers: { "Content-Type": "application/json" } },
+            );
+        });
+        server.use(http.patch(`${API_BASE}/api/investments/:id`, update));
+        const user = userEvent.setup();
+        renderWithApp(
+            <EditInvestmentDialog
+                investment={{ ...INVESTMENT, price_provider: "manual" }}
+            />,
+        );
+        await user.click(
+            await screen.findByRole("button", { name: /^edit$/i }),
+        );
+        const price = await screen.findByLabelText(/current price/i);
+        await user.clear(price);
+        await user.type(price, "abc");
+        await user.click(screen.getByRole("button", { name: /^save$/i }));
+        expect(price).toHaveAttribute("aria-invalid", "true");
+        expect(price).toHaveFocus();
+        expect(price).toHaveValue("abc");
+        expect(update).not.toHaveBeenCalled();
+        await user.clear(price);
+        await user.type(price, "0");
+        expect(price).toHaveAttribute("aria-invalid", "false");
+        await user.click(screen.getByRole("button", { name: /^save$/i }));
+        await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+        await waitFor(() =>
+            expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+        );
+    });
+    it("saves European decimal prices without changing their magnitude", async () => {
+        let payload: Record<string, unknown> | undefined;
+        server.use(
+            http.get(`${API_BASE}/api/settings`, () =>
+                ok({ app_settings: { numberFormat: "eu" } }),
+            ),
+            http.patch(
+                `${API_BASE}/api/investments/:id`,
+                async ({ request }) => {
+                    payload = (await request.json()) as Record<string, unknown>;
+                    return ok({ ...INVESTMENT, ...payload });
+                },
+            ),
+        );
+        const user = userEvent.setup();
+        renderWithApp(
+            <EditInvestmentDialog
+                investment={{ ...INVESTMENT, price_provider: "manual" }}
+            />,
+        );
+        await user.click(
+            await screen.findByRole("button", { name: /^edit$/i }),
+        );
+        const price = await screen.findByLabelText(/current price/i);
+        await user.clear(price);
+        await user.type(price, "1.234,56");
+        await user.click(screen.getByRole("button", { name: /^save$/i }));
+        await waitFor(() => expect(payload?.current_price).toBe(1234.56));
+        await waitFor(() =>
+            expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+        );
+    });
+
+    it("omits a hidden invalid manual price after switching to a price provider", async () => {
+        let payload: Record<string, unknown> | undefined;
+        server.use(
+            http.patch(
+                `${API_BASE}/api/investments/:id`,
+                async ({ request }) => {
+                    payload = (await request.json()) as Record<string, unknown>;
+                    return ok({ ...INVESTMENT, ...payload });
+                },
+            ),
+        );
+        const user = userEvent.setup();
+        renderWithApp(
+            <EditInvestmentDialog
+                investment={{ ...INVESTMENT, price_provider: "manual" }}
+            />,
+        );
+        await user.click(
+            await screen.findByRole("button", { name: /^edit$/i }),
+        );
+        const price = await screen.findByLabelText(/current price/i);
+        await user.clear(price);
+        await user.type(price, "abc");
+        await user.click(screen.getByRole("button", { name: /^save$/i }));
+        expect(price).toHaveAttribute("aria-invalid", "true");
+        expect(payload).toBeUndefined();
+        await user.click(
+            screen.getByRole("combobox", { name: /price provider/i }),
+        );
+        await user.click(await screen.findByRole("option", { name: /yahoo/i }));
+        expect(
+            screen.queryByLabelText(/current price/i),
+        ).not.toBeInTheDocument();
+        await user.click(screen.getByRole("button", { name: /^save$/i }));
+        await waitFor(() => expect(payload?.price_provider).toBe("yahoo"));
+        expect(payload).not.toHaveProperty("current_price");
+        await waitFor(() =>
+            expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+        );
     });
 });

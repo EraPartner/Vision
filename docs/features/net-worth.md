@@ -2,8 +2,8 @@
 title: Net Worth Feature
 type: feature
 status: active
-date: 2026-06-20
-updated: 2026-09-08
+date: 2026-09-27
+updated: 2026-09-27
 tags:
   [
     feature,
@@ -197,6 +197,11 @@ runningInvested     = sum of `buy` transaction amounts (converted to target curr
                       minus `sell` amounts
 cumulativeAppreciation = sum of `appreciation` transaction amounts
 ```
+
+The transaction form labels appreciation as **Increase in value**. Enter the change since the
+last recorded value, not the property's full valuation. For example, a property recorded at
+300,000 with a new value of 315,000 needs an appreciation amount of 15,000. See
+[[docs/features/portfolio#Editing Portfolio Transactions|Portfolio transaction forms]].
 
 **Legacy fallback:** If an investment has no buy transactions but has `current_price` set and the current day is on or after `active_from`, the snapshot uses `current_price` (converted). This preserves display for manually-entered investments without seed transactions.
 

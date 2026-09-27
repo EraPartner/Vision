@@ -1,6 +1,12 @@
+import { PageError } from "@/components/shared/PageError";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+    Tooltip,
+    TooltipTrigger,
+    TooltipContent,
+} from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -31,11 +37,6 @@ import {
 } from "@/features/research/useWatchlistData";
 import { PageShell } from "@/components/shared/PageShell";
 import { TextLink } from "@/components/shared/TextLink";
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipTrigger,
-} from "@/components/ui/tooltip";
 
 const ASSET_CLASS_COLORS: Record<string, string> = {
     stock: "bg-chart-3/10 text-chart-3 border-chart-3/20",
@@ -50,12 +51,10 @@ export default function WatchlistPage() {
     const { appSettings } = useAppSettings();
     const isOnline = useOnlineStatus();
     const [addDialogOpen, setAddDialogOpen] = useState(false);
-    const [selectedItemId, setSelectedItemId] = useState<number | null>(
-        null,
-    );
+    const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
     const { confirm, ConfirmDialog } = useConfirmDialog();
 
-    const { data, isLoading } = useWatchlist();
+    const { data, isLoading, error: loadError, refetch } = useWatchlist();
     const selectedItem =
         data?.items.find((item) => item.id === selectedItemId) ?? null;
 
@@ -118,7 +117,18 @@ export default function WatchlistPage() {
                 </div>
             )}
 
-            {isLoading ? (
+            {loadError && data && (
+                <PageError
+                    message={t("common.loadFailedRetry")}
+                    onRetry={() => void refetch()}
+                />
+            )}
+            {loadError && !data ? (
+                <PageError
+                    message={t("common.loadFailedRetry")}
+                    onRetry={() => void refetch()}
+                />
+            ) : isLoading ? (
                 <div
                     {...loadingSurfaceProps}
                     className="grid gap-4 md:grid-cols-2 lg:grid-cols-3"
@@ -340,6 +350,7 @@ export default function WatchlistPage() {
                                         <Button
                                             variant="ghost"
                                             size="sm"
+                                            aria-label={`${t("watchlist.openChart")}: ${item.name} (${item.symbol})`}
                                             onClick={() =>
                                                 setSelectedItemId(item.id)
                                             }
@@ -347,19 +358,22 @@ export default function WatchlistPage() {
                                             <LineChart className="mr-2 h-4 w-4" />
                                             {t("watchlist.openChart")}
                                         </Button>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="icon-touch-target text-muted-foreground hover:text-destructive"
-                                            aria-label={t(
-                                                "aria.removeFromWatchlist",
-                                            )}
-                                            onClick={() =>
-                                                void handleRemove(item)
-                                            }
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="icon-touch-target text-muted-foreground hover:text-destructive"
+                                                    aria-label={`${t("aria.removeFromWatchlist")}: ${item.name} (${item.symbol})`}
+                                                    onClick={() =>
+                                                        void handleRemove(item)
+                                                    }
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent>{`${t("aria.removeFromWatchlist")}: ${item.name} (${item.symbol})`}</TooltipContent>
+                                        </Tooltip>
                                     </div>
                                 </CardContent>
                             </Card>

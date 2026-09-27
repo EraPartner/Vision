@@ -53,6 +53,9 @@ export function BrokerTransferDialog({ account, open, onOpenChange }: Props) {
         mutationFn: async () => {
             const data = preview.data;
             if (
+                accountsQuery.isPending ||
+                accountsQuery.isError ||
+                !accountsQuery.data ||
                 !data ||
                 data.eligible_count === 0 ||
                 data.eligible_count > data.limit ||
@@ -99,6 +102,9 @@ export function BrokerTransferDialog({ account, open, onOpenChange }: Props) {
         preview.data.eligible_count > preview.data.limit;
     const disabled =
         !destination ||
+        accountsQuery.isPending ||
+        accountsQuery.isError ||
+        !accountsQuery.data ||
         preview.isLoading ||
         preview.isError ||
         !preview.data ||
@@ -142,13 +148,43 @@ export function BrokerTransferDialog({ account, open, onOpenChange }: Props) {
                         {t("portfolio.brokerTransfer.loading")}
                     </div>
                 ) : preview.isError ? (
-                    <p className="text-sm text-warning" role="alert">
-                        {t("portfolio.brokerTransfer.unavailable")}
-                    </p>
+                    <div
+                        className="space-y-2 text-sm text-warning"
+                        role="alert"
+                    >
+                        <p>{t("portfolio.brokerTransfer.unavailable")}</p>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={preview.isFetching}
+                            onClick={() => void preview.refetch()}
+                        >
+                            {t("common.retry")}
+                        </Button>
+                    </div>
                 ) : preview.data?.eligible_count === 0 ? (
                     <p className="text-sm text-muted-foreground">
                         {t("portfolio.brokerTransfer.empty")}
                     </p>
+                ) : accountsQuery.isPending ? (
+                    <p role="status" className="text-sm text-muted-foreground">
+                        {t("portfolio.brokerTransfer.accountsLoading")}
+                    </p>
+                ) : accountsQuery.isError ? (
+                    <div
+                        role="alert"
+                        className="space-y-2 text-sm text-warning"
+                    >
+                        <p>{t("portfolio.brokerTransfer.accountsFailed")}</p>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={accountsQuery.isFetching}
+                            onClick={() => void accountsQuery.refetch()}
+                        >
+                            {t("common.retry")}
+                        </Button>
+                    </div>
                 ) : (
                     <>
                         <PortfolioLotRetagChoice

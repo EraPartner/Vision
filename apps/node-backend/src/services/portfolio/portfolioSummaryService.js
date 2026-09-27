@@ -87,18 +87,23 @@ async function resolveCostBasisMethod() {
  * summaries plus aggregated totals — all pre-converted to targetCurrency.
  *
  * @param {string} targetCurrency
- * @param {{ throughDate?: string, activeInvestmentsOnly?: boolean }} [options]
+ * @param {{ throughDate?: string, activeInvestmentsOnly?: boolean, includeBrokerSnapshotParity?: boolean }} [options]
  * @returns {Promise<{
  *   currency: string,
  *   computed_at: string,
  *   totals: ReturnType<typeof aggregateTotals>,
  *   summaries: ReturnType<typeof buildInvestmentSummary>['summary'][],
  *   byAccount: ReturnType<typeof aggregateByAccount>,
+ *   brokerSnapshotParity?: { totalValue: string, partitionValue: string },
  * }>}
  */
 export async function getPortfolioSummary(
   targetCurrency = "EUR",
-  { throughDate = undefined, activeInvestmentsOnly = true } = {},
+  {
+    throughDate = undefined,
+    activeInvestmentsOnly = true,
+    includeBrokerSnapshotParity = false,
+  } = {},
 ) {
   const target = (targetCurrency || "EUR").toUpperCase();
 
@@ -196,6 +201,22 @@ export async function getPortfolioSummary(
     totals,
     summaries,
     byAccount,
+    // Snapshot parity must compare the same unrounded valuation tracks. Public
+    // totals sum individually rounded investments; account rows round once.
+    ...(includeBrokerSnapshotParity
+      ? {
+          brokerSnapshotParity: {
+            totalValue: addAll(
+              perInvestment.map((r) => r.unroundedCurrentValue),
+            ).toString(),
+            partitionValue: addAll(
+              perInvestment.flatMap((r) =>
+                r.accountContributions.map((c) => c.currentValue),
+              ),
+            ).toString(),
+          },
+        }
+      : {}),
   };
 }
 
@@ -359,7 +380,7 @@ function annotateTransactionFxMultipliers(
  * @param {string} targetCurrency
  * @param {Map<string, number>} multiplierByCurrency  FX multiplier per currency
  * @param {{ costBasisMethod: CostBasisMethod, todayYmd: string }} opts
- * @returns {{ summary: Record<string, any>, accountContributions: AccountContribution[] }}
+ * @returns {{ summary: Record<string, any>, accountContributions: AccountContribution[], unroundedCurrentValue: Decimal }}
  */
 function buildInvestmentSummary(
   inv,
@@ -498,7 +519,11 @@ function buildInvestmentSummary(
     byAccount: aggregateByAccount(accountContributions),
   };
 
-  return { summary, accountContributions };
+  return {
+    summary,
+    accountContributions,
+    unroundedCurrentValue: convertedCurrentValue,
+  };
 }
 
 /**

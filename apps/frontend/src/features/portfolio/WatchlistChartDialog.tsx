@@ -8,6 +8,11 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import {
+    Tooltip,
+    TooltipTrigger,
+    TooltipContent,
+} from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -184,9 +189,8 @@ export function WatchlistChartDialog({
                                 >
                                     <Input
                                         id="watchlist-target-price"
-                                        aria-label={t(
-                                            "watchlistChart.targetPrice",
-                                        )}
+                                        autoFocus
+                                        aria-label={`${t("watchlistChart.targetPrice")}: ${item.name} (${item.symbol})`}
                                         type="text"
                                         inputMode="decimal"
                                         value={newTargetPrice}
@@ -220,22 +224,32 @@ export function WatchlistChartDialog({
                                     </Button>
                                 </form>
                             ) : (
-                                <button
-                                    onClick={() => {
-                                        setNewTargetPrice(
-                                            formatEditableNumber(
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <button
+                                            type="button"
+                                            aria-label={`${t("common.edit")}: ${t("watchlistChart.targetPrice")}, ${item.name} (${item.symbol}), ${formatDisplayCurrency(targetPrice, { currency: item.currency })}`}
+                                            onClick={() => {
+                                                setNewTargetPrice(
+                                                    formatEditableNumber(
+                                                        targetPrice,
+                                                        appSettings.numberFormat,
+                                                    ),
+                                                );
+                                                setEditingPrice(true);
+                                            }}
+                                            className="rounded-sm text-2xl font-bold text-primary hover:underline text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                        >
+                                            {formatDisplayCurrency(
                                                 targetPrice,
-                                                appSettings.numberFormat,
-                                            ),
-                                        );
-                                        setEditingPrice(true);
-                                    }}
-                                    className="text-2xl font-bold text-primary hover:underline text-left"
-                                >
-                                    {formatDisplayCurrency(targetPrice, {
-                                        currency: item.currency,
-                                    })}
-                                </button>
+                                                {
+                                                    currency: item.currency,
+                                                },
+                                            )}
+                                        </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>{`${t("common.edit")}: ${t("watchlistChart.targetPrice")}, ${item.name} (${item.symbol})`}</TooltipContent>
+                                </Tooltip>
                             )}
                         </div>
 

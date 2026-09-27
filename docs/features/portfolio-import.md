@@ -374,8 +374,20 @@ Portfolio CSV Import is accessible under **Portfolio → Tools → Import portfo
 
 | Page                        | Route                               | Purpose                                                             |
 | --------------------------- | ----------------------------------- | ------------------------------------------------------------------- |
-| `PortfolioImportPage`       | `/portfolio/import`                 | Column mapper, file upload, parser picker, brokerage account picker |
-| `PortfolioImportReviewPage` | `/portfolio/import/review/:batchId` | Investment resolution for unmatched rows                            |
+| `PortfolioImportPage`       | `/portfolio/import`                 | File-first upload, progressive column mapping, parser and brokerage account pickers |
+| `PortfolioImportReviewPage` | `/portfolio/import/:batchId/review` | Investment resolution for unmatched rows                            |
+
+### Upload and mapping layout
+
+The upload page starts with the CSV dropzone and parser picker. Custom column mappings appear
+only after a file is selected. **CSV format options** keeps delimiter, date and number formats,
+encoding, and skipped-row settings in a collapsed disclosure; the parser choice remains visible.
+
+The mapper shows eight core columns: date, transaction type, symbol, name, units, price, amount,
+and currency. Fees, taxes, exchange rate, and note are available under **Additional columns**.
+Defaults and transaction-type value mapping remain available alongside the core mappings.
+**Save this setup for reuse** separately expands the saved-parser controls. These disclosures
+change presentation only; they preserve the configured values and import validation.
 
 ### Atomic group resolution
 
@@ -402,7 +414,7 @@ See [[docs/api/portfolio-imports#POST /api/portfolio/import/batches/:id/rows/inv
 
 | Component                  | Purpose                                                                 |
 | -------------------------- | ----------------------------------------------------------------------- |
-| `PortfolioCsvColumnMapper` | Maps CSV columns to portfolio fields; shows `FileHeadersPanel` preview  |
+| `PortfolioCsvColumnMapper` | Maps core and additional CSV columns; the parent page owns the preview  |
 | `InvestmentCombobox`       | Searchable combobox for picking or creating an investment during review |
 
 ### i18n
@@ -413,7 +425,11 @@ New `portfolioImport.*` keys in `i18n/source/en.json` and `i18n/source/nl.json`.
 
 ## FileHeadersPanel Integration
 
-`PortfolioCsvColumnMapper` uses the shared `FileHeadersPanel` component (added alongside this feature) to show CSV column names and sample rows as soon as a file is selected, before any mapping is attempted. This is the same panel now shown in `TransactionImportCard` for budgeting imports. See [[docs/features/import#file-headers-preview-panel|Import Feature — FileHeadersPanel]].
+`PortfolioImportPage` owns the shared `FileHeadersPanel` above the parser controls. After a file
+is selected, the panel offers its column names and sample rows in a collapsed preview and
+highlights mapped columns. `PortfolioCsvColumnMapper` reads the same preview data to populate its
+mapping controls. The budgeting `TransactionImportCard` uses the same panel. See
+[[docs/features/import#file-headers-preview-panel|Import Feature — FileHeadersPanel]].
 
 ---
 

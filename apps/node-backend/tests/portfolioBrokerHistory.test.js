@@ -72,6 +72,34 @@ describe("forward-only broker snapshots", () => {
     ).toBe(false);
   });
 
+  it("rejects an unrounded partition defect even when displayed totals match", async () => {
+    query.mockResolvedValueOnce({
+      rows: [{ relation: "portfolio_broker_snapshots" }],
+    });
+    await expect(
+      __storeCurrentBrokerSnapshot("EUR", {
+        totals: { totalPortfolioValue: 10 },
+        byAccount: [
+          {
+            account_id: null,
+            currentValue: 10,
+            totalInvested: 10,
+            gainLoss: 0,
+          },
+        ],
+        brokerSnapshotParity: {
+          totalValue: "10.004",
+          partitionValue: "10.001",
+        },
+      }),
+    ).rejects.toThrow("parity failed");
+    expect(
+      query.mock.calls.some(([sql]) =>
+        sql.includes("DELETE FROM portfolio_broker_snapshots"),
+      ),
+    ).toBe(false);
+  });
+
   it("reads the frozen snapshot identity rather than resolving current account tags", async () => {
     query
       .mockResolvedValueOnce({

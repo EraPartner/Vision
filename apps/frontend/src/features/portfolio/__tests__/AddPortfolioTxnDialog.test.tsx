@@ -79,6 +79,82 @@ describe("AddPortfolioTxnDialog", () => {
         vi.restoreAllMocks();
     });
 
+    it.each(["real_estate", "savings"] as const)(
+        "accepts amount-only purchases for %s without unit guidance",
+        async (assetClass) => {
+            const user = userEvent.setup();
+            let posted: Record<string, unknown> | undefined;
+            server.use(
+                http.post(
+                    `${API_BASE}/api/investments/1/transactions`,
+                    async ({ request }) => {
+                        posted = (await request.json()) as Record<
+                            string,
+                            unknown
+                        >;
+                        return ok(PORTFOLIO_TXN_STUB);
+                    },
+                ),
+            );
+            renderWithApp(
+                <AddPortfolioTxnDialog
+                    investment={{
+                        ...INVESTMENT,
+                        assetClass,
+                        asset_class: assetClass,
+                    }}
+                />,
+            );
+            await user.click(
+                await screen.findByRole("button", { name: /add transaction/i }),
+            );
+            expect(screen.queryByLabelText(/units/i)).not.toBeInTheDocument();
+            expect(
+                screen.queryByText(/enter any two/i),
+            ).not.toBeInTheDocument();
+            await user.click(screen.getByRole("button", { name: /record/i }));
+            const amount = screen.getByLabelText(/total amount/i);
+            expect(amount).toHaveAttribute("aria-invalid", "true");
+            expect(screen.getByText(/amount is required/i)).toBeInTheDocument();
+            await user.type(amount, "1250");
+            await user.click(screen.getByRole("button", { name: /record/i }));
+            await waitFor(() =>
+                expect(posted).toMatchObject({ amount: 1250, type: "buy" }),
+            );
+            expect(posted).not.toHaveProperty("units");
+            expect(posted).not.toHaveProperty("price_per_unit");
+        },
+    );
+
+    it("explains appreciation as an increase rather than the full property value", async () => {
+        const user = userEvent.setup();
+        renderWithApp(
+            <AddPortfolioTxnDialog
+                investment={{
+                    ...INVESTMENT,
+                    assetClass: "real_estate",
+                    asset_class: "real_estate",
+                }}
+            />,
+        );
+        await user.click(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        );
+        await user.click(screen.getAllByRole("combobox")[0]);
+        await user.click(
+            await screen.findByRole("option", { name: /appreciation/i }),
+        );
+        const amount = screen.getByLabelText(/increase in value/i);
+        expect(amount).toHaveAccessibleDescription(
+            /increase since the last recorded value.*not the property.s total value/i,
+        );
+        await user.click(screen.getByRole("button", { name: /record/i }));
+        expect(amount).toHaveAttribute("aria-invalid", "true");
+        expect(amount).toHaveAccessibleDescription(
+            /amount is required.*increase since/i,
+        );
+    });
+
     it("renders trigger button", async () => {
         // Arrange + Act
         renderWithApp(<AddPortfolioTxnDialog investment={INVESTMENT} />);

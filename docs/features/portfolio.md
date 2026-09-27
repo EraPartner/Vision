@@ -194,7 +194,9 @@ POST /api/investments/:id/transactions
 
 ### Editing Portfolio Transactions
 
-Portfolio transaction edits are supported via a dedicated edit modal.
+Portfolio transaction edits are supported via a dedicated edit modal. In an investment's
+transaction history, edit and delete controls identify the transaction type and date and show
+that context in keyboard-focus tooltips.
 
 Rules:
 
@@ -202,6 +204,8 @@ Rules:
 - All other transaction fields are editable, including date, amount/unit/price inputs, fees/taxes, note, and recurring settings.
 - `fx_rate_to_eur` is editable as an optional field in the transaction dialogs.
 - Unit-based buy/sell edit math keeps the same 2-of-3 pricing normalization rules as create.
+- Real-estate and savings/bond buy/sell forms use the amount directly. They do not require hidden unit or price inputs or display the unit-based 2-of-3 guidance.
+- Appreciation uses **Increase in value**, with help explaining that the amount is the change since the last recorded value. It is added to the existing property value, not treated as a replacement valuation; see [[docs/features/net-worth#Non-Unit Asset Valuation Formulas (2026-05-18, ADR-061)|Net Worth]].
 - Unit-based `sell` validation enforces holdings sufficiency on both create and update (oversell transactions are rejected).
 - `updated_at` captures edit timestamps.
 - Migration compatibility: when `portfolio_transactions` is a compatibility view in inherited schemas, migration `0016_add_fx_rate_to_portfolio_transactions` guards `ALTER TABLE` by relation kind (`r`/`p` only), while preserving the view recreation path for `relkind='v'` ([[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]], [[docs/guides/deployment|Deployment Guide]]).
@@ -504,9 +508,14 @@ Code links: [[apps/frontend/src/hooks/useOnlineStatus.ts]], [[apps/frontend/src/
 
 Migration 0109 starts an empty `portfolio_broker_snapshots` history. Each snapshot run appends or
 atomically replaces only the current application date from the canonical `byAccount` summary. The
-writer keeps an explicit Unassigned partition, verifies that broker values sum to the global value,
-and copies account identity into the row so later retagging or renaming does not rewrite recorded
-history. It never backfills earlier dates and does not expose the dormant replay-based
+writer keeps an explicit Unassigned partition and verifies the global value against the account
+contributions before replacing rows. This check uses unrounded valuations, with the difference
+rounded to six decimal places, so accumulated display rounding cannot reject a valid snapshot.
+A real partition mismatch still aborts the write. Public totals sum individually rounded
+investments while account values round their aggregated contributions; displayed sums can therefore
+differ by a few cents without a valuation mismatch. The stored broker values retain their existing
+rounding. The writer copies account identity into the row so later retagging or renaming does not
+rewrite recorded history. It never backfills earlier dates and does not expose the dormant replay-based
 `portfolio_snapshot_accounts` table.
 
 `GET /api/info/portfolio-performance/by-broker` supplies the Performance page's per-broker area
@@ -1061,7 +1070,9 @@ allocation splits.
 ### Saved named plans
 
 Custom allocations can be named, saved, updated, and deleted. They persist as a JSON array under
-the `rebalance_plans` key in the settings store — no DB migration required.
+the `rebalance_plans` key in the settings store — no DB migration required. Allocation and target
+percentage controls identify their row and selected allocation; remove buttons use the same
+context in their accessible names and focus tooltips.
 
 **Plan shape:**
 
@@ -1164,3 +1175,15 @@ See [[docs/api/investments#GET /api/investments/exposure|Investments API]] and
   table without altering the then-variable `investments` relation. The side table remains part of
   the canonical schema after migration 0087. Absent row = visible; downgrade drops the table.
 - `0112_portfolio_exposure_sources.py` — Adds explicit classifications and one validated fund-holdings document per investment for ADR-150 look-through exposure (**authored, not applied to user data in this session**).
+
+## Overview hierarchy and asset entry
+
+The portfolio summary precedes the exposure breakdown. Add investment is restricted to savings and bonds on Savings, and to real estate on Real Estate, in both populated and empty states.
+
+### Investment form feedback and transfer recovery
+
+Add and Edit investment show linked inline errors for malformed numeric text and focus the first invalid field before any save request. Optional zero values keep their existing meaning. The initial purchase form asks for total cost and, for unit-based assets, units; price per unit is calculated and is not an editable third input. Hidden asset-specific numeric fields and manual prices under another provider are not submitted by Add investment.
+
+Transfer portfolio lots distinguishes account loading and failures from a successfully loaded list. Destination selection and submission wait for account data; a load failure offers Retry. The lot preview also offers Retry on failure. Unassigned remains an explicit choice once the account list loads, and existing transfer limits and receipt behavior are unchanged.
+
+Exposure coverage and holding percentages use the app number-format locale, matching the amounts beside them. Display retains up to two decimal places without padding whole percentages; coverage calculations and visual bar widths remain unchanged.

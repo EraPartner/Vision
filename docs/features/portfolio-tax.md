@@ -2,8 +2,8 @@
 title: Portfolio Tax Feature
 type: feature
 status: active
-date: 2026-05-11
-updated: 2026-09-04
+date: 2026-09-27
+updated: 2026-09-27
 tags: [feature, portfolio, tax, belgian, frontend, investments, audit-2026-05-11, etf-structure, reynders-override, tax-classifications, portfolio-tax-pure-module, decimal-migration, url-state]
 description: Portfolio-level tax tracking with recorded taxes, manual adjustments, per-investment breakdowns, and Belgian tax rule integration. May 2026: Added per-investment ETF structure (accumulating/distributing) and Reynders routing override metadata. 2026-05-29: Portfolio-tax estimators extracted to portfolioTax.ts (pure, tested, Decimal-accumulating); PortfolioTaxPage now calls shared functions instead of inlining math.
 aliases: [portfolio taxation, investment tax, capital gains tax, TOB]
@@ -70,7 +70,7 @@ Uses `useWidgetVisibility` with 7 configurable widgets:
 
 | Widget ID             | Label Key                        | Default | Description                                                                          |
 | --------------------- | -------------------------------- | ------- | ------------------------------------------------------------------------------------ |
-| `summaryCards`        | `tax.widget.summaryCards`        | Visible | 6 KPI cards (taxes, fees, costs, effective rate, total with PIT, manual adjustments) |
+| `summaryCards`        | `tax.widget.summaryCards`        | Visible | 3 primary cost cards and 3 supporting metrics (effective rate, total with PIT, manual adjustments) |
 | `taxByAssetClass`     | `tax.widget.taxByAssetClass`     | Visible | Bar chart of taxes/fees by asset class                                               |
 | `taxTypes`            | `tax.widget.taxTypes`            | Visible | Breakdown by tax type (capital gains, dividend withholding, transaction tax, other)  |
 | `yearlyTaxFeeTrend`   | `tax.widget.yearlyTaxFeeTrend`   | Visible | Monthly stacked bar chart of taxes + fees                                            |
@@ -100,6 +100,13 @@ Per-investment tax classification metadata is now persisted via `usePortfolioTax
 Storage: Settings API key `portfolio_tax_classifications_v1` (JSONB).
 
 ## Manual Tax Adjustments
+
+The dialog groups fields by investment and includes its name in each control's accessible
+label. Taxes and fees stay visible. ETF structure and Reynders options, where applicable,
+are inside a collapsed **Tax treatment** disclosure with their explanatory text. Closing it
+preserves draft values. If a hidden percentage is invalid, validation opens its disclosure
+and focuses the field for correction.
+
 
 ### Hook: usePortfolioTaxAdjustments
 
@@ -238,3 +245,8 @@ The page relies on `usePortfolio()` for investment summaries rather than a dedic
 - [[docs/adr/059-belgian-tax-historical-year-extensions|ADR-059]] — Extends ADR-058 with `YearActionsMenu` (freeze/file/history/export) and `HistoricalYearBanner` filed/frozen modes shared with `/tax`. Portfolio Tax now reads via `displayCalculationForYear`, so filed years surface their as-filed numbers rather than today's live recompute.
 - [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] — Decimal.js monetary arithmetic pattern that `portfolioTax.ts` follows for frontend accumulation
 - [[docs/adr/060-may-2026-monetary-precision-and-deduplication-audit|ADR-060]] — Established `apps/frontend/src/lib/decimal.ts`; `portfolioTax.ts` Decimal usage is consistent with this frontend pattern
+
+
+## Task-focused guidance and hierarchy
+
+Portfolio costs and Tax estimates and assumptions are separate named sections. The three main cost figures retain prominent cards; effective rate, combined personal-income-tax estimate, and manual adjustments remain in a quieter supporting row. Profile inputs and budget estimates sit with Belgian estimates. Duplicate header totals are removed; editing an existing profile is secondary, while first-time setup stays primary. No metrics, widget identifiers, calculation caveats, or historical-year controls are removed.

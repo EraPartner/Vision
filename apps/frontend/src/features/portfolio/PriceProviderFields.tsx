@@ -51,6 +51,7 @@ interface PriceProviderFieldsProps<F extends PriceProviderFormShape> {
     /** Whether the manual current-price input may appear (gated on unit-based). */
     showManualPrice: boolean;
     t: TranslateFn;
+    currentPriceError?: string;
 }
 
 export function PriceProviderFields<F extends PriceProviderFormShape>({
@@ -58,6 +59,7 @@ export function PriceProviderFields<F extends PriceProviderFormShape>({
     form,
     setForm,
     showManualPrice,
+    currentPriceError,
     t,
 }: PriceProviderFieldsProps<F>) {
     const priceProviders = usePriceProviderCatalog(t);
@@ -130,6 +132,12 @@ export function PriceProviderFields<F extends PriceProviderFormShape>({
                     </Label>
                     <Input
                         id={`${idPrefix}-price`}
+                        aria-invalid={Boolean(currentPriceError)}
+                        aria-describedby={
+                            currentPriceError
+                                ? `${idPrefix}-price-error`
+                                : undefined
+                        }
                         type="text"
                         inputMode="decimal"
                         placeholder="0.00"
@@ -141,6 +149,15 @@ export function PriceProviderFields<F extends PriceProviderFormShape>({
                             }))
                         }
                     />
+                    {currentPriceError && (
+                        <p
+                            id={`${idPrefix}-price-error`}
+                            role="alert"
+                            className="text-sm text-destructive"
+                        >
+                            {currentPriceError}
+                        </p>
+                    )}
                 </div>
             )}
 

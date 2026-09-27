@@ -5,7 +5,6 @@ import { usePortfolioTaxData } from "@/hooks/usePortfolioTaxData";
 import { useTaxYearParam } from "@/hooks/useTaxYearParam";
 import { type InvestmentSummary } from "@/types/portfolio";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TaxProfileDialog } from "@/features/tax/TaxProfileDialog";
 import { TaxYearSwitcher } from "@/features/tax/TaxYearSwitcher";
@@ -29,7 +28,6 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { AssetClassTaxChart } from "./AssetClassTaxChart";
 import { InvestmentTaxBreakdownTable } from "./InvestmentTaxBreakdownTable";
-import { Money } from "@/components/shared/Money";
 import { PageShell } from "@/components/shared/PageShell";
 
 function getPortfolioTaxWidgets(
@@ -141,7 +139,7 @@ export default function PortfolioTaxPage() {
                             targetYear={viewedYear}
                             trigger={
                                 <Button
-                                    variant="default"
+                                    variant={hasProfile ? "outline" : "default"}
                                     size="sm"
                                     className="gap-2"
                                 >
@@ -169,12 +167,6 @@ export default function PortfolioTaxPage() {
             <div className="flex items-center gap-2 -mt-2 text-xs text-muted-foreground flex-wrap">
                 <TaxYearSwitcher />
                 <YearActionsMenu year={viewedYear} />
-                <Badge variant="outline">
-                    {t("tax.taxes")}: <Money amount={totalTaxes} />
-                </Badge>
-                <Badge variant="outline">
-                    {t("tax.fees")}: <Money amount={totalFees} />
-                </Badge>
             </div>
 
             <HistoricalYearBannerSection />
@@ -194,6 +186,14 @@ export default function PortfolioTaxPage() {
                 />
             ) : (
                 <>
+                    <div className="space-y-2">
+                        <h2 className="font-display text-xl font-semibold">
+                            {t("tax.costsSection")}
+                        </h2>
+                        <p className="text-sm text-muted-foreground">
+                            {t("tax.costsHelp")}
+                        </p>
+                    </div>
                     {isVisible("summaryCards") && (
                         <PortfolioTaxSummaryCards
                             totalTaxes={totalTaxes}
@@ -227,13 +227,6 @@ export default function PortfolioTaxPage() {
                                     totalUnrealizedGain={totalUnrealizedGain}
                                 />
                             )}
-
-                        {isVisible("profileInputs") && (
-                            <PortfolioProfileInputsCard
-                                profile={profile}
-                                calculation={calculation}
-                            />
-                        )}
                     </div>
 
                     {isVisible("yearlyTaxFeeTrend") &&
@@ -252,12 +245,6 @@ export default function PortfolioTaxPage() {
                             totalManualFees={totalManualFees}
                             totalTaxesAndFees={totalTaxesAndFees}
                         />
-
-                        <PortfolioBudgetCard
-                            totalPIT={calculation.totalPIT}
-                            totalTaxes={totalTaxes}
-                            portfolioTaxesPlusPIT={portfolioTaxesPlusPIT}
-                        />
                     </div>
 
                     {isVisible("investmentBreakdown") &&
@@ -269,6 +256,27 @@ export default function PortfolioTaxPage() {
                             />
                         )}
 
+                    <div className="space-y-2 border-t border-border/50 pt-6">
+                        <h2 className="font-display text-xl font-semibold">
+                            {t("tax.estimatesSection")}
+                        </h2>
+                        <p className="text-sm text-muted-foreground">
+                            {t("tax.estimatesHelp")}
+                        </p>
+                    </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <PortfolioBudgetCard
+                            totalPIT={calculation.totalPIT}
+                            totalTaxes={totalTaxes}
+                            portfolioTaxesPlusPIT={portfolioTaxesPlusPIT}
+                        />
+                        {isVisible("profileInputs") && (
+                            <PortfolioProfileInputsCard
+                                profile={profile}
+                                calculation={calculation}
+                            />
+                        )}
+                    </div>
                     {isVisible("belgianRules") && (
                         <BelgianPortfolioRulesCard
                             totalDividendIncome={totalDividendIncome}

@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { useDebounce, SEARCH_DEBOUNCE_MS } from '@/hooks/useDebounce';
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useDebounce, SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
 
 export interface UseSymbolSearchOptions {
     /**
@@ -29,8 +29,8 @@ export interface UseSymbolSearchOptions {
  * debounced query text, the cached search query against the page's own
  * `searchFn`, and the base "results dropdown may open" condition. The visual
  * chrome lives in `SymbolSearchBox`; pages render their own result rows and
- * AND `isOpen` with a has-results check where the dropdown should stay closed
- * on empty results.
+ * show loading, empty, or error feedback as appropriate. Opening is delayed
+ * until the debounced query matches the current input to avoid stale results.
  */
 export function useSymbolSearch<TResult>(
     searchFn: (query: string) => Promise<TResult>,
@@ -44,10 +44,17 @@ export function useSymbolSearch<TResult>(
         trim = true,
     } = options;
 
-    const [searchText, setSearchText] = useState('');
-    const debouncedSearch = useDebounce(trim ? searchText.trim() : searchText, debounceMs);
+    const [searchText, setSearchText] = useState("");
+    const debouncedSearch = useDebounce(
+        trim ? searchText.trim() : searchText,
+        debounceMs,
+    );
 
-    const { data: searchResult, isFetching } = useQuery({
+    const {
+        data: searchResult,
+        isFetching,
+        isError,
+    } = useQuery({
         queryKey: [queryKey, debouncedSearch],
         queryFn: () => searchFn(debouncedSearch),
         enabled: debouncedSearch.length >= minLength,
@@ -55,7 +62,18 @@ export function useSymbolSearch<TResult>(
     });
 
     /** Base dropdown condition: a long-enough debounced query and a non-cleared input. */
-    const isOpen = debouncedSearch.length >= minLength && searchText.length > 0;
+    const isOpen =
+        debouncedSearch.length >= minLength &&
+        searchText.length > 0 &&
+        debouncedSearch === (trim ? searchText.trim() : searchText);
 
-    return { searchText, setSearchText, debouncedSearch, searchResult, isFetching, isOpen };
+    return {
+        searchText,
+        setSearchText,
+        debouncedSearch,
+        searchResult,
+        isFetching,
+        isError,
+        isOpen,
+    };
 }

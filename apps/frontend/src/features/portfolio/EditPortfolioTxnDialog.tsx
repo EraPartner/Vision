@@ -164,7 +164,9 @@ export function EditPortfolioTxnDialog({
     const { form, setForm, reset, dirty } = useDialogFormState(initialForm);
     useUnsavedChanges(dirty);
 
-    const isBuySell = transaction.type === "buy" || transaction.type === "sell";
+    const isBuySell =
+        unitBased &&
+        (transaction.type === "buy" || transaction.type === "sell");
     const isGift = transaction.type === "gift";
 
     // Render-time unit math only feeds the live UI (the derived-amount hint, the
@@ -360,6 +362,7 @@ export function EditPortfolioTxnDialog({
                         isBuySell={isBuySell}
                         buySellIsValid={buySellIsValid}
                         isGift={isGift}
+                        isAppreciation={transaction.type === "appreciation"}
                         lockAmountWhenGift={false}
                         withPlaceholders={false}
                         errors={visibleErrors}

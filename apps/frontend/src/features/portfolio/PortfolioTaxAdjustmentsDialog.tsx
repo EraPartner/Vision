@@ -248,6 +248,8 @@ export function PortfolioTaxAdjustmentsDialog({ investments }: Props) {
                             return (
                                 <div
                                     key={inv.id}
+                                    role="group"
+                                    aria-label={inv.name}
                                     className="rounded-lg border border-border p-3"
                                 >
                                     <div className="flex items-center gap-2 flex-wrap mb-2">
@@ -279,6 +281,7 @@ export function PortfolioTaxAdjustmentsDialog({ investments }: Props) {
                                             </Label>
                                             <Input
                                                 id={`taxes-${inv.id}`}
+                                                aria-label={`${t("tax.taxes")}: ${inv.name}`}
                                                 type="text"
                                                 inputMode="decimal"
                                                 value={
@@ -311,6 +314,7 @@ export function PortfolioTaxAdjustmentsDialog({ investments }: Props) {
                                             </Label>
                                             <Input
                                                 id={`fees-${inv.id}`}
+                                                aria-label={`${t("tax.fees")}: ${inv.name}`}
                                                 type="text"
                                                 inputMode="decimal"
                                                 value={
@@ -336,149 +340,102 @@ export function PortfolioTaxAdjustmentsDialog({ investments }: Props) {
                                         </div>
                                     </div>
                                     {(showEtfStructure || showReynders) && (
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3 pt-3 border-t border-dashed border-border">
-                                            {showEtfStructure && (
-                                                <div className="space-y-1">
-                                                    <Label
-                                                        htmlFor={`etf-structure-${inv.id}`}
-                                                        className="text-xs"
-                                                    >
-                                                        {t("tax.etfStructure")}
-                                                    </Label>
-                                                    <Select
-                                                        value={
-                                                            cls.etfStructure ??
-                                                            "accumulating"
-                                                        }
-                                                        onValueChange={(v) =>
-                                                            setClassDraft(
-                                                                (prev) => ({
-                                                                    ...prev,
-                                                                    [inv.id]: {
-                                                                        ...(prev[
-                                                                            inv
-                                                                                .id
-                                                                        ] ?? {
-                                                                            reynders:
-                                                                                "auto",
-                                                                        }),
-                                                                        etfStructure:
-                                                                            v as EtfStructure,
-                                                                    },
-                                                                }),
-                                                            )
-                                                        }
-                                                    >
-                                                        <SelectTrigger
-                                                            id={`etf-structure-${inv.id}`}
-                                                        >
-                                                            <SelectValue />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="accumulating">
-                                                                {t(
-                                                                    "tax.etfStructure.accumulating",
-                                                                )}
-                                                            </SelectItem>
-                                                            <SelectItem value="distributing">
-                                                                {t(
-                                                                    "tax.etfStructure.distributing",
-                                                                )}
-                                                            </SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                    <p className="text-2xs text-muted-foreground">
-                                                        {t(
-                                                            "tax.etfStructure.desc",
-                                                        )}
-                                                    </p>
-                                                </div>
-                                            )}
-                                            {showReynders && (
-                                                <div className="space-y-1">
-                                                    <Label
-                                                        htmlFor={`reynders-${inv.id}`}
-                                                        className="text-xs"
-                                                    >
-                                                        {t(
-                                                            "tax.subjectToReynders",
-                                                        )}
-                                                    </Label>
-                                                    <Select
-                                                        value={cls.reynders}
-                                                        onValueChange={(v) =>
-                                                            setClassDraft(
-                                                                (prev) => ({
-                                                                    ...prev,
-                                                                    [inv.id]: {
-                                                                        ...(prev[
-                                                                            inv
-                                                                                .id
-                                                                        ] ?? {
-                                                                            reynders:
-                                                                                "auto",
-                                                                            interestPortion:
-                                                                                "",
-                                                                        }),
-                                                                        reynders:
-                                                                            v as ReyndersChoice,
-                                                                    },
-                                                                }),
-                                                            )
-                                                        }
-                                                    >
-                                                        <SelectTrigger
-                                                            id={`reynders-${inv.id}`}
-                                                        >
-                                                            <SelectValue />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="auto">
-                                                                {t(
-                                                                    "tax.subjectToReynders.auto",
-                                                                )}
-                                                            </SelectItem>
-                                                            <SelectItem value="yes">
-                                                                {t(
-                                                                    "tax.subjectToReynders.yes",
-                                                                )}
-                                                            </SelectItem>
-                                                            <SelectItem value="no">
-                                                                {t(
-                                                                    "tax.subjectToReynders.no",
-                                                                )}
-                                                            </SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                    <p className="text-2xs text-muted-foreground">
-                                                        {t(
-                                                            "tax.subjectToReynders.desc",
-                                                        )}
-                                                    </p>
-                                                </div>
-                                            )}
-                                            {showReynders &&
-                                                reyndersResolved && (
-                                                    <div className="space-y-1 md:col-span-2">
+                                        <details
+                                            className="mt-3 pt-3 border-t border-dashed border-border"
+                                            onInvalidCapture={(event) => {
+                                                // Keep optional fields mounted so drafts and native
+                                                // validation survive collapsing this section.
+                                                event.currentTarget.open = true;
+                                                (
+                                                    event.target as HTMLElement
+                                                ).focus();
+                                            }}
+                                        >
+                                            <summary
+                                                className="cursor-pointer rounded-sm text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                                aria-label={`${t("tax.treatmentOptions")}: ${inv.name}`}
+                                            >
+                                                {t("tax.treatmentOptions")}
+                                            </summary>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                                                {showEtfStructure && (
+                                                    <div className="space-y-1">
                                                         <Label
-                                                            htmlFor={`reynders-interest-${inv.id}`}
+                                                            htmlFor={`etf-structure-${inv.id}`}
                                                             className="text-xs"
                                                         >
                                                             {t(
-                                                                "tax.reyndersInterestPortion",
+                                                                "tax.etfStructure",
                                                             )}
                                                         </Label>
-                                                        <Input
-                                                            id={`reynders-interest-${inv.id}`}
-                                                            type="number"
-                                                            inputMode="numeric"
-                                                            min={0}
-                                                            max={100}
-                                                            step={1}
+                                                        <Select
                                                             value={
-                                                                cls.interestPortion
+                                                                cls.etfStructure ??
+                                                                "accumulating"
                                                             }
-                                                            onChange={(e) =>
+                                                            onValueChange={(
+                                                                v,
+                                                            ) =>
+                                                                setClassDraft(
+                                                                    (prev) => ({
+                                                                        ...prev,
+                                                                        [inv.id]:
+                                                                            {
+                                                                                ...(prev[
+                                                                                    inv
+                                                                                        .id
+                                                                                ] ?? {
+                                                                                    reynders:
+                                                                                        "auto",
+                                                                                }),
+                                                                                etfStructure:
+                                                                                    v as EtfStructure,
+                                                                            },
+                                                                    }),
+                                                                )
+                                                            }
+                                                        >
+                                                            <SelectTrigger
+                                                                id={`etf-structure-${inv.id}`}
+                                                                aria-label={`${t("tax.etfStructure")}: ${inv.name}`}
+                                                            >
+                                                                <SelectValue />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="accumulating">
+                                                                    {t(
+                                                                        "tax.etfStructure.accumulating",
+                                                                    )}
+                                                                </SelectItem>
+                                                                <SelectItem value="distributing">
+                                                                    {t(
+                                                                        "tax.etfStructure.distributing",
+                                                                    )}
+                                                                </SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                        <p className="text-2xs text-muted-foreground">
+                                                            {t(
+                                                                "tax.etfStructure.desc",
+                                                            )}
+                                                        </p>
+                                                    </div>
+                                                )}
+                                                {showReynders && (
+                                                    <div className="space-y-1">
+                                                        <Label
+                                                            htmlFor={`reynders-${inv.id}`}
+                                                            className="text-xs"
+                                                        >
+                                                            {t(
+                                                                "tax.subjectToReynders",
+                                                            )}
+                                                        </Label>
+                                                        <Select
+                                                            value={cls.reynders}
+                                                            onValueChange={(
+                                                                v,
+                                                            ) =>
                                                                 setClassDraft(
                                                                     (prev) => ({
                                                                         ...prev,
@@ -493,24 +450,102 @@ export function PortfolioTaxAdjustmentsDialog({ investments }: Props) {
                                                                                     interestPortion:
                                                                                         "",
                                                                                 }),
-                                                                                interestPortion:
-                                                                                    e
-                                                                                        .target
-                                                                                        .value,
+                                                                                reynders:
+                                                                                    v as ReyndersChoice,
                                                                             },
                                                                     }),
                                                                 )
                                                             }
-                                                            placeholder="100"
-                                                        />
+                                                        >
+                                                            <SelectTrigger
+                                                                id={`reynders-${inv.id}`}
+                                                                aria-label={`${t("tax.subjectToReynders")}: ${inv.name}`}
+                                                            >
+                                                                <SelectValue />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="auto">
+                                                                    {t(
+                                                                        "tax.subjectToReynders.auto",
+                                                                    )}
+                                                                </SelectItem>
+                                                                <SelectItem value="yes">
+                                                                    {t(
+                                                                        "tax.subjectToReynders.yes",
+                                                                    )}
+                                                                </SelectItem>
+                                                                <SelectItem value="no">
+                                                                    {t(
+                                                                        "tax.subjectToReynders.no",
+                                                                    )}
+                                                                </SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
                                                         <p className="text-2xs text-muted-foreground">
                                                             {t(
-                                                                "tax.reyndersInterestPortion.desc",
+                                                                "tax.subjectToReynders.desc",
                                                             )}
                                                         </p>
                                                     </div>
                                                 )}
-                                        </div>
+                                                {showReynders &&
+                                                    reyndersResolved && (
+                                                        <div className="space-y-1 md:col-span-2">
+                                                            <Label
+                                                                htmlFor={`reynders-interest-${inv.id}`}
+                                                                className="text-xs"
+                                                            >
+                                                                {t(
+                                                                    "tax.reyndersInterestPortion",
+                                                                )}
+                                                            </Label>
+                                                            <Input
+                                                                id={`reynders-interest-${inv.id}`}
+                                                                aria-label={`${t("tax.reyndersInterestPortion")}: ${inv.name}`}
+                                                                type="number"
+                                                                inputMode="numeric"
+                                                                min={0}
+                                                                max={100}
+                                                                step={1}
+                                                                value={
+                                                                    cls.interestPortion
+                                                                }
+                                                                onChange={(e) =>
+                                                                    setClassDraft(
+                                                                        (
+                                                                            prev,
+                                                                        ) => ({
+                                                                            ...prev,
+                                                                            [inv.id]:
+                                                                                {
+                                                                                    ...(prev[
+                                                                                        inv
+                                                                                            .id
+                                                                                    ] ?? {
+                                                                                        reynders:
+                                                                                            "auto",
+                                                                                        interestPortion:
+                                                                                            "",
+                                                                                    }),
+                                                                                    interestPortion:
+                                                                                        e
+                                                                                            .target
+                                                                                            .value,
+                                                                                },
+                                                                        }),
+                                                                    )
+                                                                }
+                                                                placeholder="100"
+                                                            />
+                                                            <p className="text-2xs text-muted-foreground">
+                                                                {t(
+                                                                    "tax.reyndersInterestPortion.desc",
+                                                                )}
+                                                            </p>
+                                                        </div>
+                                                    )}
+                                            </div>
+                                        </details>
                                     )}
                                 </div>
                             );

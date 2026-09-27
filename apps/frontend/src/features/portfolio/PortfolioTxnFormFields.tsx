@@ -89,6 +89,7 @@ interface PortfolioTxnFormFieldsProps<F extends PortfolioTxnFieldsForm> {
     isBuySell: boolean;
     buySellIsValid: boolean;
     isGift: boolean;
+    isAppreciation?: boolean;
     /** Add locks the amount to 0 for gifts; Edit leaves it editable. */
     lockAmountWhenGift: boolean;
     /** Add renders example placeholders; Edit renders none. */
@@ -118,6 +119,7 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
     isBuySell,
     buySellIsValid,
     isGift,
+    isAppreciation = false,
     lockAmountWhenGift,
     withPlaceholders,
     errors,
@@ -144,7 +146,7 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
     // The live two-of-three message (below) already sits inline; when it is the
     // field's revealed error it becomes the aria-describedby target, and the
     // per-field <FieldError> is suppressed so the message never renders twice.
-    const twoOfThreeShown = isBuySell && !buySellIsValid;
+    const twoOfThreeShown = showUnits && isBuySell && !buySellIsValid;
     const twoOfThreeTargetId = showUnits ? unitsId : amountId;
 
     return (
@@ -227,7 +229,12 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
 
                 <div className={cn("space-y-2", showUnits && "sm:col-span-2")}>
                     <Label htmlFor={amountId}>
-                        {t("addPortTxn.totalAmount", { currency })}
+                        {t(
+                            isAppreciation
+                                ? "portfolio.txn.valueIncrease"
+                                : "addPortTxn.totalAmount",
+                            { currency },
+                        )}
                         {lockAmount ? (
                             <span className="text-muted-foreground ml-1 text-xs">
                                 = 0
@@ -253,7 +260,25 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
                             setForm((f) => ({ ...f, amount: e.target.value }))
                         }
                         {...fieldErrorProps(amountId, errors?.[amountId])}
+                        aria-describedby={
+                            [
+                                fieldErrorProps(amountId, errors?.[amountId])[
+                                    "aria-describedby"
+                                ],
+                                isAppreciation ? `${amountId}-help` : undefined,
+                            ]
+                                .filter(Boolean)
+                                .join(" ") || undefined
+                        }
                     />
+                    {isAppreciation && (
+                        <p
+                            id={`${amountId}-help`}
+                            className="text-xs text-muted-foreground"
+                        >
+                            {t("portfolio.txn.valueIncreaseHelp")}
+                        </p>
+                    )}
                     {/* When the amount slot holds the two-of-three error (units hidden),
               the live message below is the error element — don't render it twice. */}
                     <FieldError

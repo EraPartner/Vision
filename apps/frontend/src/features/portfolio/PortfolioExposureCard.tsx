@@ -1,3 +1,4 @@
+import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 import { useId, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Upload } from "lucide-react";
@@ -23,6 +24,7 @@ type Dimension = "issuer" | "sector" | "issuerCountry";
 
 export function PortfolioExposureCard({ currency }: { currency: string }) {
     const { t } = useLanguage();
+    const formatPercent = usePercentFormatter();
     const sourceInputId = useId();
     const queryClient = useQueryClient();
     const [dimension, setDimension] = useState<Dimension>("issuer");
@@ -140,7 +142,9 @@ export function PortfolioExposureCard({ currency }: { currency: string }) {
                                         <span
                                             key={key}
                                             className={`h-full shrink-0 ${color}`}
-                                            style={{ width: `${percent}%` }}
+                                            style={{
+                                                width: `${formatPercent(Number(percent), { digits: 2, minDigits: 0 })}`,
+                                            }}
                                         />
                                     ))}
                                 </div>
@@ -164,7 +168,13 @@ export function PortfolioExposureCard({ currency }: { currency: string }) {
                                                     />
                                                 </span>
                                                 <span className="text-sm tabular-nums text-muted-foreground">
-                                                    {percent}%
+                                                    {formatPercent(
+                                                        Number(percent),
+                                                        {
+                                                            digits: 2,
+                                                            minDigits: 0,
+                                                        },
+                                                    )}
                                                 </span>
                                             </p>
                                             <p className="mt-1 text-xs text-muted-foreground">
@@ -214,7 +224,15 @@ export function PortfolioExposureCard({ currency }: { currency: string }) {
                                                     currency={currency}
                                                 />
                                                 <span className="text-muted-foreground">
-                                                    {row.weightPercent}%
+                                                    {formatPercent(
+                                                        Number(
+                                                            row.weightPercent,
+                                                        ),
+                                                        {
+                                                            digits: 2,
+                                                            minDigits: 0,
+                                                        },
+                                                    )}
                                                 </span>
                                             </span>
                                         </span>

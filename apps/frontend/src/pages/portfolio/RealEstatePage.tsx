@@ -186,7 +186,11 @@ export default function RealEstatePage() {
                 <PageHeader
                     title={t("realestate.title")}
                     icon={PAGE_ICONS["/portfolio/real-estate"]}
-                    actions={<AddInvestmentDialog />}
+                    actions={
+                        <AddInvestmentDialog
+                            allowedAssetClasses={["real_estate"]}
+                        />
+                    }
                 />
 
                 {/* Summary Cards */}

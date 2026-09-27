@@ -88,14 +88,17 @@ export async function __storeCurrentBrokerSnapshot(currency, summary) {
 
     const rows = [...byKey.values()];
     const valueSum = addAll(rows.map((row) => row.value));
+    const parity = summary.brokerSnapshotParity;
+    const parityDifference = parity
+      ? toDecimal(parity.partitionValue).minus(parity.totalValue)
+      : valueSum.minus(summary.totals.totalPortfolioValue || 0);
     if (
-      valueSum
-        .minus(summary.totals.totalPortfolioValue || 0)
-        .abs()
-        .gt(BROKER_HISTORY_PARITY_TOLERANCE)
+      parity
+        ? !parityDifference.toDecimalPlaces(6).isZero()
+        : parityDifference.abs().gt(BROKER_HISTORY_PARITY_TOLERANCE)
     ) {
       throw new Error(
-        `Broker snapshot parity failed: partitions=${valueSum.toFixed(2)} total=${toDecimal(summary.totals.totalPortfolioValue || 0).toFixed(2)}`,
+        `Broker snapshot parity failed: partitions=${parity?.partitionValue ?? valueSum.toFixed(2)} total=${parity?.totalValue ?? toDecimal(summary.totals.totalPortfolioValue || 0).toFixed(2)}`,
       );
     }
 
@@ -134,7 +137,9 @@ export async function computeAndStoreSnapshots(targetCurrency = "EUR") {
   if (snapshots.length === 0 || !(await hasBrokerSnapshotTable())) {
     return snapshots;
   }
-  const summary = await getPortfolioSummary(targetCurrency);
+  const summary = await getPortfolioSummary(targetCurrency, {
+    includeBrokerSnapshotParity: true,
+  });
   await __storeCurrentBrokerSnapshot(targetCurrency, summary);
   return snapshots;
 }

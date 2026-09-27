@@ -75,6 +75,47 @@ describe("RebalancePage saved-plan deletion", () => {
         expect(deletePlan).toHaveBeenCalledTimes(1);
     });
 
+    it("names each allocation control and supports keyboard removal without changing weight ratios", async () => {
+        const user = userEvent.setup();
+        renderWithApp(<RebalancePage />, {
+            initialEntries: [
+                "/portfolio/rebalance?source=custom&target=stocks%3A20&target=bonds%3A30",
+            ],
+        });
+        expect(
+            screen.getByRole("combobox", { name: "Allocation 1: Stocks" }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("combobox", { name: "Allocation 2: Bonds" }),
+        ).toBeInTheDocument();
+        const stocks = screen.getByRole("textbox", {
+            name: "Target 1: Stocks (%)",
+        });
+        stocks.focus();
+        await user.clear(stocks);
+        await user.keyboard("40");
+        await user.click(screen.getByRole("button", { name: /compute plan/i }));
+        await waitFor(() =>
+            expect(apiClient.computeRebalance).toHaveBeenLastCalledWith(
+                expect.objectContaining({
+                    targetWeights: { stocks: 0.4, bonds: 0.3 },
+                }),
+            ),
+        );
+        const remove = screen.getByRole("button", {
+            name: "Remove sleeve 2: Bonds",
+        });
+        remove.focus();
+        expect(await screen.findByRole("tooltip")).toHaveTextContent(
+            "Remove sleeve 2: Bonds",
+        );
+        await user.keyboard("{Enter}");
+        expect(
+            screen.queryByRole("textbox", { name: /Target.*Bonds/ }),
+        ).not.toBeInTheDocument();
+        expect(stocks).toHaveValue("40");
+    });
+
     it("parses EU grouped target weights and cash caps with the selected format", async () => {
         vi.mocked(apiClient.computeCommitmentAwareCash).mockResolvedValue({
             candidateCashCap: 5000,

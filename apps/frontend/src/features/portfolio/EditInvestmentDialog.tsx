@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { parseDecimal } from "@/lib/decimal";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import {
@@ -101,12 +102,25 @@ export function EditInvestmentDialog({
     useUnsavedChanges(dirty);
     useReseedOnIdentityChange(investment.id, reset);
 
+    const [submitted, setSubmitted] = useState(false);
+
     const handleOpenChange = (v: boolean) => {
+        setSubmitted(false);
         if (v && !dirty) reset();
         setOpen(v);
     };
 
     const unitBased = isUnitBased(investment.assetClass);
+
+    const currentPriceError =
+        unitBased &&
+        form.priceProvider === "manual" &&
+        form.currentPrice &&
+        !Number.isFinite(
+            parseDecimal(form.currentPrice, appSettings.numberFormat, NaN),
+        )
+            ? t("addInv.error.numberInvalid")
+            : undefined;
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -122,6 +136,13 @@ export function EditInvestmentDialog({
             return;
         }
 
+        setSubmitted(true);
+        if (currentPriceError) {
+            e.currentTarget
+                .querySelector<HTMLInputElement>("#edit-inv-price")
+                ?.focus();
+            return;
+        }
         try {
             await updateInvestment(investment.id, {
                 name: form.name.trim(),
@@ -142,6 +163,7 @@ export function EditInvestmentDialog({
                 t("invEdit.toast.updated", { name: form.name.trim() }),
             );
             reset();
+            setSubmitted(false);
             setOpen(false);
         } catch {
             // handled in hook
@@ -235,6 +257,9 @@ export function EditInvestmentDialog({
                         form={form}
                         setForm={setForm}
                         showManualPrice={unitBased}
+                        currentPriceError={
+                            submitted ? currentPriceError : undefined
+                        }
                         t={t}
                     />
 
@@ -244,6 +269,7 @@ export function EditInvestmentDialog({
                             variant="outline"
                             onClick={() => {
                                 reset();
+                                setSubmitted(false);
                                 setOpen(false);
                             }}
                         >

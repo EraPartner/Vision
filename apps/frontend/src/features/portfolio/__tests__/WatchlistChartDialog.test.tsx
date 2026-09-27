@@ -235,7 +235,7 @@ describe("WatchlistChartDialog", () => {
 
             // Fill in the new price
             const priceInput = await screen.findByRole("textbox", {
-                name: "Target Price",
+                name: /^Target Price:/,
             });
             await user.clear(priceInput);
             await user.type(priceInput, "210");
@@ -275,13 +275,13 @@ describe("WatchlistChartDialog", () => {
         await screen.findByRole("dialog");
         await user.click(await screen.findByRole("button", { name: /200/i }));
         expect(
-            await screen.findByRole("textbox", { name: "Target Price" }),
+            await screen.findByRole("textbox", { name: /^Target Price:/ }),
         ).toBeInTheDocument();
 
         await user.click(screen.getByRole("button", { name: "Cancel" }));
 
         expect(
-            screen.queryByRole("textbox", { name: "Target Price" }),
+            screen.queryByRole("textbox", { name: /^Target Price:/ }),
         ).not.toBeInTheDocument();
         expect(patchCount).toBe(0);
     });
@@ -313,7 +313,7 @@ describe("WatchlistChartDialog", () => {
         // Act — enter edit mode and set the price to 0 (paste-equivalent)
         await user.click(await screen.findByRole("button", { name: /200/i }));
         const priceInput = await screen.findByRole("textbox", {
-            name: "Target Price",
+            name: /^Target Price:/,
         });
         fireEvent.change(priceInput, { target: { value: "0" } });
 
@@ -324,7 +324,7 @@ describe("WatchlistChartDialog", () => {
         // Assert — edit mode stays open (success path would close it) and no PATCH sent
         await waitFor(() =>
             expect(
-                screen.getByRole("textbox", { name: "Target Price" }),
+                screen.getByRole("textbox", { name: /^Target Price:/ }),
             ).toBeInTheDocument(),
         );
         expect(patched).toBe(false);
@@ -366,7 +366,9 @@ describe("WatchlistChartDialog", () => {
             />,
         );
         await screen.findByRole("dialog");
-        await user.keyboard("{Escape}");
+        // The focused target action opens its tooltip; Escape dismisses that
+        // layer before the containing dialog.
+        await user.keyboard("{Escape}{Escape}");
         await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
     });
 
