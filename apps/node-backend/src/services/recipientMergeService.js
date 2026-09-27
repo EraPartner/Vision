@@ -19,13 +19,14 @@
  *   4. recipient_bank_accounts.recipient_id → primary (unless that would create a dupe account_number)
  *   5. recipients.primary_recipient_id    → primary (aliases now officially point at it)
  */
-import { withTransaction } from '../database/connection.js';
-import { filterValidatedIdNumbers } from '../lib/validation.js';
-import { recipientRepository } from '../repositories/recipientRepository.js';
-import { transactionRepository } from '../repositories/transactionRepository.js';
-import { splitRepository } from '../repositories/splitRepository.js';
-import { plannedTransactionRepository } from '../repositories/plannedTransactionRepository.js';
-import { recipientBankAccountRepository } from '../repositories/recipientBankAccountRepository.js';
+import { withTransaction } from "../database/connection.js";
+import { filterValidatedIdNumbers } from "../lib/validation.js";
+import { recipientRepository } from "../repositories/recipientRepository.js";
+import { transactionRepository } from "../repositories/transactionRepository.js";
+import { splitRepository } from "../repositories/splitRepository.js";
+import { plannedTransactionRepository } from "../repositories/plannedTransactionRepository.js";
+import { recipientBankAccountRepository } from "../repositories/recipientBankAccountRepository.js";
+import { ConflictError, NotFoundError } from "../middleware/errorHandler.js";
 
 /**
  * Merge a set of alias recipients into a primary recipient.
@@ -44,27 +45,43 @@ import { recipientBankAccountRepository } from '../repositories/recipientBankAcc
  */
 export async function mergeRecipients(primaryId, aliasIds) {
   if (!Number.isInteger(primaryId)) {
-    throw new Error('mergeRecipients: primaryId must be an integer');
+    throw new Error("mergeRecipients: primaryId must be an integer");
   }
-  const ids = filterValidatedIdNumbers(aliasIds)
-    .filter((id) => id !== primaryId);
+  const ids = filterValidatedIdNumbers(aliasIds).filter(
+    (id) => id !== primaryId,
+  );
   if (!ids.length) {
-    return { mergedAliasIds: [], reassigned: { transactions: 0, splits: 0, planned: 0, bankAccounts: 0 } };
+    return {
+      mergedAliasIds: [],
+      reassigned: { transactions: 0, splits: 0, planned: 0, bankAccounts: 0 },
+    };
   }
 
   // Composed from repository methods: the ambient transaction context routes
   // each repo call onto this transaction's client, so the whole repoint sequence
-  // shares the primary's FOR UPDATE lock and rolls back as one.
+  // shares all participants' FOR UPDATE locks and rolls back as one.
   return withTransaction(async () => {
-    // Sanity: the primary must exist. We lock it FOR UPDATE so concurrent
-    // merges into the same primary serialize cleanly.
-    const primary = await recipientRepository.lockByIdForMerge(primaryId);
+    const lockIds = [...new Set([primaryId, ...ids])].sort((a, b) => a - b);
+    const participants = await recipientRepository.lockByIdsForMerge(lockIds);
+    const primary = participants.find(
+      (recipient) => recipient.id === primaryId,
+    );
     if (!primary) {
-      throw new Error(`mergeRecipients: primary recipient ${primaryId} not found`);
+      throw new NotFoundError("Primary recipient not found");
+    }
+    // The route's earlier lookup cannot establish this invariant after waiting
+    // for another merge. Reject before any FK write rather than create a chain.
+    if (primary.primary_recipient_id != null) {
+      throw new ConflictError(
+        "Primary recipient is now an alias. Use its primary instead.",
+      );
     }
 
     // 1. transactions
-    const txCount = await transactionRepository.repointRecipient(primaryId, ids);
+    const txCount = await transactionRepository.repointRecipient(
+      primaryId,
+      ids,
+    );
 
     // 2. transaction_splits
     const splitCount = await splitRepository.repointRecipient(primaryId, ids);
@@ -72,7 +89,10 @@ export async function mergeRecipients(primaryId, aliasIds) {
     // 3. planned_transactions — guarded: older schemas may not have the column.
     let plannedRowCount = 0;
     if (await plannedTransactionRepository.hasRecipientIdColumn()) {
-      plannedRowCount = await plannedTransactionRepository.repointRecipient(primaryId, ids);
+      plannedRowCount = await plannedTransactionRepository.repointRecipient(
+        primaryId,
+        ids,
+      );
     }
 
     // 4. recipient_bank_accounts — guard against collisions on
@@ -80,11 +100,17 @@ export async function mergeRecipients(primaryId, aliasIds) {
     // already owns an account with the same number we keep its row and
     // delete the alias's row instead of reassigning.
     await recipientBankAccountRepository.deleteMergeDuplicates(primaryId, ids);
-    const bankCount = await recipientBankAccountRepository.repointRecipient(primaryId, ids);
+    const bankCount = await recipientBankAccountRepository.repointRecipient(
+      primaryId,
+      ids,
+    );
 
     // 5. flag aliases as pointing at the primary. This preserves the
     // historical relationship for the Recipients UI + /:id/aliases.
-    const mergedAliasIds = await recipientRepository.flagAliasesOf(primaryId, ids);
+    const mergedAliasIds = await recipientRepository.flagAliasesOf(
+      primaryId,
+      ids,
+    );
 
     // 5b. Re-point any GRANDCHILDREN — recipients whose primary_recipient_id was
     // one of the now-merged aliases — onto the new primary. Without this, merging

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
@@ -218,6 +218,38 @@ describe("RecipientsPage (integration)", () => {
         );
         expect(target.querySelector("span")).toHaveClass("truncate");
 
+        const name = "A very long recipient name";
+        const patterns = screen.getByRole("button", {
+            name: `Patterns for ${name}`,
+        });
+        expect(
+            screen.getByRole("button", { name: `Unmerge ${name}` }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: `Delete ${name}` }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: `Active: ${name}` }),
+        ).toHaveAttribute("title", `Deactivate ${name}`);
+        const user = userEvent.setup();
+        act(() => patterns.focus());
+        expect(
+            await screen.findByRole("tooltip", {
+                name: `Patterns for ${name}`,
+            }),
+        ).toBeInTheDocument();
+        await user.keyboard("{Escape}");
+        await user.click(screen.getByRole("button", { name: `Edit: ${name}` }));
+        expect(
+            screen.getByRole("button", { name: `Save: ${name}` }),
+        ).toBeInTheDocument();
+        await user.click(
+            screen.getByRole("button", { name: `Cancel: ${name}` }),
+        );
+        expect(
+            screen.getByRole("button", { name: `Edit: ${name}` }),
+        ).toBeInTheDocument();
+
         if (heightDescriptor)
             Object.defineProperty(
                 HTMLElement.prototype,
@@ -291,9 +323,9 @@ describe("RecipientsPage (integration)", () => {
 
         renderWithApp(<RecipientsPage />);
 
-        // recipientPatterns.openBtn = "Patterns" — icon button title on each row
+        // Each icon action identifies the recipient in its accessible name.
         const patternsBtn = await screen.findByRole("button", {
-            name: /^patterns$/i,
+            name: /^patterns for /i,
         });
         await user.click(patternsBtn);
 
@@ -360,7 +392,7 @@ describe("RecipientsPage (integration)", () => {
         renderWithApp(<RecipientsPage />);
 
         const patternsBtn = await screen.findByRole("button", {
-            name: /^patterns$/i,
+            name: /^patterns for /i,
         });
         await user.click(patternsBtn);
 
@@ -539,7 +571,7 @@ describe("RecipientsPage (integration)", () => {
 
         renderWithApp(<RecipientsPage />);
         await user.click(
-            await screen.findByRole("button", { name: /delete recipient/i }),
+            await screen.findByRole("button", { name: "Delete Northwind Market" }),
         );
 
         const dialog = await screen.findByRole("alertdialog");
@@ -610,7 +642,7 @@ describe("RecipientsPage (integration)", () => {
         renderWithApp(<RecipientsPage />);
 
         const patternsBtn = await screen.findByRole("button", {
-            name: /^patterns$/i,
+            name: /^patterns for /i,
         });
         await user.click(patternsBtn);
 

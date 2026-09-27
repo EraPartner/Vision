@@ -424,16 +424,18 @@ export const recipientRepository = {
   },
 
   /**
-   * Lock the merge primary so concurrent merges into it serialize cleanly.
-   * @param {number} id
-   * @returns {Promise<{id:number}|undefined>}
+   * Lock all merge participants in a consistent order before reading alias
+   * state. A target can become an alias while a competing merge holds its lock.
+   * @param {number[]} ids
+   * @returns {Promise<Array<{id:number, primary_recipient_id:number|null}>>}
    */
-  async lockByIdForMerge(id) {
+  async lockByIdsForMerge(ids) {
     const result = await query(
-      `SELECT id FROM recipients WHERE id = $1 FOR UPDATE`,
-      [id],
+      `SELECT id, primary_recipient_id FROM recipients
+       WHERE id = ANY($1::int[]) ORDER BY id FOR UPDATE`,
+      [ids],
     );
-    return result.rows[0] ?? undefined;
+    return result.rows;
   },
 
   /**

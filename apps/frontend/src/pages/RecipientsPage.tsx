@@ -5,6 +5,11 @@ import logger from "@/lib/logger";
 import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+    Tooltip,
+    TooltipTrigger,
+    TooltipContent,
+} from "@/components/ui/tooltip";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
@@ -100,6 +105,7 @@ export default function RecipientsPage() {
         name: string;
     } | null>(null);
     const [allItems, setAllItems] = useState<Recipient[]>([]);
+    const [hasInitialItems, setHasInitialItems] = useState(false);
     const [totalItems, setTotalItems] = useState(0);
     const [isFetchingMore, setIsFetchingMore] = useState(false);
     const offsetRef = useRef(0);
@@ -131,6 +137,7 @@ export default function RecipientsPage() {
         if (initialData) {
             generationRef.current += 1;
             setAllItems(initialData.items);
+            setHasInitialItems(true);
             setTotalItems(initialData.total ?? initialData.items.length);
             offsetRef.current = initialData.items.length;
             hasMoreRef.current =
@@ -194,8 +201,6 @@ export default function RecipientsPage() {
                 },
                 { replace: true },
             );
-            setAllItems([]);
-            setTotalItems(0);
             offsetRef.current = 0;
             hasMoreRef.current = true;
         },
@@ -402,30 +407,54 @@ export default function RecipientsPage() {
                 header: t("recipientsPage.col.status"),
                 editable: false,
                 render: (row: TableRecipient) => (
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        className={cn(
-                            "gap-1.5",
-                            row.is_active
-                                ? "text-accent hover:text-accent"
-                                : "text-muted-foreground hover:text-muted-foreground opacity-50",
-                        )}
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            toggleActive(row.id, row.is_active);
-                        }}
-                        disabled={updateMutation.isPending}
-                    >
-                        {row.is_active ? (
-                            <ToggleRight className="h-4 w-4" />
-                        ) : (
-                            <ToggleLeft className="h-4 w-4" />
-                        )}
-                        {row.is_active
-                            ? t("recipientsPage.statusActive")
-                            : t("recipientsPage.statusInactive")}
-                    </Button>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className={cn(
+                                    "gap-1.5",
+                                    row.is_active
+                                        ? "text-accent hover:text-accent"
+                                        : "text-muted-foreground hover:text-muted-foreground opacity-50",
+                                )}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleActive(row.id, row.is_active);
+                                }}
+                                disabled={updateMutation.isPending}
+                                aria-label={t(
+                                    row.is_active
+                                        ? "recipientsPage.activeFor"
+                                        : "recipientsPage.inactiveFor",
+                                    { name: row.name },
+                                )}
+                                title={t(
+                                    row.is_active
+                                        ? "recipientsPage.deactivateFor"
+                                        : "recipientsPage.activateFor",
+                                    { name: row.name },
+                                )}
+                            >
+                                {row.is_active ? (
+                                    <ToggleRight className="h-4 w-4" />
+                                ) : (
+                                    <ToggleLeft className="h-4 w-4" />
+                                )}
+                                {row.is_active
+                                    ? t("recipientsPage.statusActive")
+                                    : t("recipientsPage.statusInactive")}
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            {t(
+                                row.is_active
+                                    ? "recipientsPage.deactivateFor"
+                                    : "recipientsPage.activateFor",
+                                { name: row.name },
+                            )}
+                        </TooltipContent>
+                    </Tooltip>
                 ),
             },
             {
@@ -435,59 +464,96 @@ export default function RecipientsPage() {
                 editable: false,
                 render: (row: TableRecipient) => (
                     <div className="flex items-center gap-1">
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="icon-touch-target text-muted-foreground hover:text-foreground"
-                            title={t("recipientPatterns.openBtn")}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                setPatternsDialogRecipient({
-                                    id: row.id,
-                                    name: row.name,
-                                });
-                            }}
-                        >
-                            <Regex className="h-4 w-4" />
-                        </Button>
-                        {row.primary_recipient_id && (
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="icon-touch-target text-muted-foreground hover:text-foreground"
-                                title={t("recipientsPage.unmergeTitle")}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    unmergeMutation.mutate(row.id);
-                                }}
-                                disabled={unmergeMutation.isPending}
-                            >
-                                <Unlink className="h-4 w-4" />
-                            </Button>
-                        )}
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="icon-touch-target text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                            aria-label={t("aria.deleteRecipient")}
-                            onClick={async () => {
-                                const ok = await confirm({
-                                    title: t("recipientsPage.delete.title"),
-                                    description: t(
-                                        "recipientsPage.delete.desc",
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="icon-touch-target text-muted-foreground hover:text-foreground"
+                                    aria-label={t(
+                                        "recipientsPage.patternsFor",
                                         { name: row.name },
-                                    ),
-                                    confirmLabel: t(
-                                        "recipientsPage.delete.confirm",
-                                    ),
-                                    variant: "destructive",
-                                });
-                                if (ok) deleteMutation.mutate(row.id);
-                            }}
-                            disabled={deleteMutation.isPending}
-                        >
-                            <Trash2 className="h-4 w-4" />
-                        </Button>
+                                    )}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setPatternsDialogRecipient({
+                                            id: row.id,
+                                            name: row.name,
+                                        });
+                                    }}
+                                >
+                                    <Regex className="h-4 w-4" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                {t("recipientsPage.patternsFor", {
+                                    name: row.name,
+                                })}
+                            </TooltipContent>
+                        </Tooltip>
+                        {row.primary_recipient_id && (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="icon-touch-target text-muted-foreground hover:text-foreground"
+                                        aria-label={t(
+                                            "recipientsPage.unmergeFor",
+                                            { name: row.name },
+                                        )}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            unmergeMutation.mutate(row.id);
+                                        }}
+                                        disabled={unmergeMutation.isPending}
+                                    >
+                                        <Unlink className="h-4 w-4" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    {t("recipientsPage.unmergeFor", {
+                                        name: row.name,
+                                    })}
+                                </TooltipContent>
+                            </Tooltip>
+                        )}
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="icon-touch-target text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                    aria-label={t("recipientsPage.deleteFor", {
+                                        name: row.name,
+                                    })}
+                                    onClick={async () => {
+                                        const ok = await confirm({
+                                            title: t(
+                                                "recipientsPage.delete.title",
+                                            ),
+                                            description: t(
+                                                "recipientsPage.delete.desc",
+                                                { name: row.name },
+                                            ),
+                                            confirmLabel: t(
+                                                "recipientsPage.delete.confirm",
+                                            ),
+                                            variant: "destructive",
+                                        });
+                                        if (ok) deleteMutation.mutate(row.id);
+                                    }}
+                                    disabled={deleteMutation.isPending}
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                {t("recipientsPage.deleteFor", {
+                                    name: row.name,
+                                })}
+                            </TooltipContent>
+                        </Tooltip>
                     </div>
                 ),
             },
@@ -504,7 +570,7 @@ export default function RecipientsPage() {
         ],
     );
 
-    if (isLoading) {
+    if (isLoading || (initialData && !hasInitialItems)) {
         return (
             <PageShell className="">
                 <PageHeader
@@ -605,6 +671,7 @@ export default function RecipientsPage() {
                 <VirtualDataTable
                     columns={columns}
                     data={recipients}
+                    getRowLabel={(row) => row.name}
                     onRowUpdate={handleUpdate}
                     emptyMessage={
                         <EmptyState
