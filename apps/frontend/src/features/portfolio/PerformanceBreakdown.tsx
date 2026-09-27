@@ -16,6 +16,7 @@ import {
     formatMonthLabelWithLocale,
 } from "@/lib/dateUtils";
 import type { AssetClass } from "@/types/api";
+import { getAssetClassLabel } from "@/types/portfolio";
 import { cn } from "@/lib/utils";
 import { TouchDisclosure } from "@/components/shared/TouchDisclosure";
 import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
@@ -69,7 +70,8 @@ function PerformerRow({
                     {inv.name}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                    {inv.symbol || inv.assetClass}
+                    {inv.symbol ||
+                        getAssetClassLabel(t, inv.assetClass as AssetClass)}
                 </p>
             </div>
             <div className="text-right shrink-0">

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PortfolioExposureCard } from "./PortfolioExposureCard";
 
@@ -75,16 +76,57 @@ vi.mock("@/hooks/portfolio/usePortfolioExposure", () => ({
 }));
 
 describe("PortfolioExposureCard", () => {
-    it("shows stale source details even without classified contributions", () => {
+    it("keeps stale-source warnings visible and source details expandable", async () => {
         render(
             <QueryClientProvider client={new QueryClient()}>
                 <PortfolioExposureCard currency="EUR" />
             </QueryClientProvider>,
         );
 
-        expect(screen.getByText(/Unsupported Fund/)).toHaveTextContent(
-            "Holdings as of 2026-07-01; age 75 days; maximum 30 · Stale source",
+        expect(
+            screen.getByText("Stale source: Unsupported Fund"),
+        ).toBeVisible();
+        const source = screen.getByText(/Holdings as of 2026-07-01/);
+        expect(source).not.toBeVisible();
+        await userEvent.click(screen.getByText("Sources and import"));
+        expect(source).toBeVisible();
+        expect(source).toHaveTextContent("age 75 days; maximum 30");
+        expect(
+            screen.getByText("No holdings are classified for this dimension."),
+        ).toBeVisible();
+    });
+    it("announces the selected dimension and allows changing it", async () => {
+        render(
+            <QueryClientProvider client={new QueryClient()}>
+                <PortfolioExposureCard currency="EUR" />
+            </QueryClientProvider>,
         );
+        const issuer = screen.getByRole("button", {
+            name: "Issuer",
+        });
+        const sector = screen.getByRole("button", {
+            name: "Sector",
+        });
+        expect(issuer).toHaveAttribute("aria-pressed", "true");
+        await userEvent.click(sector);
+        expect(issuer).toHaveAttribute("aria-pressed", "false");
+        expect(sector).toHaveAttribute("aria-pressed", "true");
+    });
+    it("rejects oversized source bundles without replacing the current coverage", async () => {
+        render(
+            <QueryClientProvider client={new QueryClient()}>
+                <PortfolioExposureCard currency="EUR" />
+            </QueryClientProvider>,
+        );
+        await userEvent.click(screen.getByText("Sources and import"));
+        const file = new File([new Uint8Array(1_000_001)], "sources.json", {
+            type: "application/json",
+        });
+        await userEvent.upload(
+            screen.getByLabelText("Import exposure sources"),
+            file,
+        );
+        expect(screen.getByRole("alert")).toBeVisible();
         expect(
             screen.getByText("No holdings are classified for this dimension."),
         ).toBeVisible();

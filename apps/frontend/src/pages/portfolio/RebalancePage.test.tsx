@@ -206,7 +206,17 @@ describe("RebalancePage saved-plan deletion", () => {
         );
         expect(
             await screen.findByText(/not guaranteed spendable cash/i),
-        ).toBeInTheDocument();
+        ).toBeVisible();
+        expect(reserve).toHaveAccessibleDescription(/Cash to keep aside.*EUR/);
+        const methodology = screen.getByText("How this estimate is calculated");
+        const details = methodology.closest("details");
+        expect(details).not.toHaveAttribute("open");
+        await user.click(methodology);
+        expect(details).toHaveAttribute("open");
+        expect(
+            screen.getByText(/Currency conversions use stored exchange rates/),
+        ).toBeVisible();
+        expect(screen.getByText(/Excludes future income/)).toBeVisible();
     });
 
     it("clears a computed estimate when the custom target changes", async () => {

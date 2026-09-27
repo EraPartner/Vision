@@ -562,6 +562,7 @@ export default function RebalancePage() {
                         </Label>
                         <Input
                             id="rebalance-reserve-floor"
+                            aria-describedby="rebalance-reserve-help"
                             type="text"
                             inputMode="decimal"
                             value={reserveFloorInput}
@@ -571,6 +572,14 @@ export default function RebalancePage() {
                             }}
                             className="w-40 text-right tabular-nums"
                         />
+                        <p
+                            id="rebalance-reserve-help"
+                            className="max-w-64 text-xs text-muted-foreground"
+                        >
+                            {t("rebalance.reserveHelp", {
+                                currency,
+                            })}
+                        </p>
                     </div>
                     <Button
                         onClick={() => compute.mutate()}
@@ -618,23 +627,44 @@ export default function RebalancePage() {
                             {t("rebalance.commitment.title")}
                         </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-2 text-sm">
-                        <p>
-                            {t("rebalance.commitment.minimum", {
-                                amount: fmt(projection.minimumProjectedBalance),
-                                date: projection.minimumDate,
-                            })}
-                        </p>
-                        <p>
-                            {t("rebalance.commitment.candidate", {
-                                amount: fmt(projection.candidateCashCap),
-                            })}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                            {t("rebalance.commitment.assumptions", {
-                                date: projection.horizonEnd,
-                            })}
-                        </p>
+                    <CardContent className="space-y-4 text-sm">
+                        <div className="grid gap-4 sm:grid-cols-2">
+                            <div className="rounded-lg border bg-muted/20 p-4">
+                                <p className="text-xs text-muted-foreground">
+                                    {t("rebalance.commitment.candidateLabel")}
+                                </p>
+                                <p className="mt-1 text-2xl font-semibold tabular-nums">
+                                    {fmt(projection.candidateCashCap)}
+                                </p>
+                                <p className="mt-2 text-xs text-muted-foreground">
+                                    {t("rebalance.commitment.estimateWarning")}
+                                </p>
+                            </div>
+                            <div className="flex items-center rounded-lg border p-4 text-muted-foreground">
+                                {t("rebalance.commitment.minimum", {
+                                    amount: fmt(
+                                        projection.minimumProjectedBalance,
+                                    ),
+                                    date: projection.minimumDate,
+                                })}
+                            </div>
+                        </div>
+                        <details className="rounded-lg border px-3 py-2">
+                            <summary className="cursor-pointer rounded-sm py-1 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                                {t("rebalance.commitment.methodology")}
+                            </summary>
+                            <ul className="mt-2 list-disc space-y-2 pl-5 text-xs leading-relaxed text-muted-foreground">
+                                <li>
+                                    {t("rebalance.commitment.includes", {
+                                        date: projection.horizonEnd,
+                                    })}
+                                </li>
+                                <li>
+                                    {t("rebalance.commitment.exchangeRates")}
+                                </li>
+                                <li>{t("rebalance.commitment.exclusions")}</li>
+                            </ul>
+                        </details>
                     </CardContent>
                 </Card>
             )}

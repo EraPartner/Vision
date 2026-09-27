@@ -369,6 +369,10 @@ export default function PerformancePage() {
                 icon={PAGE_ICONS["/portfolio/performance"]}
             />
 
+            <p className="text-sm text-muted-foreground">
+                {t("performance.scopeHint")}
+            </p>
+
             {/* Period selector */}
             <ChartPeriodSelector
                 periods={CHART_PERIODS}
@@ -525,7 +529,7 @@ export default function PerformancePage() {
                             labels={{
                                 title: t("portfolio.portfolioValue"),
                                 investments: "",
-                                assetSplit: t("performance.allocation"),
+                                assetSplit: t("performance.trackedAllocation"),
                                 bestPerformer: t("portfolio.bestPerformer"),
                                 worstPerformer: t("portfolio.worstPerformer"),
                                 sparkline: t("performance.last30Days"),

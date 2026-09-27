@@ -312,7 +312,16 @@ function TransactionList({
 
     return (
         <div ref={scrollRef} className="max-h-[400px] overflow-y-auto pr-2">
-            <div style={{ paddingTop, paddingBottom }}>
+            {/* Reserve the full extent before the first viewport measurement.
+                Otherwise an empty virtual window collapses this max-height
+                scroller to zero and no transaction can ever mount. */}
+            <div
+                style={{
+                    minHeight: virtualizer.getTotalSize(),
+                    paddingTop,
+                    paddingBottom,
+                }}
+            >
                 {items.map((item) => {
                     const txn = transactions[item.index];
                     if (!txn) return null;

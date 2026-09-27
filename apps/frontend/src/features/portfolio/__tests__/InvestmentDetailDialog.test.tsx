@@ -9,6 +9,8 @@ import { ok, err } from "@/test/msw/handlers";
 import { InvestmentDetailDialog } from "@/features/portfolio/InvestmentDetailDialog";
 import type { InvestmentSummary } from "@/types/portfolio";
 
+const virtualWindow = vi.hoisted(() => ({ measured: true }));
+
 // jsdom has no layout: the transactions list's scroll box measures 0px tall, so
 // the real virtualizer mounts no rows at all. Render every item instead, the
 // same stand-in VirtualDataTable's tests use, so these keep asserting the row
@@ -22,13 +24,16 @@ vi.mock("@tanstack/react-virtual", () => ({
         estimateSize: () => number;
     }) => ({
         getVirtualItems: () =>
-            Array.from({ length: count }, (_, i) => ({
-                key: i,
-                index: i,
-                start: i * estimateSize(),
-                end: (i + 1) * estimateSize(),
-                size: estimateSize(),
-            })),
+            Array.from(
+                { length: virtualWindow.measured ? count : 0 },
+                (_, i) => ({
+                    key: i,
+                    index: i,
+                    start: i * estimateSize(),
+                    end: (i + 1) * estimateSize(),
+                    size: estimateSize(),
+                }),
+            ),
         getTotalSize: () => count * estimateSize(),
         measureElement: vi.fn(),
         scrollToIndex: vi.fn(),
@@ -89,10 +94,32 @@ const INVESTMENT: InvestmentSummary = {
 };
 
 afterEach(() => {
+    virtualWindow.measured = true;
     vi.restoreAllMocks();
 });
 
 describe("InvestmentDetailDialog", () => {
+    it("reserves transaction content height before the viewport is measured", async () => {
+        virtualWindow.measured = false;
+        const user = userEvent.setup();
+        renderWithApp(<InvestmentDetailDialog investment={INVESTMENT} />);
+        await user.click(
+            await screen.findByRole("button", { name: /details/i }),
+        );
+        await user.click(
+            await screen.findByRole("tab", { name: /transactions/i }),
+        );
+
+        // Real virtualizers initially return no rows. A max-height scroller
+        // needs an intrinsic content extent to become measurable and mount them.
+        expect(screen.queryByText("Initial buy")).not.toBeInTheDocument();
+        const panel = screen.getByRole("tabpanel");
+        const scroller = panel.querySelector(".overflow-y-auto");
+        const content = scroller?.firstElementChild as HTMLElement;
+        expect(content).toBeTruthy();
+        expect(parseFloat(content.style.minHeight)).toBeGreaterThan(0);
+    });
+
     it("renders trigger button (Eye/Details button)", async () => {
         // Arrange + Act
         renderWithApp(<InvestmentDetailDialog investment={INVESTMENT} />);
