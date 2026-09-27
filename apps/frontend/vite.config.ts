@@ -63,7 +63,9 @@ export default defineConfig(({ mode }) => ({
     __APP_VERSION__: JSON.stringify(rootPackage.version),
   },
   server: {
-    host: "::",
+    // The API proxy is unauthenticated. Keep host development on loopback;
+    // containers explicitly opt in to a wildcard behind loopback port mappings.
+    host: process.env.VISION_VITE_BIND_HOST || "127.0.0.1",
     port: 8080,
     strictPort: false, // auto-pick next free port if 8080 is taken
     proxy: {

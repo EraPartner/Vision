@@ -83,6 +83,7 @@ const csvEnv = (defaultValue) =>
 const envSchema = z
   .object({
     SERVER_HOST: optionalStringEnv,
+    SERVER_ALLOWED_HOSTS: csvEnv(""),
     HOSTNAME: optionalStringEnv,
     PORT: intEnv(3002),
     ENVIRONMENT: optionalStringEnv,

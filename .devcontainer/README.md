@@ -60,6 +60,10 @@ VISION_REBUILD=1 vision-claude --dangerously-skip-permissions
 
 ## Browser access from the host
 
+The image sets `VISION_VITE_BIND_HOST=0.0.0.0` for its internal Vite listener. Outside the image,
+Vite defaults to `127.0.0.1`. Rebuild the image after this configuration change and preserve the
+host-loopback port publications below; the API proxy has no separate session authentication.
+
 The container publishes `127.0.0.1:8080:8080` and
 `127.0.0.1:3002:3002`. Once Claude (or you) runs `bun run dev`
 inside the container, the host can reach:

@@ -28,6 +28,7 @@ import {
   isLoopbackHost,
 } from "./middleware/adminAuth.js";
 import { createCsrfGuard } from "./middleware/csrfGuard.js";
+import { createHostGuard } from "./middleware/hostGuard.js";
 import { createCorsMiddleware } from "./middleware/cors.js";
 import { compression } from "./middleware/compression.js";
 import { closeBrowser as closePuppeteerBrowser } from "./services/reports/puppeteerRenderer.js";
@@ -106,6 +107,14 @@ const app = express();
 
 // Request ID — must run first so every other middleware and logger sees `req.id`.
 app.use(requestId);
+
+// Check the destination before CORS can finish OPTIONS or any body/route runs.
+app.use(
+  createHostGuard({
+    bindHost: settings.server.host,
+    allowedHosts: settings.server.allowedHosts,
+  }),
+);
 
 // Request metrics — rolling in-memory window for /api/admin/metrics/requests.
 app.use(requestMetrics);
@@ -524,11 +533,6 @@ async function start() {
       databaseUrl: settings.database.url,
       migrationsUrl: settings.database.migrationsUrl,
     });
-    await ensureAnalysisRole({
-      databaseUrl: settings.database.url,
-      analysisUrl: settings.database.analysisUrl,
-      migrationsUrl: settings.database.migrationsUrl,
-    });
     endRoleBootstrap();
 
     // Wait for PostgreSQL to be fully ready. On a cold first-ever native start,
@@ -551,6 +555,12 @@ async function start() {
         // Alembic is the single source of schema DDL (ADR-027).
         const endMig = bootMark("run_migrations");
         await runMigrations();
+        // Approved views may be created or replaced by this migration pass.
+        await ensureAnalysisRole({
+          databaseUrl: settings.database.url,
+          analysisUrl: settings.database.analysisUrl,
+          migrationsUrl: settings.database.migrationsUrl,
+        });
         // A fresh baseline can introduce routines after the app role's first
         // grant pass. Apply that grant set once more only when a grant was
         // missing before migration.

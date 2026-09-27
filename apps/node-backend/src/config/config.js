@@ -56,6 +56,7 @@ const defaultOpenAiModel = env.OPENAI_API_MODEL || openAiModels[0]?.id;
 const settings = deepFreeze({
   server: {
     host: env.SERVER_HOST || env.HOSTNAME || "localhost",
+    allowedHosts: env.SERVER_ALLOWED_HOSTS,
     port: env.PORT,
     environment: env.ENVIRONMENT || env.NODE_ENV || "development",
   },
