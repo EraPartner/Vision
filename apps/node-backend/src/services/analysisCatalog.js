@@ -299,9 +299,10 @@ export function compileVisualAnalysis(plan) {
     );
   }
 
-  const groupSql = measures.length
-    ? `\nGROUP BY ${groups.map((id) => fieldExpression(dataset, id, joined)).join(", ")}`
-    : "";
+  const groupSql =
+    measures.length && groups.length
+      ? `\nGROUP BY ${groups.map((id) => fieldExpression(dataset, id, joined)).join(", ")}`
+      : "";
   const allowedOutputs = new Set([...fields, ...measures]);
   const order = (plan.orderBy ?? []).map(({ id, direction }) => {
     if (!allowedOutputs.has(id))

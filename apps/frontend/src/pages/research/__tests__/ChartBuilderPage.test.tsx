@@ -152,15 +152,37 @@ describe("ChartBuilderPage oscillator state", () => {
         queryState.loading = true;
         renderPage();
 
-        expect(screen.getAllByRole("status")).toHaveLength(1);
+        expect(
+            screen.getAllByRole("status", { name: /loading/i }),
+        ).toHaveLength(1);
+        expect(
+            screen.getByText("Changes saved on this device"),
+        ).toBeInTheDocument();
     });
 
     it("replaces loading bones with compact settled empty states", () => {
         queryState.loading = false;
         renderPage();
 
-        expect(screen.queryByRole("status")).not.toBeInTheDocument();
+        expect(
+            screen.queryByRole("status", { name: /loading/i }),
+        ).not.toBeInTheDocument();
         expect(screen.getAllByText("No chart data available")).toHaveLength(2);
+    });
+
+    it("keeps chart options collapsed and preserves scale choices", async () => {
+        const user = userEvent.setup();
+        renderPage();
+        const options = screen.getByText("Chart options").closest("details")!;
+        expect(options).not.toHaveAttribute("open");
+        await user.click(screen.getByText("Chart options"));
+        const scale = screen.getByRole("switch", { name: "Log scale" });
+        await user.click(scale);
+        await user.click(screen.getByText("Chart options"));
+        expect(options).not.toHaveAttribute("open");
+        expect(options.querySelector("summary")).toHaveTextContent("Log scale");
+        await user.click(screen.getByText("Chart options"));
+        expect(scale).toBeChecked();
     });
 
     it("saves and deletes a named layout through the rendered controls", async () => {
@@ -177,6 +199,7 @@ describe("ChartBuilderPage oscillator state", () => {
         );
         expect(stored.layouts).toHaveLength(1);
 
+        await user.click(screen.getByText("Layout actions"));
         await user.click(screen.getByRole("button", { name: /^delete$/i }));
         await user.click(
             within(screen.getByRole("alertdialog")).getByRole("button", {
@@ -238,6 +261,14 @@ describe("ChartBuilderPage oscillator state", () => {
         });
 
         renderPage();
+        expect(
+            await screen.findByText(
+                "Chart changes could not be saved on this device.",
+            ),
+        ).toBeInTheDocument();
+        expect(
+            screen.queryByText("Changes saved on this device"),
+        ).not.toBeInTheDocument();
 
         await vi.waitFor(() =>
             expect(toast.error).toHaveBeenCalledWith(

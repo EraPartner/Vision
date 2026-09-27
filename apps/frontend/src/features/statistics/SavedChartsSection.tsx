@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Plus, TrendingUp } from "lucide-react";
 import { useSavedCharts, useDeleteSavedChart } from "@/hooks/useSavedCharts";
@@ -26,7 +26,16 @@ export function SavedChartsSection({ data }: SavedChartsSectionProps) {
         undefined,
     );
 
-    const handleEdit = (chart: SavedChart) => {
+    const builderOpener = useRef<HTMLButtonElement | null>(null);
+    const newChartButton = useRef<HTMLButtonElement | null>(null);
+    const restoreBuilderFocus = () => {
+        (builderOpener.current?.isConnected
+            ? builderOpener.current
+            : newChartButton.current
+        )?.focus();
+    };
+    const handleEdit = (chart: SavedChart, opener: HTMLButtonElement) => {
+        builderOpener.current = opener;
         setEditChart(chart);
         setBuilderOpen(true);
     };
@@ -36,15 +45,23 @@ export function SavedChartsSection({ data }: SavedChartsSectionProps) {
         if (!open) setEditChart(undefined);
     };
 
-    const handleDelete = async (chart: SavedChart) => {
+    const handleDelete = async (
+        chart: SavedChart,
+        opener: HTMLButtonElement,
+    ) => {
         const accepted = await confirm({
             title: t("customChart.deleteTitle"),
             description: t("customChart.deleteDesc", { name: chart.name }),
             confirmLabel: t("common.delete"),
             cancelLabel: t("common.cancel"),
             variant: "destructive",
+            onCloseAutoFocus: () =>
+                (opener.isConnected ? opener : newChartButton.current)?.focus(),
         });
-        if (accepted) deleteChart.mutate(chart.id);
+        if (accepted)
+            deleteChart.mutate(chart.id, {
+                onSuccess: () => newChartButton.current?.focus(),
+            });
     };
 
     const charts = (savedCharts ?? []).filter(
@@ -66,7 +83,9 @@ export function SavedChartsSection({ data }: SavedChartsSectionProps) {
                 </div>
                 <Button
                     size="sm"
-                    onClick={() => {
+                    ref={newChartButton}
+                    onClick={(event) => {
+                        builderOpener.current = event.currentTarget;
                         setEditChart(undefined);
                         setBuilderOpen(true);
                     }}
@@ -92,7 +111,8 @@ export function SavedChartsSection({ data }: SavedChartsSectionProps) {
                         description={t("customChart.emptyDesc")}
                         action={
                             <Button
-                                onClick={() => {
+                                onClick={(event) => {
+                                    builderOpener.current = event.currentTarget;
                                     setEditChart(undefined);
                                     setBuilderOpen(true);
                                 }}
@@ -111,7 +131,9 @@ export function SavedChartsSection({ data }: SavedChartsSectionProps) {
                             savedChart={chart}
                             data={data}
                             onEdit={handleEdit}
-                            onDelete={(chart) => void handleDelete(chart)}
+                            onDelete={(chart, opener) =>
+                                void handleDelete(chart, opener)
+                            }
                         />
                     ))}
                 </div>
@@ -122,6 +144,7 @@ export function SavedChartsSection({ data }: SavedChartsSectionProps) {
                 onOpenChange={handleBuilderClose}
                 data={data}
                 editChart={editChart}
+                onCloseAutoFocus={restoreBuilderFocus}
             />
 
             <ConfirmDialog />

@@ -2,7 +2,7 @@
 title: Saved Charts Feature
 type: feature
 status: active
-date: 2026-09-11
+date: 2026-09-27
 tags:
   [
     feature,
@@ -34,7 +34,7 @@ related_code:
   - alembic/versions/0063_saved_charts_tag_ids.py
   - alembic/versions/0064_saved_charts_all_source_flags.py
   - alembic/versions/0096_normalize_saved_chart_filters.py
-updated: 2026-09-04
+updated: 2026-09-27
 ---
 
 # Saved Charts Feature
@@ -204,6 +204,7 @@ See [[docs/api/aggregations|Aggregations API]] for the full `tag-pivot` contract
   - The manual picker remains fully functional when the toggle is off.
 - **Right column**: live `<CustomChart>` preview updated as state changes.
 - **Modes**: create (default values) and edit (initial values from existing `SavedChart`).
+- **Focus**: closing the builder returns focus to its New chart, first-chart, or Edit opener. If that control is no longer mounted, focus returns to the header's New chart button.
 - **Save**: calls `useCreateSavedChart` or `useUpdateSavedChart`; closes modal on success. A chart is saveable when at least one dimension has either a non-empty id list or its all-flag set to `true`.
 
 ### SavedChartsSection (tab content)
@@ -213,7 +214,7 @@ See [[docs/api/aggregations|Aggregations API]] for the full `tag-pivot` contract
 - Header: section title + "New chart" button.
 - Empty state: illustration + description + "Create your first chart" CTA when no charts.
 - Chart grid: `grid-cols-1 lg:grid-cols-2` layout; each card is a `CustomChart` with edit/delete callbacks.
-- Delete confirm: `AlertDialog` pattern (shadcn).
+- Delete confirm: `AlertDialog` pattern (shadcn). Cancelling returns focus to the chart's Delete button. Successful deletion focuses New chart, which also serves as the fallback if the original control is gone.
 - Filters out `autochart:*` name-prefixed charts (tax-page internal records).
 
 ### Tax Page Compatibility

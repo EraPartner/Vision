@@ -2,8 +2,8 @@
 title: Analysis Workspace
 type: feature
 status: active
-date: 2026-09-26
-updated: 2026-09-26
+date: 2026-09-27
+updated: 2026-09-27
 tags:
   [
     feature,
@@ -40,7 +40,9 @@ related_code:
 
 The default example groups non-transfer active cash flow by month and category. Join IDs come from
 the catalog; raw join expressions are not accepted. Sorting reruns the server query rather than
-sorting only the loaded page.
+sorting only the loaded page. For a single total across the filtered dataset, select measures such
+as Count or Sum with no fields or groups. The compiler omits `GROUP BY` for this form while
+retaining filters and ordering on the selected measures.
 
 The start panel also offers three ordinary, editable templates over the same synthetic-data-safe
 catalog: category spending, monthly cash flow, and portfolio activity. Applying a template copies
@@ -67,7 +69,9 @@ compatible visual origin is retained when the result shape is unchanged.
   visual analysis retain that order.
 - Drill-through uses the selected group values as typed filters.
 - A pivot uses the first two groups and first measure only when the complete result is loaded.
-- A bar chart uses chosen result columns only when the complete result is loaded.
+- A bar chart uses chosen result columns only when the complete result is loaded. Its selectors
+  are labelled **Category axis** and **Value axis**; the value selector offers only numeric
+  columns. Results without a numeric column show an explanation instead of an empty chart.
 - A failed run leaves the last usable result visible with an explicit error.
 
 These rules prevent a loaded page from being presented as a whole-population chart or pivot.
@@ -123,6 +127,17 @@ history. A local model can propose a typed edit against the current version. The
 before/after document; applying it requires a separate action and a stale base version is rejected.
 Users can continue editing and saving with AI unavailable.
 
+Opening a saved analysis restores valid bar-chart column choices. Missing or stale choices fall
+back independently to the first result column for categories and the first numeric column for
+values. Without a cached result, stored axis choices are preserved until the next run can check
+them against the returned columns. Opening the analysis also returns its result paging to the
+beginning.
+
+**Version history** shows a loading state while fetching. An empty history or one containing only
+the current version displays **No earlier versions**. Failed requests display an error rather
+than leaving the action without feedback. A response for an analysis or version that is no longer
+selected cannot replace the current history or error state.
+
 ## Operational boundary
 
 `DATABASE_URL_ANALYSIS` must name `vision_analysis_executor`, use the same database as
@@ -156,3 +171,18 @@ starting. See [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]] fo
 - [[docs/adr/144-isolated-manual-analysis-workspace|ADR-144]]
 - [[docs/adr/149-cloud-authored-catalog-analysis-plans|ADR-149]]
 - [[docs/features/portfolio|Portfolio]]
+
+
+## Template selection
+
+The template chooser closes after selecting a template, starting a blank analysis, or loading a saved analysis. Choose a template reopens it without discarding the current draft. Analysis name and optional source references have visible labels; Visual and SQL expose their selected state.
+
+
+## Task-focused guidance and hierarchy
+
+The builder explains columns versus totals and counts, including the explicit Group by requirement. Result guidance identifies the last completed run and asks users to rerun after editing; it does not imply automatic updates or SQL drill-through.
+
+
+## Clarity and recovery feedback
+
+A query-input signature marks displayed results as needing an update after the query changes. The warning remains through a failed rerun and clears after a successful run for the current query. It concerns query inputs, not unsaved analysis metadata.

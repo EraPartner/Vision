@@ -108,6 +108,7 @@ interface CustomChartBuilderModalProps {
     onOpenChange: (open: boolean) => void;
     data: StatisticsData;
     editChart?: SavedChart;
+    onCloseAutoFocus?: () => void;
 }
 
 export function CustomChartBuilderModal({
@@ -115,6 +116,7 @@ export function CustomChartBuilderModal({
     onOpenChange,
     data,
     editChart,
+    onCloseAutoFocus,
 }: CustomChartBuilderModalProps) {
     const { t } = useLanguage();
     const fieldId = useId();
@@ -261,7 +263,15 @@ export function CustomChartBuilderModal({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogContent
+                className="max-w-4xl max-h-[90vh] overflow-y-auto"
+                onCloseAutoFocus={(event) => {
+                    if (onCloseAutoFocus) {
+                        event.preventDefault();
+                        onCloseAutoFocus();
+                    }
+                }}
+            >
                 <DialogHeader>
                     <DialogTitle>
                         {isEdit

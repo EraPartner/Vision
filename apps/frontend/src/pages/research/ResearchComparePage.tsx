@@ -332,6 +332,7 @@ export default function ResearchComparePage() {
         setSearchText,
         searchResult,
         isFetching: isSearching,
+        isError: searchFailed,
         isOpen,
     } = useSymbolSearch(apiClient.searchResearch, {
         queryKey: "research-search",
@@ -453,6 +454,8 @@ export default function ResearchComparePage() {
             series: lineSeries,
             statsRows: perSymbol.map((s, i) => ({
                 ...s.stats,
+                firstTime: s.rebased[0]?.time,
+                lastTime: s.rebased[s.rebased.length - 1]?.time,
                 color: getChartColor(i),
             })),
             correlation: { symbols: returnSeries.map((r) => r.symbol), matrix },
@@ -569,9 +572,23 @@ export default function ResearchComparePage() {
                         value={searchText}
                         onChange={setSearchText}
                         loading={isSearching && searchText.length > 0}
-                        open={isOpen && searchItems.length > 0}
+                        open={isOpen}
                         onDismiss={() => setSearchText("")}
                     >
+                        {!isSearching && searchItems.length === 0 && (
+                            <p
+                                role="status"
+                                className="px-3 py-3 text-sm text-muted-foreground"
+                            >
+                                {t(
+                                    searchFailed ||
+                                        searchResult?.meta.source ===
+                                            "unavailable"
+                                        ? "research.searchFailed"
+                                        : "research.noResults",
+                                )}
+                            </p>
+                        )}
                         {searchItems.map((item) => (
                             <SymbolSearchResultItem
                                 key={`${item.symbol}-${item.exchange}`}
@@ -617,6 +634,9 @@ export default function ResearchComparePage() {
                                         onChange={setSelectedRange}
                                     />
                                 </div>
+                                <p className="text-sm text-muted-foreground">
+                                    {t("research.compare.rebasedHint")}
+                                </p>
                             </CardHeader>
                             <CardContent>
                                 {isLoading ? (
@@ -668,6 +688,9 @@ export default function ResearchComparePage() {
                                 <CardTitle variant="sm">
                                     {t("research.compare.metrics")}
                                 </CardTitle>
+                                <p className="text-xs text-muted-foreground">
+                                    {t("research.compare.historyHint")}
+                                </p>
                             </CardHeader>
                             <CardContent>
                                 <Table>
@@ -707,6 +730,32 @@ export default function ResearchComparePage() {
                                                             {row.symbol}
                                                         </span>
                                                     </span>
+                                                    {Number.isFinite(
+                                                        row.firstTime,
+                                                    ) &&
+                                                        Number.isFinite(
+                                                            row.lastTime,
+                                                        ) && (
+                                                            <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                                                                {t(
+                                                                    "research.compare.historyRange",
+                                                                    {
+                                                                        from: formatDateWithAppSettings(
+                                                                            new Date(
+                                                                                row.firstTime!,
+                                                                            ),
+                                                                            appSettings.dateFormat,
+                                                                        ),
+                                                                        to: formatDateWithAppSettings(
+                                                                            new Date(
+                                                                                row.lastTime!,
+                                                                            ),
+                                                                            appSettings.dateFormat,
+                                                                        ),
+                                                                    },
+                                                                )}
+                                                            </span>
+                                                        )}
                                                 </TableCell>
                                                 <TableCell className="text-right tabular-nums">
                                                     {row.totalReturn == null ? (

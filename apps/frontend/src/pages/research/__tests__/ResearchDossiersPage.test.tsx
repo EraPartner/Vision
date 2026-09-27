@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { screen } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
@@ -90,5 +90,105 @@ describe("ResearchDossiersPage", () => {
             evidence: [{ origin: "ai-draft" }],
             links: { investmentIds: [3] },
         });
+    });
+    it("preserves edited dossiers on reselection and cancelled switches, and discards only after confirmation", async () => {
+        const content = {
+            title: "First dossier",
+            workspace: "research",
+            question: "First question",
+            userThesis: "",
+            assumptions: [],
+            openQuestions: [],
+            conclusion: "",
+            reviewDate: null,
+            evidence: [],
+            links: { categoryIds: [], investmentIds: [], savedAnalysisIds: [] },
+        };
+        const dossiers = [
+            { ...content, id: "first", version: 1 },
+            { ...content, id: "second", title: "Second dossier", version: 1 },
+        ];
+        let writes = 0;
+        server.use(
+            http.get(`${api}/research-dossiers`, () =>
+                ok({ items: dossiers, total: 2, limit: 500, offset: 0 }),
+            ),
+            http.get(`${api}/research-dossiers/:id/versions`, () =>
+                ok({ items: [] }),
+            ),
+            http.get(`${api}/research-dossiers/:id`, ({ params }) =>
+                ok(dossiers.find((item) => item.id === params.id)),
+            ),
+            http.get(`${api}/categories/tree`, () =>
+                ok({ items: [], total: 0 }),
+            ),
+            http.get(`${api}/investments`, () => ok({ items: [], total: 0 })),
+            http.get(`${api}/analysis/saved`, () => ok({ items: [] })),
+            http.get(`${api}/ai-research/documents`, () => ok({ items: [] })),
+            http.post(`${api}/research-dossiers`, () => {
+                writes += 1;
+                return ok({});
+            }),
+            http.put(`${api}/research-dossiers/:id`, () => {
+                writes += 1;
+                return ok({});
+            }),
+        );
+        const user = userEvent.setup();
+        renderWithApp(<ResearchDossiersPage />);
+        await user.click(
+            await screen.findByRole("button", { name: /First dossier/ }),
+        );
+        await screen.findByDisplayValue("First dossier");
+        await user.type(screen.getByLabelText("Title"), " edited");
+        await user.click(screen.getByRole("button", { name: /First dossier/ }));
+        expect(screen.getByLabelText("Title")).toHaveValue(
+            "First dossier edited",
+        );
+        expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+
+        await user.click(
+            screen.getByRole("button", { name: /Second dossier/ }),
+        );
+        let dialog = await screen.findByRole("alertdialog");
+        await user.click(
+            within(dialog).getByRole("button", { name: "Cancel" }),
+        );
+        expect(screen.getByLabelText("Title")).toHaveValue(
+            "First dossier edited",
+        );
+
+        await user.click(screen.getByRole("button", { name: /new dossier/i }));
+        dialog = await screen.findByRole("alertdialog");
+        await user.click(
+            within(dialog).getByRole("button", { name: "Cancel" }),
+        );
+        expect(screen.getByLabelText("Title")).toHaveValue(
+            "First dossier edited",
+        );
+
+        await user.click(
+            screen.getByRole("button", { name: /Second dossier/ }),
+        );
+        dialog = await screen.findByRole("alertdialog");
+        await user.click(
+            within(dialog).getByRole("button", { name: "Discard changes" }),
+        );
+        await waitFor(() =>
+            expect(screen.getByLabelText("Title")).toHaveValue(
+                "Second dossier",
+            ),
+        );
+        await user.click(screen.getByRole("button", { name: /new dossier/i }));
+        expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+        expect(screen.getByLabelText("Title")).toHaveValue("");
+        await user.type(screen.getByLabelText("Title"), "New draft");
+        await user.click(screen.getByRole("button", { name: /new dossier/i }));
+        dialog = await screen.findByRole("alertdialog");
+        await user.click(
+            within(dialog).getByRole("button", { name: "Discard changes" }),
+        );
+        expect(screen.getByLabelText("Title")).toHaveValue("");
+        expect(writes).toBe(0);
     });
 });

@@ -18,6 +18,7 @@ import {
     useDossierPickers,
 } from "@/hooks/useDossiers";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageShell } from "@/components/shared/PageShell";
 import { Button } from "@/components/ui/button";
@@ -94,6 +95,7 @@ function LinesField({
 
 export default function ResearchDossiersPage() {
     const { t } = useLanguage();
+    const { confirm, ConfirmDialog } = useConfirmDialog();
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [listOffset, setListOffset] = useState(0);
     const [draft, setDraft] = useState<DossierContent | null>(null);
@@ -101,6 +103,7 @@ export default function ResearchDossiersPage() {
     const [conflict, setConflict] = useState(false);
     const [notice, setNotice] = useState("");
     const loadedRevision = useRef<string | null>(null);
+    const savedContent = useRef<string | null>(null);
     const list = useDossiers(listOffset);
     const detail = useDossier(selectedId);
     const history = useDossierVersions(selectedId);
@@ -125,7 +128,7 @@ export default function ResearchDossiersPage() {
             evidence,
             links,
         } = detail.data;
-        setDraft({
+        const content = {
             title,
             workspace,
             question,
@@ -136,23 +139,40 @@ export default function ResearchDossiersPage() {
             reviewDate,
             evidence,
             links,
-        });
+        };
+        savedContent.current = JSON.stringify(content);
+        setDraft(content);
     }, [selectedId, detail.data]);
 
     const edit = (patch: Partial<DossierContent>) =>
         setDraft((current) => (current ? { ...current, ...patch } : current));
-    const choose = (id: string) => {
+    const confirmDiscard = async () =>
+        !draft ||
+        JSON.stringify(draft) === savedContent.current ||
+        (await confirm({
+            title: t("dossiers.discardChangesTitle"),
+            description: t("dossiers.discardChangesConfirm"),
+            confirmLabel: t("dossiers.discardChanges"),
+            variant: "destructive",
+        }));
+    const choose = async (id: string, afterSave = false) => {
+        if (id === selectedId) return;
+        if (!afterSave && !(await confirmDiscard())) return;
         loadedRevision.current = null;
+        savedContent.current = null;
         setSelectedId(id);
         setDraft(null);
         setError("");
         setConflict(false);
         setNotice("");
     };
-    const create = () => {
+    const create = async () => {
+        if (!(await confirmDiscard())) return;
+        const content = emptyContent();
         loadedRevision.current = null;
+        savedContent.current = JSON.stringify(content);
         setSelectedId(null);
-        setDraft(emptyContent());
+        setDraft(content);
         setError("");
         setConflict(false);
         setNotice("");
@@ -185,10 +205,12 @@ export default function ResearchDossiersPage() {
                     expectedVersion: detail.data.version,
                 });
                 loadedRevision.current = null;
-                setDraft({ ...draft, evidence: saved.evidence });
+                const content = { ...draft, evidence: saved.evidence };
+                savedContent.current = JSON.stringify(content);
+                setDraft(content);
             } else {
                 const saved = await actions.create.mutateAsync(draft);
-                choose(saved.id);
+                await choose(saved.id, true);
             }
             setNotice(t("dossiers.saved"));
         });
@@ -252,6 +274,7 @@ export default function ResearchDossiersPage() {
 
     return (
         <PageShell>
+            <ConfirmDialog />
             <PageHeader
                 title={t("dossiers.title")}
                 subtitle={t("dossiers.subtitle")}
@@ -265,7 +288,7 @@ export default function ResearchDossiersPage() {
                             <Download className="mr-2 size-4" />
                             {t("dossiers.exportAll")}
                         </Button>
-                        <Button onClick={create}>
+                        <Button onClick={() => void create()}>
                             <Plus className="mr-2 size-4" />
                             {t("dossiers.new")}
                         </Button>
@@ -324,7 +347,7 @@ export default function ResearchDossiersPage() {
                             aria-current={
                                 selectedId === item.id ? "page" : undefined
                             }
-                            onClick={() => choose(item.id)}
+                            onClick={() => void choose(item.id)}
                             className="w-full rounded-lg border p-3 text-left hover:bg-accent aria-[current=page]:border-primary"
                         >
                             <span className="block font-medium">

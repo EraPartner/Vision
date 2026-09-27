@@ -56,7 +56,7 @@ interface ForecastRow extends ForecastPoint {
 }
 
 export default function PortfolioForecastPage() {
-    const { t } = useLanguage();
+    const { t, language } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
@@ -253,110 +253,162 @@ export default function PortfolioForecastPage() {
                         />
                     </div>
 
-                    <div className="space-y-2">
-                        <p
-                            id="forecast-return-source-label"
-                            className="text-sm font-medium"
-                        >
-                            {t("research.forecast.returnSource")}
-                        </p>
-                        <Tabs
-                            value={returnSource}
-                            onValueChange={(v) =>
-                                setReturnSource(v as ReturnSource)
-                            }
-                        >
-                            <TabsList
-                                className="h-8"
-                                aria-labelledby="forecast-return-source-label"
-                            >
-                                <TabsTrigger
-                                    value="historical"
-                                    className="text-xs"
+                    <details className="group rounded-lg border border-border/60 md:col-span-2 lg:col-span-3">
+                        <summary className="cursor-pointer rounded-lg px-4 py-3 text-sm marker:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
+                            <span className="font-medium">
+                                {t("research.forecast.assumptions")}
+                            </span>
+                            <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
+                                {t(
+                                    returnSource === "historical"
+                                        ? "research.forecast.sourceHistorical"
+                                        : "research.forecast.sourceBlended",
+                                )}
+                                {returnSource === "blended" &&
+                                    ` (${t("research.forecast.blendValue", { historical: 100 - blendPct, forward: blendPct })})`}
+                                {" · "}
+                                {t(
+                                    method === "parametric"
+                                        ? "research.forecast.methodParametric"
+                                        : "research.forecast.methodBootstrap",
+                                )}
+                                {" · "}
+                                {t("research.forecast.paths")}:{" "}
+                                {paths.toLocaleString(locale)}
+                            </span>
+                        </summary>
+                        <div className="grid gap-6 border-t border-border/60 p-4 md:grid-cols-2 lg:grid-cols-3">
+                            <div className="space-y-2">
+                                <p
+                                    id="forecast-return-source-label"
+                                    className="text-sm font-medium"
                                 >
-                                    {t("research.forecast.sourceHistorical")}
-                                </TabsTrigger>
-                                <TabsTrigger
-                                    value="blended"
-                                    className="text-xs"
+                                    {t("research.forecast.returnSource")}
+                                </p>
+                                <Tabs
+                                    value={returnSource}
+                                    onValueChange={(v) =>
+                                        setReturnSource(v as ReturnSource)
+                                    }
                                 >
-                                    {t("research.forecast.sourceBlended")}
-                                </TabsTrigger>
-                            </TabsList>
-                        </Tabs>
-                        {returnSource === "blended" && (
-                            <div className="pt-1">
-                                <div className="flex justify-between text-xs text-muted-foreground">
-                                    <span>
-                                        {t("research.forecast.blendHistorical")}
-                                    </span>
-                                    <span className="tabular-nums">
-                                        {blendPct}%{" "}
-                                        {t("research.forecast.blendForward")}
-                                    </span>
-                                </div>
-                                <Slider
-                                    className="mt-2"
-                                    value={[blendPct]}
-                                    min={0}
-                                    max={100}
-                                    step={5}
-                                    onValueChange={(v) => setBlendPct(v[0])}
+                                    <TabsList
+                                        className="h-8"
+                                        aria-labelledby="forecast-return-source-label"
+                                    >
+                                        <TabsTrigger
+                                            value="historical"
+                                            className="text-xs"
+                                        >
+                                            {t(
+                                                "research.forecast.sourceHistorical",
+                                            )}
+                                        </TabsTrigger>
+                                        <TabsTrigger
+                                            value="blended"
+                                            className="text-xs"
+                                        >
+                                            {t(
+                                                "research.forecast.sourceBlended",
+                                            )}
+                                        </TabsTrigger>
+                                    </TabsList>
+                                </Tabs>
+                                {returnSource === "blended" && (
+                                    <div className="pt-1">
+                                        <div className="flex justify-between text-xs text-muted-foreground">
+                                            <span>
+                                                {100 - blendPct}%{" "}
+                                                {t(
+                                                    "research.forecast.blendHistorical",
+                                                )}
+                                            </span>
+                                            <span className="tabular-nums">
+                                                {blendPct}%{" "}
+                                                {t(
+                                                    "research.forecast.blendForward",
+                                                )}
+                                            </span>
+                                        </div>
+                                        <Slider
+                                            className="mt-2"
+                                            aria-label={t(
+                                                "research.forecast.blendLabel",
+                                            )}
+                                            aria-valuetext={t(
+                                                "research.forecast.blendValue",
+                                                {
+                                                    historical: 100 - blendPct,
+                                                    forward: blendPct,
+                                                },
+                                            )}
+                                            value={[blendPct]}
+                                            min={0}
+                                            max={100}
+                                            step={5}
+                                            onValueChange={(v) =>
+                                                setBlendPct(v[0])
+                                            }
+                                        />
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="space-y-2">
+                                <p
+                                    id="forecast-method-label"
+                                    className="text-sm font-medium"
+                                >
+                                    {t("research.forecast.method")}
+                                </p>
+                                <Tabs
+                                    value={method}
+                                    onValueChange={(v) =>
+                                        setMethod(v as ForecastMethod)
+                                    }
+                                >
+                                    <TabsList
+                                        className="h-8"
+                                        aria-labelledby="forecast-method-label"
+                                    >
+                                        <TabsTrigger
+                                            value="parametric"
+                                            className="text-xs"
+                                        >
+                                            {t(
+                                                "research.forecast.methodParametric",
+                                            )}
+                                        </TabsTrigger>
+                                        <TabsTrigger
+                                            value="block_bootstrap"
+                                            className="text-xs"
+                                        >
+                                            {t(
+                                                "research.forecast.methodBootstrap",
+                                            )}
+                                        </TabsTrigger>
+                                    </TabsList>
+                                </Tabs>
+                            </div>
+
+                            <div className="space-y-2">
+                                <p
+                                    id="forecast-paths-label"
+                                    className="text-sm font-medium"
+                                >
+                                    {t("research.forecast.paths")}
+                                </p>
+                                <SegmentedButtons
+                                    aria-labelledby="forecast-paths-label"
+                                    options={PATH_OPTIONS}
+                                    getKey={(p) => p}
+                                    getLabel={(p) => p}
+                                    isSelected={(p) => paths === p}
+                                    onSelect={setPaths}
+                                    buttonClassName="h-8 px-3 text-xs tabular-nums"
                                 />
                             </div>
-                        )}
-                    </div>
-
-                    <div className="space-y-2">
-                        <p
-                            id="forecast-method-label"
-                            className="text-sm font-medium"
-                        >
-                            {t("research.forecast.method")}
-                        </p>
-                        <Tabs
-                            value={method}
-                            onValueChange={(v) =>
-                                setMethod(v as ForecastMethod)
-                            }
-                        >
-                            <TabsList
-                                className="h-8"
-                                aria-labelledby="forecast-method-label"
-                            >
-                                <TabsTrigger
-                                    value="parametric"
-                                    className="text-xs"
-                                >
-                                    {t("research.forecast.methodParametric")}
-                                </TabsTrigger>
-                                <TabsTrigger
-                                    value="block_bootstrap"
-                                    className="text-xs"
-                                >
-                                    {t("research.forecast.methodBootstrap")}
-                                </TabsTrigger>
-                            </TabsList>
-                        </Tabs>
-                    </div>
-
-                    <div className="space-y-2">
-                        <p
-                            id="forecast-paths-label"
-                            className="text-sm font-medium"
-                        >
-                            {t("research.forecast.paths")}
-                        </p>
-                        <SegmentedButtons
-                            aria-labelledby="forecast-paths-label"
-                            options={PATH_OPTIONS}
-                            getKey={(p) => p}
-                            getLabel={(p) => p}
-                            isSelected={(p) => paths === p}
-                            onSelect={setPaths}
-                            buttonClassName="h-8 px-3 text-xs tabular-nums"
-                        />
-                    </div>
+                        </div>
+                    </details>
                 </CardContent>
             </Card>
 
@@ -481,10 +533,10 @@ export default function PortfolioForecastPage() {
                                     height={360}
                                     series={series}
                                     xTickFormat={(v) =>
-                                        formatDateWithAppSettings(
-                                            v as Date,
-                                            appSettings.dateFormat,
-                                        )
+                                        new Intl.DateTimeFormat(language, {
+                                            month: "short",
+                                            year: "numeric",
+                                        }).format(v as Date)
                                     }
                                     yTickFormat={(v) =>
                                         formatCurrency(v, currency, locale, 0)

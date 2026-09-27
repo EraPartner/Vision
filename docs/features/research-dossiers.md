@@ -2,7 +2,7 @@
 title: Research Dossiers
 type: feature
 status: active
-date: 2026-09-19
+date: 2026-09-27
 tags: [feature, research, dossiers, evidence, provenance, analysis]
 description: Local versioned research records for questions, thesis, evidence, conclusions, and linked financial context.
 aliases: [dossier workspace, research dossier library]
@@ -15,6 +15,11 @@ write a thesis, assumptions, open questions, dated review target, conclusion, an
 sides. A dossier belongs to one of the budgeting, portfolio, research, or cross-workspace contexts.
 It can link current categories, investments, and saved analyses. Evidence has an explicit
 `user` or `ai-draft` origin; saving an AI draft does not make it an approved conclusion.
+
+Linked categories, investments, and saved analyses each have a collapsed picker with a selected
+count. Expanding a group reveals labelled checkboxes in a bounded, scrollable list. Groups with
+more than eight available records also offer a search field. Filtering or collapsing a group
+preserves its selections; an empty search result has an explicit message.
 
 The editor saves only on an explicit action. A successful save creates a numbered, immutable
 snapshot. When an editor is stale, the server rejects the save rather than overwriting a newer
@@ -49,3 +54,7 @@ service does not send it to an AI provider.
 - [[docs/features/analysis-workspace|Analysis Workspace]]
 - [[docs/features/backup-coverage-audit|Backup Coverage Audit]]
 - [[docs/features/analysis-monitors|Analysis Monitors]]
+
+### Unsaved edits when switching dossiers
+
+Selecting the current dossier keeps its draft unchanged. Selecting another dossier or New with unsaved edits opens the shared discard confirmation. Cancel retains the draft; Discard changes continues the requested selection. Saving remains explicit and successful saves do not trigger this confirmation.

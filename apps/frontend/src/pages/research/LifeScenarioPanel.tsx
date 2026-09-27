@@ -14,7 +14,7 @@ import type {
     PortfolioForecastInput,
 } from "@/types/research";
 import type { NumberFormat } from "@/utils/currency";
-import { formatCurrency } from "@/utils/currency";
+import { formatCurrency, formatEditableNumber } from "@/utils/currency";
 
 const SETTING_KEY = "life_scenarios";
 
@@ -65,15 +65,29 @@ const blankDraft = (): ScenarioDraft => ({
     goalDate: "",
 });
 
-function toDraft(scenario: LifeScenario): ScenarioDraft {
+function toDraft(
+    scenario: LifeScenario,
+    numberFormat: NumberFormat,
+): ScenarioDraft {
     return {
         id: scenario.id,
         name: scenario.name,
-        monthlySurplus: String(scenario.monthlySurplus),
-        monthlyIncomeLoss: String(scenario.monthlyIncomeLoss),
-        monthlyContribution: String(scenario.monthlyContribution),
+        monthlySurplus: formatEditableNumber(
+            scenario.monthlySurplus,
+            numberFormat,
+        ),
+        monthlyIncomeLoss: formatEditableNumber(
+            scenario.monthlyIncomeLoss,
+            numberFormat,
+        ),
+        monthlyContribution: formatEditableNumber(
+            scenario.monthlyContribution,
+            numberFormat,
+        ),
         goalValue:
-            scenario.goalValue === undefined ? "" : String(scenario.goalValue),
+            scenario.goalValue === undefined
+                ? ""
+                : formatEditableNumber(scenario.goalValue, numberFormat),
         goalDate: scenario.goalDate?.slice(0, 7) ?? "",
     };
 }
@@ -113,12 +127,14 @@ export default function LifeScenarioPanel({
     const [loadingSaved, setLoadingSaved] = useState(true);
     const [savedError, setSavedError] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [loadAttempt, setLoadAttempt] = useState(0);
 
     useEffect(() => {
         let active = true;
         getSetting(SETTING_KEY)
             .then((result) => {
                 if (active) {
+                    setSavedError(false);
                     setScenarios(
                         Array.isArray(result.value)
                             ? (result.value as LifeScenario[])
@@ -136,7 +152,7 @@ export default function LifeScenarioPanel({
         return () => {
             active = false;
         };
-    }, []);
+    }, [loadAttempt]);
 
     const edit = (patch: Partial<ScenarioDraft>) => {
         setDraft((current) => ({ ...current, ...patch }));
@@ -212,7 +228,7 @@ export default function LifeScenarioPanel({
             setSaving(true);
             await saveSetting(SETTING_KEY, next);
             setScenarios(next);
-            setDraft(toDraft(scenario));
+            setDraft(toDraft(scenario, numberFormat));
             setError(null);
         } catch (reason) {
             setError(apiErrorToMessage(reason, t));
@@ -341,9 +357,23 @@ export default function LifeScenarioPanel({
             </CardHeader>
             <CardContent className="space-y-5">
                 {savedError && (
-                    <p role="alert" className="text-sm text-destructive">
-                        {t("research.lifeScenario.loadFailed")}
-                    </p>
+                    <div className="flex flex-wrap items-center gap-3">
+                        <p role="alert" className="text-sm text-destructive">
+                            {t("research.lifeScenario.loadFailed")}
+                        </p>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={loadingSaved}
+                            onClick={() => {
+                                setLoadingSaved(true);
+                                setLoadAttempt((attempt) => attempt + 1);
+                            }}
+                        >
+                            {t("common.retry")}
+                        </Button>
+                    </div>
                 )}
                 <div className="flex flex-wrap items-end gap-3">
                     <div className="min-w-56 flex-1 space-y-2">
@@ -360,7 +390,9 @@ export default function LifeScenarioPanel({
                                     (item) => item.id === event.target.value,
                                 );
                                 setDraft(
-                                    selected ? toDraft(selected) : blankDraft(),
+                                    selected
+                                        ? toDraft(selected, numberFormat)
+                                        : blankDraft(),
                                 );
                                 setComparison(null);
                                 setError(null);
@@ -389,21 +421,22 @@ export default function LifeScenarioPanel({
                         {t("research.lifeScenario.new")}
                     </Button>
                 </div>
+                <div className="space-y-2">
+                    <Label htmlFor="life-scenario-name">
+                        {t("research.lifeScenario.name")}
+                    </Label>
+                    <Input
+                        id="life-scenario-name"
+                        disabled={saving}
+                        maxLength={80}
+                        value={draft.name}
+                        onChange={(event) => edit({ name: event.target.value })}
+                    />
+                </div>
+                <p className="text-sm text-muted-foreground">
+                    {t("research.lifeScenario.amountsHelp", { currency })}
+                </p>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    <div className="space-y-2">
-                        <Label htmlFor="life-scenario-name">
-                            {t("research.lifeScenario.name")}
-                        </Label>
-                        <Input
-                            id="life-scenario-name"
-                            disabled={saving}
-                            maxLength={80}
-                            value={draft.name}
-                            onChange={(event) =>
-                                edit({ name: event.target.value })
-                            }
-                        />
-                    </div>
                     <div className="space-y-2">
                         <Label htmlFor="life-scenario-surplus">
                             {t("research.lifeScenario.monthlySurplus")}
@@ -451,42 +484,60 @@ export default function LifeScenarioPanel({
                             }
                         />
                     </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="life-scenario-goal-value">
-                            {t("research.lifeScenario.goalValue")}
-                        </Label>
-                        <Input
-                            id="life-scenario-goal-value"
-                            disabled={saving}
-                            type="text"
-                            inputMode="decimal"
-                            value={draft.goalValue}
-                            onChange={(event) =>
-                                edit({ goalValue: event.target.value })
-                            }
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="life-scenario-goal-date">
-                            {t("research.lifeScenario.goalDate")}
-                        </Label>
-                        <Input
-                            id="life-scenario-goal-date"
-                            disabled={saving}
-                            type="month"
-                            value={draft.goalDate}
-                            onChange={(event) =>
-                                edit({ goalDate: event.target.value })
-                            }
-                        />
-                    </div>
                 </div>
+                <fieldset className="rounded-lg border border-border/50 p-4">
+                    <legend className="px-2 text-sm font-medium">
+                        {t("research.lifeScenario.optionalGoal")}
+                    </legend>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="space-y-2">
+                            <Label htmlFor="life-scenario-goal-value">
+                                {t("research.lifeScenario.goalValue")}
+                            </Label>
+                            <Input
+                                id="life-scenario-goal-value"
+                                disabled={saving}
+                                type="text"
+                                inputMode="decimal"
+                                value={draft.goalValue}
+                                onChange={(event) =>
+                                    edit({ goalValue: event.target.value })
+                                }
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="life-scenario-goal-date">
+                                {t("research.lifeScenario.goalDate")}
+                            </Label>
+                            <Input
+                                id="life-scenario-goal-date"
+                                disabled={saving}
+                                type="month"
+                                value={draft.goalDate}
+                                onChange={(event) =>
+                                    edit({ goalDate: event.target.value })
+                                }
+                            />
+                        </div>
+                    </div>
+                </fieldset>
                 <p className="text-xs text-muted-foreground">
                     {t("research.lifeScenario.assumption")}
                 </p>
                 <div className="flex flex-wrap gap-2">
                     <Button
                         type="button"
+                        variant="default"
+                        onClick={run}
+                        disabled={running || saving}
+                    >
+                        {running
+                            ? t("research.lifeScenario.running")
+                            : t("research.lifeScenario.run")}
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="outline"
                         onClick={saveDraft}
                         disabled={saving || loadingSaved || savedError}
                     >
@@ -502,16 +553,6 @@ export default function LifeScenarioPanel({
                             {t("research.lifeScenario.delete")}
                         </Button>
                     )}
-                    <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={run}
-                        disabled={running || saving}
-                    >
-                        {running
-                            ? t("research.lifeScenario.running")
-                            : t("research.lifeScenario.run")}
-                    </Button>
                 </div>
                 {error && (
                     <p role="alert" className="text-sm text-destructive">
@@ -534,6 +575,9 @@ export default function LifeScenarioPanel({
                     >
                         <p className="font-medium">
                             {t("research.lifeScenario.result")}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                            {t("research.lifeScenario.resultHelp")}
                         </p>
                         <div className="grid gap-3 sm:grid-cols-3">
                             <div>

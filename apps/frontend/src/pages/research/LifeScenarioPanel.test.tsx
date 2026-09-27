@@ -57,25 +57,17 @@ describe("LifeScenarioPanel", () => {
         await waitFor(() =>
             expect(getSetting).toHaveBeenCalledWith("life_scenarios"),
         );
-        await user.type(
-            screen.getByLabelText("Scenario name"),
-            "Income gap",
-        );
+        await user.type(screen.getByLabelText("Scenario name"), "Income gap");
         await user.type(
             screen.getByLabelText("Baseline monthly surplus"),
             "900",
         );
-        await user.type(
-            screen.getByLabelText("Monthly income lost"),
-            "700",
-        );
+        await user.type(screen.getByLabelText("Monthly income lost"), "700");
         await user.type(
             screen.getByLabelText("Planned monthly portfolio contribution"),
             "500",
         );
-        await user.click(
-            screen.getByRole("button", { name: "Save scenario" }),
-        );
+        await user.click(screen.getByRole("button", { name: "Save scenario" }));
 
         await waitFor(() =>
             expect(saveSetting).toHaveBeenCalledWith("life_scenarios", [
@@ -107,9 +99,7 @@ describe("LifeScenarioPanel", () => {
             200, 200, 200,
         ]);
         expect(interruption.seed).toBe(baseline.seed);
-        expect(
-            screen.getByText("Scenario comparison"),
-        ).toBeInTheDocument();
+        expect(screen.getByText("Scenario comparison")).toBeInTheDocument();
         view.rerender(
             <LifeScenarioPanel
                 forecastInput={{
@@ -138,36 +128,26 @@ describe("LifeScenarioPanel", () => {
                 numberFormat="us"
             />,
         );
-        await user.type(
-            screen.getByLabelText("Scenario name"),
-            "Dated goal",
-        );
+        await user.type(screen.getByLabelText("Scenario name"), "Dated goal");
         await user.type(
             screen.getByLabelText("Baseline monthly surplus"),
             "1000",
         );
-        await user.type(
-            screen.getByLabelText("Monthly income lost"),
-            "500",
-        );
+        await user.type(screen.getByLabelText("Monthly income lost"), "500");
         await user.type(
             screen.getByLabelText("Planned monthly portfolio contribution"),
             "600",
         );
-        await user.type(
-            screen.getByLabelText("Savings goal amount"),
-            "10000",
-        );
+        await user.type(screen.getByLabelText("Savings goal amount"), "10000");
         const date = new Date();
         date.setMonth(date.getMonth() + 6);
         const goalDate = [
             date.getFullYear(),
             String(date.getMonth() + 1).padStart(2, "0"),
         ].join("-");
-        fireEvent.change(
-            screen.getByLabelText("Savings goal month"),
-            { target: { value: goalDate } },
-        );
+        fireEvent.change(screen.getByLabelText("Savings goal month"), {
+            target: { value: goalDate },
+        });
         await user.click(
             screen.getByRole("button", { name: "Compare scenarios" }),
         );
@@ -183,5 +163,145 @@ describe("LifeScenarioPanel", () => {
             targetValue: 10000,
             goalMonth: 6,
         });
+    });
+    it("preserves European decimal values after saving and selecting a saved scenario", async () => {
+        const user = userEvent.setup();
+        const view = renderWithApp(
+            <LifeScenarioPanel
+                forecastInput={{ horizonMonths: 12, currency: "EUR" }}
+                currency="EUR"
+                locale="nl-BE"
+                numberFormat="eu"
+            />,
+        );
+        await waitFor(() =>
+            expect(
+                screen.getByRole("button", { name: "Save scenario" }),
+            ).toBeEnabled(),
+        );
+        for (const [label, value] of [
+            ["Scenario name", "Decimal scenario"],
+            ["Baseline monthly surplus", "900,75"],
+            ["Monthly income lost", "700,25"],
+            ["Planned monthly portfolio contribution", "500,5"],
+            ["Savings goal amount", "10000,25"],
+        ]) {
+            await user.type(screen.getByLabelText(label), value);
+        }
+        const date = new Date();
+        date.setMonth(date.getMonth() + 6);
+        fireEvent.change(screen.getByLabelText("Savings goal month"), {
+            target: {
+                value: [
+                    date.getFullYear(),
+                    String(date.getMonth() + 1).padStart(2, "0"),
+                ].join("-"),
+            },
+        });
+        await user.click(screen.getByRole("button", { name: "Save scenario" }));
+        await waitFor(() => expect(saveSetting).toHaveBeenCalled());
+        expect(screen.getByLabelText("Baseline monthly surplus")).toHaveValue(
+            "900,75",
+        );
+        const saved = saveSetting.mock.calls[0][1][0];
+        expect(saved).toMatchObject({
+            monthlySurplus: 900.75,
+            monthlyIncomeLoss: 700.25,
+            monthlyContribution: 500.5,
+            goalValue: 10000.25,
+        });
+        view.unmount();
+        getSetting.mockResolvedValue({ key: "life_scenarios", value: [saved] });
+        renderWithApp(
+            <LifeScenarioPanel
+                forecastInput={{ horizonMonths: 12, currency: "EUR" }}
+                currency="EUR"
+                locale="nl-BE"
+                numberFormat="eu"
+            />,
+        );
+        await screen.findByRole("option", { name: "Decimal scenario" });
+        await user.selectOptions(screen.getByRole("combobox"), saved.id);
+        expect(screen.getByLabelText("Baseline monthly surplus")).toHaveValue(
+            "900,75",
+        );
+        expect(screen.getByLabelText("Monthly income lost")).toHaveValue(
+            "700,25",
+        );
+        expect(
+            screen.getByLabelText("Planned monthly portfolio contribution"),
+        ).toHaveValue("500,5");
+        expect(screen.getByLabelText("Savings goal amount")).toHaveValue(
+            "10000,25",
+        );
+        await user.click(
+            screen.getByRole("button", { name: "Compare scenarios" }),
+        );
+        await waitFor(() =>
+            expect(getPortfolioForecast).toHaveBeenCalledTimes(2),
+        );
+        expect(getPortfolioForecast.mock.calls[0][0]).toMatchObject({
+            monthlyContribution: 500.5,
+            targetValue: 10000.25,
+        });
+        expect(
+            getPortfolioForecast.mock.calls[1][0].monthlyContributionSchedule,
+        ).toEqual([200.5, 200.5, 200.5]);
+    });
+
+    it("retries saved scenarios without discarding the draft or enabling save before recovery", async () => {
+        const user = userEvent.setup();
+        getSetting.mockRejectedValueOnce(new Error("Unavailable"));
+        renderWithApp(
+            <LifeScenarioPanel
+                forecastInput={{ horizonMonths: 12, currency: "EUR" }}
+                currency="EUR"
+                locale="en-US"
+                numberFormat="us"
+            />,
+        );
+        const retry = await screen.findByRole("button", { name: "Retry" });
+        await user.type(
+            screen.getByLabelText("Scenario name"),
+            "Keep my draft",
+        );
+        await user.type(
+            screen.getByLabelText("Baseline monthly surplus"),
+            "900",
+        );
+        expect(
+            screen.getByRole("button", { name: "Save scenario" }),
+        ).toBeDisabled();
+        let recover!: (value: { key: string; value: unknown[] }) => void;
+        getSetting.mockImplementationOnce(
+            () =>
+                new Promise((resolve) => {
+                    recover = resolve;
+                }),
+        );
+        await user.click(retry);
+        expect(retry).toBeDisabled();
+        expect(
+            screen.getByRole("button", { name: "Save scenario" }),
+        ).toBeDisabled();
+        expect(screen.getByLabelText("Scenario name")).toHaveValue(
+            "Keep my draft",
+        );
+        recover({ key: "life_scenarios", value: [] });
+        await waitFor(() =>
+            expect(
+                screen.queryByRole("button", { name: "Retry" }),
+            ).not.toBeInTheDocument(),
+        );
+        expect(
+            screen.getByRole("button", { name: "Save scenario" }),
+        ).toBeEnabled();
+        expect(screen.getByLabelText("Scenario name")).toHaveValue(
+            "Keep my draft",
+        );
+        expect(screen.getByLabelText("Baseline monthly surplus")).toHaveValue(
+            "900",
+        );
+        expect(saveSetting).not.toHaveBeenCalled();
     });
 });

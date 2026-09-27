@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Database, Play, Save, Square, Trash2 } from "lucide-react";
 import { apiClient } from "@/lib/api";
@@ -33,6 +33,32 @@ import {
     ANALYSIS_TEMPLATES,
     cloneAnalysisPlan,
 } from "@/features/analysis/analysisTemplates";
+
+function chartColumns(result: AnalysisResult | null) {
+    const columns = result?.declaredColumns?.length
+        ? result.declaredColumns
+        : (result?.columns ?? []);
+    return {
+        ids: columns.map((column) => column.id),
+        numericIds: columns
+            .filter(
+                (column) =>
+                    /^(decimal|number|integer|currency|numeric|float|double)$/.test(
+                        column.type,
+                    ) ||
+                    result?.rows.some((row) => {
+                        const value = row[column.id];
+                        return (
+                            (typeof value === "number" ||
+                                (typeof value === "string" &&
+                                    value.trim() !== "")) &&
+                            Number.isFinite(Number(value))
+                        );
+                    }),
+            )
+            .map((column) => column.id),
+    };
+}
 
 const EMPTY_PLAN: VisualAnalysisPlan = {
     datasetId: "cash-flows",
@@ -356,6 +382,8 @@ export default function AnalysisWorkspacePage() {
         [],
     );
     const [workspace, setWorkspace] = useState<AnalysisWorkspace>("budgeting");
+    const [templatesOpen, setTemplatesOpen] = useState(true);
+    const templateSummaryRef = useRef<HTMLElement>(null);
     const [mode, setMode] = useState<"visual" | "sql">("visual");
     const [plan, setPlan] = useState<VisualAnalysisPlan>(EMPTY_PLAN);
     const [sql, setSql] = useState("");
@@ -373,6 +401,26 @@ export default function AnalysisWorkspacePage() {
         }
     });
     const [result, setResult] = useState<AnalysisResult | null>(null);
+    const [resultQuery, setResultQuery] = useState<string | null>(null);
+    const querySignature = (
+        queryMode: "visual" | "sql",
+        queryPlan: VisualAnalysisPlan,
+        querySql: string,
+        values: string,
+        datasets: string[],
+    ) =>
+        JSON.stringify(
+            queryMode === "visual"
+                ? { mode: queryMode, plan: queryPlan }
+                : { mode: queryMode, sql: querySql, values, datasets },
+        );
+    const currentQuery = querySignature(
+        mode,
+        plan,
+        sql,
+        sqlValues,
+        sqlDatasets,
+    );
     const [lastUsableResult, setLastUsableResult] =
         useState<AnalysisResult | null>(null);
     const [exportContext, setExportContext] =
@@ -400,10 +448,15 @@ export default function AnalysisWorkspacePage() {
         before: Record<string, unknown>;
         after: Record<string, unknown>;
     } | null>(null);
-    const [versions, setVersions] = useState<number[]>([]);
+    const [versions, setVersions] = useState<number[] | null>(null);
+    const [versionsLoading, setVersionsLoading] = useState(false);
     const [selectedSaved, setSelectedSaved] = useState<SavedAnalysis | null>(
         null,
     );
+    const selectedRevision = useRef("");
+    selectedRevision.current = selectedSaved
+        ? `${selectedSaved.id}:${selectedSaved.version}`
+        : "";
     const [drillResult, setDrillResult] = useState<AnalysisResult | null>(null);
     const [chartX, setChartX] = useState("");
     const [chartY, setChartY] = useState("");
@@ -496,6 +549,9 @@ export default function AnalysisWorkspacePage() {
                       },
             );
             setResult(next);
+            setResultQuery(
+                querySignature(mode, planOverride, sql, sqlValues, sqlDatasets),
+            );
             setLastUsableResult(next);
             setExportContext({
                 name: name.trim() || "analysis",
@@ -519,23 +575,12 @@ export default function AnalysisWorkspacePage() {
                         10,
                     ),
                 );
-            const ids = (
-                next.declaredColumns?.length
-                    ? next.declaredColumns
-                    : next.columns
-            ).map((column) => column.id);
-            setChartX((current) => current || ids[0] || "");
-            setChartY(
-                (current) =>
-                    current ||
-                    ids.find((id) =>
-                        next.rows.some(
-                            (row) =>
-                                typeof row[id] === "number" ||
-                                !Number.isNaN(Number(row[id])),
-                        ),
-                    ) ||
-                    "",
+            const { ids, numericIds } = chartColumns(next);
+            setChartX((current) =>
+                ids.includes(current) ? current : (ids[0] ?? ""),
+            );
+            setChartY((current) =>
+                numericIds.includes(current) ? current : (numericIds[0] ?? ""),
             );
         } catch (cause) {
             setError(apiErrorToMessage(cause, t));
@@ -615,10 +660,20 @@ export default function AnalysisWorkspacePage() {
     const loadSaved = useCallback(
         (saved: SavedAnalysis) => {
             const source = sourceFromSaved(saved);
+            setTemplatesOpen(false);
             setSelectedSaved(saved);
             setName(saved.name);
             setWorkspace(saved.workspace);
             setMode(source.mode);
+            setResultQuery(
+                querySignature(
+                    source.mode,
+                    source.plan ?? EMPTY_PLAN,
+                    source.sql ?? "",
+                    JSON.stringify(saved.parameters.sqlValues ?? []),
+                    source.datasetIds ?? [],
+                ),
+            );
             if (source.plan) setPlan(source.plan);
             if (source.sql !== undefined) setSql(source.sql);
             if (source.datasetIds?.length) setSqlDatasets(source.datasetIds);
@@ -636,6 +691,29 @@ export default function AnalysisWorkspacePage() {
             setRunWithoutBenchmark(false);
             setRunAnswerDepth("");
             setRunLanguage("");
+            const { ids, numericIds } = chartColumns(saved.lastResult);
+            const binding = saved.charts.find(
+                (chart): chart is { kind: string; x: string; y: string } =>
+                    typeof chart === "object" &&
+                    chart !== null &&
+                    "kind" in chart &&
+                    chart.kind === "bar" &&
+                    "x" in chart &&
+                    typeof chart.x === "string" &&
+                    "y" in chart &&
+                    typeof chart.y === "string",
+            );
+            setChartX(
+                binding && (!saved.lastResult || ids.includes(binding.x))
+                    ? binding.x
+                    : (ids[0] ?? ""),
+            );
+            setChartY(
+                binding && (!saved.lastResult || numericIds.includes(binding.y))
+                    ? binding.y
+                    : (numericIds[0] ?? ""),
+            );
+            setOffset(0);
             setResult(saved.lastResult);
             setLastUsableResult(saved.lastResult);
             setExportContext(
@@ -672,7 +750,8 @@ export default function AnalysisWorkspacePage() {
                 JSON.stringify(formulaModel?.assumptionValues ?? {}, null, 2),
             );
             setProposalPreview(null);
-            setVersions([]);
+            setVersions(null);
+            setVersionsLoading(false);
             setError(saved.lastError?.message ?? null);
         },
         [reportingTimezone],
@@ -693,6 +772,7 @@ export default function AnalysisWorkspacePage() {
     ]);
 
     const displayedResult = result ?? lastUsableResult;
+    const availableChartColumns = chartColumns(displayedResult);
     const completeForChart =
         displayedResult?.window.kind === "page" &&
         displayedResult.window.hasMore === false &&
@@ -726,73 +806,96 @@ export default function AnalysisWorkspacePage() {
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
                 <div className="space-y-4">
                     <Card>
-                        <CardHeader>
-                            <CardTitle>{t("analysis.startTitle")}</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                            <div className="grid gap-2 md:grid-cols-3">
-                                {ANALYSIS_TEMPLATES.map((template) => (
-                                    <button
-                                        key={template.id}
-                                        type="button"
-                                        className="rounded-lg border border-border bg-card/60 p-3 text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                        onClick={() => {
-                                            setWorkspace(template.workspace);
-                                            setMode("visual");
-                                            setPlan(
-                                                cloneAnalysisPlan(
-                                                    template.plan,
-                                                ),
-                                            );
-                                            setName(t(template.titleKey));
-                                            setSelectedSaved(null);
-                                            setResult(null);
-                                            setLastUsableResult(null);
-                                            setExportContext(null);
-                                            setError(null);
-                                        }}
-                                    >
-                                        <span className="block text-sm font-medium">
-                                            {t(template.titleKey)}
-                                        </span>
-                                        <span className="mt-1 block text-xs text-muted-foreground">
-                                            {t(template.descriptionKey)}
-                                        </span>
-                                    </button>
-                                ))}
-                            </div>
-                            <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() => {
-                                    setMode("visual");
-                                    setPlan({
-                                        datasetId:
-                                            catalogQuery.data?.datasets[0]
-                                                ?.id ?? "cash-flows",
-                                        fields: [],
-                                        filters: [],
-                                        groups: [],
-                                        measures: [],
-                                        joins: [],
-                                        orderBy: [],
-                                        limit: 500,
-                                    });
-                                    setName("");
-                                    setSelectedSaved(null);
-                                    setResult(null);
-                                    setLastUsableResult(null);
-                                    setExportContext(null);
-                                    setError(null);
-                                }}
+                        <details
+                            open={templatesOpen}
+                            onToggle={(event) =>
+                                setTemplatesOpen(event.currentTarget.open)
+                            }
+                        >
+                            <summary
+                                ref={templateSummaryRef}
+                                className="cursor-pointer rounded-lg p-4 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             >
-                                {t("analysis.blank")}
-                            </Button>
-                        </CardContent>
+                                {t(
+                                    templatesOpen
+                                        ? "analysis.startTitle"
+                                        : "analysis.chooseTemplate",
+                                )}
+                            </summary>
+                            <CardContent className="space-y-3">
+                                <div className="grid gap-2 md:grid-cols-3">
+                                    {ANALYSIS_TEMPLATES.map((template) => (
+                                        <button
+                                            key={template.id}
+                                            type="button"
+                                            className="rounded-lg border border-border bg-card/60 p-3 text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                            onClick={() => {
+                                                setTemplatesOpen(false);
+                                                templateSummaryRef.current?.focus();
+                                                setWorkspace(
+                                                    template.workspace,
+                                                );
+                                                setMode("visual");
+                                                setPlan(
+                                                    cloneAnalysisPlan(
+                                                        template.plan,
+                                                    ),
+                                                );
+                                                setName(t(template.titleKey));
+                                                setSelectedSaved(null);
+                                                setResult(null);
+                                                setLastUsableResult(null);
+                                                setExportContext(null);
+                                                setError(null);
+                                            }}
+                                        >
+                                            <span className="block text-sm font-medium">
+                                                {t(template.titleKey)}
+                                            </span>
+                                            <span className="mt-1 block text-xs text-muted-foreground">
+                                                {t(template.descriptionKey)}
+                                            </span>
+                                        </button>
+                                    ))}
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => {
+                                        setTemplatesOpen(false);
+                                        templateSummaryRef.current?.focus();
+                                        setMode("visual");
+                                        setPlan({
+                                            datasetId:
+                                                catalogQuery.data?.datasets[0]
+                                                    ?.id ?? "cash-flows",
+                                            fields: [],
+                                            filters: [],
+                                            groups: [],
+                                            measures: [],
+                                            joins: [],
+                                            orderBy: [],
+                                            limit: 500,
+                                        });
+                                        setName("");
+                                        setSelectedSaved(null);
+                                        setResult(null);
+                                        setLastUsableResult(null);
+                                        setExportContext(null);
+                                        setError(null);
+                                    }}
+                                >
+                                    {t("analysis.blank")}
+                                </Button>
+                            </CardContent>
+                        </details>
                     </Card>
                     <Card>
                         <CardHeader>
                             <CardTitle>{t("analysis.build")}</CardTitle>
+                            <p className="max-w-2xl text-sm text-muted-foreground">
+                                {t("analysis.buildHelp")}
+                            </p>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div className="flex flex-wrap items-center gap-2">
@@ -802,6 +905,7 @@ export default function AnalysisWorkspacePage() {
                                             ? "default"
                                             : "outline"
                                     }
+                                    aria-pressed={mode === "visual"}
                                     onClick={() => setMode("visual")}
                                 >
                                     {t("analysis.visual")}
@@ -812,6 +916,7 @@ export default function AnalysisWorkspacePage() {
                                     </summary>
                                     <Button
                                         className="mt-2"
+                                        aria-pressed={mode === "sql"}
                                         variant={
                                             mode === "sql"
                                                 ? "default"
@@ -896,6 +1001,9 @@ export default function AnalysisWorkspacePage() {
                                             <legend className="text-sm font-medium">
                                                 {t("analysis.fields")}
                                             </legend>
+                                            <p className="mt-1 text-xs text-muted-foreground">
+                                                {t("analysis.fieldsHelp")}
+                                            </p>
                                             <div className="mt-2 grid max-h-48 grid-cols-2 gap-2 overflow-auto">
                                                 {dataset.fields.map((field) => (
                                                     <label
@@ -948,6 +1056,9 @@ export default function AnalysisWorkspacePage() {
                                             <legend className="text-sm font-medium">
                                                 {t("analysis.measures")}
                                             </legend>
+                                            <p className="mt-1 text-xs text-muted-foreground">
+                                                {t("analysis.measuresHelp")}
+                                            </p>
                                             <div className="mt-2 space-y-2">
                                                 {dataset.measures.map(
                                                     (measure) => (
@@ -1530,8 +1641,20 @@ export default function AnalysisWorkspacePage() {
                                         {displayedResult.window.returnedRows}
                                     </Badge>
                                 </CardTitle>
+                                <p className="text-sm text-muted-foreground">
+                                    {t("analysis.resultsHelp")}
+                                </p>
                             </CardHeader>
                             <CardContent className="space-y-3">
+                                {resultQuery !== null &&
+                                    resultQuery !== currentQuery && (
+                                        <p
+                                            role="status"
+                                            className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm"
+                                        >
+                                            {t("analysis.resultsOutdated")}
+                                        </p>
+                                    )}
                                 <ResultTable
                                     result={displayedResult}
                                     onSort={(id) => {
@@ -1671,34 +1794,53 @@ export default function AnalysisWorkspacePage() {
                             </CardHeader>
                             <CardContent className="space-y-3">
                                 <div className="flex gap-2">
-                                    <select
-                                        value={chartX}
-                                        onChange={(event) =>
-                                            setChartX(event.target.value)
-                                        }
-                                        className="rounded-md border bg-background px-2 py-1"
-                                    >
-                                        {Object.keys(
-                                            displayedResult.rows[0] ?? {},
-                                        ).map((id) => (
-                                            <option key={id}>{id}</option>
-                                        ))}
-                                    </select>
-                                    <select
-                                        value={chartY}
-                                        onChange={(event) =>
-                                            setChartY(event.target.value)
-                                        }
-                                        className="rounded-md border bg-background px-2 py-1"
-                                    >
-                                        {Object.keys(
-                                            displayedResult.rows[0] ?? {},
-                                        ).map((id) => (
-                                            <option key={id}>{id}</option>
-                                        ))}
-                                    </select>
+                                    <label className="grid gap-1 text-sm">
+                                        <span>
+                                            {t("analysis.chartCategory")}
+                                        </span>
+                                        <select
+                                            value={chartX}
+                                            onChange={(event) =>
+                                                setChartX(event.target.value)
+                                            }
+                                            className="rounded-md border bg-background px-2 py-1"
+                                        >
+                                            {availableChartColumns.ids.map(
+                                                (id) => (
+                                                    <option key={id}>
+                                                        {id}
+                                                    </option>
+                                                ),
+                                            )}
+                                        </select>
+                                    </label>
+                                    <label className="grid gap-1 text-sm">
+                                        <span>{t("analysis.chartValue")}</span>
+                                        <select
+                                            value={chartY}
+                                            onChange={(event) =>
+                                                setChartY(event.target.value)
+                                            }
+                                            className="rounded-md border bg-background px-2 py-1"
+                                        >
+                                            {!chartY && (
+                                                <option value="">—</option>
+                                            )}
+                                            {availableChartColumns.numericIds.map(
+                                                (id) => (
+                                                    <option key={id}>
+                                                        {id}
+                                                    </option>
+                                                ),
+                                            )}
+                                        </select>
+                                    </label>
                                 </div>
-                                {completeForChart ? (
+                                {!chartY ? (
+                                    <p className="text-sm text-muted-foreground">
+                                        {t("analysis.chartNoNumeric")}
+                                    </p>
+                                ) : completeForChart ? (
                                     <div className="space-y-2">
                                         {chartValues
                                             .slice(0, 30)
@@ -1740,14 +1882,22 @@ export default function AnalysisWorkspacePage() {
                             <CardTitle>{t("analysis.saveTitle")}</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-3">
+                            <Label htmlFor="analysis-name">
+                                {t("analysis.namePlaceholder")}
+                            </Label>
                             <Input
+                                id="analysis-name"
                                 value={name}
                                 onChange={(event) =>
                                     setName(event.target.value)
                                 }
                                 placeholder={t("analysis.namePlaceholder")}
                             />
+                            <Label htmlFor="analysis-sources">
+                                {t("analysis.sourcesLabel")}
+                            </Label>
                             <Textarea
+                                id="analysis-sources"
                                 value={sourceReferences}
                                 onChange={(event) =>
                                     setSourceReferences(event.target.value)
@@ -1957,25 +2107,67 @@ export default function AnalysisWorkspacePage() {
                                     <Button
                                         size="sm"
                                         variant="outline"
-                                        onClick={() =>
-                                            void apiClient
-                                                .listSavedAnalysisVersions(
-                                                    selectedSaved.id,
+                                        disabled={versionsLoading}
+                                        onClick={async () => {
+                                            const requestedRevision = `${selectedSaved.id}:${selectedSaved.version}`;
+                                            setVersionsLoading(true);
+                                            setError(null);
+                                            try {
+                                                const items =
+                                                    await apiClient.listSavedAnalysisVersions(
+                                                        selectedSaved.id,
+                                                    );
+                                                if (
+                                                    selectedRevision.current !==
+                                                    requestedRevision
                                                 )
-                                                .then((items) =>
-                                                    setVersions(
-                                                        items.map(
-                                                            (item) =>
-                                                                item.version,
-                                                        ),
+                                                    return;
+                                                setVersions(
+                                                    items.map(
+                                                        (item) => item.version,
                                                     ),
+                                                );
+                                            } catch (cause) {
+                                                if (
+                                                    selectedRevision.current ===
+                                                    requestedRevision
                                                 )
-                                        }
+                                                    setError(
+                                                        apiErrorToMessage(
+                                                            cause,
+                                                            t,
+                                                        ),
+                                                    );
+                                            } finally {
+                                                if (
+                                                    selectedRevision.current ===
+                                                    requestedRevision
+                                                )
+                                                    setVersionsLoading(false);
+                                            }
+                                        }}
                                     >
-                                        {t("analysis.versionHistory")}
+                                        {versionsLoading
+                                            ? t("common.loading")
+                                            : t("analysis.versionHistory")}
                                     </Button>
+                                    {versions !== null &&
+                                        !versions.some(
+                                            (version) =>
+                                                version !==
+                                                selectedSaved.version,
+                                        ) && (
+                                            <p
+                                                role="status"
+                                                className="text-sm text-muted-foreground"
+                                            >
+                                                {t(
+                                                    "analysis.noEarlierVersions",
+                                                )}
+                                            </p>
+                                        )}
                                     {versions
-                                        .filter(
+                                        ?.filter(
                                             (version) =>
                                                 version !==
                                                 selectedSaved.version,

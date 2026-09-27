@@ -2,7 +2,7 @@
 title: Analysis Monitors
 type: feature
 status: active
-date: 2026-09-19
+date: 2026-09-27
 tags: [feature, analysis, monitoring, research, dossiers, notifications]
 description: Local scheduled checks for saved-analysis thresholds and dossier evidence changes, with durable observations and an in-app inbox.
 aliases: [saved analysis conditions, evidence change monitors]
@@ -36,6 +36,20 @@ contacts an AI model, market-data provider, or public web service, and no operat
 notification is sent. The inbox is an in-app view only. The three monitor tables are included in
 normal `.visionbak` backups. Deleting a rule also deletes its observations and inbox entries.
 
+## Creating and editing a rule
+
+Choose the condition type and its saved analysis or dossier first. Until a target is selected,
+the form hides the rule title, condition inputs, schedule, and create button. If no eligible
+analysis or dossier exists, the empty state links to Analysis or Dossiers to create one.
+For numeric rules, **How alerts work** expands the eligibility and alert explanation.
+
+After selecting a target, the form explains that the first valid check establishes a baseline.
+**Schedule** holds the interval and cooldown fields in a collapsed disclosure, while a short
+summary remains visible in minutes, hours, or days. Closing the disclosure preserves any custom
+values. Existing rules use the same schedule disclosure when edited. Submitting an invalid
+interval or cooldown opens the disclosure; when that field is the first invalid input in the
+form, focus moves to it so the value can be corrected.
+
 ## Related
 
 - [[docs/features/index|Features]]
@@ -44,3 +58,7 @@ normal `.visionbak` backups. Deleting a rule also deletes its observations and i
 - [[docs/features/analysis-workspace|Analysis Workspace]]
 - [[docs/features/research-dossiers|Research Dossiers]]
 - [[docs/features/backup-coverage-audit|Backup Coverage Audit]]
+
+## Loading recovery
+
+Rules, target analyses and dossiers, observations, and the inbox offer Retry when loading fails. A failed request does not also claim the list is empty. Available cached rules, observations, and notifications remain visible with the failure message. Retrying preserves the current rule form and selection.

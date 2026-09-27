@@ -99,8 +99,8 @@ function parseDate(period: string, bucket: "monthly" | "yearly"): Date {
 interface CustomChartProps {
     savedChart: SavedChart;
     data: StatisticsData;
-    onEdit?: (chart: SavedChart) => void;
-    onDelete?: (chart: SavedChart) => void;
+    onEdit?: (chart: SavedChart, opener: HTMLButtonElement) => void;
+    onDelete?: (chart: SavedChart, opener: HTMLButtonElement) => void;
 }
 
 export function CustomChart({
@@ -373,7 +373,12 @@ export function CustomChart({
                                         variant="ghost"
                                         size="sm"
                                         className="text-muted-foreground hover:text-foreground"
-                                        onClick={() => onEdit(savedChart)}
+                                        onClick={(event) =>
+                                            onEdit(
+                                                savedChart,
+                                                event.currentTarget,
+                                            )
+                                        }
                                     >
                                         <Pencil className="h-4 w-4" />
                                     </Button>
@@ -396,7 +401,12 @@ export function CustomChart({
                                         variant="ghost"
                                         size="sm"
                                         className="text-muted-foreground hover:text-destructive"
-                                        onClick={() => onDelete(savedChart)}
+                                        onClick={(event) =>
+                                            onDelete(
+                                                savedChart,
+                                                event.currentTarget,
+                                            )
+                                        }
                                     >
                                         <Trash2 className="h-4 w-4" />
                                     </Button>

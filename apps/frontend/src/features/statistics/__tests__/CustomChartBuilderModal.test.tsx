@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { useState, useRef } from "react";
 import { describe, it, expect, vi } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -83,6 +84,35 @@ const RECIPIENT_WITH_NAME = {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe("CustomChartBuilderModal", () => {
+    it("restores a controlled builder opener after Cancel", async () => {
+        function Harness() {
+            const [open, setOpen] = useState(false);
+            const opener = useRef<HTMLButtonElement>(null);
+            return (
+                <>
+                    <button ref={opener} onClick={() => setOpen(true)}>
+                        Open chart
+                    </button>
+                    <CustomChartBuilderModal
+                        open={open}
+                        onOpenChange={setOpen}
+                        data={STATS_DATA}
+                        editChart={SAVED_CHART}
+                        onCloseAutoFocus={() => opener.current?.focus()}
+                    />
+                </>
+            );
+        }
+        const user = userEvent.setup();
+        renderWithApp(<Harness />);
+        const opener = screen.getByRole("button", { name: "Open chart" });
+        await user.click(opener);
+        await user.click(
+            await screen.findByRole("button", { name: /cancel/i }),
+        );
+        await waitFor(() => expect(opener).toHaveFocus());
+    });
+
     it("names form controls and lets users remove a selected series by name", async () => {
         const user = userEvent.setup();
         renderWithApp(
@@ -128,11 +158,17 @@ describe("CustomChartBuilderModal", () => {
         await user.click(
             await screen.findByRole("button", { name: "Edit My chart" }),
         );
-        expect(onEdit).toHaveBeenCalledWith(SAVED_CHART);
+        expect(onEdit).toHaveBeenCalledWith(
+            SAVED_CHART,
+            screen.getByRole("button", { name: "Edit My chart" }),
+        );
         await user.click(
             screen.getByRole("button", { name: "Delete My chart" }),
         );
-        expect(onDelete).toHaveBeenCalledWith(SAVED_CHART);
+        expect(onDelete).toHaveBeenCalledWith(
+            SAVED_CHART,
+            screen.getByRole("button", { name: "Delete My chart" }),
+        );
     });
 
     it("renders dialog when open=true", async () => {

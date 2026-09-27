@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { Link } from "react-router";
 import { Play, Plus, Save, Trash2 } from "lucide-react";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { PAGE_ICONS } from "@/lib/pageIcons";
@@ -71,6 +72,21 @@ function numericColumns(analysis: SavedAnalysis) {
                 (typeof result.rows[0][column.id] === "string" &&
                     decimal.test(result.rows[0][column.id] as string))),
     );
+}
+
+function revealInvalidSchedule(event: FormEvent<HTMLDetailsElement>) {
+    // Reveal before the browser tries to focus a hidden invalid input.
+    event.currentTarget.open = true;
+    const input = event.target;
+    if (
+        input instanceof HTMLInputElement &&
+        Array.from(input.form?.elements ?? []).find(
+            (element) =>
+                element instanceof HTMLInputElement && !element.validity.valid,
+        ) === input
+    ) {
+        input.focus();
+    }
 }
 
 function dateTime(value: string | null) {
@@ -168,6 +184,21 @@ export default function AnalysisMonitorsPage() {
         (analysis) => analysis.id === form.savedAnalysisId,
     );
     const columns = chosenAnalysis ? numericColumns(chosenAnalysis) : [];
+    const hasTarget =
+        form.kind === "analysis-threshold"
+            ? Boolean(chosenAnalysis)
+            : Boolean(form.dossierId);
+    const duration = (minutes: number) =>
+        minutes > 0 && minutes % 1440 === 0
+            ? t("monitors.durationDays", { count: minutes / 1440 })
+            : minutes > 0 && minutes % 60 === 0
+              ? t("monitors.durationHours", { count: minutes / 60 })
+              : t("monitors.durationMinutes", { count: minutes });
+    const cadence = (interval: number, cooldown: number) =>
+        t("monitors.scheduleSummary", {
+            interval: duration(interval),
+            cooldown: duration(cooldown),
+        });
     const selectedAnalysis = targets.analyses.data?.find(
         (analysis) => analysis.id === selected?.savedAnalysisId,
     );
@@ -303,7 +334,7 @@ export default function AnalysisMonitorsPage() {
         <PageShell>
             <PageHeader
                 title={t("monitors.title")}
-                subtitle={t("monitors.subtitle")}
+                subtitle={t("monitors.intro")}
                 icon={PAGE_ICONS["/analysis/monitors"]}
             />
             {error && (
@@ -355,22 +386,6 @@ export default function AnalysisMonitorsPage() {
                                 </option>
                             </select>
                         </div>
-                        <div className="space-y-1">
-                            <Label htmlFor="monitor-title">
-                                {t("monitors.ruleTitle")}
-                            </Label>
-                            <Input
-                                id="monitor-title"
-                                required
-                                value={form.title}
-                                onChange={(event) =>
-                                    setForm((current) => ({
-                                        ...current,
-                                        title: event.target.value,
-                                    }))
-                                }
-                            />
-                        </div>
                         {form.kind === "analysis-threshold" ? (
                             <>
                                 <div className="space-y-1">
@@ -403,9 +418,25 @@ export default function AnalysisMonitorsPage() {
                                         ))}
                                     </select>
                                     {targets.analyses.isError && (
-                                        <p role="alert">
-                                            {t("monitors.targetsFailed")}
-                                        </p>
+                                        <div
+                                            role="alert"
+                                            className="space-y-2 text-sm"
+                                        >
+                                            <p>{t("monitors.targetsFailed")}</p>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                disabled={
+                                                    targets.analyses.isFetching
+                                                }
+                                                onClick={() =>
+                                                    void targets.analyses.refetch()
+                                                }
+                                            >
+                                                {t("common.retry")}
+                                            </Button>
+                                        </div>
                                     )}
                                     {targets.analyses.isLoading && (
                                         <p>{t("monitors.targetsLoading")}</p>
@@ -413,87 +444,112 @@ export default function AnalysisMonitorsPage() {
                                     {!targets.analyses.isLoading &&
                                         !targets.analyses.isError &&
                                         eligible.length === 0 && (
-                                            <p>
-                                                {t(
-                                                    "monitors.noEligibleAnalyses",
-                                                )}
-                                            </p>
+                                            <div className="rounded-lg bg-muted/40 p-3 space-y-2 text-sm">
+                                                <p>
+                                                    {t(
+                                                        "monitors.noEligibleAnalyses",
+                                                    )}
+                                                </p>
+                                                <Button
+                                                    asChild
+                                                    variant="outline"
+                                                    size="sm"
+                                                >
+                                                    <Link to="/analysis">
+                                                        {t(
+                                                            "monitors.openAnalysis",
+                                                        )}
+                                                    </Link>
+                                                </Button>
+                                            </div>
                                         )}
-                                    <p className="text-xs text-muted-foreground">
-                                        {t("monitors.analysisHint")}
-                                    </p>
+                                    <details className="text-xs text-muted-foreground">
+                                        <summary className="cursor-pointer">
+                                            {t("monitors.howAlertsWork")}
+                                        </summary>
+                                        <p className="pt-2">
+                                            {t("monitors.analysisHint")}
+                                        </p>
+                                    </details>
                                 </div>
-                                <div className="space-y-1">
-                                    <Label htmlFor="monitor-field">
-                                        {t("monitors.field")}
-                                    </Label>
-                                    <select
-                                        id="monitor-field"
-                                        className="h-10 w-full rounded-lg border bg-background px-3"
-                                        value={form.fieldId}
-                                        onChange={(event) =>
-                                            setForm((current) => ({
-                                                ...current,
-                                                fieldId: event.target.value,
-                                            }))
-                                        }
-                                    >
-                                        <option value="">
-                                            {t("monitors.selectField")}
-                                        </option>
-                                        {columns.map((column) => (
-                                            <option
-                                                key={column.id}
-                                                value={column.id}
+                                {chosenAnalysis && (
+                                    <>
+                                        <div className="space-y-1">
+                                            <Label htmlFor="monitor-field">
+                                                {t("monitors.field")}
+                                            </Label>
+                                            <select
+                                                id="monitor-field"
+                                                className="h-10 w-full rounded-lg border bg-background px-3"
+                                                value={form.fieldId}
+                                                onChange={(event) =>
+                                                    setForm((current) => ({
+                                                        ...current,
+                                                        fieldId:
+                                                            event.target.value,
+                                                    }))
+                                                }
                                             >
-                                                {column.id}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <div className="space-y-1">
-                                        <Label htmlFor="monitor-operator">
-                                            {t("monitors.operator")}
-                                        </Label>
-                                        <select
-                                            id="monitor-operator"
-                                            className="h-10 w-full rounded-lg border bg-background px-3"
-                                            value={form.operator}
-                                            onChange={(event) =>
-                                                setForm((current) => ({
-                                                    ...current,
-                                                    operator: event.target
-                                                        .value as MonitorOperator,
-                                                }))
-                                            }
-                                        >
-                                            <option value="above">
-                                                {t("monitors.above")}
-                                            </option>
-                                            <option value="below">
-                                                {t("monitors.below")}
-                                            </option>
-                                        </select>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <Label htmlFor="monitor-threshold">
-                                            {t("monitors.threshold")}
-                                        </Label>
-                                        <Input
-                                            id="monitor-threshold"
-                                            inputMode="decimal"
-                                            value={form.threshold}
-                                            onChange={(event) =>
-                                                setForm((current) => ({
-                                                    ...current,
-                                                    threshold:
-                                                        event.target.value,
-                                                }))
-                                            }
-                                        />
-                                    </div>
-                                </div>
+                                                <option value="">
+                                                    {t("monitors.selectField")}
+                                                </option>
+                                                {columns.map((column) => (
+                                                    <option
+                                                        key={column.id}
+                                                        value={column.id}
+                                                    >
+                                                        {column.id}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div className="space-y-1">
+                                                <Label htmlFor="monitor-operator">
+                                                    {t("monitors.operator")}
+                                                </Label>
+                                                <select
+                                                    id="monitor-operator"
+                                                    className="h-10 w-full rounded-lg border bg-background px-3"
+                                                    value={form.operator}
+                                                    onChange={(event) =>
+                                                        setForm((current) => ({
+                                                            ...current,
+                                                            operator: event
+                                                                .target
+                                                                .value as MonitorOperator,
+                                                        }))
+                                                    }
+                                                >
+                                                    <option value="above">
+                                                        {t("monitors.above")}
+                                                    </option>
+                                                    <option value="below">
+                                                        {t("monitors.below")}
+                                                    </option>
+                                                </select>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <Label htmlFor="monitor-threshold">
+                                                    {t("monitors.threshold")}
+                                                </Label>
+                                                <Input
+                                                    id="monitor-threshold"
+                                                    inputMode="decimal"
+                                                    value={form.threshold}
+                                                    onChange={(event) =>
+                                                        setForm((current) => ({
+                                                            ...current,
+                                                            threshold:
+                                                                event.target
+                                                                    .value,
+                                                        }))
+                                                    }
+                                                />
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
                             </>
                         ) : (
                             <div className="space-y-1">
@@ -526,9 +582,25 @@ export default function AnalysisMonitorsPage() {
                                     )}
                                 </select>
                                 {targets.dossiers.isError && (
-                                    <p role="alert">
-                                        {t("monitors.targetsFailed")}
-                                    </p>
+                                    <div
+                                        role="alert"
+                                        className="space-y-2 text-sm"
+                                    >
+                                        <p>{t("monitors.targetsFailed")}</p>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            disabled={
+                                                targets.dossiers.isFetching
+                                            }
+                                            onClick={() =>
+                                                void targets.dossiers.refetch()
+                                            }
+                                        >
+                                            {t("common.retry")}
+                                        </Button>
+                                    </div>
                                 )}
                                 {targets.dossiers.isLoading && (
                                     <p>{t("monitors.targetsLoading")}</p>
@@ -536,7 +608,18 @@ export default function AnalysisMonitorsPage() {
                                 {!targets.dossiers.isLoading &&
                                     !targets.dossiers.isError &&
                                     targets.dossiers.data?.total === 0 && (
-                                        <p>{t("monitors.noDossiers")}</p>
+                                        <div className="rounded-lg bg-muted/40 p-3 space-y-2 text-sm">
+                                            <p>{t("monitors.noDossiers")}</p>
+                                            <Button
+                                                asChild
+                                                variant="outline"
+                                                size="sm"
+                                            >
+                                                <Link to="/research/dossiers">
+                                                    {t("monitors.openDossiers")}
+                                                </Link>
+                                            </Button>
+                                        </div>
                                     )}
                                 {(targets.dossiers.data?.total ?? 0) > 500 && (
                                     <div className="flex items-center gap-2 text-xs">
@@ -595,61 +678,116 @@ export default function AnalysisMonitorsPage() {
                                 )}
                             </div>
                         )}
-                        <div className="grid grid-cols-2 gap-2">
-                            <div className="space-y-1">
-                                <Label htmlFor="monitor-interval">
-                                    {t("monitors.interval")}
-                                </Label>
-                                <Input
-                                    id="monitor-interval"
-                                    type="number"
-                                    min={15}
-                                    max={10080}
-                                    value={form.intervalMinutes}
-                                    onChange={(event) =>
-                                        setForm((current) => ({
-                                            ...current,
-                                            intervalMinutes: Number(
-                                                event.target.value,
-                                            ),
-                                        }))
-                                    }
-                                />
-                            </div>
-                            <div className="space-y-1">
-                                <Label htmlFor="monitor-cooldown">
-                                    {t("monitors.cooldown")}
-                                </Label>
-                                <Input
-                                    id="monitor-cooldown"
-                                    type="number"
-                                    min={0}
-                                    max={10080}
-                                    value={form.cooldownMinutes}
-                                    onChange={(event) =>
-                                        setForm((current) => ({
-                                            ...current,
-                                            cooldownMinutes: Number(
-                                                event.target.value,
-                                            ),
-                                        }))
-                                    }
-                                />
-                            </div>
-                        </div>
-                        <Button type="submit" disabled={busy}>
-                            <Plus className="mr-2 size-4" />
-                            {t("monitors.create")}
-                        </Button>
+                        {hasTarget && (
+                            <>
+                                <div className="space-y-1">
+                                    <Label htmlFor="monitor-title">
+                                        {t("monitors.ruleTitle")}
+                                    </Label>
+                                    <Input
+                                        id="monitor-title"
+                                        required
+                                        value={form.title}
+                                        onChange={(event) =>
+                                            setForm((current) => ({
+                                                ...current,
+                                                title: event.target.value,
+                                            }))
+                                        }
+                                    />
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                    {t("monitors.baselineHint")}
+                                </p>
+                                <details
+                                    className="rounded-lg border p-3"
+                                    onInvalidCapture={revealInvalidSchedule}
+                                >
+                                    <summary className="cursor-pointer text-sm font-medium">
+                                        {t("monitors.schedule")}
+                                    </summary>
+                                    <div className="pt-3">
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div className="space-y-1">
+                                                <Label htmlFor="monitor-interval">
+                                                    {t("monitors.interval")}
+                                                </Label>
+                                                <Input
+                                                    id="monitor-interval"
+                                                    type="number"
+                                                    min={15}
+                                                    max={10080}
+                                                    value={form.intervalMinutes}
+                                                    onChange={(event) =>
+                                                        setForm((current) => ({
+                                                            ...current,
+                                                            intervalMinutes:
+                                                                Number(
+                                                                    event.target
+                                                                        .value,
+                                                                ),
+                                                        }))
+                                                    }
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <Label htmlFor="monitor-cooldown">
+                                                    {t("monitors.cooldown")}
+                                                </Label>
+                                                <Input
+                                                    id="monitor-cooldown"
+                                                    type="number"
+                                                    min={0}
+                                                    max={10080}
+                                                    value={form.cooldownMinutes}
+                                                    onChange={(event) =>
+                                                        setForm((current) => ({
+                                                            ...current,
+                                                            cooldownMinutes:
+                                                                Number(
+                                                                    event.target
+                                                                        .value,
+                                                                ),
+                                                        }))
+                                                    }
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </details>
+                                <p className="text-xs text-muted-foreground">
+                                    {cadence(
+                                        form.intervalMinutes,
+                                        form.cooldownMinutes,
+                                    )}
+                                </p>
+                                <Button type="submit" disabled={busy}>
+                                    <Plus className="mr-2 size-4" />
+                                    {t("monitors.create")}
+                                </Button>
+                            </>
+                        )}
                     </form>
                     <section className="space-y-2">
                         <h2 className="text-lg font-semibold">
                             {t("monitors.rules")}
                         </h2>
                         {monitors.isError && (
-                            <p role="alert">{t("monitors.loadFailed")}</p>
+                            <div role="alert" className="space-y-2 text-sm">
+                                <p>{t("monitors.loadFailed")}</p>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={monitors.isFetching}
+                                    onClick={() => void monitors.refetch()}
+                                >
+                                    {t("common.retry")}
+                                </Button>
+                            </div>
                         )}
                         {!monitors.isLoading &&
+                            !monitors.isError &&
                             !monitors.data?.items.length && (
                                 <p>{t("monitors.empty")}</p>
                             )}
@@ -880,48 +1018,74 @@ export default function AnalysisMonitorsPage() {
                                         </div>
                                     </>
                                 )}
-                                <div className="grid grid-cols-2 gap-2">
-                                    <div className="space-y-1">
-                                        <Label htmlFor="edit-interval">
-                                            {t("monitors.interval")}
-                                        </Label>
-                                        <Input
-                                            id="edit-interval"
-                                            type="number"
-                                            min={15}
-                                            max={10080}
-                                            value={edit.intervalMinutes ?? 1440}
-                                            onChange={(event) =>
-                                                setEdit((current) => ({
-                                                    ...current,
-                                                    intervalMinutes: Number(
-                                                        event.target.value,
-                                                    ),
-                                                }))
-                                            }
-                                        />
+                                <details
+                                    className="rounded-lg border p-3"
+                                    onInvalidCapture={revealInvalidSchedule}
+                                >
+                                    <summary className="cursor-pointer text-sm font-medium">
+                                        {t("monitors.schedule")}
+                                    </summary>
+                                    <div className="pt-3">
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div className="space-y-1">
+                                                <Label htmlFor="edit-interval">
+                                                    {t("monitors.interval")}
+                                                </Label>
+                                                <Input
+                                                    id="edit-interval"
+                                                    type="number"
+                                                    min={15}
+                                                    max={10080}
+                                                    value={
+                                                        edit.intervalMinutes ??
+                                                        1440
+                                                    }
+                                                    onChange={(event) =>
+                                                        setEdit((current) => ({
+                                                            ...current,
+                                                            intervalMinutes:
+                                                                Number(
+                                                                    event.target
+                                                                        .value,
+                                                                ),
+                                                        }))
+                                                    }
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <Label htmlFor="edit-cooldown">
+                                                    {t("monitors.cooldown")}
+                                                </Label>
+                                                <Input
+                                                    id="edit-cooldown"
+                                                    type="number"
+                                                    min={0}
+                                                    max={10080}
+                                                    value={
+                                                        edit.cooldownMinutes ??
+                                                        1440
+                                                    }
+                                                    onChange={(event) =>
+                                                        setEdit((current) => ({
+                                                            ...current,
+                                                            cooldownMinutes:
+                                                                Number(
+                                                                    event.target
+                                                                        .value,
+                                                                ),
+                                                        }))
+                                                    }
+                                                />
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="space-y-1">
-                                        <Label htmlFor="edit-cooldown">
-                                            {t("monitors.cooldown")}
-                                        </Label>
-                                        <Input
-                                            id="edit-cooldown"
-                                            type="number"
-                                            min={0}
-                                            max={10080}
-                                            value={edit.cooldownMinutes ?? 1440}
-                                            onChange={(event) =>
-                                                setEdit((current) => ({
-                                                    ...current,
-                                                    cooldownMinutes: Number(
-                                                        event.target.value,
-                                                    ),
-                                                }))
-                                            }
-                                        />
-                                    </div>
-                                </div>
+                                </details>
+                                <p className="text-xs text-muted-foreground">
+                                    {cadence(
+                                        edit.intervalMinutes ?? 1440,
+                                        edit.cooldownMinutes ?? 1440,
+                                    )}
+                                </p>
                                 <Button type="submit" disabled={busy}>
                                     <Save className="mr-2 size-4" />
                                     {t("monitors.save")}
@@ -959,11 +1123,28 @@ export default function AnalysisMonitorsPage() {
                         {selectedId ? (
                             <>
                                 {observations.isError && (
-                                    <p role="alert">
-                                        {t("monitors.observationsFailed")}
-                                    </p>
+                                    <div
+                                        role="alert"
+                                        className="space-y-2 text-sm"
+                                    >
+                                        <p>
+                                            {t("monitors.observationsFailed")}
+                                        </p>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            disabled={observations.isFetching}
+                                            onClick={() =>
+                                                void observations.refetch()
+                                            }
+                                        >
+                                            {t("common.retry")}
+                                        </Button>
+                                    </div>
                                 )}
-                                {observations.data &&
+                                {!observations.isError &&
+                                    observations.data &&
                                     !observations.data.items.length && (
                                         <p>{t("monitors.noObservations")}</p>
                                     )}
@@ -975,7 +1156,8 @@ export default function AnalysisMonitorsPage() {
                                         />
                                     ))}
                                 </ul>
-                                {observations.data &&
+                                {!observations.isError &&
+                                    observations.data &&
                                     observations.data.total > 200 && (
                                         <div className="flex gap-2">
                                             <Button
@@ -1023,9 +1205,21 @@ export default function AnalysisMonitorsPage() {
                             {t("monitors.inbox")}
                         </h2>
                         {notifications.isError && (
-                            <p role="alert">{t("monitors.inboxFailed")}</p>
+                            <div role="alert" className="space-y-2 text-sm">
+                                <p>{t("monitors.inboxFailed")}</p>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={notifications.isFetching}
+                                    onClick={() => void notifications.refetch()}
+                                >
+                                    {t("common.retry")}
+                                </Button>
+                            </div>
                         )}
-                        {notifications.data &&
+                        {!notifications.isError &&
+                            notifications.data &&
                             !notifications.data.items.length && (
                                 <p>{t("monitors.noNotifications")}</p>
                             )}
@@ -1079,7 +1273,8 @@ export default function AnalysisMonitorsPage() {
                                 </li>
                             ))}
                         </ul>
-                        {notifications.data &&
+                        {!notifications.isError &&
+                            notifications.data &&
                             notifications.data.total > 200 && (
                                 <div className="flex gap-2">
                                     <Button

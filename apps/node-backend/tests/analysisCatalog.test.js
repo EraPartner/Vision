@@ -30,6 +30,45 @@ describe("analysis catalog compiler", () => {
     expect(compiled.visualPlan.generatedSql).toBe(compiled.sql);
   });
 
+  it("compiles a single total without emitting an empty GROUP BY clause", () => {
+    const compiled = compileVisualAnalysis({
+      datasetId: "transactions",
+      fields: [],
+      groups: [],
+      measures: ["count"],
+      filters: [],
+      joins: [],
+      limit: 500,
+    });
+    expect(compiled.sql).toBe(
+      'SELECT COUNT(*) AS "count"\nFROM vision_analysis.transactions_v2\nLIMIT 500',
+    );
+    expect(compiled.columns).toEqual([
+      {
+        id: "count",
+        label: "Transaction count",
+        type: "integer",
+        nullable: false,
+      },
+    ]);
+  });
+
+  it("retains filters and measure ordering for ungrouped totals", () => {
+    const compiled = compileVisualAnalysis({
+      datasetId: "transactions",
+      fields: [],
+      groups: [],
+      measures: ["count", "sum_amount"],
+      filters: [{ fieldId: "is_active", operator: "eq", value: true }],
+      orderBy: [{ id: "sum_amount", direction: "desc" }],
+    });
+    expect(compiled.sql).not.toContain("GROUP BY");
+    expect(compiled.sql).toContain(
+      'WHERE is_active = $1\nORDER BY "sum_amount" DESC\nLIMIT 500',
+    );
+    expect(compiled.values).toEqual([true]);
+  });
+
   it("rejects unknown fields, outputs, and duplication-unsafe joins", () => {
     expect(() =>
       compileVisualAnalysis({

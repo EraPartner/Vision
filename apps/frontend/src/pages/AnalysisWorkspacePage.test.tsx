@@ -106,6 +106,35 @@ const result = {
     },
 };
 
+const savedChartAnalysis = {
+    id: "chart-analysis",
+    definitionId: "analysis:chart",
+    name: "Monthly cashflow",
+    workspace: "budgeting",
+    version: 1,
+    refreshMode: "live",
+    parameters: {},
+    charts: [],
+    sourceReferences: [],
+    refreshStatus: "success",
+    lastResult: result,
+    definition: {
+        source: {
+            kind: "visual-plan",
+            datasetId: "cash-flows",
+            select: [
+                { id: "month", source: { kind: "field" } },
+                { id: "sum_spending", source: { kind: "metric" } },
+            ],
+            groupBy: ["month"],
+            orderBy: [],
+            filters: [],
+            joins: [],
+            limit: 500,
+        },
+    },
+};
+
 describe("AnalysisWorkspacePage", () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -115,6 +144,159 @@ describe("AnalysisWorkspacePage", () => {
         vi.spyOn(apiClient, "listSavedAnalyses").mockResolvedValue([]);
         vi.spyOn(apiClient, "executeAnalysis").mockResolvedValue(
             result as never,
+        );
+    });
+
+    it("marks changed queries as outdated until a successful rerun", async () => {
+        const user = userEvent.setup();
+        renderPage();
+        await screen.findByText("Cash flows");
+        await user.click(screen.getByRole("button", { name: "Run" }));
+        await screen.findByText(/FROM vision_analysis\.cash_flows_v1/);
+        await user.click(
+            screen.getByRole("button", { name: "Remove filter 1: Transfer" }),
+        );
+        expect(
+            await screen.findByText(/Results need updating/),
+        ).toBeInTheDocument();
+        vi.mocked(apiClient.executeAnalysis).mockRejectedValueOnce(
+            new Error("Unavailable"),
+        );
+        await user.click(screen.getByRole("button", { name: "Run" }));
+        await screen.findByRole("alert");
+        expect(screen.getByText(/Results need updating/)).toBeInTheDocument();
+        await user.click(screen.getByRole("button", { name: "Run" }));
+        await waitFor(() =>
+            expect(
+                screen.queryByText(/Results need updating/),
+            ).not.toBeInTheDocument(),
+        );
+    });
+
+    it.each([
+        { charts: [], expectedX: "month", expectedY: "sum_spending" },
+        {
+            charts: [{ kind: "bar", x: "category_general", y: "sum_spending" }],
+            expectedX: "category_general",
+            expectedY: "sum_spending",
+        },
+        {
+            charts: [{ kind: "bar", x: "removed", y: "month" }],
+            expectedX: "month",
+            expectedY: "sum_spending",
+        },
+    ])(
+        "restores valid chart bindings with numeric defaults: $expectedX",
+        async ({ charts, expectedX, expectedY }) => {
+            vi.mocked(apiClient.listSavedAnalyses).mockResolvedValue([
+                { ...savedChartAnalysis, charts },
+            ] as never);
+            const user = userEvent.setup();
+            renderPage();
+            await user.click(
+                await screen.findByRole("button", { name: "Monthly cashflow" }),
+            );
+            expect(screen.getByLabelText("Category axis")).toHaveValue(
+                expectedX,
+            );
+            expect(screen.getByLabelText("Value axis")).toHaveValue(expectedY);
+            expect(screen.getByText("12.3")).toBeInTheDocument();
+        },
+    );
+
+    it("preserves a saved chart binding without cached results through the next run and save", async () => {
+        const charts = [
+            { kind: "bar", x: "category_general", y: "sum_spending" },
+        ];
+        const saved = { ...savedChartAnalysis, charts, lastResult: null };
+        vi.mocked(apiClient.listSavedAnalyses).mockResolvedValue([
+            saved,
+        ] as never);
+        const update = vi
+            .spyOn(apiClient, "updateSavedAnalysis")
+            .mockResolvedValue(saved as never);
+        const user = userEvent.setup();
+        renderPage();
+        await user.click(
+            await screen.findByRole("button", { name: "Monthly cashflow" }),
+        );
+        expect(
+            screen.getByRole("button", { name: "Save new version" }),
+        ).toBeDisabled();
+        await user.click(screen.getByRole("button", { name: "Run" }));
+        await waitFor(() =>
+            expect(screen.getByLabelText("Category axis")).toHaveValue(
+                "category_general",
+            ),
+        );
+        await user.click(
+            screen.getByRole("button", { name: "Save new version" }),
+        );
+        await waitFor(() =>
+            expect(update).toHaveBeenCalledWith(
+                saved.id,
+                expect.objectContaining({ charts }),
+            ),
+        );
+    });
+
+    it("ignores version history resolved after opening another saved analysis", async () => {
+        vi.mocked(apiClient.listSavedAnalyses).mockResolvedValue([
+            savedChartAnalysis,
+            { ...savedChartAnalysis, id: "other", name: "Other analysis" },
+        ] as never);
+        let resolveHistory!: (value: never) => void;
+        vi.spyOn(apiClient, "listSavedAnalysisVersions").mockReturnValue(
+            new Promise((resolve) => {
+                resolveHistory = resolve;
+            }),
+        );
+        const user = userEvent.setup();
+        renderPage();
+        await user.click(
+            await screen.findByRole("button", { name: "Monthly cashflow" }),
+        );
+        await user.click(
+            screen.getByRole("button", { name: "Version history" }),
+        );
+        await user.click(
+            screen.getByRole("button", { name: "Other analysis" }),
+        );
+        resolveHistory([{ version: 99 }] as never);
+        await waitFor(() =>
+            expect(
+                screen.getByRole("button", { name: "Version history" }),
+            ).toBeEnabled(),
+        );
+        expect(
+            screen.queryByRole("button", { name: /restore.*99/i }),
+        ).not.toBeInTheDocument();
+    });
+
+    it("explains empty version history and reports failed history requests", async () => {
+        vi.mocked(apiClient.listSavedAnalyses).mockResolvedValue([
+            savedChartAnalysis,
+        ] as never);
+        const history = vi
+            .spyOn(apiClient, "listSavedAnalysisVersions")
+            .mockResolvedValue([{ version: 1 }] as never);
+        const user = userEvent.setup();
+        renderPage();
+        await user.click(
+            await screen.findByRole("button", { name: "Monthly cashflow" }),
+        );
+        await user.click(
+            screen.getByRole("button", { name: "Version history" }),
+        );
+        expect(await screen.findByRole("status")).toHaveTextContent(
+            "No earlier versions",
+        );
+        history.mockRejectedValueOnce(new Error("History unavailable"));
+        await user.click(
+            screen.getByRole("button", { name: "Version history" }),
+        );
+        expect(await screen.findByRole("alert")).toHaveTextContent(
+            "History unavailable",
         );
     });
 
@@ -210,6 +392,16 @@ describe("AnalysisWorkspacePage", () => {
         await user.click(
             screen.getByRole("button", { name: /Category spending/ }),
         );
+        const chooser = screen
+            .getByRole("button", { name: /Category spending/, hidden: true })
+            .closest("details")!;
+        expect(chooser).not.toHaveAttribute("open");
+        const nameInput = screen.getByLabelText("Analysis name");
+        await user.clear(nameInput);
+        await user.type(nameInput, "My edited analysis");
+        await user.click(chooser.querySelector("summary")!);
+        expect(chooser).toHaveAttribute("open");
+        expect(nameInput).toHaveValue("My edited analysis");
         await user.click(screen.getByRole("button", { name: "Run" }));
 
         await waitFor(() =>
@@ -263,6 +455,14 @@ describe("AnalysisWorkspacePage", () => {
         await user.click(
             await screen.findByRole("button", { name: "Newest months first" }),
         );
+        expect(
+            screen
+                .getByRole("button", {
+                    name: /Category spending/,
+                    hidden: true,
+                })
+                .closest("details"),
+        ).not.toHaveAttribute("open");
         await user.click(screen.getByRole("button", { name: "Run" }));
         await waitFor(() =>
             expect(apiClient.executeAnalysis).toHaveBeenCalledWith(
@@ -274,6 +474,21 @@ describe("AnalysisWorkspacePage", () => {
                 }),
             ),
         );
+    });
+
+    it("collapses the blank-start chooser and keeps the editor mode explicit", async () => {
+        const user = userEvent.setup();
+        renderPage();
+        await screen.findByText("Cash flows");
+        const blank = screen.getByRole("button", { name: "Start blank" });
+        const chooser = blank.closest("details")!;
+        await user.click(blank);
+        expect(chooser).not.toHaveAttribute("open");
+        expect(chooser.querySelector("summary")).toHaveFocus();
+        expect(screen.getByLabelText("Analysis name")).toHaveValue("");
+        expect(
+            screen.getByRole("button", { name: "Visual builder" }),
+        ).toHaveAttribute("aria-pressed", "true");
     });
 
     it("persists an explicit no-benchmark override", async () => {
