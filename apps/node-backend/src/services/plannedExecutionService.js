@@ -6,14 +6,15 @@
  * (plannedMatchService) so both compute the same updateFields, advance
  * recurring rows identically, and inherit tags the same way.
  *
- * Idempotency is delegated to plannedTransactionService.executeAndAdvance,
- * which guards on the UNIQUE (planned_transaction_id, executed_transaction_id)
- * index — re-running the same (planned, tx) pair is a no-op (duplicate: true).
+ * The parent row is locked before reading recurrence state. The replay check
+ * and UNIQUE (planned_transaction_id, executed_transaction_id) index ensure
+ * re-running the same pair is a no-op, including after series completion.
  */
 
 import plannedTransactionService from "./plannedTransactionService.js";
+import { withTransaction } from "../database/connection.js";
 import { calculateNextDate } from "../lib/calculations/recurrence.js";
-import { NotFoundError } from "../middleware/errorHandler.js";
+import { ConflictError, NotFoundError } from "../middleware/errorHandler.js";
 import { toAppDateString, todayAppDateString } from "../lib/timezone.js";
 import { toWireDate } from "../lib/dateFormat.js";
 
@@ -30,65 +31,91 @@ export async function executePlanned({
   executedTransactionId,
   executionDate,
 }) {
-  const existing = await plannedTransactionService.getById(id);
-  if (!existing) throw new NotFoundError(`Planned transaction ${id} not found`);
+  return withTransaction(async () => {
+    await plannedTransactionService.lockForExecution(id);
+    const existing = await plannedTransactionService.getById(id);
+    if (!existing)
+      throw new NotFoundError(`Planned transaction ${id} not found`);
 
-  const execDate = executionDate || todayAppDateString();
-  /**
-   * Sanitized update payload for `plannedTransactionService.executeAndAdvance`
-   * — write-side values, NOT the read-side row shape: both dates go in as
-   * 'YYYY-MM-DD' strings (pg coerces on bind), whereas a fetched row's same
-   * columns come back as `Date` (see `PlannedTransactionRow` in types/rows.js).
-   * @type {{ is_executed: boolean, last_executed_date: string, planned_date?: string }}
-   */
-  const updateFields = {
-    is_executed: !existing.is_recurring,
-    last_executed_date: execDate,
-  };
+    // A completed series still accepts a replay of its final execution.
+    if (
+      (existing.executions || []).some(
+        (execution) =>
+          Number(execution.executed_transaction_id) ===
+          Number(executedTransactionId),
+      )
+    ) {
+      return { current: existing, duplicate: true };
+    }
+    if (
+      existing.is_recurring &&
+      ((existing.max_occurrences != null &&
+        Number(existing.execution_count || 0) >=
+          Number(existing.max_occurrences)) ||
+        (existing.is_executed &&
+          (existing.max_occurrences != null ||
+            existing.recurrence_end_date != null)))
+    ) {
+      throw new ConflictError("Recurring planned transaction is complete");
+    }
 
-  if (existing.is_recurring && existing.recurrence_pattern) {
-    // Recurrence bounds (migration 0071): the series COMPLETES — is_executed
-    // stays true, planned_date stays put — when this execution reaches
-    // max_occurrences, or when the next occurrence would fall past
-    // recurrence_end_date. These bounds were collected by the form but dropped
-    // at every layer, so bounded recurrences generated due bills forever.
-    const priorExecutions = Number(existing.execution_count || 0);
-    const reachedMaxOccurrences =
-      existing.max_occurrences != null &&
-      priorExecutions + 1 >= Number(existing.max_occurrences);
+    const execDate = executionDate || todayAppDateString();
+    /**
+     * Sanitized update payload for `plannedTransactionService.executeAndAdvance`
+     * — write-side values, NOT the read-side row shape: both dates go in as
+     * 'YYYY-MM-DD' strings (pg coerces on bind), whereas a fetched row's same
+     * columns come back as `Date` (see `PlannedTransactionRow` in types/rows.js).
+     * @type {{ is_executed: boolean, last_executed_date: string, planned_date?: string }}
+     */
+    const updateFields = {
+      is_executed: !existing.is_recurring,
+      last_executed_date: execDate,
+    };
 
-    const baseDate = new Date(existing.planned_date);
-    const nextDate = calculateNextDate(baseDate, existing.recurrence_pattern);
-    if (nextDate) {
-      // calculateNextDate returns a UTC instant for start-of-day in APP_TIMEZONE.
-      // toISOString() takes the UTC calendar day, which is the *previous* day in
-      // a UTC+ zone — moving a monthly payment one day earlier per cycle.
-      // toAppDateString reads the date back in APP_TIMEZONE. (Day-of-month anchor
-      // is intentionally sticky-clamped — see docs/features planned-transactions.)
-      const nextYmd = toAppDateString(nextDate);
-      const endYmd = toWireDate(existing.recurrence_end_date);
-      const pastEndDate = endYmd != null && nextYmd > endYmd;
+    if (existing.is_recurring && existing.recurrence_pattern) {
+      // Recurrence bounds (migration 0071): the series COMPLETES — is_executed
+      // stays true, planned_date stays put — when this execution reaches
+      // max_occurrences, or when the next occurrence would fall past
+      // recurrence_end_date. These bounds were collected by the form but dropped
+      // at every layer, so bounded recurrences generated due bills forever.
+      const priorExecutions = Number(existing.execution_count || 0);
+      const reachedMaxOccurrences =
+        existing.max_occurrences != null &&
+        priorExecutions + 1 >= Number(existing.max_occurrences);
 
-      if (reachedMaxOccurrences || pastEndDate) {
-        updateFields.is_executed = true;
-      } else {
-        updateFields.planned_date = nextYmd;
-        updateFields.is_executed = false;
+      const baseDate = new Date(existing.planned_date);
+      const nextDate = calculateNextDate(baseDate, existing.recurrence_pattern);
+      if (nextDate) {
+        // calculateNextDate returns a UTC instant for start-of-day in APP_TIMEZONE.
+        // toISOString() takes the UTC calendar day, which is the *previous* day in
+        // a UTC+ zone — moving a monthly payment one day earlier per cycle.
+        // toAppDateString reads the date back in APP_TIMEZONE. (Day-of-month anchor
+        // is intentionally sticky-clamped — see docs/features planned-transactions.)
+        const nextYmd = toAppDateString(nextDate);
+        const endYmd = toWireDate(existing.recurrence_end_date);
+        const pastEndDate = endYmd != null && nextYmd > endYmd;
+
+        if (reachedMaxOccurrences || pastEndDate) {
+          updateFields.is_executed = true;
+        } else {
+          updateFields.planned_date = nextYmd;
+          updateFields.is_executed = false;
+        }
       }
     }
-  }
 
-  const tagIdsToInherit = (existing.tags || []).map((t) => t.id);
-  const { duplicate } = await plannedTransactionService.executeAndAdvance(
-    id,
-    executedTransactionId,
-    execDate,
-    updateFields,
-    tagIdsToInherit,
-  );
+    const tagIdsToInherit = (existing.tags || []).map((t) => t.id);
+    const { duplicate } = await plannedTransactionService.executeAndAdvance(
+      id,
+      executedTransactionId,
+      execDate,
+      updateFields,
+      tagIdsToInherit,
+    );
 
-  const current = await plannedTransactionService.getById(id);
-  return { current, duplicate };
+    const current = await plannedTransactionService.getById(id);
+    return { current, duplicate };
+  });
 }
 
 export default { executePlanned };

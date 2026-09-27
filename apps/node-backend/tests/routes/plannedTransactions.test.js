@@ -32,10 +32,14 @@ vi.mock("../../src/services/plannedTransactionService.js", () => ({
     hardDelete: vi.fn(),
     replaceLoanSchedule: vi.fn(),
     executeAndAdvance: vi.fn(async () => ({ duplicate: false })),
+    lockForExecution: vi.fn(),
   },
 }));
 
-vi.mock("../../src/database/connection.js", () => mockConnection());
+vi.mock("../../src/database/connection.js", () => ({
+  ...mockConnection(),
+  withTransaction: vi.fn(async (fn) => fn()),
+}));
 
 // The per-route PATCH limiter (routes/plannedTransactions.js:417) is stubbed
 // here on purpose: this suite issues ~28 PATCHes against one in-memory counter

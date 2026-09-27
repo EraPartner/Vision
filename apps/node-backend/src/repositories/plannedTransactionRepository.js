@@ -428,6 +428,13 @@ export async function inheritTransactionTagsInTransaction(
 }
 
 export const plannedTransactionRepository = {
+  /** Lock the parent before reading recurrence state on the ambient transaction. @param {number} id */
+  async lockForExecution(id) {
+    await query(
+      "SELECT id FROM planned_transactions WHERE id = $1 FOR UPDATE",
+      [id],
+    );
+  },
   /**
    * @param {PlannedTransactionFilters} [filters]
    * @returns {Promise<{ items: HydratedPlannedTransactionRow[], total: number }>}

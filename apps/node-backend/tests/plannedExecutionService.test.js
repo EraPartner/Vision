@@ -3,9 +3,13 @@ import { makePlannedTransactionRow } from "./builders/domainRows.js";
 
 vi.mock("../src/services/plannedTransactionService.js", () => ({
   default: {
+    lockForExecution: vi.fn(),
     getById: vi.fn(),
     executeAndAdvance: vi.fn().mockResolvedValue({ duplicate: false }),
   },
+}));
+vi.mock("../src/database/connection.js", () => ({
+  withTransaction: vi.fn(async (fn) => fn()),
 }));
 
 import plannedTransactionService from "../src/services/plannedTransactionService.js";
@@ -37,6 +41,48 @@ beforeEach(() => {
 });
 
 describe("executePlanned — recurrence bounds (migration 0071)", () => {
+  it("locks before reading state and rejects new executions beyond the maximum", async () => {
+    plannedTransactionService.getById.mockResolvedValue(
+      planned({ max_occurrences: 1, execution_count: 1, is_executed: true }),
+    );
+    await expect(
+      executePlanned({ id: 1, executedTransactionId: 9 }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(
+      plannedTransactionService.lockForExecution.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      plannedTransactionService.getById.mock.invocationCallOrder[0],
+    );
+    expect(plannedTransactionService.executeAndAdvance).not.toHaveBeenCalled();
+  });
+
+  it("accepts a final execution replay after the series is complete", async () => {
+    const existing = planned({
+      max_occurrences: 1,
+      execution_count: 1,
+      is_executed: true,
+      executions: [{ executed_transaction_id: 9 }],
+    });
+    plannedTransactionService.getById.mockResolvedValue(existing);
+    await expect(
+      executePlanned({ id: 1, executedTransactionId: 9 }),
+    ).resolves.toEqual({ current: existing, duplicate: true });
+    expect(plannedTransactionService.executeAndAdvance).not.toHaveBeenCalled();
+  });
+
+  it("rejects a new execution after end-date completion", async () => {
+    plannedTransactionService.getById.mockResolvedValue(
+      planned({
+        recurrence_end_date: "2026-07-01",
+        execution_count: 1,
+        is_executed: true,
+      }),
+    );
+    await expect(
+      executePlanned({ id: 1, executedTransactionId: 9 }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(plannedTransactionService.executeAndAdvance).not.toHaveBeenCalled();
+  });
   it("an unbounded recurrence advances to the next date", async () => {
     plannedTransactionService.getById.mockResolvedValue(planned());
     await executePlanned({
