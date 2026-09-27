@@ -40,16 +40,6 @@ type ForecastMode = "month" | "rolling";
 type RollingDays = 30 | 60 | 90 | 180;
 const ROLLING_PRESETS: ReadonlyArray<RollingDays> = [30, 60, 90, 180];
 
-const DEFAULT_VISIBLE_METHOD_IDS: readonly string[] = [
-    "simple_avg",
-    "weighted_avg",
-    "ewma",
-    "holt_winters",
-    "prophet_lite",
-    "ensemble_imse",
-    "monte_carlo_block_bootstrap",
-];
-
 const BORDER_COLOR = "hsl(var(--border))";
 const EMPTY_IDS: number[] = [];
 
@@ -117,9 +107,9 @@ export function CashFlowForecastChart({
     const [includePlanned, setIncludePlanned] = useState(false);
     const [showDiagnostics, setShowDiagnostics] = useState(false);
 
-    const [visibleMethodIds, setVisibleMethodIds] = useState<Set<string>>(
-        () => new Set(DEFAULT_VISIBLE_METHOD_IDS),
-    );
+    const [selectedMethodIds, setVisibleMethodIds] = useState<
+        Set<string> | undefined
+    >();
 
     const { monthQuery, rollingQuery, rollingDiagnosticsQuery } =
         useCashflowForecastQueries({
@@ -137,17 +127,32 @@ export function CashFlowForecastChart({
         mode === "month" ? monthQuery.isLoading : rollingQuery.isLoading;
     const error = mode === "month" ? monthQuery.error : rollingQuery.error;
 
-    const toggleMethod = useCallback((id: string) => {
-        setVisibleMethodIds((prev) => {
-            const next = new Set(prev);
-            if (next.has(id)) {
-                next.delete(id);
-            } else {
-                next.add(id);
-            }
-            return next;
-        });
-    }, []);
+    const availableMethods =
+        data?.methods.filter(
+            (method) => !method.error && method.daily.length > 0,
+        ) ?? [];
+    const defaultMethod =
+        availableMethods.find((method) => method.id === "ensemble_imse") ??
+        availableMethods[0];
+    const visibleMethodIds =
+        selectedMethodIds ?? new Set(defaultMethod ? [defaultMethod.id] : []);
+
+    const toggleMethod = useCallback(
+        (id: string) => {
+            setVisibleMethodIds((prev) => {
+                const next = new Set(
+                    prev ?? (defaultMethod ? [defaultMethod.id] : []),
+                );
+                if (next.has(id)) {
+                    next.delete(id);
+                } else {
+                    next.add(id);
+                }
+                return next;
+            });
+        },
+        [defaultMethod],
+    );
 
     const monthName =
         mode === "month" && monthQuery.data
@@ -192,7 +197,8 @@ export function CashFlowForecastChart({
                         key={days}
                         type="button"
                         onClick={() => setRollingDays(days)}
-                        className="px-3 py-0.5 rounded-full border text-xs transition-opacity"
+                        aria-pressed={active}
+                        className="min-h-8 px-3 py-0.5 rounded-full border text-xs transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         style={{
                             borderColor: active
                                 ? "hsl(var(--primary))"
@@ -203,7 +209,7 @@ export function CashFlowForecastChart({
                                 : "transparent",
                         }}
                     >
-                        {t(`cashflow.window${days}`)}
+                        {t("cashflow.windowDays", { days })}
                     </button>
                 );
             })}
@@ -274,7 +280,8 @@ export function CashFlowForecastChart({
                         key={m.id}
                         type="button"
                         onClick={() => toggleMethod(m.id)}
-                        className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-xs transition-opacity"
+                        aria-pressed={active}
+                        className="flex min-h-8 items-center gap-1.5 px-2 py-0.5 rounded-full border text-xs transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         style={methodToggleStyle(color, active)}
                     >
                         <span
@@ -314,7 +321,15 @@ export function CashFlowForecastChart({
             )}
             {data && !isLoading && (
                 <>
-                    {methodToggles}
+                    <details className="mb-3">
+                        <summary className="w-fit cursor-pointer rounded-sm py-2 text-xs text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                            {t("cashflow.compareMethods")}
+                        </summary>
+                        <p className="mb-3 text-xs text-muted-foreground">
+                            {t("cashflow.compareMethodsHelp")}
+                        </p>
+                        {methodToggles}
+                    </details>
                     {mode === "month" && monthQuery.data ? (
                         <ForecastInner
                             data={monthQuery.data}

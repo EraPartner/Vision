@@ -1,6 +1,5 @@
-// Pin tests for PKG-07 / PKG-09 / PKG-12 (date-fns adoption, see
-// docs/audits/2026-07-package-adoption-audit.md). Written against the
-// hand-rolled implementations FIRST; the date-fns swap must keep them green.
+// Pin tests for PKG-07 / PKG-09 / PKG-12 (date-fns adoption). Written against
+// the hand-rolled implementations FIRST; the date-fns swap must keep them green.
 import { describe, expect, test } from "vitest";
 import { CHART_DATE_PATTERNS, formatDate, parseISO } from "./dateUtils";
 import { filterByPeriod, CHART_PERIOD_OFFSET_DAYS } from "@/components/charts/chartPeriods";

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useId } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -117,6 +117,7 @@ export function CustomChartBuilderModal({
     editChart,
 }: CustomChartBuilderModalProps) {
     const { t } = useLanguage();
+    const fieldId = useId();
     const formatCurrencyBase = useCurrencyFormatter();
     const formatCurrency = (val: number) =>
         formatCurrencyBase(val, { decimals: 0 });
@@ -280,10 +281,14 @@ export function CustomChartBuilderModal({
                         <div className="space-y-4">
                             {/* Name */}
                             <div className="space-y-1">
-                                <label className="text-sm font-medium">
+                                <label
+                                    htmlFor={`${fieldId}-name`}
+                                    className="text-sm font-medium"
+                                >
                                     {t("customChart.builder.name")}
                                 </label>
                                 <Input
+                                    id={`${fieldId}-name`}
                                     value={state.name}
                                     onChange={(e) =>
                                         update("name", e.target.value)
@@ -297,14 +302,20 @@ export function CustomChartBuilderModal({
 
                             {/* Chart type combo */}
                             <div className="space-y-1">
-                                <label className="text-sm font-medium">
+                                <label
+                                    htmlFor={`${fieldId}-type`}
+                                    className="text-sm font-medium"
+                                >
                                     {t("customChart.chartType")}
                                 </label>
                                 <Select
                                     value={selectedComboKey}
                                     onValueChange={handleComboChange}
                                 >
-                                    <SelectTrigger className="w-full">
+                                    <SelectTrigger
+                                        id={`${fieldId}-type`}
+                                        className="w-full"
+                                    >
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -329,7 +340,10 @@ export function CustomChartBuilderModal({
                             {/* Time bucket — irrelevant for ranked (totals over the whole range) */}
                             {state.chartVariant !== "ranked" && (
                                 <div className="space-y-1">
-                                    <label className="text-sm font-medium">
+                                    <label
+                                        htmlFor={`${fieldId}-bucket`}
+                                        className="text-sm font-medium"
+                                    >
                                         {t("customChart.timeBucket")}
                                     </label>
                                     <Select
@@ -341,7 +355,10 @@ export function CustomChartBuilderModal({
                                             )
                                         }
                                     >
-                                        <SelectTrigger className="w-full">
+                                        <SelectTrigger
+                                            id={`${fieldId}-bucket`}
+                                            className="w-full"
+                                        >
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -359,10 +376,14 @@ export function CustomChartBuilderModal({
                             {/* Date range */}
                             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                                 <div className="space-y-1">
-                                    <label className="text-sm font-medium">
+                                    <label
+                                        htmlFor={`${fieldId}-from`}
+                                        className="text-sm font-medium"
+                                    >
                                         {t("customChart.dateFrom")}
                                     </label>
                                     <Input
+                                        id={`${fieldId}-from`}
                                         type="date"
                                         value={state.dateRangeStart}
                                         onChange={(e) =>
@@ -374,10 +395,14 @@ export function CustomChartBuilderModal({
                                     />
                                 </div>
                                 <div className="space-y-1">
-                                    <label className="text-sm font-medium">
+                                    <label
+                                        htmlFor={`${fieldId}-to`}
+                                        className="text-sm font-medium"
+                                    >
                                         {t("customChart.dateTo")}
                                     </label>
                                     <Input
+                                        id={`${fieldId}-to`}
                                         type="date"
                                         value={state.dateRangeEnd}
                                         onChange={(e) =>
@@ -519,12 +544,18 @@ export function CustomChartBuilderModal({
                                                         </span>
                                                         <button
                                                             type="button"
+                                                            aria-label={t(
+                                                                "customChart.removeSeries",
+                                                                {
+                                                                    name: cat.name,
+                                                                },
+                                                            )}
                                                             onClick={() =>
                                                                 toggleCategory(
                                                                     cat.id,
                                                                 )
                                                             }
-                                                            className="ml-1 rounded-full hover:bg-muted p-0.5"
+                                                            className="ml-1 inline-flex min-h-6 min-w-6 items-center justify-center rounded-full hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring p-0.5"
                                                         >
                                                             <X className="h-3 w-3" />
                                                         </button>
@@ -661,12 +692,18 @@ export function CustomChartBuilderModal({
                                                         </span>
                                                         <button
                                                             type="button"
+                                                            aria-label={t(
+                                                                "customChart.removeSeries",
+                                                                {
+                                                                    name: rec.name,
+                                                                },
+                                                            )}
                                                             onClick={() =>
                                                                 toggleRecipient(
                                                                     rec.id,
                                                                 )
                                                             }
-                                                            className="ml-1 rounded-full hover:bg-muted p-0.5"
+                                                            className="ml-1 inline-flex min-h-6 min-w-6 items-center justify-center rounded-full hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring p-0.5"
                                                         >
                                                             <X className="h-3 w-3" />
                                                         </button>
@@ -805,12 +842,18 @@ export function CustomChartBuilderModal({
                                                         </span>
                                                         <button
                                                             type="button"
+                                                            aria-label={t(
+                                                                "customChart.removeSeries",
+                                                                {
+                                                                    name: tag.slug,
+                                                                },
+                                                            )}
                                                             onClick={() =>
                                                                 toggleTag(
                                                                     tag.id,
                                                                 )
                                                             }
-                                                            className="ml-1 rounded-full hover:bg-muted p-0.5"
+                                                            className="ml-1 inline-flex min-h-6 min-w-6 items-center justify-center rounded-full hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring p-0.5"
                                                         >
                                                             <X className="h-3 w-3" />
                                                         </button>

@@ -16,7 +16,7 @@ interface SavedChartsSectionProps {
 }
 
 export function SavedChartsSection({ data }: SavedChartsSectionProps) {
-    const { t } = useLanguage();
+    const { t, tc } = useLanguage();
     const { data: savedCharts, isLoading } = useSavedCharts();
     const deleteChart = useDeleteSavedChart();
     const { confirm, ConfirmDialog } = useConfirmDialog();
@@ -60,7 +60,7 @@ export function SavedChartsSection({ data }: SavedChartsSectionProps) {
                     </h2>
                     {charts.length > 0 && (
                         <p className="text-sm text-muted-foreground">
-                            {t("customChart.savedCount", { n: charts.length })}
+                            {tc("customChart.savedCount", charts.length)}
                         </p>
                     )}
                 </div>

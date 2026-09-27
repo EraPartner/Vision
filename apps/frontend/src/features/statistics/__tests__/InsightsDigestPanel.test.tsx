@@ -75,11 +75,39 @@ describe("InsightsDigestPanel", () => {
         window.localStorage.clear();
     });
 
+    it("starts with a compact summary while keeping the cash forecast visible", async () => {
+        stubDigest(DIGEST);
+        renderWithApp(<InsightsDigestPanel />);
+        const user = userEvent.setup();
+        const toggle = await screen.findByRole("button", {
+            name: "Show findings",
+        });
+        expect(toggle).toHaveAttribute("aria-expanded", "false");
+        expect(
+            document.getElementById(toggle.getAttribute("aria-controls")!),
+        ).not.toBeVisible();
+        expect(screen.getByText("Netflix")).not.toBeVisible();
+        expect(
+            screen.getByText(/Expected month-end net cash flow:/),
+        ).toBeVisible();
+        await user.click(toggle);
+        expect(screen.getByText("Netflix")).toBeVisible();
+        expect(toggle).toHaveAccessibleName("Hide findings");
+        await user.click(toggle);
+        expect(screen.getByText("Netflix")).not.toBeVisible();
+        expect(
+            screen.getByText(/Expected month-end net cash flow:/),
+        ).toBeVisible();
+    });
+
     it("renders net cash flow without balance or overdraft claims", async () => {
         stubDigest(DIGEST);
         renderWithApp(<InsightsDigestPanel />);
 
-        expect(await screen.findByText("Netflix")).toBeInTheDocument();
+        await userEvent.click(
+            await screen.findByRole("button", { name: "Show findings" }),
+        );
+        expect(screen.getByText("Netflix")).toBeVisible();
         expect(screen.getByText("New subscriptions")).toBeInTheDocument();
         expect(screen.getByText("Spotify")).toBeInTheDocument();
         expect(screen.getByText("Price changes")).toBeInTheDocument();
@@ -110,7 +138,10 @@ describe("InsightsDigestPanel", () => {
         stubDigest(DIGEST);
         renderWithApp(<InsightsDigestPanel />);
 
-        expect(await screen.findByText(/dag 1 t\/m 15/)).toBeInTheDocument();
+        await userEvent.click(
+            await screen.findByRole("button", { expanded: false }),
+        );
+        expect(await screen.findByText(/dag 1 t\/m 15/)).toBeVisible();
         expect(
             screen.getByText(/normaal voor dag 1 t\/m 15:/),
         ).toBeInTheDocument();
@@ -171,9 +202,14 @@ describe("InsightsDigestPanel", () => {
         renderWithApp(<InsightsDigestPanel />);
         const user = userEvent.setup();
 
-        await screen.findByText("Netflix");
-        // Rows render in section order: new subscription first.
-        await user.click(screen.getAllByLabelText("Dismiss")[0]);
+        await user.click(
+            await screen.findByRole("button", { name: "Show findings" }),
+        );
+        await user.click(
+            screen.getByRole("button", {
+                name: "Dismiss New subscriptions: Netflix",
+            }),
+        );
 
         await waitFor(() =>
             expect(screen.queryByText("Netflix")).not.toBeInTheDocument(),

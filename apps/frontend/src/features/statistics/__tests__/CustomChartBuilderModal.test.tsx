@@ -6,6 +6,7 @@ import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok, err, RECIPIENT_STUB } from "@/test/msw/handlers";
+import { CustomChart } from "@/features/statistics/CustomChart";
 import { CustomChartBuilderModal } from "@/features/statistics/CustomChartBuilderModal";
 import type { StatisticsData } from "@/hooks/useStatistics";
 import type { SavedChart } from "@/types/apiClient";
@@ -82,11 +83,67 @@ const RECIPIENT_WITH_NAME = {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe("CustomChartBuilderModal", () => {
+    it("names form controls and lets users remove a selected series by name", async () => {
+        const user = userEvent.setup();
+        renderWithApp(
+            <CustomChartBuilderModal
+                open
+                onOpenChange={vi.fn()}
+                data={STATS_DATA}
+                editChart={SAVED_CHART}
+            />,
+        );
+        expect(
+            await screen.findByRole("textbox", { name: "Name" }),
+        ).toHaveValue("My chart");
+        expect(
+            screen.getByRole("combobox", { name: "Chart type" }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("combobox", { name: "Granularity" }),
+        ).toBeInTheDocument();
+        expect(screen.getByLabelText("From")).toHaveAttribute("type", "date");
+        expect(screen.getByLabelText("To")).toHaveAttribute("type", "date");
+        await user.click(
+            screen.getByRole("button", { name: "Remove FOOD:GROCERIES" }),
+        );
+        expect(
+            screen.queryByRole("button", { name: "Remove FOOD:GROCERIES" }),
+        ).not.toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    });
+
+    it("names chart actions and identifies their chart", async () => {
+        const user = userEvent.setup();
+        const onEdit = vi.fn();
+        const onDelete = vi.fn();
+        renderWithApp(
+            <CustomChart
+                savedChart={SAVED_CHART}
+                data={STATS_DATA}
+                onEdit={onEdit}
+                onDelete={onDelete}
+            />,
+        );
+        await user.click(
+            await screen.findByRole("button", { name: "Edit My chart" }),
+        );
+        expect(onEdit).toHaveBeenCalledWith(SAVED_CHART);
+        await user.click(
+            screen.getByRole("button", { name: "Delete My chart" }),
+        );
+        expect(onDelete).toHaveBeenCalledWith(SAVED_CHART);
+    });
+
     it("renders dialog when open=true", async () => {
         // Arrange
         const onOpenChange = vi.fn();
         renderWithApp(
-            <CustomChartBuilderModal open={true} onOpenChange={onOpenChange} data={STATS_DATA} />,
+            <CustomChartBuilderModal
+                open={true}
+                onOpenChange={onOpenChange}
+                data={STATS_DATA}
+            />,
         );
 
         // Assert
@@ -97,7 +154,11 @@ describe("CustomChartBuilderModal", () => {
         // Arrange
         const onOpenChange = vi.fn();
         renderWithApp(
-            <CustomChartBuilderModal open={true} onOpenChange={onOpenChange} data={STATS_DATA} />,
+            <CustomChartBuilderModal
+                open={true}
+                onOpenChange={onOpenChange}
+                data={STATS_DATA}
+            />,
         );
 
         // Assert — no name entered, no categories selected
@@ -110,11 +171,17 @@ describe("CustomChartBuilderModal", () => {
         const user = userEvent.setup();
         const onOpenChange = vi.fn();
         renderWithApp(
-            <CustomChartBuilderModal open={true} onOpenChange={onOpenChange} data={STATS_DATA} />,
+            <CustomChartBuilderModal
+                open={true}
+                onOpenChange={onOpenChange}
+                data={STATS_DATA}
+            />,
         );
 
         // Act — type a name only
-        const nameInput = await screen.findByPlaceholderText("e.g. Groceries over time");
+        const nameInput = await screen.findByPlaceholderText(
+            "e.g. Groceries over time",
+        );
         await user.type(nameInput, "My chart");
 
         // Assert
@@ -127,18 +194,26 @@ describe("CustomChartBuilderModal", () => {
         const user = userEvent.setup();
         const onOpenChange = vi.fn();
         renderWithApp(
-            <CustomChartBuilderModal open={true} onOpenChange={onOpenChange} data={STATS_DATA} />,
+            <CustomChartBuilderModal
+                open={true}
+                onOpenChange={onOpenChange}
+                data={STATS_DATA}
+            />,
         );
 
         // Act — type a name; wait for i18n via the placeholder text
-        const nameInput = await screen.findByPlaceholderText("e.g. Groceries over time");
+        const nameInput = await screen.findByPlaceholderText(
+            "e.g. Groceries over time",
+        );
         await user.type(nameInput, "My chart");
 
         // Act — open category combobox (index 2: after chart-type[0] and time-bucket[1])
         const combos = screen.getAllByRole("combobox");
         const catTrigger = combos[2];
         await user.click(catTrigger);
-        const categoryOption = await screen.findByRole("option", { name: /FOOD:GROCERIES/i });
+        const categoryOption = await screen.findByRole("option", {
+            name: /FOOD:GROCERIES/i,
+        });
         await user.click(categoryOption);
 
         // Assert
@@ -160,18 +235,26 @@ describe("CustomChartBuilderModal", () => {
         );
 
         renderWithApp(
-            <CustomChartBuilderModal open={true} onOpenChange={onOpenChange} data={STATS_DATA} />,
+            <CustomChartBuilderModal
+                open={true}
+                onOpenChange={onOpenChange}
+                data={STATS_DATA}
+            />,
         );
 
         // Act — enter name
-        const nameInput = await screen.findByPlaceholderText("e.g. Groceries over time");
+        const nameInput = await screen.findByPlaceholderText(
+            "e.g. Groceries over time",
+        );
         await user.type(nameInput, "My chart");
 
         // Act — select a category (index 2: after chart-type[0] and time-bucket[1])
         const combos = screen.getAllByRole("combobox");
         const catTrigger = combos[2];
         await user.click(catTrigger);
-        const categoryOption = await screen.findByRole("option", { name: /FOOD:GROCERIES/i });
+        const categoryOption = await screen.findByRole("option", {
+            name: /FOOD:GROCERIES/i,
+        });
         await user.click(categoryOption);
 
         // Act — close popover by pressing Escape, then save
@@ -241,7 +324,11 @@ describe("CustomChartBuilderModal", () => {
         const user = userEvent.setup();
         const onOpenChange = vi.fn();
         renderWithApp(
-            <CustomChartBuilderModal open={true} onOpenChange={onOpenChange} data={STATS_DATA} />,
+            <CustomChartBuilderModal
+                open={true}
+                onOpenChange={onOpenChange}
+                data={STATS_DATA}
+            />,
         );
 
         // Act
@@ -256,18 +343,30 @@ describe("CustomChartBuilderModal", () => {
         // Arrange
         server.use(
             http.get(`${API_BASE}/api/recipients`, () =>
-                ok({ items: [RECIPIENT_WITH_NAME], total: 1, limit: 200, offset: 0, links: [] }),
+                ok({
+                    items: [RECIPIENT_WITH_NAME],
+                    total: 1,
+                    limit: 200,
+                    offset: 0,
+                    links: [],
+                }),
             ),
         );
 
         const user = userEvent.setup();
         const onOpenChange = vi.fn();
         renderWithApp(
-            <CustomChartBuilderModal open={true} onOpenChange={onOpenChange} data={STATS_DATA} />,
+            <CustomChartBuilderModal
+                open={true}
+                onOpenChange={onOpenChange}
+                data={STATS_DATA}
+            />,
         );
 
         // Act — open recipient combobox (index 3: after chart-type[0], time-bucket[1], category[2])
-        const nameInput2 = await screen.findByPlaceholderText("e.g. Groceries over time");
+        const nameInput2 = await screen.findByPlaceholderText(
+            "e.g. Groceries over time",
+        );
         expect(nameInput2).toBeInTheDocument(); // wait for i18n
         const combos = screen.getAllByRole("combobox");
         const recTrigger = combos[3];
@@ -281,7 +380,11 @@ describe("CustomChartBuilderModal", () => {
 
     it("dialog renders in open state (a11y / backdrop guard)", async () => {
         renderWithApp(
-            <CustomChartBuilderModal open={true} onOpenChange={vi.fn()} data={STATS_DATA} />,
+            <CustomChartBuilderModal
+                open={true}
+                onOpenChange={vi.fn()}
+                data={STATS_DATA}
+            />,
         );
         const dialog = await screen.findByRole("dialog");
         expect(dialog).toHaveAttribute("data-state", "open");
@@ -289,7 +392,11 @@ describe("CustomChartBuilderModal", () => {
 
     it("first focusable element exists for keyboard nav", async () => {
         renderWithApp(
-            <CustomChartBuilderModal open={true} onOpenChange={vi.fn()} data={STATS_DATA} />,
+            <CustomChartBuilderModal
+                open={true}
+                onOpenChange={vi.fn()}
+                data={STATS_DATA}
+            />,
         );
         await screen.findByRole("dialog");
         const inputs = screen.getAllByRole("textbox");
@@ -304,20 +411,30 @@ describe("CustomChartBuilderModal", () => {
         const onOpenChange = vi.fn();
 
         server.use(
-            http.post(`${API_BASE}/api/saved-charts`, () => err(500, "save failed")),
+            http.post(`${API_BASE}/api/saved-charts`, () =>
+                err(500, "save failed"),
+            ),
         );
 
         renderWithApp(
-            <CustomChartBuilderModal open={true} onOpenChange={onOpenChange} data={STATS_DATA} />,
+            <CustomChartBuilderModal
+                open={true}
+                onOpenChange={onOpenChange}
+                data={STATS_DATA}
+            />,
         );
 
-        const nameInput = await screen.findByPlaceholderText("e.g. Groceries over time");
+        const nameInput = await screen.findByPlaceholderText(
+            "e.g. Groceries over time",
+        );
         await user.type(nameInput, "My chart");
 
         const combos = screen.getAllByRole("combobox");
         const catTrigger = combos[2];
         await user.click(catTrigger);
-        const categoryOption = await screen.findByRole("option", { name: /FOOD:GROCERIES/i });
+        const categoryOption = await screen.findByRole("option", {
+            name: /FOOD:GROCERIES/i,
+        });
         await user.click(categoryOption);
 
         await user.keyboard("{Escape}");

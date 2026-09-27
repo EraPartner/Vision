@@ -183,7 +183,7 @@ export function DashboardSettingsDialog({
                                     )}
                                 >
                                     <Icon className="h-4 w-4 shrink-0" />
-                                    <span className="truncate">
+                                    <span className="whitespace-nowrap md:whitespace-normal md:break-words">
                                         {t(labelKey)}
                                     </span>
                                 </button>

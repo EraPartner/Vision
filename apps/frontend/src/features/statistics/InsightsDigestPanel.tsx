@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import {
     useDismissInsight,
     useInsightsDigest,
@@ -45,7 +45,8 @@ export function InsightsDigestPanel() {
     const formatPercent = usePercentFormatter();
     const formatCurrency = useCurrencyFormatter();
     const { t } = useLanguage();
-    const [expanded, setExpanded] = useState(true);
+    const [expanded, setExpanded] = useState(false);
+    const findingsId = useId();
     const { data, isLoading, error } = useInsightsDigest();
     const dismissMutation = useDismissInsight();
 
@@ -125,12 +126,25 @@ export function InsightsDigestPanel() {
         );
     }
 
+    const findingCount =
+        newSubscriptions.length + priceChanges.length + categoryOutliers.length;
+    const sections = [
+        {
+            label: t("insights.panel.newSubscriptions"),
+            count: newSubscriptions.length,
+        },
+        { label: t("insights.panel.priceChanges"), count: priceChanges.length },
+        {
+            label: t("insights.panel.categoryOverspend"),
+            count: categoryOutliers.length,
+        },
+    ].filter((section) => section.count > 0);
     const forecastAlert = cashForecast?.prominence === "alert";
 
     return (
         <Card>
             <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <CardTitle variant="sm">
                             {t("insights.panel.title")}
@@ -144,23 +158,46 @@ export function InsightsDigestPanel() {
                             {t("insights.panel.desc")}
                         </CardDescription>
                     </div>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="icon-touch-target"
-                        aria-label={expanded ? "Collapse" : "Expand"}
-                        onClick={() => setExpanded(!expanded)}
-                    >
-                        {expanded ? (
-                            <ChevronUp className="h-4 w-4" />
-                        ) : (
-                            <ChevronDown className="h-4 w-4" />
-                        )}
-                    </Button>
+                    {findingCount > 0 && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="gap-2"
+                            aria-expanded={expanded}
+                            aria-controls={findingsId}
+                            onClick={() => setExpanded(!expanded)}
+                        >
+                            {t(
+                                expanded
+                                    ? "insights.panel.hideDetails"
+                                    : "insights.panel.showDetails",
+                            )}
+                            {expanded ? (
+                                <ChevronUp className="h-4 w-4" />
+                            ) : (
+                                <ChevronDown className="h-4 w-4" />
+                            )}
+                        </Button>
+                    )}
                 </div>
             </CardHeader>
-            {expanded && (
-                <CardContent className="space-y-5">
+            <CardContent className="space-y-4">
+                {!expanded && sections.length > 0 && (
+                    <ul className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
+                        {sections.map((section) => (
+                            <li
+                                key={section.label}
+                                className="flex items-center gap-2"
+                            >
+                                <span className="font-semibold tabular-nums text-foreground">
+                                    {section.count}
+                                </span>
+                                {section.label}
+                            </li>
+                        ))}
+                    </ul>
+                )}
+                <div id={findingsId} hidden={!expanded} className="space-y-5">
                     {newSubscriptions.length > 0 && (
                         <section className="space-y-2">
                             <SectionLabel>
@@ -193,7 +230,12 @@ export function InsightsDigestPanel() {
                                         })}
                                     </span>
                                     <DismissButton
-                                        label={t("insights.dismiss")}
+                                        label={t("insights.dismissFinding", {
+                                            kind: t(
+                                                "insights.panel.newSubscriptions",
+                                            ),
+                                            name: finding.recipientName,
+                                        })}
                                         onClick={() =>
                                             handleDismissSubscription(
                                                 finding.recipientId,
@@ -268,7 +310,15 @@ export function InsightsDigestPanel() {
                                             </div>
                                         </div>
                                         <DismissButton
-                                            label={t("insights.dismiss")}
+                                            label={t(
+                                                "insights.dismissFinding",
+                                                {
+                                                    kind: t(
+                                                        "insights.panel.priceChanges",
+                                                    ),
+                                                    name: finding.recipientName,
+                                                },
+                                            )}
                                             onClick={() =>
                                                 handleDismissSubscription(
                                                     finding.recipientId,
@@ -318,7 +368,12 @@ export function InsightsDigestPanel() {
                                         </p>
                                     </div>
                                     <DismissButton
-                                        label={t("insights.dismiss")}
+                                        label={t("insights.dismissFinding", {
+                                            kind: t(
+                                                "insights.panel.categoryOverspend",
+                                            ),
+                                            name: outlier.categoryName,
+                                        })}
                                         onClick={() =>
                                             handleDismissOutlier(outlier)
                                         }
@@ -327,60 +382,53 @@ export function InsightsDigestPanel() {
                             ))}
                         </section>
                     )}
-
-                    {cashForecast && (
-                        <section className="space-y-2">
-                            <SectionLabel>
-                                {t("insights.panel.cashForecast")}
-                            </SectionLabel>
-                            <div
-                                className={cn(
-                                    "flex items-center gap-3 rounded-lg p-3",
-                                    forecastAlert
-                                        ? "border border-destructive/40 bg-destructive/5"
-                                        : "border bg-card",
-                                )}
-                            >
-                                {forecastAlert ? (
-                                    <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
-                                ) : (
-                                    <Wallet className="h-4 w-4 text-muted-foreground shrink-0" />
-                                )}
-                                <div className="min-w-0 flex-1">
-                                    <p
-                                        className={cn(
-                                            "text-sm",
-                                            forecastAlert
-                                                ? "font-semibold text-foreground"
-                                                : "text-muted-foreground",
-                                        )}
-                                    >
-                                        {t(
-                                            "insights.panel.monthEndNetCashflow",
-                                            {
-                                                amount: formatCurrency(
-                                                    cashForecast.monthEndNetCashflow,
-                                                    {
-                                                        currency:
-                                                            cashForecast.currency,
-                                                    },
-                                                ),
-                                            },
-                                        )}
-                                    </p>
-                                    {cashForecast.movedSignificantly && (
-                                        <p className="text-xs text-destructive mt-0.5">
-                                            {t(
-                                                "insights.panel.significantMove",
-                                            )}
-                                        </p>
+                </div>
+                {cashForecast && (
+                    <section className="space-y-2">
+                        <SectionLabel>
+                            {t("insights.panel.cashForecast")}
+                        </SectionLabel>
+                        <div
+                            className={cn(
+                                "flex items-center gap-3 rounded-lg p-3",
+                                forecastAlert
+                                    ? "border border-destructive/40 bg-destructive/5"
+                                    : "border bg-card",
+                            )}
+                        >
+                            {forecastAlert ? (
+                                <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
+                            ) : (
+                                <Wallet className="h-4 w-4 text-muted-foreground shrink-0" />
+                            )}
+                            <div className="min-w-0 flex-1">
+                                <p
+                                    className={cn(
+                                        "text-sm",
+                                        forecastAlert
+                                            ? "font-semibold text-foreground"
+                                            : "text-muted-foreground",
                                     )}
-                                </div>
+                                >
+                                    {t("insights.panel.monthEndNetCashflow", {
+                                        amount: formatCurrency(
+                                            cashForecast.monthEndNetCashflow,
+                                            {
+                                                currency: cashForecast.currency,
+                                            },
+                                        ),
+                                    })}
+                                </p>
+                                {cashForecast.movedSignificantly && (
+                                    <p className="text-xs text-destructive mt-0.5">
+                                        {t("insights.panel.significantMove")}
+                                    </p>
+                                )}
                             </div>
-                        </section>
-                    )}
-                </CardContent>
-            )}
+                        </div>
+                    </section>
+                )}
+            </CardContent>
         </Card>
     );
 }

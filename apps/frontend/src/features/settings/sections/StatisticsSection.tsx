@@ -304,13 +304,13 @@ export const StatisticsSection = memo(function StatisticsSection() {
                                                             key={general}
                                                             className="space-y-0.5"
                                                         >
-                                                            <div
+                                                            <Label
+                                                                htmlFor={`category-group-${items[0].id}`}
                                                                 className="flex cursor-pointer items-center space-x-3 rounded-md bg-muted/50 px-3 py-2 transition-colors hover:bg-muted"
-                                                                onClick={
-                                                                    toggleGroup
-                                                                }
                                                             >
                                                                 <Checkbox
+                                                                    id={`category-group-${items[0].id}`}
+                                                                    aria-label={general}
                                                                     checked={
                                                                         allExcluded
                                                                             ? true
@@ -330,7 +330,7 @@ export const StatisticsSection = memo(function StatisticsSection() {
                                                                         items.length
                                                                     }
                                                                 </span>
-                                                            </div>
+                                                            </Label>
                                                             {items
                                                                 .sort((a, b) =>
                                                                     a.path

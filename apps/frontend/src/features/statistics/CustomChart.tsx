@@ -6,6 +6,11 @@ import {
     CardHeader,
     CardTitle,
 } from "@/components/ui/card";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
@@ -358,24 +363,50 @@ export function CustomChart({
                 {(onEdit || onDelete) && (
                     <div className="flex items-center gap-1 shrink-0">
                         {onEdit && (
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-muted-foreground hover:text-foreground"
-                                onClick={() => onEdit(savedChart)}
-                            >
-                                <Pencil className="h-4 w-4" />
-                            </Button>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        aria-label={t(
+                                            "customChart.editAction",
+                                            { name: savedChart.name },
+                                        )}
+                                        variant="ghost"
+                                        size="sm"
+                                        className="text-muted-foreground hover:text-foreground"
+                                        onClick={() => onEdit(savedChart)}
+                                    >
+                                        <Pencil className="h-4 w-4" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    {t("customChart.editAction", {
+                                        name: savedChart.name,
+                                    })}
+                                </TooltipContent>
+                            </Tooltip>
                         )}
                         {onDelete && (
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-muted-foreground hover:text-destructive"
-                                onClick={() => onDelete(savedChart)}
-                            >
-                                <Trash2 className="h-4 w-4" />
-                            </Button>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        aria-label={t(
+                                            "customChart.deleteAction",
+                                            { name: savedChart.name },
+                                        )}
+                                        variant="ghost"
+                                        size="sm"
+                                        className="text-muted-foreground hover:text-destructive"
+                                        onClick={() => onDelete(savedChart)}
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    {t("customChart.deleteAction", {
+                                        name: savedChart.name,
+                                    })}
+                                </TooltipContent>
+                            </Tooltip>
                         )}
                     </div>
                 )}
