@@ -2,10 +2,11 @@
 title: Recipients
 type: feature
 status: active
-date: 2026-04-16
+date: 2026-09-27
 tags: [feature, recipients, transactions, payees, payers, merge, atomic]
 description: Recipient (payee/payer) management with atomic merge, normalization-based fuzzy matching, and UNIQUE constraints
-aliases: [recipients-feature, payees, payers, counterparties, recipient-management]
+aliases:
+  [recipients-feature, payees, payers, counterparties, recipient-management]
 related_code:
   - apps/node-backend/src/routes/recipients.js
   - apps/node-backend/src/repositories/recipientRepository.js
@@ -26,17 +27,17 @@ Recipients represent counterparties in financial transactions. They can be group
 
 ### Recipient Model
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | integer | Unique identifier |
-| `name` | text | Display name (user-facing) |
-| `normalized_name` | text | Canonical lowercase form (UNIQUE, for matching) |
-| `default_category_id` | integer | FK to categories; optional default category |
-| `primary_recipient_id` | integer | FK to self; set when merged into another recipient |
-| `notes` | text | User-provided notes |
-| `is_active` | boolean | Soft-delete flag |
-| `created_at` | timestamp | Creation time (UTC) |
-| `updated_at` | timestamp | Last modification time (UTC) |
+| Field                  | Type      | Description                                        |
+| ---------------------- | --------- | -------------------------------------------------- |
+| `id`                   | integer   | Unique identifier                                  |
+| `name`                 | text      | Display name (user-facing)                         |
+| `normalized_name`      | text      | Canonical lowercase form (UNIQUE, for matching)    |
+| `default_category_id`  | integer   | FK to categories; optional default category        |
+| `primary_recipient_id` | integer   | FK to self; set when merged into another recipient |
+| `notes`                | text      | User-provided notes                                |
+| `is_active`            | boolean   | Soft-delete flag                                   |
+| `created_at`           | timestamp | Creation time (UTC)                                |
+| `updated_at`           | timestamp | Last modification time (UTC)                       |
 
 ### Normalization & Matching (Phase 6)
 
@@ -70,8 +71,11 @@ Merging recipients is now transactional and atomic. When recipient A is merged i
 If any step fails, the entire merge rolls back.
 
 **Guarantees:**
-- Merges serialize cleanly via `FOR UPDATE` row-level lock on the primary recipient.
-- Concurrent merges into the same primary are linearized by the database.
+
+- Merges lock the complete primary/alias set in ascending ID order with `FOR UPDATE`.
+- Overlapping merges serialize and recheck the locked primary's root status. A target that
+  became an alias returns 409 before any reference writes; a removed primary returns 404.
+  This prevents a waiting merge from recreating a two-level alias chain.
 - Bank account deduplication is race-safe via `INSERT ... ON CONFLICT` and `RETURNING id` for exact-one semantics.
 
 **Service:** [[apps/node-backend/src/services/recipientMergeService.js|recipientMergeService.js]]
@@ -79,6 +83,7 @@ If any step fails, the entire merge rolls back.
 ### Default Category Assignment (ADR-046)
 
 Recipients can have an optional `default_category_id` which is used to auto-categorize transactions:
+
 - During import review, users can override the category per staging row
 - The "Save as recipient default" checkbox persists the category to `recipients.default_category_id` for future imports
 - Committed transactions have category written explicitly: `COALESCE(override_category_id, recipient_default_category_id, NULL)`
@@ -89,9 +94,9 @@ See [[docs/adr/046-import-review-category-assignment|ADR-046]] for implementatio
 
 Dialog components have been moved into feature folders:
 
-| Old Path | New Path |
-|----------|----------|
-| `components/forms/AddRecipientDialog.tsx` | `features/recipients/AddRecipientDialog.tsx` |
+| Old Path                                          | New Path                                        |
+| ------------------------------------------------- | ----------------------------------------------- |
+| `components/forms/AddRecipientDialog.tsx`         | `features/recipients/AddRecipientDialog.tsx`    |
 | `components/recipients/MergeRecipientsDialog.tsx` | `features/recipients/MergeRecipientsDialog.tsx` |
 
 Pages (`RecipientsPage.tsx`) have been updated to import from the new feature paths.
@@ -101,6 +106,7 @@ Pages (`RecipientsPage.tsx`) have been updated to import from the new feature pa
 All recipient endpoints are documented in [[docs/api/recipients|Recipients API]].
 
 Key transactional guarantees:
+
 - **POST /api/recipients/:id/merge** — Atomic merge (single DB transaction, row-locked).
 - **POST /api/recipients** — Create-or-get pattern with normalized name UNIQUE constraint.
 

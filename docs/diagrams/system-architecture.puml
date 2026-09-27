@@ -25,7 +25,7 @@ cloud "Load Balancer / Reverse Proxy\n(production hosts only)" as Proxy
 package "Server" {
   rectangle "Node.js Backend (Bun runtime)" {
     node "Express.js" as Express
-    node "Middleware Stack\nadminAuth · requestId · metrics\nCORS · rate limit · envelope · errors" as Middleware
+    node "Middleware Stack\nrequestId · Host guard · metrics\nCORS · CSRF · adminAuth · rate limit\nenvelope · errors" as Middleware
     node "Routes\ntransactions · planning · portfolio · imports\nreports · AI · settings · admin · private audit" as Routes
     node "Services\nimports · prices · FX · tax · snapshots\nbackup · AI orchestration + references + Desktop setup · reports · attachments" as Services
     node "Repositories\ntransaction · recipient · planning · portfolio\nimports · AI jobs + reference maps · attachments · settings · info" as Repos
@@ -77,7 +77,7 @@ package "Desktop Runtime" {
   node "Local audit receipt\nHMAC + safeStorage key\noutside PostgreSQL and backup" as AuditReceipt
   Electron --> NativeRuntime : packaged default
   NativeRuntime --> Express : loopback backend
-  NativeRuntime --> DB : owner/app role connections
+  NativeRuntime --> DB : admin provisions executor login\nowner/app role connections
   Electron --> AuditReceipt : authenticate and update
   Electron --> Routes : loopback + per-launch token\nverify and checkpoint metadata
 }
@@ -160,6 +160,8 @@ note right of NativeRuntime
   and Chrome Headless Shell. Electron manages the private,
   loopback-only PostgreSQL cluster and Bun backend lifecycle,
   logs, readiness, updates, and durable runtime marker.
+  Cluster admin provisions Analysis executor credentials and defaults.
+  After migrations, the NOCREATEROLE owner resets approved view grants.
   A saved legacy runtime marker fails closed and directs
   the user to the last migration-capable release (ADR-133).
   Vision Demo reuses this provider with an isolated runtime,

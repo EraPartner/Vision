@@ -3,7 +3,7 @@ title: Views & Pages
 type: feature
 status: active
 date: 2026-04-10
-updated: 2026-09-19
+updated: 2026-09-25
 tags:
   [
     feature,
@@ -71,22 +71,25 @@ The main landing page providing a quick overview of your finances.
 
 | Widget                    | Description                                                                                                                                           |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Suggestions**           | Contextual suggestion card — appears only when planned payments are due within 7 days (replaces the global upcoming-payments banner on the dashboard) |
+| **Suggestions**           | Compact upcoming-payment summary; expand to review the next payments in date order or open Planned Payments |
 | **Stat Cards**            | Total income, expenses, net worth summary                                                                                                             |
 | **Bank Balances**         | Current balance per bank account                                                                                                                      |
 | **Monthly Trends**        | Income vs expenses over time (bar chart)                                                                                                              |
 | **Category Distribution** | Transaction count by category for the latest 50 active transactions (pie chart)                                                                       |
-| **Cashflow Comparison**   | Current vs previous period                                                                                                                            |
+| **Cashflow Forecast**     | Actual cash flow and one forecast; expand comparison controls for other methods                                                                                                                            |
 | **Recent Transactions**   | Latest transactions table                                                                                                                             |
 
 ### Features
 
 - **Widget Customization**: Show/hide widgets via the visibility dialog
 - **Exclusion Controls**: Filter categories/recipients from dashboard stats
-- **Date Range**: View current month by default
+- **Summary period**: “Latest month” means the newest month represented in the transaction data; income and spending links use that same month.
+- **Upcoming payments**: The dashboard reminder starts collapsed. Expand it for the next five payments, soonest first, individual dismissal controls, and the planned-payment link.
 - **Real-time Data**: Refreshes automatically
 - **Semantic date-label UX pass (dashboard)**: Cashflow month descriptions/headings and Monthly Trends x-axis labels now use `formatMonthYearWithAppSettings(date, appDateFormat, locale?)` from [[apps/frontend/src/lib/dateUtils.ts]] to avoid overly detailed full-date labels while respecting app settings
 - **Hotfix (settings-refactor runtime safety)**: Dashboard cashflow month description labels used an in-scope `locale` (not undefined `language`) in [[apps/frontend/src/pages/DashboardPage.tsx]] and the since-removed `CashFlowComparisonChart.tsx`.
+
+Walkthrough evidence and remaining acceptance: [[docs/sessions/2026-09-25-demo-ui-review]].
 
 ### Use Cases
 
@@ -114,7 +117,7 @@ Full transaction management with advanced filtering and editing.
   - Currency
   - Hidden/active status
 - **Inline Editing**: Quick edit amount, category, recipient
-- **Extra Info Inline Editing**: Edit existing extra information rows inline from the dialog via per-row pencil action (transaction ID remains read-only)
+- **Extra Info Inline Editing**: Edit information rows, including a previously blank comment, from the dialog. Pencil buttons identify the field in their accessible name and hover/focus tooltip; transaction ID remains read-only.
 - **Bulk Actions**: Select multiple transactions for batch operations
 - **Export**: Download filtered transactions as CSV
 - **Search**: Full-text search on memo/description
@@ -124,7 +127,7 @@ Full transaction management with advanced filtering and editing.
 - Search input state is maintained locally in `VirtualDataTable` while server filtering is driven by controlled `searchValue`/`onSearchChange` in `TransactionsPage`.
 - Debounced server updates (200ms) provide a more live search feel while preserving immediate input feedback.
 - Clearing search (button or character-by-character) updates the query consistently and avoids stale delayed requests.
-- Virtual table rendering uses deferred data (`useDeferredValue`) to keep typing fluid during refreshes.
+- Virtual table rendering uses deferred data (`useDeferredValue`) to keep typing fluid during refreshes. The first populated result renders immediately so it cannot announce an empty result while rows wait for deferral. Transaction and recipient lists keep their loading state until initial rows are ready; recipient sorting retains existing rows until the replacement arrives.
 
 Code links: [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/pages/TransactionsPage.tsx]], [[apps/frontend/src/components/shared/PageHeader.tsx]], [[apps/frontend/src/components/shared/EmptyState.tsx]], [[apps/frontend/src/components/shared/PageError.tsx]]
 

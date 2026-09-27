@@ -2,8 +2,8 @@
 title: Security - Data Protection & CSP
 type: security
 status: active
-date: 2026-09-20
-updated: 2026-09-20
+date: 2026-09-27
+updated: 2026-09-27
 tags: [security, csp, cors, data-protection, privacy, content-security-policy, xss, dangerouslySetInnerHTML, path-traversal, rfc-5987, backup-encryption, passphrase, phase-7, phase-c, pre-restore-confirmation, concurrent-backup-guard, watchdog-pause, bug-hunt-2026-05-05, bug-hunt-2026-05-06, electron-hardening, window-open-handler, will-navigate, checksum-verification, backup-directory-restrictions, csv-filename-sanitization, safe-storage, keychain, lazy-safeStorage, csrf-guard, sec-fetch-site, admin-auth, token-or-open, zip-bomb, response-cap, content-length]
 description: Content Security Policy, CORS, data protection, path traversal prevention, backup security, and privacy considerations for Vision. Phase 7 adds pre-restore confirmation dialog and concurrent-backup guard. May 2026 bug hunt hardens Electron with setWindowOpenHandler denial, will-navigate whitelist, mandatory installer checksum verification, and backup directory restrictions. safeStorage is now accessed lazily to avoid macOS Keychain prompts when no passphrase is configured. 2026-05-29: admin auth replaced with token-or-open + CSRF guard (ADR-063). June 2026: zip-bomb guard on restore, 5 MB Content-Length response cap on external fetches.
 aliases: [CSP, data protection, privacy, content security policy, security headers, XSS prevention, path traversal]
@@ -451,6 +451,18 @@ Code: [[apps/node-backend/src/services/prices/priceProviderRegistry.js]]
 
 ### Admin Auth: Token-or-Open + CSRF Guard (2026-05-29)
 
+The global [[apps/node-backend/src/middleware/hostGuard.js|Host guard]] now checks the destination
+before CORS preflight, body parsing, health checks, static files, and API routes. It accepts
+`localhost`, valid IPv4/IPv6 loopback addresses (including mapped loopback), the specific bind
+hostname/address, and exact additional `SERVER_ALLOWED_HOSTS` entries. Wildcard binds are never
+wildcard permissions. Missing, duplicate, or malformed Host headers and unlisted destinations
+receive 403. Forwarded headers, Origin, fetch metadata, and admin tokens cannot bypass this check.
+Proxies that rewrite Host must enforce their own public hostname policy before forwarding;
+the backend sees only the rewritten authority.
+This closes the server-side arbitrary-Host path used by DNS rebinding; a browser exploit and live
+HTTP acceptance remain unverified in the restricted local test environment. See
+[[docs/guides/deployment#Network and admin security|deployment]] for reverse proxy setup.
+
 Admin endpoints (`/api/admin/*`) are protected by two co-operating guards. See [[docs/adr/063-admin-auth-csrf-guard|ADR-063]] for the full decision record.
 
 **`adminAuth.js` — Token-or-Open**
@@ -460,12 +472,14 @@ Admin endpoints (`/api/admin/*`) are protected by two co-operating guards. See [
   performed. Native Electron's loopback binding supplies the network boundary and the CSRF guard
   below supplies the browser-origin boundary.
 - A startup warning is logged when the token is absent, instructing operators to set it if the port is published on `0.0.0.0`.
+- A tokenless non-loopback bind refuses startup unless `ADMIN_ALLOW_TOKENLESS_NONLOOPBACK=true`
+  explicitly acknowledges an outer access boundary.
 
 > [!warning] This supersedes the RFC1918 IP-allowlist fallback from ADR-037. The middleware no longer trusts the entire private address space — `10.x`, `172.16.x`, `192.168.x`, IPv6 ULA are no longer implicitly trusted.
 
 **`csrfGuard.js` — `createCsrfGuard` (mounted before `adminAuthMiddleware`)**
 
-Blocks cross-site state-changing browser requests. Strategy (zero-config, no tokens/cookies):
+Blocks cross-site state-changing browser requests across `/api`. Strategy (zero-config, no tokens/cookies):
 
 - `GET`/`HEAD`/`OPTIONS` are always allowed.
 - `Sec-Fetch-Site` header (sent by Chrome 76+, Firefox 90+, Safari 16.4+) is authoritative:

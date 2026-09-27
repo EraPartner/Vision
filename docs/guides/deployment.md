@@ -2,7 +2,7 @@
 title: Deployment Guide
 type: guide
 status: active
-date: 2026-09-08
+date: 2026-09-27
 tags:
   [
     guide,
@@ -58,7 +58,8 @@ Set the backend environment explicitly:
 DATABASE_URL=postgresql://vision_app:<password>@127.0.0.1:5432/financial_transactions
 DATABASE_URL_MIGRATIONS=postgresql://vision_owner:<password>@127.0.0.1:5432/financial_transactions
 PORT=3002
-HOST=127.0.0.1
+SERVER_HOST=127.0.0.1
+SERVER_ALLOWED_HOSTS=vision.example.com
 LOG_LEVEL=info
 CORS_ORIGINS=https://vision.example.com
 ADMIN_AUTH_TOKEN=<random-secret>
@@ -80,6 +81,15 @@ Never run a bare Alembic write against Vision; use the repository migration runn
 ## Network and admin security
 
 - Bind the backend to loopback unless an authenticated reverse proxy is the explicit boundary.
+- Requests must target a loopback hostname/address, the specific configured bind hostname/address,
+  or an exact hostname in `SERVER_ALLOWED_HOSTS`. Wildcard binds never disable Host validation.
+  A proxy can preserve the public Host above, or rewrite its upstream Host to `127.0.0.1:3002`.
+  The hostname list contains no schemes, ports, or wildcards. `X-Forwarded-Host`, CORS origins,
+  and trusted proxy IPs do not grant destination permission. Invalid or duplicate Host headers
+  receive 403 before preflight, body parsing, health checks, or routes.
+  A proxy that rewrites Host must also reject unknown public hostnames itself: the backend
+  cannot validate a browser authority that the proxy discarded. Keep Vite's host policy enabled
+  for development proxies, which use `changeOrigin: true`.
 - Set `ADMIN_AUTH_TOKEN` whenever the backend is reachable outside the local process boundary.
 - Keep the Cross-Site Request Forgery (CSRF) guard enabled on state-changing admin routes.
 - Terminate Transport Layer Security (TLS) at the reverse proxy for browser deployments.

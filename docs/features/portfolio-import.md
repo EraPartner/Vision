@@ -2,9 +2,9 @@
 title: Feature - Portfolio CSV Import
 type: feature
 status: active
-date: 2026-06-20
-updated: 2026-09-12
-last_modified: 2026-09-12
+date: 2026-09-27
+updated: 2026-09-27
+last_modified: 2026-09-27
 tags:
   [
     feature,
@@ -81,6 +81,23 @@ Key design points:
 - **Reuses `portfolioTransactionService.create`**: 2-of-3 unit math, oversell prevention, and asset-class routing shared with manual entry.
 - **Saved parser configs**: reuses `custom_parser_configs` table with `kind = 'portfolio'` discriminator (ADR-041 migration 0041) and remembers one optional file-level broker account in the existing JSON config.
 
+Generic mappings also save `number_format`: automatic, decimal point, or decimal comma,
+independently of the CSV delimiter. Existing mappings default to automatic. All mapped numeric
+columns use it: amount, units, unit price, fees, taxes, and FX rate. Automatic mode rejects
+conflicting decimal/grouping interpretations such as `1,234` and `1.234`; the whole file fails
+before staging with a data-row and column diagnostic instead of dropping the affected row.
+Choose the matching explicit format and retry. Four-decimal precision remains supported.
+Maintained broker presets retain their format-specific numeric rules.
+
+Leading rows counts physical lines before the header. The shared decoder accepts UTF-8,
+Latin-1/ISO-8859-1 aliases, and Windows-1252; the latter preserves euro and punctuation bytes.
+Unsupported encoding values return 400. See [[docs/api/portfolio-imports]].
+
+The header preview and mapping dropdowns use the chosen encoding and physical line offset too;
+changing either option refreshes the preview. Failed trade and cash-row inserts roll back and
+release their row savepoint before recording the error or continuing with the next row, so a
+chunk does not retain failed subtransactions until its final commit.
+
 ---
 
 ## Pipeline Phases
@@ -148,8 +165,8 @@ error rather than being silently discarded. Interest becomes linked income and g
 top-ups become gifts. Asset withdrawals and zero-output conversions remain visible review errors.
 The synthetic fixture was cross-checked against a sanitized real export and preserves its 11
 headers, currency-decorated USD values, decimal precision, event kinds, UTC timestamps, signs,
-linked-row structure, and fee-currency cases without retaining transaction data. See
-[[docs/audits/2026-09-12-nexo-saxo-real-export-acceptance]].
+linked-row structure, and fee-currency cases without retaining transaction data. Regression
+coverage is in [[apps/node-backend/tests/nexoTransactionHistoryAdapter.test.js]].
 
 The Saxo adapter accepts localized Transactions exports. It normalizes header whitespace because
 the exporter uses both ordinary and non-breaking spaces. Dutch and English trade actions provide
@@ -159,8 +176,8 @@ dividends keep their symbol and name; deposits and withdrawals are instrument-le
 corporate actions remain visible review errors. The synthetic fixture was cross-checked against a
 sanitized real export and preserves the real 29-column schema, localized decimal boundary, header
 whitespace, instrument-less cash rows, noisy symbol structure, and event classes without retaining
-user, account, transaction, instrument, or amount data from the supplied export. See
-[[docs/audits/2026-09-12-nexo-saxo-real-export-acceptance]].
+user, account, transaction, instrument, or amount data from the supplied export. Regression
+coverage is in [[apps/node-backend/tests/saxoTransactionHistoryAdapter.test.js]].
 
 The transaction and portfolio pipelines share `importStageLifecycle.js` for the staging status
 transition, BIGSERIAL batch-id normalization, 500-row chunk loop, persisted total, and progress

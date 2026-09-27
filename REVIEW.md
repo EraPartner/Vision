@@ -19,7 +19,7 @@ behind each item is in `AGENTS.md` (Conventions, Verification, Security) and `do
 - [ ] All inputs validated with **Zod** (frontend _and_ server-side).
 - [ ] ADRs in `docs/adr/` are **append-only** — supersede with a new ADR, never rewrite.
 - [ ] DB schema change → Alembic migration is **reversible** (CI round-trips `downgrade -1` →
-      `upgrade head`); ship a rollback plan; migrations are user-applied, not auto-run.
+      `upgrade head`); ship a rollback plan; pending migrations auto-run during backend startup.
 - [ ] Route/API change → `docs/reference/api-endpoint-matrix.md` + the `docs/api/` doc updated,
       count matches `openapi.yaml` (`bun run check-endpoint-matrix`), and `generated.ts`
       regenerated (`bun run generate:types`). Note breaking vs non-breaking.

@@ -2,8 +2,8 @@
 title: Planned Transactions
 type: feature
 status: active
-date: 2026-04-26
-updated: 2026-09-04
+date: 2026-09-26
+updated: 2026-09-26
 tags: [feature, planned, recurring, bills, loans, phase-3, phase-12, calculations, immutability, error-handling, toast, atomic-patch, virtual-data-table, i18n-toasts, upcoming-payments-hook, occurrence-key-dismissal, june-2026, auto-link, planned-match, exchange-rates, fx]
 aliases: [planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loan-amortization]
 description: Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses. June 2026: auto-link & auto-clear planned payments on match — ingested transactions are automatically linked to matching planned payments (same recipient cluster, same sign, ±5% amount, ±5 days); ambiguous matches surface as confirmable suggestions. PlannedPaymentsPage migrated from DataTable to VirtualDataTable; native alert() replaced with toast.error (new i18n keys plannedPage.toggleFailed/deleteFailed). V11: useUpcomingPlannedPayments shared hook (single fetch + shared dismissed-ID store); UpcomingPaymentsNotification renders its dashboard reminder without duplicating the planned-payments page, while native badge synchronization remains active throughout AppLayout. June 2026 (B1 fix): dismissals now keyed per occurrence (id:YYYY-MM-DD) so recurring reminders re-surface each cycle; past-dated keys pruned on load; legacy id-only entries silently dropped on next load. August 2026: Planned aggregates omit payments whose exchange rate is unavailable and visibly report the omission instead of blending currencies.
@@ -317,15 +317,20 @@ All three steps commit or roll back together. If the row no longer exists, `null
 
 **Scope:** Only the PATCH path for loan-bearing rows uses this method. Non-loan PATCHes continue through `plannedTransactionService.update()`. The service's standalone `replaceLoanSchedule()` method remains for direct schedule-reset calls.
 
-## Execution Atomicity and Idempotency (Phase 3)
+## Execution Atomicity and Idempotency
 
 The execute endpoint is now **atomic and idempotent**:
 
-- **Database:** Migration `0027_planned_execution_idempotency` adds a UNIQUE INDEX on `planned_transaction_executions (planned_transaction_id, executed_transaction_id)`. Any attempt to re-execute the same (planned_id, executed_id) pair will trigger a unique violation.
-- **Endpoint:** `POST /api/planned-transactions/:id/execute` wraps the insert-execution-row + update-parent pair in a single `BEGIN/COMMIT` transaction. If a unique violation occurs (Postgres error 23505), the transaction rolls back and returns a 200 OK with the current planned state + `Idempotent-Replay: true` header instead of error.
+- **Database:** A unique index on `planned_transaction_executions (planned_transaction_id, executed_transaction_id)` prevents duplicate execution pairs. The insert uses `ON CONFLICT DO NOTHING`.
+- **Service:** `executePlanned` locks the planned parent row before reading its date, execution count, bounds, and tags. The read, advance calculation, execution insert, inherited tags, and final read share one transaction. Distinct concurrent executions therefore advance from successive states.
+- **Bounds:** A new execution after maximum-count or end-date completion returns `409 CONFLICT` without inserting an execution or copying tags. Replaying an existing pair remains a `200` response with `Idempotent-Replay: true`, even after the series completes.
 - **Result:** Double-clicks, retries, and network replays return the same result without creating duplicate execution rows.
 
 See [[docs/adr/012-planned-execution-idempotency|ADR-012]] for design rationale.
+
+[[apps/node-backend/tests/plannedExecutionConcurrency.db.test.js]] covers concurrent distinct
+payments, duplicate replay, the final bounded occurrence, and end-date completion on disposable
+PostgreSQL. Live verification of these new cases is pending in [[TODO]].
 
 ## Supporting Services
 

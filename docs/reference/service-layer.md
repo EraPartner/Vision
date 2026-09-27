@@ -2,7 +2,7 @@
 title: Service Layer Reference
 type: reference
 status: active
-date: 2026-09-13
+date: 2026-09-26
 last_modified: 2026-09-13
 tags: [backend, services, reference, business-logic, phase-1, phase-c, import-pipeline, graceful-shutdown, bug-hunt-2026-05-05, error-handling, robustness, route-service-boundary, repo-service-boundary, layering, thin-seams, adr-067]
 description: Complete reference for backend service modules. June 2026 — all 15 route files now go through thin `services/<domain>Service.js` seams; the lint rule `vision-local/no-repo-direct-from-route` is enforced as ERROR. 14 new thin seam modules added. August 2026 — the inverse edge is enforced too: `vision-local/no-service-import-from-repo` is an ERROR on `src/repositories/**`, with a closed allowlist for the seven sanctioned currency-conversion importers.
@@ -183,8 +183,8 @@ directly. See [[docs/integrations/bank-adapters#adding-new-banks|Adding New Bank
 
 - **Multi-source Merging:** ECB overwrites overlaps, supplementary fills gaps
 - **XML Parsing:** Custom regex parser handles single-quoted (daily) and double-quoted (historical) ECB formats
-- **Binary Search:** `findNearestRateInIndex` finds closest historical rate date when exact match unavailable
-- **Historical Rate Index:** Per-currency sorted index for efficient nearest-date lookups
+- **Binary Search:** `findRateOnOrBeforeInIndex` finds the last quote on or before the requested date and excludes future quotes
+- **Historical Rate Index:** Per-currency sorted index for efficient prior-date lookups; missing prior quotes are prefetched even when newer quotes exist
 - **Batch Conversion:** `convertRowsToEur` supports `useHistoricalRatesByDate` option with configurable `dateField`
 
 ### Dependencies

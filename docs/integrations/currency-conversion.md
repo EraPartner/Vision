@@ -2,8 +2,8 @@
 title: Currency Conversion
 type: integration
 status: active
-date: 2026-09-09
-updated: 2026-09-09
+date: 2026-09-26
+updated: 2026-09-26
 tags: [integration, currency, exchange-rates, phase-0, phase-1, phase-3-1, offline-resilience, network-reachability, startup-optimization, historical-rates, ecb-full-history, purchase-date-rates, fx-attribution, adr-074]
 description: Multi-currency support with automatic conversion to target currencies using ECB and supplementary exchange rates, including date-aware historical conversion and batch grouped conversion (Phase 3.1+). Startup FX warmup is skipped when offline (2026-05-03). 2026-06-11 (ADR-074): ECB full-history tier (daily since 1999), on-or-before weekend convention, one-time repair of fabricated old rates, and bulk-stamp of fx_rate_to_eur on non-EUR portfolio transactions.
 related_code: ["apps/node-backend/src/services/currency/rateFetcher.js", "apps/node-backend/src/services/currency/currencyConversionService.js", "apps/node-backend/src/repositories/infoRepositoryHelpers.js", "apps/node-backend/src/lib/network.js"]
@@ -21,7 +21,7 @@ The currency conversion service handles all currency-related operations, includi
 - Converting transaction amounts to a requested target currency
 - Handling currencies not covered by ECB
 - Preserving historical exchange-rate rows while updating the latest per currency
-- Date-aware historical lookup for portfolio conversion (exact date, otherwise nearest stored date)
+- Date-aware historical lookup (exact date, otherwise most recent quote on or before the date)
 
 ## Data Sources
 
@@ -71,7 +71,14 @@ The service implements a multi-layer fallback:
 2. **Database rates** - Stored in `exchange_rates` table
 3. **Hardcoded constants** - Last resort fallback
 
-For date-aware conversion requests, the service also opportunistically queries ECB's 90-day historical feed for exact-date matches before falling back to nearest stored database rates.
+Date-aware row conversion first uses stored quotes on or before each requested day. Missing prior
+quotes are resolved in batches from the 90-day and full ECB feeds, even when that currency already
+has newer stored quotes. A point lookup's final database tier also excludes future quotes. If no
+prior quote exists, row conversion uses the current-rate fallback and marks it explicitly.
+
+Partial refreshes retain known rates for currencies omitted by either provider. Fresh quotes
+overwrite the retained baseline, with ECB taking precedence on overlap. Only fresh provider quotes
+are persisted with today's date; retained and static fallback rates are not stamped as new history.
 
 ```
 ┌─────────────────────────────────────┐
@@ -267,7 +274,7 @@ const historyConverted = converted.filter((r) => r._batchGroup === "history");
 
 ### Historical Rate Fallback Flag
 
-When `useHistoricalRatesByDate: true` and the exact (or nearest) historical rate is unavailable for a row's date, the service falls back to the current in-memory rate and surfaces this in the conversion result:
+When `useHistoricalRatesByDate: true` and no historical quote exists on or before a row's date, the service falls back to the current in-memory rate and surfaces this in the conversion result:
 
 ```json
 {
@@ -319,7 +326,7 @@ diagnostics away. Rows where the rate resolved normally carry neither internal f
 
 - `backfillPortfolioHistoricalRates()` backfills only missing `(portfolio_transactions.currency, portfolio_transactions.date)` pairs (excluding EUR)
 - Existing historical rows are preserved
-- Backfill favors exact-date ECB data when available, then falls back to nearest local rate
+- Backfill favors exact-date ECB data, then on-or-before ECB or stored quotes; future quotes are excluded
 
 ### Full History Startup Backfill (ADR-074, 2026-06-11)
 

@@ -2,7 +2,7 @@
 title: Native macOS Runtime Guide
 type: guide
 status: active
-date: 2026-09-08
+date: 2026-09-26
 tags:
   [guide, native-runtime, macos, electron, postgresql-18, backup, restore, demo]
 description: Build, operate, diagnose, back up, and restore Vision's bundled native macOS runtime.
@@ -48,9 +48,19 @@ credentials, and attachment storage under its own application-data boundary.
 
 The generated database roles are separate:
 
-- the cluster administrator creates databases and required extensions;
-- the migration owner owns application schema objects; and
-- the application role has only runtime data privileges.
+- the cluster administrator creates databases, required extensions, and the fixed
+  `vision_analysis_executor` login;
+- the migration owner owns application schema objects and remains `NOCREATEROLE`;
+- the application role has only runtime data privileges; and
+- the Analysis executor has no role inheritance or administrative attributes and reads only the
+  approved Analysis views.
+
+Native bootstrap resets the Analysis login password and read-only defaults with the cluster
+administrator. After migrations succeed, the backend uses the migration owner to validate the
+existing executor and reset grants to the six approved views. This order covers newly introduced
+view versions without giving the migration owner role-administration privileges. An explicit
+`DATABASE_URL_ANALYSIS` must use the fixed executor and the same native host, port, and database.
+See [[docs/features/analysis-workspace#Operational boundary|Analysis operational boundary]].
 
 The grant template is `config/postgres/app-role-grants.sql.tpl`. Credentials are restricted to the
 application-data directory and are never logged.

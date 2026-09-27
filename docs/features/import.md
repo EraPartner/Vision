@@ -2,9 +2,9 @@
 title: Feature - CSV Import, Export, Attachments & Deduplication
 type: feature
 status: active
-date: 2026-09-13
-updated: 2026-09-13
-last_modified: 2026-09-13
+date: 2026-09-27
+updated: 2026-09-27
+last_modified: 2026-09-27
 tags:
   [
     feature,
@@ -103,6 +103,22 @@ related_code:
 ## Overview
 
 Vision provides comprehensive CSV import capabilities with support for multiple bank formats, automatic deduplication, and category detection.
+
+Custom bank mappings save a number format independently of the CSV delimiter: automatic,
+decimal point, or decimal comma. Automatic parsing rejects cells such as `1,234` or `1.234`
+when both decimal and grouping interpretations are valid and differ. Choose an explicit format
+and retry; the complete file fails before staging with a data-row and column diagnostic, without
+echoing the numeric value. Existing saved mappings default to automatic. Amount and mapped balance
+use this choice; maintained bank adapters keep their own format rules.
+
+Leading rows means physical lines before the header, including metadata and blank lines.
+The encoding choices UTF-8, Latin-1, ISO-8859-1, and Windows-1252 work across custom, recipient,
+and category imports. Windows-1252 decodes its euro and punctuation bytes correctly.
+Unsupported encodings return 400. UTF-8 retains the existing Latin-1 fallback for invalid bytes.
+See [[docs/api/imports]] for the multipart and saved-config contract.
+
+The header preview and mapping dropdowns apply the chosen encoding and physical line offset.
+Changing either option refreshes the detected header and sample rows.
 
 ## Phase E — Frontend Component Decomposition (April 2026)
 
@@ -592,13 +608,13 @@ Users can now save a custom CSV column-mapping configuration under a unique name
 
 Saved parsers are persisted in the `custom_parser_configs` table (migration `0037_add_custom_parser_configs`):
 
-| Column        | Type           | Notes                                                                                                                  |
-| ------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `id`          | SERIAL PK      |                                                                                                                        |
-| `name`        | TEXT NOT NULL  | Unique (index `uq_custom_parser_configs_name`); also used as `bank_account` label on imported transactions             |
-| `config_json` | JSONB NOT NULL | Column mapping: `{ dateColumn, dateFormat, recipientColumn, amountColumn, memoColumn, separator, encoding, skipRows }` |
-| `created_at`  | TIMESTAMPTZ    |                                                                                                                        |
-| `updated_at`  | TIMESTAMPTZ    | Maintained by the shared `update_updated_at_column()` trigger                                                          |
+| Column        | Type           | Notes                                                                                                                                 |
+| ------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`          | SERIAL PK      |                                                                                                                                       |
+| `name`        | TEXT NOT NULL  | Unique (index `uq_custom_parser_configs_name`); also used as `bank_account` label on imported transactions                            |
+| `config_json` | JSONB NOT NULL | Column mapping: `{ dateColumn, dateFormat, recipientColumn, amountColumn, memoColumn, separator, encoding, skipRows, number_format }` |
+| `created_at`  | TIMESTAMPTZ    |                                                                                                                                       |
+| `updated_at`  | TIMESTAMPTZ    | Maintained by the shared `update_updated_at_column()` trigger                                                                         |
 
 **Repository**: [[apps/node-backend/src/repositories/customParserConfigRepository.js]] — `getAll`, `getById`, `getByName`, `create`, `update`, `delete`; maps `config_json` → `config` for callers.
 

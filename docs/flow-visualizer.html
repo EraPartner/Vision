@@ -948,7 +948,7 @@
           {
             "id": "be.middleware",
             "label": "Middleware chain",
-            "sub": "adminAuth \u00b7 csrfGuard \u00b7 rateLimit \u00b7 errorHandler",
+            "sub": "hostGuard \u00b7 adminAuth \u00b7 csrfGuard \u00b7 rateLimit \u00b7 errorHandler",
             "kind": "backend",
             "x": 220,
             "y": 348
@@ -1257,7 +1257,7 @@
             "sub": "bundled PostgreSQL 18.6 · Bun · migrations · Chrome",
             "kind": "build",
             "path": "packaging/electron/runtime/",
-            "desc": "Default macOS provider. Verifies the bundled PostgreSQL 18.6, migration, backend, and Chrome Headless Shell payloads; manages private loopback clusters with distinct administrator, owner, and application roles; owns readiness, logs, backup transport, verified cutover, and the split-brain marker (ADR-113); and atomically activates the isolated deterministic Vision Demo seed (ADR-114).",
+            "desc": "Default macOS provider. Verifies the bundled PostgreSQL 18.6, migration, backend, and Chrome Headless Shell payloads; manages private loopback clusters with distinct administrator, owner, application, and Analysis executor roles; the administrator provisions executor credentials and read-only defaults, while the NOCREATEROLE owner grants approved views after migrations; owns readiness, logs, backup transport, verified cutover, and the split-brain marker (ADR-113); and atomically activates the isolated deterministic Vision Demo seed (ADR-114).",
             "x": 760,
             "y": 852
           },
@@ -1662,7 +1662,7 @@
                 "from": "be.middleware",
                 "to": "be.routes",
                 "payload": "validated request body",
-                "annotation": "Middleware chain attaches requestId, validates the envelope, and forwards to routes/transactions.js."
+                "annotation": "main.js assigns requestId then validates the destination with middleware/hostGuard.js before CORS or body parsing; the remaining chain validates the envelope and forwards to routes/transactions.js."
               },
               {
                 "from": "be.routes",
@@ -1945,6 +1945,18 @@
             "summary": "A visual or custom SQL query crosses one bounded API and restricted PostgreSQL role, then an immutable definition version and explicit run state can be saved.",
             "steps": [
               {
+                "from": "build.native",
+                "to": "db.postgres",
+                "payload": "startup: provision restricted Analysis login and read-only defaults",
+                "annotation": "packaging/electron/runtime/native.js uses the private cluster administrator to create or reset vision_analysis_executor before starting the backend; the migration owner remains NOCREATEROLE."
+              },
+              {
+                "from": "db.alembic",
+                "to": "db.postgres",
+                "payload": "after successful migrations: validate executor and grant six approved views",
+                "annotation": "apps/node-backend/src/main.js calls database/analysisRoleBootstrap.js after runMigrations(); a restricted owner validates the preprovisioned role and resets relation grants without ALTER ROLE."
+              },
+              {
                 "from": "browser",
                 "to": "fe.pages",
                 "payload": "select fields, filters, groups, measures or edit SQL",
@@ -1972,7 +1984,7 @@
                 "from": "sv.analysis",
                 "to": "db.postgres",
                 "payload": "SELECT approved vision_analysis views only",
-                "annotation": "analysisRoleBootstrap.js revokes public and unapproved table grants before granting four version-1 views."
+                "annotation": "apps/node-backend/src/database/analysisRoleBootstrap.js revokes public and unapproved table grants before granting the six approved v1/v2 views after migrations."
               },
               {
                 "from": "be.routes",

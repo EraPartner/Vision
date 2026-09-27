@@ -3,7 +3,7 @@ title: Cash Flow Forecast
 type: feature
 status: active
 date: 2026-04-25
-updated: 2026-09-05
+updated: 2026-09-25
 last_modified: 2026-09-05
 tags: [feature, cash-flow, forecast, planning, aggregations, phase-6, phase-10, phase-c, phase-d, phase-e, phase-g, planned-transactions, statistical-forecasting, ensemble-methods, ensemble-v2, empirical-bayes, frontend-visualization, multi-method-forecast, diagnostics-sheet, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience]
 aliases: [cashflow-forecast, forward-projections, cash-flow-planning, income-expense-forecast, budget-projection, multi-method-forecast, ensemble-forecast, category-breakdown]
@@ -67,13 +67,13 @@ Forecasts the rest of the current month using 8 statistical methods: 5 point for
 
 ### Phase C: Frontend Dashboard Visualization
 
-Dashboard widget (`CashFlowForecastChart`) displays the 8-method forecast (7 base + ensemble) with full interactivity and diagnostics. By default, shows 6 methods: the 5 point-estimate methods plus ensemble inv-MSE. Monte Carlo methods are hidden by default but can be toggled on via pill controls.
+Dashboard widget (`CashFlowForecastChart`) displays the 8-method forecast (7 base + ensemble) with full interactivity and diagnostics. The initial view shows actual cash flow and the ensemble forecast. If the ensemble is unavailable, the first working method is used. Expand “Compare forecast methods” to choose additional methods.
 
 **Features:**
 
 - **Multi-method chart** — Tabs to toggle between cumulative net cash flow and daily net views
 - **Method toggles** — Per-method pill controls to show/hide individual forecasts on the chart
-- **Default visibility** — Displays 5 point methods + Ensemble (v2) by default; Monte Carlo methods hidden by default but toggleable
+- **Default visibility** — Shows one working forecast, preferring Ensemble (v2). Comparison controls are collapsed initially; all methods remain selectable. Method and rolling-window controls expose their selected state to assistive technology.
 - **MC confidence bands** — Dashed LineSeries rendering P10/P90 bands for parametric and block bootstrap methods (visible when those methods are toggled on)
 - **Planned transaction overlay** — Switch to include pending planned transactions in cumulative view (triggers refetch)
 - **Diagnostics panel** — Right-side sheet showing:
@@ -90,7 +90,7 @@ Dashboard widget (`CashFlowForecastChart`) displays the 8-method forecast (7 bas
 
 ## Phase 10 & F: Eight Forecasting Methods
 
-The multi-method forecast endpoint returns daily predictions from 8 statistical methods (7 base + 1 ensemble). The frontend chart defaults to showing 6 of these methods: the 5 point-estimate methods (Simple Average, Weighted Average, EWMA, Holt-Winters, Prophet Lite) plus the ensemble method. The 2 Monte Carlo methods are toggled off by default but can be enabled via pill controls.
+The multi-method forecast endpoint returns daily predictions from 8 statistical methods (7 base + 1 ensemble). The frontend initially shows one working method, preferring the ensemble. Other point estimates and Monte Carlo methods can be enabled from the expandable comparison controls.
 
 ### Point Forecasts (No Confidence Bounds)
 
@@ -855,7 +855,7 @@ Additionally, the diagnostics section includes ensemble weights:
 - State:
   - `view` (cumulative | daily-net) via Tabs component
   - `includePlanned` boolean via Switch (triggers refetch)
-  - `visibleMethodIds` Set<string> initialized to `DEFAULT_VISIBLE_METHOD_IDS` (5 point methods + ensemble; Monte Carlo methods hidden by default)
+  - `visibleMethodIds` derived from the available ensemble (or first working method), then from the user’s explicit method selections
   - Per-method visibility toggles via pill buttons
   - Diagnostics sheet open/closed state
 - Constants:

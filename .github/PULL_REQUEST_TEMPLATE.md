@@ -31,7 +31,7 @@ See CONTRIBUTING.md and docs/guides/contributing.md.
 - [ ] No API change — **or** `docs/api/` + `docs/reference/api-endpoint-matrix.md` updated
       (note breaking vs. non-breaking)
 - [ ] No schema change — **or** an Alembic migration **and rollback plan** are included
-      (migrations are not auto-run)
+      (pending migrations auto-run during backend startup)
 
 ## Verification
 

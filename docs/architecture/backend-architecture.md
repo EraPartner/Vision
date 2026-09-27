@@ -3,8 +3,8 @@ title: Backend Architecture
 type: architecture
 status: active
 description: Node.js backend architecture and diagrams. Phase 3: infoRepository split into 7 domain-specific sub-modules. Phase 9: Decimal.js enforcement on all monetary paths. Phase E: Forecast cache materialization with 6-hour TTL and nightly job. May 2026: Transaction tags as orthogonal dimension (ADR-052). June 2026: Route→service boundary enforced (ADR-067, 14 new thin seams); global API rate limiter + trusted-proxy XFF + VISION_DEV fail-safe (ADR security); mv_recipient_monthly dropped (ADR-068); @vision/shared-utils package + banker's rounding canonical (ADR-069). September 2026: transaction ownership uses the ADR-088 Account entity and canonical account_id foreign keys.
-date: 2026-04-23
-last_modified: 2026-09-08
+date: 2026-09-27
+last_modified: 2026-09-27
 tags: [architecture, backend, uml, plantuml, phase-3, phase-6, phase-9, phase-e, decimal, money, precision, caching, materialization, nightly-job, startup, dependency-ordering, db-polling, graceful-shutdown, signal-handling, offline-resilience, network-reachability, tags, tagging, orthogonal-dimension, route-service-boundary, thin-seams, global-rate-limiter, trusted-proxies, vision-dev, mv-recipient-monthly-drop, shared-utils, banker-rounding]
 aliases: [backend architecture, node architecture, server design]
 ---
@@ -687,6 +687,12 @@ InvestmentsRouter --> IR
 ```
 
 Recent update note (2026-04-10):
+
+The global destination Host guard runs immediately after request ID assignment, before CORS,
+parsers, health checks, and every route. It grants exact configured destinations and loopback
+authorities; wildcard binds do not weaken it. The admin token and `/api` CSRF guards remain
+separate checks. See [[docs/security/data-protection#Admin Auth: Token-or-Open + CSRF Guard (2026-05-29)|Data Protection]]
+and [[docs/guides/deployment#Network and admin security|Deployment]].
 
 - Optional admin bearer-auth middleware was added in main app wiring: when `ADMIN_AUTH_TOKEN` is configured, `/api/admin/*` routes require `Authorization: Bearer <token>`; when unset, behavior remains backward-compatible ([[apps/node-backend/src/main.js]], [[apps/node-backend/src/config/config.js]]).
 - `POST /api/info/refresh-views` now uses `adminRateLimiter` for additional protection of expensive refresh operations ([[apps/node-backend/src/routes/info.js]]).

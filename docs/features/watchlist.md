@@ -2,9 +2,9 @@
 title: Watchlist Feature
 type: feature
 status: active
-date: 2026-09-11
-last_modified: 2026-09-11
-updated: 2026-09-11
+date: 2026-09-26
+last_modified: 2026-09-26
+updated: 2026-09-26
 tags: [feature, watchlist, investments, tracking, alerts, phase-3.6, offline-resilience, online-status-detection, api-client-migration, validation, june-2026, backtest, added-price, adr-097, destructive-confirm]
 description: Investment watchlist for tracking securities not yet in the portfolio with target price alerts. June 2026: POST/PATCH return 400 ValidationError for invalid fields; what-if backtest shows return since add date using added_price (migration 0058, ADR-097).
 aliases: [watch list, price alerts, investment tracking]
@@ -168,7 +168,7 @@ The watchlist page gracefully degrades when offline:
 - **Dialog handling**: Add/edit dialogs wrap queryFns in try/catch, set `retry: false`, and `refetchOnWindowFocus: false` to prevent unhandled rejections or spinner storms
 - **User feedback**: When quotes are unavailable (offline or provider error), a banner displays showing i18n key `watchlist.quotesOffline` ("Live quotes unavailable. Showing target prices only.")
 - **Target price fallback**: Page continues to show target prices and allow editing even when live quotes are unavailable
-- **Inline target editing**: The chart dialog's target-price editor is a labeled form. Enter and the named Save button submit the same single update; Cancel never submits.
+- **Inline target editing**: The chart dialog's target-price editor is a labeled form. Enter and the named Save button submit the same single update; Cancel never submits. After a successful save and watchlist refresh, the open chart uses the refreshed target price without requiring the dialog to be reopened.
 
 Code links: [[apps/frontend/src/pages/research/WatchlistPage.tsx]], [[apps/frontend/src/hooks/useOnlineStatus.ts]]
 

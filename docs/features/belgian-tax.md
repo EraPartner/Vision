@@ -2,8 +2,8 @@
 title: Feature - Belgian Tax
 type: feature
 status: active
-date: 2026-05-11
-updated: 2026-09-11
+date: 2026-09-26
+updated: 2026-09-26
 tags: [feature, tax, belgian, cadastral-income, deductions, phase-8, pdf-export, regional-own-home-credit, exemption-brackets, taxable-income-sources, audit-2026-05-11, disabled-dependents, regional-autonomy-factor, property-tax-centimes, etf-tob, reynders-routing, portfolio-tax-pure-module, decimal-migration, point-in-time-fx, url-state, filing-masthead, computation-flow, adr-105]
 description: Belgian tax profile management with PIT calculator using exemption-bracket method (CIR-92 art. 134 §3), regional own-home credits (Flemish woonbonus, Walloon chèque habitat), taxable income source filtering, cadastral income tracking, deduction management, PDF tax report export, and May 2026 PwC audit fixes (disabled-dependent doubling, child-under-3 forfeiture, regional autonomy factor, property-tax centimes calibration). May 2026: Portfolio-tax estimators extracted to a pure, tested module with Decimal.js accumulation.
 aliases: [belgian-tax, tax-feature, cadastral, deductions, belgium]
@@ -41,6 +41,16 @@ matching annual profile field to the detected total; it does not add to the exis
 current calendar year, every application first requires an explicit acknowledgement that the year
 is incomplete and the candidate may cover only part of it. The confirmation shows both the current
 annual profile value and its replacement. Completed tax years retain direct confirmation.
+
+Candidate matching is conservative. `PENSION SAVINGS` and `PENSIOENSPAREN` identify pension
+savings; bare `PENSION`, `RETIREMENT`, or `RETIREMENT:FUND` do not. Group pension and group life
+insurance take precedence over personal pension savings or life insurance. Generic group policies
+and bare `SCHENKING` remain unclassified. Explicit phrases can span general/detail segments,
+such as `UNION:DUES`, `CHILD:CARE`, and `GOEDE:DOELEN`.
+
+A failed candidate request displays an error and a retry action. It does not display an empty
+success or let the user confirm cached suggestions while the latest request has failed. These
+category matches remain suggestions requiring confirmation; category text does not prove eligibility.
 
 ## Module layout
 

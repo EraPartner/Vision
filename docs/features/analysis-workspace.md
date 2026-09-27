@@ -2,8 +2,8 @@
 title: Analysis Workspace
 type: feature
 status: active
-date: 2026-09-19
-updated: 2026-09-19
+date: 2026-09-26
+updated: 2026-09-26
 tags:
   [
     feature,
@@ -63,13 +63,16 @@ compatible visual origin is retained when the result shape is unchanged.
 ## Result transformations
 
 - The grid pages through server results and shows whether more rows exist or a byte limit truncated it.
-- Header sorting reruns visual SQL with the selected order.
+- Header sorting reruns visual SQL with the selected order. Saving, reopening, and refreshing a
+  visual analysis retain that order.
 - Drill-through uses the selected group values as typed filters.
 - A pivot uses the first two groups and first measure only when the complete result is loaded.
 - A bar chart uses chosen result columns only when the complete result is loaded.
 - A failed run leaves the last usable result visible with an explicit error.
 
 These rules prevent a loaded page from being presented as a whole-population chart or pivot.
+Calendar-date results stay `YYYY-MM-DD` strings without a timezone conversion; timestamp results
+remain ISO datetime strings.
 
 ## Formulas and scenarios
 
@@ -124,9 +127,27 @@ Users can continue editing and saving with AI unavailable.
 
 `DATABASE_URL_ANALYSIS` must name `vision_analysis_executor`, use the same database as
 `DATABASE_URL`, and provide its password. When omitted, the server derives that URL from the runtime
-URL by replacing the username. Provisioning uses `DATABASE_URL_MIGRATIONS` when available.
+URL by replacing the username. The native runtime additionally requires the same host and port.
+
+Native startup provisions the login and its password through the private cluster administrator in
+`packaging/electron/runtime/native.js`. It reapplies the restricted role attributes, read-only
+default, timeouts, and `vision_analysis, pg_catalog` search path. The migration owner remains
+`NOCREATEROLE`; it does not administer executor credentials.
+
+After migrations succeed, backend startup calls `analysisRoleBootstrap.js` through
+`DATABASE_URL_MIGRATIONS` when available. A restricted owner checks the existing login's attributes
+before resetting relation grants. The grant set contains six approved views: `transactions_v1`,
+`transactions_v2`, `accounts_v1`, `holding_events_v1`, `cash_flows_v1`, and `cash_flows_v2`.
+Running this pass after migrations includes newly created or replaced views. A privileged bootstrap
+connection can still provision the role directly for standalone backend deployments.
+
+A missing role without role-creation privileges, unsafe existing attributes, or failed grant pass
+produces a bootstrap warning and degraded result. This does not prevent the rest of Vision from
+starting. See [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]] for native diagnostics.
 
 ## Related
+
+- [[docs/features/index|Features]]
 
 - [[docs/features/analysis-monitors|Analysis Monitors]]
 - [[docs/api/analysis|Analysis API]]

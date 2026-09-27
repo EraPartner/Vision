@@ -2,9 +2,9 @@
 title: Integration - Price Providers
 type: integration
 description: Live and historical price feeds for stocks, crypto, and other investments. Startup price refresh is skipped when the host is offline (2026-05-03).
-date: 2026-04-21
-last_modified: 2026-09-05
-updated: 2026-09-05
+date: 2026-09-27
+last_modified: 2026-09-27
+updated: 2026-09-27
 tags:
   [
     integration,
@@ -128,6 +128,17 @@ Custom provider URLs (`price_provider_url`, `price_provider_latest_url`, `price_
 
 URLs that target private networks (RFC 1918, loopback, CGNAT `100.64/10`, cloud metadata `169.254.169.254`, IPv6 ULA/link-local) are blocked at both boundaries. See [[docs/security/input-validation#outbound-request-guard-ssrf-2026-05-29|Input Validation — SSRF guard]] for the full range list and module reference.
 
+## Live request concurrency
+
+Custom and Kinesis live holdings and unresolved Yahoo chart fallbacks run with at most six
+workers per provider batch. A worker retains its slot until response-body parsing and fallback
+work complete. Yahoo still attempts one bulk quote call first. Failures stay isolated to their
+holding; no holdings are discarded to enforce the bound.
+
+The limit applies to one provider batch, not all server requests combined. Market quote requests
+have their own six-call bound, documented in [[docs/api/marketLookup]]. Provider quotas and
+process-wide traffic limits are separate concerns.
+
 ## Historical Quote Cache
 
 - Historical quotes for provider-backed assets are persisted in `asset_price_history` (daily close per investment).
@@ -145,7 +156,11 @@ URLs that target private networks (RFC 1918, loopback, CGNAT `100.64/10`, cloud 
   - If `result.filled > 0`, `computeAndStoreSnapshots()` is called so Performance and Net Worth charts reflect the denser history.
   - Idempotent: `filled` increments only when the stored row count actually grows; a run against an already-dense series makes one DB read per investment and no provider calls.
 - Transaction-triggered refresh via `refreshQuotesForInvestment()` (fire-and-forget) handles single-investment updates on buy/sell/edit
-- **`force` option on `fetchHistoricalPrices` (2026-05-31):** `fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly, force })` accepts `force=true` to bypass the `needsHistoryRefresh` short-circuit unconditionally. The gap-fill path uses this to re-populate interior holes in series that already span the window endpoints.
+- **`force` option on `fetchHistoricalPrices`:** `force=true` bypasses both database coverage and the provider memory cache for Yahoo, Binance, Kinesis, and custom history. Provider failure still returns persisted history. `dbOnly=true` takes precedence and prevents outbound requests even when `force` is set.
+- **Yahoo windows:** Cache keys include the symbol and UTC start/end days. A narrow request cannot satisfy a wider history request. Yahoo receives an inclusive start day and an exclusive end bound at the day after the requested final day. Returned points are still filtered to the caller's exact bounds before persistence.
+- **Binance pagination timeout:** Each history page has a fresh 8-second abort signal, including
+  response-body reads. A stalled page returns persisted history without saving a partial provider
+  result; a later call can retry. This is a per-page bound, with at most 30 pages per fetch.
 - Startup live refresh now prioritizes fast availability for Kinesis-backed investments: when a valid persisted `current_price` exists, it is used immediately and the external Kinesis refresh is deferred to background execution.
 - If provider fetch fails, history requests fall back to persisted DB rows.
 - `fetchLivePricesDetailed` uses provider-consistent cache keys, including investment-scoped keys for `custom`/`kinesis` to keep cache reads and writes aligned.

@@ -2,8 +2,8 @@
 title: Electron Desktop Architecture
 type: architecture-doc
 status: active
-date: 2026-09-24
-updated: 2026-09-24
+date: 2026-09-26
+updated: 2026-09-26
 tags:
   [
     architecture,
@@ -254,7 +254,11 @@ startup sets the canonical identity but does not inspect, rename, archive, or im
    - create restricted runtime directories and initialize or reuse the private PostgreSQL cluster;
    - require PostgreSQL `listen_addresses` to be loopback-only, disable Unix sockets, and verify its
      exact data directory;
-   - create separate cluster-administrator, owner/migration, and application roles. The owner role
+   - create separate cluster-administrator, owner/migration, application, and Analysis executor roles.
+     The administrator provisions the executor password and read-only defaults; after migrations,
+     the owner validates the executor and grants only the six approved Analysis views. The owner
+     remains `NOCREATEROLE`. See [[docs/features/analysis-workspace#Operational boundary|Analysis
+     operational boundary]]. The owner role
      owns schema tables and performs migrations and database-wide maintenance; the application role
      owns only the runtime-managed materialized views in addition to its data privileges. The
      privileged bootstrap reapplies current table and view grants relation by relation, skipping

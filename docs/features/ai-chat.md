@@ -2,9 +2,9 @@
 title: Feature - AI Chat
 type: feature
 status: active
-date: 2026-09-14
-updated: 2026-09-25
-last_modified: 2026-09-25
+date: 2026-09-26
+updated: 2026-09-26
+last_modified: 2026-09-26
 tags:
   [
     feature,
@@ -83,15 +83,26 @@ related_code:
 - Optional AgentCloak protection uses Desktop detection to replace selected-text findings with
   Vision's encrypted scoped tokens before preview. The MCP mode remains a block-on-change check.
   Both modes recheck user-authored cloud text before each OpenAI send.
-- Four visible model privacy profiles: fully local, public-question cloud planning, selected-summary
-  cloud planning, and final cloud synthesis from exact selected evidence.
-- Each profile states its capability, exact cloud data, privacy boundary, and local retention. A
-  visible delete action removes the recoverable investigation and its selected evidence.
+- Four model privacy profiles: fully local, public-question cloud planning, selected-summary cloud
+  planning, and final cloud synthesis from exact selected evidence. Three concise summaries show
+  the selected model boundary, research behavior, and local retention; expanded details explain
+  the selected profile rather than showing every mode at once.
+- The selected profile still states its capability, exact cloud data, privacy boundary, and local
+  retention. A visible delete action removes the recoverable investigation and its selected evidence.
 - Quick and detailed depth profiles state their compute/output difference and explicitly do not
   widen the selected model or research disclosure boundary.
 - The OpenAI route offers a server-approved API model picker. Each model has its own configured
   prices, and the selected identifier is visible in the payload preview and consent digest.
 - Durable partial jobs that resume without repeating completed tool steps.
+
+## Investigation controls
+
+The investigation question uses the full panel width. Labeled depth, research, and model-route
+selectors sit below it; the optional date range is collapsed initially. The privacy summary uses
+icons with text, and its keyboard-accessible disclosure retains the full selected model, research,
+depth, and cloud-retention explanation. Selected-evidence cloud synthesis explicitly says that it
+performs no automatic lookup; it does not describe local or public retrieval as active. Cloud
+preview and consent remain separate actions before sending the selected payload.
 
 ## Investigation resource profile
 

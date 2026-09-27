@@ -2,8 +2,8 @@
 title: Devcontainer Guide
 type: guide
 status: active
-date: 2026-08-13
-updated: 2026-09-24
+date: 2026-09-27
+updated: 2026-09-27
 tags:
   [
     guide,
@@ -33,6 +33,11 @@ The sandbox runs on **Apple's `container` runtime** (`apple/container`), not Doc
 > The egress lock isolates the **host from Claude**, not Claude from a hostile repo. A malicious project could still exfiltrate anything inside the container — including the `~/.claude` credentials volume. Only enable `--dangerously-skip-permissions` for trusted repositories.
 
 ## What runs inside
+
+The image explicitly sets `VISION_VITE_BIND_HOST=0.0.0.0` so its Vite listener can receive
+forwarded host-loopback connections. Host Vite defaults to `127.0.0.1`. Rebuild the image to
+pick up this override; preserve the launcher's `127.0.0.1` port publications and Vite hostname
+validation. A wildcard host listener outside that container boundary exposes the API proxy.
 
 | Component                   | Runtime                    | Port                              |
 | --------------------------- | -------------------------- | --------------------------------- |

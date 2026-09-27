@@ -2,9 +2,9 @@
 title: Feature - Portfolio & Investments
 type: feature
 status: active
-date: 2026-09-20
-last_modified: 2026-09-20
-updated: 2026-09-20
+date: 2026-09-27
+last_modified: 2026-09-27
+updated: 2026-09-27
 tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding, fx-attribution, asset-gain, fx-gain, purchase-date-rates, value-fx-neutral, adr-074, adr-091, adr-100, per-account, move-holding, close-account, brokerage-fanout, rebalancing, saved-plans, cash-aware, cross-workspace, adr-098, portfolio-ticker, marquee, live-quotes, ticker-manager, show-in-ticker, migration-0061, fx-aware-pnl, unified-detail-dialog, useFxAwarePnl]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections. 2026-05-29 adds historical FX in snapshots and loading/error states on all asset pages. June 2026 adds snapshotBuilder split/return_of_capital events, APP_TIMEZONE day-boundary fix, shared portfolioUnitMath.ts, and FX attribution UI (ADR-074): asset gain / FX effect decomposition on overview, performance, asset pages, and investment detail.
@@ -220,6 +220,12 @@ Portfolio calculates:
 - **Total Dividends**: Sum of all dividend transactions
 - **Total Fees**: Sum of all fees
 - **Gains/Losses**: Realized/Unrealized P&L is FX-aware using transaction `fx_rate_to_eur` when present, otherwise falling back to exchange-rate map conversion
+
+Unit-based gain/loss deducts fees and taxes on dividend, interest, rent, and other rows outside
+buy/gift/sell cost basis. A gross dividend of 100 with withholding tax 30 contributes 70 to
+gain/loss. Gross dividend/income labels and expense totals remain separate. Acquisition and
+disposal expenses are counted once through cost basis/net proceeds. Converted expenses use
+their transaction-date FX rate, preserving asset/FX gain attribution.
 
 Oversell safety behavior:
 
@@ -1101,6 +1107,15 @@ Unsupported and missing fund weight remains visible as uncovered, missing classi
 unclassified, and explicit fund cash stays separate. Rows and coverage totals show reporting-
 currency values plus percentages of total portfolio value. Rows drill through to direct positions
 or the source fund and show stale-source state. The view does not infer economic foreign-exchange exposure.
+
+The coverage summary shows a proportional bar with a text legend, reporting-currency amounts, and
+percentages for classified value, unclassified value, missing fund data, and fund cash. It renders
+the bar only when these values form a valid nonnegative percentage partition; the numeric summary
+remains visible otherwise. Dimension buttons expose their selected state to assistive technology.
+Source metadata and the import control sit in a collapsed “Sources and import” section. Stale fund
+names remain visible above the exposure rows even while that section is closed, and each row can
+expand to show its contributing positions or funds.
+
 Fund freshness is re-evaluated against the portfolio computation date on every read, using the
 document's explicit as-of date and maximum age. Fund drill-through rows display that as-of date.
 The synthetic Demo includes an explicit Apple direct-plus-IWDA overlap, separate cash, partial
