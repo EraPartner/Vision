@@ -423,11 +423,11 @@ describe("ImportReviewPage (integration)", () => {
         renderReviewPage();
 
         // exact badge + count
-        expect(await screen.findByText("exact")).toBeInTheDocument();
+        expect(await screen.findByText("Exact match")).toBeInTheDocument();
         // fuzzy badge + count
-        expect(await screen.findByText("fuzzy")).toBeInTheDocument();
+        expect(await screen.findByText("Suggested match")).toBeInTheDocument();
         // new badge + count
-        expect(await screen.findByText("new")).toBeInTheDocument();
+        expect(await screen.findByText("New recipient")).toBeInTheDocument();
     });
 
     it("expands accordion group to show row details when trigger is clicked", async () => {

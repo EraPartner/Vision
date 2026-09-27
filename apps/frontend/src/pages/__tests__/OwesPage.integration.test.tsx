@@ -257,10 +257,55 @@ describe("OwesPage (integration)", () => {
         );
         await screen.findByRole("dialog");
 
-        // owesPage.recordDialog.placeholder = "Payment amount"
+        const amount = screen.getByRole("textbox", { name: /^amount$/i });
+        expect(amount).toHaveAccessibleDescription(/remaining:.*40/i);
+        await user.click(screen.getByText(/^amount$/i, { selector: "label" }));
+        expect(amount).toHaveFocus();
+    });
+
+    it("names split actions by transaction and supports keyboard payment entry", async () => {
+        const user = userEvent.setup();
+        const payments: unknown[] = [];
+        server.use(
+            http.get(`${API_BASE}/api/splits/owed`, () =>
+                owedSummaryWithRecipient(),
+            ),
+            http.get(`${API_BASE}/api/splits/owed/1`, () =>
+                splitDetailForRecipient(),
+            ),
+            http.post(`${API_BASE}/api/splits/101/pay`, async ({ request }) => {
+                payments.push(await request.json());
+                return ok({ id: 1 });
+            }),
+        );
+        renderWithApp(<OwesPage />);
+        await user.click(await screen.findByText("Alice"));
+        const record = await screen.findByRole("button", {
+            name: /record payment: Dinner,/i,
+        });
         expect(
-            screen.getByPlaceholderText(/payment amount/i),
+            screen.getByRole("button", { name: /mark.*settled: Dinner,/i }),
         ).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: /delete split: Dinner,/i }),
+        ).toBeInTheDocument();
+        record.focus();
+        expect(
+            await screen.findByRole("tooltip", { name: /record payment/i }),
+        ).toBeInTheDocument();
+        await user.keyboard("{Enter}");
+        const amount = screen.getByRole("textbox", { name: /^amount$/i });
+        await user.clear(amount);
+        await user.type(amount, "0{Enter}");
+        expect(payments).toHaveLength(0);
+        expect(screen.getByRole("dialog")).toBeInTheDocument();
+        await user.clear(amount);
+        await user.type(amount, "12{Enter}");
+        await waitFor(() => expect(payments).toHaveLength(1));
+        expect(payments[0]).toMatchObject({ amount: 12 });
+        await waitFor(() =>
+            expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+        );
     });
 
     it("Record Payment dialog closes when Cancel is clicked", async () => {
@@ -509,7 +554,7 @@ describe("OwesPage (integration)", () => {
         );
     });
 
-    it("renders empty state gracefully when splits API fails with 500", async () => {
+    it("shows retry feedback when splits API fails with 500", async () => {
         const consoleSpy = vi
             .spyOn(console, "error")
             .mockImplementation(() => {});
@@ -525,15 +570,21 @@ describe("OwesPage (integration)", () => {
         // apiRequest retries on 500 (MAX_RETRIES=2, ~1.5 s backoff) — needs extended timeout
         expect(
             await screen.findByText(
-                /no outstanding debts/i,
+                /could not load this information/i,
                 {},
                 { timeout: 5000 },
             ),
         ).toBeInTheDocument();
+        expect(
+            screen.queryByText(/no outstanding debts/i),
+        ).not.toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: /retry/i }),
+        ).toBeInTheDocument();
         consoleSpy.mockRestore();
     });
 
-    it("renders empty state gracefully when splits API fails with 403", async () => {
+    it("shows retry feedback when splits API fails with 403", async () => {
         const consoleSpy = vi
             .spyOn(console, "error")
             .mockImplementation(() => {});
@@ -547,7 +598,13 @@ describe("OwesPage (integration)", () => {
             await screen.findByRole("heading", { name: /who owes you/i }),
         ).toBeInTheDocument();
         expect(
-            await screen.findByText(/no outstanding debts/i),
+            await screen.findByText(/could not load this information/i),
+        ).toBeInTheDocument();
+        expect(
+            screen.queryByText(/no outstanding debts/i),
+        ).not.toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: /retry/i }),
         ).toBeInTheDocument();
         consoleSpy.mockRestore();
     });

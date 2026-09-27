@@ -197,6 +197,17 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
     // existing POST /accounts/:id/opening-balance path. Not part of
     // AccountFormValues: edit mode uses the OpeningBalanceDialog instead.
     const [openingBalance, setOpeningBalance] = useState("");
+    const [openingBalanceSubmitted, setOpeningBalanceSubmitted] =
+        useState(false);
+    const openingBalanceInvalid =
+        !isEditMode &&
+        !isHoldingsOnlyPortfolioType(form.type) &&
+        openingBalance.trim().length > 0 &&
+        !Number.isFinite(
+            parseDecimal(openingBalance, appSettings.numberFormat, NaN),
+        );
+    const showOpeningBalanceError =
+        openingBalanceSubmitted && openingBalanceInvalid;
     const [openingBalanceDate, setOpeningBalanceDate] = useState(() =>
         toYmd(new Date()),
     );
@@ -310,8 +321,11 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
                       Number.NaN,
                   )
                 : null;
+            setOpeningBalanceSubmitted(true);
             if (hasOpeningBalance && !Number.isFinite(openingAmount)) {
-                toast.error(t("accounts.openingBalance.invalid"));
+                e.currentTarget
+                    .querySelector<HTMLInputElement>("#acct-opening-balance")
+                    ?.focus();
                 return;
             }
             createMutation.mutate(
@@ -332,6 +346,7 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
                         setTouchedFlags(new Set());
                         setDisplayNameEdited(false);
                         setOpeningBalance("");
+                        setOpeningBalanceSubmitted(false);
                         setOpeningBalanceDate(toYmd(new Date()));
                         setShowAdvanced(false);
                         setCreateOpen(false);
@@ -342,7 +357,10 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
     };
 
     const open = editProps?.open ?? createOpen;
-    const onOpenChange = editProps?.onOpenChange ?? setCreateOpen;
+    const onOpenChange = (nextOpen: boolean) => {
+        setOpeningBalanceSubmitted(false);
+        (editProps?.onOpenChange ?? setCreateOpen)(nextOpen);
+    };
     const isPending = editProps?.isSaving ?? createMutation.isPending;
 
     const switchRow = (
@@ -484,6 +502,14 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
                             </Label>
                             <Input
                                 id="acct-opening-balance"
+                                aria-invalid={
+                                    showOpeningBalanceError || undefined
+                                }
+                                aria-describedby={
+                                    showOpeningBalanceError
+                                        ? "acct-opening-balance-error"
+                                        : undefined
+                                }
                                 type="text"
                                 inputMode="decimal"
                                 placeholder={t(
@@ -494,6 +520,15 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
                                     setOpeningBalance(e.target.value)
                                 }
                             />
+                            {showOpeningBalanceError && (
+                                <p
+                                    id="acct-opening-balance-error"
+                                    role="alert"
+                                    className="text-sm text-destructive"
+                                >
+                                    {t("accounts.openingBalance.invalid")}
+                                </p>
+                            )}
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="acct-opening-date">

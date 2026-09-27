@@ -852,17 +852,24 @@ describe("VirtualDataTable — inline editing", () => {
                     },
                 ]}
                 data={[{ id: 1, date: "2025-01-15" }]}
+                getRowLabel={() => "First transaction"}
                 onRowUpdate={onRowUpdate}
             />,
         );
 
         await user.dblClick(screen.getByText("2025-01-15"));
-        await user.click(screen.getByRole("button", { name: "15/01/2025" }));
+        const dateEditor = screen.getByRole("button", {
+            name: "Date: First transaction",
+        });
+        expect(dateEditor).toHaveFocus();
+        await user.click(dateEditor);
         const input = screen.getByRole("textbox", { name: /enter date/i });
         await user.clear(input);
         await user.type(input, "24/03/2026");
         await user.keyboard("{Enter}");
-        await user.click(screen.getByRole("button", { name: "Save" }));
+        await user.click(
+            screen.getByRole("button", { name: "Save: First transaction" }),
+        );
 
         await waitFor(() =>
             expect(onRowUpdate).toHaveBeenCalledWith(

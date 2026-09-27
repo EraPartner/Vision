@@ -61,6 +61,58 @@ const nodes = [
 ];
 
 describe("CategoriesPage hierarchy", () => {
+    it("names category activity toggles and exposes their current state", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/categories/tree`, () =>
+                ok({
+                    items: [{ ...nodes[0], is_active: false }, nodes[1]],
+                    total: 2,
+                }),
+            ),
+        );
+        const user = userEvent.setup();
+        renderWithApp(<CategoriesPage />);
+        expect(
+            await screen.findByRole("button", {
+                name: "Inactive: FOOD",
+                pressed: false,
+            }),
+        ).toBeInTheDocument();
+        await user.click(screen.getByRole("button", { name: /^expand all$/i }));
+        expect(
+            screen.getByRole("button", {
+                name: "Active: FOOD / GROCERIES",
+                pressed: true,
+            }),
+        ).toBeInTheDocument();
+    });
+
+    it.each(["Edit", "Merge category", "Delete category"])(
+        "returns keyboard focus after cancelling %s",
+        async (action) => {
+            server.use(
+                http.get(`${API_BASE}/api/categories/tree`, () =>
+                    ok({ items: nodes, total: nodes.length }),
+                ),
+            );
+            const user = userEvent.setup();
+            renderWithApp(<CategoriesPage />);
+            await screen.findByRole("link", { name: "FOOD" });
+            await user.click(
+                screen.getByRole("button", { name: /^expand all$/i }),
+            );
+            const opener = screen.getByRole("button", {
+                name: `${action} FOOD / GROCERIES / ORGANIC / FRUIT`,
+            });
+            opener.focus();
+            await user.keyboard("{Enter}");
+            await user.click(
+                await screen.findByRole("button", { name: /^cancel$/i }),
+            );
+            await waitFor(() => expect(opener).toHaveFocus());
+        },
+    );
+
     it("shows an empty tree and the create action", async () => {
         renderWithApp(<CategoriesPage />);
         expect(

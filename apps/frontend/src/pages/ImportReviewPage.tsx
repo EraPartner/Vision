@@ -49,6 +49,7 @@ interface GroupState {
 
 function matchSourceBadge(
     source: MatchSource,
+    t: (key: string) => string,
     locale: string,
     similarity?: number | null,
 ) {
@@ -59,7 +60,7 @@ function matchSourceBadge(
                     variant="outline"
                     className="text-xs border-muted-foreground/30 text-muted-foreground"
                 >
-                    exact
+                    {t("importReview.match.exact")}
                 </Badge>
             );
         case "fuzzy":
@@ -68,7 +69,7 @@ function matchSourceBadge(
                     variant="outline"
                     className="text-xs border-warning/60 text-warning"
                 >
-                    fuzzy{" "}
+                    {t("importReview.match.fuzzy")}{" "}
                     {similarity != null
                         ? formatPercent(similarity * 100, { digits: 0, locale })
                         : ""}
@@ -80,7 +81,7 @@ function matchSourceBadge(
                     variant="outline"
                     className="text-xs border-info/60 text-info"
                 >
-                    pattern
+                    {t("importReview.match.pattern")}
                 </Badge>
             );
         case "new":
@@ -89,7 +90,7 @@ function matchSourceBadge(
                     variant="outline"
                     className="text-xs border-success/60 text-success"
                 >
-                    new
+                    {t("importReview.match.new")}
                 </Badge>
             );
         default:
@@ -98,7 +99,7 @@ function matchSourceBadge(
                     variant="outline"
                     className="text-xs border-destructive/50 text-destructive"
                 >
-                    unresolved
+                    {t("importReview.match.unresolved")}
                 </Badge>
             );
     }
@@ -371,7 +372,7 @@ export default function ImportReviewPage() {
                             variant="outline"
                             className="text-xs border-muted-foreground/30 text-muted-foreground mr-1"
                         >
-                            exact
+                            {t("importReview.match.exact")}
                         </Badge>
                         {preview.totals.exact}
                     </span>
@@ -382,7 +383,7 @@ export default function ImportReviewPage() {
                             variant="outline"
                             className="text-xs border-warning/60 text-warning mr-1"
                         >
-                            fuzzy
+                            {t("importReview.match.fuzzy")}
                         </Badge>
                         {preview.totals.fuzzy}
                     </span>
@@ -393,7 +394,7 @@ export default function ImportReviewPage() {
                             variant="outline"
                             className="text-xs border-info/60 text-info mr-1"
                         >
-                            pattern
+                            {t("importReview.match.pattern")}
                         </Badge>
                         {preview.totals.pattern}
                     </span>
@@ -404,7 +405,7 @@ export default function ImportReviewPage() {
                             variant="outline"
                             className="text-xs border-success/60 text-success mr-1"
                         >
-                            new
+                            {t("importReview.match.new")}
                         </Badge>
                         {preview.totals.new}
                     </span>
@@ -415,7 +416,7 @@ export default function ImportReviewPage() {
                             variant="outline"
                             className="text-xs border-destructive/50 text-destructive mr-1"
                         >
-                            unresolved
+                            {t("importReview.match.unresolved")}
                         </Badge>
                         {preview.totals.unresolved}
                     </span>
@@ -526,7 +527,7 @@ export default function ImportReviewPage() {
                                 }
                             >
                                 <div className="flex items-center gap-3 min-w-0 flex-1">
-                                    {matchSourceBadge(dominant, locale)}
+                                    {matchSourceBadge(dominant, t, locale)}
                                     <span className="font-medium text-sm truncate">
                                         {groupHeading}
                                     </span>
@@ -601,6 +602,7 @@ export default function ImportReviewPage() {
                                             <div className="shrink-0">
                                                 {matchSourceBadge(
                                                     row.match_source,
+                                                    t,
                                                     locale,
                                                     row.match_similarity,
                                                 )}
@@ -631,7 +633,9 @@ export default function ImportReviewPage() {
                                                 {formatCurrency(
                                                     Number(row.amount),
                                                     row.currency ?? "EUR",
-                                                    locale, appSettings.showDecimalPlaces ?? 2
+                                                    locale,
+                                                    appSettings.showDecimalPlaces ??
+                                                        2,
                                                 )}
                                             </span>
                                         </div>

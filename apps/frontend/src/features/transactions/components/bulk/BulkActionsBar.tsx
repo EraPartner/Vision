@@ -220,6 +220,11 @@ export function BulkActionsBar({
                             {t("txPage.bulk.menuLabel")}
                         </DropdownMenuLabel>
                         <DropdownMenuSeparator />
+                        {selectionMode === "filter" && (
+                            <p className="max-w-64 px-2 py-1.5 text-xs text-muted-foreground">
+                                {t("txPage.bulk.tagSelectionHint")}
+                            </p>
+                        )}
                         <DropdownMenuItem
                             onClick={() => setTagOpen(true)}
                             disabled={selectionMode === "filter"}
@@ -269,7 +274,7 @@ export function BulkActionsBar({
                     onClick={onClearSelection}
                     disabled={anyBusy}
                 >
-                    {t("common.clear")}
+                    {t("common.clearSelection")}
                 </Button>
             </div>
 

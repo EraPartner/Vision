@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from "vitest";
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok } from "@/test/msw/handlers";
 import { RecipientPatternsDialog } from "@/features/recipients/RecipientPatternsDialog";
+import { apiClient } from "@/lib/api";
 import type { RecipientPattern } from "@/lib/api";
 
 const API_BASE = "http://localhost:3002";
@@ -39,6 +40,58 @@ function renderDialog(open = true, onOpenChange = vi.fn()) {
 }
 
 describe("RecipientPatternsDialog", () => {
+    it("ignores pending previews after the rule changes and previews trimmed text", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/recipients/:id/patterns`, () =>
+                ok({ items: [], total: 0 }),
+            ),
+        );
+        let finish!: (value: {
+            matchCount: number;
+            recipientIds: number[];
+        }) => void;
+        const preview = vi
+            .spyOn(apiClient, "previewRecipientPattern")
+            .mockImplementationOnce(
+                () =>
+                    new Promise((resolve) => {
+                        finish = resolve;
+                    }),
+            )
+            .mockResolvedValue({ matchCount: 2, recipientIds: [1, 2] });
+        const user = userEvent.setup();
+        renderDialog();
+        await user.click(
+            await screen.findByRole("button", { name: /add pattern/i }),
+        );
+        const input = screen.getByRole("textbox", { name: /pattern/i });
+        await user.type(input, " RENT ");
+        await user.click(screen.getByRole("button", { name: /preview/i }));
+        expect(preview).toHaveBeenCalledWith(
+            1,
+            expect.objectContaining({ pattern: "RENT" }),
+        );
+        await user.click(screen.getByRole("switch", { name: /case/i }));
+        await user.click(screen.getByRole("button", { name: /preview/i }));
+        expect(await screen.findByRole("status")).toHaveTextContent(
+            "2 existing recipients",
+        );
+        await act(async () => {
+            finish({ matchCount: 99, recipientIds: [] });
+        });
+        expect(screen.getByRole("status")).toHaveTextContent(
+            "2 existing recipients",
+        );
+        await user.type(input, "X");
+        expect(
+            screen.queryByText(/existing recipients would match/),
+        ).not.toBeInTheDocument();
+        await user.clear(input);
+        await user.type(input, "   ");
+        expect(screen.getByRole("button", { name: /preview/i })).toBeDisabled();
+        preview.mockRestore();
+    });
+
     it("renders the dialog when open=true", async () => {
         // Arrange
         server.use(
@@ -97,7 +150,9 @@ describe("RecipientPatternsDialog", () => {
         await screen.findByRole("dialog");
 
         // Assert — add button present (recipientPatterns.addBtn key)
-        expect(await screen.findByRole("button", { name: /add pattern/i })).toBeInTheDocument();
+        expect(
+            await screen.findByRole("button", { name: /add pattern/i }),
+        ).toBeInTheDocument();
     });
 
     it("clicking 'Add Pattern' shows the inline form", async () => {
@@ -111,10 +166,14 @@ describe("RecipientPatternsDialog", () => {
         renderDialog();
 
         // Act
-        await user.click(await screen.findByRole("button", { name: /add pattern/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /add pattern/i }),
+        );
 
         // Assert — pattern input from the inline form is now visible
-        expect(await screen.findByRole("textbox", { name: /pattern/i })).toBeInTheDocument();
+        expect(
+            await screen.findByRole("textbox", { name: /pattern/i }),
+        ).toBeInTheDocument();
     });
 
     it("submitting new pattern calls POST and closes inline form on success", async () => {
@@ -133,14 +192,20 @@ describe("RecipientPatternsDialog", () => {
         renderDialog();
 
         // Act — open form, type a pattern, save
-        await user.click(await screen.findByRole("button", { name: /add pattern/i }));
-        const patternInput = await screen.findByRole("textbox", { name: /pattern/i });
+        await user.click(
+            await screen.findByRole("button", { name: /add pattern/i }),
+        );
+        const patternInput = await screen.findByRole("textbox", {
+            name: /pattern/i,
+        });
         await user.type(patternInput, "SALARY*");
         await user.click(await screen.findByRole("button", { name: /save/i }));
 
         // Assert — POST was called and the form is hidden (add button reappears)
         await waitFor(() => expect(posted).toBe(true));
-        expect(await screen.findByRole("button", { name: /add pattern/i })).toBeInTheDocument();
+        expect(
+            await screen.findByRole("button", { name: /add pattern/i }),
+        ).toBeInTheDocument();
     });
 
     it("clicking the edit button on a pattern shows the inline form pre-populated", async () => {
@@ -157,11 +222,15 @@ describe("RecipientPatternsDialog", () => {
         await screen.findByText("RENT*");
 
         // Act — click the edit (pencil) button; the button has sr-only text "Edit"
-        const editButton = await screen.findByRole("button", { name: /^edit$/i });
+        const editButton = await screen.findByRole("button", {
+            name: /^edit$/i,
+        });
         await user.click(editButton);
 
         // Assert — inline form appears pre-populated with the existing pattern value
-        const patternInput = await screen.findByRole("textbox", { name: /pattern/i });
+        const patternInput = await screen.findByRole("textbox", {
+            name: /pattern/i,
+        });
         expect(patternInput).toHaveValue("RENT*");
     });
 
@@ -172,19 +241,26 @@ describe("RecipientPatternsDialog", () => {
             http.get(`${API_BASE}/api/recipients/:id/patterns`, () =>
                 ok({ items: [PATTERN_STUB], total: 1 }),
             ),
-            http.patch(`${API_BASE}/api/recipients/:id/patterns/:patternId`, () => {
-                patched = true;
-                return ok({ patternId: 1 });
-            }),
+            http.patch(
+                `${API_BASE}/api/recipients/:id/patterns/:patternId`,
+                () => {
+                    patched = true;
+                    return ok({ patternId: 1 });
+                },
+            ),
         );
         const user = userEvent.setup();
         renderDialog();
 
         // Act — open edit form, clear input, type new value, save
         await screen.findByText("RENT*");
-        const editButton = await screen.findByRole("button", { name: /^edit$/i });
+        const editButton = await screen.findByRole("button", {
+            name: /^edit$/i,
+        });
         await user.click(editButton);
-        const patternInput = await screen.findByRole("textbox", { name: /pattern/i });
+        const patternInput = await screen.findByRole("textbox", {
+            name: /pattern/i,
+        });
         await user.clear(patternInput);
         await user.type(patternInput, "RENT_UPDATED*");
         await user.click(await screen.findByRole("button", { name: /save/i }));
@@ -200,23 +276,30 @@ describe("RecipientPatternsDialog", () => {
             http.get(`${API_BASE}/api/recipients/:id/patterns`, () =>
                 ok({ items: [PATTERN_STUB], total: 1 }),
             ),
-            http.delete(`${API_BASE}/api/recipients/:id/patterns/:patternId`, () => {
-                deleted = true;
-                return ok({ patternId: 1 });
-            }),
+            http.delete(
+                `${API_BASE}/api/recipients/:id/patterns/:patternId`,
+                () => {
+                    deleted = true;
+                    return ok({ patternId: 1 });
+                },
+            ),
         );
         const user = userEvent.setup();
         renderDialog();
 
         // Act — wait for pattern row, click trash button (icon-only, no accessible name)
         await screen.findByText("RENT*");
-        const patternRow = screen.getByText("RENT*").closest(".rounded-lg") as HTMLElement;
+        const patternRow = screen
+            .getByText("RENT*")
+            .closest(".rounded-lg") as HTMLElement;
         // Pattern row buttons (role=button, Switch is role=switch): [Edit, Trash]
         const [, trashBtn] = within(patternRow).getAllByRole("button");
         await user.click(trashBtn);
 
         // Confirm dialog should appear (AlertDialog)
-        const confirmButton = await screen.findByRole("button", { name: /delete/i });
+        const confirmButton = await screen.findByRole("button", {
+            name: /delete/i,
+        });
         await user.click(confirmButton);
 
         // Assert — DELETE was called

@@ -3,6 +3,7 @@ import {
     useCallback,
     useDeferredValue,
     useEffect,
+    useId,
     useMemo,
     useRef,
     useState,
@@ -222,6 +223,7 @@ interface VirtualizedTableRowProps<T extends Record<string, unknown>> {
     saveLabel: string;
     cancelLabel: string;
     editLabel: string;
+    rowLabel?: string;
     numberFormat: NumberFormat;
 }
 
@@ -250,13 +252,39 @@ function VirtualizedTableRow<T extends Record<string, unknown>>({
     saveLabel,
     cancelLabel,
     editLabel,
+    rowLabel,
     numberFormat,
 }: VirtualizedTableRowProps<T>) {
+    const editorId = useId();
+    const rowRef = useRef<HTMLDivElement | null>(null);
+    const restoreEditFocus = useRef(false);
+    const attachRow = useCallback(
+        (node: HTMLDivElement | null) => {
+            rowRef.current = node;
+            if (typeof measureElement === "function") measureElement(node);
+            else if (measureElement) measureElement.current = node;
+        },
+        [measureElement],
+    );
+    useEffect(() => {
+        if (isEditing) {
+            rowRef.current
+                ?.querySelector<HTMLElement>(
+                    "[data-inline-editor], [data-inline-date-editor] button",
+                )
+                ?.focus();
+        } else if (restoreEditFocus.current) {
+            restoreEditFocus.current = false;
+            rowRef.current
+                ?.querySelector<HTMLElement>("[data-inline-edit-action]")
+                ?.focus();
+        }
+    }, [isEditing]);
     const rowsInteractive = !!(onRowDoubleClick || onRowOpen || onRowQuickLook);
     const rowEl = (
         <div
             data-index={virtualIndex}
-            ref={measureElement}
+            ref={attachRow}
             role="row"
             aria-rowindex={virtualIndex + 2}
             tabIndex={rowsInteractive ? (isFirstVisible ? 0 : -1) : undefined}
@@ -359,24 +387,39 @@ function VirtualizedTableRow<T extends Record<string, unknown>>({
                     >
                         {isEditing && col.editable ? (
                             col.type === "date" ? (
-                                <DatePicker
-                                    value={
-                                        editValues?.[col.key]
-                                            ? parseLocalDateFromYmd(
-                                                  String(editValues[col.key]),
-                                              )
-                                            : undefined
-                                    }
-                                    onChange={(date) =>
-                                        setEditValues((prev) => ({
-                                            ...prev,
-                                            [col.key]: date ? toYmd(date) : "",
-                                        }))
-                                    }
-                                    buttonClassName="h-8 text-sm w-full"
-                                />
+                                <div data-inline-date-editor>
+                                    <label
+                                        className="sr-only"
+                                        htmlFor={`${editorId}-${col.key}`}
+                                    >
+                                        {`${typeof col.header === "string" ? col.header : col.key}${rowLabel ? `: ${rowLabel}` : ""}`}
+                                    </label>
+                                    <DatePicker
+                                        id={`${editorId}-${col.key}`}
+                                        value={
+                                            editValues?.[col.key]
+                                                ? parseLocalDateFromYmd(
+                                                      String(
+                                                          editValues[col.key],
+                                                      ),
+                                                  )
+                                                : undefined
+                                        }
+                                        onChange={(date) =>
+                                            setEditValues((prev) => ({
+                                                ...prev,
+                                                [col.key]: date
+                                                    ? toYmd(date)
+                                                    : "",
+                                            }))
+                                        }
+                                        buttonClassName="h-8 text-sm w-full"
+                                    />
+                                </div>
                             ) : (
                                 <Input
+                                    data-inline-editor
+                                    aria-label={`${typeof col.header === "string" ? col.header : col.key}${rowLabel ? `: ${rowLabel}` : ""}`}
                                     type={
                                         col.type === "number"
                                             ? "text"
@@ -451,7 +494,10 @@ function VirtualizedTableRow<T extends Record<string, unknown>>({
                                 aria-label={cancelLabel}
                                 title={cancelLabel}
                                 className="icon-touch-target text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                onClick={cancelEditing}
+                                onClick={() => {
+                                    restoreEditFocus.current = true;
+                                    cancelEditing();
+                                }}
                             >
                                 <X className="h-4 w-4" />
                             </Button>
@@ -460,6 +506,7 @@ function VirtualizedTableRow<T extends Record<string, unknown>>({
                         <Button
                             variant="ghost"
                             size="icon"
+                            data-inline-edit-action
                             aria-label={editLabel}
                             title={editLabel}
                             className="icon-touch-target text-muted-foreground hover:text-primary hover:bg-primary/10"
@@ -1611,6 +1658,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                                     ? `${t("aria.cancel")}: ${getRowLabel(row)}`
                                                     : t("aria.cancel")
                                             }
+                                            rowLabel={getRowLabel?.(row)}
                                             editLabel={
                                                 getRowLabel
                                                     ? `${t("aria.edit")}: ${getRowLabel(row)}`

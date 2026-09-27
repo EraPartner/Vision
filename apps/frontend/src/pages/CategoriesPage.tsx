@@ -1,10 +1,10 @@
-import { useMemo, useState } from "react";
+import { PageError } from "@/components/shared/PageError";
+import { ListFilterToggle } from "@/components/shared/ListFilterToggle";
+import { useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import {
     ChevronDown,
     ChevronRight,
-    Eye,
-    EyeOff,
     Folder,
     FolderOpen,
     GitMerge,
@@ -42,6 +42,12 @@ import type { CategoryNode } from "@/types/api";
 
 export default function CategoriesPage() {
     const { t } = useLanguage();
+    const dialogOpener = useRef<HTMLButtonElement | null>(null);
+    const treeControls = useRef<HTMLButtonElement | null>(null);
+    const restoreDialogFocus = () => {
+        const target = dialogOpener.current;
+        (target?.isConnected ? target : treeControls.current)?.focus();
+    };
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const [showAll, setShowAll] = useSearchParamState(
         "show_all",
@@ -50,7 +56,7 @@ export default function CategoriesPage() {
     const [searchParams, setSearchParams] = useSearchParams();
     const [editTarget, setEditTarget] = useState<CategoryNode | null>(null);
     const [mergeSource, setMergeSource] = useState<CategoryNode | null>(null);
-    const { data, isLoading, error } = useCategoryTree();
+    const { data, isLoading, error, refetch } = useCategoryTree();
     const update = useUpdateCategoryNode();
     const remove = useDeleteCategoryNode();
     const { confirm, ConfirmDialog } = useConfirmDialog();
@@ -174,6 +180,8 @@ export default function CategoriesPage() {
                             size="sm"
                             className="h-7 gap-1 text-xs"
                             disabled={update.isPending}
+                            aria-label={`${node.is_active ? t("categoriesPage.statusActive") : t("categoriesPage.statusInactive")}: ${node.path.join(" / ")}`}
+                            aria-pressed={node.is_active}
                             onClick={() =>
                                 update.mutate({
                                     id: node.id,
@@ -196,7 +204,10 @@ export default function CategoriesPage() {
                             className="icon-touch-target"
                             title={t("common.edit")}
                             aria-label={`${t("common.edit")} ${node.path.join(" / ")}`}
-                            onClick={() => setEditTarget(node)}
+                            onClick={(event) => {
+                                dialogOpener.current = event.currentTarget;
+                                setEditTarget(node);
+                            }}
                         >
                             <Pencil className="h-3.5 w-3.5" />
                         </Button>
@@ -205,7 +216,10 @@ export default function CategoriesPage() {
                             size="icon"
                             className="icon-touch-target"
                             aria-label={`${t("categoriesPage.mergeTitle")} ${node.path.join(" / ")}`}
-                            onClick={() => setMergeSource(node)}
+                            onClick={(event) => {
+                                dialogOpener.current = event.currentTarget;
+                                setMergeSource(node);
+                            }}
                             disabled={
                                 !allNodes.some(
                                     (target) =>
@@ -230,8 +244,10 @@ export default function CategoriesPage() {
                                     ? t("categoriesPage.deleteChildrenFirst")
                                     : undefined
                             }
-                            onClick={async () => {
+                            onClick={async (event) => {
+                                dialogOpener.current = event.currentTarget;
                                 const ok = await confirm({
+                                    onCloseAutoFocus: restoreDialogFocus,
                                     title: t("categoriesPage.delete.title"),
                                     description: t(
                                         "categoriesPage.delete.desc",
@@ -281,15 +297,12 @@ export default function CategoriesPage() {
                     title={t("categories.title")}
                     icon={PAGE_ICONS["/categories"]}
                 />
-                <Card>
-                    <CardContent variant="headerless">
-                        <p className="text-destructive">
-                            {t("categoriesPage.error", {
-                                msg: apiErrorToMessage(error, t),
-                            })}
-                        </p>
-                    </CardContent>
-                </Card>
+                <PageError
+                    message={t("categoriesPage.error", {
+                        msg: apiErrorToMessage(error, t),
+                    })}
+                    onRetry={() => void refetch()}
+                />
             </PageShell>
         );
 
@@ -305,7 +318,7 @@ export default function CategoriesPage() {
                         })}
                         icon={PAGE_ICONS["/categories"]}
                     />
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                         <Button
                             variant="outline"
                             size="sm"
@@ -325,21 +338,12 @@ export default function CategoriesPage() {
                                 ? t("categoriesPage.collapseAll")
                                 : t("categoriesPage.expandAll")}
                         </Button>
-                        <Button
-                            variant={showAll ? "secondary" : "outline"}
-                            size="sm"
-                            onClick={() => setShowAll(!showAll)}
-                            className="gap-1.5"
-                        >
-                            {showAll ? (
-                                <Eye className="h-4 w-4" />
-                            ) : (
-                                <EyeOff className="h-4 w-4" />
-                            )}
-                            {showAll
-                                ? t("categoriesPage.showingAll")
-                                : t("categoriesPage.activeOnly")}
-                        </Button>
+                        <ListFilterToggle
+                            ref={treeControls}
+                            checked={showAll}
+                            onCheckedChange={setShowAll}
+                            label={t("common.includeInactive")}
+                        />
                         <CategoryNodeDialog nodes={allNodes} />
                     </div>
                 </div>
@@ -367,6 +371,7 @@ export default function CategoriesPage() {
                 <CategoryNodeDialog
                     key={editTarget.id}
                     nodes={allNodes}
+                    onCloseAutoFocus={restoreDialogFocus}
                     editNode={editTarget}
                     open
                     onOpenChange={(open) => {
@@ -378,6 +383,7 @@ export default function CategoriesPage() {
                 <CategoryMergeDialog
                     key={mergeSource.id}
                     source={mergeSource}
+                    onCloseAutoFocus={restoreDialogFocus}
                     nodes={allNodes}
                     open
                     onOpenChange={(open) => {

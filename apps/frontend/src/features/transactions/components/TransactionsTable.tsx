@@ -31,6 +31,12 @@ import {
 } from "lucide-react";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
+import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
+import {
+    Tooltip,
+    TooltipTrigger,
+    TooltipContent,
+} from "@/components/ui/tooltip";
 import { Money } from "@/components/shared/Money";
 import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import { getCategoryColor } from "@/utils/categoryColors";
@@ -91,6 +97,21 @@ export function TransactionsTable({
 }: TransactionsTableProps) {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
+    const fmt = useCurrencyFormatter();
+    const getRowLabel = useCallback(
+        (row: TableTransaction) =>
+            [
+                formatDateStringWithAppSettings(
+                    row.date,
+                    appSettings.dateFormat,
+                ),
+                row.recipient,
+                fmt(row.amount, { currency: row.currency }),
+            ]
+                .filter(Boolean)
+                .join(", "),
+        [appSettings.dateFormat, fmt],
+    );
 
     // Display values sourced from the same server-mode config the table runs on
     // (always provided by TransactionsPage; fallbacks only satisfy the types).
@@ -146,7 +167,7 @@ export function TransactionsTable({
                         checked={selectedIds.has(row.id)}
                         onCheckedChange={() => toggleSelect(row.id)}
                         onClick={(e) => e.stopPropagation()}
-                        aria-label={`Select transaction ${row.id}`}
+                        aria-label={`${t("aria.selectTransaction")}: ${getRowLabel(row)}`}
                     />
                 ),
             },
@@ -351,22 +372,28 @@ export function TransactionsTable({
                 render: (row: TableTransaction) => (
                     <div className="flex items-center">
                         <SplitTransactionDialog
+                            triggerLabel={`${t("splitDialog.buttonTitle")}: ${getRowLabel(row)}`}
                             transactionId={row.id}
                             transactionAmount={row.amount}
                             transactionCurrency={row.currency}
                         />
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="icon-touch-target text-muted-foreground hover:text-foreground"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onOpenInfo(row);
-                            }}
-                            aria-label={t("aria.transactionInfo")}
-                        >
-                            <Info className="h-4 w-4" />
-                        </Button>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="icon-touch-target text-muted-foreground hover:text-foreground"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onOpenInfo(row);
+                                    }}
+                                    aria-label={`${t("aria.transactionInfo")}: ${getRowLabel(row)}`}
+                                >
+                                    <Info className="h-4 w-4" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>{`${t("aria.transactionInfo")}: ${getRowLabel(row)}`}</TooltipContent>
+                        </Tooltip>
                     </div>
                 ),
             },
@@ -391,6 +418,8 @@ export function TransactionsTable({
                             onToggleActive(row.id, row.is_active);
                         }}
                         disabled={updatePending}
+                        aria-pressed={row.is_active}
+                        aria-label={`${t("txPage.statusActive")}: ${getRowLabel(row)}`}
                     >
                         {row.is_active ? (
                             <ToggleRight className="h-4 w-4" />
@@ -411,24 +440,30 @@ export function TransactionsTable({
                 minWidth: 36,
                 editable: false,
                 render: (row: TableTransaction) => (
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="icon-touch-target text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                        onClick={() =>
-                            onDelete(row.id, row.memo || row.recipient)
-                        }
-                        disabled={deletePending}
-                        aria-label={t("aria.deleteTransaction")}
-                    >
-                        <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="icon-touch-target text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                onClick={() =>
+                                    onDelete(row.id, row.memo || row.recipient)
+                                }
+                                disabled={deletePending}
+                                aria-label={`${t("aria.deleteTransaction")}: ${getRowLabel(row)}`}
+                            >
+                                <Trash2 className="h-4 w-4" />
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{`${t("aria.deleteTransaction")}: ${getRowLabel(row)}`}</TooltipContent>
+                    </Tooltip>
                 ),
             },
         ],
         [
             t,
             appSettings.dateFormat,
+            getRowLabel,
             allSelected,
             someSelected,
             selectedIds,
@@ -536,6 +571,7 @@ export function TransactionsTable({
             subtitle={t("txPage.tableSubtitle", { n: totalItems })}
             columns={columns}
             data={transactions}
+            getRowLabel={getRowLabel}
             onRowUpdate={onRowUpdate}
             onRowOpen={onOpenInfo}
             onRowQuickLook={onQuickLook}

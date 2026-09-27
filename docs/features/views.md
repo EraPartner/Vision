@@ -2,8 +2,8 @@
 title: Views & Pages
 type: feature
 status: active
-date: 2026-04-10
-updated: 2026-09-25
+date: 2026-09-27
+updated: 2026-09-27
 tags:
   [
     feature,
@@ -786,3 +786,8 @@ Workspace-agnostic observability hub (gated by Settings → App → Developer to
 - [[docs/api/index]] - API documentation
 - [[docs/components/index]] - UI Components
 - `docs/flow-visualizer.html` — interactive package + flow map (open in browser)
+
+
+## Workspace navigation
+
+The collapsed sidebar opens a workspace menu with Budgeting, Portfolio, and Research choices and an explicit current selection. Expanded workspace buttons expose the selected state. Switching preserves the existing workspace route behavior.

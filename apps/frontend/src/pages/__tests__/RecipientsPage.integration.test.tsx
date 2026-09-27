@@ -11,6 +11,29 @@ import RecipientsPage from "@/pages/RecipientsPage";
 const API_BASE = "http://localhost:3002";
 
 describe("RecipientsPage (integration)", () => {
+    it("recovers the recipient list through Retry", async () => {
+        const user = userEvent.setup();
+        server.use(
+            http.get(`${API_BASE}/api/recipients`, () =>
+                err(403, "Unavailable"),
+            ),
+        );
+        renderWithApp(<RecipientsPage />);
+        const retry = await screen.findByRole("button", { name: "Retry" });
+        server.use(
+            http.get(`${API_BASE}/api/recipients`, () =>
+                ok({ items: [], total: 0, limit: 200, offset: 0, links: [] }),
+            ),
+        );
+        await user.click(retry);
+        expect(
+            await screen.findByRole("button", { name: /add recipient/i }),
+        ).toBeInTheDocument();
+        expect(
+            screen.queryByRole("button", { name: "Retry" }),
+        ).not.toBeInTheDocument();
+    });
+
     it("hydrates show-all, uncategorized, and search state from the URL", async () => {
         renderWithApp(<RecipientsPage />, {
             initialEntries: [
@@ -19,10 +42,16 @@ describe("RecipientsPage (integration)", () => {
         });
 
         expect(
-            await screen.findByRole("button", { name: /showing all/i }),
+            await screen.findByRole("switch", {
+                name: /include inactive/i,
+                checked: true,
+            }),
         ).toBeInTheDocument();
         expect(
-            screen.getByRole("button", { name: /uncategorized/i }),
+            screen.getByRole("switch", {
+                name: /uncategorized only/i,
+                checked: true,
+            }),
         ).toBeInTheDocument();
         expect(screen.getByPlaceholderText(/search database/i)).toHaveValue(
             "coffee",
@@ -159,7 +188,10 @@ describe("RecipientsPage (integration)", () => {
         renderWithApp(<RecipientsPage />);
         // recipientsPage.activeOnly = "Active Only"
         expect(
-            await screen.findByRole("button", { name: /active only/i }),
+            await screen.findByRole("switch", {
+                name: /include inactive/i,
+                checked: false,
+            }),
         ).toBeInTheDocument();
     });
 
@@ -240,6 +272,19 @@ describe("RecipientsPage (integration)", () => {
         ).toBeInTheDocument();
         await user.keyboard("{Escape}");
         await user.click(screen.getByRole("button", { name: `Edit: ${name}` }));
+        const recipientInput = screen.getByRole("textbox", {
+            name: `Recipient: ${name}`,
+        });
+        expect(recipientInput).toHaveFocus();
+        const notesInput = screen.getByRole("textbox", {
+            name: `Notes: ${name}`,
+        });
+        expect(
+            screen.getByRole("combobox", { name: `Default Category: ${name}` }),
+        ).toBeInTheDocument();
+        await user.click(notesInput);
+        await user.type(notesInput, "Draft note");
+        expect(notesInput).toHaveFocus();
         expect(
             screen.getByRole("button", { name: `Save: ${name}` }),
         ).toBeInTheDocument();
@@ -248,7 +293,7 @@ describe("RecipientsPage (integration)", () => {
         );
         expect(
             screen.getByRole("button", { name: `Edit: ${name}` }),
-        ).toBeInTheDocument();
+        ).toHaveFocus();
 
         if (heightDescriptor)
             Object.defineProperty(
@@ -419,14 +464,18 @@ describe("RecipientsPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<RecipientsPage />);
 
-        const activeOnlyBtn = await screen.findByRole("button", {
-            name: /active only/i,
+        const activeOnlyBtn = await screen.findByRole("switch", {
+            name: /include inactive/i,
+            checked: false,
         });
         await user.click(activeOnlyBtn);
 
         // recipientsPage.showingAll = "Showing All"
         expect(
-            await screen.findByRole("button", { name: /showing all/i }),
+            await screen.findByRole("switch", {
+                name: /include inactive/i,
+                checked: true,
+            }),
         ).toBeInTheDocument();
     });
 
@@ -571,7 +620,9 @@ describe("RecipientsPage (integration)", () => {
 
         renderWithApp(<RecipientsPage />);
         await user.click(
-            await screen.findByRole("button", { name: "Delete Northwind Market" }),
+            await screen.findByRole("button", {
+                name: "Delete Northwind Market",
+            }),
         );
 
         const dialog = await screen.findByRole("alertdialog");

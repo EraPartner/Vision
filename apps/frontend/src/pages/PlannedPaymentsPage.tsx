@@ -1,7 +1,8 @@
+import { ListFilterToggle } from "@/components/shared/ListFilterToggle";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useCallback, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Eye, EyeOff, History, Plus } from "lucide-react";
+import { History, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -227,7 +228,7 @@ export default function PlannedPaymentsPage() {
                         subtitle={t("plannedPage.subtitle")}
                         icon={PAGE_ICONS["/planned"]}
                     />
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                         <Button
                             variant="outline"
                             size="sm"
@@ -237,21 +238,11 @@ export default function PlannedPaymentsPage() {
                             <History className="h-4 w-4" />
                             {t("plannedPage.history.button")}
                         </Button>
-                        <Button
-                            variant={showAll ? "secondary" : "outline"}
-                            size="sm"
-                            onClick={() => setShowAll(!showAll)}
-                            className="gap-1.5"
-                        >
-                            {showAll ? (
-                                <Eye className="h-4 w-4" />
-                            ) : (
-                                <EyeOff className="h-4 w-4" />
-                            )}
-                            {showAll
-                                ? t("plannedPage.showingAll")
-                                : t("plannedPage.activeOnly")}
-                        </Button>
+                        <ListFilterToggle
+                            checked={showAll}
+                            onCheckedChange={setShowAll}
+                            label={t("plannedPage.includePaused")}
+                        />
                         <Button
                             onClick={() => {
                                 setEditing(undefined);

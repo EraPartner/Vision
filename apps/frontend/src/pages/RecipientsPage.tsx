@@ -1,3 +1,4 @@
+import { ListFilterToggle } from "@/components/shared/ListFilterToggle";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
@@ -14,8 +15,6 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import {
-    Eye,
-    EyeOff,
     ToggleLeft,
     ToggleRight,
     Trash2,
@@ -108,6 +107,7 @@ export default function RecipientsPage() {
     const [hasInitialItems, setHasInitialItems] = useState(false);
     const [totalItems, setTotalItems] = useState(0);
     const [isFetchingMore, setIsFetchingMore] = useState(false);
+    const [loadMoreFailed, setLoadMoreFailed] = useState(false);
     const offsetRef = useRef(0);
     const hasMoreRef = useRef(true);
     const loadingRef = useRef(false);
@@ -124,6 +124,7 @@ export default function RecipientsPage() {
         data: initialData,
         isLoading,
         error,
+        refetch,
     } = useVirtualRecipients({
         active: !showAll,
         search: search || undefined,
@@ -136,6 +137,7 @@ export default function RecipientsPage() {
     useEffect(() => {
         if (initialData) {
             generationRef.current += 1;
+            setLoadMoreFailed(false);
             setAllItems(initialData.items);
             setHasInitialItems(true);
             setTotalItems(initialData.total ?? initialData.items.length);
@@ -150,6 +152,7 @@ export default function RecipientsPage() {
         if (loadingRef.current || !hasMoreRef.current) return;
         loadingRef.current = true;
         setIsFetchingMore(true);
+        setLoadMoreFailed(false);
         const gen = generationRef.current;
         try {
             const result = await apiClient.getRecipients({
@@ -174,6 +177,7 @@ export default function RecipientsPage() {
                 offsetRef.current < (result.total ?? result.items.length);
             setTotalItems(result.total ?? result.items.length);
         } catch (err) {
+            if (generationRef.current === gen) setLoadMoreFailed(true);
             logger.error("Failed to load more recipients:", err);
         } finally {
             setIsFetchingMore(false);
@@ -333,6 +337,7 @@ export default function RecipientsPage() {
                     if (isEditing) {
                         return (
                             <CategoryCombobox
+                                aria-label={`${t("recipientsPage.col.category")}: ${row.name}`}
                                 value={row.default_category_id ?? null}
                                 onSelect={(catId) => {
                                     // Cancel any ongoing queries to prevent refetch removing this row
@@ -601,6 +606,7 @@ export default function RecipientsPage() {
                 <Card>
                     <CardContent>
                         <PageError
+                            onRetry={() => void refetch()}
                             message={t("recipientsPage.error", {
                                 msg: apiErrorToMessage(error, t),
                             })}
@@ -612,38 +618,17 @@ export default function RecipientsPage() {
     }
 
     const tableActions = (
-        <div className="flex gap-2">
-            <Button
-                variant={showAll ? "secondary" : "outline"}
-                size="sm"
-                onClick={() => setShowAll(!showAll)}
-                className="gap-1.5"
-            >
-                {showAll ? (
-                    <Eye className="h-4 w-4" />
-                ) : (
-                    <EyeOff className="h-4 w-4" />
-                )}
-                {showAll
-                    ? t("recipientsPage.showingAll")
-                    : t("recipientsPage.activeOnly")}
-            </Button>
-            <Button
-                variant={showUncategorized ? "secondary" : "outline"}
-                size="sm"
-                onClick={() => setShowUncategorized(!showUncategorized)}
-                className="gap-1.5"
-            >
-                <Badge
-                    variant={showUncategorized ? "default" : "outline"}
-                    className="h-4 w-4 p-0 flex items-center justify-center"
-                >
-                    ?
-                </Badge>
-                {showUncategorized
-                    ? t("recipientsPage.uncategorized")
-                    : t("recipientsPage.allCategories")}
-            </Button>
+        <div className="flex flex-wrap items-center gap-2">
+            <ListFilterToggle
+                checked={showAll}
+                onCheckedChange={setShowAll}
+                label={t("common.includeInactive")}
+            />
+            <ListFilterToggle
+                checked={showUncategorized}
+                onCheckedChange={setShowUncategorized}
+                label={t("recipients.uncategorizedOnly")}
+            />
             <Button
                 variant="outline"
                 size="sm"
@@ -700,6 +685,23 @@ export default function RecipientsPage() {
                     maxHeight={700}
                     cancelEditingRef={cancelEditingRef}
                 />
+
+                {loadMoreFailed && (
+                    <div
+                        role="alert"
+                        className="flex flex-wrap items-center gap-3 text-sm"
+                    >
+                        <p>{t("recipientsPage.loadMoreFailed")}</p>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={isFetchingMore}
+                            onClick={() => void loadMore()}
+                        >
+                            {t("common.retry")}
+                        </Button>
+                    </div>
+                )}
 
                 <MergeRecipientsDialog
                     open={mergeDialogOpen}

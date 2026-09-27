@@ -22,6 +22,7 @@ import type { CategoryNode } from "@/types/api";
 
 interface CategoryNodeDialogProps {
     nodes: CategoryNode[];
+    onCloseAutoFocus?: () => void;
     editNode?: CategoryNode;
     initialParentId?: number | null;
     open?: boolean;
@@ -30,6 +31,7 @@ interface CategoryNodeDialogProps {
 
 export function CategoryNodeDialog({
     nodes,
+    onCloseAutoFocus,
     editNode,
     initialParentId = null,
     open: controlledOpen,
@@ -78,7 +80,15 @@ export function CategoryNodeDialog({
     };
 
     const content = (
-        <DialogContent className="sm:max-w-md">
+        <DialogContent
+            className="sm:max-w-md"
+            onCloseAutoFocus={(event) => {
+                if (onCloseAutoFocus) {
+                    event.preventDefault();
+                    onCloseAutoFocus();
+                }
+            }}
+        >
             <DialogHeader>
                 <DialogTitle>
                     {editNode

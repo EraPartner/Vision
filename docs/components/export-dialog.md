@@ -2,8 +2,21 @@
 title: ExportDialog Component
 type: component
 status: active
-date: 2026-08-25
-tags: [component, export, dialog, reports, pdf, phase-4, phase-8, ui, configuration, portfolio, tax]
+date: 2026-09-27
+tags:
+  [
+    component,
+    export,
+    dialog,
+    reports,
+    pdf,
+    phase-4,
+    phase-8,
+    ui,
+    configuration,
+    portfolio,
+    tax,
+  ]
 description: Unified PDF report export configuration dialog. Selects report type (financial/portfolio/tax with Phase 8 completion of portfolio and tax reports), period (YTD/rolling/year/custom), sections (6 portfolio + 7 tax sections fully implemented), and currency before triggering backend PDF generation.
 related_code:
   - apps/frontend/src/features/reports/ExportDialog.tsx
@@ -45,7 +58,7 @@ interface ExportDialogProps {
    * Defaults to 'financial'.
    * Override with 'portfolio' or 'tax' for contextual pages.
    */
-  defaultType?: 'financial' | 'portfolio' | 'tax';
+  defaultType?: "financial" | "portfolio" | "tax";
 }
 ```
 
@@ -86,6 +99,7 @@ Pre-selects tax report type; user still configures period, sections, and currenc
 ### Report Type Selection
 
 Radio group with three options (financial, portfolio, tax):
+
 - Styled as bordered cards with hover and active states
 - Changes the available sections list when toggled
 - All three types fully implemented and operational (Phase 8)
@@ -94,15 +108,16 @@ Radio group with three options (financial, portfolio, tax):
 
 Radio group with five presets:
 
-| Preset | Backend Period | Label | UI Elements |
-|--------|---|---|---|
-| `ytd` | `{ kind: 'ytd' }` | Year to Date | None |
-| `rolling3` | `{ kind: 'rolling', months: 3 }` | Last 3 Months | None |
-| `rolling12` | `{ kind: 'rolling', months: 12 }` | Last 12 Months | None (default) |
-| `year` | `{ kind: 'year', year: YYYY }` | Specific Year | Number input (min: 2000, max: current year + 1) |
-| `custom` | `{ kind: 'custom', from, to }` | Custom Range | Two `DatePicker` components (popover calendars) for from/to date selection |
+| Preset      | Backend Period                    | Label          | UI Elements                                                                |
+| ----------- | --------------------------------- | -------------- | -------------------------------------------------------------------------- |
+| `ytd`       | `{ kind: 'ytd' }`                 | Year to Date   | None                                                                       |
+| `rolling3`  | `{ kind: 'rolling', months: 3 }`  | Last 3 Months  | None                                                                       |
+| `rolling12` | `{ kind: 'rolling', months: 12 }` | Last 12 Months | None (default)                                                             |
+| `year`      | `{ kind: 'year', year: YYYY }`    | Specific Year  | Number input (min: 2000, max: current year + 1)                            |
+| `custom`    | `{ kind: 'custom', from, to }`    | Custom Range   | Two `DatePicker` components (popover calendars) for from/to date selection |
 
 **Defaults:**
+
 - Period preset: `rolling12` (last 12 months)
 - Custom year: current year
 - Custom from: `YYYY-01-01` (last year, Jan 1)
@@ -115,6 +130,7 @@ Radio group with five presets:
 - **All sections default to enabled**
 
 **Financial sections (7):**
+
 1. Executive Summary
 2. Cashflow Trend
 3. Category Breakdown
@@ -124,6 +140,7 @@ Radio group with five presets:
 7. Planned Outlook
 
 **Portfolio sections (6, Phase 8 complete):**
+
 1. Portfolio Executive Summary
 2. Portfolio Allocation
 3. Top Holdings
@@ -132,6 +149,7 @@ Radio group with five presets:
 6. Dividend Income
 
 **Tax sections (7, Phase 8 complete):**
+
 1. Tax Executive Summary
 2. Tax Type Breakdown
 3. Tax by Asset Class
@@ -150,13 +168,16 @@ Radio group with five presets:
 
 ```typescript
 // Component logic
-const selectedSections = allSectionsEnabled(sections, sectionDefs) ? [] : [...sections];
+const selectedSections = allSectionsEnabled(sections, sectionDefs)
+  ? []
+  : [...sections];
 // Result: [] when all checked, ["ex", "cf", ...] when some are unchecked
 ```
 
 ### Currency Selection
 
 Dropdown menu with 12 currencies:
+
 - EUR (default in most regions)
 - USD, GBP, CHF, JPY, CAD, AUD, SEK, NOK, DKK, PLN, CZK
 
@@ -166,17 +187,17 @@ Defaults to `appSettings.defaultCurrency` (from `AppSettingsHydration`).
 
 Internal state (all `useState`):
 
-| State | Type | Default |
-|-------|------|---------|
-| `open` | boolean | `false` |
-| `reportType` | `'financial' \| 'portfolio' \| 'tax'` | `defaultType` prop (or `'financial'`) |
-| `periodPreset` | `'ytd' \| 'rolling3' \| 'rolling12' \| 'year' \| 'custom'` | `'rolling12'` |
-| `customYear` | string | Current year |
-| `customFrom` | string | `YYYY-01-01` (last year) |
-| `customTo` | string | Today (`YYYY-MM-DD`) |
-| `sections` | `Set<string>` | All sections for selected type |
-| `currency` | string | `appSettings.defaultCurrency` |
-| `isSubmitting` | boolean | `false` |
+| State          | Type                                                       | Default                               |
+| -------------- | ---------------------------------------------------------- | ------------------------------------- |
+| `open`         | boolean                                                    | `false`                               |
+| `reportType`   | `'financial' \| 'portfolio' \| 'tax'`                      | `defaultType` prop (or `'financial'`) |
+| `periodPreset` | `'ytd' \| 'rolling3' \| 'rolling12' \| 'year' \| 'custom'` | `'rolling12'`                         |
+| `customYear`   | string                                                     | Current year                          |
+| `customFrom`   | string                                                     | `YYYY-01-01` (last year)              |
+| `customTo`     | string                                                     | Today (`YYYY-MM-DD`)                  |
+| `sections`     | `Set<string>`                                              | All sections for selected type        |
+| `currency`     | string                                                     | `appSettings.defaultCurrency`         |
+| `isSubmitting` | boolean                                                    | `false`                               |
 
 ## Form Submission
 
@@ -248,16 +269,19 @@ All labels, descriptions, and button text are i18n-enabled via `useLanguage()` h
 ### Export keys (42 total; plus `common.cancel`)
 
 **Dialog Header:**
+
 - `export.title` → "Export PDF Report"
 - `export.description` → "Configure your report before downloading."
 
 **Report Type:**
+
 - `export.reportType` → "Report Type"
 - `export.reportType.financial` → "Financial"
 - `export.reportType.portfolio` → "Portfolio"
 - `export.reportType.tax` → "Tax"
 
 **Period:**
+
 - `export.period` → "Period"
 - `export.period.ytd` → "Year to Date"
 - `export.period.rolling3` → "Last 3 Months"
@@ -270,6 +294,7 @@ All labels, descriptions, and button text are i18n-enabled via `useLanguage()` h
 - `export.period.invalidRange` → "The start date must be on or before the end date."
 
 **Sections:**
+
 - `export.sections` → "Sections"
 - `export.sections.all` → "All"
 - `export.section.executiveSummary` → "Executive Summary"
@@ -294,9 +319,11 @@ All labels, descriptions, and button text are i18n-enabled via `useLanguage()` h
 - `export.section.belgianRulesSummary` → "Belgian Tax Rules"
 
 **Currency:**
+
 - `export.currency` → "Currency"
 
 **Buttons:**
+
 - `export.openDialog` → "Export PDF"
 - `export.download` → "Download PDF"
 - `export.downloading` → "Generating…"
@@ -321,6 +348,7 @@ Uses shadcn/Radix UI primitives:
 - `Label` — Form labels
 
 **Colors and spacing:**
+
 - Border-based radio group styling (primary border + background on active)
 - Hover states with muted background tints
 - Responsive spacing (py-2, px-3, gap-2, etc.)
@@ -331,6 +359,7 @@ Uses shadcn/Radix UI primitives:
 ### Report Type Change
 
 When user selects a different report type:
+
 1. Update `reportType` state
 2. Reset `sections` to default set for that type
 3. Keep period and currency unchanged
@@ -338,6 +367,7 @@ When user selects a different report type:
 ### Period Preset Toggle
 
 When user selects a different period:
+
 - Update `periodPreset` state
 - Conditionally show year input (if `year` selected)
 - Conditionally show from/to date inputs (if `custom` selected)
@@ -345,6 +375,7 @@ When user selects a different period:
 ### Section Toggle
 
 Individual checkbox changes update the `sections` Set:
+
 - Add section if checked
 - Remove section if unchecked
 - Update "All" checkbox state (full, partial, or empty)
@@ -352,6 +383,7 @@ Individual checkbox changes update the `sections` Set:
 ### All Sections Toggle
 
 Clicking the "All" header checkbox:
+
 - Checked → Set all sections to enabled
 - Unchecked → Set all sections to disabled
 
@@ -384,14 +416,19 @@ function buildPeriod(
   preset: PeriodPreset,
   customYear: string,
   customFrom: string,
-  customTo: string
+  customTo: string,
 ): ReportPeriod {
   switch (preset) {
-    case 'ytd': return { kind: 'ytd' };
-    case 'rolling3': return { kind: 'rolling', months: 3 };
-    case 'rolling12': return { kind: 'rolling', months: 12 };
-    case 'year': return { kind: 'year', year: parseInt(customYear, 10) || new Date().getFullYear() };
-    case 'custom': return { kind: 'custom', from: customFrom, to: customTo };
+    case "ytd":
+      return { kind: "ytd" };
+    case "rolling3":
+      return { kind: "rolling", months: 3 };
+    case "rolling12":
+      return { kind: "rolling", months: 12 };
+    case "year":
+      return { kind: "year", year: Number(customYear) };
+    case "custom":
+      return { kind: "custom", from: customFrom, to: customTo };
   }
 }
 ```
@@ -401,12 +438,17 @@ function buildPeriod(
 Determines whether to send `[]` (defaults) or explicit section list:
 
 ```typescript
-function allSectionsEnabled(sections: ReadonlySet<string>, defs: SectionDef[]): boolean {
+function allSectionsEnabled(
+  sections: ReadonlySet<string>,
+  defs: SectionDef[],
+): boolean {
   return defs.every((d) => sections.has(d.id));
 }
 
 // Usage
-const selectedSections = allSectionsEnabled(sections, sectionDefs) ? [] : [...sections];
+const selectedSections = allSectionsEnabled(sections, sectionDefs)
+  ? []
+  : [...sections];
 ```
 
 ## Integration Points
@@ -429,18 +471,18 @@ See `[[docs/features/pdf-report-export|PDF Report Export]]` for request/response
 Uses `sonner` toast library:
 
 ```typescript
-toast.success(t('statsPage.report.downloadSuccess'));
-toast.error(t('statsPage.report.downloadError'), { description: '...' });
+toast.success(t("statsPage.report.downloadSuccess"));
+toast.error(t("statsPage.report.downloadError"), { description: "..." });
 ```
 
 ## Deployment Locations
 
-| Page | Path | Report Type | Position |
-|------|------|-------------|----------|
-| **Statistics** | `apps/frontend/src/pages/StatisticsPage.tsx` | financial | Header actions |
-| **Tax Overview** | `apps/frontend/src/pages/TaxOverviewPage.tsx` | tax | Header actions |
-| **Stocks** | `apps/frontend/src/pages/portfolio/StocksPage.tsx` | portfolio | Header actions |
-| **Portfolio Overview** | `apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx` | portfolio | Header actions |
+| Page                   | Path                                                          | Report Type | Position       |
+| ---------------------- | ------------------------------------------------------------- | ----------- | -------------- |
+| **Statistics**         | `apps/frontend/src/pages/StatisticsPage.tsx`                  | financial   | Header actions |
+| **Tax Overview**       | `apps/frontend/src/pages/TaxOverviewPage.tsx`                 | tax         | Header actions |
+| **Stocks**             | `apps/frontend/src/pages/portfolio/StocksPage.tsx`            | portfolio   | Header actions |
+| **Portfolio Overview** | `apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx` | portfolio   | Header actions |
 
 ## Related
 
@@ -455,3 +497,7 @@ toast.error(t('statsPage.report.downloadError'), { description: '...' });
 - Export scheduling (e.g., "Email me monthly reports")
 - Custom branding options (logo, footer text)
 - Comparative period analysis (e.g., YoY or YTD vs same period last year)
+
+### Validation and filter summary
+
+Full Year requires a four-digit year from 2000 through the next calendar year. The input has associated inline feedback and Download is disabled and guarded while invalid; there is no fallback for a blank year. For financial reports, a compact notice shows effective statistics category/recipient exclusion counts. The displayed counts and submitted arrays share the same source. Portfolio and tax requests send empty arrays because their report bodies do not apply these filters.

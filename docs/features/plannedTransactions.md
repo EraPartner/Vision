@@ -2,8 +2,8 @@
 title: Planned Transactions
 type: feature
 status: active
-date: 2026-09-26
-updated: 2026-09-26
+date: 2026-09-27
+updated: 2026-09-27
 tags: [feature, planned, recurring, bills, loans, phase-3, phase-12, calculations, immutability, error-handling, toast, atomic-patch, virtual-data-table, i18n-toasts, upcoming-payments-hook, occurrence-key-dismissal, june-2026, auto-link, planned-match, exchange-rates, fx]
 aliases: [planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loan-amortization]
 description: Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses. June 2026: auto-link & auto-clear planned payments on match — ingested transactions are automatically linked to matching planned payments (same recipient cluster, same sign, ±5% amount, ±5 days); ambiguous matches surface as confirmable suggestions. PlannedPaymentsPage migrated from DataTable to VirtualDataTable; native alert() replaced with toast.error (new i18n keys plannedPage.toggleFailed/deleteFailed). V11: useUpcomingPlannedPayments shared hook (single fetch + shared dismissed-ID store); UpcomingPaymentsNotification renders its dashboard reminder without duplicating the planned-payments page, while native badge synchronization remains active throughout AppLayout. June 2026 (B1 fix): dismissals now keyed per occurrence (id:YYYY-MM-DD) so recurring reminders re-surface each cycle; past-dated keys pruned on load; legacy id-only entries silently dropped on next load. August 2026: Planned aggregates omit payments whose exchange rate is unavailable and visibly report the omission instead of blending currencies.
@@ -713,7 +713,9 @@ As of 2026-08-26, the eight column definitions and their cell presentation live
 in `features/planned/PlannedPaymentsTable.tsx`. The page retains query and
 mutation orchestration, confirmation, logging, toast handling, dialog state,
 and the active-only filter. The table receives those actions as callbacks and
-memoizes its column definitions.
+memoizes its column definitions. Execution, edit, pause/resume, and delete controls identify the
+payment in their accessible names and focus tooltips. The status toggle exposes whether the
+payment is active through its pressed state.
 
 ### PlannedPaymentsPage — the next-7-days strip (August 2026)
 
@@ -813,3 +815,13 @@ multi-currency amounts cannot be summed in mismatched units.
 
 - `0002_add_url_to_planned_transactions.py` — Added `url` field for linking to billing portals
 - `0011_planned_loans.py` — Added loan support fields (`is_loan`, `loan_type`, `loan_principal`, `loan_annual_interest_rate`, `loan_term_months`, `loan_start_date`, `loan_payment_day`, `loan_regular_payment_amount`, `loan_first_payment_date`) and `planned_transaction_loan_schedule` table
+
+
+## List visibility filters
+
+Include paused is a labeled switch with a stable label and an explicit on/off state. Recipients also uses an Uncategorized only switch. These controls retain the existing filtering and URL behavior.
+
+
+## Clarity and recovery feedback
+
+The visibility switch is labeled Include paused to match the Paused row status. It retains the show_all URL and query behavior.

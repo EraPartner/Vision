@@ -69,7 +69,9 @@ describe("MergeRecipientsDialog", () => {
     it("renders dialog title when open", async () => {
         renderDialog(true);
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
-        expect(await screen.findByText(/merge recipients/i)).toBeInTheDocument();
+        expect(
+            await screen.findByText(/merge recipients/i),
+        ).toBeInTheDocument();
     });
 
     it("shows loading state while fetching recipients", async () => {
@@ -177,7 +179,9 @@ describe("MergeRecipientsDialog", () => {
         );
         const { onOpenChange } = renderDialog(true);
         await screen.findByRole("dialog");
-        const cancelBtn = await screen.findByRole("button", { name: /cancel/i });
+        const cancelBtn = await screen.findByRole("button", {
+            name: /cancel/i,
+        });
         await user.click(cancelBtn);
         expect(onOpenChange).toHaveBeenCalledWith(false);
     });
@@ -198,7 +202,9 @@ describe("MergeRecipientsDialog", () => {
         await user.click(await screen.findByText("Alice"));
         await screen.findByRole("button", { name: /clear selection/i });
         await user.keyboard("{Escape}");
-        rerender(<MergeRecipientsDialog open={false} onOpenChange={onOpenChange} />);
+        rerender(
+            <MergeRecipientsDialog open={false} onOpenChange={onOpenChange} />,
+        );
         rerender(<MergeRecipientsDialog open onOpenChange={onOpenChange} />);
 
         // Assert — the chosen primary is still chosen
@@ -222,7 +228,9 @@ describe("MergeRecipientsDialog", () => {
         await user.click(await screen.findByText("Alice"));
         await screen.findByRole("button", { name: /clear selection/i });
         await user.click(screen.getByRole("button", { name: /cancel/i }));
-        rerender(<MergeRecipientsDialog open={false} onOpenChange={onOpenChange} />);
+        rerender(
+            <MergeRecipientsDialog open={false} onOpenChange={onOpenChange} />,
+        );
         rerender(<MergeRecipientsDialog open onOpenChange={onOpenChange} />);
 
         // Assert — back to step 1, no primary selected
@@ -253,4 +261,20 @@ describe("MergeRecipientsDialog", () => {
         const dialog = await screen.findByRole("dialog");
         expect(dialog).toHaveAttribute("data-state", "open");
     });
+});
+
+it("distinguishes load failure from no results and retries", async () => {
+    server.use(
+        http.get(`${API_BASE}/api/recipients`, () => err(500, "failed")),
+    );
+    const user = userEvent.setup();
+    renderDialog();
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(screen.queryByText(/no results/i)).not.toBeInTheDocument();
+    server.use(
+        http.get(`${API_BASE}/api/recipients`, () => ok(RECIPIENTS_LIST)),
+    );
+    await user.click(screen.getByRole("button", { name: /retry/i }));
+    expect(await screen.findByText("Alice")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 });

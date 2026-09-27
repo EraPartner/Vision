@@ -17,6 +17,7 @@ import type { CategoryNode } from "@/types/api";
 interface CategoryMergeDialogProps {
     source: CategoryNode;
     nodes: CategoryNode[];
+    onCloseAutoFocus?: () => void;
     open: boolean;
     onOpenChange: (open: boolean) => void;
 }
@@ -24,6 +25,7 @@ interface CategoryMergeDialogProps {
 export function CategoryMergeDialog({
     source,
     nodes,
+    onCloseAutoFocus,
     open,
     onOpenChange,
 }: CategoryMergeDialogProps) {
@@ -36,6 +38,7 @@ export function CategoryMergeDialog({
             node.id !== source.id &&
             !node.pathIds.includes(source.id),
     );
+    const target = targets.find((node) => node.id === targetId);
     const submit = (event: FormEvent) => {
         event.preventDefault();
         if (targetId == null) return;
@@ -48,7 +51,15 @@ export function CategoryMergeDialog({
     };
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent
+                className="sm:max-w-md"
+                onCloseAutoFocus={(event) => {
+                    if (onCloseAutoFocus) {
+                        event.preventDefault();
+                        onCloseAutoFocus();
+                    }
+                }}
+            >
                 <DialogHeader>
                     <DialogTitle>{t("categoriesPage.mergeTitle")}</DialogTitle>
                     <DialogDescription>
@@ -56,6 +67,14 @@ export function CategoryMergeDialog({
                     </DialogDescription>
                 </DialogHeader>
                 <form className="space-y-4" onSubmit={submit}>
+                    <div className="rounded-md border bg-muted/30 p-3">
+                        <p className="text-xs text-muted-foreground">
+                            {t("categoriesPage.mergeSourceLabel")}
+                        </p>
+                        <p className="text-sm font-medium">
+                            {source.path.join(" / ")}
+                        </p>
+                    </div>
                     <div className="space-y-2">
                         <Label htmlFor="category-merge-target">
                             {t("categoriesPage.mergeTarget")}
@@ -81,6 +100,14 @@ export function CategoryMergeDialog({
                             ))}
                         </select>
                     </div>
+                    {target && (
+                        <p className="text-sm text-muted-foreground">
+                            {t("categoriesPage.mergeSelectionSummary", {
+                                source: source.path.join(" / "),
+                                target: target.path.join(" / "),
+                            })}
+                        </p>
+                    )}
                     <DialogFooter>
                         <Button
                             type="button"

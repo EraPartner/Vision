@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 interface ConfirmOptions {
+    onCloseAutoFocus?: () => void;
     title?: string;
     description: ReactNode;
     confirmLabel?: string;
@@ -68,7 +69,14 @@ export function useConfirmDialog() {
                     if (!v) onCancel();
                 }}
             >
-                <AlertDialogContent>
+                <AlertDialogContent
+                    onCloseAutoFocus={(event) => {
+                        if (opts.onCloseAutoFocus) {
+                            event.preventDefault();
+                            opts.onCloseAutoFocus();
+                        }
+                    }}
+                >
                     <AlertDialogHeader>
                         <AlertDialogTitle>
                             {opts.title ?? translate("common.confirm")}

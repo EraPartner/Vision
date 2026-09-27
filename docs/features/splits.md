@@ -2,8 +2,8 @@
 title: Feature - Splits & Owes
 type: feature
 status: active
-date: 2026-04-22
-updated: 2026-09-04
+date: 2026-09-27
+updated: 2026-09-27
 tags:
   [
     feature,
@@ -203,6 +203,7 @@ Implementation notes:
 - **Owed Summary View**: Shows who owes whom with totals; linked recipients (aliases sharing a `primary_recipient_id`) are automatically collapsed into a single row
 - **Per-Person Detail View**: Detailed breakdown per recipient; expands aliased recipients to show all splits from the full alias group
 - **Split Source Context**: Shows original transaction recipient and memo
+- **Payment controls**: Record payment, settle, and delete controls identify the source transaction and date, with tooltips available on keyboard focus. The payment amount has an associated label and remaining-balance description.
 - **Recent Recipient Transactions**: VirtualDataTable with infinite scroll showing recent transactions for the selected recipient using `recipient_group_id` filter (Phase Q) — includes all transactions for the recipient and all linked recipients in the same primary group, surfacing the full transaction history even when linked recipients are involved
 - **Bulk Settle**: Settle all outstanding splits for a person with confirmation; settling a primary recipient or alias settles all unsettled splits from the entire alias group
 - **Jump to Source**: Double-click any split row to open Transactions filtered to the source `transaction_id`
@@ -300,3 +301,8 @@ i18n keys are defined in `i18n/source/en.json` and `i18n/source/nl.json` and acc
 - [[docs/features/views#owes]] — Owes page in views
 - [[docs/adr/002-database-schema#transaction-splits-tables]] — Schema details
 - [[apps/node-backend/src/lib/calculations/splits.js]] — Pure calc module for validation
+
+
+## Clarity and recovery feedback
+
+Debt-summary and recipient-detail query failures show a retry action rather than No outstanding debts or All settled. Cached details remain available with failure feedback when a refresh fails.

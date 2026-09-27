@@ -83,7 +83,10 @@ describe("PlannedPaymentsPage (integration)", () => {
         });
 
         expect(
-            await screen.findByRole("button", { name: /showing all/i }),
+            await screen.findByRole("switch", {
+                name: /include paused/i,
+                checked: true,
+            }),
         ).toBeInTheDocument();
     });
 
@@ -182,7 +185,10 @@ describe("PlannedPaymentsPage (integration)", () => {
         renderWithApp(<PlannedPaymentsPage />);
         // plannedPage.activeOnly = "Active Only" — initial state of the toggle
         expect(
-            await screen.findByRole("button", { name: /active only/i }),
+            await screen.findByRole("switch", {
+                name: /include paused/i,
+                checked: false,
+            }),
         ).toBeInTheDocument();
     });
 
@@ -351,14 +357,18 @@ describe("PlannedPaymentsPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<PlannedPaymentsPage />);
 
-        const activeOnlyBtn = await screen.findByRole("button", {
-            name: /active only/i,
+        const activeOnlyBtn = await screen.findByRole("switch", {
+            name: /include paused/i,
+            checked: false,
         });
         await user.click(activeOnlyBtn);
 
         // After toggle, button label flips to "Showing All" (plannedPage.showingAll)
         expect(
-            await screen.findByRole("button", { name: /showing all/i }),
+            await screen.findByRole("switch", {
+                name: /include paused/i,
+                checked: true,
+            }),
         ).toBeInTheDocument();
     });
 

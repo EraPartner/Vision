@@ -311,6 +311,10 @@ Right-clicking a transaction row opens a Radix `ContextMenu` (`modal={false}` �
 
 #### Keyboard Row Navigation
 
+Selection, Edit, Info, Split, and Delete controls identify the transaction by its formatted
+date, recipient, and amount. Info, Split, and Delete tooltips also appear on keyboard focus.
+The Active button exposes its pressed state to distinguish active and inactive transactions.
+
 Rows are focusable when any row handler is wired. Shortcuts while a row is focused:
 
 - **↑ / ↓** — move focus to adjacent row (virtual scroll aware; up to 5 rAF retries until the target DOM node is mounted).
@@ -526,3 +530,19 @@ See [[docs/components/hooks#useTransactions|useTransactions hook]], [[docs/adr/0
 - `0007_recipient_merge.py` — Added `primary_recipient_id` for recipient merge support
 - `0008_drop_custom_raw_transactions.py` — Dropped `custom_raw_transactions` table (custom imports now use generic path)
 - `0012_add_indexes.py` — Performance indexes on transactions and related tables
+
+
+## List visibility filters
+
+Include inactive is a labeled switch with a stable label and an explicit on/off state. Recipients also uses an Uncategorized only switch. These controls retain the existing filtering and URL behavior.
+
+
+## Clarity and recovery feedback
+
+Bulk actions use Clear selection to distinguish selection from filters. When all matching rows are selected, the menu explains that tagging requires selecting individual rows; filter-wide tagging remains disabled.
+
+### Quick-filter validation and summaries
+
+Amount quick filters use the configured number format, including decimal commas. Every filled bound must be a valid number; invalid input is identified inline and cannot be applied. Blank bounds still support one-sided ranges, and explicit leading signs retain signed matching. The filter banner formats bounds using the same number preference.
+
+Date ranges reject an end date before the start date with field-linked feedback. One-sided dates remain supported. The active-filter summary includes each identity constraint when scopes are combined; category groups use a count when names are unavailable. A single named scope keeps its readable label.

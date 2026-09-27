@@ -2,7 +2,7 @@
 title: PDF Report Export
 type: feature
 status: active
-date: 2026-08-25
+date: 2026-09-27
 updated: 2026-08-26
 tags:
   [
@@ -958,3 +958,7 @@ The report fetches all data in parallel via `fetchFinancialData()`:
 - [[docs/api/index|API Documentation]]
 - [[docs/features/statistics|Statistics Feature]]
 - [[docs/api/reports|Reports API]]
+
+### Export setup clarity
+
+The dialog validates Full Year as a whole year from 2000 through the next calendar year; an empty or invalid input blocks downloading and explains the accepted range instead of silently using the current year. Financial reports show counts of excluded categories and recipients when the configured statistics filters apply. Portfolio and tax bodies do not apply these transaction filters, so their dialog requests now send empty exclusion arrays and their covers no longer claim those filters were applied. Report calculation behavior is unchanged.

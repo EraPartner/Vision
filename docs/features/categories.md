@@ -2,7 +2,7 @@
 title: Categories
 type: feature
 status: active
-date: 2026-09-19
+date: 2026-09-27
 tags: [feature, categories, transactions, organization, hierarchy]
 description: Parent-linked transaction categories with stable IDs, ordered paths, and legacy GENERAL:DETAIL compatibility
 aliases:
@@ -30,6 +30,12 @@ for display.
 ## Overview
 
 Each transaction can be assigned a category to support spending analysis, budgeting, and reporting. Categories are shared across all transactions and recipients, and can have default category assignments.
+
+## Keyboard interaction
+
+Status buttons identify the full category path and expose whether the category is active.
+Closing the edit, merge, or delete-confirmation dialog returns focus to the button that opened
+it. If that button has left the tree, focus returns to the Active Only / Showing All filter control.
 
 ## Category Model
 
@@ -182,3 +188,17 @@ Key behaviors:
 
 - [[docs/adr/046-import-review-category-assignment|ADR-046]] — Import review category assignment with optional persist-as-recipient-default
 - [[docs/adr/015-recipient-bank-account-uniqueness|ADR-015]] — UNIQUE constraint migration for categories, recipients, and bank accounts
+
+
+## List visibility filters
+
+Include inactive is a labeled switch with a stable label and an explicit on/off state. Recipients also uses an Uncategorized only switch. These controls retain the existing filtering and URL behavior.
+
+
+## Clarity and recovery feedback
+
+The category error state offers Retry. Whitespace-only general/detail values receive field-linked errors and focus returns to the first invalid field; other entries are retained.
+
+### Merge context
+
+The merge dialog identifies the source by its full category path. Selecting a destination adds a concise source-to-destination summary, so the category being removed and the category being kept are visible before confirmation.

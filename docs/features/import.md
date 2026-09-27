@@ -982,3 +982,8 @@ See [[docs/api/attachments|Attachments API]] for endpoint contracts and examples
 Admin observability for aggregation shadow divergences added. See [[docs/adr/016-aggregation-shadow-mode|ADR-016: Aggregation Shadow Mode]] for decision context and [[docs/api/admin|Admin API]] for monitoring endpoints.
 
 Related testing docs: [[docs/testing/testing|Testing Documentation]], [[docs/testing/test-inventory|Test Inventory]].
+
+
+## Recipient match labels
+
+Import review labels match sources as Exact match, Suggested match, Rule match, New recipient, and Needs review. The labels are localized; match rules, similarity percentages, and review decisions are unchanged.

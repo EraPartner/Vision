@@ -1,22 +1,37 @@
-import {useState} from "react";
-import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger} from "@/components/ui/dialog";
-import {Button} from "@/components/ui/button";
-import {Input} from "@/components/ui/input";
-import {Label} from "@/components/ui/label";
-import {Textarea} from "@/components/ui/textarea";
-import {Plus, Loader2} from "lucide-react";
-import {useCreateRecipient} from "@/hooks/useRecipients";
+import { useState } from "react";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Plus, Loader2 } from "lucide-react";
+import { useCreateRecipient } from "@/hooks/useRecipients";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 
 export function AddRecipientDialog() {
     const { t } = useLanguage();
     const [open, setOpen] = useState(false);
+    const [submitted, setSubmitted] = useState(false);
     const createMutation = useCreateRecipient();
-    const [form, setForm] = useState({name: "", notes: ""});
+    const [form, setForm] = useState({ name: "", notes: "" });
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!form.name.trim()) return;
+        setSubmitted(true);
+        if (!form.name.trim()) {
+            (e.currentTarget as HTMLFormElement)
+                .querySelector<HTMLInputElement>("#name")
+                ?.focus();
+            return;
+        }
 
         createMutation.mutate(
             {
@@ -25,39 +40,98 @@ export function AddRecipientDialog() {
             },
             {
                 onSuccess: () => {
-                    setForm({name: "", notes: ""});
+                    setSubmitted(false);
+                    setForm({ name: "", notes: "" });
                     setOpen(false);
                 },
-            }
+            },
         );
     };
 
     return (
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog
+            open={open}
+            onOpenChange={(next) => {
+                setSubmitted(false);
+                setOpen(next);
+            }}
+        >
             <DialogTrigger asChild>
                 <Button size="sm" className="gap-1.5">
-                    <Plus className="h-4 w-4" /> {t('form.addRecipient.title')}
+                    <Plus className="h-4 w-4" /> {t("form.addRecipient.title")}
                 </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
-                    <DialogTitle>{t('form.addRecipient.title')}</DialogTitle>
-                    <DialogDescription className="sr-only">{t('form.addRecipient.title')}</DialogDescription>
+                    <DialogTitle>{t("form.addRecipient.title")}</DialogTitle>
+                    <DialogDescription className="sr-only">
+                        {t("form.addRecipient.title")}
+                    </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="space-y-2">
-                        <Label htmlFor="name">{t('form.addRecipient.name')}</Label>
-                        <Input id="name" placeholder={t('addRec.namePlaceholder')} maxLength={200} value={form.name} onChange={(e) => setForm(f => ({...f, name: e.target.value}))} required />
+                        <Label htmlFor="name">
+                            {t("form.addRecipient.name")}
+                        </Label>
+                        <Input
+                            aria-invalid={submitted && !form.name.trim()}
+                            aria-describedby={
+                                submitted && !form.name.trim()
+                                    ? "recipient-name-error"
+                                    : undefined
+                            }
+                            id="name"
+                            placeholder={t("addRec.namePlaceholder")}
+                            maxLength={200}
+                            value={form.name}
+                            onChange={(e) =>
+                                setForm((f) => ({ ...f, name: e.target.value }))
+                            }
+                            required
+                        />
+                        {submitted && !form.name.trim() && (
+                            <p
+                                id="recipient-name-error"
+                                role="alert"
+                                className="text-sm text-destructive"
+                            >
+                                {t("form.nameRequired")}
+                            </p>
+                        )}
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="notes">{t('addRec.notesOptional')}</Label>
-                        <Textarea id="notes" placeholder={t('addRec.notesPlaceholder')} maxLength={1000} value={form.notes} onChange={(e) => setForm(f => ({...f, notes: e.target.value}))} />
+                        <Label htmlFor="notes">
+                            {t("addRec.notesOptional")}
+                        </Label>
+                        <Textarea
+                            id="notes"
+                            placeholder={t("addRec.notesPlaceholder")}
+                            maxLength={1000}
+                            value={form.notes}
+                            onChange={(e) =>
+                                setForm((f) => ({
+                                    ...f,
+                                    notes: e.target.value,
+                                }))
+                            }
+                        />
                     </div>
                     <DialogFooter className="pt-2">
-                        <Button type="button" variant="outline" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
-                        <Button type="submit" disabled={createMutation.isPending}>
-                            {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                            {t('common.create')}
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setOpen(false)}
+                        >
+                            {t("common.cancel")}
+                        </Button>
+                        <Button
+                            type="submit"
+                            disabled={createMutation.isPending}
+                        >
+                            {createMutation.isPending && (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                            )}
+                            {t("common.create")}
                         </Button>
                     </DialogFooter>
                 </form>

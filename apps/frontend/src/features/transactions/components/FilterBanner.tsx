@@ -1,3 +1,4 @@
+import { numberFormatToLocale } from "@/utils/currency";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
@@ -13,7 +14,7 @@ interface FilterBannerProps {
     categoryIdsFilter?: number[];
     startDateFilter?: string;
     endDateFilter?: string;
-    transactionTypeFilter?: 'income' | 'expense';
+    transactionTypeFilter?: "income" | "expense";
     amountMinFilter?: number;
     amountMaxFilter?: number;
     amountSignedFilter?: boolean;
@@ -50,61 +51,107 @@ export function FilterBanner({
     const { appSettings } = useAppSettings();
 
     const hasAmountFilter = amountMinFilter != null || amountMaxFilter != null;
-    const hasMainFilter = transactionIdFilter || recipientIdFilter || categoryIdFilter ||
-        categoryIdsFilter?.length || startDateFilter || endDateFilter || transactionTypeFilter ||
-        accountIdFilter || bankAccountFilter || hasAmountFilter;
+    const hasMainFilter =
+        transactionIdFilter ||
+        recipientIdFilter ||
+        categoryIdFilter ||
+        categoryIdsFilter?.length ||
+        startDateFilter ||
+        endDateFilter ||
+        transactionTypeFilter ||
+        accountIdFilter ||
+        bankAccountFilter ||
+        hasAmountFilter;
     const hasTagFilter = tagsFilter && tagsFilter.length > 0;
 
     if (!hasMainFilter && !hasTagFilter) {
         return null;
     }
 
-    const currency = appSettings.defaultCurrency || 'EUR';
+    const currency = appSettings.defaultCurrency || "EUR";
     // In signed mode the bound values carry their sign; render an explicit + for
     // positives so "+50 income" reads differently from a "50" magnitude match.
-    const fmtAmt = (n: number) => (amountSignedFilter && n > 0 ? `+${n}` : String(n));
+    const amountFormatter = new Intl.NumberFormat(
+        numberFormatToLocale(appSettings.numberFormat),
+        { maximumFractionDigits: 20 },
+    );
+    const fmtAmt = (n: number) =>
+        `${amountSignedFilter && n > 0 ? "+" : ""}${amountFormatter.format(n)}`;
     const amountLabel = (() => {
         if (amountMinFilter != null && amountMaxFilter != null) {
             return amountMinFilter === amountMaxFilter
                 ? `= ${fmtAmt(amountMinFilter)} ${currency}`
                 : `${fmtAmt(amountMinFilter)}–${fmtAmt(amountMaxFilter)} ${currency}`;
         }
-        if (amountMinFilter != null) return `≥ ${fmtAmt(amountMinFilter)} ${currency}`;
-        if (amountMaxFilter != null) return `≤ ${fmtAmt(amountMaxFilter)} ${currency}`;
-        return '';
+        if (amountMinFilter != null)
+            return `≥ ${fmtAmt(amountMinFilter)} ${currency}`;
+        if (amountMaxFilter != null)
+            return `≤ ${fmtAmt(amountMaxFilter)} ${currency}`;
+        return "";
     })();
-    const fmtDate = (d?: string) => (d ? formatDateStringWithAppSettings(d, appSettings.dateFormat) : '…');
+    const fmtDate = (d?: string) =>
+        d ? formatDateStringWithAppSettings(d, appSettings.dateFormat) : "…";
 
     const descriptors: string[] = [];
-    const baseLabel =
-        filterLabel ||
-        (transactionIdFilter
-            ? `transaction #${transactionIdFilter}`
-            : recipientIdFilter
-                ? `recipient #${recipientIdFilter}`
-                : categoryIdFilter
-                    ? `category #${categoryIdFilter}`
-                    : accountIdFilter
-                        ? `account #${accountIdFilter}`
-                        : bankAccountFilter ?? '');
-    if (baseLabel) descriptors.push(baseLabel);
-    if (transactionTypeFilter) descriptors.push(t(transactionTypeFilter === 'income' ? 'filter.type.income' : 'filter.type.expense'));
-    if (startDateFilter || endDateFilter) descriptors.push(`${fmtDate(startDateFilter)} → ${fmtDate(endDateFilter)}`);
+    const scopeDescriptors: string[] = [];
+    if (transactionIdFilter)
+        scopeDescriptors.push(
+            t("filter.transactionId", { id: transactionIdFilter }),
+        );
+    if (recipientIdFilter)
+        scopeDescriptors.push(
+            t("filter.recipientId", { id: recipientIdFilter }),
+        );
+    if (categoryIdFilter)
+        scopeDescriptors.push(t("filter.categoryId", { id: categoryIdFilter }));
+    if (categoryIdsFilter?.length)
+        scopeDescriptors.push(
+            t("filter.categoryIds", { count: categoryIdsFilter.length }),
+        );
+    if (accountIdFilter)
+        scopeDescriptors.push(t("filter.accountId", { id: accountIdFilter }));
+    if (bankAccountFilter)
+        scopeDescriptors.push(
+            t("filter.bankAccount", { name: bankAccountFilter }),
+        );
+    // A shared label identifies a single scope; with combined filters it cannot
+    // reliably identify which constraint it describes, so retain all scopes.
+    if (filterLabel) descriptors.push(filterLabel);
+    if (!filterLabel || scopeDescriptors.length !== 1)
+        descriptors.push(...scopeDescriptors);
+    if (transactionTypeFilter)
+        descriptors.push(
+            t(
+                transactionTypeFilter === "income"
+                    ? "filter.type.income"
+                    : "filter.type.expense",
+            ),
+        );
+    if (startDateFilter || endDateFilter)
+        descriptors.push(
+            `${fmtDate(startDateFilter)} → ${fmtDate(endDateFilter)}`,
+        );
     if (hasAmountFilter) descriptors.push(amountLabel);
-    const label = descriptors.join(' · ');
+    const label = descriptors.join(" · ");
 
     return (
         <div className="flex flex-wrap items-center gap-2 px-3 py-2 rounded-md bg-primary/10 border border-primary/20">
             {hasMainFilter && (
                 <span className="text-sm text-foreground">
-                    {t('txPage.filteredBy', { label })}
+                    {t("txPage.filteredBy", { label })}
                 </span>
             )}
             {hasTagFilter && (
                 <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-xs text-muted-foreground">{t('filter.tags.label')}:</span>
+                    <span className="text-xs text-muted-foreground">
+                        {t("filter.tags.label")}:
+                    </span>
                     {tagsFilter!.map((slug) => (
-                        <Badge key={slug} variant="outline" className="text-xs py-0 px-1.5 h-5">
+                        <Badge
+                            key={slug}
+                            variant="outline"
+                            className="text-xs py-0 px-1.5 h-5"
+                        >
                             {slug}
                         </Badge>
                     ))}
@@ -114,7 +161,7 @@ export function FilterBanner({
                             size="icon"
                             className="h-5 w-5"
                             onClick={onClearTags}
-                            aria-label={t('filter.tags.clearAll')}
+                            aria-label={t("filter.tags.clearAll")}
                         >
                             <X className="h-3 w-3" />
                         </Button>
@@ -139,7 +186,13 @@ export function FilterBanner({
                     bankAccountFilter={bankAccountFilter}
                 />
                 {hasMainFilter && (
-                    <Button variant="ghost" size="icon" className="icon-touch-target" onClick={onClear} aria-label={t('aria.clearFilter')}>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="icon-touch-target"
+                        onClick={onClear}
+                        aria-label={t("aria.clearFilter")}
+                    >
                         <X className="h-4 w-4" />
                     </Button>
                 )}

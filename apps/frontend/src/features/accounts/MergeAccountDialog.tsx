@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
     Dialog,
     DialogContent,
@@ -55,7 +55,14 @@ export function MergeAccountDialog({
     const { appSettings } = useAppSettings();
     const merge = useMergeAccounts();
     const [targetId, setTargetId] = useState<string>("");
-    const [acknowledged, setAcknowledged] = useState(false);
+    const [acknowledgedPair, setAcknowledgedPair] = useState<string | null>(
+        null,
+    );
+    useEffect(() => {
+        setAcknowledgedPair(null);
+    }, [source.id, open]);
+    const pairKey = `${source.id}:${targetId}`;
+    const acknowledged = acknowledgedPair === pairKey;
 
     // Full population, archived included — the dialog must offer every possible
     // survivor regardless of what the hub currently displays.
@@ -66,6 +73,12 @@ export function MergeAccountDialog({
     // Read-only dry-run of this exact source→survivor pair (WP-A3 endpoint).
     const preview = useAccountMergePreview(source.id, target?.id);
 
+    const previewReady =
+        !preview.isFetching &&
+        !preview.isError &&
+        preview.data?.source === source.id &&
+        preview.data?.into === target?.id;
+
     // Counts use the SAME locale the money formatter derives from the
     // number-format setting, so "1.002 transactions" and "€ 1.002,00" agree.
     const numFmt = new Intl.NumberFormat(
@@ -74,11 +87,12 @@ export function MergeAccountDialog({
 
     const reset = () => {
         setTargetId("");
-        setAcknowledged(false);
+        setAcknowledgedPair(null);
     };
 
     const handleMerge = () => {
-        if (!targetId || !acknowledged) return;
+        if (!targetId || !acknowledged || !previewReady || merge.isPending)
+            return;
         merge.mutate(
             { targetId: Number(targetId), sourceIds: [source.id] },
             {
@@ -105,7 +119,13 @@ export function MergeAccountDialog({
                     <Label htmlFor="merge-target">
                         {t("accounts.mergeTargetLabel")}
                     </Label>
-                    <Select value={targetId} onValueChange={setTargetId}>
+                    <Select
+                        value={targetId}
+                        onValueChange={(value) => {
+                            setTargetId(value);
+                            setAcknowledgedPair(null);
+                        }}
+                    >
                         <SelectTrigger id="merge-target">
                             <SelectValue
                                 placeholder={t(
@@ -128,9 +148,22 @@ export function MergeAccountDialog({
                     {target && (
                         <div className="glass-thin rounded-xl p-3 text-sm">
                             {preview.isError ? (
-                                <span className="text-destructive">
-                                    {t("accounts.mergePreview.failed")}
-                                </span>
+                                <div role="alert" className="space-y-2">
+                                    <p className="text-destructive">
+                                        {t("accounts.mergePreview.failed")}
+                                    </p>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={preview.isFetching}
+                                        onClick={() => {
+                                            setAcknowledgedPair(null);
+                                            void preview.refetch();
+                                        }}
+                                    >
+                                        {t("common.retry")}
+                                    </Button>
+                                </div>
                             ) : !preview.data ? (
                                 <span className="flex items-center gap-2 text-muted-foreground">
                                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -220,7 +253,10 @@ export function MergeAccountDialog({
                     <label className="flex items-start gap-2 text-sm">
                         <Checkbox
                             checked={acknowledged}
-                            onCheckedChange={(c) => setAcknowledged(c === true)}
+                            disabled={!previewReady || merge.isPending}
+                            onCheckedChange={(c) =>
+                                setAcknowledgedPair(c === true ? pairKey : null)
+                            }
                             className="mt-0.5"
                         />
                         <span>{t("accounts.mergeAcknowledge")}</span>
@@ -235,7 +271,12 @@ export function MergeAccountDialog({
                     </Button>
                     <Button
                         variant="destructive"
-                        disabled={!targetId || !acknowledged || merge.isPending}
+                        disabled={
+                            !targetId ||
+                            !acknowledged ||
+                            !previewReady ||
+                            merge.isPending
+                        }
                         onClick={handleMerge}
                     >
                         {merge.isPending ? (

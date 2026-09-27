@@ -1,11 +1,19 @@
-import {useState} from "react";
-import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger} from "@/components/ui/dialog";
-import {Button} from "@/components/ui/button";
-import {Input} from "@/components/ui/input";
-import {Label} from "@/components/ui/label";
-import {Textarea} from "@/components/ui/textarea";
-import {Plus, Loader2} from "lucide-react";
-import {useCreateCategory} from "@/hooks/useCategories";
+import { useState } from "react";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Plus, Loader2 } from "lucide-react";
+import { useCreateCategory } from "@/hooks/useCategories";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 
 type CategoryFormValues = {
@@ -17,12 +25,12 @@ type CategoryFormValues = {
 type AddCategoryDialogProps =
     | { mode?: "create" }
     | {
-        mode: "edit";
-        initialValues: CategoryFormValues;
-        open: boolean;
-        onOpenChange: (open: boolean) => void;
-        onSave: (values: CategoryFormValues) => void;
-        isSaving?: boolean;
+          mode: "edit";
+          initialValues: CategoryFormValues;
+          open: boolean;
+          onOpenChange: (open: boolean) => void;
+          onSave: (values: CategoryFormValues) => void;
+          isSaving?: boolean;
       };
 
 export function AddCategoryDialog(props: AddCategoryDialogProps = {}) {
@@ -32,18 +40,29 @@ export function AddCategoryDialog(props: AddCategoryDialogProps = {}) {
 
     // Create-mode state
     const [createOpen, setCreateOpen] = useState(false);
+    const [submitted, setSubmitted] = useState(false);
     const createMutation = useCreateCategory();
 
     // Initialized once on mount. Parents mount the edit dialog per target
     // (keyed by category id), so a target switch remounts with fresh values —
     // no sync effect, which would revert in-flight edits on parent re-renders.
     const [form, setForm] = useState<CategoryFormValues>(
-        isEditMode ? props.initialValues : { general: "", detail: "", description: "" }
+        isEditMode
+            ? props.initialValues
+            : { general: "", detail: "", description: "" },
     );
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!form.general.trim() || !form.detail.trim()) return;
+        setSubmitted(true);
+        if (!form.general.trim() || !form.detail.trim()) {
+            (e.currentTarget as HTMLFormElement)
+                .querySelector<HTMLInputElement>(
+                    !form.general.trim() ? "#cat-general" : "#cat-detail",
+                )
+                ?.focus();
+            return;
+        }
 
         const values: CategoryFormValues = {
             general: form.general.trim().toUpperCase(),
@@ -55,71 +74,134 @@ export function AddCategoryDialog(props: AddCategoryDialogProps = {}) {
             editProps?.onSave(values);
         } else {
             createMutation.mutate(
-                { general: values.general, detail: values.detail, description: values.description || undefined },
+                {
+                    general: values.general,
+                    detail: values.detail,
+                    description: values.description || undefined,
+                },
                 {
                     onSuccess: () => {
+                        setSubmitted(false);
                         setForm({ general: "", detail: "", description: "" });
                         setCreateOpen(false);
                     },
-                }
+                },
             );
         }
     };
 
     const open = editProps?.open ?? createOpen;
-    const onOpenChange = editProps?.onOpenChange ?? setCreateOpen;
+    const onOpenChange = (next: boolean) => {
+        setSubmitted(false);
+        (editProps?.onOpenChange ?? setCreateOpen)(next);
+    };
     const isPending = editProps?.isSaving ?? createMutation.isPending;
 
     const dialogContent = (
         <DialogContent className="sm:max-w-md">
             <DialogHeader>
                 <DialogTitle>
-                    {isEditMode ? t('form.addCategory.editTitle') : t('form.addCategory.title')}
+                    {isEditMode
+                        ? t("form.addCategory.editTitle")
+                        : t("form.addCategory.title")}
                 </DialogTitle>
                 <DialogDescription className="sr-only">
-                    {isEditMode ? t('form.addCategory.editTitle') : t('form.addCategory.title')}
+                    {isEditMode
+                        ? t("form.addCategory.editTitle")
+                        : t("form.addCategory.title")}
                 </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                    <Label htmlFor="cat-general">{t('form.addCategory.general')}</Label>
+                    <Label htmlFor="cat-general">
+                        {t("form.addCategory.general")}
+                    </Label>
                     <Input
                         id="cat-general"
-                        placeholder={t('addCat.generalPlaceholder')}
+                        aria-invalid={submitted && !form.general.trim()}
+                        aria-describedby={
+                            submitted && !form.general.trim()
+                                ? "cat-general-error"
+                                : undefined
+                        }
+                        placeholder={t("addCat.generalPlaceholder")}
                         maxLength={100}
                         value={form.general}
-                        onChange={(e) => setForm(f => ({ ...f, general: e.target.value }))}
+                        onChange={(e) =>
+                            setForm((f) => ({ ...f, general: e.target.value }))
+                        }
                         required
                     />
+                    {submitted && !form.general.trim() && (
+                        <p
+                            id="cat-general-error"
+                            role="alert"
+                            className="text-sm text-destructive"
+                        >
+                            {t("form.nameRequired")}
+                        </p>
+                    )}
                 </div>
                 <div className="space-y-2">
-                    <Label htmlFor="cat-detail">{t('form.addCategory.detail')}</Label>
+                    <Label htmlFor="cat-detail">
+                        {t("form.addCategory.detail")}
+                    </Label>
                     <Input
                         id="cat-detail"
-                        placeholder={t('addCat.detailPlaceholder')}
+                        aria-invalid={submitted && !form.detail.trim()}
+                        aria-describedby={
+                            submitted && !form.detail.trim()
+                                ? "cat-detail-error"
+                                : undefined
+                        }
+                        placeholder={t("addCat.detailPlaceholder")}
                         maxLength={100}
                         value={form.detail}
-                        onChange={(e) => setForm(f => ({ ...f, detail: e.target.value }))}
+                        onChange={(e) =>
+                            setForm((f) => ({ ...f, detail: e.target.value }))
+                        }
                         required
                     />
+                    {submitted && !form.detail.trim() && (
+                        <p
+                            id="cat-detail-error"
+                            role="alert"
+                            className="text-sm text-destructive"
+                        >
+                            {t("form.nameRequired")}
+                        </p>
+                    )}
                 </div>
                 <div className="space-y-2">
-                    <Label htmlFor="cat-description">{t('addCat.descriptionOptional')}</Label>
+                    <Label htmlFor="cat-description">
+                        {t("addCat.descriptionOptional")}
+                    </Label>
                     <Textarea
                         id="cat-description"
-                        placeholder={t('addCat.descriptionPlaceholder')}
+                        placeholder={t("addCat.descriptionPlaceholder")}
                         maxLength={500}
                         value={form.description}
-                        onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))}
+                        onChange={(e) =>
+                            setForm((f) => ({
+                                ...f,
+                                description: e.target.value,
+                            }))
+                        }
                     />
                 </div>
                 <DialogFooter className="pt-2">
-                    <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                        {t('common.cancel')}
+                    <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => onOpenChange(false)}
+                    >
+                        {t("common.cancel")}
                     </Button>
                     <Button type="submit" disabled={isPending}>
-                        {isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
-                        {isEditMode ? t('common.save') : t('common.create')}
+                        {isPending && (
+                            <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                        )}
+                        {isEditMode ? t("common.save") : t("common.create")}
                     </Button>
                 </DialogFooter>
             </form>
@@ -138,7 +220,7 @@ export function AddCategoryDialog(props: AddCategoryDialogProps = {}) {
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogTrigger asChild>
                 <Button size="sm" className="gap-1.5">
-                    <Plus className="h-4 w-4" /> {t('form.addCategory.title')}
+                    <Plus className="h-4 w-4" /> {t("form.addCategory.title")}
                 </Button>
             </DialogTrigger>
             {dialogContent}

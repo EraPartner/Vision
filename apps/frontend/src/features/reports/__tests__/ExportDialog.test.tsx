@@ -1,9 +1,12 @@
 // @vitest-environment jsdom
 import { describe, expect, it, beforeEach, vi } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithApp } from "@/test/renderWithApp";
 import { ExportDialog } from "@/features/reports/ExportDialog";
+import { http } from "msw";
+import { server } from "@/test/msw/server";
+import { ok } from "@/test/msw/handlers";
 import * as reportsApi from "@/lib/api/reports";
 
 // jsdom does not implement these blob URL APIs
@@ -11,6 +14,7 @@ beforeEach(() => {
     globalThis.URL.createObjectURL = vi.fn().mockReturnValue("blob:fake");
     globalThis.URL.revokeObjectURL = vi.fn();
     vi.restoreAllMocks();
+    vi.clearAllMocks();
 });
 
 // Mock the reports API module so fetch is never called.
@@ -22,7 +26,12 @@ vi.mock("@/lib/api/reports", () => ({
 }));
 
 vi.mock("@/components/shared/DatePicker", () => ({
-    DatePicker: ({ id, onChange, placeholder, ...props }: {
+    DatePicker: ({
+        id,
+        onChange,
+        placeholder,
+        ...props
+    }: {
         id?: string;
         onChange: (date?: Date) => void;
         placeholder?: string;
@@ -33,7 +42,13 @@ vi.mock("@/components/shared/DatePicker", () => ({
             id={id}
             aria-invalid={props["aria-invalid"] as boolean | undefined}
             aria-describedby={props["aria-describedby"] as string | undefined}
-            onClick={() => onChange(id === "export-from" ? new Date(2026, 11, 31) : new Date(2026, 0, 1))}
+            onClick={() =>
+                onChange(
+                    id === "export-from"
+                        ? new Date(2026, 11, 31)
+                        : new Date(2026, 0, 1),
+                )
+            }
         >
             {placeholder}
         </button>
@@ -66,8 +81,12 @@ describe("ExportDialog", () => {
         await user.click(screen.getByRole("button", { name: "From" }));
         await user.click(screen.getByRole("button", { name: "To" }));
 
-        expect(screen.getByRole("alert")).toHaveTextContent(/start date must be on or before/i);
-        expect(screen.getByRole("button", { name: /download pdf/i })).toBeDisabled();
+        expect(screen.getByRole("alert")).toHaveTextContent(
+            /start date must be on or before/i,
+        );
+        expect(
+            screen.getByRole("button", { name: /download pdf/i }),
+        ).toBeDisabled();
         expect(reportsApi.downloadFinancialReport).not.toHaveBeenCalled();
     });
 
@@ -86,16 +105,24 @@ describe("ExportDialog", () => {
     it("shows financial report sections by default", async () => {
         await openDialog();
         // The financial sections heading and at least one section label should appear
-        expect(await screen.findByText(/executive summary/i)).toBeInTheDocument();
+        expect(
+            await screen.findByText(/executive summary/i),
+        ).toBeInTheDocument();
         expect(await screen.findByText(/cashflow trend/i)).toBeInTheDocument();
     });
 
     it("switching to portfolio report type shows portfolio sections", async () => {
         const user = await openDialog();
-        const portfolioRadio = await screen.findByRole("radio", { name: /portfolio/i });
+        const portfolioRadio = await screen.findByRole("radio", {
+            name: /portfolio/i,
+        });
         await user.click(portfolioRadio);
-        expect(await screen.findByText(/portfolio summary/i)).toBeInTheDocument();
-        expect(await screen.findByText(/portfolio allocation/i)).toBeInTheDocument();
+        expect(
+            await screen.findByText(/portfolio summary/i),
+        ).toBeInTheDocument();
+        expect(
+            await screen.findByText(/portfolio allocation/i),
+        ).toBeInTheDocument();
     });
 
     it("switching to tax report type shows tax sections", async () => {
@@ -103,22 +130,30 @@ describe("ExportDialog", () => {
         const taxRadio = await screen.findByRole("radio", { name: /^tax$/i });
         await user.click(taxRadio);
         expect(await screen.findByText(/tax summary/i)).toBeInTheDocument();
-        expect(await screen.findByText(/tax type breakdown/i)).toBeInTheDocument();
+        expect(
+            await screen.findByText(/tax type breakdown/i),
+        ).toBeInTheDocument();
     });
 
     it("Download button disabled when all sections unchecked", async () => {
         const user = await openDialog();
         // The "All" checkbox toggles all sections — click it to uncheck all
-        const allCheckbox = await screen.findByRole("checkbox", { name: /^all$/i });
+        const allCheckbox = await screen.findByRole("checkbox", {
+            name: /^all$/i,
+        });
         await user.click(allCheckbox); // uncheck all
-        const downloadBtn = await screen.findByRole("button", { name: /download pdf/i });
+        const downloadBtn = await screen.findByRole("button", {
+            name: /download pdf/i,
+        });
         expect(downloadBtn).toBeDisabled();
     });
 
     it("successful download closes dialog", async () => {
         stubFinancialSuccess();
         const user = await openDialog();
-        const downloadBtn = await screen.findByRole("button", { name: /download pdf/i });
+        const downloadBtn = await screen.findByRole("button", {
+            name: /download pdf/i,
+        });
         await user.click(downloadBtn);
         await waitFor(() => {
             expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -128,7 +163,9 @@ describe("ExportDialog", () => {
     it("download error keeps dialog open", async () => {
         stubFinancialError();
         const user = await openDialog();
-        const downloadBtn = await screen.findByRole("button", { name: /download pdf/i });
+        const downloadBtn = await screen.findByRole("button", {
+            name: /download pdf/i,
+        });
         await user.click(downloadBtn);
         // Wait for the async error path to settle, then dialog should still be present
         await waitFor(() => {
@@ -138,7 +175,9 @@ describe("ExportDialog", () => {
 
     it("Cancel button closes dialog", async () => {
         const user = await openDialog();
-        const cancelBtn = await screen.findByRole("button", { name: /cancel/i });
+        const cancelBtn = await screen.findByRole("button", {
+            name: /cancel/i,
+        });
         await user.click(cancelBtn);
         await waitFor(() => {
             expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -150,7 +189,9 @@ describe("ExportDialog", () => {
     it("Escape key closes dialog", async () => {
         const user = await openDialog();
         await user.keyboard("{Escape}");
-        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+        );
     });
 
     it("dialog renders in open state (a11y / backdrop guard)", async () => {
@@ -165,4 +206,82 @@ describe("ExportDialog", () => {
         const buttons = screen.getAllByRole("button");
         expect(buttons.length).toBeGreaterThan(0);
     });
+    it.each(["", "1999", "2020.5", String(new Date().getFullYear() + 2)])(
+        "blocks an invalid full year %s without falling back",
+        async (year) => {
+            const user = await openDialog();
+            await user.click(
+                screen.getByRole("radio", { name: /full year|specific year/i }),
+            );
+            const input = screen.getByLabelText(/^year$/i);
+            fireEvent.change(input, { target: { value: year } });
+            expect(input).toHaveAttribute("aria-invalid", "true");
+            expect(screen.getByRole("alert")).toHaveTextContent(/2000/);
+            expect(
+                screen.getByRole("button", { name: /download pdf/i }),
+            ).toBeDisabled();
+            fireEvent.submit(input.closest("form")!);
+            expect(reportsApi.downloadFinancialReport).not.toHaveBeenCalled();
+            fireEvent.change(input, { target: { value: "2000" } });
+            expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+            await user.click(
+                screen.getByRole("button", { name: /download pdf/i }),
+            );
+            await waitFor(() =>
+                expect(reportsApi.downloadFinancialReport).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        period: { kind: "year", year: 2000 },
+                    }),
+                ),
+            );
+        },
+    );
+
+    it.each(["financial", "portfolio", "tax"] as const)(
+        "shows and sends only effective exclusions for %s reports",
+        async (type) => {
+            server.use(
+                http.get("http://localhost:3002/api/settings", () =>
+                    ok({
+                        dashboard_settings: {
+                            exclusionScope: "statistics",
+                            excludedCategoryIds: [11, 12],
+                            excludedRecipientIds: [21],
+                        },
+                    }),
+                ),
+            );
+            const user = await openDialog();
+            await user.click(
+                screen.getByRole("radio", { name: new RegExp(type, "i") }),
+            );
+            if (type === "financial") {
+                expect(
+                    screen.getByText(/statistics filters/i),
+                ).toHaveTextContent(/2.*1/);
+            } else {
+                expect(
+                    screen.queryByText(/statistics filters/i),
+                ).not.toBeInTheDocument();
+            }
+            await user.click(
+                screen.getByRole("button", { name: /download pdf/i }),
+            );
+            const download =
+                type === "financial"
+                    ? reportsApi.downloadFinancialReport
+                    : type === "portfolio"
+                      ? reportsApi.downloadPortfolioReport
+                      : reportsApi.downloadTaxReport;
+            await waitFor(() =>
+                expect(download).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        excludedCategoryIds:
+                            type === "financial" ? [11, 12] : [],
+                        excludedRecipientIds: type === "financial" ? [21] : [],
+                    }),
+                ),
+            );
+        },
+    );
 });

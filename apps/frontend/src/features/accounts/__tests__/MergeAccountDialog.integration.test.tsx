@@ -196,7 +196,7 @@ describe("MergeAccountDialog (integration, WP-B5 §3 F9 preview)", () => {
         ).toBeInTheDocument();
     });
 
-    it("keeps the merge available when the preview fails (preview is advisory)", async () => {
+    it("blocks merge after preview failure and allows retry", async () => {
         mockApi({ preview: "error" });
         const user = userEvent.setup();
         renderDialog();
@@ -211,8 +211,43 @@ describe("MergeAccountDialog (integration, WP-B5 §3 F9 preview)", () => {
         expect(
             await screen.findByText(/could not load the merge preview/i),
         ).toBeInTheDocument();
-        // Acknowledge + merge still possible: the button only needs target + checkbox.
+        expect(screen.getByRole("checkbox")).toBeDisabled();
+        expect(screen.getByRole("button", { name: /^merge$/i })).toBeDisabled();
+        mockApi();
+        await user.click(screen.getByRole("button", { name: /retry/i }));
+        await waitFor(() => expect(screen.getByRole("checkbox")).toBeEnabled());
         await user.click(screen.getByRole("checkbox"));
         expect(screen.getByRole("button", { name: /^merge$/i })).toBeEnabled();
+        await user.click(
+            screen.getByRole("combobox", { name: /keep this account/i }),
+        );
+        await user.click(
+            await screen.findByRole("option", { name: "Dusty (Archived)" }),
+        );
+        expect(screen.getByRole("checkbox")).not.toBeChecked();
+        expect(screen.getByRole("button", { name: /^merge$/i })).toBeDisabled();
     });
+});
+
+it("requires new acknowledgement when the source changes", async () => {
+    mockApi();
+    const user = userEvent.setup();
+    const { rerender } = renderDialog();
+    await user.click(
+        await screen.findByRole("combobox", { name: /keep this account/i }),
+    );
+    await user.click(await screen.findByRole("option", { name: "New KBC" }));
+    await waitFor(() => expect(screen.getByRole("checkbox")).toBeEnabled());
+    await user.click(screen.getByRole("checkbox"));
+    expect(screen.getByRole("button", { name: /^merge$/i })).toBeEnabled();
+    rerender(
+        <MergeAccountDialog source={ARCHIVED} open onOpenChange={vi.fn()} />,
+    );
+    expect(screen.getByRole("checkbox")).not.toBeChecked();
+    expect(screen.getByRole("button", { name: /^merge$/i })).toBeDisabled();
+    rerender(
+        <MergeAccountDialog source={SOURCE} open onOpenChange={vi.fn()} />,
+    );
+    expect(screen.getByRole("checkbox")).not.toBeChecked();
+    expect(screen.getByRole("button", { name: /^merge$/i })).toBeDisabled();
 });

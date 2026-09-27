@@ -2,7 +2,7 @@
 title: Accounts
 type: feature
 status: active
-date: 2026-07-22
+date: 2026-09-27
 updated: 2026-09-13
 tags:
   [
@@ -191,3 +191,11 @@ The Transactions page's actions bar has an **Account** combobox (`AccountFilterC
 - `apps/node-backend/tests/routes/transactions.test.js` — `include_balance` threading + `running_balance` on/off the wire.
 - `apps/frontend/src/features/accounts/__tests__/groupAccounts.test.ts` — grouping/subtotal/Net-cash math.
 - `apps/frontend/src/features/accounts/__tests__/brokerAccountMetrics.test.ts` — position-only holdings value, complete broker P&L, and oversold aggregation from the portfolio-summary partition.
+
+### Opening-balance correction
+
+An invalid opening balance in Add account keeps the entered text and shows a linked inline error with focus on that field. Correcting the amount clears the error. Optional blank balances, explicit zero, and signed balances keep their existing behavior.
+
+### Merge preview and confirmation
+
+Account merging requires a successfully loaded preview for the selected source and destination. Loading or a failed preview disables confirmation; failures offer Retry. Changing either account requires a fresh acknowledgement before merging. The backend merge rules are unchanged.

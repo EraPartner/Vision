@@ -2,8 +2,8 @@
 title: Custom Hooks
 type: component
 status: active
-date: 2026-04-23
-updated: 2026-09-03
+date: 2026-09-27
+updated: 2026-09-27
 last_modified: 2026-09-03
 tags: [components, hooks, react-query, zustand, form-state, data-table, phase-4, phase-13, phase-c, phase-d, i18n, notifications, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, mount-guard, query-key-fix, prefetch, memoization, useCallback, parseLocaleNumber, currency-utilities, exclusion-ids, ssrf-correctness, loading-states, error-states, isError, refetch, recipient-insights-filter, optimistic-updates, optimistic-create, liquid-glass-v2, premium-v3, june-2026, fx-aware-pnl, useFxAwarePnl, useTabParam, useTaxYearParam, url-state]
 description: Custom React hooks for data fetching and state management. Includes toast notifications for mutations via i18n keys. Phase 13 adds useBankAccounts hook for export filtering. May 2026 bug hunt adds mount guard to usePlannedPayments, fixes queryKey mismatch in usePortfolioPrefetch, and documents parseLocaleNumber utility for locale-aware number parsing. 2026-05-29 adds useExcludedIds as a shared exclusion-resolution hook and exposes isLoading/isError/error/refetch from usePortfolio so asset pages can distinguish loading/error from empty. 2026-06-01: useStatistics adds recipientInsightsFilteredQuery so the all-years Top Recipients chart reacts to exclusion toggles. 2026-06-10: useUpdateTransaction/useDeleteTransaction made optimistic (ADR-070 Tier 5). 2026-06-10 Premium v3 (ADR-071): useCreateTransaction made optimistic (temp negative-id row, server swap, rollback, onSettled invalidate; 6 tests total). 2026-06-10 V11: useUpcomingPlannedPayments — shared "due in next 7 days" query + module-level dismissed-ID store (useSyncExternalStore, persists to localStorage). 2026-06-24: SuggestionCard deleted — useUpcomingPlannedPayments now has a single consumer (UpcomingPaymentsNotification). Aug 2026 (PR #156): adds useTabParam (page-level Tabs ↔ `?tab=`) and useTaxYearParam (BelgianTaxProfileContext viewedYear ↔ `?year=`). 2026-08-11: the full category list is unified behind useAllCategories under one key (`['categories','all']`) — useExcludedIds and the Settings exclusion picker no longer keep two cache entries; useOllamaStatus polls adaptively (30s healthy, 2min unreachable, stopped when AI chat is disabled server-side).
@@ -561,7 +561,10 @@ export const CATEGORY_FETCH_LIMIT = 1000; // shared across all consumers
 
 ## useConfirmDialog
 
-Hook for showing confirmation dialogs.
+Hook for showing confirmation dialogs. An optional `onCloseAutoFocus` callback lets a caller
+restore focus to its stored opener, with a fallback if that control is no longer mounted.
+Supplying it replaces the dialog's default close-focus behavior; callers without it retain
+Radix's default behavior.
 
 ### API
 
@@ -572,7 +575,7 @@ const { confirm, ConfirmDialog } = useConfirmDialog();
 const confirmed = await confirm({
   title: "Delete Transaction",
   description: "Are you sure?",
-  confirmText: "Delete",
+  confirmLabel: "Delete",
 });
 
 // In component render

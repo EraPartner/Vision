@@ -11,7 +11,6 @@ import {
     AddAccountDialog,
     type AccountFormValues,
 } from "@/features/accounts/AddAccountDialog";
-import { toast } from "sonner";
 
 vi.mock("sonner", () => ({
     toast: {
@@ -142,9 +141,17 @@ describe("AddAccountDialog (integration, WP-B5 §3 F4+F7)", () => {
         expect(form).not.toBeNull();
         fireEvent.submit(form!);
 
-        expect(toast.error).toHaveBeenCalledWith(
+        expect(screen.getByRole("alert")).toHaveTextContent(
             "Enter a valid opening balance",
         );
+        const balanceInput = screen.getByLabelText(/opening balance/i);
+        expect(balanceInput).toHaveAttribute("aria-invalid", "true");
+        expect(balanceInput).toHaveAttribute(
+            "aria-describedby",
+            "acct-opening-balance-error",
+        );
+        expect(balanceInput).toHaveFocus();
+        expect(balanceInput).toHaveValue("not-a-number");
         expect(calls.create).toHaveLength(0);
         expect(calls.opening).toHaveLength(0);
     });
@@ -321,4 +328,29 @@ describe("AddAccountDialog (integration, WP-B5 §3 F4+F7)", () => {
             }),
         ]);
     });
+    it.each(["0", "-125,50"])(
+        "accepts the valid signed or zero opening balance %s",
+        async (value) => {
+            const calls = mockCreate();
+            const user = userEvent.setup();
+            renderWithApp(<AddAccountDialog />);
+            await openCreateDialog(user);
+            await user.type(screen.getByLabelText(/^name$/i), "Checking");
+            const input = screen.getByLabelText(/opening balance/i);
+            await user.type(input, "abc");
+            await user.click(screen.getByRole("button", { name: /create/i }));
+            expect(input).toHaveFocus();
+            expect(calls.create).toHaveLength(0);
+            await user.clear(input);
+            await user.type(input, value);
+            expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+            await user.click(screen.getByRole("button", { name: /create/i }));
+            await waitFor(() => expect(calls.opening).toHaveLength(1));
+            expect(calls.opening[0].body).toEqual({
+                balance: value === "0" ? 0 : -125.5,
+                date: toYmd(new Date()),
+                currency: "EUR",
+            });
+        },
+    );
 });

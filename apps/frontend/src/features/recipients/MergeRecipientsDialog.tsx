@@ -41,8 +41,13 @@ export function MergeRecipientsDialog({
     useUnsavedChanges(primaryId !== null || aliasIds.length > 0);
     const mergeMutation = useMergeRecipients();
 
-    const { data: recipients = [], isLoading: recipientsLoading } =
-        useAllRecipientsForMerge(open);
+    const {
+        data: recipients = [],
+        isLoading: recipientsLoading,
+        isError: recipientsError,
+        refetch,
+        isFetching,
+    } = useAllRecipientsForMerge(open);
 
     // Only show recipients that are NOT already aliases of someone else
     const availableRecipients = recipients.filter(
@@ -58,7 +63,14 @@ export function MergeRecipientsDialog({
     };
 
     const handleMerge = () => {
-        if (!primaryId || aliasIds.length === 0) return;
+        if (
+            !primaryId ||
+            aliasIds.length === 0 ||
+            recipientsError ||
+            recipientsLoading ||
+            mergeMutation.isPending
+        )
+            return;
         mergeMutation.mutate(
             { primaryId, aliasIds },
             {
@@ -94,6 +106,21 @@ export function MergeRecipientsDialog({
                     </DialogDescription>
                 </DialogHeader>
 
+                {recipientsError && (
+                    <div role="alert" className="space-y-2">
+                        <p className="text-sm text-destructive">
+                            {t("merge.loadFailed")}
+                        </p>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={isFetching}
+                            onClick={() => void refetch()}
+                        >
+                            {t("common.retry")}
+                        </Button>
+                    </div>
+                )}
                 <div className="space-y-4 flex-1 overflow-hidden">
                     {/* Step 1: Select primary */}
                     <div>
@@ -125,7 +152,7 @@ export function MergeRecipientsDialog({
                                     <X className="h-3 w-3" />
                                 </Button>
                             </div>
-                        ) : !recipientsLoading ? (
+                        ) : !recipientsLoading && !recipientsError ? (
                             <Command className="border border-border rounded-md">
                                 <CommandInput
                                     placeholder={t("merge.searchPrimary")}
@@ -255,7 +282,8 @@ export function MergeRecipientsDialog({
                             !primaryId ||
                             aliasIds.length === 0 ||
                             mergeMutation.isPending ||
-                            recipientsLoading
+                            recipientsLoading ||
+                            recipientsError
                         }
                     >
                         {mergeMutation.isPending

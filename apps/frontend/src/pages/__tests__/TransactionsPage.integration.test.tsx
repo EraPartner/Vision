@@ -156,7 +156,10 @@ describe("TransactionsPage (integration)", () => {
         renderTransactionsPage();
         // TableActions renders txPage.activeOnly = "Active Only" when showAll = false
         expect(
-            await screen.findByRole("button", { name: /active only/i }),
+            await screen.findByRole("switch", {
+                name: /include inactive/i,
+                checked: false,
+            }),
         ).toBeInTheDocument();
     });
 
@@ -365,14 +368,18 @@ describe("TransactionsPage (integration)", () => {
         const user = userEvent.setup();
         renderTransactionsPage();
 
-        const activeOnlyBtn = await screen.findByRole("button", {
-            name: /active only/i,
+        const activeOnlyBtn = await screen.findByRole("switch", {
+            name: /include inactive/i,
+            checked: false,
         });
         await user.click(activeOnlyBtn);
 
         // txPage.showingAll = "Showing All" — label flips after toggle
         expect(
-            await screen.findByRole("button", { name: /showing all/i }),
+            await screen.findByRole("switch", {
+                name: /include inactive/i,
+                checked: true,
+            }),
         ).toBeInTheDocument();
     });
 

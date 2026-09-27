@@ -18,6 +18,46 @@ function LocationProbe() {
 }
 
 describe("shareable page URL state", () => {
+    it("discloses different available histories without changing performance returns", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/research/chart`, ({ request }) => {
+                const symbol = new URL(request.url).searchParams.get("symbol");
+                return ok(
+                    {
+                        symbol,
+                        points: [
+                            {
+                                time: Date.UTC(2026, 0, 1, 12),
+                                close: symbol === "AAPL" ? 100 : 0,
+                            },
+                            { time: Date.UTC(2026, 0, 2, 12), close: 110 },
+                            { time: Date.UTC(2026, 0, 3, 12), close: 121 },
+                        ],
+                    },
+                    { provider: "test", source: "live" },
+                );
+            }),
+            http.get(`${API_BASE}/api/research/fundamentals`, () =>
+                ok(null, { provider: null, source: "unavailable" }),
+            ),
+        );
+        renderWithApp(<ResearchComparePage />, {
+            initialEntries: ["/research/compare?symbol=AAPL&symbol=MSFT"],
+        });
+        await screen.findByText("+21,00%");
+        expect(
+            await screen.findByText("Data: 01/01/2026 - 03/01/2026"),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByText("Data: 02/01/2026 - 03/01/2026"),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByText(/A value of 110 means a 10% increase/),
+        ).toBeInTheDocument();
+        expect(screen.getByText("+21,00%")).toBeInTheDocument();
+        expect(screen.getByText("+10,00%")).toBeInTheDocument();
+    });
+
     it("hydrates Research Compare symbols, range, sort, and tab", async () => {
         server.use(
             http.get(`${API_BASE}/api/research/chart`, ({ request }) => {

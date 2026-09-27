@@ -76,7 +76,7 @@ function buildPeriod(
         case "year":
             return {
                 kind: "year",
-                year: parseInt(customYear, 10) || new Date().getFullYear(),
+                year: Number(customYear),
             };
         case "custom":
             return { kind: "custom", from: customFrom, to: customTo };
@@ -143,6 +143,22 @@ export function ExportDialog({
     const customRangeInvalid =
         periodPreset === "custom" && !isCustomRangeValid(customFrom, customTo);
 
+    const customYearInvalid =
+        periodPreset === "year" &&
+        (!/^\d{4}$/.test(customYear) ||
+            Number(customYear) < 2000 ||
+            Number(customYear) > currentYear + 1);
+    const filtersApply =
+        reportType === "financial" &&
+        (dashSettings.exclusionScope === "everywhere" ||
+            dashSettings.exclusionScope === "statistics");
+    const excludedCategoryIds = filtersApply
+        ? [...dashSettings.excludedCategoryIds]
+        : [];
+    const excludedRecipientIds = filtersApply
+        ? [...dashSettings.excludedRecipientIds]
+        : [];
+
     // Reset sections when report type changes
     function handleReportTypeChange(type: ReportType) {
         setReportType(type);
@@ -167,7 +183,13 @@ export function ExportDialog({
 
     async function handleDownload(e: React.FormEvent) {
         e.preventDefault();
-        if (customRangeInvalid) return;
+        if (
+            customRangeInvalid ||
+            customYearInvalid ||
+            sections.size === 0 ||
+            isSubmitting
+        )
+            return;
         const period = buildPeriod(
             periodPreset,
             customYear,
@@ -180,19 +202,12 @@ export function ExportDialog({
             ? []
             : [...sections];
 
-        const filtersApply =
-            dashSettings.exclusionScope === "everywhere" ||
-            dashSettings.exclusionScope === "statistics";
         const baseOpts = {
             currency,
             period,
             sections: selectedSections,
-            excludedCategoryIds: filtersApply
-                ? [...dashSettings.excludedCategoryIds]
-                : [],
-            excludedRecipientIds: filtersApply
-                ? [...dashSettings.excludedRecipientIds]
-                : [],
+            excludedCategoryIds,
+            excludedRecipientIds,
         };
 
         setIsSubmitting(true);
@@ -363,6 +378,14 @@ export function ExportDialog({
                                     <Input
                                         id="export-year"
                                         type="number"
+                                        aria-invalid={
+                                            customYearInvalid || undefined
+                                        }
+                                        aria-describedby={
+                                            customYearInvalid
+                                                ? "export-year-error"
+                                                : undefined
+                                        }
                                         min={2000}
                                         max={currentYear + 1}
                                         value={customYear}
@@ -372,6 +395,18 @@ export function ExportDialog({
                                         className="h-8 w-24 text-sm"
                                     />
                                 </div>
+                            )}
+
+                            {customYearInvalid && (
+                                <p
+                                    id="export-year-error"
+                                    role="alert"
+                                    className="text-sm text-destructive"
+                                >
+                                    {t("export.period.year.invalid", {
+                                        max: currentYear + 1,
+                                    })}
+                                </p>
                             )}
 
                             {/* Custom date range */}
@@ -542,6 +577,15 @@ export function ExportDialog({
                         </div>
                     </div>
 
+                    {(excludedCategoryIds.length > 0 ||
+                        excludedRecipientIds.length > 0) && (
+                        <p className="text-xs text-muted-foreground">
+                            {t("export.exclusionsSummary", {
+                                categories: excludedCategoryIds.length,
+                                recipients: excludedRecipientIds.length,
+                            })}
+                        </p>
+                    )}
                     <DialogFooter>
                         <Button
                             type="button"
@@ -558,7 +602,8 @@ export function ExportDialog({
                             disabled={
                                 isSubmitting ||
                                 sections.size === 0 ||
-                                customRangeInvalid
+                                customRangeInvalid ||
+                                customYearInvalid
                             }
                             className="gap-1.5"
                         >

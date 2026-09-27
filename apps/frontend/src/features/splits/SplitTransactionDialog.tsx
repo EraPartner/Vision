@@ -8,6 +8,11 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+    Tooltip,
+    TooltipTrigger,
+    TooltipContent,
+} from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -33,12 +38,14 @@ interface SplitEntry {
 }
 
 interface SplitTransactionDialogProps {
+    triggerLabel?: string;
     transactionId: number;
     transactionAmount: number;
     transactionCurrency: string;
 }
 
 export function SplitTransactionDialog({
+    triggerLabel,
     transactionId,
     transactionAmount,
     transactionCurrency,
@@ -174,16 +181,25 @@ export function SplitTransactionDialog({
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="icon-touch-target text-muted-foreground hover:text-primary"
-                    title={t("splitDialog.buttonTitle")}
-                >
-                    <Users className="h-4 w-4" />
-                </Button>
-            </DialogTrigger>
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    <DialogTrigger asChild>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="icon-touch-target text-muted-foreground hover:text-primary"
+                            aria-label={
+                                triggerLabel ?? t("splitDialog.buttonTitle")
+                            }
+                        >
+                            <Users className="h-4 w-4" />
+                        </Button>
+                    </DialogTrigger>
+                </TooltipTrigger>
+                <TooltipContent>
+                    {triggerLabel ?? t("splitDialog.buttonTitle")}
+                </TooltipContent>
+            </Tooltip>
             <DialogContent className="sm:max-w-lg">
                 {/* Portal target: dropdowns render here (inside dialog DOM) so the dialog focus trap covers them */}
                 <div ref={setPortalContainer} />

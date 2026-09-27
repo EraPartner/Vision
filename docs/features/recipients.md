@@ -90,6 +90,12 @@ Recipients can have an optional `default_category_id` which is used to auto-cate
 
 See [[docs/adr/046-import-review-category-assignment|ADR-046]] for implementation details.
 
+### Editing recipients
+
+Inline edit fields identify both the column and recipient, including the default-category
+picker. Starting an edit focuses the recipient name. Cancelling returns focus to that row's
+Edit button, so keyboard navigation can continue from the same recipient.
+
 ### Frontend Reorganization (Phase 6)
 
 Dialog components have been moved into feature folders:
@@ -132,3 +138,21 @@ These constraints are enforced at the database level and handled gracefully in a
 - [[docs/adr/046-import-review-category-assignment|ADR-046]] — Import review category assignment with persist-as-default flow
 - [[docs/adr/014-atomic-merge-transactional-safety|ADR-014]] — Atomic merge design and row-locking strategy
 - [[docs/adr/015-recipient-bank-account-uniqueness|ADR-015]] — UNIQUE constraint migration for bank accounts and recipients
+
+## List visibility filters
+
+Include inactive is a labeled switch with a stable label and an explicit on/off state. Recipients also uses an Uncategorized only switch. These controls retain the existing filtering and URL behavior.
+
+## Clarity and recovery feedback
+
+Whitespace-only recipient names receive a field-linked error and focus returns to the name. Validation resets for a fresh opening and after successful creation. Pattern preview uses a visible action label rather than an icon explained only by a native title.
+
+### Loading recovery
+
+Initial list failures offer Retry. If loading the next page fails, already loaded recipients remain visible with a retry message below the table. Retry requests the same offset; it does not clear the current rows or restart the list. A new successful list query clears that page error.
+
+### Merge and pattern preview feedback
+
+Recipient merge loading failures display Retry instead of an empty results message. Existing selections remain available after recovery; merging is disabled while the list is unavailable.
+
+Pattern preview counts belong to the current text, pattern type, and case-sensitivity setting. Changing those fields, switching drafts, or closing the dialog invalidates pending and completed previews. Late responses cannot replace a newer preview. Preview trims surrounding whitespace in the same way as Save, and match counts are announced as status updates.

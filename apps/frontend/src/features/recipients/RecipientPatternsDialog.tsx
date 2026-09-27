@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { apiClient } from "@/lib/api";
@@ -75,6 +75,25 @@ export function RecipientPatternsDialog({
     const [previewCount, setPreviewCount] = useState<number | null>(null);
     const [isPreviewing, setIsPreviewing] = useState(false);
 
+    const previewVersion = useRef(0);
+
+    useEffect(() => {
+        previewVersion.current += 1;
+        setPreviewCount(null);
+        setIsPreviewing(false);
+        return () => {
+            previewVersion.current += 1;
+        };
+    }, [
+        form.pattern,
+        form.pattern_kind,
+        form.case_sensitive,
+        editingId,
+        addingNew,
+        open,
+        recipientId,
+    ]);
+
     const queryKey = ["recipient-patterns", recipientId];
 
     const { data, isLoading } = useRecipientPatterns(recipientId, open);
@@ -141,22 +160,25 @@ export function RecipientPatternsDialog({
     };
 
     const handlePreview = async () => {
-        if (!form.pattern) return;
+        if (!form.pattern.trim()) return;
+        const version = ++previewVersion.current;
         setIsPreviewing(true);
         try {
             const result = await apiClient.previewRecipientPattern(
                 recipientId,
                 {
-                    pattern: form.pattern,
+                    pattern: form.pattern.trim(),
                     pattern_kind: form.pattern_kind,
                     case_sensitive: form.case_sensitive,
                 },
             );
-            setPreviewCount(result.matchCount);
+            if (version === previewVersion.current)
+                setPreviewCount(result.matchCount);
         } catch {
-            toast.error(t("recipientPatterns.toast.error"));
+            if (version === previewVersion.current)
+                toast.error(t("recipientPatterns.toast.error"));
         } finally {
-            setIsPreviewing(false);
+            if (version === previewVersion.current) setIsPreviewing(false);
         }
     };
 
@@ -308,7 +330,7 @@ export function RecipientPatternsDialog({
                                                 }
                                             >
                                                 <span className="sr-only">
-                                                    Edit
+                                                    {t("common.edit")}
                                                 </span>
                                                 <svg
                                                     className="h-3.5 w-3.5"
@@ -379,14 +401,11 @@ export function RecipientPatternsDialog({
                                                 <Button
                                                     type="button"
                                                     variant="outline"
-                                                    size="icon"
-                                                    className="shrink-0"
-                                                    title={t(
-                                                        "recipientPatterns.previewBtn",
-                                                    )}
+                                                    size="sm"
+                                                    className="shrink-0 gap-2"
                                                     onClick={handlePreview}
                                                     disabled={
-                                                        !form.pattern ||
+                                                        !form.pattern.trim() ||
                                                         isPreviewing
                                                     }
                                                 >
@@ -395,10 +414,14 @@ export function RecipientPatternsDialog({
                                                     ) : (
                                                         <Eye className="h-4 w-4" />
                                                     )}
+                                                    {t(
+                                                        "recipientPatterns.previewBtn",
+                                                    )}
                                                 </Button>
                                             </div>
                                             {previewCount != null && (
                                                 <p
+                                                    role="status"
                                                     className={cn(
                                                         "text-xs",
                                                         previewCount > 0
