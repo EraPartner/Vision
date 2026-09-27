@@ -18,6 +18,26 @@ beforeEach(() => {
 });
 
 describe("computeDeductionCandidates", () => {
+  it("does not roll ambiguous category spending into annual deduction totals", async () => {
+    transactionRepository.getAll.mockResolvedValueOnce([
+      { amount: "-1000", category_name: "RETIREMENT:HOME" },
+      { amount: "-500", category_name: "SAVINGS:RETIREMENT" },
+      { amount: "-200", category_name: "INSURANCE:GROUP TRAVEL" },
+      { amount: "-300", category_name: "SCHENKING:KINDEREN" },
+      { amount: "-40", category_name: "GROEPSVERZEKERING:PENSIOEN" },
+      { amount: "-20", category_name: "UNION:DUES" },
+    ]);
+    const result = await computeDeductionCandidates({ year: 2025 });
+    expect(
+      result.byDeductionType.map(({ deductionType, total }) => ({
+        deductionType,
+        total,
+      })),
+    ).toEqual([
+      { deductionType: "groupInsurance", total: 40 },
+      { deductionType: "unionDues", total: 20 },
+    ]);
+  });
   it("queries the year window for active transactions", async () => {
     transactionRepository.getAll.mockResolvedValueOnce([]);
 

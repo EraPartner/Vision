@@ -23,6 +23,9 @@ vi.mock("@/stores/hydration/LanguageHydration", () => ({
             const translations: Record<string, string> = {
                 "tax.deductionCandidates.title":
                     "Suggested deductions from your transactions",
+                "tax.deductionCandidates.unavailable":
+                    "Could not load deduction suggestions. Try again.",
+                "common.retry": "Retry",
                 "tax.deductionCandidates.confirm": "Confirm",
                 "tax.deductionCandidates.dismiss": "Dismiss",
                 "tax.deductionCandidates.applied": "Applied",
@@ -295,4 +298,37 @@ test("renders nothing while loading", () => {
     });
     const { container } = renderCard();
     expect(container.firstChild).toBeNull();
+});
+
+test("shows a retryable error without offering cached amounts for confirmation", () => {
+    const refetch = vi.fn();
+    mockUseDeductionCandidates.mockReturnValue({
+        data: makeResponse(),
+        isLoading: false,
+        isError: true,
+        isFetching: false,
+        refetch,
+    });
+    renderCard();
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+        "Could not load deduction suggestions. Try again.",
+    );
+    expect(
+        screen.queryByRole("button", { name: "Confirm" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+    expect(updateProfile).not.toHaveBeenCalled();
+});
+
+test("disables retry while deduction suggestions are being fetched again", () => {
+    mockUseDeductionCandidates.mockReturnValue({
+        isError: true,
+        isLoading: false,
+        isFetching: true,
+        refetch: vi.fn(),
+    });
+    renderCard();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeDisabled();
 });

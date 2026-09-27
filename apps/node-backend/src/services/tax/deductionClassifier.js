@@ -32,14 +32,14 @@
 
 /** Stable deduction-type keys modeled by the Belgian tax calculator. */
 export const DEDUCTION_TYPES = Object.freeze([
-  'pensionSavings',
-  'lifeInsurance',
-  'groupInsurance',
-  'charitableDonations',
-  'childcare',
-  'alimony',
-  'unionDues',
-  'mortgageInterest',
+  "pensionSavings",
+  "lifeInsurance",
+  "groupInsurance",
+  "charitableDonations",
+  "childcare",
+  "alimony",
+  "unionDues",
+  "mortgageInterest",
 ]);
 
 // ---------------------------------------------------------------------------
@@ -54,9 +54,9 @@ export const DEDUCTION_TYPES = Object.freeze([
  * @returns {string[]}
  */
 function tokenize(value) {
-  return String(value ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // strip combining diacritics
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // strip combining diacritics
     .toUpperCase()
     .split(/[^A-Z0-9]+/)
     .filter(Boolean);
@@ -102,16 +102,15 @@ function hasPhrase(tokens, phrase) {
 }
 
 /**
- * Phrase lookup within EITHER the general or the detail part (phrases do not
- * span the general/detail boundary — that boundary is a deliberate split the
- * user made, not adjacent words).
+ * Categories split concepts such as UNION:DUES across path segments. Preserve
+ * their ordered tokens when checking explicit phrases.
  *
  * @param {CategoryTokens} cat
  * @param {readonly (readonly string[])[]} phrases
  * @returns {boolean}
  */
 function hasAnyPhrase(cat, phrases) {
-  return phrases.some((p) => hasPhrase(cat.general, p) || hasPhrase(cat.detail, p));
+  return phrases.some((p) => hasPhrase(cat.all, p));
 }
 
 // ---------------------------------------------------------------------------
@@ -120,48 +119,89 @@ function hasAnyPhrase(cat, phrases) {
 
 // Insurance context words. Presence alone NEVER classifies — a qualifying
 // product word (life / group) is also required.
-const INSURANCE_WORDS = Object.freeze(['INSURANCE', 'VERZEKERING', 'VERZEKERINGEN']);
+const INSURANCE_WORDS = Object.freeze([
+  "INSURANCE",
+  "VERZEKERING",
+  "VERZEKERINGEN",
+]);
 
-const PENSION_WORDS = Object.freeze(['PENSION', 'PENSIOEN', 'PENSIOENSPAREN', 'RETIREMENT']);
-const PENSION_PHRASES = Object.freeze([['PENSION', 'SAVING'], ['PENSION', 'SAVINGS']]);
+const PENSION_WORDS = Object.freeze(["PENSION", "PENSIOEN"]);
+const SAVINGS_WORDS = Object.freeze(["SAVING", "SAVINGS", "SPAREN"]);
 
-const LIFE_WORDS = Object.freeze(['LIFE', 'LEVEN']);
+const LIFE_WORDS = Object.freeze(["LIFE", "LEVEN"]);
 // Compound Dutch word that is self-sufficient (product + insurance in one token).
-const LIFE_INSURANCE_WORDS = Object.freeze(['LEVENSVERZEKERING', 'LEVENSVERZEKERINGEN']);
+const LIFE_INSURANCE_WORDS = Object.freeze([
+  "LEVENSVERZEKERING",
+  "LEVENSVERZEKERINGEN",
+]);
 
-const GROUP_WORDS = Object.freeze(['GROUP', 'GROEP']);
-const GROUP_INSURANCE_WORDS = Object.freeze(['GROEPSVERZEKERING', 'GROEPSVERZEKERINGEN']);
+const GROUP_WORDS = Object.freeze(["GROUP", "GROEP"]);
+const GROUP_INSURANCE_WORDS = Object.freeze([
+  "GROEPSVERZEKERING",
+  "GROEPSVERZEKERINGEN",
+]);
 
 // Charity: unambiguous donation/charity wording only. Bare GIFT/GIFTS is NOT
 // here — "GIFTS:BIRTHDAY" is a present, not a donation. Dutch "GIFTEN" (the
 // fiscal term for charitable gifts) IS unambiguous and included.
 const CHARITY_WORDS = Object.freeze([
-  'DONATION', 'DONATIONS', 'DONATIE', 'DONATIES',
-  'CHARITY', 'CHARITIES', 'LIEFDADIGHEID',
-  'SCHENKING', 'SCHENKINGEN', 'GIFTEN',
+  "DONATION",
+  "DONATIONS",
+  "DONATIE",
+  "DONATIES",
+  "CHARITY",
+  "CHARITIES",
+  "LIEFDADIGHEID",
+  "GIFTEN",
 ]);
 const CHARITY_PHRASES = Object.freeze([
-  ['GOEDE', 'DOEL'], ['GOEDE', 'DOELEN'], ['CHARITABLE', 'GIFT'], ['CHARITABLE', 'GIFTS'],
+  ["GOEDE", "DOEL"],
+  ["GOEDE", "DOELEN"],
+  ["CHARITABLE", "GIFT"],
+  ["CHARITABLE", "GIFTS"],
 ]);
 
 const CHILDCARE_WORDS = Object.freeze([
-  'CHILDCARE', 'DAYCARE', 'KINDEROPVANG', 'CRECHE', 'KINDERDAGVERBLIJF',
+  "CHILDCARE",
+  "DAYCARE",
+  "KINDEROPVANG",
+  "CRECHE",
+  "KINDERDAGVERBLIJF",
 ]);
-const CHILDCARE_PHRASES = Object.freeze([['CHILD', 'CARE'], ['DAY', 'CARE']]);
+const CHILDCARE_PHRASES = Object.freeze([
+  ["CHILD", "CARE"],
+  ["DAY", "CARE"],
+]);
 
 // Bare MAINTENANCE deliberately excluded (home/car maintenance); only the
 // explicitly spousal phrase qualifies alongside the unambiguous words.
-const ALIMONY_WORDS = Object.freeze(['ALIMONY', 'ONDERHOUDSGELD', 'ALIMENTATIE']);
-const ALIMONY_PHRASES = Object.freeze([['SPOUSAL', 'MAINTENANCE']]);
+const ALIMONY_WORDS = Object.freeze([
+  "ALIMONY",
+  "ONDERHOUDSGELD",
+  "ALIMENTATIE",
+]);
+const ALIMONY_PHRASES = Object.freeze([["SPOUSAL", "MAINTENANCE"]]);
 
 // Bare UNION deliberately excluded (credit union, etc.).
-const UNION_WORDS = Object.freeze(['VAKBOND', 'VAKBONDSBIJDRAGE', 'VAKBONDSBIJDRAGEN']);
-const UNION_PHRASES = Object.freeze([['UNION', 'DUES'], ['TRADE', 'UNION']]);
+const UNION_WORDS = Object.freeze([
+  "VAKBOND",
+  "VAKBONDSBIJDRAGE",
+  "VAKBONDSBIJDRAGEN",
+]);
+const UNION_PHRASES = Object.freeze([
+  ["UNION", "DUES"],
+  ["TRADE", "UNION"],
+]);
 
-const MORTGAGE_WORDS = Object.freeze(['MORTGAGE', 'HYPOTHEEK']);
-const INTEREST_WORDS = Object.freeze(['INTEREST', 'RENTE', 'INTREST', 'INTRESTEN']);
+const MORTGAGE_WORDS = Object.freeze(["MORTGAGE", "HYPOTHEEK"]);
+const INTEREST_WORDS = Object.freeze([
+  "INTEREST",
+  "RENTE",
+  "INTREST",
+  "INTRESTEN",
+]);
 // Compound Dutch word that is self-sufficient.
-const MORTGAGE_INTEREST_WORDS = Object.freeze(['HYPOTHEEKRENTE']);
+const MORTGAGE_INTEREST_WORDS = Object.freeze(["HYPOTHEEKRENTE"]);
 
 // ---------------------------------------------------------------------------
 // Rules — evaluated in order, first match wins
@@ -172,7 +212,7 @@ const MORTGAGE_INTEREST_WORDS = Object.freeze(['HYPOTHEEKRENTE']);
  * general + detail concatenated) and returns a boolean.
  *
  * Ordering notes:
- *   - groupInsurance is checked BEFORE lifeInsurance so an employer-scheme
+ *   - groupInsurance is checked BEFORE pensionSavings and lifeInsurance so an employer-scheme
  *     name like "GROUP LIFE INSURANCE" lands in the more specific
  *     groupInsurance (2nd pillar), not lifeInsurance.
  *
@@ -180,47 +220,55 @@ const MORTGAGE_INTEREST_WORDS = Object.freeze(['HYPOTHEEKRENTE']);
  */
 const RULES = Object.freeze([
   {
-    // PENSION / PENSIOEN / PENSIOENSPAREN / RETIREMENT / "pension saving(s)"
-    type: 'pensionSavings',
-    test: (cat) => hasWord(cat.all, PENSION_WORDS) || hasAnyPhrase(cat, PENSION_PHRASES),
-  },
-  {
-    // GROEPSVERZEKERING, or insurance context + GROUP/GROEP.
-    type: 'groupInsurance',
+    // Generic group policies are ambiguous; require an explicit life/pension product.
+    type: "groupInsurance",
     test: (cat) =>
       hasWord(cat.all, GROUP_INSURANCE_WORDS) ||
-      (hasWord(cat.all, INSURANCE_WORDS) && hasWord(cat.all, GROUP_WORDS)),
+      (hasWord(cat.all, GROUP_WORDS) &&
+        (hasWord(cat.all, PENSION_WORDS) ||
+          (hasWord(cat.all, INSURANCE_WORDS) && hasWord(cat.all, LIFE_WORDS)))),
+  },
+  {
+    // Bare pension or retirement words can describe income or ordinary spending.
+    type: "pensionSavings",
+    test: (cat) =>
+      hasWord(cat.all, ["PENSIOENSPAREN"]) ||
+      (hasWord(cat.all, PENSION_WORDS) && hasWord(cat.all, SAVINGS_WORDS)),
   },
   {
     // LEVENSVERZEKERING, or insurance context + LIFE/LEVEN. Generic INSURANCE
     // or CAR/HOME/AUTO/WONING insurance has no life word → falls through to null.
-    type: 'lifeInsurance',
+    type: "lifeInsurance",
     test: (cat) =>
       hasWord(cat.all, LIFE_INSURANCE_WORDS) ||
       (hasWord(cat.all, INSURANCE_WORDS) && hasWord(cat.all, LIFE_WORDS)),
   },
   {
     // Donation/charity wording only; ambiguous bare "gift" leans null.
-    type: 'charitableDonations',
-    test: (cat) => hasWord(cat.all, CHARITY_WORDS) || hasAnyPhrase(cat, CHARITY_PHRASES),
+    type: "charitableDonations",
+    test: (cat) =>
+      hasWord(cat.all, CHARITY_WORDS) || hasAnyPhrase(cat, CHARITY_PHRASES),
   },
   {
-    type: 'childcare',
-    test: (cat) => hasWord(cat.all, CHILDCARE_WORDS) || hasAnyPhrase(cat, CHILDCARE_PHRASES),
+    type: "childcare",
+    test: (cat) =>
+      hasWord(cat.all, CHILDCARE_WORDS) || hasAnyPhrase(cat, CHILDCARE_PHRASES),
   },
   {
-    type: 'alimony',
-    test: (cat) => hasWord(cat.all, ALIMONY_WORDS) || hasAnyPhrase(cat, ALIMONY_PHRASES),
+    type: "alimony",
+    test: (cat) =>
+      hasWord(cat.all, ALIMONY_WORDS) || hasAnyPhrase(cat, ALIMONY_PHRASES),
   },
   {
-    type: 'unionDues',
-    test: (cat) => hasWord(cat.all, UNION_WORDS) || hasAnyPhrase(cat, UNION_PHRASES),
+    type: "unionDues",
+    test: (cat) =>
+      hasWord(cat.all, UNION_WORDS) || hasAnyPhrase(cat, UNION_PHRASES),
   },
   {
     // HYPOTHEEKRENTE, or mortgage word + interest word (possibly split across
     // general/detail, e.g. MORTGAGE:INTEREST or HYPOTHEEK:RENTE). Plain
     // MORTGAGE without an interest word is capital repayment → conservative null.
-    type: 'mortgageInterest',
+    type: "mortgageInterest",
     test: (cat) =>
       hasWord(cat.all, MORTGAGE_INTEREST_WORDS) ||
       (hasWord(cat.all, MORTGAGE_WORDS) && hasWord(cat.all, INTEREST_WORDS)),

@@ -43,7 +43,8 @@ export function DeductionCandidatesCard() {
     }));
     const { t } = useLanguage();
     const fmt = useCurrencyFormatter();
-    const { data, isLoading } = useDeductionCandidates(profile.taxYear);
+    const { data, isLoading, isError, isFetching, refetch } =
+        useDeductionCandidates(profile.taxYear);
     const { confirm, ConfirmDialog } = useConfirmDialog();
 
     const [dismissed, setDismissed] = useState(loadDismissedCandidates);
@@ -61,8 +62,30 @@ export function DeductionCandidatesCard() {
             !isCandidateDismissed(dismissed, year, group.deductionType),
     );
 
-    // No empty card: loading, outage (fail-soft empty response), or everything
-    // dismissed/inapplicable all render as nothing (RecurringDetectionPanel pattern).
+    if (isError) {
+        return (
+            <Card>
+                <CardHeader>
+                    <CardTitle>{t("tax.deductionCandidates.title")}</CardTitle>
+                </CardHeader>
+                <CardContent className="flex items-center justify-between gap-4">
+                    <p role="alert" className="text-sm text-muted-foreground">
+                        {t("tax.deductionCandidates.unavailable")}
+                    </p>
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={isFetching}
+                        onClick={() => void refetch()}
+                    >
+                        {t("common.retry")}
+                    </Button>
+                </CardContent>
+            </Card>
+        );
+    }
+
+    // A successful empty result or entirely dismissed/inapplicable groups need no card.
     if (isLoading || groups.length === 0) return null;
     const currency = data?.currency;
 
