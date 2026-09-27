@@ -11,6 +11,74 @@ import AIChatPage from "@/pages/AIChatPage";
 const API_BASE = "http://localhost:3002";
 
 describe("AIChatPage (integration)", () => {
+    it("shows one question workflow at a time and preserves investigation drafts", async () => {
+        const user = userEvent.setup();
+        renderWithApp(<AIChatPage />);
+        expect(
+            await screen.findByRole("tab", { name: "Chat", selected: true }),
+        ).toBeInTheDocument();
+        expect(
+            screen.queryByRole("textbox", {
+                name: /ask a financial or research question/i,
+            }),
+        ).not.toBeInTheDocument();
+        await user.click(screen.getByRole("tab", { name: "Investigation" }));
+        const question = screen.getByRole("textbox", {
+            name: /ask a financial or research question/i,
+        });
+        await user.type(question, "Compare my spending");
+        expect(
+            screen.queryByRole("textbox", { name: /ask about your spending/i }),
+        ).not.toBeInTheDocument();
+        await user.click(screen.getByRole("tab", { name: "Chat" }));
+        await user.click(screen.getByRole("tab", { name: "Investigation" }));
+        expect(
+            screen.getByRole("textbox", {
+                name: /ask a financial or research question/i,
+            }),
+        ).toHaveValue("Compare my spending");
+    });
+
+    it("restores the investigation mode from its URL and supports keyboard switching", async () => {
+        const user = userEvent.setup();
+        renderWithApp(<AIChatPage />, {
+            initialEntries: ["/ai-chat?mode=investigation"],
+        });
+        const tab = screen.getByRole("tab", {
+            name: "Investigation",
+            selected: true,
+        });
+        tab.focus();
+        await user.keyboard("{ArrowLeft}");
+        expect(
+            screen.getByRole("tab", { name: "Chat", selected: true }),
+        ).toHaveFocus();
+        expect(screen.getByRole("tabpanel", { name: "Chat" })).toBeVisible();
+    });
+
+    it("preserves an unsent chat draft across investigation mode", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/ai/status`, () =>
+                ok({
+                    ok: true,
+                    baseUrl: "http://localhost:11434",
+                    defaultModel: "llama3",
+                    enabled: true,
+                }),
+            ),
+        );
+        const user = userEvent.setup();
+        renderWithApp(<AIChatPage />);
+        const composer = await screen.findByPlaceholderText(
+            /ask about your spending/i,
+        );
+        await waitFor(() => expect(composer).not.toBeDisabled());
+        await user.type(composer, "How did spending change?");
+        await user.click(screen.getByRole("tab", { name: "Investigation" }));
+        await user.click(screen.getByRole("tab", { name: "Chat" }));
+        expect(composer).toHaveValue("How did spending change?");
+    });
+
     it("renders page heading", async () => {
         renderWithApp(<AIChatPage />);
         expect(

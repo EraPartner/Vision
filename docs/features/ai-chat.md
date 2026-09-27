@@ -2,9 +2,9 @@
 title: Feature - AI Chat
 type: feature
 status: active
-date: 2026-09-26
-updated: 2026-09-26
-last_modified: 2026-09-26
+date: 2026-09-27
+updated: 2026-09-27
+last_modified: 2026-09-27
 tags:
   [
     feature,
@@ -94,6 +94,17 @@ related_code:
 - The OpenAI route offers a server-approved API model picker. Each model has its own configured
   prices, and the selected identifier is visible in the payload preview and consent digest.
 - Durable partial jobs that resume without repeating completed tool steps.
+
+## Choosing a workflow
+
+The page shows one workflow at a time through **Chat** and **Investigation** tabs. Chat is the
+default; `?mode=investigation` restores the investigation view. The conversation selection remains
+in the separate `c` query parameter. The conversation rail and its mobile drawer button appear
+only in Chat. A shared Ollama status banner remains above both modes.
+
+Both panels stay mounted while the inactive panel is hidden. Switching modes therefore preserves
+the chat composer draft, investigation inputs, and the investigation panel's current job state.
+Each tab has a short description of its purpose; the two question forms are not shown together.
 
 ## Investigation controls
 
@@ -225,7 +236,7 @@ Shared contract
 
 | Component                     | Type                  | Description                                                                                                                                                                                                                                                                                                                              |
 | ----------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `AIChatPage`                  | Frontend Page         | Page shell with a display-scale conversation heading; hosts conversation list, message stream, composer; manages URL state (`?c=<id>`) and auto-selects active stream on mount                                                                                                                                                           |
+| `AIChatPage`                  | Frontend Page         | Page shell with a display-scale conversation heading; hosts conversation list, message stream, composer; manages conversation (`?c=<id>`) and mode (`?mode=investigation`) URL state; retains both mode panels while hiding the inactive one, and auto-selects active stream on mount                                                                                                                                                           |
 | `ChatConversationList`        | Frontend Component    | List conversations; on-hover action menu; shows pulsing indicator for active streams via `useStreamingConversationIds()`                                                                                                                                                                                                                 |
 | `ChatMessageList`             | Frontend Component    | Renders ordered messages; shows thinking indicator when streaming w/no content yet; retains and labels stopped/interrupted/timed-out drafts with Retry; handles autoscroll — the view follows the stream only while it is pinned to the bottom, so scrolling up mid-answer is not overridden; re-pins on conversation switch and on send |
 | `ChatBubble`                  | Frontend Component    | User vs assistant styling                                                                                                                                                                                                                                                                                                                |
@@ -329,7 +340,7 @@ Tools are declared with JSON Schema params. Backend validates args before dispat
 
 ### Screens
 
-1. **AI Chat Main View** — split layout: conversation list (left), active conversation message stream + composer (center/right).
+1. **AI workspace** — Chat and Investigation tabs with a shared Ollama status banner. Chat shows the conversation list, message stream, and composer; Investigation uses the full content area without the conversation rail.
 2. **Empty State** — shown when no conversation is selected; prompts user to start a new chat with suggested queries.
 3. **Settings — AI Chat Section** — Ollama URL input + default model dropdown + health probe.
 

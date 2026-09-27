@@ -27,9 +27,12 @@ import type { ChatMessage } from "@/types/aiChat";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { PAGE_ICONS } from "@/lib/pageIcons";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useTabParam } from "@/hooks/useTabParam";
 import { AIInvestigationPanel } from "@/features/ai-chat/AIInvestigationPanel";
 
 const SELECTED_PARAM = "c";
+const AI_MODES = ["chat", "investigation"] as const;
 
 export default function AIChatPage() {
     const { t } = useLanguage();
@@ -37,6 +40,7 @@ export default function AIChatPage() {
     const { data: status, isLoading: statusLoading } = useOllamaStatus();
     const [searchParams, setSearchParams] = useSearchParams();
     const selectedId = searchParams.get(SELECTED_PARAM);
+    const [mode, setMode] = useTabParam(AI_MODES, "chat", "mode");
     const [modelOverride, setModelOverride] = useState<string | null>(null);
     const [useTools, setUseTools] = useState<boolean>(true);
     // Mobile: the conversation rail is hidden and opened as a drawer instead.
@@ -189,7 +193,12 @@ export default function AIChatPage() {
         <div className="flex h-[calc(100vh-8rem)] gap-4 p-4">
             {/* Desktop: persistent rail. Mobile (<md): hidden — opened via the
                 header menu button as a left drawer below. */}
-            <aside className="hidden w-72 shrink-0 rounded-2xl glass-regular md:block">
+            <aside
+                className={cn(
+                    "hidden w-72 shrink-0 rounded-2xl glass-regular",
+                    mode === "chat" && "md:block",
+                )}
+            >
                 <ChatConversationList
                     selectedId={selectedId}
                     onSelect={setSelectedId}
@@ -204,7 +213,10 @@ export default function AIChatPage() {
                                 <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="md:hidden"
+                                    className={cn(
+                                        "md:hidden",
+                                        mode !== "chat" && "hidden",
+                                    )}
                                     aria-label={t("aiChat.conversations")}
                                 >
                                     <Menu className="h-5 w-5" />
@@ -227,7 +239,8 @@ export default function AIChatPage() {
                         </Sheet>
                         <div className="min-w-0">
                             <h1 className="truncate text-lg font-semibold tracking-tight">
-                                {detail?.conversation.title ||
+                                {(mode === "chat" &&
+                                    detail?.conversation.title) ||
                                     t("aiChat.title")}
                             </h1>
                             {(statusLoading || status?.ok) && (
@@ -246,30 +259,68 @@ export default function AIChatPage() {
                 </header>
 
                 <OllamaStatusBanner status={status} isLoading={statusLoading} />
-                <AIInvestigationPanel />
 
-                <ChatMessageList
-                    conversationId={selectedId}
-                    messages={messages}
-                    streamingUserMessage={streamingUserMessage}
-                    streamingToolMessages={streamingToolMessages}
-                    assistantDraft={assistantDraft}
-                    isStreaming={isStreaming}
-                    streamStatus={streamStatus}
-                    onRetry={lastRequest ? handleRetry : undefined}
-                    emptyState={emptyState}
-                />
+                <Tabs
+                    value={mode}
+                    onValueChange={setMode}
+                    className="flex min-h-0 flex-1 flex-col"
+                >
+                    <div className="shrink-0 border-b border-border/50 px-5 py-3">
+                        <TabsList aria-label={t("aiChat.mode.label")}>
+                            <TabsTrigger value="chat">
+                                {t("aiChat.mode.chat")}
+                            </TabsTrigger>
+                            <TabsTrigger value="investigation">
+                                {t("aiChat.mode.investigation")}
+                            </TabsTrigger>
+                        </TabsList>
+                        <p className="mt-2 text-sm text-muted-foreground">
+                            {t(
+                                mode === "chat"
+                                    ? "aiChat.mode.chatHint"
+                                    : "aiChat.mode.investigationHint",
+                            )}
+                        </p>
+                    </div>
+                    <TabsContent
+                        value="investigation"
+                        forceMount
+                        hidden={mode !== "investigation"}
+                        className="m-0 min-h-0 flex-1 overflow-y-auto data-[state=inactive]:hidden"
+                    >
+                        <AIInvestigationPanel />
+                    </TabsContent>
+                    <TabsContent
+                        value="chat"
+                        forceMount
+                        hidden={mode !== "chat"}
+                        className="m-0 flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden"
+                    >
+                        <ChatMessageList
+                            isVisible={mode === "chat"}
+                            conversationId={selectedId}
+                            messages={messages}
+                            streamingUserMessage={streamingUserMessage}
+                            streamingToolMessages={streamingToolMessages}
+                            assistantDraft={assistantDraft}
+                            isStreaming={isStreaming}
+                            streamStatus={streamStatus}
+                            onRetry={lastRequest ? handleRetry : undefined}
+                            emptyState={emptyState}
+                        />
 
-                <ChatComposer
-                    onSend={handleSend}
-                    onCancel={cancel}
-                    isStreaming={isStreaming}
-                    disabled={composerDisabled}
-                    model={activeModel}
-                    onModelChange={setModelOverride}
-                    useTools={useTools}
-                    onUseToolsChange={setUseTools}
-                />
+                        <ChatComposer
+                            onSend={handleSend}
+                            onCancel={cancel}
+                            isStreaming={isStreaming}
+                            disabled={composerDisabled}
+                            model={activeModel}
+                            onModelChange={setModelOverride}
+                            useTools={useTools}
+                            onUseToolsChange={setUseTools}
+                        />
+                    </TabsContent>
+                </Tabs>
             </main>
         </div>
     );

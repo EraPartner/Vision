@@ -215,6 +215,63 @@ describe("ChatMessageList draft rendering", () => {
 });
 
 describe("ChatMessageList auto-scroll", () => {
+    it.each([false, true])(
+        "restores a hidden transcript while respecting scrolled-up state (%s)",
+        (scrolledUp) => {
+            vi.spyOn(window, "requestAnimationFrame").mockImplementation(
+                (callback) => {
+                    callback(0);
+                    return 1;
+                },
+            );
+            vi.spyOn(window, "cancelAnimationFrame").mockImplementation(
+                () => {},
+            );
+            const scrollTo = vi.spyOn(Element.prototype, "scrollTo");
+            const transcript = (
+                isVisible: boolean,
+                messages = firstConversation,
+            ) => (
+                <LanguageProvider language="en" setLanguage={vi.fn()}>
+                    <ChatMessageList
+                        messages={messages}
+                        streamingUserMessage={null}
+                        streamingToolMessages={[]}
+                        assistantDraft=""
+                        isStreaming={false}
+                        conversationId="conversation-one"
+                        isVisible={isVisible}
+                    />
+                </LanguageProvider>
+            );
+            const view = render(transcript(scrolledUp));
+            const log = screen.getByRole("log");
+            setScrollableGeometry(log);
+            if (scrolledUp) scrollUpFromBottom(log);
+            view.rerender(transcript(false));
+            scrollTo.mockClear();
+
+            // Hidden panels have zero layout dimensions. Neither data loading nor
+            // a layout-driven scroll event should overwrite the user's pin state.
+            Object.defineProperty(log, "scrollHeight", {
+                configurable: true,
+                value: 0,
+            });
+            fireEvent.scroll(log);
+            view.rerender(transcript(false, secondConversation));
+            expect(scrollTo).not.toHaveBeenCalled();
+
+            setScrollableGeometry(log);
+            view.rerender(transcript(true, secondConversation));
+            if (scrolledUp) {
+                expect(scrollTo).not.toHaveBeenCalled();
+                expect(log.scrollTop).toBe(300);
+            } else {
+                expect(scrollTo).toHaveBeenCalledWith({ top: 1_200 });
+            }
+        },
+    );
+
     it("scrolls an equal-length replacement conversation to the bottom", () => {
         vi.spyOn(window, "requestAnimationFrame").mockImplementation(
             (callback) => {

@@ -13,6 +13,8 @@ interface ChatMessageListProps {
     streamingToolMessages: ChatMessage[];
     assistantDraft: string;
     isStreaming: boolean;
+    /** Whether the mounted transcript is currently displayed and can be measured. */
+    isVisible?: boolean;
     streamStatus?: StreamState["status"];
     onRetry?: () => void;
     emptyState?: React.ReactNode;
@@ -45,6 +47,7 @@ export function ChatMessageList({
     streamingToolMessages,
     assistantDraft,
     isStreaming,
+    isVisible = true,
     streamStatus = isStreaming ? "streaming" : "idle",
     onRetry,
     emptyState,
@@ -108,7 +111,7 @@ export function ChatMessageList({
 
     useEffect(() => {
         const el = scrollRef.current;
-        if (!el) return;
+        if (!el || !isVisible) return;
         lastScrollTopRef.current = el.scrollTop;
         const onScroll = () => {
             const previousTop = lastScrollTopRef.current;
@@ -134,7 +137,7 @@ export function ChatMessageList({
         };
         el.addEventListener("scroll", onScroll, { passive: true });
         return () => el.removeEventListener("scroll", onScroll);
-    }, []);
+    }, [isVisible]);
 
     // Re-pin on the two explicit "show me the newest message" intents, so the
     // guard below can only ever suppress the mid-stream yank it exists for:
@@ -155,7 +158,7 @@ export function ChatMessageList({
 
     useEffect(() => {
         const el = scrollRef.current;
-        if (!el) return;
+        if (!el || !isVisible) return;
         // Don't yank a reader who has scrolled up mid-stream back to the
         // bottom on every chunk.
         if (!isPinnedRef.current) return;
@@ -167,6 +170,7 @@ export function ChatMessageList({
         });
         return () => cancelAnimationFrame(raf);
     }, [
+        isVisible,
         combined.length,
         latestCombinedMessageId,
         assistantDraft,
