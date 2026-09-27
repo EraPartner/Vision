@@ -203,25 +203,10 @@ export interface DeductionCandidatesResponse {
 }
 
 /** Transaction-derived Belgian deduction candidates for the tax review card. */
-export async function getDeductionCandidates(
+export function getDeductionCandidates(
     year: number,
 ): Promise<DeductionCandidatesResponse> {
-    try {
-        return await apiRequest("/api/info/deduction-candidates?year=" + year);
-    } catch (err) {
-        // Fail-soft: deduction candidates are optional UI enrichment.
-        logger.warn(
-            "Deduction candidates unavailable; using empty result",
-            err,
-        );
-        return {
-            year,
-            from: `${year}-01-01`,
-            to: `${year}-12-31`,
-            currency: "EUR",
-            byDeductionType: [],
-        };
-    }
+    return apiRequest("/api/info/deduction-candidates?year=" + year);
 }
 
 export function getPortfolioPerformance(params?: {

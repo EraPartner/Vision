@@ -50,12 +50,14 @@ export default function WatchlistPage() {
     const { appSettings } = useAppSettings();
     const isOnline = useOnlineStatus();
     const [addDialogOpen, setAddDialogOpen] = useState(false);
-    const [selectedItem, setSelectedItem] = useState<WatchlistItem | null>(
+    const [selectedItemId, setSelectedItemId] = useState<number | null>(
         null,
     );
     const { confirm, ConfirmDialog } = useConfirmDialog();
 
     const { data, isLoading } = useWatchlist();
+    const selectedItem =
+        data?.items.find((item) => item.id === selectedItemId) ?? null;
 
     const symbols =
         data?.items
@@ -339,7 +341,7 @@ export default function WatchlistPage() {
                                             variant="ghost"
                                             size="sm"
                                             onClick={() =>
-                                                setSelectedItem(item)
+                                                setSelectedItemId(item.id)
                                             }
                                         >
                                             <LineChart className="mr-2 h-4 w-4" />
@@ -373,7 +375,7 @@ export default function WatchlistPage() {
             <WatchlistChartDialog
                 item={selectedItem}
                 open={!!selectedItem}
-                onOpenChange={(open) => !open && setSelectedItem(null)}
+                onOpenChange={(open) => !open && setSelectedItemId(null)}
             />
             <ConfirmDialog />
         </PageShell>

@@ -30,7 +30,7 @@ import {
   saveHistoricalRate,
   getUnindexedRatesToEurForDates,
   buildHistoricalRateIndex,
-  findNearestRateInIndex,
+  findRateOnOrBeforeInIndex,
   getRateToEurForDate,
   clearHistoricalCache,
 } from "./rateFetcher.js";
@@ -158,7 +158,7 @@ function clearHistoricalIndexCache() {
  * shared across call sites. Builds (or extends) the index for the union of
  * already-cached and newly-requested currencies so distinct currency sets don't
  * thrash the cache. A superset index is safe: per-currency lookups
- * (findNearestRateInIndex / findRateOnOrBeforeInIndex) are unaffected by extra
+ * (findRateOnOrBeforeInIndex) is unaffected by extra
  * currencies being present.
  *
  * @param {string[]} currencies
@@ -283,13 +283,13 @@ export async function warmCache() {
 
     // Supplementary first, then ECB overwrites any overlaps
     /** @type {Record<string, number>} */
-    const mergedRates = {
+    const freshRates = {
       ...(erarRates ?? {}),
       ...(ecbRates ?? {}),
     };
 
     const ecbCount = ecbRates ? Object.keys(ecbRates).length - 1 : 0;
-    const totalCount = Object.keys(mergedRates).length - 1;
+    const totalCount = Object.keys(freshRates).length - 1;
     // Supplementary = er-api currencies that survived the ECB-priority merge,
     // i.e. total minus ECB (not erarCount − ecbCount, which miscounted when
     // the two sources didn't fully overlap).
@@ -297,8 +297,18 @@ export async function warmCache() {
       `Merged exchange rates: ${ecbCount} from ECB + ${totalCount - ecbCount} supplementary = ${totalCount} total`,
     );
 
+    // Partial provider success must retain known rates for omitted currencies.
+    // Only provider quotes may be stamped with today's date in the database.
+    const storedRates = await loadFromDatabase();
+    const mergedRates = {
+      ...FALLBACK_RATES,
+      ...liveFallbackRates,
+      ...(storedRates ?? {}),
+      ...(memoryCache?.rates ?? {}),
+      ...freshRates,
+    };
     liveFallbackRates = mergedRates;
-    await saveToDatabase(mergedRates);
+    await saveToDatabase(freshRates);
     memoryCache = { rates: mergedRates, timestamp: Date.now() };
     // Fresh rates were written — drop the cached historical index so the 12h
     // refresh cycle is the primary invalidation hook for it.
@@ -364,7 +374,7 @@ export async function convertRowsToEur(
     }
 
     const historical = historicalIndex
-      ? findNearestRateInIndex(historicalIndex, code, rowDate)
+      ? findRateOnOrBeforeInIndex(historicalIndex, code, rowDate)
       : undefined;
     if (historical !== undefined) return { rate: historical, fellBack: false };
 
@@ -401,7 +411,12 @@ export async function convertRowsToEur(
         const rowCurrency = (row.currency || "EUR").toUpperCase().trim();
         if (rowCurrency === toCur) continue;
         for (const currency of [rowCurrency, toCur]) {
-          if (currency === "EUR" || historicalIndex.has(currency)) continue;
+          if (
+            currency === "EUR" ||
+            findRateOnOrBeforeInIndex(historicalIndex, currency, rowDate) !==
+              undefined
+          )
+            continue;
           if (!datesByUnindexedCurrency.has(currency))
             datesByUnindexedCurrency.set(currency, []);
           datesByUnindexedCurrency.get(currency).push(rowDate);
@@ -680,7 +695,7 @@ export async function backfillPortfolioHistoricalRates() {
     if (!currencyCode || !rateDate) continue;
 
     // getRateToEurForDate persists rates it sources from ECB (90d or full
-    // history). When it falls through to a nearest-stored rate no exact row
+    // history). When it falls through to a prior stored rate no exact row
     // appears — count those as unresolved rather than fabricating history.
     await getRateToEurForDate(currencyCode, rateDate, {
       saveFetchedHistoricalRate: true,

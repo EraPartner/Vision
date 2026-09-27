@@ -946,99 +946,49 @@ export default function ResearchDossiersPage() {
                                             })}
                                         </p>
                                     ))}
-                                <div className="grid gap-4 lg:grid-cols-3">
-                                    <fieldset className="max-h-56 space-y-2 overflow-auto rounded-lg border p-3">
-                                        <legend>
-                                            {t("dossiers.linkCategories")}
-                                        </legend>
-                                        {categories.isError && (
-                                            <p role="alert">
-                                                {t("dossiers.linksError")}
-                                            </p>
+                                <div className="grid items-start gap-3 lg:grid-cols-3">
+                                    <DossierLinkPicker
+                                        label={t("dossiers.linkCategories")}
+                                        items={(
+                                            categories.data?.items ?? []
+                                        ).map((item) => ({
+                                            id: item.id,
+                                            label: item.path.join(" / "),
+                                        }))}
+                                        selected={draft.links.categoryIds}
+                                        error={categories.isError}
+                                        onToggle={(id) =>
+                                            toggleLink("categoryIds", id)
+                                        }
+                                    />
+                                    <DossierLinkPicker
+                                        label={t("dossiers.linkInvestments")}
+                                        items={(
+                                            investments.data?.items ?? []
+                                        ).map((item) => ({
+                                            id: item.id,
+                                            label: item.name,
+                                        }))}
+                                        selected={draft.links.investmentIds}
+                                        error={investments.isError}
+                                        onToggle={(id) =>
+                                            toggleLink("investmentIds", id)
+                                        }
+                                    />
+                                    <DossierLinkPicker
+                                        label={t("dossiers.linkAnalyses")}
+                                        items={(analyses.data ?? []).map(
+                                            (item) => ({
+                                                id: item.id,
+                                                label: item.name,
+                                            }),
                                         )}
-                                        {categories.data?.items.map((item) => (
-                                            <label
-                                                key={item.id}
-                                                className="flex gap-2 text-sm"
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    checked={draft.links.categoryIds.includes(
-                                                        item.id,
-                                                    )}
-                                                    onChange={() =>
-                                                        toggleLink(
-                                                            "categoryIds",
-                                                            item.id,
-                                                        )
-                                                    }
-                                                />
-                                                <span>
-                                                    {item.path.join(" / ")}
-                                                </span>
-                                            </label>
-                                        ))}
-                                    </fieldset>
-                                    <fieldset className="max-h-56 space-y-2 overflow-auto rounded-lg border p-3">
-                                        <legend>
-                                            {t("dossiers.linkInvestments")}
-                                        </legend>
-                                        {investments.isError && (
-                                            <p role="alert">
-                                                {t("dossiers.linksError")}
-                                            </p>
-                                        )}
-                                        {investments.data?.items.map((item) => (
-                                            <label
-                                                key={item.id}
-                                                className="flex gap-2 text-sm"
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    checked={draft.links.investmentIds.includes(
-                                                        item.id,
-                                                    )}
-                                                    onChange={() =>
-                                                        toggleLink(
-                                                            "investmentIds",
-                                                            item.id,
-                                                        )
-                                                    }
-                                                />
-                                                <span>{item.name}</span>
-                                            </label>
-                                        ))}
-                                    </fieldset>
-                                    <fieldset className="max-h-56 space-y-2 overflow-auto rounded-lg border p-3">
-                                        <legend>
-                                            {t("dossiers.linkAnalyses")}
-                                        </legend>
-                                        {analyses.isError && (
-                                            <p role="alert">
-                                                {t("dossiers.linksError")}
-                                            </p>
-                                        )}
-                                        {analyses.data?.map((item) => (
-                                            <label
-                                                key={item.id}
-                                                className="flex gap-2 text-sm"
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    checked={draft.links.savedAnalysisIds.includes(
-                                                        item.id,
-                                                    )}
-                                                    onChange={() =>
-                                                        toggleLink(
-                                                            "savedAnalysisIds",
-                                                            item.id,
-                                                        )
-                                                    }
-                                                />
-                                                <span>{item.name}</span>
-                                            </label>
-                                        ))}
-                                    </fieldset>
+                                        selected={draft.links.savedAnalysisIds}
+                                        error={analyses.isError}
+                                        onToggle={(id) =>
+                                            toggleLink("savedAnalysisIds", id)
+                                        }
+                                    />
                                 </div>
                             </section>
                             {selectedId && (
@@ -1098,5 +1048,82 @@ export default function ResearchDossiersPage() {
                 </main>
             </div>
         </PageShell>
+    );
+}
+
+function DossierLinkPicker<T extends string | number>({
+    label,
+    items,
+    selected,
+    error,
+    onToggle,
+}: {
+    label: string;
+    items: Array<{ id: T; label: string }>;
+    selected: T[];
+    error: boolean;
+    onToggle: (id: T) => void;
+}) {
+    const { t } = useLanguage();
+    const [query, setQuery] = useState("");
+    const visibleItems = items.filter((item) =>
+        item.label
+            .toLocaleLowerCase()
+            .includes(query.trim().toLocaleLowerCase()),
+    );
+    return (
+        <div>
+            {error && (
+                <p role="alert" className="mb-2 text-sm text-destructive">
+                    {t("dossiers.linksError")}
+                </p>
+            )}
+            <details className="rounded-lg border p-3">
+                <summary className="cursor-pointer rounded-sm text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                    {label}
+                    <span className="ml-2 text-xs font-normal text-muted-foreground">
+                        {t("dossiers.linksSelected", {
+                            count: selected.length,
+                        })}
+                    </span>
+                </summary>
+                <div className="mt-3 space-y-2">
+                    {items.length > 8 && (
+                        <Input
+                            type="search"
+                            value={query}
+                            aria-label={t("dossiers.searchLinks", {
+                                type: label,
+                            })}
+                            placeholder={t("dossiers.searchLinks", {
+                                type: label,
+                            })}
+                            onChange={(event) => setQuery(event.target.value)}
+                        />
+                    )}
+                    <div className="max-h-56 space-y-1 overflow-auto">
+                        {visibleItems.map((item) => (
+                            <label
+                                key={item.id}
+                                className="flex min-h-8 cursor-pointer items-start gap-2 rounded px-1 py-1.5 text-sm hover:bg-muted/50"
+                            >
+                                <input
+                                    type="checkbox"
+                                    className="mt-0.5"
+                                    checked={selected.includes(item.id)}
+                                    onChange={() => onToggle(item.id)}
+                                />
+                                <span>{item.label}</span>
+                            </label>
+                        ))}
+                        {!error && visibleItems.length === 0 && (
+                            <p className="text-sm text-muted-foreground">
+                                {t("dossiers.noMatchingLinks")}
+                            </p>
+                        )}
+                    </div>
+                </div>
+            </details>
+        </div>
     );
 }

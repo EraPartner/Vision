@@ -312,7 +312,10 @@ async function _fetchBinanceKlines(binanceSymbol, startMs, endMs) {
       "https://data-api.binance.vision/api/v3/klines" +
       `?symbol=${encodeURIComponent(binanceSymbol)}` +
       `&interval=1d&startTime=${cursor}&endTime=${end}&limit=${BINANCE_PAGE_LIMIT}`;
-    const res = await fetch(url, { headers: { Accept: "application/json" } });
+    const res = await fetch(url, {
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(8_000),
+    });
     if (!res.ok) throw new UpstreamError(`Binance API error: ${res.status}`);
     const data = await res.json();
     if (!Array.isArray(data) || data.length === 0) return collected;
@@ -381,7 +384,7 @@ async function _persistAndResolve(
 /**
  * @param {{ id: number, price_provider?: string, price_provider_id?: string|null, asset_class?: string, currency?: string, symbol?: string }} investment
  * @param {{ fromMs?: number, toMs?: number, dbOnly?: boolean|string|number, force?: boolean }} [opts]
- *   force: bypass the endpoint-coverage freshness short-circuit and re-query the provider.
+ *   force: bypass DB endpoint coverage and the provider memory cache to re-query the provider.
  *   needsHistoryRefresh only inspects the series' first/last point vs the window bounds, so a
  *   sparse-but-endpoint-spanning series would otherwise never be re-fetched. The gap-fill /
  *   densify paths set force to repopulate interior gaps.
@@ -438,21 +441,26 @@ export async function fetchHistoricalPrices(
     const symbol = resolveYahooSymbol(investment);
     if (!symbol) return [];
 
-    const cacheKey = `yahoo-history:${symbol}`;
-    const cached = cacheGet(cacheKey);
+    const now = Date.now();
+    const startDay = _dayKey(from ?? now - 5 * 365 * BINANCE_DAY_MS);
+    const endDay = _dayKey(to ?? now);
+    const cacheKey = `yahoo-history:${symbol}:${startDay}:${endDay}`;
+    const cached = force ? undefined : cacheGet(cacheKey);
     let points = Array.isArray(cached?.points) ? cached.points : undefined;
 
     if (!points) {
       try {
         const yahooFinance = await getYahooClient();
         const chart = await yahooFinance.chart(symbol, {
-          period1: new Date(from || Date.now() - 5 * 365 * 24 * 60 * 60 * 1000),
+          period1: new Date(startDay * BINANCE_DAY_MS),
+          // Yahoo's end is exclusive; include the requested final calendar day.
+          period2: new Date((endDay + 1) * BINANCE_DAY_MS),
           interval: "1d",
           includePrePost: false,
         });
 
         points = normalizeHistoryPoints(
-          /** @type {any[]} */ ((chart?.quotes) || [])
+          /** @type {any[]} */ (chart?.quotes || [])
             .map((/** @type {any} */ q) => ({
               timestampMs: q?.date ? new Date(q.date).getTime() : Number.NaN,
               price: toNumber(q?.close),
@@ -492,7 +500,7 @@ export async function fetchHistoricalPrices(
       from !== undefined ? from : Date.now() - 365 * BINANCE_DAY_MS;
     const endMs = to !== undefined ? to : Date.now();
     const cacheKey = `binance-history:${symbol}:${_dayKey(startMs)}:${_dayKey(endMs)}`;
-    const cached = cacheGet(cacheKey);
+    const cached = force ? undefined : cacheGet(cacheKey);
     let points = Array.isArray(cached?.points) ? cached.points : undefined;
 
     if (!points) {
@@ -539,7 +547,7 @@ export async function fetchHistoricalPrices(
     }
 
     const cacheKey = `kinesis-history:${symbol}:${timeframe}`;
-    const cached = cacheGet(cacheKey);
+    const cached = force ? undefined : cacheGet(cacheKey);
     let points = Array.isArray(cached?.points) ? cached.points : undefined;
 
     if (!points) {
@@ -616,7 +624,7 @@ export async function fetchHistoricalPrices(
   if (!config.historyUrl) return [];
 
   const cacheKey = `custom-history:${investment.id}:${config.historyUrl}:${config.historyPath}:${config.timestampPath}:${config.pricePath}`;
-  const cached = cacheGet(cacheKey);
+  const cached = force ? undefined : cacheGet(cacheKey);
   let points = Array.isArray(cached?.points) ? cached.points : undefined;
 
   if (!points) {

@@ -123,6 +123,31 @@ describe("ChartBuilderPage oscillator state", () => {
 
     afterEach(() => vi.unstubAllGlobals());
 
+    it("names series controls and supports changing the axis from the keyboard", async () => {
+        const user = userEvent.setup();
+        renderPage();
+        expect(
+            screen.getByRole("combobox", { name: "Chart type: TEST" }),
+        ).toHaveTextContent("Line");
+        expect(
+            screen.getByRole("combobox", { name: "Data provider: TEST" }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("combobox", { name: "Oscillator" }),
+        ).toHaveTextContent("RSI");
+        const axis = screen.getByRole("combobox", { name: "Axis: TEST" });
+        axis.focus();
+        await user.keyboard(" ");
+        await user.keyboard("{End}{Enter}");
+        expect(axis).toHaveTextContent("Right axis");
+        await user.click(
+            screen.getByRole("button", { name: "Remove series: TEST" }),
+        );
+        expect(
+            screen.queryByRole("combobox", { name: "Axis: TEST" }),
+        ).not.toBeInTheDocument();
+    });
+
     it("announces one loading surface for the shared chart query", () => {
         queryState.loading = true;
         renderPage();

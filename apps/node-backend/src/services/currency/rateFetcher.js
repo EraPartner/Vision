@@ -39,7 +39,7 @@ export const CACHE_LIFETIME_MS = 24 * 60 * 60 * 1000; // 24 hours
 // Idle window after which the full-history cache (~6 MB parsed) is dropped so a
 // single old-date lookup doesn't pin it in memory for the process lifetime. The
 // timer is reset on every access, so an actively-used cache is retained.
- const HISTORICAL_FULL_CACHE_IDLE_MS = 60 * 60 * 1000; // 1 hour
+const HISTORICAL_FULL_CACHE_IDLE_MS = 60 * 60 * 1000; // 1 hour
 
 // { byDate: Map<YYYY-MM-DD, ratesMap>, timestamp }
 /** @type {{ byDate: RatesByDate, timestamp: number } | null} */
@@ -237,7 +237,7 @@ export async function fetchFromErApi() {
  *
  * @returns {Promise<RatesByDate>} empty map when the feed is unreachable
  */
- async function fetchHistoricalFromEcb90d() {
+async function fetchHistoricalFromEcb90d() {
   if (
     historicalEcb90dCache &&
     Date.now() - historicalEcb90dCache.timestamp < CACHE_LIFETIME_MS
@@ -431,11 +431,10 @@ export async function saveHistoricalRate(currencyCode, dateStr, rateToEur) {
 }
 
 /**
- * Resolve many previously-unindexed currency/date pairs from ECB feeds.
+ * Resolve currency/date pairs with no prior stored quote from ECB feeds.
  *
- * The caller has already proved that these currencies have no stored history,
- * so doing an exact and nearest database lookup for every date cannot produce
- * a result. Both ECB feeds are loaded at most once, all dates are resolved in
+ * The caller has already proved that these pairs have no stored quote on or
+ * before the date. Both ECB feeds are loaded at most once, all dates are resolved in
  * memory, and successful points are persisted with one set-based statement.
  *
  * @param {Map<string, string[]>} datesByCurrency normalized currency → YYYY-MM-DD dates
@@ -504,19 +503,19 @@ export async function getUnindexedRatesToEurForDates(
 }
 
 /**
- * Nearest stored rate for a currency at ANY distance from the date — the last
+ * Most recent stored rate on or before the date — the last
  * resort of {@link getRateToEurForDate}.
  *
  * @param {string} currencyCode
  * @param {string} dateStr 'YYYY-MM-DD'
  * @returns {Promise<number|undefined>} undefined when nothing is stored for the currency
  */
- async function getNearestRateFromDatabase(currencyCode, dateStr) {
+async function getPriorRateFromDatabase(currencyCode, dateStr) {
   const result = await query(
     `SELECT rate_to_eur
      FROM exchange_rates
-     WHERE currency_code = $1
-     ORDER BY ABS(rate_date - $2::date) ASC, rate_date DESC
+     WHERE currency_code = $1 AND rate_date <= $2::date
+     ORDER BY rate_date DESC
      LIMIT 1`,
     [currencyCode, dateStr],
   );
@@ -631,32 +630,7 @@ function searchRateIndex(index, currencyCode, dateStr, resolve) {
 }
 
 /**
- * Rate for a currency at the date, or the closest published date on EITHER
- * side when the exact day is absent.
- *
- * @param {HistoricalRateIndex} index
- * @param {string} currencyCode
- * @param {string} dateStr 'YYYY-MM-DD'
- * @returns {number|undefined}
- */
-export function findNearestRateInIndex(index, currencyCode, dateStr) {
-  return searchRateIndex(index, currencyCode, dateStr, (prev, next) => {
-    if (!prev) return next?.rate;
-    if (!next) return prev.rate;
-
-    const prevDist = Math.abs(
-      new Date(prev.date).getTime() - new Date(dateStr).getTime(),
-    );
-    const nextDist = Math.abs(
-      new Date(next.date).getTime() - new Date(dateStr).getTime(),
-    );
-    return prevDist <= nextDist ? prev.rate : next.rate;
-  });
-}
-
-/**
- * Like {@link findNearestRateInIndex} but strictly ON-or-BEFORE the date —
- * the standard FX convention (a Saturday uses Friday's close, never Monday's).
+ * Most recent rate strictly ON-or-BEFORE the date.
  * Returns undefined when no rate exists on or before the date.
  *
  * @param {HistoricalRateIndex} index
@@ -674,7 +648,7 @@ export function findRateOnOrBeforeInIndex(index, currencyCode, dateStr) {
 
 /**
  * Point lookup of a currency's rate on a specific day, walking the tiers:
- * exact stored row → 90-day ECB feed → full ECB history → nearest stored row.
+ * exact stored row → 90-day ECB feed → full ECB history → prior stored row.
  *
  * @param {string} currencyCode
  * @param {string|Date|null|undefined} dateValue
@@ -726,8 +700,12 @@ export async function getRateToEurForDate(
     return historicalRate;
   }
 
-  // Last resort (e.g. non-ECB currencies): nearest stored rate, any distance.
-  return getNearestRateFromDatabase(currencyCode, dateStr);
+  // Last resort (e.g. non-ECB currencies): last stored quote on or before the date.
+  return getPriorRateFromDatabase(currencyCode, dateStr);
 }
 
-export { HISTORICAL_FULL_CACHE_IDLE_MS as __HISTORICAL_FULL_CACHE_IDLE_MS, fetchHistoricalFromEcb90d as __fetchHistoricalFromEcb90d, getNearestRateFromDatabase as __getNearestRateFromDatabase };
+export {
+  HISTORICAL_FULL_CACHE_IDLE_MS as __HISTORICAL_FULL_CACHE_IDLE_MS,
+  fetchHistoricalFromEcb90d as __fetchHistoricalFromEcb90d,
+  getPriorRateFromDatabase as __getPriorRateFromDatabase,
+};

@@ -18,12 +18,13 @@ import {
   convertRowsToEur,
   convertToCurrency,
   warmCache,
+  FALLBACK_RATES,
   backfillPortfolioHistoricalRates,
   __clearHistoricalIndexCache as clearHistoricalIndexCache,
   getHistoricalRateIndex,
 } from "../src/services/currency/currencyConversionService.js";
 import { hasConversionRate } from "../src/lib/exchangeRates.js";
-import { query } from "../src/database/connection.js";
+import { query, withTransaction } from "../src/database/connection.js";
 import { logger } from "../src/config/logger.js";
 
 const originalFetch = global.fetch;
@@ -225,7 +226,7 @@ describe("Currency Conversion Service", () => {
     expect(row.amount_eur).toBeCloseTo(expectedEur, 6);
   });
 
-  it("should use nearest historical DB rate when exact date is missing", async () => {
+  it("uses an earlier historical rate even when a future rate is closer", async () => {
     query
       // getRates() initial load
       .mockResolvedValueOnce({
@@ -234,20 +235,66 @@ describe("Currency Conversion Service", () => {
           { currency_code: "EUR", rate_to_eur: 1.0 },
         ],
       })
-      // historical index has another day; the in-memory nearest lookup resolves it
+      // A closer future quote must never influence historical conversion.
       .mockResolvedValueOnce({
         rows: [
           { currency_code: "USD", rate_date: "2020-01-14", rate_to_eur: 0.8 },
+          { currency_code: "USD", rate_date: "2020-01-17", rate_to_eur: 0.7 },
         ],
       });
 
-    const rows = [{ amount: 100, currency: "USD", day: "2020-01-15" }];
+    const rows = [{ amount: 100, currency: "USD", day: "2020-01-16" }];
     const converted = await convertRowsToEur(rows, "EUR", {
       useHistoricalRatesByDate: true,
       dateField: "day",
     });
-    // With indexed historical prefetch and empty exact match, converter uses nearest DB rate.
     expect(converted[0].amount_eur).toBeCloseTo(80, 6);
+  });
+
+  it("prefetches history when the stored currency has only future rates", async () => {
+    query
+      .mockResolvedValueOnce({
+        rows: [{ currency_code: "USD", rate_to_eur: 0.9 }],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          { currency_code: "USD", rate_date: "2020-02-01", rate_to_eur: 0.7 },
+        ],
+      });
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () =>
+        '<Cube time="2020-01-14"><Cube currency="USD" rate="1.25"/></Cube>',
+    });
+    const [row] = await convertRowsToEur(
+      [{ amount: 100, currency: "USD", day: "2020-01-16" }],
+      "EUR",
+      { useHistoricalRatesByDate: true },
+    );
+    expect(row.amount_eur).toBeCloseTo(80, 6);
+    expect(row.used_fallback_rate).toBeUndefined();
+    expect(global.fetch).toHaveBeenCalled();
+  });
+
+  it("marks a current-rate fallback when all historical quotes are in the future", async () => {
+    query
+      .mockResolvedValueOnce({
+        rows: [{ currency_code: "USD", rate_to_eur: 0.9 }],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          { currency_code: "USD", rate_date: "2020-02-01", rate_to_eur: 0.7 },
+        ],
+      });
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 503 });
+    const [row] = await convertRowsToEur(
+      [{ amount: 100, currency: "USD", day: "2020-01-16" }],
+      "EUR",
+      { useHistoricalRatesByDate: true },
+    );
+    expect(row.amount_eur).toBeCloseTo(90, 6);
+    expect(row.used_fallback_rate).toBe(true);
+    expect(row.fallback_reason).toBe("historical_rate_missing");
   });
 
   it("should batch repeated historical misses without point DB lookups", async () => {
@@ -683,6 +730,44 @@ describe("Currency Conversion Service", () => {
   });
 
   // ── warmCache ─────────────────────────────────────────────
+  it.each(["ecb", "supplementary", "both"])(
+    "preserves unfetched currencies and persists only fresh quotes when %s succeeds",
+    async (provider) => {
+      query.mockResolvedValue({
+        rows: [{ currency_code: "AED", rate_to_eur: 0.3 }],
+      });
+      const client = { query: vi.fn().mockResolvedValue({ rows: [] }) };
+      withTransaction.mockImplementation(async (fn) => fn(client));
+      global.fetch = vi.fn().mockImplementation(async (url) =>
+        String(url).includes("ecb")
+          ? {
+              ok: provider !== "supplementary",
+              text: async () => '<Cube currency="USD" rate="2"/>',
+            }
+          : {
+              ok: provider !== "ecb",
+              json: async () => ({
+                result: "success",
+                rates: { USD: 4, GBP: 2 },
+              }),
+            },
+      );
+      await warmCache();
+      expect(await convertToCurrency(10, "AED", "EUR")).toBeCloseTo(3);
+      expect(await convertToCurrency(10, "USD", "EUR")).toBeCloseTo(
+        provider === "supplementary" ? 2.5 : 5,
+      );
+      expect(await convertToCurrency(10, "SAR", "EUR")).toBeCloseTo(
+        10 * FALLBACK_RATES.SAR,
+      );
+      const written = client.query.mock.calls
+        .filter(([sql]) => String(sql).includes("INSERT INTO exchange_rates"))
+        .map(([, params]) => params[0]);
+      expect(written.sort()).toEqual(
+        provider === "ecb" ? ["USD"] : ["GBP", "USD"],
+      );
+    },
+  );
   it("should warm cache without throwing", async () => {
     // Mock both upstream fetches so the test never reaches real ECB / open.er-api
     // endpoints. The unmocked variant flaked under CI coverage instrumentation

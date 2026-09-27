@@ -7,10 +7,7 @@ import {
     usePercentFormatter,
 } from "@/hooks/useCurrencyFormatter";
 import { formatCompactNumber } from "@/utils/formatCompactNumber";
-import {
-    formatDateTimeWithAppSettings,
-    formatDateWithAppSettings,
-} from "@/lib/dateUtils";
+import { formatDateTimeWithAppSettings } from "@/lib/dateUtils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -45,6 +42,7 @@ import { apiClient } from "@/lib/api";
 
 import { LOOKUP_RANGES as RANGES } from "@/lib/research/ranges";
 import { PageShell } from "@/components/shared/PageShell";
+import { formatMarketChartTick } from "@/features/research/marketChartTicks";
 import { useMarketLookupData } from "@/features/research/useMarketLookupData";
 
 const MARKET_TABS = ["fundamentals", "analyst", "news"] as const;
@@ -92,22 +90,6 @@ interface Quote {
     priceToBook?: number;
     analystConsensus: AnalystConsensus | null;
     recentAnalystActions: AnalystAction[];
-}
-
-function fmtDate(
-    ts: number,
-    range: string,
-    appDateFormat: string,
-    locale: string,
-) {
-    const d = new Date(ts);
-    if (range === "1d" || range === "5d") {
-        return d.toLocaleTimeString(locale, {
-            hour: "2-digit",
-            minute: "2-digit",
-        });
-    }
-    return formatDateWithAppSettings(d, appDateFormat);
 }
 
 export default function MarketLookupPage() {
@@ -506,10 +488,9 @@ export default function MarketLookupPage() {
                                         xIsDate
                                         height={320}
                                         xTickFormat={(v) =>
-                                            fmtDate(
+                                            formatMarketChartTick(
                                                 (v as Date).getTime(),
                                                 selectedRange.range,
-                                                appSettings.dateFormat,
                                                 locale,
                                             )
                                         }

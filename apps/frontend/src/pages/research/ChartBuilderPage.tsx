@@ -917,7 +917,10 @@ export default function ChartBuilderPage() {
                                         })
                                     }
                                 >
-                                    <SelectTrigger className="h-8 w-32">
+                                    <SelectTrigger
+                                        className="h-8 w-32"
+                                        aria-label={`${t("customChart.chartType")}: ${s.macro?.title ?? s.symbol}`}
+                                    >
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -945,7 +948,10 @@ export default function ChartBuilderPage() {
                                     })
                                 }
                             >
-                                <SelectTrigger className="h-8 w-28">
+                                <SelectTrigger
+                                    className="h-8 w-28"
+                                    aria-label={`${t("research.builder.axisLabel")}: ${s.macro?.title ?? s.symbol}${s.field === "volume" ? ` (${t("research.builder.volume")})` : ""}`}
+                                >
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -973,7 +979,10 @@ export default function ChartBuilderPage() {
                                         })
                                     }
                                 >
-                                    <SelectTrigger className="h-8 w-36">
+                                    <SelectTrigger
+                                        className="h-8 w-36"
+                                        aria-label={`${t("research.builder.providerLabel")}: ${s.symbol}${s.field === "volume" ? ` (${t("research.builder.volume")})` : ""}`}
+                                    >
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -997,7 +1006,7 @@ export default function ChartBuilderPage() {
                                 variant="ghost"
                                 className="ml-auto h-8 w-8"
                                 onClick={() => removeSeries(s.id)}
-                                aria-label={t("research.builder.removeSeries")}
+                                aria-label={`${t("research.builder.removeSeries")}: ${s.macro?.title ?? s.symbol}${s.field === "volume" ? ` (${t("research.builder.volume")})` : ""}`}
                             >
                                 <Trash2 className="h-4 w-4" />
                             </Button>
@@ -1110,9 +1119,7 @@ export default function ChartBuilderPage() {
                                     />
                                     <button
                                         onClick={() => removeIndicator(ind.id)}
-                                        aria-label={t(
-                                            "research.builder.removeIndicator",
-                                        )}
+                                        aria-label={`${t("research.builder.removeIndicator")}: ${ind.type.toUpperCase()} (${ind.period})`}
                                     >
                                         <X className="h-3 w-3 hover:text-destructive" />
                                     </button>
@@ -1195,7 +1202,12 @@ export default function ChartBuilderPage() {
                                     patch({ oscillator: v as Oscillator })
                                 }
                             >
-                                <SelectTrigger className="h-8 w-32">
+                                <SelectTrigger
+                                    className="h-8 w-32"
+                                    aria-label={t(
+                                        "research.builder.oscillator",
+                                    )}
+                                >
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>

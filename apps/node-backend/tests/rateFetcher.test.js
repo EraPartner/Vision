@@ -21,9 +21,9 @@ import {
   saveToDatabase,
   saveHistoricalRate,
   getUnindexedRatesToEurForDates,
-  __getNearestRateFromDatabase as getNearestRateFromDatabase,
+  __getPriorRateFromDatabase as getPriorRateFromDatabase,
   buildHistoricalRateIndex,
-  findNearestRateInIndex,
+  findRateOnOrBeforeInIndex,
   getRateToEurForDate,
 } from "../src/services/currency/rateFetcher.js";
 
@@ -350,20 +350,20 @@ describe("getUnindexedRatesToEurForDates", () => {
   });
 });
 
-describe("getNearestRateFromDatabase", () => {
+describe("getPriorRateFromDatabase", () => {
   it("returns undefined when no rows match", async () => {
     query.mockResolvedValueOnce({ rows: [] });
-    expect(
-      await getNearestRateFromDatabase("USD", "2025-04-01"),
-    ).toBeUndefined();
+    expect(await getPriorRateFromDatabase("USD", "2025-04-01")).toBeUndefined();
   });
 
-  it("returns the rate from the nearest stored row", async () => {
+  it("restricts the database fallback to quotes on or before the requested day", async () => {
     query.mockResolvedValueOnce({ rows: [{ rate_to_eur: "0.92" }] });
-    expect(await getNearestRateFromDatabase("USD", "2025-04-01")).toBeCloseTo(
+    expect(await getPriorRateFromDatabase("USD", "2025-04-01")).toBeCloseTo(
       0.92,
       4,
     );
+    expect(query.mock.calls[0][0]).toContain("rate_date <= $2::date");
+    expect(query.mock.calls[0][0]).toContain("ORDER BY rate_date DESC");
   });
 });
 
@@ -390,7 +390,7 @@ describe("buildHistoricalRateIndex", () => {
   });
 });
 
-describe("findNearestRateInIndex", () => {
+describe("findRateOnOrBeforeInIndex", () => {
   const idx = buildHistoricalRateIndex([
     { currency_code: "USD", rate_date: "2025-01-01", rate_to_eur: "1.0" },
     { currency_code: "USD", rate_date: "2025-04-01", rate_to_eur: "0.9" },
@@ -398,37 +398,34 @@ describe("findNearestRateInIndex", () => {
   ]);
 
   it("returns 1 for EUR", () => {
-    expect(findNearestRateInIndex(idx, "EUR", "2025-04-01")).toBe(1);
+    expect(findRateOnOrBeforeInIndex(idx, "EUR", "2025-04-01")).toBe(1);
   });
 
   it("returns undefined for unknown currency", () => {
-    expect(findNearestRateInIndex(idx, "JPY", "2025-04-01")).toBeUndefined();
+    expect(findRateOnOrBeforeInIndex(idx, "JPY", "2025-04-01")).toBeUndefined();
   });
 
   it("returns exact match when present", () => {
-    expect(findNearestRateInIndex(idx, "USD", "2025-04-01")).toBeCloseTo(
+    expect(findRateOnOrBeforeInIndex(idx, "USD", "2025-04-01")).toBeCloseTo(
       0.9,
       4,
     );
   });
 
-  it("returns the closer of two surrounding dates", () => {
-    expect(findNearestRateInIndex(idx, "USD", "2025-02-01")).toBeCloseTo(
-      1.0,
-      4,
-    ); // closer to Jan 1
-    expect(findNearestRateInIndex(idx, "USD", "2025-06-01")).toBeCloseTo(
-      0.9,
-      4,
-    ); // closer to Apr 1
-  });
-
-  it("returns boundary entry when date is outside the index range", () => {
-    expect(findNearestRateInIndex(idx, "USD", "2024-01-01")).toBeCloseTo(
+  it("returns the prior quote even when the future quote is closer", () => {
+    expect(findRateOnOrBeforeInIndex(idx, "USD", "2025-02-01")).toBeCloseTo(
       1.0,
       4,
     );
-    expect(findNearestRateInIndex(idx, "USD", "2030-01-01")).toBeCloseTo(
+    expect(findRateOnOrBeforeInIndex(idx, "USD", "2025-12-30")).toBeCloseTo(
+      0.9,
+      4,
+    );
+  });
+
+  it("rejects future-only quotes and accepts the last prior quote", () => {
+    expect(findRateOnOrBeforeInIndex(idx, "USD", "2024-01-01")).toBeUndefined();
+    expect(findRateOnOrBeforeInIndex(idx, "USD", "2030-01-01")).toBeCloseTo(
       0.95,
       4,
     );

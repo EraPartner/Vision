@@ -15,6 +15,7 @@ import { AppError } from '../middleware/errorHandler.js';
 import { createResearchCache } from './research/researchCache.js';
 import { getYahooClient } from './prices/yahooClient.js';
 import { toAppTz } from '../lib/timezone.js';
+import { forEachConcurrent } from '../lib/concurrency.js';
 
 // Per-symbol quote cache + in-flight coalescing. The Markets Overview polls the
 // quote route for the whole active group (tens of symbols) every 60s, which
@@ -24,6 +25,7 @@ import { toAppTz } from '../lib/timezone.js';
 // identical fetches (e.g. overlapping symbol sets) so a cold symbol is fetched
 // once, not N times.
 const QUOTE_CACHE_TTL_MS = 60_000;
+const QUOTE_FETCH_CONCURRENCY = 6;
 const quoteCache = createResearchCache();
 /** @type {Map<string, Promise<any|null>>} */
 const inFlightQuotes = new Map();
@@ -290,14 +292,27 @@ export async function searchSymbols(q) {
  * @returns {Promise<{ items: Array<object>, total: number }>}
  */
 export async function getQuotes(symbolList, basic) {
-  const quoteResults = await Promise.allSettled(
-    symbolList.map((sym) => getCachedQuote(sym, basic)),
+  /** @type {Map<string, object|null>} */
+  const quoteResults = new Map();
+  // A full lookup opens a quote + summary pair; reserve both slots so either
+  // mode stays within six upstream calls per batch.
+  const concurrency = basic ? QUOTE_FETCH_CONCURRENCY : QUOTE_FETCH_CONCURRENCY / 2;
+  // Resolve each symbol once, including failed duplicates, then restore the
+  // caller's order and duplicate entries in the response.
+  await forEachConcurrent(
+    [...new Set(symbolList)],
+    concurrency,
+    async (sym) => {
+      try {
+        quoteResults.set(sym, await getCachedQuote(sym, basic));
+      } catch {
+        quoteResults.set(sym, null);
+      }
+    },
   );
 
-  const items = quoteResults
-    .filter(/** @type {(r: PromiseSettledResult<any>) => r is PromiseFulfilledResult<any>} */
-      (r) => r.status === 'fulfilled' && r.value !== null && r.value !== undefined)
-    .map((r) => r.value);
+  const items = symbolList.map((sym) => quoteResults.get(sym))
+    .filter((quote) => quote !== null && quote !== undefined);
 
   return { items, total: items.length };
 }

@@ -18,6 +18,9 @@ import { madReturnStats, isRobustNeedle } from '../../lib/math.js';
 import { convertToCurrency } from '../currency/currencyConversionService.js';
 import { assertPublicHttpUrl } from '../../lib/urlSafety.js';
 import { getYahooClient } from './yahooClient.js';
+import { forEachConcurrent } from '../../lib/concurrency.js';
+
+const PROVIDER_FETCH_CONCURRENCY = 6;
 
 /**
  * @typedef {import('../../types/rows.js').InvestmentRow} InvestmentRow
@@ -553,7 +556,7 @@ export const PROVIDERS = {
     const unresolved = symbols.filter((symbol) => !resolved.has(symbol));
 
     if (unresolved.length) {
-      await Promise.all(unresolved.map(async (symbol) => {
+      await forEachConcurrent(unresolved, PROVIDER_FETCH_CONCURRENCY, async (symbol) => {
         if (prices[symbol]) return;
         try {
           const closePrice = await _fetchYahooLatestClose(symbol);
@@ -563,7 +566,7 @@ export const PROVIDERS = {
         } catch (err) {
           logger.warn(`Yahoo chart fallback failed for ${symbol}`, { error: err.message });
         }
-      }));
+      });
     }
 
     return prices;
@@ -574,12 +577,11 @@ export const PROVIDERS = {
    * @returns {Promise<Record<string, LivePriceQuote>>} keyed by investment id; `{ price }` only
    */
   async custom(investments) {
-    // Per-holding fetches run concurrently — each iteration self-catches, and
-    // serially one hung endpoint (10s timeout, up to 2 fetches per holding on
-    // the fallback path) stalled every holding behind it.
+    // Keep slow holdings independent without opening one socket per holding.
+    // Each worker retains its slot through body reads and history fallbacks.
     /** @type {Record<string, LivePriceQuote>} */
     const prices = {};
-    await Promise.all(investments.map(async (inv) => {
+    await forEachConcurrent(investments, PROVIDER_FETCH_CONCURRENCY, async (inv) => {
       const { latestUrl, latestPath } = _resolveCustomLatestConfig(inv);
       const historyConfig = resolveCustomHistoryConfig(inv);
 
@@ -615,7 +617,7 @@ export const PROVIDERS = {
       }
 
       if (isValidPrice(price)) prices[inv.id] = { price };
-    }));
+    });
     return prices;
   },
 
@@ -624,11 +626,10 @@ export const PROVIDERS = {
    * @returns {Promise<Record<string, LivePriceQuote>>} keyed by investment id
    */
   async kinesis(investments) {
-    // Same concurrency rationale as custom(): these ran one sequential fetch
-    // per holding with a 15s timeout — worst case ~75s for 5 holdings.
+    // Bound per-holding work while allowing other holdings past a slow endpoint.
     /** @type {Record<string, LivePriceQuote>} */
     const prices = {};
-    await Promise.all(investments.map(async (inv) => {
+    await forEachConcurrent(investments, PROVIDER_FETCH_CONCURRENCY, async (inv) => {
       const { symbol, timeframe, fromDate, needsUsdToEur } = resolveKinesisConfig(inv);
 
       if (!symbol) {
@@ -678,7 +679,7 @@ export const PROVIDERS = {
       } catch (err) {
         logger.warn(`Kinesis fetch failed for ${symbol}: ${err.message}`);
       }
-    }));
+    });
     return prices;
   },
 };
