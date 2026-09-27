@@ -1,5 +1,73 @@
-import { describe, expect, it } from "vitest";
-import { __validateAnalysisSql } from "../src/services/analysisExecutor.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import pg from "pg";
+import {
+  __validateAnalysisSql,
+  executeAnalysisSql,
+} from "../src/services/analysisExecutor.js";
+
+describe("analysis result dates", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("preserves calendar dates while retaining timestamp and numeric parsers", async () => {
+    const defaultDateParser = pg.types.getTypeParser(1082, "text");
+    const parserSpy = vi.spyOn(pg.types, "getTypeParser");
+    const release = vi.fn();
+    const fields = [
+      { name: "month", dataTypeID: 1082 },
+      { name: "recorded_at", dataTypeID: 1184 },
+      { name: "amount", dataTypeID: 1700 },
+    ];
+    const query = vi.fn(async (config) => {
+      if (typeof config === "string") return { rows: [{ pid: 123 }] };
+      const raw = ["2026-04-01", "2026-04-01 00:00:00+03", "123.45"];
+      return {
+        fields,
+        rows: [
+          Object.fromEntries(
+            fields.map((field, index) => [
+              field.name,
+              config.types.getTypeParser(field.dataTypeID, "text")(raw[index]),
+            ]),
+          ),
+        ],
+      };
+    });
+    vi.spyOn(pg.Pool.prototype, "connect").mockResolvedValue({
+      query,
+      release,
+    });
+
+    const result = await executeAnalysisSql({
+      requestId: "date-regression",
+      sql: "SELECT * FROM vision_analysis.transactions_v1",
+      datasetIds: ["transactions"],
+    });
+
+    expect(result.rows).toEqual([
+      {
+        month: "2026-04-01",
+        recorded_at: "2026-03-31T21:00:00.000Z",
+        amount: "123.45",
+      },
+    ]);
+    expect(result.columns.map((column) => column.type)).toEqual([
+      "date",
+      "datetime",
+      "decimal",
+    ]);
+    expect(parserSpy).not.toHaveBeenCalledWith(1082, "text");
+    expect(parserSpy).toHaveBeenCalledWith(1184, "text");
+    expect(parserSpy).toHaveBeenCalledWith(1700, "text");
+    const config = query.mock.calls.find(
+      ([value]) => typeof value === "object",
+    )[0];
+    expect(config.types.getTypeParser(1082, "binary")).toBe(
+      pg.types.getTypeParser(1082, "binary"),
+    );
+    expect(pg.types.getTypeParser(1082, "text")).toBe(defaultDateParser);
+    expect(release).toHaveBeenCalledWith(undefined);
+  });
+});
 
 describe("analysis SQL boundary", () => {
   it("accepts declared approved datasets, CTEs, joins, aggregates, and windows", () => {

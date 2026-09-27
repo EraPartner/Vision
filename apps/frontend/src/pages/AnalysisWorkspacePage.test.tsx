@@ -22,7 +22,12 @@ vi.mock("@/stores/hydration/LanguageHydration", async (importOriginal) => {
         useLanguage: () => ({
             language: "en" as const,
             setLanguage: vi.fn(),
-            t: (key: string) => en[key] ?? key,
+            t: (key: string, params: Record<string, string | number> = {}) =>
+                Object.entries(params).reduce(
+                    (text, [name, value]) =>
+                        text.replaceAll(`{${name}}`, String(value)),
+                    en[key] ?? key,
+                ),
         }),
     };
 });
@@ -113,6 +118,54 @@ describe("AnalysisWorkspacePage", () => {
         );
     });
 
+    it("labels visual filters and grouping without changing query identifiers", async () => {
+        const user = userEvent.setup();
+        renderPage();
+        await screen.findByText("Cash flows");
+        expect(screen.getAllByRole("checkbox", { name: "Month" })).toHaveLength(
+            2,
+        );
+        expect(
+            screen.getAllByRole("checkbox", { name: "Category" }),
+        ).toHaveLength(2);
+        const operator = screen.getByRole("combobox", {
+            name: "Filter 1: operator for Transfer",
+        });
+        expect(operator).toHaveValue("eq");
+        expect(operator).toHaveTextContent("Equals");
+        expect(operator).toHaveTextContent("Does not equal");
+        expect(
+            screen.getByRole("textbox", {
+                name: "Filter 1: value for Transfer",
+            }),
+        ).toHaveValue("false");
+        await user.selectOptions(operator, "neq");
+        await user.click(screen.getByRole("button", { name: "Run" }));
+        await waitFor(() =>
+            expect(apiClient.executeAnalysis).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    plan: expect.objectContaining({
+                        filters: expect.arrayContaining([
+                            expect.objectContaining({
+                                fieldId: "is_transfer",
+                                operator: "neq",
+                                value: false,
+                            }),
+                        ]),
+                    }),
+                }),
+            ),
+        );
+        await user.click(
+            screen.getByRole("button", { name: "Remove filter 1: Transfer" }),
+        );
+        expect(
+            screen.queryByRole("textbox", {
+                name: "Filter 1: value for Transfer",
+            }),
+        ).not.toBeInTheDocument();
+    });
+
     it("runs a visual plan, shows its SQL, and validates SQL parameters locally", async () => {
         const user = userEvent.setup();
         renderPage();
@@ -167,6 +220,56 @@ describe("AnalysisWorkspacePage", () => {
                         datasetId: "cash-flows",
                         fields: ["month", "category_general"],
                         measures: ["sum_spending"],
+                    }),
+                }),
+            ),
+        );
+    });
+
+    it("restores saved output ordering when reopening and running an analysis", async () => {
+        const user = userEvent.setup();
+        vi.mocked(apiClient.listSavedAnalyses).mockResolvedValue([
+            {
+                id: "sorted-analysis",
+                definitionId: "analysis:sorted",
+                name: "Newest months first",
+                workspace: "budgeting",
+                version: 1,
+                refreshMode: "live",
+                parameters: {},
+                charts: [],
+                sourceReferences: [],
+                refreshStatus: "never-run",
+                lastResult: null,
+                definition: {
+                    source: {
+                        kind: "visual-plan",
+                        datasetId: "cash-flows",
+                        select: [
+                            { id: "month", source: { kind: "field" } },
+                            { id: "sum_spending", source: { kind: "metric" } },
+                        ],
+                        groupBy: ["month"],
+                        orderBy: [{ outputId: "month", direction: "desc" }],
+                        filters: [],
+                        joins: [],
+                        limit: 500,
+                    },
+                },
+            },
+        ] as never);
+        vi.spyOn(apiClient, "listSavedAnalysisVersions").mockResolvedValue([]);
+        renderPage();
+        await user.click(
+            await screen.findByRole("button", { name: "Newest months first" }),
+        );
+        await user.click(screen.getByRole("button", { name: "Run" }));
+        await waitFor(() =>
+            expect(apiClient.executeAnalysis).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    mode: "visual",
+                    plan: expect.objectContaining({
+                        orderBy: [{ id: "month", direction: "desc" }],
                     }),
                 }),
             ),

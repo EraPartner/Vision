@@ -9,6 +9,13 @@ const DEFAULT_ROWS = 500;
 const MAX_RESULT_BYTES = 2 * 1024 * 1024;
 const MAX_SQL_BYTES = 100_000;
 const activeQueries = new Map();
+const resultTypes = {
+  getTypeParser(oid, format) {
+    // Calendar dates have no timezone; converting them to Date shifts day boundaries.
+    if (oid === 1082 && (!format || format === "text")) return (value) => value;
+    return pg.types.getTypeParser(oid, format);
+  },
+};
 
 const pool = new pg.Pool({
   connectionString: settings.database.analysisUrl,
@@ -250,11 +257,11 @@ export async function executeAnalysisSql({
       .pid;
     activeQueries.set(requestId, { pid });
     const wrapped = `SELECT * FROM (${checkedSql}) AS vision_analysis_result LIMIT $${values.length + 1} OFFSET $${values.length + 2}`;
-    const result = await client.query(wrapped, [
-      ...values,
-      pageLimit + 1,
-      pageOffset,
-    ]);
+    const result = await client.query({
+      text: wrapped,
+      values: [...values, pageLimit + 1, pageOffset],
+      types: resultTypes,
+    });
     const hasMore = result.rows.length > pageLimit;
     let rows = result.rows
       .slice(0, pageLimit)

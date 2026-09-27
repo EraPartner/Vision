@@ -385,103 +385,145 @@ test("native PostgreSQL bootstraps query-statistics observability", () => {
   ]);
 });
 
-test("managed PostgreSQL installs required extensions as cluster administrator", async () => {
-  const temp = await fs.promises.mkdtemp(
-    path.join(os.tmpdir(), "vision-pg-extension-bootstrap-"),
-  );
-  const calls = [];
-  try {
-    const { runtimeRoot } = await createBundledPostgresFixture(temp);
-    const runtimeId = "vision_extension_bootstrap";
-    const postgresData = path.join(
-      temp,
-      "user-data",
-      "native",
-      runtimeId,
-      "postgres",
-      "data",
+for (const executorExists of [false, true]) {
+  test(`managed PostgreSQL provisions analysis and extensions (executor exists: ${executorExists})`, async () => {
+    const temp = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), "vision-pg-extension-bootstrap-"),
     );
-    const runFile = async (executable, args) => {
-      calls.push({ executable: path.basename(executable), args: [...args] });
-      if (args[0] === "--version") {
-        return {
-          stdout: `${path.basename(executable)} (PostgreSQL) 18.6`,
-          stderr: "",
-        };
-      }
-      if (path.basename(executable) === "pg_isready") {
-        return { stdout: "accepting connections", stderr: "" };
-      }
-      const command = args[args.indexOf("--command") + 1] || "";
-      if (command.includes("SHOW server_version_num")) {
-        return {
-          stdout: `180006\nlocalhost\n${postgresData}\n`,
-          stderr: "",
-        };
-      }
-      if (
-        command.includes("SELECT 1 FROM pg_roles") ||
-        command.includes("SELECT 1 FROM pg_database")
-      ) {
-        return { stdout: "1\n", stderr: "" };
-      }
-      return { stdout: "", stderr: "" };
-    };
-    const runtime = createNativeRuntime({
-      userDataDir: path.join(temp, "user-data"),
-      repoRoot: path.resolve(__dirname, "..", "..", ".."),
-      runtimeRoot: path.resolve(__dirname, "..", "..", ".."),
-      postgresRuntimeRoot: runtimeRoot,
-      runtimeId,
-      bunPath: "/bin/echo",
-      alembicPath: "/bin/echo",
-      chromePath: "/bin/echo",
-      runFile,
-    });
-    await runtime.ensureLayout();
-    await runtime.discover();
-    await fs.promises.mkdir(postgresData, { recursive: true });
-    await fs.promises.writeFile(path.join(postgresData, "PG_VERSION"), "18\n");
-    await fs.promises.writeFile(
-      path.join(postgresData, "postgresql.conf"),
-      "# fixture\ninclude = 'vision.conf'\n",
-    );
-    await fs.promises.writeFile(
-      path.join(postgresData, "vision.conf"),
-      [
-        "listen_addresses = '127.0.0.1'",
-        "port = 54329",
-        "unix_socket_directories = ''",
-        "password_encryption = 'scram-sha-256'",
-        "shared_preload_libraries = 'pg_stat_statements'",
-        "logging_collector = off",
-        "",
-      ].join("\n"),
-    );
+    const calls = [];
+    const secretStatements = [];
+    try {
+      const { runtimeRoot } = await createBundledPostgresFixture(temp);
+      const runtimeId = "vision_extension_bootstrap";
+      const postgresData = path.join(
+        temp,
+        "user-data",
+        "native",
+        runtimeId,
+        "postgres",
+        "data",
+      );
+      const runFile = async (executable, args) => {
+        if (args.includes("--file")) {
+          secretStatements.push(
+            await fs.promises.readFile(
+              args[args.indexOf("--file") + 1],
+              "utf8",
+            ),
+          );
+        }
+        calls.push({ executable: path.basename(executable), args: [...args] });
+        if (args[0] === "--version") {
+          return {
+            stdout: `${path.basename(executable)} (PostgreSQL) 18.6`,
+            stderr: "",
+          };
+        }
+        if (path.basename(executable) === "pg_isready") {
+          return { stdout: "accepting connections", stderr: "" };
+        }
+        const command = args[args.indexOf("--command") + 1] || "";
+        if (command.includes("SHOW server_version_num")) {
+          return {
+            stdout: `180006\nlocalhost\n${postgresData}\n`,
+            stderr: "",
+          };
+        }
+        if (
+          command.includes("SELECT 1 FROM pg_roles") &&
+          command.includes("vision_analysis_executor")
+        ) {
+          return { stdout: executorExists ? "1\n" : "", stderr: "" };
+        }
+        if (
+          command.includes("SELECT 1 FROM pg_roles") ||
+          command.includes("SELECT 1 FROM pg_database")
+        ) {
+          return { stdout: "1\n", stderr: "" };
+        }
+        return { stdout: "", stderr: "" };
+      };
+      const runtime = createNativeRuntime({
+        userDataDir: path.join(temp, "user-data"),
+        repoRoot: path.resolve(__dirname, "..", "..", ".."),
+        runtimeRoot: path.resolve(__dirname, "..", "..", ".."),
+        postgresRuntimeRoot: runtimeRoot,
+        runtimeId,
+        bunPath: "/bin/echo",
+        alembicPath: "/bin/echo",
+        chromePath: "/bin/echo",
+        runFile,
+      });
+      await runtime.ensureLayout();
+      await runtime.discover();
+      await fs.promises.mkdir(postgresData, { recursive: true });
+      await fs.promises.writeFile(
+        path.join(postgresData, "PG_VERSION"),
+        "18\n",
+      );
+      await fs.promises.writeFile(
+        path.join(postgresData, "postgresql.conf"),
+        "# fixture\ninclude = 'vision.conf'\n",
+      );
+      await fs.promises.writeFile(
+        path.join(postgresData, "vision.conf"),
+        [
+          "listen_addresses = '127.0.0.1'",
+          "port = 54329",
+          "unix_socket_directories = ''",
+          "password_encryption = 'scram-sha-256'",
+          "shared_preload_libraries = 'pg_stat_statements'",
+          "logging_collector = off",
+          "",
+        ].join("\n"),
+      );
 
-    await runtime.bootstrapDatabase();
+      await runtime.bootstrapDatabase();
 
-    const extensionCall = calls.find(({ executable, args }) => {
-      const command = args[args.indexOf("--command") + 1] || "";
-      return executable === "psql" && command.includes("CREATE EXTENSION");
-    });
-    assert.ok(extensionCall);
-    assert.equal(
-      extensionCall.args[extensionCall.args.indexOf("-U") + 1],
-      `${runtimeId}_admin`,
-    );
-    assert.equal(
-      extensionCall.args[extensionCall.args.indexOf("-d") + 1],
-      runtimeId,
-    );
-    assert.match(
-      extensionCall.args[extensionCall.args.indexOf("--command") + 1],
-      /CREATE EXTENSION IF NOT EXISTS pg_stat_statements;/,
-    );
-  } finally {
-    await fs.promises.rm(temp, { recursive: true, force: true });
-  }
-});
+      const analysisSql = secretStatements.find((sql) =>
+        sql.includes("ALTER ROLE vision_analysis_executor"),
+      );
+      assert.ok(analysisSql);
+      assert.equal(
+        secretStatements.some((sql) =>
+          sql.includes("CREATE ROLE vision_analysis_executor"),
+        ),
+        !executorExists,
+      );
+      assert.match(
+        analysisSql,
+        /NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS/,
+      );
+      assert.match(analysisSql, /default_transaction_read_only = on/);
+      assert.match(analysisSql, /search_path = vision_analysis, pg_catalog/);
+      assert.ok(
+        calls.every(
+          ({ args }) => !args.some((arg) => arg.includes("PASSWORD")),
+        ),
+      );
+
+      const extensionCall = calls.find(({ executable, args }) => {
+        const command = args[args.indexOf("--command") + 1] || "";
+        return executable === "psql" && command.includes("CREATE EXTENSION");
+      });
+      assert.ok(extensionCall);
+      assert.equal(
+        extensionCall.args[extensionCall.args.indexOf("-U") + 1],
+        `${runtimeId}_admin`,
+      );
+      assert.equal(
+        extensionCall.args[extensionCall.args.indexOf("-d") + 1],
+        runtimeId,
+      );
+      assert.match(
+        extensionCall.args[extensionCall.args.indexOf("--command") + 1],
+        /CREATE EXTENSION IF NOT EXISTS pg_stat_statements;/,
+      );
+    } finally {
+      await fs.promises.rm(temp, { recursive: true, force: true });
+    }
+  });
+}
 
 test("managed PostgreSQL upgrades observability config for an existing cluster", async () => {
   const temp = await fs.promises.mkdtemp(
@@ -763,6 +805,31 @@ test("generated native environment is loopback-only and separates owner/applicat
   assert.notEqual(config.ownerPassword, config.appPassword);
   assert.notEqual(config.adminPassword, config.ownerPassword);
   assert.match(config.ownerPassword, /^[0-9a-f]{64}$/);
+});
+
+test("native analysis credentials follow the configured executor and reject foreign targets", () => {
+  const contents = nativeEnvContents(runtimeNames("vision_test"));
+  const config = databaseConfigFromEnv(contents);
+  assert.equal(config.analysisPassword, config.appPassword);
+  const custom =
+    "postgresql://vision_analysis_executor:custom%27password@127.0.0.1:54329/vision_test";
+  assert.equal(
+    databaseConfigFromEnv(`${contents}DATABASE_URL_ANALYSIS=${custom}\n`)
+      .analysisPassword,
+    "custom'password",
+  );
+  for (const invalid of [
+    custom.replace("vision_analysis_executor", "other"),
+    custom.replace("127.0.0.1", "other.invalid"),
+    custom.replace(":54329", ":54330"),
+    custom.replace("/vision_test", "/other"),
+  ]) {
+    assert.throws(
+      () =>
+        databaseConfigFromEnv(`${contents}DATABASE_URL_ANALYSIS=${invalid}\n`),
+      /fixed executor/,
+    );
+  }
 });
 
 test("restore ownership handoff is limited to runtime-managed materialized views", () => {

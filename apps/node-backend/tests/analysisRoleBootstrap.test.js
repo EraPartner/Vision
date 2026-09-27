@@ -59,6 +59,51 @@ describe("analysis role bootstrap", () => {
     );
   });
 
+  it("grants approved views to a safe native executor without role administration", async () => {
+    client.query
+      .mockResolvedValueOnce({ rows: [{ can_create: false }] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            rolsuper: false,
+            rolcreatedb: false,
+            rolcreaterole: false,
+            rolinherit: false,
+            rolreplication: false,
+            rolbypassrls: false,
+            rolcanlogin: true,
+          },
+        ],
+      })
+      .mockResolvedValue({ rows: [] });
+    const result = await ensureAnalysisRole({
+      databaseUrl: "postgres://app:secret@localhost/vision",
+      migrationsUrl: "postgres://owner:secret@localhost/vision",
+      analysisUrl: `postgres://${__ANALYSIS_ROLE}:secret@localhost/vision`,
+    });
+    expect(result).toEqual({ status: "exists" });
+    const statements = client.query.mock.calls.map(([sql]) => sql).join("\n");
+    expect(statements).not.toMatch(/ALTER ROLE|CREATE ROLE/);
+    expect(statements.match(/GRANT SELECT ON vision_analysis\./g)).toHaveLength(
+      6,
+    );
+  });
+
+  it("refuses to grant views to an elevated preprovisioned executor", async () => {
+    client.query
+      .mockResolvedValueOnce({ rows: [{ can_create: false }] })
+      .mockResolvedValueOnce({ rows: [{ rolsuper: true, rolcanlogin: true }] });
+    await expect(
+      ensureAnalysisRole({
+        databaseUrl: "postgres://app:secret@localhost/vision",
+        analysisUrl: `postgres://${__ANALYSIS_ROLE}:secret@localhost/vision`,
+      }),
+    ).resolves.toEqual({ status: "degraded", reason: "unsafe-executor-role" });
+    expect(
+      client.query.mock.calls.map(([sql]) => sql).join("\n"),
+    ).not.toContain("GRANT");
+  });
+
   it("fails closed when the configured login is not the fixed role", async () => {
     const log = { warn: vi.fn() };
     await expect(

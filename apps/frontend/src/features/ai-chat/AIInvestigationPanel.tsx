@@ -1,3 +1,4 @@
+import { InvestigationPrivacySummary } from "./InvestigationPrivacySummary";
 import { useEffect, useMemo, useState } from "react";
 import { apiClient } from "@/lib/api";
 import type {
@@ -310,8 +311,135 @@ export function AIInvestigationPanel() {
             <h2 id="ai-investigation-heading" className="text-sm font-semibold">
                 {t("aiResearch.title")}
             </h2>
+            <div className="mt-4 space-y-3">
+                <textarea
+                    aria-label={t("aiResearch.question")}
+                    className="min-h-28 w-full resize-y rounded-xl border bg-background p-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+                    value={question}
+                    onChange={(event) => {
+                        setQuestion(event.target.value);
+                        setPreview(null);
+                    }}
+                    placeholder={t("aiResearch.question")}
+                />
+                <div className="grid items-start gap-3 sm:grid-cols-3">
+                    <label className="space-y-1.5 text-xs font-medium text-muted-foreground">
+                        <span>{t("aiResearch.depth")}</span>
+                        <select
+                            aria-label={t("aiResearch.depth")}
+                            className="h-10 w-full min-w-0 rounded-md border bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+                            value={depth}
+                            onChange={(event) =>
+                                setDepthOverride(
+                                    event.target.value as "quick" | "detailed",
+                                )
+                            }
+                        >
+                            <option value="quick">
+                                {t("aiResearch.quick")}
+                            </option>
+                            <option value="detailed">
+                                {t("aiResearch.detailed")}
+                            </option>
+                        </select>
+                    </label>
+                    <label className="space-y-1.5 text-xs font-medium text-muted-foreground">
+                        <span>{t("aiResearch.researchMode")}</span>
+                        <select
+                            aria-label={t("aiResearch.researchMode")}
+                            className="h-10 w-full min-w-0 rounded-md border bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+                            value={researchMode}
+                            disabled={
+                                route === "openai-api" &&
+                                disclosureMode === "cloud-synthesis-selected"
+                            }
+                            onChange={(event) =>
+                                setResearchMode(
+                                    event.target.value as typeof researchMode,
+                                )
+                            }
+                        >
+                            <option value="local-only">
+                                {t("aiResearch.localOnly")}
+                            </option>
+                            <option value="public-providers">
+                                {t("aiResearch.publicProviders")}
+                            </option>
+                            <option value="public-web">
+                                {t("aiResearch.publicWeb")}
+                            </option>
+                        </select>
+                    </label>
+                    <label className="space-y-1.5 text-xs font-medium text-muted-foreground">
+                        <span>{t("aiResearch.route")}</span>
+                        <select
+                            aria-label={t("aiResearch.route")}
+                            className="h-10 w-full min-w-0 rounded-md border bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+                            value={route}
+                            onChange={(event) => {
+                                setRoute(event.target.value as typeof route);
+                                setPreview(null);
+                            }}
+                        >
+                            <option value="local">
+                                {t("aiResearch.localModel")}
+                            </option>
+                            <option
+                                value="openai-api"
+                                disabled={!openAiEnabled}
+                            >
+                                {t("aiResearch.openAi")}
+                            </option>
+                        </select>
+                    </label>
+                </div>
+            </div>
+            {researchMode === "public-web" && (
+                <div className="mt-2">
+                    <label
+                        className="text-xs font-medium"
+                        htmlFor="ai-public-web-query"
+                    >
+                        {t("aiResearch.publicWebQuery")}
+                    </label>
+                    <input
+                        id="ai-public-web-query"
+                        className="mt-1 w-full rounded-md border bg-background px-2 py-1 text-sm"
+                        value={publicWebQuery}
+                        onChange={(event) =>
+                            setPublicWebQuery(event.target.value)
+                        }
+                        placeholder={t("aiResearch.publicWebQueryPlaceholder")}
+                    />
+                    <p className="mt-1 text-xs text-muted-foreground">
+                        {t("aiResearch.publicWebQueryHelp")}
+                    </p>
+                </div>
+            )}
+            {researchMode === "public-providers" && (
+                <div className="mt-2">
+                    <label
+                        className="text-xs font-medium"
+                        htmlFor="ai-public-symbols"
+                    >
+                        {t("aiResearch.publicSymbols")}
+                    </label>
+                    <input
+                        id="ai-public-symbols"
+                        className="mt-1 w-full rounded-md border bg-background px-2 py-1 text-sm"
+                        value={publicSymbols}
+                        onChange={(event) =>
+                            setPublicSymbols(event.target.value)
+                        }
+                        placeholder={t("aiResearch.publicSymbolsPlaceholder")}
+                    />
+                    <p className="mt-1 text-xs text-muted-foreground">
+                        {t("aiResearch.publicSymbolsHelp")}
+                    </p>
+                </div>
+            )}
             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                <label className="cursor-pointer rounded-md border px-2 py-1 hover:bg-muted">
+                <label className="cursor-pointer rounded-md border px-3 py-2 hover:bg-muted focus-within:ring-2 focus-within:ring-ring/70">
                     {t("aiResearch.addDocument")}
                     <input
                         className="sr-only"
@@ -372,112 +500,6 @@ export function AIInvestigationPanel() {
                     </span>
                 ))}
             </div>
-            {researchMode === "public-web" && (
-                <div className="mt-2">
-                    <label
-                        className="text-xs font-medium"
-                        htmlFor="ai-public-web-query"
-                    >
-                        {t("aiResearch.publicWebQuery")}
-                    </label>
-                    <input
-                        id="ai-public-web-query"
-                        className="mt-1 w-full rounded-md border bg-background px-2 py-1 text-sm"
-                        value={publicWebQuery}
-                        onChange={(event) =>
-                            setPublicWebQuery(event.target.value)
-                        }
-                        placeholder={t("aiResearch.publicWebQueryPlaceholder")}
-                    />
-                    <p className="mt-1 text-xs text-muted-foreground">
-                        {t("aiResearch.publicWebQueryHelp")}
-                    </p>
-                </div>
-            )}
-            {researchMode === "public-providers" && (
-                <div className="mt-2">
-                    <label
-                        className="text-xs font-medium"
-                        htmlFor="ai-public-symbols"
-                    >
-                        {t("aiResearch.publicSymbols")}
-                    </label>
-                    <input
-                        id="ai-public-symbols"
-                        className="mt-1 w-full rounded-md border bg-background px-2 py-1 text-sm"
-                        value={publicSymbols}
-                        onChange={(event) =>
-                            setPublicSymbols(event.target.value)
-                        }
-                        placeholder={t("aiResearch.publicSymbolsPlaceholder")}
-                    />
-                    <p className="mt-1 text-xs text-muted-foreground">
-                        {t("aiResearch.publicSymbolsHelp")}
-                    </p>
-                </div>
-            )}
-            <div className="mt-2 grid gap-2 md:grid-cols-[1fr_auto_auto_auto]">
-                <textarea
-                    className="min-h-20 rounded-md border bg-background p-2 text-sm"
-                    value={question}
-                    onChange={(event) => {
-                        setQuestion(event.target.value);
-                        setPreview(null);
-                    }}
-                    placeholder={t("aiResearch.question")}
-                />
-                <select
-                    aria-label={t("aiResearch.depth")}
-                    className="rounded-md border bg-background px-2 text-sm"
-                    value={depth}
-                    onChange={(event) =>
-                        setDepthOverride(
-                            event.target.value as "quick" | "detailed",
-                        )
-                    }
-                >
-                    <option value="quick">{t("aiResearch.quick")}</option>
-                    <option value="detailed">{t("aiResearch.detailed")}</option>
-                </select>
-                <select
-                    aria-label={t("aiResearch.researchMode")}
-                    className="rounded-md border bg-background px-2 text-sm"
-                    value={researchMode}
-                    disabled={
-                        route === "openai-api" &&
-                        disclosureMode === "cloud-synthesis-selected"
-                    }
-                    onChange={(event) =>
-                        setResearchMode(
-                            event.target.value as typeof researchMode,
-                        )
-                    }
-                >
-                    <option value="local-only">
-                        {t("aiResearch.localOnly")}
-                    </option>
-                    <option value="public-providers">
-                        {t("aiResearch.publicProviders")}
-                    </option>
-                    <option value="public-web">
-                        {t("aiResearch.publicWeb")}
-                    </option>
-                </select>
-                <select
-                    aria-label={t("aiResearch.route")}
-                    className="rounded-md border bg-background px-2 text-sm"
-                    value={route}
-                    onChange={(event) => {
-                        setRoute(event.target.value as typeof route);
-                        setPreview(null);
-                    }}
-                >
-                    <option value="local">{t("aiResearch.localModel")}</option>
-                    <option value="openai-api" disabled={!openAiEnabled}>
-                        {t("aiResearch.openAi")}
-                    </option>
-                </select>
-            </div>
             <p className="mt-2 text-xs text-muted-foreground">
                 {t("aiResearch.effectivePreferences", {
                     currency: resolvedPreferences.currency,
@@ -486,26 +508,33 @@ export function AIInvestigationPanel() {
                         t("aiResearch.noBenchmark"),
                 })}
             </p>
-            <div className="mt-2 flex flex-wrap gap-2">
-                <label className="text-xs">
-                    {t("aiResearch.dateFrom")}
-                    <input
-                        type="date"
-                        className="ml-2 rounded-md border bg-background px-2 py-1"
-                        value={dateFrom}
-                        onChange={(event) => setDateFrom(event.target.value)}
-                    />
-                </label>
-                <label className="text-xs">
-                    {t("aiResearch.dateTo")}
-                    <input
-                        type="date"
-                        className="ml-2 rounded-md border bg-background px-2 py-1"
-                        value={dateTo}
-                        onChange={(event) => setDateTo(event.target.value)}
-                    />
-                </label>
-            </div>
+            <details className="mt-3 rounded-lg border px-3 py-2">
+                <summary className="cursor-pointer text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
+                    {t("aiResearch.dateRangeOptional")}
+                </summary>
+                <div className="mt-2 flex flex-wrap gap-2">
+                    <label className="text-xs">
+                        {t("aiResearch.dateFrom")}
+                        <input
+                            type="date"
+                            className="ml-2 rounded-md border bg-background px-2 py-1"
+                            value={dateFrom}
+                            onChange={(event) =>
+                                setDateFrom(event.target.value)
+                            }
+                        />
+                    </label>
+                    <label className="text-xs">
+                        {t("aiResearch.dateTo")}
+                        <input
+                            type="date"
+                            className="ml-2 rounded-md border bg-background px-2 py-1"
+                            value={dateTo}
+                            onChange={(event) => setDateTo(event.target.value)}
+                        />
+                    </label>
+                </div>
+            </details>
             {route === "openai-api" && (
                 <div className="mt-2 space-y-2">
                     <div>
@@ -628,8 +657,8 @@ export function AIInvestigationPanel() {
                     <p className="text-xs text-muted-foreground">
                         {t(
                             disclosureMode === "cloud-synthesis-selected"
-                                ? "aiResearch.cloudSynthesisWarning"
-                                : "aiResearch.cloudRetention",
+                                ? "aiResearch.summary.reviewEvidence"
+                                : "aiResearch.summary.reviewPayload",
                         )}
                     </p>
                     {aiResearchStatus?.openai.agentCloakPreflight?.enabled && (
@@ -669,38 +698,12 @@ export function AIInvestigationPanel() {
                     </pre>
                 </div>
             )}
-            <details className="mt-2 rounded-md border p-2 text-xs" open>
-                <summary className="cursor-pointer font-medium">
-                    {t("aiResearch.modeGuideTitle")}
-                </summary>
-                <div className="mt-2 grid gap-2 md:grid-cols-2">
-                    {[
-                        "aiResearch.modeLocalProfile",
-                        "aiResearch.modeCloudPublicProfile",
-                        "aiResearch.modeSelectedSummaryProfile",
-                        "aiResearch.modeCloudSynthesisProfile",
-                    ].map((key) => (
-                        <p key={key} className="rounded bg-muted p-2">
-                            {t(key)}
-                        </p>
-                    ))}
-                </div>
-                <h3 className="mt-3 font-medium">
-                    {t("aiResearch.researchProfilesTitle")}
-                </h3>
-                <ul className="mt-1 list-disc space-y-1 pl-5 text-muted-foreground">
-                    <li>{t("aiResearch.researchLocalProfile")}</li>
-                    <li>{t("aiResearch.researchProvidersProfile")}</li>
-                    <li>{t("aiResearch.researchWebProfile")}</li>
-                </ul>
-                <h3 className="mt-3 font-medium">
-                    {t("aiResearch.depthProfilesTitle")}
-                </h3>
-                <ul className="mt-1 list-disc space-y-1 pl-5 text-muted-foreground">
-                    <li>{t("aiResearch.quickProfile")}</li>
-                    <li>{t("aiResearch.detailedProfile")}</li>
-                </ul>
-            </details>
+            <InvestigationPrivacySummary
+                route={route}
+                disclosureMode={disclosureMode}
+                researchMode={researchMode}
+                depth={depth}
+            />
             <div className="mt-2 flex flex-wrap gap-2">
                 <Button
                     size="sm"
@@ -849,7 +852,7 @@ export function AIInvestigationPanel() {
             </div>
             {recordCount != null && (
                 <details className="mt-2 rounded-md border p-2 text-xs">
-                    <summary className="cursor-pointer font-medium">
+                    <summary className="cursor-pointer text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
                         {t("aiResearch.disclosureHistory")}
                     </summary>
                     <div className="mt-2 space-y-2">

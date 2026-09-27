@@ -25,6 +25,7 @@
  * @property {Record<string, any>} query
  * @property {any} body
  * @property {Record<string, string|string[]|undefined>} headers
+ * @property {string[]} [rawHeaders] Node wire headers, before duplicate-field normalization.
  * @property {string} [id] Request id stamped by middleware/requestId.js.
  * @property {string} method
  * @property {string} path

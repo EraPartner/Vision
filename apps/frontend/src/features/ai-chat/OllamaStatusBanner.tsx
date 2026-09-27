@@ -28,10 +28,10 @@ export function OllamaStatusBanner({ status, isLoading }: OllamaStatusBannerProp
     return (
         <div
             role="alert"
-            className="flex items-start gap-3 border-b border-warning/30 bg-warning/10 px-5 py-3"
+            className="flex flex-wrap items-start gap-3 border-b border-warning/30 bg-warning/10 px-5 py-3"
         >
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-48">
                 <p className="text-sm font-medium text-foreground">
                     {t('aiChat.banner.unreachable')}
                 </p>
@@ -50,7 +50,7 @@ export function OllamaStatusBanner({ status, isLoading }: OllamaStatusBannerProp
                     variant="outline"
                     size="sm"
                     onClick={handleRetry}
-                    className="h-7 border-warning/40 bg-transparent px-2 text-xs hover:bg-warning/20"
+                    className="h-8 border-warning/40 bg-transparent px-2 text-xs hover:bg-warning/20"
                 >
                     <RefreshCw className="mr-1 h-3 w-3" />
                     {t('aiChat.banner.retry')}
@@ -59,7 +59,7 @@ export function OllamaStatusBanner({ status, isLoading }: OllamaStatusBannerProp
                     href={OLLAMA_SETUP_URL}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex h-7 items-center gap-1 rounded-md border border-warning/40 px-2 text-xs text-foreground hover:bg-warning/20"
+                    className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 inline-flex h-8 items-center gap-1 rounded-md border border-warning/40 px-2 text-xs text-foreground hover:bg-warning/20"
                 >
                     {t('aiChat.banner.setup')}
                     <ExternalLink className="h-3 w-3" />

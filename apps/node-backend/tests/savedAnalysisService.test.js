@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   __buildDefinition as buildDefinition,
+  __runtimeRequest as runtimeRequest,
   __resolveFormulaModel,
   __finalizeSavedAnalysisResult,
 } from "../src/services/savedAnalysisService.js";
@@ -33,7 +34,7 @@ describe("saved analysis definitions", () => {
             measures: ["sum_spending"],
             filters: [],
             joins: [],
-            orderBy: [],
+            orderBy: [{ id: "month", direction: "desc" }],
             limit: 500,
           },
         },
@@ -41,6 +42,13 @@ describe("saved analysis definitions", () => {
       expect(definition.workspace).toBe(workspace);
       expect(definition.definitionVersion).toBe(2);
       expect(definition.source.generatedSql).toContain("SUM(spending_amount)");
+      expect(definition.source.orderBy).toEqual([
+        { outputId: "month", direction: "desc" },
+      ]);
+      expect(runtimeRequest({ definition, parameters: {} }).sql).toBe(
+        definition.source.generatedSql,
+      );
+      expect(definition.source.generatedSql).toMatch(/ORDER BY.*month.*DESC/);
     }
   });
 

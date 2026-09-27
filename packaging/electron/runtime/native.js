@@ -466,6 +466,21 @@ function databaseConfigFromEnv(contents) {
   ) {
     throw new Error("Native database URLs target different PostgreSQL ports");
   }
+  const analysisUrl = new URL(env.DATABASE_URL_ANALYSIS || env.DATABASE_URL);
+  if (!env.DATABASE_URL_ANALYSIS)
+    analysisUrl.username = "vision_analysis_executor";
+  if (
+    decodeURIComponent(analysisUrl.username) !== "vision_analysis_executor" ||
+    analysisUrl.hostname !== config.host ||
+    Number(analysisUrl.port || 5432) !== config.port ||
+    decodeURIComponent(analysisUrl.pathname.slice(1)) !== config.database ||
+    !analysisUrl.password
+  ) {
+    throw new Error(
+      "Native analysis URL must use the fixed executor on the native database",
+    );
+  }
+  config.analysisPassword = decodeURIComponent(analysisUrl.password);
   quoteHexSecret(config.appPassword);
   quoteHexSecret(config.ownerPassword);
   quoteHexSecret(config.adminPassword);
@@ -1651,6 +1666,25 @@ function createNativeRuntime(options) {
     await runSecretAdminSql(
       config,
       `ALTER ROLE ${quoteIdentifier(config.appRole)} WITH LOGIN PASSWORD ${quoteHexSecret(config.appPassword)} NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;`,
+    );
+
+    // Role administration stays in the desktop runtime; the migration owner
+    // only grants access to the approved views after migrations have finished.
+    const analysisRole = "vision_analysis_executor";
+    const analysisPassword = `E'${config.analysisPassword.replace(/\\/g, "\\\\").replace(/'/g, "''")}'`;
+    if (!(await roleExists(analysisRole))) {
+      await runSecretAdminSql(config, `CREATE ROLE ${analysisRole} NOLOGIN;`);
+    }
+    await runSecretAdminSql(
+      config,
+      [
+        `ALTER ROLE ${analysisRole} WITH LOGIN PASSWORD ${analysisPassword} NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;`,
+        `ALTER ROLE ${analysisRole} SET default_transaction_read_only = on;`,
+        `ALTER ROLE ${analysisRole} SET statement_timeout = '5000ms';`,
+        `ALTER ROLE ${analysisRole} SET lock_timeout = '1000ms';`,
+        `ALTER ROLE ${analysisRole} SET idle_in_transaction_session_timeout = '5000ms';`,
+        `ALTER ROLE ${analysisRole} SET search_path = vision_analysis, pg_catalog;`,
+      ].join("\n"),
     );
 
     const dbExists = await runAsClusterAdmin(

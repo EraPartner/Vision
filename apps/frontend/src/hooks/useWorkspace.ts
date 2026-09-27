@@ -1,5 +1,6 @@
 import { useCallback, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router";
+import { WORKSPACE_AGNOSTIC_URLS } from "@/lib/navigation";
 
 export type Workspace = "budgeting" | "portfolio" | "research";
 
@@ -26,8 +27,8 @@ function writeWorkspace(ws: Workspace) {
 
 /**
  * Router-backed hook that derives the active workspace and provides a
- * navigate-based setter. Admin routes (/admin/*) are workspace-agnostic —
- * they preserve whichever workspace was active before entering admin.
+ * navigate-based setter. Global and admin routes preserve whichever
+ * workspace was active before entering them.
  */
 export function useWorkspace() {
     const location = useLocation();
@@ -36,14 +37,14 @@ export function useWorkspace() {
     const path = location.pathname;
     const isPortfolio = path.startsWith("/portfolio");
     const isResearch = path.startsWith("/research");
-    // Workspace-agnostic top-level routes preserve whichever workspace was active
-    // (admin, the cross-workspace Accounts hub per ADR-088, and AI Chat — which
-    // renders above the workspace switcher and must not rewrite the stored
-    // workspace when opened from Portfolio/Research).
+    // Share global routes with the navigation registry so new global pages
+    // cannot silently reset the active workspace and its sidebar.
     const isAgnostic =
-        path.startsWith("/admin") ||
-        path.startsWith("/accounts") ||
-        path.startsWith("/ai-chat");
+        path === "/admin" ||
+        path.startsWith("/admin/") ||
+        [...WORKSPACE_AGNOSTIC_URLS].some(
+            (url) => path === url || path.startsWith(`${url}/`),
+        );
 
     let workspace: Workspace;
     if (isAgnostic) {
@@ -69,13 +70,12 @@ export function useWorkspace() {
                 ws === "budgeting" &&
                 (path.startsWith("/portfolio") ||
                     path.startsWith("/research") ||
-                    path.startsWith("/admin") ||
-                    path.startsWith("/accounts"))
+                    isAgnostic)
             ) {
                 navigate("/");
             }
         },
-        [navigate, path],
+        [navigate, path, isAgnostic],
     );
 
     return { workspace, setWorkspace };

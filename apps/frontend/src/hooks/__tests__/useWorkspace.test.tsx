@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { type ReactNode } from "react";
 import { renderHook, act } from "@testing-library/react";
-import { MemoryRouter } from "react-router";
+import { MemoryRouter, useLocation } from "react-router";
 import { useWorkspace } from "@/hooks/useWorkspace";
 
 function makeWrapper(path: string) {
@@ -50,6 +50,50 @@ describe("useWorkspace", () => {
         });
         expect(result.current.workspace).toBe("portfolio");
     });
+
+    it.each([
+        "/analysis",
+        "/analysis/monitors",
+        "/accounts",
+        "/ai-chat",
+        "/admin/settings",
+    ])(
+        "preserves the originating workspace on %s and can switch back to Budgeting",
+        (path) => {
+            sessionStorage.setItem("vision_workspace", "portfolio");
+            const { result } = renderHook(
+                () => ({ ...useWorkspace(), pathname: useLocation().pathname }),
+                {
+                    wrapper: makeWrapper(path),
+                },
+            );
+            expect(result.current.workspace).toBe("portfolio");
+            expect(sessionStorage.getItem("vision_workspace")).toBe(
+                "portfolio",
+            );
+            act(() => result.current.setWorkspace("budgeting"));
+            expect(result.current.workspace).toBe("budgeting");
+            expect(result.current.pathname).toBe("/");
+            expect(sessionStorage.getItem("vision_workspace")).toBe(
+                "budgeting",
+            );
+        },
+    );
+
+    it.each(["portfolio", "research"] as const)(
+        "navigates to the %s home when selected from Analysis",
+        (workspace) => {
+            const { result } = renderHook(
+                () => ({ ...useWorkspace(), pathname: useLocation().pathname }),
+                {
+                    wrapper: makeWrapper("/analysis"),
+                },
+            );
+            act(() => result.current.setWorkspace(workspace));
+            expect(result.current.workspace).toBe(workspace);
+            expect(result.current.pathname).toBe(`/${workspace}`);
+        },
+    );
 
     it("exposes a setWorkspace function", () => {
         const { result } = renderHook(() => useWorkspace(), {

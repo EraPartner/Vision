@@ -154,7 +154,10 @@ function buildDefinition({
           : { right: { kind: "literal", value: filter.value } }),
       })),
       groupBy: compiled.visualPlan.groups,
-      orderBy: compiled.visualPlan.orderBy ?? [],
+      orderBy: (compiled.visualPlan.orderBy ?? []).map(({ id, direction }) => ({
+        outputId: id,
+        direction,
+      })),
       limit: Math.min(
         Math.max(Number(compiled.visualPlan.limit) || 500, 1),
         1000,
@@ -521,7 +524,10 @@ function runtimeRequest(saved) {
         ? { value: filter.right.value }
         : {}),
     })),
-    orderBy: source.orderBy,
+    orderBy: source.orderBy.map(({ outputId, direction }) => ({
+      id: outputId,
+      direction,
+    })),
     limit: source.limit,
   };
   const compiled = compileVisualAnalysis(plan);
@@ -716,6 +722,7 @@ export async function deleteSavedAnalysis(id) {
 
 export {
   buildDefinition as __buildDefinition,
+  runtimeRequest as __runtimeRequest,
   resolveFormulaModel as __resolveFormulaModel,
   finalizeSavedAnalysisResult as __finalizeSavedAnalysisResult,
 };

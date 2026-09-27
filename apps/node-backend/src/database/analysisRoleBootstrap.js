@@ -58,7 +58,7 @@ export async function ensureAnalysisRole({
       "SELECT rolsuper OR rolcreaterole AS can_create FROM pg_roles WHERE rolname = current_user",
     );
     const exists = await client.query(
-      "SELECT 1 FROM pg_roles WHERE rolname = $1",
+      "SELECT rolsuper, rolcreatedb, rolcreaterole, rolinherit, rolreplication, rolbypassrls, rolcanlogin FROM pg_roles WHERE rolname = $1",
       [ANALYSIS_ROLE],
     );
     if (exists.rows.length === 0) {
@@ -70,28 +70,48 @@ export async function ensureAnalysisRole({
         `CREATE ROLE ${ANALYSIS_ROLE} LOGIN PASSWORD ${quoteLiteral(analysis.password)} ` +
           "NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS",
       );
-    } else {
+    } else if (privileges.rows[0]?.can_create === true) {
       await client.query(
         `ALTER ROLE ${ANALYSIS_ROLE} PASSWORD ${quoteLiteral(analysis.password)} ` +
           "NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS",
       );
     }
 
-    await client.query(
-      `ALTER ROLE ${ANALYSIS_ROLE} SET default_transaction_read_only = on`,
-    );
-    await client.query(
-      `ALTER ROLE ${ANALYSIS_ROLE} SET statement_timeout = '5000ms'`,
-    );
-    await client.query(
-      `ALTER ROLE ${ANALYSIS_ROLE} SET lock_timeout = '1000ms'`,
-    );
-    await client.query(
-      `ALTER ROLE ${ANALYSIS_ROLE} SET idle_in_transaction_session_timeout = '5000ms'`,
-    );
-    await client.query(
-      `ALTER ROLE ${ANALYSIS_ROLE} SET search_path = vision_analysis, pg_catalog`,
-    );
+    if (privileges.rows[0]?.can_create !== true) {
+      const role = exists.rows[0];
+      if (
+        !role?.rolcanlogin ||
+        [
+          "rolsuper",
+          "rolcreatedb",
+          "rolcreaterole",
+          "rolinherit",
+          "rolreplication",
+          "rolbypassrls",
+        ].some((flag) => role[flag] !== false)
+      ) {
+        log.warn(
+          "[analysis-role] preprovisioned executor has unsafe attributes; executor disabled.",
+        );
+        return { status: "degraded", reason: "unsafe-executor-role" };
+      }
+    } else {
+      await client.query(
+        `ALTER ROLE ${ANALYSIS_ROLE} SET default_transaction_read_only = on`,
+      );
+      await client.query(
+        `ALTER ROLE ${ANALYSIS_ROLE} SET statement_timeout = '5000ms'`,
+      );
+      await client.query(
+        `ALTER ROLE ${ANALYSIS_ROLE} SET lock_timeout = '1000ms'`,
+      );
+      await client.query(
+        `ALTER ROLE ${ANALYSIS_ROLE} SET idle_in_transaction_session_timeout = '5000ms'`,
+      );
+      await client.query(
+        `ALTER ROLE ${ANALYSIS_ROLE} SET search_path = vision_analysis, pg_catalog`,
+      );
+    }
     await client.query(`REVOKE ALL ON SCHEMA public FROM ${ANALYSIS_ROLE}`);
     await client.query(
       `REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM ${ANALYSIS_ROLE}`,

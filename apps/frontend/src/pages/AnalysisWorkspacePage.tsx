@@ -123,7 +123,15 @@ function visualPlanFromSource(
         joins: ((source.joins as Array<{ pathId: string }>) ?? []).map(
             (join) => join.pathId,
         ),
-        orderBy: (source.orderBy as VisualAnalysisPlan["orderBy"]) ?? [],
+        orderBy: (
+            (source.orderBy as Array<{
+                outputId: string;
+                direction: "asc" | "desc";
+            }>) ?? []
+        ).map(({ outputId, direction }) => ({
+            id: outputId,
+            direction,
+        })),
         limit: Number(source.limit) || 500,
     };
 }
@@ -1050,7 +1058,10 @@ export default function AnalysisWorkspacePage() {
                                                             )
                                                         }
                                                     />
-                                                    {id}
+                                                    {dataset.fields.find(
+                                                        (field) =>
+                                                            field.id === id,
+                                                    )?.label ?? id}
                                                 </label>
                                             ))}
                                         </div>
@@ -1091,6 +1102,14 @@ export default function AnalysisWorkspacePage() {
                                                         className="grid gap-2 sm:grid-cols-[1fr_10rem_1fr_auto]"
                                                     >
                                                         <select
+                                                            aria-label={t(
+                                                                "analysis.filterField",
+                                                                {
+                                                                    number:
+                                                                        index +
+                                                                        1,
+                                                                },
+                                                            )}
                                                             value={
                                                                 filter.fieldId
                                                             }
@@ -1140,6 +1159,24 @@ export default function AnalysisWorkspacePage() {
                                                             )}
                                                         </select>
                                                         <select
+                                                            aria-label={t(
+                                                                "analysis.filterOperator",
+                                                                {
+                                                                    number:
+                                                                        index +
+                                                                        1,
+                                                                    field:
+                                                                        dataset.fields.find(
+                                                                            (
+                                                                                field,
+                                                                            ) =>
+                                                                                field.id ===
+                                                                                filter.fieldId,
+                                                                        )
+                                                                            ?.label ??
+                                                                        filter.fieldId,
+                                                                },
+                                                            )}
                                                             value={
                                                                 filter.operator
                                                             }
@@ -1177,15 +1214,36 @@ export default function AnalysisWorkspacePage() {
                                                                         key={
                                                                             operator
                                                                         }
-                                                                    >
-                                                                        {
+                                                                        value={
                                                                             operator
                                                                         }
+                                                                    >
+                                                                        {t(
+                                                                            `analysis.operator.${operator}`,
+                                                                        )}
                                                                     </option>
                                                                 ),
                                                             )}
                                                         </select>
                                                         <Input
+                                                            aria-label={t(
+                                                                "analysis.filterValue",
+                                                                {
+                                                                    number:
+                                                                        index +
+                                                                        1,
+                                                                    field:
+                                                                        dataset.fields.find(
+                                                                            (
+                                                                                field,
+                                                                            ) =>
+                                                                                field.id ===
+                                                                                filter.fieldId,
+                                                                        )
+                                                                            ?.label ??
+                                                                        filter.fieldId,
+                                                                },
+                                                            )}
                                                             value={String(
                                                                 filter.value ??
                                                                     "",
@@ -1248,7 +1306,22 @@ export default function AnalysisWorkspacePage() {
                                                             variant="ghost"
                                                             size="icon"
                                                             aria-label={t(
-                                                                "analysis.removeFilter",
+                                                                "analysis.removeFilterContext",
+                                                                {
+                                                                    number:
+                                                                        index +
+                                                                        1,
+                                                                    field:
+                                                                        dataset.fields.find(
+                                                                            (
+                                                                                field,
+                                                                            ) =>
+                                                                                field.id ===
+                                                                                filter.fieldId,
+                                                                        )
+                                                                            ?.label ??
+                                                                        filter.fieldId,
+                                                                },
                                                             )}
                                                             onClick={() =>
                                                                 setPlan(
