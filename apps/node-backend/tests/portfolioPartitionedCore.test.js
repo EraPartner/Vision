@@ -48,6 +48,129 @@ const sell = (accountId, units, amount, date, extra = {}) => ({
   ...extra,
 });
 
+describe.each(["weighted_avg", "fifo", "lifo"])(
+  "unit-based summary expenses (%s)",
+  (costBasisMethod) => {
+    const opts = { ...OPTS, costBasisMethod, fxMultiplierNow: 0.8 };
+
+    it.each(["dividend", "interest", "rent_income"])(
+      "deducts %s row expenses from gain while preserving gross income",
+      (type) => {
+        const core = buildInvestmentSummaryCore(
+          stock(10),
+          [
+            {
+              type,
+              amount: 100,
+              taxes: 30,
+              date: "2026-02-01",
+              fxMultiplier: 1.1,
+            },
+          ],
+          opts,
+        );
+        expect(n(core.totalIncome)).toBe(100);
+        expect(n(core.totalTaxes)).toBe(30);
+        expect(n(core.gainLoss)).toBe(70);
+        expect(n(core.converted.totalIncome)).toBe(110);
+        expect(n(core.converted.totalTaxes)).toBe(33);
+        expect(n(core.converted.gainLoss)).toBe(77);
+        expect(n(core.converted.assetGain)).toBe(56);
+        expect(n(core.converted.fxGain)).toBe(21);
+      },
+    );
+
+    it("counts dividend expenses once alongside buy, gift and sell costs at historical FX", () => {
+      const rows = [
+        buy(1, 10, 100, "2026-01-01", {
+          fees: 10,
+          taxes: 10,
+          fxMultiplier: 0.5,
+        }),
+        {
+          ...buy(1, 10, 200, "2026-01-02", {
+            fees: 10,
+            taxes: 10,
+            fxMultiplier: 0.75,
+          }),
+          type: "gift",
+        },
+        sell(1, 10, 250, "2026-02-01", {
+          fees: 10,
+          taxes: 20,
+          fxMultiplier: 1.2,
+        }),
+        {
+          type: "dividend",
+          amount: 100,
+          fees: 5,
+          taxes: 30,
+          date: "2026-03-01",
+          account_id: 2,
+          fxMultiplier: 1.1,
+        },
+      ];
+      const { core, partitions } = buildInvestmentSummaryCorePartitioned(
+        stock(25),
+        rows,
+        opts,
+      );
+      // 250 remaining value + 220 net sale - 340 acquisition cost + 65 net income.
+      expect(n(core.gainLoss)).toBe(195);
+      // 200 current value + 264 net sale - 225 historical cost + 71.5 net income.
+      expect(n(core.converted.gainLoss)).toBe(310.5);
+      expect(n(core.converted.assetGain)).toBe(156);
+      expect(n(core.converted.fxGain)).toBe(154.5);
+      expect(n(core.totalFees)).toBe(35);
+      expect(n(core.totalTaxes)).toBe(70);
+      expect(n(core.totalIncome)).toBe(100);
+      expect(n(core.totalDividends)).toBe(100);
+      expect(n(core.totalBuyCost)).toBe(340);
+      expect(n(core.converted.totalBuyCost)).toBe(225);
+      expect(n(core.totalSellProceeds)).toBe(250);
+      expect(n(core.converted.totalSellProceeds)).toBe(300);
+      const realized = { weighted_avg: 50, fifo: 100, lifo: 0 };
+      const realizedC = { weighted_avg: 151.5, fifo: 204, lifo: 99 };
+      expect(n(core.realizedGain)).toBe(realized[costBasisMethod]);
+      expect(n(core.converted.realizedGain)).toBe(realizedC[costBasisMethod]);
+      const incomePartition = partitions.find((part) => part.accountId === 2);
+      expect(n(incomePartition.core.gainLoss)).toBe(65);
+      expect(n(incomePartition.core.converted.gainLoss)).toBe(71.5);
+      expect(core.gainLoss.eq(core.converted.assetGain.div(0.8))).toBe(true);
+    });
+
+    it.each(["fee", "tax", "split", "return_of_capital"])(
+      "deducts %s row expense fields outside acquisition and disposal costs",
+      (type) => {
+        const rows = [
+          buy(1, 10, 100, "2026-01-01", { fxMultiplier: 0.8 }),
+          {
+            type,
+            amount: 0,
+            fees: 7,
+            taxes: 3,
+            units: 10,
+            date: "2026-02-01",
+            account_id: 1,
+            fxMultiplier: 1.1,
+          },
+        ];
+        const { core } = buildInvestmentSummaryCorePartitioned(
+          stock(10),
+          rows,
+          opts,
+        );
+        expect(n(core.gainLoss)).toBe(-10);
+        expect(n(core.converted.gainLoss)).toBe(-11);
+        expect(n(core.converted.assetGain)).toBe(-8);
+        expect(n(core.converted.fxGain)).toBe(-3);
+        expect(n(core.totalFees)).toBe(7);
+        expect(n(core.totalTaxes)).toBe(3);
+      },
+    );
+  },
+);
+
 describe("areLotsFullyAssigned (transition predicate)", () => {
   it("is false when any buy/gift/sell lacks an account, regardless of other rows", () => {
     expect(areLotsFullyAssigned([buy(1, 10, 100, "2026-01-01")])).toBe(true);
