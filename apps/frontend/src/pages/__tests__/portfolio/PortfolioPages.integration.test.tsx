@@ -275,6 +275,7 @@ describe("Portfolio pages (integration)", () => {
             screen.getByRole("button", { name: /fx.?neutral/i }),
         ).toHaveClass("bg-background");
         expect(requestedPeriods).toContain("3m");
+        expect(screen.getByText("The period changes the charts. Summary returns cover all available history.")).toBeInTheDocument();
     });
 
     it("PerformancePage shows empty state when no snapshots", async () => {
@@ -384,7 +385,7 @@ describe("Portfolio pages (integration)", () => {
         expect(hero).toHaveTextContent("Net P&L");
         expect(hero).toHaveTextContent("Asset gain");
         expect(hero).toHaveTextContent("FX effect");
-        expect(hero).toHaveTextContent("Asset allocation");
+        expect(hero).toHaveTextContent("Stocks, crypto & metals (% of group)");
         expect(hero).toHaveTextContent("900,00 € (72,0%)");
         expect(hero).toHaveTextContent("220,00 € (17,6%)");
         expect(hero).toHaveTextContent("130,00 € (10,4%)");

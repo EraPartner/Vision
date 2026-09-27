@@ -57,6 +57,7 @@ describe("multipart import request fields", () => {
                 ";",
                 "latin1",
                 2,
+                "decimal_comma",
             ),
         );
         expect(Object.fromEntries(body.entries())).toMatchObject({
@@ -69,7 +70,22 @@ describe("multipart import request fields", () => {
             separator: ";",
             encoding: "latin1",
             skip_rows: "2",
+            number_format: "decimal_comma",
         });
+    });
+
+    it("defaults old custom mappings to automatic number parsing", async () => {
+        const body = await capture("/api/import/csv/custom", () =>
+            importCSVCustom(
+                file,
+                "generic",
+                "YYYY-MM-DD",
+                "Date",
+                "Recipient",
+                "Amount",
+            ),
+        );
+        expect(body.get("number_format")).toBe("auto");
     });
 
     it.each([

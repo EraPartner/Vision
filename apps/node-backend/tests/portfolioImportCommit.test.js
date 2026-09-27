@@ -249,6 +249,39 @@ describe("commitBatch (portfolio)", () => {
         message: expect.stringMatching(/exceed/),
       }),
     );
+    const sqls = mockClient.query.mock.calls.map(([sql]) => sql);
+    const rollback = sqls.findIndex((sql) =>
+      sql.startsWith("ROLLBACK TO SAVEPOINT "),
+    );
+    expect(rollback).toBeGreaterThanOrEqual(0);
+    expect(sqls[rollback + 1]).toBe(
+      sqls[rollback].replace("ROLLBACK TO", "RELEASE"),
+    );
+  });
+
+  it("releases a failed cash row savepoint and still commits the next trade", async () => {
+    isBrokerage = true;
+    batchAccountId = 77;
+    matchedRows = [
+      row({ id: 1, route: "cash", investment_id: null, amount: 10 }),
+      row({ id: 2, tx_hash: "next" }),
+    ];
+    mockClient.query.mockImplementation(async (sql, params) => {
+      if (sql.includes("INSERT INTO transactions"))
+        throw new Error("synthetic cash insert failure");
+      return dispatch(sql, params);
+    });
+    const res = await commitBatch({ batchId: 5 });
+    expect(res).toMatchObject({ errors: 1, imported: 1 });
+    const sqls = mockClient.query.mock.calls.map(([sql]) => sql);
+    const rollback = sqls.findIndex((sql) =>
+      sql.startsWith("ROLLBACK TO SAVEPOINT "),
+    );
+    expect(rollback).toBeGreaterThanOrEqual(0);
+    expect(sqls[rollback + 1]).toBe(
+      sqls[rollback].replace("ROLLBACK TO", "RELEASE"),
+    );
+    expect(portfolioTransactionRepository.create).toHaveBeenCalledTimes(1);
   });
 
   it("flags an unresolved instrument as an error and never calls create", async () => {

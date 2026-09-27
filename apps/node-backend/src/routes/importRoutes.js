@@ -4,8 +4,8 @@
  * Request parsing is validated with zod (schema → safeParse → ValidationError),
  * the idiom established in settings.js/reports.js. Batch/row route ids share
  * one coerced schema with the portfolio import router (lib/importBatchIds.js).
- * The CSV option/config schemas coerce multipart string fields exactly like the
- * pre-zod hand-rolled parsing (String()/parseInt fallbacks, trims, defaults).
+ * CSV option/config schemas normalize multipart fields and validate the
+ * supported encoding and numeric convention before staging.
  */
 
 /// <reference path="../types/thirdPartyModules.d.ts" />
@@ -47,6 +47,10 @@ import {
 } from "../services/aggregationRefresh.js";
 import { registerParserRoutes } from "./parserConfigRoutes.js";
 import { registerImportBatchRoutes } from "./importBatchRoutes.js";
+import {
+  normalizeCsvEncoding,
+  CSV_NUMBER_FORMATS,
+} from "../services/importPipeline/adapters/_shared.js";
 
 /**
  * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
@@ -132,7 +136,19 @@ function parseImportInput(schema, input) {
   return result.data;
 }
 
-// Multipart fields arrive as strings; falsy values use the endpoint defaults.
+const csvEncodingField = z
+  .unknown()
+  .optional()
+  .transform((value, ctx) => {
+    try {
+      return normalizeCsvEncoding(value);
+    } catch (error) {
+      ctx.addIssue({ code: "custom", message: error.message });
+      return z.NEVER;
+    }
+  });
+
+// Multipart fields arrive as strings; empty values use the endpoint defaults.
 const csvImportOptionsSchema = z.object({
   separator: z
     .unknown()
@@ -148,10 +164,7 @@ const csvImportOptionsSchema = z.object({
       }
       return separator;
     }),
-  encoding: z
-    .unknown()
-    .optional()
-    .transform((value) => String(value || "utf-8")),
+  encoding: csvEncodingField,
 });
 
 // Parse + validate the CSV separator/encoding options shared by the
@@ -191,7 +204,7 @@ const multipartTextField = (field) =>
       return value;
     });
 
-// csv-parse throws "Invalid Option: from must be a positive integer" on a
+// csv-parse throws on an invalid from_line option for a
 // negative skip — validate here so it 400s instead of a raw 500.
 const skipRowsField = z
   .unknown()
@@ -218,7 +231,8 @@ const customCsvImportSchema = z
     recipient_column: multipartTextField("recipient_column"),
     amount_column: multipartTextField("amount_column"),
     memo_column: multipartTextField("memo_column"),
-    encoding: z.unknown().optional(),
+    encoding: csvEncodingField,
+    number_format: z.enum(CSV_NUMBER_FORMATS).default("auto"),
     separator: z
       .unknown()
       .optional()
@@ -263,6 +277,7 @@ const customCsvImportSchema = z
         bank_name: required.bank_name.trim(),
         date_format: required.date_format.trim(),
         encoding: data.encoding || "utf-8",
+        number_format: data.number_format,
         separator: data.separator,
         skip_rows: data.skip_rows,
         column_mapping: {
@@ -276,6 +291,14 @@ const customCsvImportSchema = z
       },
     };
   });
+
+// Listener-free seam for the same request schema used by the upload handler.
+/** @param {unknown} input */
+function buildCustomCsvConfig(input) {
+  return parseImportInput(customCsvImportSchema, input);
+}
+
+export { buildCustomCsvConfig as __buildCustomCsvConfig };
 
 // POST /api/import/csv
 router.post(
@@ -345,10 +368,7 @@ router.post(
 
     let adapterName, customConfig;
     try {
-      ({ adapterName, customConfig } = parseImportInput(
-        customCsvImportSchema,
-        req.body,
-      ));
+      ({ adapterName, customConfig } = buildCustomCsvConfig(req.body));
     } catch (err) {
       cleanup(req.file.path);
       throw err;
@@ -416,12 +436,8 @@ const parserConfigSchema = z.object({
     .transform((value) =>
       typeof value === "string" && value.length ? value : ",",
     ),
-  encoding: z
-    .unknown()
-    .optional()
-    .transform((value) =>
-      typeof value === "string" && value.trim() ? value.trim() : "utf-8",
-    ),
+  encoding: csvEncodingField,
+  number_format: z.enum(CSV_NUMBER_FORMATS).default("auto"),
   skipRows: z
     .unknown()
     .optional()
@@ -440,6 +456,8 @@ function normalizeParserConfig(config) {
   }
   return parseImportInput(parserConfigSchema, config);
 }
+
+export { normalizeParserConfig as __normalizeParserConfig };
 
 // GET/POST/PATCH/DELETE /api/import/parsers[/:id] — shared with the portfolio router.
 registerParserRoutes(router, {

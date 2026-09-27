@@ -17,6 +17,7 @@ export const DEFAULT_PORTFOLIO_IMPORT_CONFIG: PortfolioCustomConfig = {
     separator: ",",
     encoding: "utf-8",
     skipRows: 0,
+    number_format: "auto",
     defaultAssetClass: "stock",
     defaultType: "buy",
     typeMapping: {},

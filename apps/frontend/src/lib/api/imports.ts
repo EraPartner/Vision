@@ -211,6 +211,7 @@ export function importCSVCustom(
     separator: string = ",",
     encoding: string = "utf-8",
     skipRows: number = 0,
+    numberFormat: CsvNumberFormat = "auto",
 ): Promise<ImportCsvResponse> {
     const fields = new URLSearchParams();
     fields.append("bank_name", bankName);
@@ -222,8 +223,11 @@ export function importCSVCustom(
     fields.append("separator", separator);
     fields.append("encoding", encoding);
     fields.append("skip_rows", skipRows.toString());
+    fields.append("number_format", numberFormat);
     return postMultipartImport("/api/import/csv/custom", file, fields);
 }
+
+export type CsvNumberFormat = "auto" | "decimal_dot" | "decimal_comma";
 
 export interface CustomParserConfigPayload {
     dateColumn: string;
@@ -234,6 +238,7 @@ export interface CustomParserConfigPayload {
     separator: string;
     encoding: string;
     skipRows: number;
+    number_format?: CsvNumberFormat;
 }
 
 export interface SavedParserConfig {
@@ -360,9 +365,7 @@ export function overrideImportRowCategory(
     );
 }
 
-export function commitImportBatch(
-    batchId: number,
-): Promise<{
+export function commitImportBatch(batchId: number): Promise<{
     batch_id: number;
     imported: number;
     duplicates: number;

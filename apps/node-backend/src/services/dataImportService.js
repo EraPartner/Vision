@@ -32,14 +32,10 @@ import { normalizeForMatching } from "../lib/textNormalization.js";
 import { recipientRepository } from "../repositories/recipientRepository.js";
 import { categoryRepository } from "../repositories/categoryRepository.js";
 import { recipientBankAccountRepository } from "../repositories/recipientBankAccountRepository.js";
-
-const ALLOWED_ENCODINGS = new Set([
-  "utf-8",
-  "utf8",
-  "latin1",
-  "iso-8859-1",
-  "windows-1252",
-]);
+import {
+  decodeCsvBuffer,
+  normalizeCsvEncoding,
+} from "./importPipeline/adapters/_shared.js";
 const SAFE_BASENAME_RE = /^[A-Za-z0-9._-]+$/;
 
 /**
@@ -98,13 +94,9 @@ async function safeReadCsv(filePath, encoding) {
   if (!SAFE_BASENAME_RE.test(basename)) {
     throw new Error("Refusing to read CSV with unsafe filename");
   }
-  const safeEncoding = ALLOWED_ENCODINGS.has(String(encoding).toLowerCase())
-    ? encoding
-    : "utf-8";
-  return fs.promises.readFile(
-    path.join(os.tmpdir(), basename),
-    /** @type {BufferEncoding} */ (safeEncoding),
-  );
+  const safeEncoding = normalizeCsvEncoding(encoding);
+  const buffer = await fs.promises.readFile(path.join(os.tmpdir(), basename));
+  return decodeCsvBuffer(buffer, safeEncoding);
 }
 
 // ─── Shared resolution ────────────────────────────────────────────────────────

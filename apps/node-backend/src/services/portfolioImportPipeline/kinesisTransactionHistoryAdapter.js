@@ -328,7 +328,7 @@ function parseNonTrade(record) {
 
 /**
  * @param {string} filePath
- * @param {{ encoding?: BufferEncoding }} [config]
+ * @param {{ encoding?: string }} [config]
  * @returns {Promise<import('./portfolioGenericAdapter.js').ParsedPortfolioRows>}
  */
 export async function parseKinesisTransactionHistory(filePath, config = {}) {

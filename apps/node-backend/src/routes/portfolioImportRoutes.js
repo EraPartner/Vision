@@ -6,8 +6,8 @@
  * Request parsing is validated with zod (schema → safeParse → ValidationError),
  * the idiom established in settings.js/reports.js. Batch/row route ids share
  * one coerced schema with the transaction import router (lib/importBatchIds.js);
- * the multipart config/brokerage schemas coerce string fields exactly like the
- * pre-zod hand-rolled parsing (String()/parseInt fallbacks, trims, defaults).
+ * multipart config/brokerage schemas normalize strings and validate the
+ * supported encoding and numeric convention before staging.
  */
 
 /// <reference path="../types/thirdPartyModules.d.ts" />
@@ -40,6 +40,10 @@ import {
 } from "../services/portfolioImportBatchService.js";
 import { commitReviewedPortfolioImport } from "../services/portfolioImportCommitService.js";
 import { VALID_ASSET_CLASSES } from "../lib/assetClasses.js";
+import {
+  CSV_NUMBER_FORMATS,
+  normalizeCsvEncoding,
+} from "../services/importPipeline/adapters/_shared.js";
 import { registerParserRoutes } from "./parserConfigRoutes.js";
 import { registerImportBatchRoutes } from "./importBatchRoutes.js";
 import {
@@ -230,7 +234,11 @@ const portfolioImportConfigSchema = z
         return separator || ",";
       }),
     date_format: defaultedTextField("%Y-%m-%d"),
-    encoding: defaultedTextField("utf-8"),
+    encoding: z
+      .unknown()
+      .optional()
+      .transform((value) => normalizeCsvEncoding(value)),
+    number_format: z.enum(CSV_NUMBER_FORMATS).default("auto"),
     // csv-parse throws "Invalid Option: from must be a positive integer" on a
     // negative skip — validate here so it 400s instead of a raw 500.
     skip_rows: z
@@ -274,6 +282,7 @@ const portfolioImportConfigSchema = z
       date_format: data.date_format,
       separator: data.separator,
       encoding: data.encoding,
+      number_format: data.number_format,
       skip_rows: data.skip_rows,
       default_asset_class: data.default_asset_class,
       default_type: data.default_type || "buy",
@@ -447,6 +456,11 @@ router.post(
 // dateColumn, a symbol or name column, and a valid defaultAssetClass.
 const portfolioParserConfigSchema = z
   .looseObject({
+    number_format: z.enum(CSV_NUMBER_FORMATS).default("auto"),
+    encoding: z
+      .unknown()
+      .transform((value) => normalizeCsvEncoding(value))
+      .optional(),
     dateColumn: z
       .unknown()
       .optional()
@@ -492,8 +506,8 @@ const portfolioParserConfigSchema = z
     }
   });
 
-// Loose pass-through: every key (known and unknown) is stored untouched, as
-// before — only presence/validity is checked.
+// Preserve additional parser keys, normalize supported encodings, and default
+// configurations saved before numeric conventions were introduced to auto.
 /** @param {unknown} config */
 function normalizePortfolioParserConfig(config) {
   if (!config || typeof config !== "object" || Array.isArray(config)) {

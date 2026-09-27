@@ -9,6 +9,43 @@
 import fs from "fs";
 import { parse } from "csv-parse/sync";
 import { toDecimal } from "../../../lib/money.js";
+import { ValidationError } from "../../../middleware/errorHandler.js";
+
+/**
+ * Normalize the CSV encodings offered by the import forms and their aliases.
+ * @param {unknown} value
+ * @returns {'utf-8'|'latin1'|'windows-1252'}
+ */
+export function normalizeCsvEncoding(value) {
+  if (value === undefined || value === null || value === "") return "utf-8";
+  if (typeof value !== "string") {
+    throw new ValidationError("Unsupported CSV encoding");
+  }
+  const encoding = value.trim().toLowerCase();
+  if (!encoding || encoding === "utf-8" || encoding === "utf8") return "utf-8";
+  if (["latin1", "latin-1", "iso-8859-1"].includes(encoding)) return "latin1";
+  if (encoding === "windows-1252") return "windows-1252";
+  throw new ValidationError(`Unsupported CSV encoding "${value}"`);
+}
+
+/**
+ * Decode CSV bytes once for all importers. Explicit Latin-1 keeps ISO byte
+ * semantics; Windows-1252 maps its euro and punctuation bytes correctly.
+ * UTF-8 retains the established Latin-1 fallback for invalid UTF-8 exports.
+ * @param {Buffer} buffer
+ * @param {unknown} [encoding]
+ * @returns {string}
+ */
+export function decodeCsvBuffer(buffer, encoding = "utf-8") {
+  const normalized = normalizeCsvEncoding(encoding);
+  if (normalized === "windows-1252") {
+    return new TextDecoder("windows-1252").decode(buffer);
+  }
+  const content = buffer.toString(normalized);
+  return normalized === "utf-8" && content.includes("\uFFFD")
+    ? buffer.toString("latin1")
+    : content;
+}
 
 /**
  * The row shape every bank CSV adapter emits and `stage.js` persists into
@@ -88,11 +125,7 @@ export function normalizeIsoCurrency(value) {
  */
 export async function readTextWithEncodingFallback(filePath) {
   const buffer = await fs.promises.readFile(filePath);
-  const utf8 = buffer.toString("utf-8");
-  if (utf8.includes("\uFFFD")) {
-    return buffer.toString("latin1");
-  }
-  return utf8;
+  return decodeCsvBuffer(buffer);
 }
 
 /**
@@ -294,6 +327,83 @@ export function parseAmountField(raw) {
   return negative ? -n : n;
 }
 
+/** @typedef {'auto'|'decimal_dot'|'decimal_comma'} CsvNumberFormat */
+export const CSV_NUMBER_FORMATS = ["auto", "decimal_dot", "decimal_comma"];
+
+/** @param {unknown} value @returns {CsvNumberFormat} */
+export function normalizeCsvNumberFormat(value) {
+  if (value === undefined) return "auto";
+  if (typeof value !== "string" || !CSV_NUMBER_FORMATS.includes(value)) {
+    throw new ValidationError(
+      "number_format must be auto, decimal_dot or decimal_comma",
+    );
+  }
+  return /** @type {CsvNumberFormat} */ (value);
+}
+
+/**
+ * Parse a custom-mapped numeric cell without guessing between grouping and
+ * decimals. Provider-specific adapters keep their existing parseAmountField.
+ * @param {unknown} raw
+ * @param {unknown} [format]
+ * @param {{ rowNumber?: number, column?: string }} [context]
+ * @returns {number} NaN for non-numeric cells; ambiguity is a validation error.
+ */
+export function parseCustomAmount(raw, format = "auto", context = {}) {
+  const numberFormat = normalizeCsvNumberFormat(format);
+  let text = String(raw ?? "")
+    .trim()
+    .replace(/\s/g, "")
+    .replace(/[$€£¥]/g, "");
+  if (!text) return NaN;
+  let negative = false;
+  if (text.startsWith("(") && text.endsWith(")")) {
+    negative = true;
+    text = text.slice(1, -1);
+  }
+  if (text.startsWith("-") || text.startsWith("+")) {
+    if (text.startsWith("-")) negative = true;
+    text = text.slice(1);
+  }
+
+  // Validate the mantissa separately: an exponent must not erase an
+  // ambiguous grouping/decimal choice through floating-point underflow.
+  const scientific = /^(.*?)([eE][+-]?\d+)$/.exec(text);
+  const mantissa = scientific?.[1] ?? text;
+  const exponent = scientific?.[2] ?? "";
+  const dot = /^(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d*)?$|^\.\d+$/;
+  const comma = /^(?:\d+|\d{1,3}(?:\.\d{3})+)(?:,\d*)?$|^,\d+$/;
+  const validDot = dot.test(mantissa);
+  const validComma = comma.test(mantissa);
+  const dotText = mantissa.replace(/,/g, "");
+  const commaText = mantissa.replace(/\./g, "").replace(",", ".");
+  const dotValue = validDot ? parseDecimalSafe(dotText + exponent) : NaN;
+  const commaValue = validComma ? parseDecimalSafe(commaText + exponent) : NaN;
+  let result;
+  if (numberFormat === "decimal_dot") result = dotValue;
+  else if (numberFormat === "decimal_comma") result = commaValue;
+  else {
+    if (
+      validDot &&
+      validComma &&
+      !toDecimal(dotText).eq(toDecimal(commaText))
+    ) {
+      const row =
+        context.rowNumber === undefined
+          ? ""
+          : ` at CSV data row ${context.rowNumber}`;
+      const column =
+        context.column === undefined ? "" : `, column "${context.column}"`;
+      throw new ValidationError(
+        `Ambiguous number${row}${column}. Select decimal_dot or decimal_comma number_format.`,
+      );
+    }
+    result = Number.isFinite(dotValue) ? dotValue : commaValue;
+  }
+  if (!Number.isFinite(result)) return NaN;
+  return negative ? -result : result;
+}
+
 const UTF8_BOM_RE = /^\uFEFF/;
 
 /**
@@ -376,15 +486,12 @@ export function canonicalIban(value) {
  *
  * @param {string} filePath
  * @param {object} options csv-parse options
- * @param {BufferEncoding} [encoding]
+ * @param {string} [encoding]
  * @returns {Promise<any[]>}
  */
 export async function parseCsvFile(filePath, options, encoding = "utf-8") {
   const buffer = await fs.promises.readFile(filePath);
-  let content = buffer.toString(encoding);
-  if (encoding === "utf-8" && content.includes("\uFFFD")) {
-    content = buffer.toString("latin1");
-  }
+  const content = decodeCsvBuffer(buffer, encoding);
   return parseCsvText(content, options);
 }
 
@@ -456,6 +563,4 @@ export function buildRawRowString(row) {
   return Object.values(row).join("|");
 }
 
-export {
-  splitDelimitedRecord as __splitDelimitedRecord,
-};
+export { splitDelimitedRecord as __splitDelimitedRecord };

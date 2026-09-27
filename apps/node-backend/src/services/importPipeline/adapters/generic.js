@@ -5,10 +5,12 @@
 
 import { logger } from "../../../config/logger.js";
 import { normalizeToUppercase } from "../../../lib/textNormalization.js";
+import { ValidationError } from "../../../middleware/errorHandler.js";
 import {
   parseCsvFile,
   rawDataForCsvRecord,
-  parseAmountField,
+  parseCustomAmount,
+  normalizeCsvNumberFormat,
   SUPPORTED_DATE_FORMATS,
   parseDateWithFormat,
   normalizeIsoCurrency,
@@ -25,8 +27,9 @@ import {
  * It arrives either from POST /api/import/csv (which builds it from form
  * fields, so only bank_name/date_format and the date/recipient/amount column
  * names are guaranteed) or from a saved `custom_parser_configs.config_json`
- * row, which is free-form JSONB. Nothing re-validates it here, so every field
- * beyond `column_mapping` is optional.
+ * row, which is free-form JSONB. The adapter validates the date format and
+ * numeric convention, and the shared decoder validates encoding. Other fields
+ * beyond `column_mapping` remain optional.
  *
  * @typedef {object} CustomTransactionParserConfig
  * @property {string} [bank_name] defaults to 'CUSTOM'
@@ -34,7 +37,8 @@ import {
  * @property {string} [date_format] must be one of SUPPORTED_DATE_FORMATS
  * @property {string} [separator] CSV delimiter; defaults to ','
  * @property {number} [skip_rows] leading rows to drop before the header
- * @property {BufferEncoding} [encoding] defaults to 'utf-8'
+ * @property {string} [encoding] defaults to 'utf-8'; validated by the shared CSV decoder
+ * @property {'auto'|'decimal_dot'|'decimal_comma'} [number_format] defaults to auto; ambiguous auto cells reject the import
  * @property {{ date: string, recipient: string, amount: string, memo?: string, currency?: string, balance?: string, source_id?: string }} column_mapping source column NAMES, not indices
  */
 
@@ -60,9 +64,10 @@ function buildBankAccount(config) {
 /**
  * @param {Record<string, string>} row a `columns: true` csv-parse record
  * @param {CustomTransactionParserConfig} config
+ * @param {number} rowNumber data-row ordinal, excluding metadata and the header
  * @returns {ParsedBankTransaction|null} null when the mapped date or amount is unusable
  */
-function rowToTransaction(row, config) {
+function rowToTransaction(row, config, rowNumber) {
   const colMap = config.column_mapping;
   const dateStr = String(row[colMap.date] || "").trim();
   if (!dateStr) return null;
@@ -70,7 +75,10 @@ function rowToTransaction(row, config) {
   const date = parseDateWithFormat(dateStr, config.date_format || "");
   if (!date || isNaN(date.getTime())) return null;
 
-  const amount = parseAmountField(row[colMap.amount]);
+  const amount = parseCustomAmount(row[colMap.amount], config.number_format, {
+    rowNumber,
+    column: colMap.amount,
+  });
   if (isNaN(amount)) return null;
 
   const recipient = String(row[colMap.recipient] || "").trim();
@@ -83,7 +91,10 @@ function rowToTransaction(row, config) {
 
   let balance = null;
   if (colMap.balance) {
-    const bv = parseAmountField(row[colMap.balance]);
+    const bv = parseCustomAmount(row[colMap.balance], config.number_format, {
+      rowNumber,
+      column: colMap.balance,
+    });
     if (!isNaN(bv)) balance = bv;
   }
 
@@ -113,6 +124,7 @@ function rowToTransaction(row, config) {
  * @throws {Error} when `date_format` is not one of SUPPORTED_DATE_FORMATS
  */
 export async function parseWithConfig(filePath, config) {
+  normalizeCsvNumberFormat(config.number_format);
   const dateFormat = config.date_format || "";
   if (!SUPPORTED_DATE_FORMATS.includes(dateFormat)) {
     // Fail fast and loudly: a chosen-but-unimplemented format previously fell
@@ -129,7 +141,7 @@ export async function parseWithConfig(filePath, config) {
       columns: true,
       skip_empty_lines: true,
       delimiter: config.separator || ",",
-      from: (config.skip_rows || 0) + 1,
+      from_line: (config.skip_rows || 0) + 1,
       relax_column_count: true,
     },
     config.encoding || "utf-8",
@@ -137,12 +149,13 @@ export async function parseWithConfig(filePath, config) {
 
   const transactions = /** @type {ParsedBankTransactions} */ ([]);
   let skipped = 0;
-  for (const row of records) {
+  for (const [index, row] of records.entries()) {
     try {
-      const tx = rowToTransaction(row, config);
+      const tx = rowToTransaction(row, config, index + 1);
       if (tx) transactions.push(tx);
       else skipped++;
-    } catch {
+    } catch (error) {
+      if (error instanceof ValidationError) throw error;
       skipped++;
     }
   }

@@ -6,7 +6,7 @@ import {
     apiRequest,
 } from "@/lib/api/client";
 import { postMultipartImport } from "@/lib/api/helpers";
-import { importProgressSchema } from "@/lib/api/imports";
+import { importProgressSchema, type CsvNumberFormat } from "@/lib/api/imports";
 import { readSseStream } from "@/lib/api/sse";
 import type { ImportProgress } from "@/types/apiClient";
 import type { AssetClass } from "@vision/types/assetClasses";
@@ -66,6 +66,7 @@ export interface PortfolioCustomConfig {
     separator: string;
     encoding: string;
     skipRows: number;
+    number_format?: CsvNumberFormat;
     defaultAssetClass: AssetClass;
     defaultType: PortfolioTxnType;
     typeMapping: Record<string, string>;
@@ -156,6 +157,7 @@ function configToParams(
     p.append("separator", config.separator);
     p.append("encoding", config.encoding);
     p.append("skip_rows", String(config.skipRows));
+    p.append("number_format", config.number_format ?? "auto");
     p.append("default_asset_class", config.defaultAssetClass);
     p.append("default_type", config.defaultType);
     p.append("type_mapping", JSON.stringify(config.typeMapping || {}));

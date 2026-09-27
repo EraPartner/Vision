@@ -15,6 +15,7 @@ import {
     commitPortfolioImportBatch,
     rollbackPortfolioImportBatch,
     importPortfolioCSVCustom,
+    importPortfolioCSVWithProgress,
     type PortfolioCustomConfig,
 } from "@/lib/api/portfolioImports";
 
@@ -84,8 +85,63 @@ describe("portfolioImports API client", () => {
                 },
             ),
         );
-        await createPortfolioParserConfig("Mine", config);
-        expect(body).toEqual({ name: "Mine", config });
+        const selectedConfig = {
+            ...config,
+            number_format: "decimal_comma" as const,
+        };
+        await createPortfolioParserConfig("Mine", selectedConfig);
+        expect(body).toEqual({ name: "Mine", config: selectedConfig });
+    });
+
+    it.each(["auto", "decimal_dot", "decimal_comma"] as const)(
+        "sends %s number parsing for staged portfolio imports",
+        async (numberFormat) => {
+            let body: FormData | undefined;
+            server.use(
+                http.post(
+                    `${API_BASE}/api/portfolio/import/csv/custom`,
+                    async ({ request }) => {
+                        body = await request.formData();
+                        return ok({
+                            batch_id: 2,
+                            imported: 0,
+                            duplicates: 0,
+                            errors: 0,
+                        });
+                    },
+                ),
+            );
+            await importPortfolioCSVCustom(
+                new File(["fixture"], "custom.csv"),
+                { ...config, number_format: numberFormat },
+                "custom",
+            );
+            expect(body?.get("number_format")).toBe(numberFormat);
+        },
+    );
+
+    it("sends the saved number format for streaming portfolio imports", async () => {
+        let body: FormData | undefined;
+        server.use(
+            http.post(
+                `${API_BASE}/api/portfolio/import/csv/stream`,
+                async ({ request }) => {
+                    body = await request.formData();
+                    return new HttpResponse(
+                        'event: complete\ndata: {"batch_id":2,"imported":0,"duplicates":0,"errors":0}\n\n',
+                        { headers: { "Content-Type": "text/event-stream" } },
+                    );
+                },
+            ),
+        );
+        const { result } = importPortfolioCSVWithProgress(
+            new File(["fixture"], "custom.csv"),
+            { ...config, number_format: "decimal_dot" },
+            "custom",
+            () => {},
+        );
+        await result;
+        expect(body?.get("number_format")).toBe("decimal_dot");
     });
 
     it.each([

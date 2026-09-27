@@ -396,6 +396,7 @@ export async function commitBatch({ batchId, onProgress }) {
             // chunk txn on ANY statement error (25P02), so the row's error must
             // be recorded on a clean connection.
             await client.query(`ROLLBACK TO SAVEPOINT ${sp}`);
+            await client.query(`RELEASE SAVEPOINT ${sp}`);
             chunkErrors++;
             await markRow(
               row.id,
@@ -516,6 +517,7 @@ export async function commitBatch({ batchId, onProgress }) {
           tradeInsertedByIdentity.set(identity, insertedThisRun + 1);
         } catch (err) {
           await client.query(`ROLLBACK TO SAVEPOINT ${sp}`);
+          await client.query(`RELEASE SAVEPOINT ${sp}`);
           chunkErrors++;
           await markRow(
             row.id,

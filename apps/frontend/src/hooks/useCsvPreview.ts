@@ -14,14 +14,14 @@ import { PEEK_BYTES } from "@/features/imports/csvSeparator";
 const MAX_PREVIEW_ROWS = 5;
 
 export interface CsvPreview {
-  headers: string[];
-  rows: string[][];
+    headers: string[];
+    rows: string[][];
 }
 
 interface State {
-  preview: CsvPreview | null;
-  isLoading: boolean;
-  error: string | null;
+    preview: CsvPreview | null;
+    isLoading: boolean;
+    error: string | null;
 }
 
 /**
@@ -33,21 +33,23 @@ interface State {
  * check below drops it when it lost columns (matching the previous
  * hand-rolled parser's behavior).
  */
-function parseRecords(text: string, sep: string): string[][] {
-  const options = {
-    delimiter: sep,
-    record_delimiter: ["\r\n", "\n", "\r"],
-    relax_column_count: true,
-    relax_quotes: true,
-    skip_empty_lines: true,
-    trim: true,
-  };
-  try {
-    return parse(text, options) as string[][];
-  } catch (err) {
-    if ((err as { code?: string }).code !== "CSV_QUOTE_NOT_CLOSED") throw err;
-    return parse(`${text}"`, options) as string[][];
-  }
+function parseRecords(text: string, sep: string, skipRows: number): string[][] {
+    const options = {
+        delimiter: sep,
+        record_delimiter: ["\r\n", "\n", "\r"],
+        relax_column_count: true,
+        relax_quotes: true,
+        skip_empty_lines: true,
+        trim: true,
+        from_line: skipRows + 1,
+    };
+    try {
+        return parse(text, options) as string[][];
+    } catch (err) {
+        if ((err as { code?: string }).code !== "CSV_QUOTE_NOT_CLOSED")
+            throw err;
+        return parse(`${text}"`, options) as string[][];
+    }
 }
 
 /**
@@ -55,68 +57,106 @@ function parseRecords(text: string, sep: string): string[][] {
  * Blank records are skipped; fields are trimmed (also inside quotes) and
  * records with a different field count than the header are skipped.
  */
-function parseCsvText(text: string, sep: string): CsvPreview {
-  const records = parseRecords(text, sep);
-  if (records.length === 0) {
-    return { headers: [], rows: [] };
-  }
-
-  const [headerRecord, ...rest] = records;
-  const headers = headerRecord.map((field) => field.trim());
-
-  const rows: string[][] = [];
-  for (const record of rest) {
-    if (rows.length >= MAX_PREVIEW_ROWS) break;
-    if (record.length !== headers.length) continue;
-    rows.push(record.map((field) => field.trim()));
-  }
-
-  return { headers, rows };
-}
-
-export function useCsvPreview(file: File | null, separator: string): State {
-  const [state, setState] = useState<State>({
-    preview: null,
-    isLoading: false,
-    error: null,
-  });
-
-  useEffect(() => {
-    if (!file) {
-      setState({ preview: null, isLoading: false, error: null });
-      return;
+function parseCsvText(text: string, sep: string, skipRows: number): CsvPreview {
+    const records = parseRecords(text.replace(/^\uFEFF/, ""), sep, skipRows);
+    if (records.length === 0) {
+        return { headers: [], rows: [] };
     }
 
-    let cancelled = false;
-    setState({ preview: null, isLoading: true, error: null });
+    const [headerRecord, ...rest] = records;
+    const headers = headerRecord.map((field) => field.trim());
 
-    const slice = file.slice(0, PEEK_BYTES);
-    const reader = new FileReader();
+    const rows: string[][] = [];
+    for (const record of rest) {
+        if (rows.length >= MAX_PREVIEW_ROWS) break;
+        if (record.length !== headers.length) continue;
+        rows.push(record.map((field) => field.trim()));
+    }
 
-    reader.onload = () => {
-      if (cancelled) return;
-      try {
-        const text = reader.result as string;
-        const preview = parseCsvText(text, separator);
-        setState({ preview, isLoading: false, error: null });
-      } catch {
-        setState({ preview: null, isLoading: false, error: "parse_error" });
-      }
-    };
+    return { headers, rows };
+}
 
-    reader.onerror = () => {
-      if (!cancelled) {
-        setState({ preview: null, isLoading: false, error: "read_error" });
-      }
-    };
+function decodePreviewBytes(
+    buffer: ArrayBuffer,
+    encoding: string,
+    partial: boolean,
+): string {
+    const bytes = new Uint8Array(buffer);
+    const normalized = encoding.trim().toLowerCase();
+    const latin1 = () =>
+        Array.from(bytes, (byte) => String.fromCharCode(byte)).join("");
+    if (["latin1", "latin-1", "iso-8859-1"].includes(normalized))
+        return latin1();
+    if (normalized === "windows-1252")
+        return new TextDecoder("windows-1252").decode(bytes);
+    if (normalized && normalized !== "utf-8" && normalized !== "utf8")
+        throw new Error("Unsupported CSV encoding");
+    // A preview slice can end inside a valid UTF-8 character. Keep that tail
+    // pending so it does not incorrectly trigger the importer's Latin-1 fallback.
+    const text = new TextDecoder("utf-8").decode(bytes, { stream: partial });
+    return text.includes("\uFFFD") ? latin1() : text;
+}
 
-    reader.readAsText(slice);
+export function useCsvPreview(
+    file: File | null,
+    separator: string,
+    encoding = "utf-8",
+    skipRows = 0,
+): State {
+    const [state, setState] = useState<State>({
+        preview: null,
+        isLoading: false,
+        error: null,
+    });
 
-    return () => {
-      cancelled = true;
-      reader.abort();
-    };
-  }, [file, separator]);
+    useEffect(() => {
+        if (!file) {
+            setState({ preview: null, isLoading: false, error: null });
+            return;
+        }
 
-  return state;
+        let cancelled = false;
+        setState({ preview: null, isLoading: true, error: null });
+
+        const slice = file.slice(0, PEEK_BYTES);
+        const reader = new FileReader();
+
+        reader.onload = () => {
+            if (cancelled) return;
+            try {
+                const text = decodePreviewBytes(
+                    reader.result as ArrayBuffer,
+                    encoding,
+                    slice.size < file.size,
+                );
+                const preview = parseCsvText(text, separator, skipRows);
+                setState({ preview, isLoading: false, error: null });
+            } catch {
+                setState({
+                    preview: null,
+                    isLoading: false,
+                    error: "parse_error",
+                });
+            }
+        };
+
+        reader.onerror = () => {
+            if (!cancelled) {
+                setState({
+                    preview: null,
+                    isLoading: false,
+                    error: "read_error",
+                });
+            }
+        };
+
+        reader.readAsArrayBuffer(slice);
+
+        return () => {
+            cancelled = true;
+            reader.abort();
+        };
+    }, [file, separator, encoding, skipRows]);
+
+    return state;
 }

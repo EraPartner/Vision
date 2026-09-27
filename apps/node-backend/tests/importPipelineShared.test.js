@@ -10,7 +10,38 @@ import {
   readTextWithEncodingFallback,
   parseCsvText,
   rawDataForCsvRecord,
+  parseCustomAmount,
 } from "../src/services/importPipeline/adapters/_shared.js";
+
+describe("custom numeric grammar", () => {
+  it.each([
+    ["1e-8", "auto", 1e-8],
+    ["1E+3", "auto", 1000],
+    ["1.25E+2", "decimal_dot", 125],
+    ["1,25e-4", "decimal_comma", 0.000125],
+    ["(1e-8)", "auto", -1e-8],
+    ["12.", "auto", 12],
+    ["12,", "auto", 12],
+    ["12.", "decimal_dot", 12],
+    ["12,", "decimal_comma", 12],
+  ])("preserves unambiguous %s under %s", (raw, format, expected) => {
+    expect(parseCustomAmount(raw, format)).toBe(expected);
+  });
+
+  it.each(["1,234e-2", "1.234e-2", "1,234e-400"])(
+    "keeps scientific mantissa ambiguity fail closed: %s",
+    (raw) => {
+      expect(() => parseCustomAmount(raw)).toThrow(
+        expect.objectContaining({ status: 400 }),
+      );
+    },
+  );
+
+  it("resolves scientific grouped mantissas only with an explicit convention", () => {
+    expect(parseCustomAmount("1,234e-2", "decimal_dot")).toBe(12.34);
+    expect(parseCustomAmount("1,234e-2", "decimal_comma")).toBe(0.01234);
+  });
+});
 
 describe("literal CSV records", () => {
   it("preserves quoting, escaped quotes and embedded newlines while removing only CRLF", () => {

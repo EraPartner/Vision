@@ -35,6 +35,7 @@ import {
     SeparatorSelect,
     EncodingSelect,
     DateFormatSelect,
+    NumberFormatSelect,
 } from "@/features/imports/CsvFormatSelects";
 import { toast } from "sonner";
 import {
@@ -294,6 +295,25 @@ export function PortfolioImportPage() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
+                    {/* Dropzone */}
+                    <CsvDropzone
+                        file={file}
+                        onFileSelect={setFile}
+                        label={t("importPage.csvFile")}
+                    />
+
+                    {/* Detected columns of the selected file */}
+                    {!isSpecializedFormat && (
+                        <FileHeadersPanel
+                            file={file}
+                            separator={config.separator}
+                            encoding={config.encoding}
+                            skipRows={config.skipRows}
+                            highlightedHeaders={portfolioMappedColumns(config)}
+                            defaultCollapsed
+                        />
+                    )}
+
                     {/* Parser source */}
                     <div className="space-y-2">
                         <Label htmlFor="pf-source" className="font-semibold">
@@ -358,59 +378,89 @@ export function PortfolioImportPage() {
                         </p>
                     ) : (
                         <>
-                            {/* Format options */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <SeparatorSelect
-                                    id="pf-separator"
-                                    value={config.separator}
-                                    onChange={(v) =>
-                                        setConfig({ ...config, separator: v })
-                                    }
-                                />
-                                <DateFormatSelect
-                                    id="pf-date-format"
-                                    value={config.dateFormat}
-                                    onChange={(v) =>
-                                        setConfig({ ...config, dateFormat: v })
-                                    }
-                                />
-                                <EncodingSelect
-                                    id="pf-encoding"
-                                    value={config.encoding}
-                                    onChange={(v) =>
-                                        setConfig({ ...config, encoding: v })
-                                    }
-                                />
-                                <div className="space-y-2">
-                                    <Label htmlFor="pf-skip-rows">
-                                        {t("importPage.skipRows")}
-                                    </Label>
-                                    <Input
-                                        id="pf-skip-rows"
-                                        type="number"
-                                        min="0"
-                                        value={config.skipRows}
-                                        onChange={(e) =>
+                            <details className="rounded-lg border p-3">
+                                <summary className="cursor-pointer text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                                    {t("portfolioImport.formatOptions")}
+                                </summary>
+                                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <SeparatorSelect
+                                        id="pf-separator"
+                                        value={config.separator}
+                                        onChange={(v) =>
                                             setConfig({
                                                 ...config,
-                                                skipRows: Math.max(
-                                                    0,
-                                                    parseInt(e.target.value) ||
-                                                        0,
-                                                ),
+                                                separator: v,
                                             })
                                         }
                                     />
+                                    <DateFormatSelect
+                                        id="pf-date-format"
+                                        value={config.dateFormat}
+                                        onChange={(v) =>
+                                            setConfig({
+                                                ...config,
+                                                dateFormat: v,
+                                            })
+                                        }
+                                    />
+                                    <EncodingSelect
+                                        id="pf-encoding"
+                                        value={config.encoding}
+                                        onChange={(v) =>
+                                            setConfig({
+                                                ...config,
+                                                encoding: v,
+                                            })
+                                        }
+                                    />
+                                    <NumberFormatSelect
+                                        id="pf-number-format"
+                                        value={config.number_format ?? "auto"}
+                                        onChange={(value) =>
+                                            setConfig({
+                                                ...config,
+                                                number_format: value,
+                                            })
+                                        }
+                                    />
+                                    <div className="space-y-2">
+                                        <Label htmlFor="pf-skip-rows">
+                                            {t("importPage.skipRows")}
+                                        </Label>
+                                        <Input
+                                            id="pf-skip-rows"
+                                            type="number"
+                                            min="0"
+                                            value={config.skipRows}
+                                            onChange={(e) =>
+                                                setConfig({
+                                                    ...config,
+                                                    skipRows: Math.max(
+                                                        0,
+                                                        parseInt(
+                                                            e.target.value,
+                                                        ) || 0,
+                                                    ),
+                                                })
+                                            }
+                                        />
+                                    </div>
                                 </div>
-                            </div>
+                            </details>
 
                             {/* Column mapping */}
-                            <PortfolioCsvColumnMapper
-                                file={file}
-                                separator={config.separator}
-                                config={config}
-                                onChange={setConfig}
-                            />
+                            {file ? (
+                                <PortfolioCsvColumnMapper
+                                    file={file}
+                                    separator={config.separator}
+                                    config={config}
+                                    onChange={setConfig}
+                                />
+                            ) : (
+                                <p className="text-sm text-muted-foreground">
+                                    {t("portfolioImport.chooseFileFirst")}
+                                </p>
+                            )}
                         </>
                     )}
 
@@ -432,65 +482,55 @@ export function PortfolioImportPage() {
                     />
 
                     {/* Save parser */}
-                    <div className="flex flex-wrap items-end gap-2">
-                        <div className="flex-1 space-y-2 min-w-[160px]">
-                            <Label htmlFor="pf-parser-name">
-                                {t("importPage.customParser.name")}
-                            </Label>
-                            <Input
-                                id="pf-parser-name"
-                                placeholder={t(
-                                    "portfolioImport.parserNamePlaceholder",
-                                )}
-                                value={parserName}
-                                onChange={(e) => setParserName(e.target.value)}
-                            />
-                        </div>
-                        <Button
-                            size="sm"
-                            onClick={handleSaveParser}
-                            disabled={
-                                createParser.isPending ||
-                                updateParser.isPending ||
-                                !hasRequiredMapping ||
-                                !parserName.trim()
-                            }
-                        >
-                            <Save className="h-4 w-4 mr-1" />
-                            {isSaved
-                                ? t("importPage.customParser.saveChanges")
-                                : t("importPage.customParser.save")}
-                        </Button>
-                        {isSaved && (
+                    <details className="rounded-lg border p-3">
+                        <summary className="cursor-pointer text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                            {t("portfolioImport.saveParserOptions")}
+                        </summary>
+                        <div className="mt-4 flex flex-wrap items-end gap-2">
+                            <div className="flex-1 space-y-2 min-w-[160px]">
+                                <Label htmlFor="pf-parser-name">
+                                    {t("importPage.customParser.name")}
+                                </Label>
+                                <Input
+                                    id="pf-parser-name"
+                                    placeholder={t(
+                                        "portfolioImport.parserNamePlaceholder",
+                                    )}
+                                    value={parserName}
+                                    onChange={(e) =>
+                                        setParserName(e.target.value)
+                                    }
+                                />
+                            </div>
                             <Button
-                                variant="ghost"
                                 size="sm"
-                                className="text-destructive hover:text-destructive"
-                                onClick={handleDeleteParser}
-                                disabled={deleteParser.isPending}
+                                onClick={handleSaveParser}
+                                disabled={
+                                    createParser.isPending ||
+                                    updateParser.isPending ||
+                                    !hasRequiredMapping ||
+                                    !parserName.trim()
+                                }
                             >
-                                <Trash2 className="h-4 w-4 mr-1" />{" "}
-                                {t("importPage.customParser.delete")}
+                                <Save className="h-4 w-4 mr-1" />
+                                {isSaved
+                                    ? t("importPage.customParser.saveChanges")
+                                    : t("importPage.customParser.save")}
                             </Button>
-                        )}
-                    </div>
-
-                    {/* Dropzone */}
-                    <CsvDropzone
-                        file={file}
-                        onFileSelect={setFile}
-                        label={t("importPage.csvFile")}
-                    />
-
-                    {/* Detected columns of the selected file */}
-                    {!isSpecializedFormat && (
-                        <FileHeadersPanel
-                            file={file}
-                            separator={config.separator}
-                            highlightedHeaders={portfolioMappedColumns(config)}
-                            defaultCollapsed
-                        />
-                    )}
+                            {isSaved && (
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-destructive hover:text-destructive"
+                                    onClick={handleDeleteParser}
+                                    disabled={deleteParser.isPending}
+                                >
+                                    <Trash2 className="h-4 w-4 mr-1" />{" "}
+                                    {t("importPage.customParser.delete")}
+                                </Button>
+                            )}
+                        </div>
+                    </details>
 
                     {/* Progress */}
                     {progress && loading && (

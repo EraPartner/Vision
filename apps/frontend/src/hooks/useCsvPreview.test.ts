@@ -13,231 +13,322 @@ import { useCsvPreview } from "./useCsvPreview";
 
 // ── FileReader stub ────────────────────────────────────────────────────────────
 
-/** Build a FileReader class whose readAsText fires onload synchronously (via setTimeout 0). */
+/** Build a FileReader class whose readAsArrayBuffer fires onload synchronously (via setTimeout 0). */
 function buildFakeFileReader(resultText: string) {
-  return class FakeFileReader {
-    onload: ((e: ProgressEvent<FileReader>) => void) | null = null;
-    onerror: ((e: ProgressEvent<FileReader>) => void) | null = null;
-    result: string | null = null;
-    abort = vi.fn();
+    return class FakeFileReader {
+        onload: ((e: ProgressEvent<FileReader>) => void) | null = null;
+        onerror: ((e: ProgressEvent<FileReader>) => void) | null = null;
+        result: ArrayBuffer | null = null;
+        abort = vi.fn();
 
-    readAsText(_blob: Blob) {
-      setTimeout(() => {
-        this.result = resultText;
-        this.onload?.({} as ProgressEvent<FileReader>);
-      }, 0);
-    }
-  };
+        readAsArrayBuffer(_blob: Blob) {
+            setTimeout(() => {
+                this.result = new TextEncoder().encode(resultText).buffer;
+                this.onload?.({} as ProgressEvent<FileReader>);
+            }, 0);
+        }
+    };
 }
 
-/** Build a FileReader class whose readAsText fires onerror. */
+/** Build a FileReader class whose readAsArrayBuffer fires onerror. */
 function buildFakeFileReaderError() {
-  return class FakeFileReaderError {
-    onload: ((e: ProgressEvent<FileReader>) => void) | null = null;
-    onerror: ((e: ProgressEvent<FileReader>) => void) | null = null;
-    result: string | null = null;
-    abort = vi.fn();
+    return class FakeFileReaderError {
+        onload: ((e: ProgressEvent<FileReader>) => void) | null = null;
+        onerror: ((e: ProgressEvent<FileReader>) => void) | null = null;
+        result: ArrayBuffer | null = null;
+        abort = vi.fn();
 
-    readAsText(_blob: Blob) {
-      setTimeout(() => {
-        this.onerror?.({} as ProgressEvent<FileReader>);
-      }, 0);
-    }
-  };
+        readAsArrayBuffer(_blob: Blob) {
+            setTimeout(() => {
+                this.onerror?.({} as ProgressEvent<FileReader>);
+            }, 0);
+        }
+    };
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function makeFile(content: string, name = "test.csv"): File {
-  return new File([content], name, { type: "text/csv" });
+    return new File([content], name, { type: "text/csv" });
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe("useCsvPreview", () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it("returns null preview when file is null", () => {
-    const { result } = renderHook(() => useCsvPreview(null, ","));
-    expect(result.current.preview).toBeNull();
-    expect(result.current.isLoading).toBe(false);
-    expect(result.current.error).toBeNull();
-  });
-
-  it("parses headers and preview rows from CSV text", async () => {
-    const csv = `Date,Recipient,Amount\n2026-01-01,Netflix,-12.99\n2026-01-02,Spotify,-9.99`;
-    vi.stubGlobal("FileReader", buildFakeFileReader(csv));
-
-    const file = makeFile(csv);
-    const { result } = renderHook(() => useCsvPreview(file, ","));
-
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-
-    expect(result.current.preview).toMatchObject({
-      headers: ["Date", "Recipient", "Amount"],
-      rows: [
-        ["2026-01-01", "Netflix", "-12.99"],
-        ["2026-01-02", "Spotify", "-9.99"],
-      ],
+    afterEach(() => {
+        vi.unstubAllGlobals();
     });
-    expect(result.current.error).toBeNull();
-  });
 
-  it("respects alternative separator (semicolon)", async () => {
-    const csv = `Date;Recipient;Amount\n2026-01-01;Netflix;-12.99`;
-    vi.stubGlobal("FileReader", buildFakeFileReader(csv));
+    it("returns null preview when file is null", () => {
+        const { result } = renderHook(() => useCsvPreview(null, ","));
+        expect(result.current.preview).toBeNull();
+        expect(result.current.isLoading).toBe(false);
+        expect(result.current.error).toBeNull();
+    });
 
-    const file = makeFile(csv);
-    const { result } = renderHook(() => useCsvPreview(file, ";"));
+    it("uses the selected metadata offset before choosing headers", async () => {
+        const file = makeFile(
+            "Statement export\nGenerated today\nDate;Recipient;Amount\n2026-01-01;Netflix;-12.99",
+        );
+        const { result } = renderHook(() =>
+            useCsvPreview(file, ";", "utf-8", 2),
+        );
+        await waitFor(() =>
+            expect(result.current.preview?.headers).toEqual([
+                "Date",
+                "Recipient",
+                "Amount",
+            ]),
+        );
+        expect(result.current.preview?.rows).toEqual([
+            ["2026-01-01", "Netflix", "-12.99"],
+        ]);
+    });
 
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-
-    expect(result.current.preview?.headers).toEqual(["Date", "Recipient", "Amount"]);
-    expect(result.current.preview?.rows[0]).toEqual(["2026-01-01", "Netflix", "-12.99"]);
-  });
-
-  it("handles quoted fields containing the separator", async () => {
-    const csv = `Name,Memo\n"Smith, John","Payment for invoice #1"`;
-    vi.stubGlobal("FileReader", buildFakeFileReader(csv));
-
-    const file = makeFile(csv);
-    const { result } = renderHook(() => useCsvPreview(file, ","));
-
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-
-    expect(result.current.preview?.rows[0]).toEqual(["Smith, John", "Payment for invoice #1"]);
-  });
-
-  it("limits preview to MAX_PREVIEW_ROWS (5) rows", async () => {
-    const dataRows = Array.from(
-      { length: 10 },
-      (_, i) => `2026-01-${String(i + 1).padStart(2, "0")},R${i},-1.00`,
-    );
-    const csv = ["Date,Recipient,Amount", ...dataRows].join("\n");
-    vi.stubGlobal("FileReader", buildFakeFileReader(csv));
-
-    const file = makeFile(csv);
-    const { result } = renderHook(() => useCsvPreview(file, ","));
-
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-
-    expect(result.current.preview?.rows).toHaveLength(5);
-  });
-
-  it("skips rows whose column count differs from the header", async () => {
-    const csv = `Date,Amount\n2026-01-01,-1.00,EXTRA\n2026-01-02,-2.00`;
-    vi.stubGlobal("FileReader", buildFakeFileReader(csv));
-
-    const file = makeFile(csv);
-    const { result } = renderHook(() => useCsvPreview(file, ","));
-
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-
-    expect(result.current.preview?.rows).toEqual([["2026-01-02", "-2.00"]]);
-  });
-
-  it("handles quoted fields with embedded newlines", async () => {
-    const csv = `Name,Memo\n"Smith, John","line one\nline two"\n2026-01-02,x`;
-    vi.stubGlobal("FileReader", buildFakeFileReader(csv));
-
-    const file = makeFile(csv);
-    const { result } = renderHook(() => useCsvPreview(file, ","));
-
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-
-    expect(result.current.preview?.rows).toEqual([
-      ["Smith, John", "line one\nline two"],
-      ["2026-01-02", "x"],
-    ]);
-  });
-
-  it("keeps escaped double-quotes inside quoted fields", async () => {
-    const csv = `Name,Memo\n"Smith","said ""hi"" twice"`;
-    vi.stubGlobal("FileReader", buildFakeFileReader(csv));
-
-    const file = makeFile(csv);
-    const { result } = renderHook(() => useCsvPreview(file, ","));
-
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-
-    expect(result.current.preview?.rows).toEqual([["Smith", 'said "hi" twice']]);
-  });
-
-  it("survives a tail truncated mid-quote (PEEK_BYTES cut)", async () => {
-    // Simulates the preview slice ending inside an open quoted field: the
-    // records before the cut must still preview, and the truncated record is
-    // treated as if the quote closed at the cut (it still has both columns
-    // here, so it stays — a partial record missing columns is dropped by the
-    // column-count check like any other short row).
-    const csv = `Date,Memo\n2026-01-01,ok\n2026-01-02,"cut off mid-quo`;
-    vi.stubGlobal("FileReader", buildFakeFileReader(csv));
-
-    const file = makeFile(csv);
-    const { result } = renderHook(() => useCsvPreview(file, ","));
-
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-
-    expect(result.current.error).toBeNull();
-    expect(result.current.preview?.headers).toEqual(["Date", "Memo"]);
-    expect(result.current.preview?.rows).toEqual([
-      ["2026-01-01", "ok"],
-      ["2026-01-02", "cut off mid-quo"],
-    ]);
-  });
-
-  it("trims whitespace around fields, including inside quotes", async () => {
-    const csv = `Date , Amount \n 2026-01-01 ,"  -1.00  "`;
-    vi.stubGlobal("FileReader", buildFakeFileReader(csv));
-
-    const file = makeFile(csv);
-    const { result } = renderHook(() => useCsvPreview(file, ","));
-
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-
-    expect(result.current.preview?.headers).toEqual(["Date", "Amount"]);
-    expect(result.current.preview?.rows).toEqual([["2026-01-01", "-1.00"]]);
-  });
-
-  it("skips blank lines in data rows", async () => {
-    const csv = `Date,Amount\n2026-01-01,-1.00\n\n2026-01-02,-2.00`;
-    vi.stubGlobal("FileReader", buildFakeFileReader(csv));
-
-    const file = makeFile(csv);
-    const { result } = renderHook(() => useCsvPreview(file, ","));
-
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-
-    expect(result.current.preview?.rows).toHaveLength(2);
-  });
-
-  it("returns error state when FileReader fires onerror", async () => {
-    vi.stubGlobal("FileReader", buildFakeFileReaderError());
-
-    const file = makeFile("", "bad.csv");
-    const { result } = renderHook(() => useCsvPreview(file, ","));
-
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-
-    expect(result.current.error).toBe("read_error");
-    expect(result.current.preview).toBeNull();
-  });
-
-  it("clears preview when file is set back to null", async () => {
-    const csv = "Date,Amount\n2026-01-01,-1.00";
-    vi.stubGlobal("FileReader", buildFakeFileReader(csv));
-
-    const file = makeFile(csv);
-    const { result, rerender } = renderHook(
-      ({ f }: { f: File | null }) => useCsvPreview(f, ","),
-      { initialProps: { f: file as File | null } },
+    it.each([
+        ["latin1", "\u0080"],
+        ["latin-1", "\u0080"],
+        ["iso-8859-1", "\u0080"],
+        ["windows-1252", "€"],
+        ["utf-8", "\u0080"],
+    ])(
+        "decodes %s with the same byte semantics as import",
+        async (encoding, expected) => {
+            const bytes = Uint8Array.from([
+                ...new TextEncoder().encode("Caf"),
+                0xe9,
+                0x0a,
+                0x80,
+            ]);
+            const file = new File([bytes], "encoded.csv", { type: "text/csv" });
+            const { result } = renderHook(() =>
+                useCsvPreview(file, ",", encoding),
+            );
+            await waitFor(() =>
+                expect(result.current.preview?.headers).toEqual(["Café"]),
+            );
+            expect(result.current.preview?.rows).toEqual([[expected]]);
+        },
     );
 
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-    expect(result.current.preview).not.toBeNull();
+    it("refreshes the preview when encoding and skipped rows change", async () => {
+        const bytes = Uint8Array.from([
+            ...new TextEncoder().encode("Metadata\nValue\n"),
+            0x80,
+        ]);
+        const file = new File([bytes], "encoded.csv", { type: "text/csv" });
+        const { result, rerender } = renderHook(
+            ({ encoding, skipRows }) =>
+                useCsvPreview(file, ",", encoding, skipRows),
+            { initialProps: { encoding: "latin1", skipRows: 0 } },
+        );
+        await waitFor(() =>
+            expect(result.current.preview?.headers).toEqual(["Metadata"]),
+        );
+        rerender({ encoding: "windows-1252", skipRows: 1 });
+        await waitFor(() =>
+            expect(result.current.preview?.headers).toEqual(["Value"]),
+        );
+        expect(result.current.preview?.rows).toEqual([["€"]]);
+    });
 
-    rerender({ f: null });
-    expect(result.current.preview).toBeNull();
-  });
+    it("keeps UTF-8 characters in a byte-limited preview with a partial final character", async () => {
+        const bytes = new TextEncoder().encode(
+            "Café\n" + "x".repeat(16377) + "é",
+        );
+        const file = new File([bytes], "large.csv", { type: "text/csv" });
+        const { result } = renderHook(() => useCsvPreview(file, ","));
+        await waitFor(() =>
+            expect(result.current.preview?.headers).toEqual(["Café"]),
+        );
+        expect(result.current.error).toBeNull();
+    });
+
+    it("parses headers and preview rows from CSV text", async () => {
+        const csv = `Date,Recipient,Amount\n2026-01-01,Netflix,-12.99\n2026-01-02,Spotify,-9.99`;
+        vi.stubGlobal("FileReader", buildFakeFileReader(csv));
+
+        const file = makeFile(csv);
+        const { result } = renderHook(() => useCsvPreview(file, ","));
+
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+        expect(result.current.preview).toMatchObject({
+            headers: ["Date", "Recipient", "Amount"],
+            rows: [
+                ["2026-01-01", "Netflix", "-12.99"],
+                ["2026-01-02", "Spotify", "-9.99"],
+            ],
+        });
+        expect(result.current.error).toBeNull();
+    });
+
+    it("respects alternative separator (semicolon)", async () => {
+        const csv = `Date;Recipient;Amount\n2026-01-01;Netflix;-12.99`;
+        vi.stubGlobal("FileReader", buildFakeFileReader(csv));
+
+        const file = makeFile(csv);
+        const { result } = renderHook(() => useCsvPreview(file, ";"));
+
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+        expect(result.current.preview?.headers).toEqual([
+            "Date",
+            "Recipient",
+            "Amount",
+        ]);
+        expect(result.current.preview?.rows[0]).toEqual([
+            "2026-01-01",
+            "Netflix",
+            "-12.99",
+        ]);
+    });
+
+    it("handles quoted fields containing the separator", async () => {
+        const csv = `Name,Memo\n"Smith, John","Payment for invoice #1"`;
+        vi.stubGlobal("FileReader", buildFakeFileReader(csv));
+
+        const file = makeFile(csv);
+        const { result } = renderHook(() => useCsvPreview(file, ","));
+
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+        expect(result.current.preview?.rows[0]).toEqual([
+            "Smith, John",
+            "Payment for invoice #1",
+        ]);
+    });
+
+    it("limits preview to MAX_PREVIEW_ROWS (5) rows", async () => {
+        const dataRows = Array.from(
+            { length: 10 },
+            (_, i) => `2026-01-${String(i + 1).padStart(2, "0")},R${i},-1.00`,
+        );
+        const csv = ["Date,Recipient,Amount", ...dataRows].join("\n");
+        vi.stubGlobal("FileReader", buildFakeFileReader(csv));
+
+        const file = makeFile(csv);
+        const { result } = renderHook(() => useCsvPreview(file, ","));
+
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+        expect(result.current.preview?.rows).toHaveLength(5);
+    });
+
+    it("skips rows whose column count differs from the header", async () => {
+        const csv = `Date,Amount\n2026-01-01,-1.00,EXTRA\n2026-01-02,-2.00`;
+        vi.stubGlobal("FileReader", buildFakeFileReader(csv));
+
+        const file = makeFile(csv);
+        const { result } = renderHook(() => useCsvPreview(file, ","));
+
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+        expect(result.current.preview?.rows).toEqual([["2026-01-02", "-2.00"]]);
+    });
+
+    it("handles quoted fields with embedded newlines", async () => {
+        const csv = `Name,Memo\n"Smith, John","line one\nline two"\n2026-01-02,x`;
+        vi.stubGlobal("FileReader", buildFakeFileReader(csv));
+
+        const file = makeFile(csv);
+        const { result } = renderHook(() => useCsvPreview(file, ","));
+
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+        expect(result.current.preview?.rows).toEqual([
+            ["Smith, John", "line one\nline two"],
+            ["2026-01-02", "x"],
+        ]);
+    });
+
+    it("keeps escaped double-quotes inside quoted fields", async () => {
+        const csv = `Name,Memo\n"Smith","said ""hi"" twice"`;
+        vi.stubGlobal("FileReader", buildFakeFileReader(csv));
+
+        const file = makeFile(csv);
+        const { result } = renderHook(() => useCsvPreview(file, ","));
+
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+        expect(result.current.preview?.rows).toEqual([
+            ["Smith", 'said "hi" twice'],
+        ]);
+    });
+
+    it("survives a tail truncated mid-quote (PEEK_BYTES cut)", async () => {
+        // Simulates the preview slice ending inside an open quoted field: the
+        // records before the cut must still preview, and the truncated record is
+        // treated as if the quote closed at the cut (it still has both columns
+        // here, so it stays — a partial record missing columns is dropped by the
+        // column-count check like any other short row).
+        const csv = `Date,Memo\n2026-01-01,ok\n2026-01-02,"cut off mid-quo`;
+        vi.stubGlobal("FileReader", buildFakeFileReader(csv));
+
+        const file = makeFile(csv);
+        const { result } = renderHook(() => useCsvPreview(file, ","));
+
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+        expect(result.current.error).toBeNull();
+        expect(result.current.preview?.headers).toEqual(["Date", "Memo"]);
+        expect(result.current.preview?.rows).toEqual([
+            ["2026-01-01", "ok"],
+            ["2026-01-02", "cut off mid-quo"],
+        ]);
+    });
+
+    it("trims whitespace around fields, including inside quotes", async () => {
+        const csv = `Date , Amount \n 2026-01-01 ,"  -1.00  "`;
+        vi.stubGlobal("FileReader", buildFakeFileReader(csv));
+
+        const file = makeFile(csv);
+        const { result } = renderHook(() => useCsvPreview(file, ","));
+
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+        expect(result.current.preview?.headers).toEqual(["Date", "Amount"]);
+        expect(result.current.preview?.rows).toEqual([["2026-01-01", "-1.00"]]);
+    });
+
+    it("skips blank lines in data rows", async () => {
+        const csv = `Date,Amount\n2026-01-01,-1.00\n\n2026-01-02,-2.00`;
+        vi.stubGlobal("FileReader", buildFakeFileReader(csv));
+
+        const file = makeFile(csv);
+        const { result } = renderHook(() => useCsvPreview(file, ","));
+
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+        expect(result.current.preview?.rows).toHaveLength(2);
+    });
+
+    it("returns error state when FileReader fires onerror", async () => {
+        vi.stubGlobal("FileReader", buildFakeFileReaderError());
+
+        const file = makeFile("", "bad.csv");
+        const { result } = renderHook(() => useCsvPreview(file, ","));
+
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+        expect(result.current.error).toBe("read_error");
+        expect(result.current.preview).toBeNull();
+    });
+
+    it("clears preview when file is set back to null", async () => {
+        const csv = "Date,Amount\n2026-01-01,-1.00";
+        vi.stubGlobal("FileReader", buildFakeFileReader(csv));
+
+        const file = makeFile(csv);
+        const { result, rerender } = renderHook(
+            ({ f }: { f: File | null }) => useCsvPreview(f, ","),
+            { initialProps: { f: file as File | null } },
+        );
+
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+        expect(result.current.preview).not.toBeNull();
+
+        rerender({ f: null });
+        expect(result.current.preview).toBeNull();
+    });
 });

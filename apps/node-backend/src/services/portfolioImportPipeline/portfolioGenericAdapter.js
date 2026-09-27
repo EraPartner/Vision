@@ -10,10 +10,12 @@
  */
 
 import { logger } from "../../config/logger.js";
+import { ValidationError } from "../../middleware/errorHandler.js";
 import {
   parseCsvFile,
   rawDataForCsvRecord,
-  parseAmountField,
+  parseCustomAmount,
+  normalizeCsvNumberFormat,
   SUPPORTED_DATE_FORMATS,
   parseDateWithFormat,
 } from "../importPipeline/adapters/_shared.js";
@@ -55,14 +57,16 @@ import { parseSaxoTransactionHistory } from "./saxoTransactionHistoryAdapter.js"
 
 /**
  * The custom-parser definition a portfolio import runs on. It comes from the
- * upload route or a saved `custom_parser_configs.config_json` row and is not
- * re-validated here, so everything beyond `column_mapping` is optional.
+ * upload route or a saved `custom_parser_configs.config_json` row. The generic
+ * path validates the date format and numeric convention, and the shared
+ * decoder validates encoding. Other fields beyond `column_mapping` are optional.
  *
  * @typedef {object} PortfolioParserConfig
  * @property {string} [date_format] must be one of SUPPORTED_DATE_FORMATS
  * @property {string} [separator] CSV delimiter; defaults to ','
  * @property {number} [skip_rows]
- * @property {BufferEncoding} [encoding] defaults to 'utf-8'
+ * @property {string} [encoding] defaults to 'utf-8'; validated by the shared CSV decoder
+ * @property {'auto'|'decimal_dot'|'decimal_comma'} [number_format] defaults to auto; ambiguous auto cells reject the import
  * @property {Record<string, string>} [type_mapping] raw type label → canonical portfolio_txn_type (read by validate.js)
  * @property {'ibkr_transaction_history'|'kinesis_transaction_history'|'nexo_transaction_history'|'saxo_transaction_history'} [format] specialized statement format
  * @property {{ date?: string, type?: string, symbol?: string, name?: string, units?: string, price?: string, amount?: string, fees?: string, taxes?: string, currency?: string, fx_rate?: string, note?: string, source_account?: string, source_id?: string }} [column_mapping] source column NAMES, not indices
@@ -72,12 +76,14 @@ import { parseSaxoTransactionHistory } from "./saxoTransactionHistoryAdapter.js"
  * Absolute magnitude of a numeric cell, or null when blank/unparseable.
  *
  * @param {unknown} raw
+ * @param {unknown} numberFormat
+ * @param {{ rowNumber: number, column: string }} context
  * @returns {number|null}
  */
-function parseMagnitude(raw) {
+function parseMagnitude(raw, numberFormat, context) {
   if (raw === undefined || raw === null || String(raw).trim() === "")
     return null;
-  const n = parseAmountField(raw);
+  const n = parseCustomAmount(raw, numberFormat, context);
   if (isNaN(n)) return null;
   return Math.abs(n);
 }
@@ -95,28 +101,38 @@ function cell(row, key) {
 /**
  * @param {Record<string, string>} row a `columns: true` csv-parse record
  * @param {PortfolioParserConfig} config
+ * @param {number} rowNumber data-row ordinal, excluding metadata and the header
  * @returns {ParsedPortfolioRow|null} null when the mapped date cell is missing or unparseable
  */
-function rowToParsed(row, config) {
+function rowToParsed(row, config, rowNumber) {
   const colMap = config.column_mapping || {};
   const dateStr = cell(row, colMap.date);
   if (!dateStr) return null;
   const date = parseDateWithFormat(dateStr, config.date_format || "");
   if (!date || isNaN(date.getTime())) return null;
 
+  /** @param {string|undefined} key */
+  function magnitude(key) {
+    return key
+      ? parseMagnitude(row[key], config.number_format, {
+          rowNumber,
+          column: key,
+        })
+      : null;
+  }
   const currency = colMap.currency ? cell(row, colMap.currency) || null : null;
-  const fxRaw = colMap.fx_rate ? parseMagnitude(row[colMap.fx_rate]) : null;
+  const fxRaw = magnitude(colMap.fx_rate);
 
   return {
     date,
     typeRaw: cell(row, colMap.type),
     symbolRaw: cell(row, colMap.symbol),
     nameRaw: cell(row, colMap.name),
-    units: colMap.units ? parseMagnitude(row[colMap.units]) : null,
-    pricePerUnit: colMap.price ? parseMagnitude(row[colMap.price]) : null,
-    amount: colMap.amount ? parseMagnitude(row[colMap.amount]) : null,
-    fees: colMap.fees ? parseMagnitude(row[colMap.fees]) : null,
-    taxes: colMap.taxes ? parseMagnitude(row[colMap.taxes]) : null,
+    units: magnitude(colMap.units),
+    pricePerUnit: magnitude(colMap.price),
+    amount: magnitude(colMap.amount),
+    fees: magnitude(colMap.fees),
+    taxes: magnitude(colMap.taxes),
     currency,
     fxRateToEur: fxRaw,
     note: colMap.note ? cell(row, colMap.note) : "",
@@ -145,6 +161,7 @@ export async function parseWithConfig(filePath, config) {
   if (config.format === "saxo_transaction_history") {
     return parseSaxoTransactionHistory(filePath, config);
   }
+  normalizeCsvNumberFormat(config.number_format);
   const dateFormat = config.date_format || "";
   if (!SUPPORTED_DATE_FORMATS.includes(dateFormat)) {
     throw new Error(
@@ -158,7 +175,7 @@ export async function parseWithConfig(filePath, config) {
       columns: true,
       skip_empty_lines: true,
       delimiter: config.separator || ",",
-      from: (config.skip_rows || 0) + 1,
+      from_line: (config.skip_rows || 0) + 1,
       relax_column_count: true,
     },
     config.encoding || "utf-8",
@@ -166,12 +183,13 @@ export async function parseWithConfig(filePath, config) {
 
   const rows = /** @type {ParsedPortfolioRows} */ ([]);
   let skipped = 0;
-  for (const record of records) {
+  for (const [index, record] of records.entries()) {
     try {
-      const parsed = rowToParsed(record, config);
+      const parsed = rowToParsed(record, config, index + 1);
       if (parsed) rows.push(parsed);
       else skipped++;
-    } catch {
+    } catch (error) {
+      if (error instanceof ValidationError) throw error;
       skipped++;
     }
   }

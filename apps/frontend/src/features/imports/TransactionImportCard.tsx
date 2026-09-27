@@ -27,6 +27,7 @@ import {
     SeparatorSelect,
     EncodingSelect,
     DateFormatSelect,
+    NumberFormatSelect,
 } from "@/features/imports/CsvFormatSelects";
 import { isCsvFile } from "@/features/imports/csvFile";
 import { apiClient } from "@/lib/api";
@@ -53,7 +54,11 @@ import {
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { consumePendingImportFile } from "@/lib/importHandoff";
 import type { ImportProgress, ImportResult } from "@/types/apiClient";
-import { isReviewRequired, type ImportCsvResult } from "@/lib/api/imports";
+import {
+    isReviewRequired,
+    type ImportCsvResult,
+    type CsvNumberFormat,
+} from "@/lib/api/imports";
 import { useUnsavedChanges } from "@/contexts/UnsavedChangesContext";
 
 interface CustomConfig {
@@ -65,6 +70,7 @@ interface CustomConfig {
     separator: string;
     encoding: string;
     skipRows: number;
+    number_format: CsvNumberFormat;
 }
 
 const DEFAULT_CUSTOM_CONFIG: CustomConfig = {
@@ -76,6 +82,7 @@ const DEFAULT_CUSTOM_CONFIG: CustomConfig = {
     separator: ",",
     encoding: "utf-8",
     skipRows: 0,
+    number_format: "auto",
 };
 
 interface TransactionImportCardProps {
@@ -255,6 +262,7 @@ export function TransactionImportCard({
                     customConfig.separator,
                     customConfig.encoding,
                     customConfig.skipRows,
+                    customConfig.number_format,
                 );
                 if (isReviewRequired(custom)) {
                     // 202: the batch is parked in awaiting_review, nothing was committed
@@ -491,6 +499,14 @@ export function TransactionImportCard({
                                     </span>{" "}
                                     {customConfig.dateFormat}
                                 </div>
+                                <div>
+                                    <span className="font-medium text-foreground">
+                                        {t("importPage.numberFormat.label")}:
+                                    </span>{" "}
+                                    {t(
+                                        `importPage.numberFormat.${customConfig.number_format}`,
+                                    )}
+                                </div>
                             </div>
                         )}
 
@@ -536,6 +552,16 @@ export function TransactionImportCard({
                                 </div>
 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <NumberFormatSelect
+                                        id="number-format"
+                                        value={customConfig.number_format}
+                                        onChange={(value) =>
+                                            setCustomConfig({
+                                                ...customConfig,
+                                                number_format: value,
+                                            })
+                                        }
+                                    />
                                     <EncodingSelect
                                         id="encoding"
                                         value={customConfig.encoding}
@@ -572,6 +598,8 @@ export function TransactionImportCard({
                                 <CsvColumnMapper
                                     file={file}
                                     separator={customConfig.separator}
+                                    encoding={customConfig.encoding}
+                                    skipRows={customConfig.skipRows}
                                     config={{
                                         dateColumn: customConfig.dateColumn,
                                         recipientColumn:
@@ -643,6 +671,8 @@ export function TransactionImportCard({
                 {/* Detected columns of the selected file (always shown once a file is chosen) */}
                 <FileHeadersPanel
                     file={file}
+                    encoding={isCustomLike ? customConfig.encoding : undefined}
+                    skipRows={isCustomLike ? customConfig.skipRows : 0}
                     separator={
                         isCustomLike ? customConfig.separator : undefined
                     }

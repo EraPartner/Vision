@@ -16,6 +16,7 @@ const config = (accountId) => ({
   dateColumn: "Date",
   symbolColumn: "Symbol",
   defaultAssetClass: "stock",
+  number_format: "auto",
   accountId,
 });
 

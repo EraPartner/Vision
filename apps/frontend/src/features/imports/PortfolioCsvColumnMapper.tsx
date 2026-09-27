@@ -25,6 +25,13 @@ import type { PortfolioCustomConfig } from "@/lib/api/portfolioImports";
 import type { AssetClass } from "@vision/types/assetClasses";
 import type { PortfolioTxnType } from "@vision/types/portfolioTxnTypes";
 
+const ADDITIONAL_COLUMNS = new Set([
+    "feesColumn",
+    "taxesColumn",
+    "fxRateColumn",
+    "noteColumn",
+]);
+
 const ASSET_CLASS_OPTIONS: readonly AssetClass[] = ASSET_CLASSES;
 
 // The types with existing UI labels (portfolio.txnType.*). Corporate actions
@@ -56,7 +63,12 @@ export function PortfolioCsvColumnMapper({
     onChange,
 }: Props) {
     const { t } = useLanguage();
-    const { preview } = useCsvPreview(file, separator);
+    const { preview } = useCsvPreview(
+        file,
+        separator,
+        config.encoding,
+        config.skipRows,
+    );
     const headers = preview?.headers ?? [];
     const hasHeaders = headers.length > 0;
     const noMappingLabel = t("importPage.noMapping");
@@ -100,6 +112,24 @@ export function PortfolioCsvColumnMapper({
             .filter(([, n]) => n > 1)
             .map(([col]) => col);
     }, [config]);
+
+    const renderField = ([
+        key,
+        labelKey,
+        required,
+    ]: (typeof PORTFOLIO_COLUMN_FIELDS)[number]) => (
+        <MappedColumnField
+            key={key}
+            id={`pf-${key}`}
+            label={t(labelKey)}
+            value={String(config[key] ?? "")}
+            headers={headers}
+            hasHeaders={hasHeaders}
+            required={required}
+            onChange={(v) => set(key)(v as never)}
+            noMappingLabel={noMappingLabel}
+        />
+    );
 
     return (
         <div className="space-y-4">
@@ -151,22 +181,22 @@ export function PortfolioCsvColumnMapper({
                 </div>
             </div>
 
-            {/* Column mapping */}
+            {/* Core mappings stay visible; supplementary values remain available on demand. */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {PORTFOLIO_COLUMN_FIELDS.map(([key, labelKey, required]) => (
-                    <MappedColumnField
-                        key={key}
-                        id={`pf-${key}`}
-                        label={t(labelKey)}
-                        value={String(config[key] ?? "")}
-                        headers={headers}
-                        hasHeaders={hasHeaders}
-                        required={required}
-                        onChange={(v) => set(key)(v as never)}
-                        noMappingLabel={noMappingLabel}
-                    />
-                ))}
+                {PORTFOLIO_COLUMN_FIELDS.filter(
+                    ([key]) => !ADDITIONAL_COLUMNS.has(key),
+                ).map(renderField)}
             </div>
+            <details className="rounded-lg border p-3">
+                <summary className="cursor-pointer text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                    {t("portfolioImport.optionalColumns")}
+                </summary>
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {PORTFOLIO_COLUMN_FIELDS.filter(([key]) =>
+                        ADDITIONAL_COLUMNS.has(key),
+                    ).map(renderField)}
+                </div>
+            </details>
 
             {duplicateColumns.length > 0 && (
                 <p className="text-sm text-warning" role="alert">

@@ -502,6 +502,7 @@ export function buildInvestmentSummaryCore(
   let taxTxnAmount = ZERO;
   let feesFieldAmount = ZERO;
   let taxesFieldAmount = ZERO;
+  let nonBasisExpenses = ZERO;
 
   // Converted (transaction-date rate) twins of the sums above.
   let totalDividendsC = ZERO;
@@ -515,6 +516,7 @@ export function buildInvestmentSummaryCore(
   let taxTxnAmountC = ZERO;
   let feesFieldAmountC = ZERO;
   let taxesFieldAmountC = ZERO;
+  let nonBasisExpensesC = ZERO;
 
   for (const txn of txns) {
     const amount = toDecimal(txn.amount);
@@ -523,6 +525,11 @@ export function buildInvestmentSummaryCore(
     taxesFieldAmount = taxesFieldAmount.plus(toDecimal(txn.taxes));
     feesFieldAmountC = feesFieldAmountC.plus(toDecimal(txn.fees).times(fx));
     taxesFieldAmountC = taxesFieldAmountC.plus(toDecimal(txn.taxes).times(fx));
+    if (!LOT_TXN_TYPES.has(txn.type)) {
+      const expenses = toDecimal(txn.fees).plus(toDecimal(txn.taxes));
+      nonBasisExpenses = nonBasisExpenses.plus(expenses);
+      nonBasisExpensesC = nonBasisExpensesC.plus(expenses.times(fx));
+    }
 
     switch (txn.type) {
       case "buy":
@@ -682,14 +689,16 @@ export function buildInvestmentSummaryCore(
 
   const totalIncome = totalDividends.plus(totalInterestPaid).plus(totalRent);
   const totalGain = realizedGain.plus(unrealizedGain);
-  // For unit-based assets the per-row fees/taxes *columns* are already folded
-  // into cost basis by the calculators (buys add them, sells subtract them),
-  // so subtracting totalFees/totalTaxes (= fee/tax tx-types + those columns)
-  // would count them twice. Only the standalone fee/tax transaction *types*
-  // sit outside cost basis. Other branches keep the full subtraction because
-  // their totalInvested excludes the fees/taxes columns.
+  // Buy/gift/sell expense fields are already included in cost basis or net
+  // proceeds. Other rows' expense fields (including dividend withholding) and
+  // standalone fee/tax amounts sit outside that calculation. Non-unit assets
+  // subtract all expense fields because their invested amount excludes them.
   const gainLoss = isUnitBased
-    ? totalGain.plus(totalIncome).minus(feeTxnAmount).minus(taxTxnAmount)
+    ? totalGain
+        .plus(totalIncome)
+        .minus(feeTxnAmount)
+        .minus(taxTxnAmount)
+        .minus(nonBasisExpenses)
     : totalGain.plus(totalIncome).minus(totalFees).minus(totalTaxes);
   const gainLossPercent = totalBuyCost.gt(0)
     ? gainLoss.div(totalBuyCost).times(100)
@@ -712,7 +721,11 @@ export function buildInvestmentSummaryCore(
   const unrealizedGainC = currentValueC.minus(totalInvestedC);
   const totalGainC = realizedGainC.plus(unrealizedGainC);
   const gainLossC = isUnitBased
-    ? totalGainC.plus(totalIncomeC).minus(feeTxnAmountC).minus(taxTxnAmountC)
+    ? totalGainC
+        .plus(totalIncomeC)
+        .minus(feeTxnAmountC)
+        .minus(taxTxnAmountC)
+        .minus(nonBasisExpensesC)
     : totalGainC.plus(totalIncomeC).minus(totalFeesC).minus(totalTaxesC);
   const assetGainC = gainLoss.times(mNow);
   const fxGainC = gainLossC.minus(assetGainC);
