@@ -242,10 +242,11 @@ describe("getUncategorisedWithCount", () => {
       "LEFT JOIN recipients r ON t.recipient_id = r.id",
     );
     expect(totalCte).toContain("r.name ILIKE");
-    // The five projection-only joins must NOT be in the count. They are LEFT
+    // The primary recipient determines whether this transaction is categorised.
+    expect(totalCte).toContain("LEFT JOIN recipients pr");
+    // The remaining projection-only joins must NOT be in the count. They are LEFT
     // JOINs onto a PRIMARY KEY, so they can neither drop nor duplicate a row —
     // but a count selects no labels, so they are pure overhead.
-    expect(totalCte).not.toContain("LEFT JOIN recipients pr");
     expect(totalCte).not.toContain("LEFT JOIN categories");
     expect(totalCte).not.toContain("LEFT JOIN accounts");
 
@@ -273,8 +274,7 @@ describe("getUncategorisedWithCount", () => {
       sql.indexOf("WITH total_cte AS ("),
       sql.indexOf("uncategorised_rows AS ("),
     );
-    // Same predicates as getCount would build, in the same $-order; the row CTE
-    // then appends its own copies of the shared filters after them.
+    // The total and page share the same filter placeholders.
     expect(totalCte).toContain("t.is_active = true");
     expect(totalCte).toContain("t.date >= $1");
     expect(totalCte).toContain("r.name ILIKE $2");
@@ -282,7 +282,7 @@ describe("getUncategorisedWithCount", () => {
     expect(params.slice(0, 3)).toEqual(["2024-01-01", "%delh%", "%coffee%"]);
   });
 
-  it("forwards the full route filter set to BOTH halves, params ordered total → rows → limit/offset", async () => {
+  it("forwards the full row-compatible filter set to both halves using shared params", async () => {
     query.mockResolvedValueOnce({ rows: [{ id: null, total_count: "0" }] });
     await transactionRepository.getUncategorisedWithCount({
       recipientGroupId: 7,
@@ -306,22 +306,11 @@ describe("getUncategorisedWithCount", () => {
       expect(half).toContain("FROM transaction_tags tt"); // tagSlugs EXISTS
       expect(half).toMatch(/primary_recipient_id = \$\d+/); // recipientGroupId group resolve
     }
-    // Each half allocates its own placeholders; limit/offset come last.
-    expect(params).toEqual([
-      10,
-      100,
-      7,
-      ["groceries"],
-      10,
-      100,
-      7,
-      ["groceries"],
-      50,
-      0,
-    ]);
+    // Both halves reuse placeholders; limit/offset come last.
+    expect(params).toEqual([10, 100, 7, ["groceries"], 50, 0]);
   });
 
-  it("applies row-compatible filters to the queue while keeping category filters total-only", async () => {
+  it("ignores category filters and pins active rows for both the queue and its total", async () => {
     query.mockResolvedValueOnce({ rows: [{ id: null, total_count: "0" }] });
     await transactionRepository.getUncategorisedWithCount({
       categoryIds: [3],
@@ -330,15 +319,52 @@ describe("getUncategorisedWithCount", () => {
       active: false,
     });
     const [sql] = query.mock.calls[0];
-    const rowCte = sql.slice(sql.indexOf("uncategorised_rows AS ("));
-    expect(rowCte).not.toMatch(/\(\s+t\.category_id IN \(\$\d+/);
-    expect(rowCte).toContain("t.id = $");
-    expect(rowCte).toContain("t.id IN (");
-    // The queue is an active-rows worklist regardless of the `active` param.
-    expect(rowCte).toContain("t.is_active = true");
-    expect(rowCte).toContain(
-      "COALESCE(t.category_id, r.default_category_id, pr.default_category_id) IS NULL",
+    const totalCte = sql.slice(
+      sql.indexOf("WITH total_cte AS ("),
+      sql.indexOf("uncategorised_rows AS ("),
     );
+    const rowCte = sql.slice(sql.indexOf("uncategorised_rows AS ("));
+    for (const half of [totalCte, rowCte]) {
+      expect(half).not.toContain("category_ancestors");
+      expect(half).toContain("t.id = $");
+      expect(half).toContain("t.id IN (");
+      expect(half).toContain("t.is_active = true");
+      expect(half).toContain(
+        "COALESCE(t.category_id, r.default_category_id, pr.default_category_id) IS NULL",
+      );
+    }
+  });
+
+  it("counts the identical predicate before pagination and preserves a total for an empty page", async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: null, total_count: "3" }] });
+    const result = await transactionRepository.getUncategorisedWithCount({
+      startDate: "2024-01-01",
+      recipientName: "coffee",
+      amountMin: 20,
+      limit: 2,
+      offset: 4,
+    });
+    const [sql, params] = query.mock.calls[0];
+    const totalCte = sql.slice(
+      sql.indexOf("WITH total_cte AS ("),
+      sql.indexOf("uncategorised_rows AS ("),
+    );
+    const rowCte = sql.slice(sql.indexOf("uncategorised_rows AS ("));
+    const countWhere = totalCte
+      .slice(totalCte.indexOf("WHERE ") + 6, totalCte.lastIndexOf(")"))
+      .trim();
+    const pageWhere = rowCte
+      .slice(
+        rowCte.indexOf("WHERE ") + 6,
+        rowCte.indexOf("ORDER BY", rowCte.indexOf("WHERE ")),
+      )
+      .trim();
+    expect(countWhere).toBe(pageWhere);
+    expect(countWhere).toContain("pr.default_category_id) IS NULL");
+    expect(totalCte).not.toContain("LIMIT");
+    expect(totalCte).not.toContain("OFFSET");
+    expect(params.slice(-2)).toEqual([2, 4]);
+    expect(result).toEqual({ rows: [], total: 3 });
   });
 
   it("returns total 0 and empty rows when CTE yields only the null-joined total row", async () => {

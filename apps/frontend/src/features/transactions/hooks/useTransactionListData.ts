@@ -82,6 +82,7 @@ export function useTransactionListData({
     const sortDir: SortDir = sortKey ? validDir : null;
 
     const [allItems, setAllItems] = useState<RawApiTransaction[]>([]);
+    const [hasInitialItems, setHasInitialItems] = useState(false);
     const [totalItems, setTotalItems] = useState(0);
     const [isFetchingMore, setIsFetchingMore] = useState(false);
 
@@ -167,6 +168,7 @@ export function useTransactionListData({
     useEffect(() => {
         if (initialData && !isEditingRef.current) {
             setAllItems(initialData.items as unknown as RawApiTransaction[]);
+            setHasInitialItems(true);
             setTotalItems(initialData.total ?? initialData.items.length);
             offsetRef.current = initialData.items.length;
             hasMoreRef.current =
@@ -332,7 +334,7 @@ export function useTransactionListData({
         allItems,
         setAllItems,
         totalItems,
-        isLoading,
+        isLoading: isLoading || (!!initialData && !hasInitialItems),
         error: (error as Error | null) ?? null,
         isFetchingMore,
         hasMoreRef,

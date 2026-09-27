@@ -171,11 +171,57 @@ describe("TransactionInfoDialog", () => {
         );
 
         await screen.findByRole("dialog");
-        // common.edit = "Edit" — title attribute provides accessible name for icon buttons
+        // Each control identifies the field it edits.
         const editButtons = await screen.findAllByRole("button", {
-            name: /^edit$/i,
+            name: /^edit /i,
         });
-        expect(editButtons.length).toBeGreaterThan(0);
+        expect(editButtons).toHaveLength(6);
+        for (const field of [
+            "Date",
+            "Description",
+            "Amount",
+            "Currency",
+            "Bank Account",
+            "Comment",
+        ]) {
+            expect(
+                screen.getByRole("button", { name: `Edit ${field}` }),
+            ).toBeInTheDocument();
+        }
+    });
+
+    it("allows adding a previously blank comment", async () => {
+        const user = userEvent.setup();
+        const onApplyLocal = vi.fn();
+        let receivedBody: unknown;
+        server.use(
+            http.patch(
+                `${API_BASE}/api/transactions/42`,
+                async ({ request }) => {
+                    receivedBody = await request.json();
+                    return ok({ ...TX, comment: "Added note" });
+                },
+            ),
+        );
+        renderWithApp(
+            <TransactionInfoDialog
+                infoTransaction={{ ...TX, comment: "" }}
+                onClose={vi.fn()}
+                onApplyLocal={onApplyLocal}
+            />,
+        );
+        await user.click(
+            await screen.findByRole("button", { name: "Edit Comment" }),
+        );
+        await user.type(
+            screen.getByRole("textbox", { name: "Comment" }),
+            "Added note",
+        );
+        await user.click(screen.getByRole("button", { name: "Save" }));
+        await waitFor(() =>
+            expect(receivedBody).toEqual({ comment: "Added note" }),
+        );
+        expect(onApplyLocal).toHaveBeenCalledWith(42, "comment", "Added note");
     });
 
     it("clicking Edit on memo field shows text input", async () => {
@@ -191,12 +237,9 @@ describe("TransactionInfoDialog", () => {
 
         await screen.findByRole("dialog");
 
-        // Edit buttons in DOM order: date (index 0), memo (index 1), amount, currency, bank, comment
-        // (balance is read-only — bank-stamped import data, ADR-094 — so it has no edit button)
-        const editButtons = await screen.findAllByRole("button", {
-            name: /^edit$/i,
-        });
-        await user.click(editButtons[1]); // memo field uses editType="text"
+        await user.click(
+            await screen.findByRole("button", { name: "Edit Description" }),
+        );
 
         expect(screen.getByRole("textbox")).toBeInTheDocument();
     });
@@ -233,10 +276,9 @@ describe("TransactionInfoDialog", () => {
             />,
         );
 
-        const editButtons = await screen.findAllByRole("button", {
-            name: /^edit$/i,
-        });
-        await user.click(editButtons[4]);
+        await user.click(
+            await screen.findByRole("button", { name: "Edit Bank Account" }),
+        );
         const input = screen.getByRole("combobox", {
             name: "Bank Account",
         });
@@ -274,10 +316,9 @@ describe("TransactionInfoDialog", () => {
 
         await screen.findByRole("dialog");
 
-        const editButtons = await screen.findAllByRole("button", {
-            name: /^edit$/i,
-        });
-        await user.click(editButtons[1]); // memo
+        await user.click(
+            await screen.findByRole("button", { name: "Edit Description" }),
+        );
         expect(screen.getByRole("textbox")).toBeInTheDocument();
 
         // common.cancel = "Cancel"
@@ -319,10 +360,9 @@ describe("TransactionInfoDialog", () => {
 
             await screen.findByRole("dialog");
 
-            const editButtons = await screen.findAllByRole("button", {
-                name: /^edit$/i,
-            });
-            await user.click(editButtons[1]); // memo
+            await user.click(
+                await screen.findByRole("button", { name: "Edit Description" }),
+            );
 
             const input = screen.getByRole("textbox", { name: "Description" });
             await user.clear(input);
@@ -364,10 +404,9 @@ describe("TransactionInfoDialog", () => {
             />,
         );
         await screen.findByRole("dialog");
-        const editButtons = await screen.findAllByRole("button", {
-            name: /^edit$/i,
-        });
-        await user.click(editButtons[0]);
+        await user.click(
+            await screen.findByRole("button", { name: "Edit Date" }),
+        );
 
         const dateTrigger = screen.getByRole("button", { name: "Date" });
         dateTrigger.focus();
@@ -377,7 +416,7 @@ describe("TransactionInfoDialog", () => {
         expect(patchCount).toBe(0);
     });
 
-    it("Escape key closes dialog and calls onClose", async () => {
+    it("Escape dismisses the focused tooltip before closing the dialog", async () => {
         const user = userEvent.setup();
         const onClose = vi.fn();
 
@@ -391,6 +430,11 @@ describe("TransactionInfoDialog", () => {
 
         await screen.findByRole("dialog");
 
+        expect(await screen.findByRole("tooltip")).toHaveTextContent(
+            "Edit Date",
+        );
+        await user.keyboard("{Escape}");
+        expect(onClose).not.toHaveBeenCalled();
         await user.keyboard("{Escape}");
 
         // Controlled component — onClose signals parent to clear infoTransaction prop;
@@ -508,12 +552,9 @@ describe("TransactionInfoDialog", () => {
 
         await screen.findByRole("dialog");
 
-        const editButtons = await screen.findAllByRole("button", {
-            name: /^edit$/i,
-        });
-        // index order: date(0), memo(1), amount(2), currency(3), bank(4), comment(5)
-        // (balance is read-only — no edit button — see ADR-094)
-        await user.click(editButtons[2]);
+        await user.click(
+            await screen.findByRole("button", { name: "Edit Amount" }),
+        );
 
         const input = screen.getByRole("textbox", {
             name: "Amount",
@@ -623,10 +664,9 @@ describe("TransactionInfoDialog", () => {
 
         await screen.findByRole("dialog");
 
-        const editButtons = await screen.findAllByRole("button", {
-            name: /^edit$/i,
-        });
-        await user.click(editButtons[1]); // memo
+        await user.click(
+            await screen.findByRole("button", { name: "Edit Description" }),
+        );
 
         await user.type(screen.getByRole("textbox"), " (changed)");
         await user.click(

@@ -8,6 +8,11 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+    Tooltip,
+    TooltipTrigger,
+    TooltipContent,
+} from "@/components/ui/tooltip";
 import { Info, Pencil, Check, X } from "lucide-react";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
@@ -310,7 +315,7 @@ export function TransactionInfoDialog({
                                         editValue,
                                         editType,
                                     }) =>
-                                        value ? (
+                                        value || editable ? (
                                             <div
                                                 key={key}
                                                 className="flex justify-between gap-4 py-2.5 first:pt-0 last:pb-0"
@@ -458,23 +463,40 @@ export function TransactionInfoDialog({
                                                         </span>
                                                         {editable &&
                                                         editField ? (
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                className="icon-touch-target text-muted-foreground hover:text-foreground"
-                                                                onClick={() =>
-                                                                    startInfoFieldEdit(
-                                                                        editField,
-                                                                        editValue ??
-                                                                            "",
-                                                                    )
-                                                                }
-                                                                title={t(
-                                                                    "common.edit",
-                                                                )}
-                                                            >
-                                                                <Pencil className="h-3.5 w-3.5" />
-                                                            </Button>
+                                                            <Tooltip>
+                                                                <TooltipTrigger
+                                                                    asChild
+                                                                >
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        className="icon-touch-target text-muted-foreground hover:text-foreground"
+                                                                        onClick={() =>
+                                                                            startInfoFieldEdit(
+                                                                                editField,
+                                                                                editValue ??
+                                                                                    "",
+                                                                            )
+                                                                        }
+                                                                        aria-label={t(
+                                                                            "common.editField",
+                                                                            {
+                                                                                field: label,
+                                                                            },
+                                                                        )}
+                                                                    >
+                                                                        <Pencil className="h-3.5 w-3.5" />
+                                                                    </Button>
+                                                                </TooltipTrigger>
+                                                                <TooltipContent>
+                                                                    {t(
+                                                                        "common.editField",
+                                                                        {
+                                                                            field: label,
+                                                                        },
+                                                                    )}
+                                                                </TooltipContent>
+                                                            </Tooltip>
                                                         ) : null}
                                                     </div>
                                                 )}

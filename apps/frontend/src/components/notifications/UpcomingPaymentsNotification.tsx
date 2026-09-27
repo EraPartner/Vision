@@ -1,6 +1,6 @@
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { Bell, X, CalendarClock } from "lucide-react";
-import { useEffect } from "react";
+import { ChevronDown, X, CalendarClock } from "lucide-react";
+import { useEffect, useId, useState } from "react";
 import { formatCurrency } from "@/utils/currency";
 import { Link, useLocation } from "react-router";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
@@ -17,6 +17,10 @@ export function UpcomingPaymentsNotification() {
   const locale = numberFormatToLocale(appSettings.numberFormat);
   const { upcoming, visibleUpcoming, dismiss } = useUpcomingPlannedPayments();
 
+  const [expanded, setExpanded] = useState(false);
+  const detailsId = useId();
+  const sortedUpcoming = [...visibleUpcoming].sort((a, b) => a.planned_date.localeCompare(b.planned_date));
+
   // Native dock/taskbar badge mirrors the visible (non-dismissed) due count.
   const badgeCount = upcoming !== undefined ? visibleUpcoming.length : null;
   useEffect(() => {
@@ -32,13 +36,17 @@ export function UpcomingPaymentsNotification() {
   return (
     <Alert className="relative border-primary/30 bg-primary/5 mb-4">
       <CalendarClock className="h-4 w-4 text-primary" />
-      <AlertTitle className="flex items-center gap-2 text-primary font-semibold">
-        <Bell className="h-4 w-4" />
-        {tc('upcoming.count', visibleUpcoming.length)}
+      <AlertTitle className="mb-0 pr-8 text-primary font-semibold">
+        <button type="button" aria-expanded={expanded} aria-controls={detailsId}
+          onClick={() => setExpanded(!expanded)}
+          className="flex min-h-8 items-center gap-2 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          {tc('upcoming.count', visibleUpcoming.length)}
+          <ChevronDown aria-hidden="true" className={`h-4 w-4 transition-transform ${expanded ? "rotate-180" : ""}`} />
+        </button>
       </AlertTitle>
-      <AlertDescription className="mt-2 space-y-1">
-        {visibleUpcoming.slice(0, 5).map((pt) => (
-          <div key={pt.id} className="flex items-center justify-between text-sm">
+      <AlertDescription id={detailsId} hidden={!expanded} className="mt-2 space-y-1">
+        {sortedUpcoming.slice(0, 5).map((pt) => (
+          <div key={pt.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm">
             <span className="font-medium">
               {pt.memo || pt.recipient_name || t('upcoming.unnamed')}
             </span>
@@ -49,9 +57,9 @@ export function UpcomingPaymentsNotification() {
               </span>
               <button
                 type="button"
-                className="inline-flex items-center justify-center h-5 w-5 rounded-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-                title={t('recurring.dismiss')}
-                aria-label={t('recurring.dismiss')}
+                className="inline-flex items-center justify-center h-8 w-8 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                title={t('upcoming.dismissPayment', { name: pt.memo || pt.recipient_name || t('upcoming.unnamed') })}
+                aria-label={t('upcoming.dismissPayment', { name: pt.memo || pt.recipient_name || t('upcoming.unnamed') })}
                 onClick={() => dismiss(pt)}
               >
                 <X className="h-3 w-3" />
@@ -67,7 +75,7 @@ export function UpcomingPaymentsNotification() {
         <div className="mt-2">
           <Link
             to="/planned"
-            className="text-xs text-primary hover:underline font-medium"
+            className="text-xs text-primary hover:underline font-medium inline-flex min-h-8 items-center rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {t('upcoming.viewAllLink')}
           </Link>
@@ -75,7 +83,7 @@ export function UpcomingPaymentsNotification() {
       </AlertDescription>
       <button
         type="button"
-        className="absolute top-2 right-2 inline-flex items-center justify-center h-5 w-5 rounded-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+        className="absolute top-2 right-2 inline-flex items-center justify-center h-8 w-8 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
         title={t('upcoming.dismissAll')}
         aria-label={t('upcoming.dismissAll')}
         onClick={() => dismiss(visibleUpcoming)}

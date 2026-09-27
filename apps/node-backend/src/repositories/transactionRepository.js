@@ -522,17 +522,12 @@ export const transactionRepository = {
   /**
    * Get uncategorised transactions plus total in a single round-trip.
    *
-   * Important behavior note:
-   * - `rows` preserve uncategorised filtering semantics: the queue is always the
+   * - `rows` and `total` use the same uncategorised filtering semantics: the queue is always the
    *   ACTIVE rows whose full 3-level effective category is NULL (see
    *   getUncategorised), narrowed by every filter the caller set.
-   * - `total` preserves historical route semantics from getCount(): it counts over
-   *   the same filters WITHOUT the uncategorised predicate, so it may include rows
-   *   the queue does not list.
-   * - The two total-only filters are `categoryId` and `categoryIds`: a category
-   *   filter cannot narrow a set defined by having no effective category. Every
-   *   other row-compatible filter is applied to BOTH halves through the same
-   *   builder the main list uses, so the two can never disagree.
+   * - Category filters are ignored because this queue has no effective category.
+   * - Pagination limits rows only; `total` includes all matching queue rows even
+   *   when the requested page is empty.
    *
    * @param {TransactionFilters} [filters]
    * @returns {Promise<{ rows: EnrichedTransactionRow[], total: number }>}
@@ -545,13 +540,10 @@ export const transactionRepository = {
     endDate = null,
     accountId = null,
     bankAccount = null,
-    categoryId = null,
-    categoryIds = null,
     recipientId = null,
     recipientGroupId = null,
     recipientName = null,
     search = null,
-    active = true,
     sortBy = null,
     sortDir = null,
     includeBalance = false,
@@ -561,33 +553,7 @@ export const transactionRepository = {
     amountSigned = false,
     tagSlugs = null,
   } = {}) {
-    const {
-      sql: totalWhere,
-      params: totalParams,
-      nextParamIdx: totalNextParam,
-    } = buildTransactionWhere({
-      transactionId,
-      startDate,
-      endDate,
-      accountId,
-      bankAccount,
-      categoryId,
-      categoryIds,
-      recipientId,
-      recipientGroupId,
-      recipientName,
-      search,
-      active,
-      transactionType,
-      amountMin,
-      amountMax,
-      amountSigned,
-      tagSlugs,
-    });
-
-    // Row filters go through the SAME builder as the total and as the main list
-    // (getAllWithCount), so a filter both halves apply cannot be expressed two
-    // ways. `active` is pinned true rather than forwarded: the queue is an
+    // Build the predicate once for both the page and its count. The queue is an
     // active-rows worklist, exactly as getUncategorised.
     const {
       sql: rowsWhere,
@@ -609,10 +575,9 @@ export const transactionRepository = {
       amountMax,
       amountSigned,
       tagSlugs,
-      startParamIdx: totalNextParam,
     });
 
-    const params = [...totalParams, ...rowsParams];
+    const params = [...rowsParams];
 
     const sortCol = TRANSACTION_SORT_COLUMNS[sortBy] || "t.date";
     const sortDirection = sortDir === "asc" ? "ASC" : "DESC";
@@ -625,7 +590,7 @@ export const transactionRepository = {
       : "";
 
     // Full 3-level effective-category IS NULL (see getUncategorised) — requires
-    // the pr join added to the uncategorised_rows CTE below.
+    // the pr join in both CTEs below.
     const uncategorisedWhere = `${rowsWhere}
       AND ${EFFECTIVE_CATEGORY_ID_SQL} IS NULL`;
 
@@ -638,7 +603,8 @@ export const transactionRepository = {
         SELECT count(*)::int AS total
         FROM transactions t
         ${COUNT_JOINS}
-        WHERE ${totalWhere}
+        LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
+        WHERE ${uncategorisedWhere}
       ),
       uncategorised_rows AS (
         SELECT t.*,

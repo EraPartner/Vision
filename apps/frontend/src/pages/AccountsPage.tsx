@@ -403,13 +403,15 @@ export default function AccountsPage() {
             ),
             convertToTarget,
         );
-        const holdings = group.accounts.reduce(
-            (sum, account) =>
-                sum +
-                (getBrokerAccountMetrics(portfolioSummary, account.id)
-                    ?.holdingsValue ?? 0),
-            0,
-        );
+        const holdings = group.accounts
+            .filter((account) => isPortfolioType(account.type))
+            .reduce(
+                (sum, account) =>
+                    sum +
+                    (getBrokerAccountMetrics(portfolioSummary, account.id)
+                        ?.holdingsValue ?? 0),
+                0,
+            );
         return (
             <p className="text-xs text-muted-foreground">
                 {t("accounts.group.subtotal")}{" "}

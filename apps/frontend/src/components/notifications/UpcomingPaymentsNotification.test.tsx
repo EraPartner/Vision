@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { http } from "msw";
 import { beforeEach, describe, expect, it } from "vitest";
 import { UpcomingPaymentsNotification } from "@/components/notifications/UpcomingPaymentsNotification";
@@ -30,7 +30,30 @@ describe("UpcomingPaymentsNotification route density", () => {
 
     it("shows the reminder on the dashboard route", async () => {
         renderWithApp(<UpcomingPaymentsNotification />, { initialEntries: ["/"] });
-        expect(await screen.findByText("Monthly rent")).toBeInTheDocument();
+        const summary = await screen.findByRole("button", { name: "1 upcoming payment due this week" });
+        expect(summary).toHaveAttribute("aria-expanded", "false");
+        expect(screen.queryByRole("button", { name: "Dismiss reminder for Monthly rent" })).not.toBeInTheDocument();
+        fireEvent.click(summary);
+        expect(summary).toHaveAttribute("aria-expanded", "true");
+        expect(screen.getByText("Monthly rent")).toBeVisible();
+        expect(screen.getByRole("link")).toHaveAttribute("href", "/planned");
+        fireEvent.click(screen.getByRole("button", { name: "Dismiss reminder for Monthly rent" }));
+        expect(screen.queryByRole("button", { name: "1 upcoming payment due this week" })).not.toBeInTheDocument();
+    });
+
+    it("shows the soonest payment first even when the API returns newest dates first", async () => {
+        server.use(http.get(`${API_BASE}/api/planned-transactions`, () => ok({
+            items: [
+                { ...PLANNED_TRANSACTION_STUB, id: 2, memo: "Later payment", planned_date: "2026-09-30" },
+                { ...PLANNED_TRANSACTION_STUB, id: 3, memo: "Sooner payment", planned_date: "2026-09-26" },
+            ], total: 2, limit: 100, offset: 0, links: [],
+        })));
+        renderWithApp(<UpcomingPaymentsNotification />, { initialEntries: ["/"] });
+        fireEvent.click(await screen.findByRole("button", { name: "2 upcoming payments due this week" }));
+        const dismissButtons = screen.getAllByRole("button", { name: /Dismiss reminder for/ });
+        expect(dismissButtons.map((button) => button.getAttribute("aria-label"))).toEqual([
+            "Dismiss reminder for Sooner payment", "Dismiss reminder for Later payment",
+        ]);
     });
 
     it("does not repeat the reminder on the planned-payments route", async () => {

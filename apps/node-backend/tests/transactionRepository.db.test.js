@@ -712,11 +712,11 @@ describe.skipIf(!hasTestDatabase())(
         expect(miss).toEqual([]);
       });
 
-      it("getUncategorisedWithCount: rows are uncategorised, total keeps full getCount semantics", async () => {
+      it("getUncategorisedWithCount counts only active rows with no effective category", async () => {
         const { rows, total } =
           await transactionRepository.getUncategorisedWithCount({});
         expect(rows.map((r) => r.id)).toEqual([T.t1]);
-        expect(total).toBe(6); // documented asymmetry: total counts ALL active rows
+        expect(total).toBe(1); // own, recipient and primary defaults all exclude rows
       });
 
       it("returns total 0 and no rows when nothing matches", async () => {
@@ -726,46 +726,44 @@ describe.skipIf(!hasTestDatabase())(
         expect(res).toEqual({ rows: [], total: 0 });
       });
 
-      // The total CTE was narrowed from the full 6-way TRANSACTION_JOINS to just
-      // `LEFT JOIN recipients r`. Every join dropped is a LEFT JOIN onto a PRIMARY
-      // KEY, so none can drop or duplicate a transaction — but that is an argument,
-      // not evidence. These cases pin the NUMBER against the independently-built
-      // getCount() query, across every filter the endpoint takes. Both count paths
-      // now use the same proven-safe reduced join set but assemble their SQL
-      // independently.
-      it("total equals getCount() for every filter shape", async () => {
+      it("total matches the hand-counted uncategorised set for every filter shape", async () => {
         const shapes = [
-          {},
-          { active: false },
-          { startDate: "2024-03-01" },
-          { endDate: "2024-02-29" },
-          { startDate: "2024-02-01", endDate: "2024-03-31", active: false },
-          { accountId: acc["KBC CURRENT"] },
-          { bankAccount: "wise" },
-          { categoryId: cat.Food },
-          { categoryId: cat.Bills },
-          { recipientId: rec.delhaize },
-          { recipientId: rec.electrabelAlias, active: false },
-          { recipientName: "delh" },
-          { recipientName: "Electrabel Invoicing" },
-          { recipientName: "nobody" },
-          { search: "DELHAIZE" },
-          { search: "ELECTRABEL" },
-          { search: "groceries" },
-          { search: "2024-03" },
-          { search: "-52.30" },
-          { transactionId: T.t1 },
-          {
-            recipientName: "delh",
-            search: "DELHAIZE",
-            startDate: "2024-01-01",
-            active: false,
-          },
+          [{}, 1],
+          [{ active: false }, 1],
+          [{ startDate: "2024-03-01" }, 0],
+          [{ endDate: "2024-02-29" }, 1],
+          [
+            { startDate: "2024-02-01", endDate: "2024-03-31", active: false },
+            1,
+          ],
+          [{ accountId: acc["KBC CURRENT"] }, 1],
+          [{ bankAccount: "wise" }, 0],
+          [{ categoryId: cat.Food }, 1],
+          [{ categoryId: cat.Bills }, 1],
+          [{ recipientId: rec.delhaize }, 1],
+          [{ recipientId: rec.electrabelAlias, active: false }, 0],
+          [{ recipientName: "delh" }, 1],
+          [{ recipientName: "Electrabel Invoicing" }, 0],
+          [{ recipientName: "nobody" }, 0],
+          [{ search: "DELHAIZE" }, 1],
+          [{ search: "ELECTRABEL" }, 0],
+          [{ search: "groceries" }, 1],
+          [{ search: "2024-03" }, 0],
+          [{ search: "-52.30" }, 1],
+          [{ transactionId: T.t1 }, 1],
+          [
+            {
+              recipientName: "delh",
+              search: "DELHAIZE",
+              startDate: "2024-01-01",
+              active: false,
+            },
+            1,
+          ],
         ];
-        for (const shape of shapes) {
+        for (const [shape, expected] of shapes) {
           const { total } =
             await transactionRepository.getUncategorisedWithCount(shape);
-          const expected = await transactionRepository.getCount(shape);
           expect(total, `total mismatch for ${JSON.stringify(shape)}`).toBe(
             expected,
           );
@@ -809,7 +807,7 @@ describe.skipIf(!hasTestDatabase())(
           });
         });
 
-        it("baseline: four uncategorised rows, total over all nine active rows", async () => {
+        it("baseline: four uncategorised rows, total excludes the five categorised rows", async () => {
           const { rows, total } =
             await transactionRepository.getUncategorisedWithCount({});
           expect(rows.map((r) => r.id)).toEqual([
@@ -818,7 +816,24 @@ describe.skipIf(!hasTestDatabase())(
             U.small,
             T.t1,
           ]);
-          expect(total).toBe(9);
+          expect(total).toBe(4);
+        });
+
+        it("keeps total independent of limit and offset, including an empty final page", async () => {
+          for (const [offset, expectedIds] of [
+            [0, [U.income, U.big]],
+            [2, [U.small, T.t1]],
+            [4, []],
+            [20, []],
+          ]) {
+            const { rows, total } =
+              await transactionRepository.getUncategorisedWithCount({
+                limit: 2,
+                offset,
+              });
+            expect(rows.map((row) => row.id)).toEqual(expectedIds);
+            expect(total).toBe(4);
+          }
         });
 
         it("search and transactionId narrow both the uncategorised rows and total", async () => {
@@ -842,7 +857,7 @@ describe.skipIf(!hasTestDatabase())(
               amountMin: 100,
             });
           expect(rows.map((r) => r.id)).toEqual([U.income, U.big]); // |900|, |−300|
-          expect(total).toBe(4); // t3 (−120), t4 (2500), U.big, U.income
+          expect(total).toBe(2); // U.big, U.income
         });
 
         it("amountMax narrows both halves", async () => {
@@ -851,7 +866,7 @@ describe.skipIf(!hasTestDatabase())(
               amountMax: 20,
             });
           expect(rows.map((r) => r.id)).toEqual([U.small]); // |−5.00|
-          expect(total).toBe(2); // t2 (−18.75), U.small
+          expect(total).toBe(1); // U.small
         });
 
         it("amountMin+amountMax bracket a range, and amountSigned flips to the signed amount", async () => {
@@ -859,7 +874,7 @@ describe.skipIf(!hasTestDatabase())(
             { amountMin: 40, amountMax: 100 },
           );
           expect(bracket.rows.map((r) => r.id)).toEqual([T.t1]); // |−52.30|
-          expect(bracket.total).toBe(2); // t1, t5 (−45.10)
+          expect(bracket.total).toBe(1); // t1
 
           // Same bound, signed: −52.30 is no longer ≥ 40, only the +900 row is.
           const signed = await transactionRepository.getUncategorisedWithCount({
@@ -867,7 +882,7 @@ describe.skipIf(!hasTestDatabase())(
             amountSigned: true,
           });
           expect(signed.rows.map((r) => r.id)).toEqual([U.income]);
-          expect(signed.total).toBe(2); // t4 (2500), U.income
+          expect(signed.total).toBe(1); // U.income
         });
 
         it("transactionType narrows both halves", async () => {
@@ -875,13 +890,13 @@ describe.skipIf(!hasTestDatabase())(
             transactionType: "income",
           });
           expect(income.rows.map((r) => r.id)).toEqual([U.income]);
-          expect(income.total).toBe(2); // t4, U.income
+          expect(income.total).toBe(1); // U.income
 
           const expense = await transactionRepository.getUncategorisedWithCount(
             { transactionType: "expense" },
           );
           expect(expense.rows.map((r) => r.id)).toEqual([U.big, U.small, T.t1]);
-          expect(expense.total).toBe(7); // every active row except t4 and U.income
+          expect(expense.total).toBe(3); // U.big, U.small, t1
         });
 
         it("tagSlugs narrows both halves, via ACTIVE tags only", async () => {
@@ -890,7 +905,7 @@ describe.skipIf(!hasTestDatabase())(
               tagSlugs: ["groceries"],
             });
           expect(groceries.rows.map((r) => r.id)).toEqual([T.t1]); // the only tagged uncategorised row
-          expect(groceries.total).toBe(2); // t1, t2
+          expect(groceries.total).toBe(1); // t1
 
           // `archived` exists on t1 but is an inactive tag — it must match nothing.
           const archived =
@@ -906,7 +921,7 @@ describe.skipIf(!hasTestDatabase())(
               recipientGroupId: rec.delhaize,
             });
           expect(viaPrimary.rows.map((r) => r.id)).toEqual([T.t1]); // t1 hangs off the ALIAS
-          expect(viaPrimary.total).toBe(3); // t1, t2, t5
+          expect(viaPrimary.total).toBe(1); // t1
 
           // Asking by the alias resolves the same group (primary + siblings).
           const viaAlias =
@@ -914,7 +929,7 @@ describe.skipIf(!hasTestDatabase())(
               recipientGroupId: rec.delhaizeAlias,
             });
           expect(viaAlias.rows.map((r) => r.id)).toEqual([T.t1]);
-          expect(viaAlias.total).toBe(3);
+          expect(viaAlias.total).toBe(1);
 
           // A recipient outside that group selects the Bakery rows instead.
           const outside = await transactionRepository.getUncategorisedWithCount(
@@ -930,7 +945,7 @@ describe.skipIf(!hasTestDatabase())(
 
         it("recipientId resolves aliases on the rows exactly as it always did on the total", async () => {
           // Both halves now build this predicate with the same builder, so the
-          // queue can no longer be empty while the total counts three. The rows
+          // queue and total select the same alias-inclusive set. The rows
           // used to compare `t.recipient_id = $` verbatim, which missed t1 (it
           // hangs off the ALIAS of the recipient asked for).
           const { rows, total } =
@@ -938,18 +953,16 @@ describe.skipIf(!hasTestDatabase())(
               recipientId: rec.delhaize,
             });
           expect(rows.map((r) => r.id)).toEqual([T.t1]);
-          expect(total).toBe(3); // t1, t2, t5
+          expect(total).toBe(1); // t1
         });
 
-        it("categoryIds narrows the TOTAL only — a category filter cannot narrow a set defined by having none", async () => {
+        it("categoryIds does not narrow either half of the uncategorised queue", async () => {
           const { rows, total } =
             await transactionRepository.getUncategorisedWithCount({
               categoryIds: [cat.Food, cat.Salary],
             });
-          expect(total).toBe(3); // t2, t4, t5 — same as getAllWithCount's categoryIds case
-          // Deliberate, pre-existing asymmetry (shared with the singular
-          // categoryId): applying it to the rows would empty the queue by
-          // construction, so the queue keeps its full uncategorised row set.
+          expect(total).toBe(4);
+          // Preserve the row semantics: category filters do not apply to this queue.
           expect(rows.map((r) => r.id)).toEqual([
             U.income,
             U.big,
@@ -966,7 +979,7 @@ describe.skipIf(!hasTestDatabase())(
               startDate: "2024-03-01",
             });
           expect(rows.map((r) => r.id)).toEqual([U.big]);
-          expect(total).toBe(2); // t3 (−120, 2024-03-01), U.big
+          expect(total).toBe(1); // U.big
         });
 
         it("plain and counted uncategorised queries share the same filter semantics", async () => {
@@ -1006,13 +1019,13 @@ describe.skipIf(!hasTestDatabase())(
 
       it("the recipientName filter still narrows the total — `r` is load-bearing, not decoration", async () => {
         // If the count had dropped `r` along with the projection joins, this filter
-        // would be a no-op (or a SQL error) and the total would stay at 6.
+        // would be a no-op (or a SQL error).
         const all = await transactionRepository.getUncategorisedWithCount({});
-        expect(all.total).toBe(6);
+        expect(all.total).toBe(1);
         const narrowed = await transactionRepository.getUncategorisedWithCount({
-          recipientName: "delh",
+          recipientName: "electrabel",
         });
-        expect(narrowed.total).toBe(3); // t1 (alias), t2, t5 — t6 inactive
+        expect(narrowed.total).toBe(0);
         expect(narrowed.total).toBeLessThan(all.total);
       });
     });

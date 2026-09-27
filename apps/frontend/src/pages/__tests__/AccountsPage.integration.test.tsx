@@ -252,6 +252,46 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         expect(grandLine).toHaveTextContent(/1\.200,00/);
     });
 
+    it("keeps cash subtotals consistent with cards when cash accounts have assigned positions", async () => {
+        mockAccounts();
+        server.use(
+            http.get(`${API_BASE}/api/info/portfolio-summary`, () =>
+                ok({
+                    currency: "EUR",
+                    computed_at: "2026-09-08T00:00:00Z",
+                    totals: {},
+                    summaries: [],
+                    byAccount: [1, 4].map((account_id) => ({
+                        account_id,
+                        assignment: "account",
+                        contribution_kind: "position",
+                        oversold: false,
+                        currentValue: 1250,
+                        totalInvested: 1000,
+                        realizedGain: 20,
+                        unrealizedGain: 230,
+                        gainLoss: 250,
+                    })),
+                }),
+            ),
+        );
+        renderWithApp(<AccountsPage />);
+
+        const portfolio = await screen.findByRole("region", {
+            name: "Portfolio accounts",
+        });
+        // Wait for holdings to load before checking the cash subtotal.
+        await waitFor(() =>
+            expect(within(portfolio).getByText(/subtotal/i)).toHaveTextContent(
+                /1\.250,00/,
+            ),
+        );
+        const cash = screen.getByRole("region", { name: "Cash & Savings" });
+        expect(within(cash).getByText(/subtotal/i)).toHaveTextContent(
+            /2\.499,00/,
+        );
+    });
+
     it("keeps non-zero brokerage cash and provenance visible without assigned holdings", async () => {
         mockAccounts(
             FIXTURE.map((account) =>
