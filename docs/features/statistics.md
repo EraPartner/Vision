@@ -2,9 +2,9 @@
 title: Statistics Feature
 type: feature
 status: active
-date: 2026-04-24
-updated: 2026-09-19
-last_modified: 2026-09-19
+date: 2026-09-27
+updated: 2026-09-27
+last_modified: 2026-09-27
 tags:
   [
     feature,
@@ -70,6 +70,15 @@ foreign-exchange conversion.
 > [!info] Component Refactoring Complete
 > **April 2026 refactored StatisticsPage** into a thin orchestrator + 11 composable sub-components. See [[#component-architecture|Component Architecture]] below.
 
+### Smart Insights presentation
+
+On the Overview tab, Smart Insights starts collapsed, with counts for new subscriptions, price changes, and category
+overspend. **Show findings** reveals those records; **Hide findings** returns to the compact
+summary. The control exposes its expanded state and the section it controls to assistive
+technology. The cash forecast remains visible in both states within Overview, including any alert. Each dismiss
+button names the finding type and recipient or category so repeated actions have distinct
+accessible names.
+
 ### Smart Insights partial-month labels
 
 Insight dismissals are authoritative server records. They are applied before subscription lists
@@ -129,7 +138,7 @@ The Statistics page (`StatisticsPage.tsx`, 232 lines) is a thin orchestrator tha
 | Component                     | Lines | Purpose                                                                                                                                                                                                                                                   | Tabs           |
 | ----------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
 | `ChartCard.tsx`               | 48    | Card wrapper with ExclusionToggle and render-prop children                                                                                                                                                                                                | All            |
-| `MonthlyRhythm.tsx`           | —     | Page-opening lede: scrubbable per-month net strip + typical-month figures + strongest/toughest/in-the-black facts (replaced `SummaryCards`, whose income/spending/net tiles restated the dashboard hero and whose 4th tile, "Months tracked", was filler) | Above the tabs |
+| `MonthlyRhythm.tsx`           | —     | Overview lede: scrubbable per-month net strip + typical-month figures + strongest/toughest/in-the-black facts (replaced `SummaryCards`, whose income/spending/net tiles restated the dashboard hero and whose 4th tile, "Months tracked", was filler) | Overview       |
 | `MonthlyChart.tsx`            | 42    | Monthly income/spending bar chart                                                                                                                                                                                                                         | Overview       |
 | `NetTrendChart.tsx`           | 44    | Net balance area chart over time                                                                                                                                                                                                                          | Overview       |
 | `CategoryPieChart.tsx`        | 64    | Category spending donut chart (top 10, year-filterable)                                                                                                                                                                                                   | Categories     |
@@ -142,7 +151,7 @@ The Statistics page (`StatisticsPage.tsx`, 232 lines) is a thin orchestrator tha
 | `CustomChart.tsx`             | —     | Pure read-only chart display merging category + recipient pivot data                                                                                                                                                                                      | Custom Charts  |
 | `CustomChartBuilderModal.tsx` | —     | Two-column dialog (form left, live preview right) for creating/editing charts                                                                                                                                                                             | Custom Charts  |
 | `RecipientInsightsTab.tsx`    | 311   | Merchant spending insights (MoM alerts, filters)                                                                                                                                                                                                          | Recipients     |
-| `InsightsDigestPanel.tsx`     | —     | Dismissible subscription, category-overspend, and cash-forecast findings; category rows label the exact day 1 through N comparison window                                                                                                                 | Above the tabs |
+| `InsightsDigestPanel.tsx`     | —     | Collapsed finding counts with an always-visible cash forecast; expandable subscription and category findings, contextual dismiss actions, and exact day 1 through N category windows                                                                                                                 | Overview       |
 | `SankeyTab.tsx`               | 88    | Sankey flow diagram with year selector and exclusion toggle                                                                                                                                                                                               | Flow           |
 
 **Shared utilities:**
@@ -251,10 +260,15 @@ The Statistics page uses the `useWidgetVisibility` hook with 9 configurable widg
 
 ## Tab Structure
 
-The page is organized into 6 tabs:
+The six tabs sit directly below the page header and its controls. Monthly Rhythm, Smart Insights,
+and the cash forecast belong to Overview; they do not precede the selected Categories, Recipients,
+Yearly, Flow, or Custom Charts content. Deep links to those tabs open their content without the
+Overview panels.
 
 ### Overview Tab
 
+- Monthly Rhythm summary (when its widget is enabled)
+- Smart Insights and cash forecast
 - Monthly Income/Expense bar chart
 - Net Balance Trend area chart
 - Both support per-graph exclusion toggles
@@ -344,7 +358,7 @@ const MonthlyChart = lazy(() =>
 This pattern:
 
 - **Reduces initial bundle**: Defers loading chart logic until the tab is opened
-- **Improves TTI**: Initial page render shows only the `MonthlyRhythm` lede (inline), other tabs load on-demand
+- **Improves TTI**: The Overview lede (`MonthlyRhythm`) renders inline; chart content loads on demand for the selected tab
 - **Maintains UX**: Skeleton fallbacks provide loading feedback
 - **9 components lazy-loaded**: MonthlyChart, NetTrendChart, CategoryPieChart, CategoryTrendChart, TopRecipientsChart, YearlyComparisonChart, RecipientInsightsTab, SankeyTab, SavedChartsSection
 

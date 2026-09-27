@@ -2,8 +2,8 @@
 title: Database Maintenance UI
 type: feature
 status: active
-date: 2026-09-20
-updated: 2026-09-20
+date: 2026-09-27
+updated: 2026-09-27
 tags:
   [
     feature,
@@ -215,7 +215,8 @@ The backend endpoint is `GET /api/admin/database/tables/:table/rows` — see [[d
 
 ### Editing cells
 
-- Click any non-PK, non-generated cell to activate an inline editor.
+- Click a writable, non-PK, non-generated cell, or focus it and press **Enter** or **Space**, to activate its inline editor. Cells and inputs identify their column and row for assistive technology.
+- **Enter** stages the value and returns focus to the cell; **Escape** reverts the active cell and returns focus to it.
 - Press **Enter** to stage the active value. Reopen a staged cell and press **Escape** to remove only that cell's pending value and restore its original value; other staged rows and cells remain intact. Escape also reverts staged boolean and new-row cells.
 - A **Set NULL** icon button is shown for writable nullable columns with a non-NULL value.
 - Dirty cells expose a per-cell undo button for pointer users; the same action is available with **Escape** from the active editor or boolean control.

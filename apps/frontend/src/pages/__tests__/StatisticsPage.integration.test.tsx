@@ -392,6 +392,71 @@ describe("StatisticsPage (integration)", () => {
         expect(yearlyTab).toHaveAttribute("aria-selected", "true");
     });
 
+    it.each(["Categories", "Recipients", "Yearly", "Flow", "Custom Charts"])(
+        "keeps overview content out of %s and restores it on return",
+        async (name) => {
+            server.use(
+                http.get(`${API_BASE}/api/aggregations/monthly-summary`, () =>
+                    monthlySummaryWithData(),
+                ),
+            );
+            const user = userEvent.setup();
+            renderWithApp(<StatisticsPage />);
+            const summary = await screen.findByRole("heading", {
+                name: "Monthly rhythm",
+            });
+            expect(screen.getByRole("tabpanel")).toContainElement(summary);
+            expect(
+                await screen.findByText(/No new insights right now/),
+            ).toBeInTheDocument();
+
+            await user.click(screen.getByRole("tab", { name }));
+            expect(
+                screen.queryByRole("heading", { name: "Monthly rhythm" }),
+            ).not.toBeInTheDocument();
+            expect(
+                screen.queryByText(/No new insights right now/),
+            ).not.toBeInTheDocument();
+            expect(
+                screen.getByRole("combobox", { name: /date range/i }),
+            ).toBeInTheDocument();
+            expect(
+                screen.getByRole("button", { name: /widgets/i }),
+            ).toBeInTheDocument();
+
+            await user.click(screen.getByRole("tab", { name: /overview/i }));
+            expect(
+                await screen.findByRole("heading", { name: "Monthly rhythm" }),
+            ).toBeInTheDocument();
+            expect(
+                await screen.findByText(/No new insights right now/),
+            ).toBeInTheDocument();
+        },
+    );
+
+    it("opens a Custom Charts deep link without unrelated overview content", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/aggregations/monthly-summary`, () =>
+                monthlySummaryWithData(),
+            ),
+        );
+        renderWithApp(<StatisticsPage />, {
+            initialEntries: ["/statistics?tab=custom&window=all"],
+        });
+        expect(
+            await screen.findByRole("tab", { name: /custom charts/i }),
+        ).toHaveAttribute("aria-selected", "true");
+        expect(
+            screen.queryByRole("heading", { name: "Monthly rhythm" }),
+        ).not.toBeInTheDocument();
+        expect(
+            screen.queryByText(/No new insights right now/),
+        ).not.toBeInTheDocument();
+        expect(
+            screen.getByRole("combobox", { name: /date range/i }),
+        ).toHaveTextContent("All time");
+    });
+
     // ─── Edge cases ────────────────────────────────────────────────────────
 
     it("surfaces 404 from monthly-summary aggregation", async () => {

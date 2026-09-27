@@ -36,7 +36,6 @@ describe("Statistics category groups", () => {
         renderWithApp(<StatisticsSection />);
         const group = await screen.findByRole("checkbox", {
             name: "Finance",
-            exact: true,
         });
         const fees = screen.getByRole("checkbox", { name: /Fees/ });
         const interest = screen.getByRole("checkbox", { name: /Interest/ });

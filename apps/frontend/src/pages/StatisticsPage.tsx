@@ -203,26 +203,25 @@ export default function StatisticsPage() {
                     />
                     {windowSelect}
                 </div>
-                {/* Mirrors MonthlyRhythm's anatomy (headline column + bar strip, then a
-            three-fact footer) so the page never settles into a shape it never
-            promised while loading. */}
-                <Card className="glass-elevated">
-                    <CardContent variant="headerless" className="space-y-6">
-                        <div className="grid gap-6 lg:grid-cols-[minmax(0,19rem)_minmax(0,1fr)] lg:gap-10">
-                            <div className="space-y-3">
-                                <Skeleton className="h-3 w-28" />
-                                <Skeleton className="h-11 w-44" />
-                                <Skeleton className="h-4 w-36" />
+                {activeTab === "overview" && (
+                    <Card className="glass-elevated">
+                        <CardContent variant="headerless" className="space-y-6">
+                            <div className="grid gap-6 lg:grid-cols-[minmax(0,19rem)_minmax(0,1fr)] lg:gap-10">
+                                <div className="space-y-3">
+                                    <Skeleton className="h-3 w-28" />
+                                    <Skeleton className="h-11 w-44" />
+                                    <Skeleton className="h-4 w-36" />
+                                </div>
+                                <Skeleton className="h-32 w-full" />
                             </div>
-                            <Skeleton className="h-32 w-full" />
-                        </div>
-                        <div className="grid gap-4 sm:grid-cols-3">
-                            {[...Array(3)].map((_, i) => (
-                                <Skeleton key={i} className="h-14 w-full" />
-                            ))}
-                        </div>
-                    </CardContent>
-                </Card>
+                            <div className="grid gap-4 sm:grid-cols-3">
+                                {[...Array(3)].map((_, i) => (
+                                    <Skeleton key={i} className="h-14 w-full" />
+                                ))}
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
                 <Skeleton className="h-[400px] w-full" />
             </PageShell>
         );
@@ -307,13 +306,6 @@ export default function StatisticsPage() {
                 </div>
             </div>
 
-            {/* The monthly-trends lede opens the page — it is what the page is about.
-          The insights digest follows it rather than preceding it, so the first
-          thing under the H1 is this page's own story. */}
-            {isVisible("summaryCards") && <MonthlyRhythm data={data} />}
-
-            <InsightsDigestPanel />
-
             <Tabs
                 value={activeTab}
                 onValueChange={setActiveTab}
@@ -341,6 +333,9 @@ export default function StatisticsPage() {
                 </TabsList>
 
                 <TabsContent value="overview" className="space-y-6">
+                    {isVisible("summaryCards") && <MonthlyRhythm data={data} />}
+                    <InsightsDigestPanel />
+
                     <Suspense fallback={<ChartSkeleton />}>
                         {isVisible("monthly") && (
                             <ChartCard

@@ -2,8 +2,8 @@
 title: Service Layer Reference
 type: reference
 status: active
-date: 2026-09-26
-last_modified: 2026-09-13
+date: 2026-09-27
+last_modified: 2026-09-27
 tags: [backend, services, reference, business-logic, phase-1, phase-c, import-pipeline, graceful-shutdown, bug-hunt-2026-05-05, error-handling, robustness, route-service-boundary, repo-service-boundary, layering, thin-seams, adr-067]
 description: Complete reference for backend service modules. June 2026 — all 15 route files now go through thin `services/<domain>Service.js` seams; the lint rule `vision-local/no-repo-direct-from-route` is enforced as ERROR. 14 new thin seam modules added. August 2026 — the inverse edge is enforced too: `vision-local/no-service-import-from-repo` is an ERROR on `src/repositories/**`, with a closed allowlist for the seven sanctioned currency-conversion importers.
 aliases: [services, service layer, business logic, backend services]
@@ -405,6 +405,16 @@ retains its adapter selection and domain-specific staging INSERT.
 | `storeCurrentBrokerSnapshot` | `(currency, summary) => Promise<void>`                  | Transactionally replaces today's broker rows |
 | `getSnapshots`               | `(startDate, endDate, currency) => Promise<Snapshot[]>` | Stored aggregate snapshots                   |
 | `getBrokerSnapshots`         | `(startDate, endDate, currency) => Promise<Snapshot[]>` | Frozen broker rows in the requested range    |
+
+### Broker snapshot validation
+
+`computeAndStoreSnapshots` requests internal `brokerSnapshotParity` values through
+`getPortfolioSummary(..., { includeBrokerSnapshotParity: true })`. The global and account
+contribution values are compared before per-investment or per-account display rounding. A
+non-zero difference at six decimal places aborts the broker-row replacement before its delete.
+Ordinary summary callers omit this opt-in field; public responses and stored broker rounding
+remain unchanged. The writer retains its existing rounded-value tolerance for callers that do
+not supply the internal parity evidence.
 
 ### Snapshot Fields
 

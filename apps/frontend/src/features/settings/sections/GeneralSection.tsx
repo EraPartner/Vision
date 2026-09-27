@@ -10,6 +10,7 @@ import {
 import {
     SUPPORTED_CURRENCIES as CURRENCIES,
     type NumberFormat,
+    numberFormatToLocale,
 } from "@/utils/currency";
 import type { AppDateFormat } from "@/stores/settingsStore";
 
@@ -60,12 +61,10 @@ export const GeneralSection = memo(function GeneralSection() {
             value: String(appSettings.showDecimalPlaces),
             onValueChange: (v) =>
                 updateAppSettings({ showDecimalPlaces: Number(v) }),
-            options: [
-                { value: "0", label: "0 (1,234)" },
-                { value: "1", label: "1 (1,234.5)" },
-                { value: "2", label: "2 (1,234.56)" },
-                { value: "3", label: "3 (1,234.567)" },
-            ],
+            options: [0, 1, 2, 3].map((digits) => ({
+                value: String(digits),
+                label: `${digits} (${new Intl.NumberFormat(numberFormatToLocale(appSettings.numberFormat), { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(1234.567)})`,
+            })),
         },
         {
             title: t("settings.general.dateFormat"),

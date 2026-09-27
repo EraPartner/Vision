@@ -2,8 +2,8 @@
 title: Settings Feature
 type: feature
 status: active
-date: 2026-06-19
-updated: 2026-09-25
+date: 2026-09-27
+updated: 2026-09-27
 tags:
   [
     feature,
@@ -415,3 +415,13 @@ The **BackupSection** integrates encrypted backup restore with a **passphrase mo
 - [[docs/features/statistics|Statistics]] — Uses exclusions and currency settings
 - [[docs/features/portfolio-tax|Portfolio Tax]] — Uses tax adjustments stored as settings
 - [[docs/features/views|Dashboard]] — Uses widget visibility settings
+
+
+## Number format previews
+
+General settings generates each decimal-precision example with the selected number format. European, US, Swiss, and Indian examples therefore use the same separators as the selected format.
+
+
+## Clarity and recovery feedback
+
+The settings header explains that preferences apply automatically. Restore and reset remain explicit actions with their existing confirmation flows.

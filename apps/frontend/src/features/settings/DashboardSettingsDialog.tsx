@@ -143,7 +143,7 @@ export function DashboardSettingsDialog({
                 <DialogHeader className="border-b border-border/60 px-6 py-4 text-left">
                     <DialogTitle>{t("settings.title")}</DialogTitle>
                     <DialogDescription>
-                        {t("settings.description")}
+                        {t("settings.description")} {t("settings.saveHint")}
                     </DialogDescription>
                 </DialogHeader>
 

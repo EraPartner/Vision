@@ -78,6 +78,47 @@ describe("TableDataEditorPage (integration)", () => {
         expect(await screen.findByText("USD")).toBeInTheDocument();
     });
 
+    it("enters cells with Enter or Space and returns focus after staging or cancelling", async () => {
+        server.use(
+            http.get(
+                `${API_BASE}/api/admin/database/tables/transactions/rows`,
+                () => ok(rowsResponse),
+            ),
+        );
+        const user = userEvent.setup();
+        renderEditor();
+        const cell = await screen.findByRole("cell", {
+            name: "amount, row id=1",
+        });
+        cell.focus();
+        await user.keyboard("{Enter}");
+        const input = screen.getByRole("textbox", { name: "amount, row id=1" });
+        expect(input).toHaveFocus();
+        await user.clear(input);
+        await user.type(input, "20{Enter}");
+        expect(
+            screen.getByRole("cell", { name: "amount, row id=1" }),
+        ).toHaveFocus();
+        expect(screen.getByText("20")).toBeInTheDocument();
+        expect(screen.getByText(/1 pending change/i)).toBeInTheDocument();
+
+        await user.keyboard(" ");
+        const reopened = screen.getByRole("textbox", {
+            name: "amount, row id=1",
+        });
+        expect(reopened).toHaveFocus();
+        await user.clear(reopened);
+        await user.type(reopened, "99{Escape}");
+        expect(
+            screen.getByRole("cell", { name: "amount, row id=1" }),
+        ).toHaveFocus();
+        expect(screen.getByText("12.50")).toBeInTheDocument();
+        expect(screen.queryByText(/pending change/i)).not.toBeInTheDocument();
+        expect(
+            screen.getByRole("cell", { name: "id, row id=1" }),
+        ).not.toHaveAttribute("tabindex");
+    });
+
     it("renders every row of a read-only table without a primary key", async () => {
         server.use(
             http.get(

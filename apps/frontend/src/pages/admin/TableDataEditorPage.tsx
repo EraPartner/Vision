@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router";
 import {
     ArrowLeft,
@@ -143,6 +143,7 @@ function RevertCellButton({
 
 function EditableCell({
     column,
+    label,
     value,
     dirty,
     disabled,
@@ -152,6 +153,7 @@ function EditableCell({
     t,
 }: {
     column: DbColumn;
+    label: string;
     value: unknown;
     dirty: boolean;
     disabled: boolean;
@@ -161,6 +163,14 @@ function EditableCell({
     t: (k: string) => string;
 }) {
     const [editing, setEditing] = useState(false);
+    const cellRef = useRef<HTMLTableCellElement>(null);
+    const restoreFocus = useRef(false);
+    useEffect(() => {
+        if (!editing && restoreFocus.current) {
+            restoreFocus.current = false;
+            cellRef.current?.focus();
+        }
+    }, [editing]);
     const dirtyCls = dirty
         ? "bg-warning/10 ring-1 ring-inset ring-warning/40"
         : "";
@@ -173,6 +183,7 @@ function EditableCell({
             <TableCell className={dirtyCls}>
                 <div className="flex items-center gap-2">
                     <Checkbox
+                        aria-label={label}
                         checked={value === true}
                         disabled={disabled || !column.writable || lockEdit}
                         aria-keyshortcuts="Escape"
@@ -202,6 +213,7 @@ function EditableCell({
             <TableCell className={dirtyCls}>
                 <Input
                     autoFocus
+                    aria-label={label}
                     defaultValue={shown}
                     aria-keyshortcuts="Enter Escape"
                     className="h-7 font-mono text-xs"
@@ -211,11 +223,14 @@ function EditableCell({
                     }}
                     onKeyDown={(e) => {
                         if (e.key === "Enter") {
+                            e.preventDefault();
+                            restoreFocus.current = true;
                             onChange((e.target as HTMLInputElement).value);
                             setEditing(false);
                         }
                         if (e.key === "Escape") {
                             e.preventDefault();
+                            restoreFocus.current = true;
                             onRevert();
                             setEditing(false);
                         }
@@ -228,10 +243,22 @@ function EditableCell({
     const { text, isNull } = display(value);
     return (
         <TableCell
+            ref={cellRef}
+            tabIndex={canEdit ? 0 : undefined}
+            aria-label={label}
+            aria-keyshortcuts={canEdit ? "Enter Space" : undefined}
+            onKeyDown={(event) => {
+                if (!canEdit || event.target !== event.currentTarget) return;
+                if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    setEditing(true);
+                }
+            }}
             className={cn(
                 "font-mono text-xs",
                 dirtyCls,
-                canEdit && "cursor-text",
+                canEdit &&
+                    "cursor-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
             )}
             onClick={() => canEdit && setEditing(true)}
             title={
@@ -661,7 +688,7 @@ export default function TableDataEditorPage() {
                                 ))}
 
                             {/* New (insert) rows */}
-                            {newRows.map((nr) => (
+                            {newRows.map((nr, rowIndex) => (
                                 <TableRow
                                     key={nr.tempId}
                                     className="bg-success/5"
@@ -691,6 +718,10 @@ export default function TableDataEditorPage() {
                                         <EditableCell
                                             key={col.name}
                                             column={col}
+                                            label={t("dbEditor.cellLabel", {
+                                                column: col.name,
+                                                row: `${t("dbEditor.addRow")} ${rowIndex + 1}`,
+                                            })}
                                             value={nr.values[col.name] ?? null}
                                             dirty={col.name in nr.values}
                                             disabled={false}
@@ -768,6 +799,27 @@ export default function TableDataEditorPage() {
                                                     <EditableCell
                                                         key={col.name}
                                                         column={col}
+                                                        label={t(
+                                                            "dbEditor.cellLabel",
+                                                            {
+                                                                column: col.name,
+                                                                row: primaryKey.length
+                                                                    ? primaryKey
+                                                                          .map(
+                                                                              (
+                                                                                  name,
+                                                                              ) =>
+                                                                                  `${name}=${String(row[name])}`,
+                                                                          )
+                                                                          .join(
+                                                                              ", ",
+                                                                          )
+                                                                    : String(
+                                                                          rowIndex +
+                                                                              1,
+                                                                      ),
+                                                            },
+                                                        )}
                                                         value={value}
                                                         dirty={
                                                             hasEdit &&
