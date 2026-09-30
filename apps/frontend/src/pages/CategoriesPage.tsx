@@ -309,44 +309,44 @@ export default function CategoriesPage() {
     return (
         <>
             <PageShell>
-                <div className="flex items-center justify-between">
-                    <PageHeader
-                        title={t("categories.title")}
-                        subtitle={t("categoriesPage.subtitle", {
-                            n: visible.length,
-                            g: roots.length,
-                        })}
-                        icon={PAGE_ICONS["/categories"]}
-                    />
-                    <div className="flex flex-wrap items-center gap-2">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                                writeExpanded(
-                                    new Set(allExpanded ? [] : branchIds),
-                                )
-                            }
-                            className="gap-1.5"
-                        >
-                            {allExpanded ? (
-                                <Folder className="h-4 w-4" />
-                            ) : (
-                                <FolderOpen className="h-4 w-4" />
-                            )}
-                            {allExpanded
-                                ? t("categoriesPage.collapseAll")
-                                : t("categoriesPage.expandAll")}
-                        </Button>
-                        <ListFilterToggle
-                            ref={treeControls}
-                            checked={showAll}
-                            onCheckedChange={setShowAll}
-                            label={t("common.includeInactive")}
-                        />
-                        <CategoryNodeDialog nodes={allNodes} />
-                    </div>
-                </div>
+                <PageHeader
+                    title={t("categories.title")}
+                    subtitle={t("categoriesPage.subtitle", {
+                        n: visible.length,
+                        g: roots.length,
+                    })}
+                    icon={PAGE_ICONS["/categories"]}
+                    actions={
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                    writeExpanded(
+                                        new Set(allExpanded ? [] : branchIds),
+                                    )
+                                }
+                                className="gap-1.5"
+                            >
+                                {allExpanded ? (
+                                    <Folder className="h-4 w-4" />
+                                ) : (
+                                    <FolderOpen className="h-4 w-4" />
+                                )}
+                                {allExpanded
+                                    ? t("categoriesPage.collapseAll")
+                                    : t("categoriesPage.expandAll")}
+                            </Button>
+                            <ListFilterToggle
+                                ref={treeControls}
+                                checked={showAll}
+                                onCheckedChange={setShowAll}
+                                label={t("common.includeInactive")}
+                            />
+                            <CategoryNodeDialog nodes={allNodes} />
+                        </div>
+                    }
+                />
                 <Card>
                     <CardHeader className="pb-3">
                         <CardTitle variant="sm">

@@ -287,24 +287,27 @@ export default function StatisticsPage() {
 
     return (
         <PageShell className="" data-print-page="statistics">
-            <div className="flex items-center justify-between">
-                <PageHeader
-                    title={t("statsPage.title")}
-                    subtitle={t("statsPage.subtitle")}
-                    icon={PAGE_ICONS["/statistics"]}
-                />
-                <div className="flex items-center gap-2" data-print-actions>
-                    {windowSelect}
-                    <ExportDialog />
-                    <WidgetVisibilityDialog
-                        widgets={widgets}
-                        isVisible={isVisible}
-                        setWidgetVisible={setWidgetVisible}
-                        setAllVisible={setAllVisible}
-                        resetToDefaults={resetToDefaults}
-                    />
-                </div>
-            </div>
+            <PageHeader
+                title={t("statsPage.title")}
+                subtitle={t("statsPage.subtitle")}
+                icon={PAGE_ICONS["/statistics"]}
+                actions={
+                    <div
+                        className="flex flex-wrap items-center gap-2"
+                        data-print-actions
+                    >
+                        {windowSelect}
+                        <ExportDialog />
+                        <WidgetVisibilityDialog
+                            widgets={widgets}
+                            isVisible={isVisible}
+                            setWidgetVisible={setWidgetVisible}
+                            setAllVisible={setAllVisible}
+                            resetToDefaults={resetToDefaults}
+                        />
+                    </div>
+                }
+            />
 
             <Tabs
                 value={activeTab}

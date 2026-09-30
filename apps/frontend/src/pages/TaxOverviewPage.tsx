@@ -136,7 +136,7 @@ export default function TaxOverviewPage() {
                     icon={PAGE_ICONS["/tax"]}
                     actions={
                         <div
-                            className="flex items-center gap-2"
+                            className="flex flex-wrap items-center gap-2"
                             data-print-actions
                         >
                             <ExportDialog defaultType="tax" />

@@ -24,14 +24,14 @@ describe("DashboardPage (integration)", () => {
     it("plays the full stat-card arrival only on the first dashboard visit", async () => {
         window.sessionStorage.clear();
         const first = renderWithApp(<DashboardPage />);
-        await screen.findByText(/last month.*income/i);
+        await screen.findByText(/latest month.*income/i);
         expect(
             first.container.querySelector(".animate-stagger"),
         ).toBeInTheDocument();
 
         first.unmount();
         const returning = renderWithApp(<DashboardPage />);
-        await screen.findByText(/last month.*income/i);
+        await screen.findByText(/latest month.*income/i);
         expect(
             returning.container.querySelector(".animate-stagger"),
         ).toBeNull();
@@ -82,19 +82,19 @@ describe("DashboardPage (integration)", () => {
         ).toBeInTheDocument();
     });
 
-    it("shows Last Month Income stat card", async () => {
+    it("shows Latest Month Income stat card", async () => {
         renderWithApp(<DashboardPage />);
-        // dashboard.stat.lastMonthIncome = "Last Month -- Income"
+        // dashboard.stat.lastMonthIncome = "Latest Month -- Income"
         expect(
-            await screen.findByText(/last month.*income/i),
+            await screen.findByText(/latest month.*income/i),
         ).toBeInTheDocument();
     });
 
-    it("shows Last Month Spending stat card", async () => {
+    it("shows Latest Month Spending stat card", async () => {
         renderWithApp(<DashboardPage />);
-        // dashboard.stat.lastMonthSpending = "Last Month -- Spending"
+        // dashboard.stat.lastMonthSpending = "Latest Month -- Spending"
         expect(
-            await screen.findByText(/last month.*spending/i),
+            await screen.findByText(/latest month.*spending/i),
         ).toBeInTheDocument();
     });
 
@@ -166,7 +166,7 @@ describe("DashboardPage (integration)", () => {
         renderWithApp(<DashboardPage />);
 
         const income = await screen.findByRole("link", {
-            name: /last month.*income/i,
+            name: /latest month.*income/i,
         });
         const incomeUrl = new URL(income.getAttribute("href")!, "http://test");
         expect(incomeUrl.pathname).toBe("/transactions");
@@ -175,7 +175,7 @@ describe("DashboardPage (integration)", () => {
         expect(incomeUrl.searchParams.get("transaction_type")).toBe("income");
 
         const spending = screen.getByRole("link", {
-            name: /last month.*spending/i,
+            name: /latest month.*spending/i,
         });
         const spendingUrl = new URL(
             spending.getAttribute("href")!,

@@ -2,8 +2,8 @@
 title: Settings Feature
 type: feature
 status: active
-date: 2026-09-27
-updated: 2026-09-27
+date: 2026-09-30
+updated: 2026-09-30
 tags:
   [
     feature,
@@ -325,7 +325,7 @@ each tab controls the active tab panel, and Arrow keys plus Home/End move focus 
 
 - `SettingsSection` — title + description header
 - `SettingsGroup` — bordered, hairline-divided card with optional label and description
-- `SettingRow` — label + hint + control; `row` layout for switches/actions, `stack` layout for selects/lists
+- `SettingRow` — label + hint + control; `row` layout for switches/actions and `stack` for lists. Simple `SelectSettingRow` controls align beside labels when their `SettingsGroup` container is at least 28rem wide, with a consistent 10–12rem control column. They stack in narrower containers; selects with supplemental children retain the full-width stacked layout.
 
 ### Section Taxonomy
 

@@ -206,7 +206,7 @@ export function InsightsDigestPanel() {
                             {newSubscriptions.map((finding) => (
                                 <div
                                     key={`new-${finding.recipientId}`}
-                                    className="flex items-center gap-3 rounded-lg border bg-card p-3 hover:shadow-sm transition-shadow"
+                                    className="flex items-center gap-3 rounded-lg border bg-card p-3"
                                 >
                                     <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                                         <CreditCard className="h-4 w-4 text-primary" />
@@ -259,7 +259,7 @@ export function InsightsDigestPanel() {
                                 return (
                                     <div
                                         key={`price-${finding.recipientId}`}
-                                        className="flex items-center gap-3 rounded-lg border bg-card p-3 hover:shadow-sm transition-shadow"
+                                        className="flex items-center gap-3 rounded-lg border bg-card p-3"
                                     >
                                         <div className="min-w-0 flex-1">
                                             <p className="text-sm font-semibold text-foreground truncate">
@@ -340,7 +340,7 @@ export function InsightsDigestPanel() {
                             {categoryOutliers.map((outlier) => (
                                 <div
                                     key={`outlier-${outlier.categoryId}-${outlier.monthKey}`}
-                                    className="flex items-center gap-3 rounded-lg border bg-card p-3 hover:shadow-sm transition-shadow"
+                                    className="flex items-center gap-3 rounded-lg border bg-card p-3"
                                 >
                                     <div className="h-9 w-9 rounded-lg bg-loss/10 flex items-center justify-center shrink-0">
                                         <PieChart className="h-4 w-4 text-loss" />

@@ -34,6 +34,7 @@ export interface UseTransactionListDataOptions {
 }
 
 export interface UseTransactionListDataResult {
+    refetch: () => Promise<unknown>;
     allItems: RawApiTransaction[];
     setAllItems: React.Dispatch<React.SetStateAction<RawApiTransaction[]>>;
     totalItems: number;
@@ -104,6 +105,7 @@ export function useTransactionListData({
 
     const {
         data: initialData,
+        refetch,
         isLoading,
         error,
         isFetching,
@@ -331,6 +333,7 @@ export function useTransactionListData({
     );
 
     return {
+        refetch,
         allItems,
         setAllItems,
         totalItems,

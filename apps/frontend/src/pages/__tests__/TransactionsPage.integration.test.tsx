@@ -110,6 +110,30 @@ describe("TransactionsPage (integration)", () => {
         errorSpy.mockRestore();
     });
 
+    it("retries a failed initial load without leaving the page", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/transactions`, () =>
+                err(503, "Temporarily unavailable"),
+            ),
+        );
+        renderTransactionsPage();
+        const retry = await screen.findByRole("button", { name: /retry/i });
+        server.use(
+            http.get(`${API_BASE}/api/transactions`, () =>
+                ok({ items: [], total: 0 }),
+            ),
+        );
+        await userEvent.setup().click(retry);
+        await waitFor(() => {
+            expect(
+                screen.queryByText(/error loading transactions/i),
+            ).not.toBeInTheDocument();
+        });
+        expect(
+            await screen.findByRole("button", { name: /add transaction/i }),
+        ).toBeInTheDocument();
+    });
+
     it("shows the Add Transaction button in the actions bar", async () => {
         renderTransactionsPage();
         const btn = await screen.findByRole("button", {

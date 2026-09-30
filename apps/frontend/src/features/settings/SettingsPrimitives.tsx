@@ -85,7 +85,7 @@ export function SettingsGroup({
             )}
             <div
                 className={cn(
-                    "overflow-hidden rounded-xl border border-border bg-card/40 divide-y divide-border/60",
+                    "@container/settings overflow-hidden rounded-xl border border-border bg-card/40 divide-y divide-border/60",
                     className,
                 )}
             >
@@ -106,8 +106,10 @@ interface SettingRowProps {
      * 'row' (default): title/description left, control right — for switches and
      * compact selects. 'stack': control sits full-width below the title — for
      * search inputs, lists, and anything that needs the full width.
+     * 'responsive': selects sit beside the label when the settings group has
+     * room, and below it when the content pane is narrow.
      */
-    layout?: "row" | "stack";
+    layout?: "row" | "stack" | "responsive";
     /** Tone the row for destructive actions (danger zone). */
     destructive?: boolean;
     children: ReactNode;
@@ -148,7 +150,9 @@ export function SelectSettingRow({
             title={title}
             description={description}
             labelId={labelId}
-            layout="stack"
+            // Supplemental content can include schedules or previews that
+            // need the full row width. Only simple choices use compact rows.
+            layout={children ? "stack" : "responsive"}
         >
             <Select value={value} onValueChange={onValueChange}>
                 <SelectTrigger
@@ -209,6 +213,20 @@ export function SettingRow({
             <div className={cn("space-y-3 px-4 py-3.5", className)}>
                 {heading}
                 <div>{children}</div>
+            </div>
+        );
+    }
+
+    if (layout === "responsive") {
+        return (
+            <div
+                className={cn(
+                    "grid items-center gap-3 px-4 py-3.5 @min-[28rem]/settings:grid-cols-[minmax(0,1fr)_minmax(10rem,12rem)] @min-[28rem]/settings:gap-6",
+                    className,
+                )}
+            >
+                {heading}
+                <div className="min-w-0">{children}</div>
             </div>
         );
     }

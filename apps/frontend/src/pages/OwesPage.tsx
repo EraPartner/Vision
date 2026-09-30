@@ -90,26 +90,28 @@ export default function OwesPage() {
                 />
             )}
             {totalOwed > 0 && (
-                <Card className="bg-primary/5 !border-primary/50">
+                <Card>
                     <CardContent variant="headerless">
-                        <div className="text-center">
-                            <p className="text-sm text-muted-foreground">
-                                {t("owesPage.totalOutstanding")}
-                            </p>
-                            <p className="text-3xl font-bold text-primary mt-1">
+                        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+                            <div className="space-y-1">
+                                <p className="text-sm text-muted-foreground">
+                                    {t("owesPage.totalOutstanding")}
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                    {items.length === 1
+                                        ? t("owesPage.fromPerson", {
+                                              n: items.length,
+                                          })
+                                        : t("owesPage.fromPeople", {
+                                              n: items.length,
+                                          })}
+                                </p>
+                            </div>
+                            <p className="text-3xl font-semibold tabular-nums text-foreground">
                                 <Money
                                     amount={totalOwed}
                                     currency={defaultCurrency}
                                 />
-                            </p>
-                            <p className="text-sm text-muted-foreground mt-1">
-                                {items.length === 1
-                                    ? t("owesPage.fromPerson", {
-                                          n: items.length,
-                                      })
-                                    : t("owesPage.fromPeople", {
-                                          n: items.length,
-                                      })}
                             </p>
                         </div>
                     </CardContent>
@@ -149,9 +151,11 @@ export default function OwesPage() {
                                 <CardHeader className="pb-2">
                                     <CardTitle
                                         variant="sm"
-                                        className="flex items-center justify-between"
+                                        className="flex flex-wrap items-center justify-between gap-2"
                                     >
-                                        <span>{item.recipient_name}</span>
+                                        <span className="min-w-0 break-words">
+                                            {item.recipient_name}
+                                        </span>
                                         <Badge variant="secondary">
                                             {item.split_count === 1
                                                 ? t("owesPage.split", {
@@ -168,7 +172,7 @@ export default function OwesPage() {
                                         <span className="text-muted-foreground">
                                             {t("owesPage.remaining")}
                                         </span>
-                                        <span className="font-semibold text-primary">
+                                        <span className="font-semibold tabular-nums text-foreground">
                                             <Money
                                                 amount={item.remaining}
                                                 currency={defaultCurrency}
@@ -185,7 +189,7 @@ export default function OwesPage() {
                                             },
                                         )}
                                     />
-                                    <div className="flex justify-between text-xs text-muted-foreground">
+                                    <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-xs text-muted-foreground">
                                         <span>
                                             {t("owesPage.paid", {
                                                 amount: formatCurrency(

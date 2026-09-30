@@ -474,7 +474,7 @@ export default function DashboardPage() {
         >
             {[...Array(4)].map((_, i) => (
                 <Card key={i} variant="interactive">
-                    <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+                    <CardHeader className="pb-3 flex flex-row flex-wrap items-start justify-between gap-3 space-y-0">
                         <Skeleton className="h-4 w-28" />
                         <Skeleton className="h-10 w-10 rounded-xl" />
                     </CardHeader>
@@ -595,7 +595,10 @@ export default function DashboardPage() {
                 />
 
                 {partialError && (
-                    <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
+                    <div
+                        role="status"
+                        className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm"
+                    >
                         <AlertTriangle className="h-4 w-4 mt-0.5 text-warning shrink-0" />
                         <div className="text-foreground/80">
                             {allFromCache
@@ -727,7 +730,7 @@ export default function DashboardPage() {
                         !monthlyLoading &&
                         monthlyData.length > 0 && (
                             <Card className="group relative overflow-hidden lg:col-span-3">
-                                <CardHeader className="flex flex-row items-center justify-between">
+                                <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3">
                                     <div>
                                         <CardTitle variant="sm">
                                             {t("monthlyTrends.title")}
@@ -763,7 +766,7 @@ export default function DashboardPage() {
                     )}
                     {isVisible("categoryPie") && !transactionsLoading && (
                         <Card className="group relative overflow-hidden lg:col-span-2">
-                            <CardHeader className="flex flex-row items-center justify-between">
+                            <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3">
                                 <div>
                                     <CardTitle variant="sm">
                                         {t("categoryPie.title")}

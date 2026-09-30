@@ -171,6 +171,7 @@ export default function TransactionsPage() {
 
     const {
         allItems,
+        refetch,
         setAllItems,
         totalItems,
         isLoading,
@@ -651,6 +652,7 @@ export default function TransactionsPage() {
                             message={t("txPage.error", {
                                 msg: apiErrorToMessage(error, t),
                             })}
+                            onRetry={() => void refetch()}
                         />
                     </CardContent>
                 </Card>
