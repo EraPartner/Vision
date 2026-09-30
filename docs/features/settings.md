@@ -406,6 +406,16 @@ The **BackupSection** integrates encrypted backup restore with a **passphrase mo
 
 **See:** [[docs/features/backup-coverage-audit|Backup Coverage Audit]] for full restore process details and [[docs/features/onboarding|Onboarding Feature]] for RestoreFromBackupCard integration.
 
+## Concurrent saves
+
+[[docs/adr/173-conditional-settings-replacement|ADR-173]] defines conditional whole-value
+replacement. Reads retain persisted baselines separately from defaults. A stale save fails with
+409; nested values are not merged, and omitted fields are removed. After any uncertain or failed
+save, reload Vision before saving that key again. Browser queues and Electron's backup/services
+writer advance their baselines only after acknowledged persistence. Failed preload or an offline
+local mirror does not authorize overwriting database state.
+
+
 ## Related Features
 
 - [[docs/adr/084-settings-instant-apply-sidebar|ADR-084: Settings dialog sidebar + instant-apply]]

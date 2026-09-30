@@ -11,6 +11,7 @@
   },
   "files": [
     "main.js",
+    "settings-conflicts.js",
     "badge-image.js",
     "audit-anchor.js",
     "audit-keychain.js",

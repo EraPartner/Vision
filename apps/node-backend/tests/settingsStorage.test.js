@@ -24,7 +24,7 @@ describe("Settings storage and retrieval", () => {
 
   it("settingsRepository.set should call DB and return saved key/value", async () => {
     // Make query resolve as successful insert
-    query.mockResolvedValue({});
+    query.mockResolvedValue({ rowCount: 1 });
 
     const key = "dashboard_settings";
     const value = { excludedCategoryIds: [1, 2], excludedRecipientIds: [10] };
@@ -44,7 +44,7 @@ describe("Settings storage and retrieval", () => {
   });
 
   it("settingsRepository.set should serialize primitive arrays as JSON", async () => {
-    query.mockResolvedValue({});
+    query.mockResolvedValue({ rowCount: 1 });
 
     const key = "dismissed_recurring_patterns";
     const value = [373];
@@ -75,18 +75,22 @@ describe("Settings storage and retrieval", () => {
   });
 
   it("settings API routes should upsert and return settings", async () => {
-    query.mockResolvedValue({});
+    query.mockResolvedValue({ rowCount: 1 });
 
     const payload = {
       value: { excludedCategoryIds: [7], excludedRecipientIds: [8] },
     };
     const res = await api
       .put(`${BASE}/dashboard_settings`)
-      .send(payload)
+      .send(singleBody(payload))
       .expect(200);
 
     expect(res.body).toEqual(
-      okEnvelope({ key: "dashboard_settings", value: payload.value }),
+      okEnvelope({
+        key: "dashboard_settings",
+        value: payload.value,
+        expected: { exists: true, value: payload.value },
+      }),
     );
   });
 
@@ -135,7 +139,7 @@ describe("Settings storage and retrieval", () => {
   });
 
   it("settingsRepository.setMany stores the values validated by the route without secondary coercion", async () => {
-    query.mockResolvedValue({});
+    query.mockResolvedValue({ rowCount: 1 });
 
     await settingsRepository.setMany({
       dashboard_settings: {
@@ -159,7 +163,7 @@ describe("Settings storage and retrieval", () => {
   });
 
   it("settingsRepository.setMany should return early for empty object payload", async () => {
-    query.mockResolvedValue({});
+    query.mockResolvedValue({ rowCount: 1 });
 
     await settingsRepository.setMany({});
 
@@ -187,13 +191,17 @@ describe("life_scenarios setting", () => {
   };
 
   it("saves a bounded scenario with a paired dated goal", async () => {
-    query.mockResolvedValue({});
+    query.mockResolvedValue({ rowCount: 1 });
     const response = await api
       .put(`${BASE}/life_scenarios`)
-      .send({ value: [scenario] })
+      .send(singleBody({ value: [scenario] }))
       .expect(200);
     expect(response.body).toEqual(
-      okEnvelope({ key: "life_scenarios", value: [scenario] }),
+      okEnvelope({
+        key: "life_scenarios",
+        value: [scenario],
+        expected: { exists: true, value: [scenario] },
+      }),
     );
   });
 
@@ -201,15 +209,15 @@ describe("life_scenarios setting", () => {
     const { goalDate: _goalDate, ...unpaired } = scenario;
     await api
       .put(`${BASE}/life_scenarios`)
-      .send({ value: [unpaired] })
+      .send(singleBody({ value: [unpaired] }))
       .expect(400);
     await api
       .put(`${BASE}/life_scenarios`)
-      .send({ value: [{ ...scenario, monthlySurplus: -1 }] })
+      .send(singleBody({ value: [{ ...scenario, monthlySurplus: -1 }] }))
       .expect(400);
     await api
       .put(`${BASE}/life_scenarios`)
-      .send({ value: [{ ...scenario, monthlyContribution: 900 }] })
+      .send(singleBody({ value: [{ ...scenario, monthlyContribution: 900 }] }))
       .expect(400);
     expect(query).not.toHaveBeenCalled();
   });
@@ -228,36 +236,44 @@ describe("rebalance_plans setting (ADR-098 custom rebalancing plans)", () => {
   };
 
   it("accepts a valid list of plans and upserts it", async () => {
-    query.mockResolvedValue({});
+    query.mockResolvedValue({ rowCount: 1 });
 
     const res = await api
       .put(`${BASE}/rebalance_plans`)
-      .send({ value: [validPlan] })
+      .send(singleBody({ value: [validPlan] }))
       .expect(200);
 
     expect(res.body).toEqual(
-      okEnvelope({ key: "rebalance_plans", value: [validPlan] }),
+      okEnvelope({
+        key: "rebalance_plans",
+        value: [validPlan],
+        expected: { exists: true, value: [validPlan] },
+      }),
     );
   });
 
   it("accepts a plan without a cashCap", async () => {
-    query.mockResolvedValue({});
+    query.mockResolvedValue({ rowCount: 1 });
     const { cashCap: _cashCap, ...noCap } = validPlan;
 
     const res = await api
       .put(`${BASE}/rebalance_plans`)
-      .send({ value: [noCap] })
+      .send(singleBody({ value: [noCap] }))
       .expect(200);
 
     expect(res.body).toEqual(
-      okEnvelope({ key: "rebalance_plans", value: [noCap] }),
+      okEnvelope({
+        key: "rebalance_plans",
+        value: [noCap],
+        expected: { exists: true, value: [noCap] },
+      }),
     );
   });
 
   it("rejects a non-array value", async () => {
     const res = await api
       .put(`${BASE}/rebalance_plans`)
-      .send({ value: { not: "an array" } })
+      .send(singleBody({ value: { not: "an array" } }))
       .expect(400);
     expect(res.body.error.message).toMatch(/expected array/);
   });
@@ -265,7 +281,7 @@ describe("rebalance_plans setting (ADR-098 custom rebalancing plans)", () => {
   it("rejects a plan with a blank name", async () => {
     const res = await api
       .put(`${BASE}/rebalance_plans`)
-      .send({ value: [{ ...validPlan, name: "   " }] })
+      .send(singleBody({ value: [{ ...validPlan, name: "   " }] }))
       .expect(400);
     expect(res.body.error.message).toMatch(/name must not be blank/);
   });
@@ -273,7 +289,7 @@ describe("rebalance_plans setting (ADR-098 custom rebalancing plans)", () => {
   it("rejects a plan with empty targetWeights", async () => {
     const res = await api
       .put(`${BASE}/rebalance_plans`)
-      .send({ value: [{ ...validPlan, targetWeights: {} }] })
+      .send(singleBody({ value: [{ ...validPlan, targetWeights: {} }] }))
       .expect(400);
     expect(res.body.error.message).toMatch(/at least one sleeve/);
   });
@@ -281,7 +297,11 @@ describe("rebalance_plans setting (ADR-098 custom rebalancing plans)", () => {
   it("rejects a negative target weight", async () => {
     const res = await api
       .put(`${BASE}/rebalance_plans`)
-      .send({ value: [{ ...validPlan, targetWeights: { stocks: -0.1 } }] })
+      .send(
+        singleBody({
+          value: [{ ...validPlan, targetWeights: { stocks: -0.1 } }],
+        }),
+      )
       .expect(400);
     expect(res.body.error.message).toMatch(/non-negative number/);
   });
@@ -289,7 +309,7 @@ describe("rebalance_plans setting (ADR-098 custom rebalancing plans)", () => {
   it("rejects a negative cashCap", async () => {
     const res = await api
       .put(`${BASE}/rebalance_plans`)
-      .send({ value: [{ ...validPlan, cashCap: -1 }] })
+      .send(singleBody({ value: [{ ...validPlan, cashCap: -1 }] }))
       .expect(400);
     expect(res.body.error.message).toMatch(
       /cashCap must be a non-negative number/,
@@ -301,7 +321,13 @@ describe("rebalance_plans setting (ADR-098 custom rebalancing plans)", () => {
 
     const res = await api.get(`${BASE}/rebalance_plans`).expect(200);
 
-    expect(res.body).toEqual(okEnvelope({ key: "rebalance_plans", value: [] }));
+    expect(res.body).toEqual(
+      okEnvelope({
+        key: "rebalance_plans",
+        value: [],
+        expected: { exists: false },
+      }),
+    );
   });
 });
 
@@ -311,8 +337,8 @@ describe("belgian_tax_profile setting validation (TODO E6)", () => {
   });
 
   const put = async (key, value) => {
-    query.mockResolvedValue({});
-    return api.put(`${BASE}/${key}`).send({ value });
+    query.mockResolvedValue({ rowCount: 1 });
+    return api.put(`${BASE}/${key}`).send(singleBody({ value }));
   };
 
   const validProfile = {
@@ -458,13 +484,30 @@ describe("belgian_tax_profile setting validation (TODO E6)", () => {
   });
 
   it("bulk PUT enforces the same profile rules", async () => {
-    query.mockResolvedValue({});
+    query.mockResolvedValue({ rowCount: 1 });
     const res = await api
       .put(BASE)
-      .send({
-        belgian_tax_profile: { ...validProfile, communalSurchargePercent: -1 },
-      })
+      .send(
+        bulkBody({
+          belgian_tax_profile: {
+            ...validProfile,
+            communalSurchargePercent: -1,
+          },
+        }),
+      )
       .expect(400);
     expect(res.body.error.code).toBe("VALIDATION_ERROR");
   });
 });
+
+function singleBody(body) {
+  return { ...body, expected: { exists: false } };
+}
+function bulkBody(settings) {
+  return {
+    settings,
+    expected: Object.fromEntries(
+      Object.keys(settings).map((key) => [key, { exists: false }]),
+    ),
+  };
+}

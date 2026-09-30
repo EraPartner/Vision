@@ -156,9 +156,11 @@ export async function saveBackupSettings(settings: {
     backupDir: string;
     backupOnQuit: boolean;
 }): Promise<void> {
-    await saveSetting("backup_settings", settings);
     const backup = getElectronBackup();
-    if (backup) backup.saveSettings(settings).catch(() => {});
+    if (backup) {
+        const result = await backup.saveSettings(settings);
+        if (!result.success) throw new Error(result.error || "Could not save backup settings");
+    } else await saveSetting("backup_settings", settings);
 }
 
 export async function loadBackupSettings(): Promise<{
@@ -193,7 +195,7 @@ export async function loadBackupSettings(): Promise<{
 
 /**
  * Persist the opt-in "keep services running on quit" toggle. No-op outside
- * Electron (there is nothing to keep running). Same dual-write as
+ * Electron (there is nothing to keep running). Same database-first mirror as
  * saveBackupSettings: the database is the source of truth, the Electron
  * settings.json mirror is the fallback the will-quit handler reads when the
  * backend has already started shutting down.
@@ -201,9 +203,11 @@ export async function loadBackupSettings(): Promise<{
 export async function saveServicesSettings(settings: {
     keepServicesOnQuit: boolean;
 }): Promise<void> {
-    await saveSetting("services_settings", settings);
     const services = getElectronServices();
-    if (services) services.saveSettings(settings).catch(() => {});
+    if (services) {
+        const result = await services.saveSettings(settings);
+        if (!result.success) throw new Error(result.error || "Could not save services settings");
+    } else await saveSetting("services_settings", settings);
 }
 
 export async function loadServicesSettings(): Promise<{

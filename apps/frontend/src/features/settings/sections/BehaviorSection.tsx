@@ -49,7 +49,7 @@ export const BehaviorSection = memo(function BehaviorSection() {
                 setKeepServicesOnQuit(s.keepServicesOnQuit);
             })
             .catch(() => {
-                /* leave default (off) — saves stay possible from there */
+                /* Leave the display default; the writer refuses an unknown baseline. */
             });
         return () => {
             cancelled = true;
@@ -58,7 +58,10 @@ export const BehaviorSection = memo(function BehaviorSection() {
 
     const handleKeepServicesOnQuitChange = (v: boolean) => {
         setKeepServicesOnQuit(v);
-        void apiClient.saveServicesSettings({ keepServicesOnQuit: v });
+        void apiClient.saveServicesSettings({ keepServicesOnQuit: v }).catch(() => {
+            setKeepServicesOnQuit(!v);
+            toast.error(t("settings.saveFailed"));
+        });
     };
 
     const handleCostBasisMethodChange = async (v: string) => {

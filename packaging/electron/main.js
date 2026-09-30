@@ -18,6 +18,10 @@ const crypto = require("node:crypto");
 const fs = require("fs");
 const path = require("path");
 const http = require("http");
+const { createSettingsWriter } = require("./settings-conflicts");
+const settingsWriter = createSettingsWriter((key, payload) =>
+  httpPut(`http://localhost:${appPort}/api/settings/${key}`, payload),
+);
 const { isBundleEncrypted } = require("./backup/bundle");
 const backupCrypto = require("./backup/crypto");
 const {
@@ -2116,20 +2120,14 @@ registerHandler(
       backupDir: backupDir || "",
       backupOnQuit: !!backupOnQuit,
     };
-    await updateSettings((cur) => {
+    try {
+      await settingsWriter.save("backup_settings", payload);
+      await updateSettings((cur) => {
       cur.backupDir = payload.backupDir;
       cur.backupOnQuit = payload.backupOnQuit;
-    });
-    try {
-      await httpPut(
-        `http://localhost:${appPort}/api/settings/backup_settings`,
-        { value: payload },
-      );
+      });
     } catch (err) {
-      console.warn(
-        "backup:save-settings: could not persist to DB, kept in local settings.json",
-        err.message,
-      );
+      return { success: false, error: err.message };
     }
     return { success: true };
   },
@@ -2168,6 +2166,7 @@ registerHandler(
       const body = await httpGet(
         `http://localhost:${appPort}/api/settings/backup_settings`,
       );
+      if (body?.ok === true) settingsWriter.loaded("backup_settings", body.data);
       const stored = body && body.data ? body.data.value : undefined;
       if (stored && typeof stored === "object") {
         // Mirror the RAW stored value (not the default-resolved one) back to
@@ -2208,19 +2207,13 @@ registerHandler(
   "services:save-settings",
   async (event, { keepServicesOnQuit } = {}) => {
     const payload = { keepServicesOnQuit: !!keepServicesOnQuit };
-    await updateSettings((cur) => {
-      cur.keepServicesOnQuit = payload.keepServicesOnQuit;
-    });
     try {
-      await httpPut(
-        `http://localhost:${appPort}/api/settings/services_settings`,
-        { value: payload },
-      );
+      await settingsWriter.save("services_settings", payload);
+      await updateSettings((cur) => {
+      cur.keepServicesOnQuit = payload.keepServicesOnQuit;
+      });
     } catch (err) {
-      console.warn(
-        "services:save-settings: could not persist to DB, kept in local settings.json",
-        err.message,
-      );
+      return { success: false, error: err.message };
     }
     return { success: true };
   },
@@ -2234,6 +2227,7 @@ registerHandler(
       const body = await httpGet(
         `http://localhost:${appPort}/api/settings/services_settings`,
       );
+      if (body?.ok === true) settingsWriter.loaded("services_settings", body.data);
       const stored = body && body.data ? body.data.value : undefined;
       if (stored && typeof stored === "object") {
         const keepServicesOnQuit = stored.keepServicesOnQuit === true;

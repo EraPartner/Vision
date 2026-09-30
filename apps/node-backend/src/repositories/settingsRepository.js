@@ -5,7 +5,8 @@
  * Table is created by Alembic migration 0030_add_user_settings_table.
  */
 
-import { query } from '../database/connection.js';
+import { query, withTransaction } from "../database/connection.js";
+import { ConflictError } from "../middleware/errorHandler.js";
 
 /**
  * Settings whose values are plain strings. The legacy self-heal in
@@ -13,7 +14,7 @@ import { query } from '../database/connection.js';
  * happens to parse as JSON ("123", "true") would silently type-flip on
  * read. Register any new string-valued setting key here.
  */
-const STRING_VALUED_KEYS = new Set(['cost_basis_method']);
+const STRING_VALUED_KEYS = new Set(["cost_basis_method"]);
 
 /**
  * Legacy rows (and some restore paths) stored the JSON of the value inside a
@@ -25,18 +26,101 @@ const STRING_VALUED_KEYS = new Set(['cost_basis_method']);
  * @returns {any}
  */
 function reviveLegacyJsonString(key, value) {
-  if (typeof value !== 'string' || STRING_VALUED_KEYS.has(key)) return value;
-  try { return JSON.parse(value); } catch { return value; }
+  if (typeof value !== "string" || STRING_VALUED_KEYS.has(key)) return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
 }
 
 export const settingsRepository = {
+  async getAllWithBaselines() {
+    const result = await query(
+      "SELECT key, value FROM user_settings ORDER BY key",
+    );
+    const settings = Object.fromEntries(
+      result.rows.map((row) => [
+        row.key,
+        reviveLegacyJsonString(row.key, row.value),
+      ]),
+    );
+    const expected = Object.fromEntries(
+      result.rows.map((row) => [row.key, { exists: true, value: row.value }]),
+    );
+    return { settings, expected };
+  },
+
+  /** Read the persisted value without confusing absence with JSON null. */
+  async getRecord(key) {
+    const result = await query(
+      "SELECT value FROM user_settings WHERE key = $1",
+      [key],
+    );
+    if (!result.rows.length) return { expected: { exists: false } };
+    return {
+      value: reviveLegacyJsonString(key, result.rows[0].value),
+      expected: { exists: true, value: result.rows[0].value },
+    };
+  },
+
+  /**
+   * Atomic whole-value replacement. Omitted object fields are removed; nested
+   * values are not merged. PostgreSQL JSONB equality ignores object key order.
+   * @param {string} key
+   * @param {any} value
+   * @param {{ exists: boolean, value?: any }} expected
+   */
+  async replace(key, value, expected) {
+    const result = expected.exists
+      ? await query(
+          `UPDATE user_settings SET value = $2::jsonb, updated_at = NOW()
+          WHERE key = $1 AND value = $3::jsonb RETURNING key`,
+          [key, JSON.stringify(value), JSON.stringify(expected.value)],
+        )
+      : await query(
+          `INSERT INTO user_settings (key, value, updated_at)
+          VALUES ($1, $2::jsonb, NOW()) ON CONFLICT (key) DO NOTHING RETURNING key`,
+          [key, JSON.stringify(value)],
+        );
+    if (!result.rowCount)
+      throw new ConflictError("Settings changed. Reload before saving again.");
+    return { key, value, expected: { exists: true, value } };
+  },
+
+  /** Conditional multi-key saves either all commit or all roll back. */
+  async replaceMany(settings, expected) {
+    return withTransaction(async () => {
+      for (const key of Object.keys(settings).sort()) {
+        await settingsRepository.replace(key, settings[key], expected[key]);
+      }
+    });
+  },
+
+  /** Conditional deletion also protects a newer replacement. */
+  async deleteExpected(key, expected) {
+    if (!expected.exists)
+      throw new ConflictError("Settings changed. Reload before deleting.");
+    const result = await query(
+      `DELETE FROM user_settings
+      WHERE key = $1 AND value = $2::jsonb RETURNING key`,
+      [key, JSON.stringify(expected.value)],
+    );
+    if (!result.rowCount)
+      throw new ConflictError("Settings changed. Reload before deleting.");
+    return true;
+  },
+
   /**
    * Get a setting by key. Returns null if not found.
    * @param {string} key
    * @returns {Promise<any>} Parsed JSONB value, or null.
    */
   async get(key) {
-    const result = await query('SELECT value FROM user_settings WHERE key = $1', [key]);
+    const result = await query(
+      "SELECT value FROM user_settings WHERE key = $1",
+      [key],
+    );
     if (result.rows.length === 0) return null;
     return reviveLegacyJsonString(key, result.rows[0].value);
   },
@@ -46,7 +130,9 @@ export const settingsRepository = {
    * @returns {Promise<Record<string, any>>}
    */
   async getAll() {
-    const result = await query('SELECT key, value FROM user_settings ORDER BY key');
+    const result = await query(
+      "SELECT key, value FROM user_settings ORDER BY key",
+    );
     /** @type {Record<string, any>} */
     const settings = {};
     for (const row of result.rows) {
@@ -68,7 +154,7 @@ export const settingsRepository = {
       `INSERT INTO user_settings (key, value, updated_at)
        VALUES ($1, $2::jsonb, NOW())
        ON CONFLICT (key) DO UPDATE SET value = $2::jsonb, updated_at = NOW()`,
-      [key, jsonValue]
+      [key, jsonValue],
     );
     return { key, value };
   },
@@ -79,7 +165,10 @@ export const settingsRepository = {
    * @returns {Promise<boolean>} true if a row was removed
    */
   async delete(key) {
-    const result = await query('DELETE FROM user_settings WHERE key = $1 RETURNING key', [key]);
+    const result = await query(
+      "DELETE FROM user_settings WHERE key = $1 RETURNING key",
+      [key],
+    );
     return result.rowCount > 0;
   },
 
@@ -104,7 +193,7 @@ export const settingsRepository = {
        SELECT u.key, u.value::jsonb, NOW()
        FROM UNNEST($1::text[], $2::text[]) AS u(key, value)
        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
-      [keys, values]
+      [keys, values],
     );
   },
 };

@@ -2,7 +2,7 @@
 title: Repository Layer Reference
 type: reference
 status: active
-date: 2026-04-23
+date: 2026-09-30
 updated: 2026-09-04
 tags: [backend, repositories, reference, data-access, postgresql, phase-0, phase-1, phase-3, phase-3-1, phase-9, phase-q, decimal, money, recipient-groups]
 aliases: [repositories, repository layer, data access, DAL, database access]
@@ -672,6 +672,15 @@ UPDATE transactions SET is_active = false WHERE id = $1
 [[apps/node-backend/src/services/portfolio/portfolioTransactionService.js|portfolioTransactionService.js]] owns create/update orchestration. [[apps/node-backend/src/services/portfolio/portfolioTransactionRules.js|portfolioTransactionRules.js]] owns normalization, buy/sell unit math, recurrence values, and projected account-partition validation. The repository returns the investment's complete ordered unit-event history in one query; the service derives both current availability and downstream oversell effects from it. Both use [[apps/node-backend/src/lib/repositoryErrors.js|repositoryErrors.js]] for the stable `VALIDATION_ERROR` contract.
 
 ---
+
+## Conditional settings writes
+
+`settingsRepository.getRecord` and `getAllWithBaselines` separate raw persistence baselines
+from revived display values. `replace` and `deleteExpected` compare persisted JSONB atomically;
+`replaceMany` applies ordered conditional replacements in one transaction. A mismatch raises
+409 CONFLICT. Internal scalar/flag commands, administrative database edits and authorized restore
+remain explicit replacements. See [[docs/adr/173-conditional-settings-replacement|ADR-173]].
+
 
 ## Related Documentation
 

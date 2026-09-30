@@ -4,7 +4,7 @@ type: endpoint
 method: GET, PUT, DELETE
 path: /api/settings
 description: User preferences and application settings
-date: 2026-06-19
+date: 2026-09-30
 updated: 2026-09-20
 tags: [api, settings, preferences, phase-3, auto-link, planned-match, june-2026]
 status: active
@@ -22,7 +22,8 @@ The Settings API manages user preferences stored as key-value JSON. Settings can
 
 ### GET /api/settings
 
-Get all settings.
+Get all settings. With `?withBaselines=true`, response data is `{ settings, expected }`,
+with both maps obtained from one database read. Absent keys have baseline `{ exists: false }`.
 
 **Response:**
 
@@ -46,13 +47,17 @@ If a known setting key is missing, the API returns a default value instead of a 
 ```json
 {
   "key": "widget_visibility",
-  "value": {}
+  "value": {},
+  "expected": { "exists": false }
 }
 ```
 
 ### PUT /api/settings/:key
 
-Create or update a single setting value.
+Create or replace a single setting using `{ value, expected }`. Send the persisted baseline
+returned by the read that produced the edit. Do not read a fresh baseline to submit a stale object.
+Omitted fields are removed; nested objects and arrays are replaced. Missing baselines return 400.
+Stale baselines return 409 CONFLICT without changing the row. JSON null differs from absence.
 
 Storage behavior:
 
@@ -63,6 +68,7 @@ Storage behavior:
 
 ```json
 {
+  "expected": { "exists": false },
   "value": {
     "excludedCategoryIds": [12, 18],
     "excludedRecipientIds": [4],
@@ -88,11 +94,12 @@ Implementation note:
 
 ### PUT /api/settings
 
-Bulk create/update multiple settings in one request.
+Bulk conditional replacement accepts `{ settings, expected }`. Every key needs its baseline.
+All writes commit together or roll back on any 409 conflict. This mutation contract is breaking.
 
 Storage behavior:
 
-- Each key is serialized and cast with `::jsonb` before upsert for consistent JSONB persistence
+- Each key is conditionally replaced inside one transaction; no arbitrary JSON merge occurs
 
 Validation behavior:
 
@@ -106,25 +113,19 @@ Validation behavior:
 
 ```json
 {
-  "app_settings": {
-    "defaultCurrency": "EUR",
-    "language": "en"
-  },
-  "theme_settings": {
-    "variant": "default",
-    "mode": "system"
-  }
+  "settings": { "app_settings": { "defaultCurrency": "EUR", "language": "en" } },
+  "expected": { "app_settings": { "exists": false } }
 }
 ```
 
 ### DELETE /api/settings/:key
 
-Delete a setting key.
+Delete a setting key with body `{ "expected": { "exists": true, "value": ... } }`.
 
 Response semantics:
 
 - `204 No Content` with an empty body on success.
-- Returns `404` with `Setting '<key>' not found` when deleting a non-existing key.
+- Missing or invalid baseline returns 400; a changed or missing persisted row returns 409.
 
 ## Common Settings
 
@@ -327,6 +328,12 @@ Code links: [[apps/frontend/src/features/planned/PlannedPaymentForm.tsx]], [[app
 Shared date utilities include app-settings-aware date-time helpers used by settings propagation across date/time labels.
 
 Code links: [[apps/frontend/src/lib/dateUtils.ts]], [[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx]], [[apps/frontend/src/components/notifications/UpdateNotification.tsx]], [[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx]], [[apps/frontend/src/pages/research/MarketLookupPage.tsx]]
+
+## Conflict and writer policy
+
+See [[docs/adr/173-conditional-settings-replacement|ADR-173]] for frozen tab baselines,
+failed-save reload requirements, legacy storage, Electron mirrors, and explicit internal/admin/restore
+writers. Conditional APIs do not make administrative restore transactional with an open browser.
 
 ## Related
 

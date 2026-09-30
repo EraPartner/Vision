@@ -341,8 +341,8 @@ export const importCsvReviewRequiredHandlers = [
  * without crashing. Tests override per-flow handlers via `server.use(...)`.
  */
 export const defaultHandlers = [
-    http.get(`${API_BASE}/api/settings`, () => ok({})),
-    http.get(`${API_BASE}/api/settings/:key`, () => ok(null)),
+    http.get(`${API_BASE}/api/settings`, ({ request }) => ok(new URL(request.url).searchParams.get("withBaselines") === "true" ? { settings: {}, expected: {} } : {})),
+    http.get(`${API_BASE}/api/settings/:key`, ({ params }) => ok({ key: String(params.key), value: null, expected: { exists: false } })),
     // `res.ok(settingsRepository.set(...))` — routes/settings.js:328. The body
     // is the stored `{ key, value }` row (settingsRepository.js:98), never an
     // `{ok: true}` sentinel. Echo the key and value so per-flow overrides see
@@ -352,7 +352,7 @@ export const defaultHandlers = [
         const body = (await request.json().catch(() => ({}))) as {
             value?: unknown;
         };
-        return ok({ key: String(params.key), value: body.value ?? null });
+        return ok({ key: String(params.key), value: body.value ?? null, expected: { exists: true, value: body.value ?? null } });
     }),
 
     http.get(`${API_BASE}/api/info`, () =>

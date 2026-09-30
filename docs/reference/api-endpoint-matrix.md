@@ -2,9 +2,9 @@
 title: API Endpoint Matrix
 type: reference
 status: active
-date: 2026-09-27
-updated: 2026-09-27
-last_modified: 2026-09-27
+date: 2026-09-30
+updated: 2026-09-30
+last_modified: 2026-09-30
 adr-reference: 026
 # Authoritative HTTP-operation count from openapi.yaml. The CI checker also
 # compares every method/path pair; update concrete resource rows when routes change.
@@ -172,14 +172,14 @@ encodings return 400. Saved parser configs retain this option. See [[docs/api/im
 | Method           | Path                                  | Description                                        | Rate Limit  | Doc                             |
 | ---------------- | ------------------------------------- | -------------------------------------------------- | ----------- | ------------------------------- |
 | GET              | `/api/analysis/catalog`               | Approved dataset, field, measure, and join catalog | 600 req/min | [[docs/api/analysis\|Analysis]] |
-| POST             | `/api/analysis/compile`               | Visual plan to inspectable generated SQL           | 600 req/min | [[docs/api/analysis\|Analysis]] |
-| POST             | `/api/analysis/execute`               | Bounded visual or custom SQL execution             | 600 req/min | [[docs/api/analysis\|Analysis]] |
+| POST             | `/api/analysis/compile`               | Currency-safe visual plan to inspectable SQL           | 600 req/min | [[docs/api/analysis\|Analysis]] |
+| POST             | `/api/analysis/execute`               | Paged visual or bounded custom SQL execution             | 600 req/min | [[docs/api/analysis\|Analysis]] |
 | POST             | `/api/analysis/cancel/:requestId`     | Same-role PostgreSQL cancellation                  | 600 req/min | [[docs/api/analysis\|Analysis]] |
 | POST             | `/api/analysis/drill`                 | Grouped row to bounded contributing records        | 600 req/min | [[docs/api/analysis\|Analysis]] |
 | GET, POST        | `/api/analysis/saved`                 | List or create reusable analyses                   | 600 req/min | [[docs/api/analysis\|Analysis]] |
 | GET, PUT, DELETE | `/api/analysis/saved/:id`             | Read, version, or delete one analysis              | 600 req/min | [[docs/api/analysis\|Analysis]] |
 | POST             | `/api/analysis/saved/:id/run`         | Refresh and record success or failure              | 600 req/min | [[docs/api/analysis\|Analysis]] |
-| POST             | `/api/analysis/formulas/evaluate`     | Evaluate bounded spreadsheet-style formulas        | 600 req/min | [[docs/api/analysis\|Analysis]] |
+| POST             | `/api/analysis/formulas/evaluate`     | Evaluate formulas with explicit cell/completeness errors        | 600 req/min | [[docs/api/analysis\|Analysis]] |
 | POST             | `/api/analysis/ai-proposals/preview`  | Preview a version-bound AI edit                    | 600 req/min | [[docs/api/analysis\|Analysis]] |
 | POST             | `/api/analysis/ai-proposals/apply`    | Apply an inspected version-bound AI edit           | 600 req/min | [[docs/api/analysis\|Analysis]] |
 | GET              | `/api/analysis/saved/:id/versions`    | List immutable definition versions                 | 600 req/min | [[docs/api/analysis\|Analysis]] |
@@ -444,9 +444,9 @@ All routes mounted at `/api/portfolio/import` with `importRateLimiter`. Parallel
 | ------ | -------------------- | ------------------------------------------------------------------- | ---------- | ------------------------------- |
 | GET    | `/api/settings`      | Get all (includes app, dashboard, theme, backup, widget visibility) | —          | [[docs/api/settings\|Settings]] |
 | GET    | `/api/settings/:key` | Get single (with defaults)                                          | —          | [[docs/api/settings\|Settings]] |
-| PUT    | `/api/settings/:key` | Upsert single (theme_settings validated for variant/mode/schedule)  | —          | [[docs/api/settings\|Settings]] |
-| PUT    | `/api/settings`      | Bulk upsert (theme_settings validated)                              | —          | [[docs/api/settings\|Settings]] |
-| DELETE | `/api/settings/:key` | Delete                                                              | —          | [[docs/api/settings\|Settings]] |
+| PUT    | `/api/settings/:key` | Conditional replacement; persisted baseline required  | —          | [[docs/api/settings\|Settings]] |
+| PUT    | `/api/settings`      | Atomic conditional replacements; per-key baselines required                              | —          | [[docs/api/settings\|Settings]] |
+| DELETE | `/api/settings/:key` | Conditional delete; persisted baseline required                     | —          | [[docs/api/settings\|Settings]] |
 
 ## Recipient Bank Accounts (5 endpoints)
 

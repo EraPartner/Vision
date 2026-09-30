@@ -154,7 +154,7 @@ describe("AppSettingsHydration — edge cases", () => {
     it("hydrates from server-provided preload data (boot fetch success)", async () => {
         server.use(
             http.get(`${API_BASE}/api/settings`, () =>
-                ok({ app_settings: { defaultCurrency: "USD" } }),
+                ok({ settings: { app_settings: { defaultCurrency: "USD" } }, expected: { app_settings: { exists: true, value: { defaultCurrency: "USD" } } } }),
             ),
         );
         const { result } = renderHook(() => useAppSettings(), {

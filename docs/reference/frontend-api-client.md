@@ -2,7 +2,7 @@
 title: Frontend API Client Architecture
 type: reference
 status: active
-date: 2026-04-22
+date: 2026-09-30
 updated: 2026-09-13
 tags: [reference, frontend, api-client, typescript, http, phase-1, phase-2, phase-q, client-side, environment, domain-split, openapi, recipient-groups, market-search]
 description: Architecture of the frontend HTTP client split into modular layers (transport, types, domain methods) with OpenAPI type generation. Phase Q: getTransactions supports recipient_group_id parameter. 2026-04-29: searchMarket wrapper added to market.ts module; AddToWatchlistDialog migrated to apiClient methods.
@@ -240,7 +240,7 @@ Previous monolithic `api.ts` (1553 lines) split into 13 domain modules:
 | `planned.ts`      | getPlannedTransactions, getPlannedTransaction, createPlannedTransaction, updatePlannedTransaction, deletePlannedTransaction, executePlannedTransaction     | ~50   |
 | `investments.ts`  | getInvestments, getInvestment, createInvestment, updateInvestment, deleteInvestment, refreshInvestmentPrices, getPriceProviders, getInvestmentPriceHistory | ~80   |
 | `imports.ts`      | importCSV, importCSVWithProgress, importCSVCustom, importRecipients, importCategories                                                                      | ~70   |
-| `settings.ts`     | getSettings, getSetting, saveSetting, saveSettingsBulk                                                                                                     | ~35   |
+| `settings.ts`     | getSettings, getSetting, saveSetting                                                                                                     | ~35   |
 | `aggregations.ts` | getCategoryAggregations, getRecipientAggregations, getMonthlyAggregations, getRecurringPatterns                                                            | ~60   |
 | `charts.ts`       | getSavedCharts, getSavedChart, createSavedChart, updateSavedChart, deleteSavedChart                                                                        | ~35   |
 | `market.ts`       | searchMarket (2026-04-29), getMarketQuotes, getMarketNews, createWatchlistItem                                                                             | ~40   |
@@ -425,6 +425,16 @@ async getTransactions(params?: TransactionQueryParams): Promise<TransactionsList
   return body.data; // pure value, no mutation
 }
 ```
+
+## Conditional settings transport
+
+`settings.ts` uses `GET /api/settings?withBaselines=true` for preload and stores each raw
+persisted baseline separately from display values. Per-key GET returns `expected`. `saveSetting`
+sends `{ value, expected }`, disables transport retries, serializes writes per key, and blocks a
+failed queue until reload. Background reads do not replace that tab's baseline. Electron backup
+and services saves await one IPC writer; browser saves use this API client. See
+[[docs/adr/173-conditional-settings-replacement|ADR-173]] and [[docs/api/settings|Settings API]].
+
 
 ## Related
 

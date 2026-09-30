@@ -29,7 +29,7 @@ describe("BehaviorSection — cost basis method", () => {
     it("persists the top-level cost_basis_method key and refreshes portfolio summaries", async () => {
         const saveSetting = vi
             .spyOn(apiClient, "saveSetting")
-            .mockResolvedValue({ key: "cost_basis_method", value: "fifo" });
+            .mockResolvedValue({ key: "cost_basis_method", value: "fifo", expected: { exists: true, value: "fifo" } });
         const user = userEvent.setup();
         const { queryClient } = renderWithApp(<BehaviorSection />);
         const invalidate = vi.spyOn(queryClient, "invalidateQueries");
@@ -99,10 +99,12 @@ describe("BehaviorSection — brokerage cash categories", () => {
     it("hydrates and saves the complete four-kind mapping atomically", async () => {
         vi.spyOn(apiClient, "getSetting").mockResolvedValue({
             key: "brokerage_cash_category_ids",
+            expected: { exists: false },
             value: { dividend: 7, interest: null, fee: null, tax: null },
         });
         const save = vi.spyOn(apiClient, "saveSetting").mockResolvedValue({
             key: "brokerage_cash_category_ids",
+            expected: { exists: false },
             value: { dividend: 7, interest: null, fee: 8, tax: null },
         });
         const user = userEvent.setup();
@@ -132,6 +134,7 @@ describe("BehaviorSection — brokerage cash categories", () => {
     it("persists clearing as null and surfaces a failed save", async () => {
         vi.spyOn(apiClient, "getSetting").mockResolvedValue({
             key: "brokerage_cash_category_ids",
+            expected: { exists: false },
             value: { dividend: 7, interest: null, fee: null, tax: null },
         });
         const save = vi
@@ -177,7 +180,7 @@ function installElectronStubs(
 ) {
     const win = window as unknown as Record<string, unknown>;
     win.electronUpdater = {};
-    const saveSettings = vi.fn().mockResolvedValue(undefined);
+    const saveSettings = vi.fn().mockResolvedValue({ success: true });
     const loadSettings = vi.fn().mockResolvedValue(loadedSettings);
     win.electronServices = { saveSettings, loadSettings };
     return { saveSettings, loadSettings };

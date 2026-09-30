@@ -14,10 +14,10 @@ import { routeAgent, errEnvelope } from "../helpers/routeApp.js";
 vi.mock("../../src/repositories/settingsRepository.js", () => ({
   default: {
     getAll: vi.fn(),
-    get: vi.fn(),
-    set: vi.fn(),
-    setMany: vi.fn(),
-    delete: vi.fn(),
+    getRecord: vi.fn(),
+    replace: vi.fn(),
+    replaceMany: vi.fn(),
+    deleteExpected: vi.fn(),
   },
 }));
 
@@ -25,6 +25,7 @@ vi.mock("../../src/config/logger.js", () => ({
   logger: mockLogger(),
 }));
 
+import { ConflictError } from "../../src/middleware/errorHandler.js";
 import settingsRepository from "../../src/repositories/settingsRepository.js";
 
 const { default: settingsRouter } =
@@ -73,7 +74,7 @@ describe("Settings Routes", () => {
 
   describe("GET /:key", () => {
     it("returns the all-null brokerage category default without prior storage", async () => {
-      settingsRepository.get.mockResolvedValue(null);
+      settingsRepository.getRecord.mockResolvedValue(record(null));
       const res = { ok: vi.fn() };
 
       await getSingleSetting(
@@ -84,33 +85,38 @@ describe("Settings Routes", () => {
       expect(res.ok).toHaveBeenCalledWith({
         key: "brokerage_cash_category_ids",
         value: { dividend: null, interest: null, fee: null, tax: null },
+        expected: { exists: false },
       });
     });
 
     it("returns stored setting value when present", async () => {
-      settingsRepository.get.mockResolvedValue({ defaultCurrency: "USD" });
+      settingsRepository.getRecord.mockResolvedValue(
+        record({ defaultCurrency: "USD" }),
+      );
 
       const res = await api.get(`${BASE}/app_settings`).expect(200);
 
       expect(res.body.data).toEqual({
         key: "app_settings",
         value: { defaultCurrency: "USD" },
+        expected: { exists: true, value: { defaultCurrency: "USD" } },
       });
     });
 
     it("returns default for known key when missing", async () => {
-      settingsRepository.get.mockResolvedValue(null);
+      settingsRepository.getRecord.mockResolvedValue(record(null));
 
       const res = await api.get(`${BASE}/onboarding_complete`).expect(200);
 
       expect(res.body.data).toEqual({
         key: "onboarding_complete",
         value: false,
+        expected: { exists: false },
       });
     });
 
     it("app_settings default mirrors the frontend store (no default-copy drift)", async () => {
-      settingsRepository.get.mockResolvedValue(null);
+      settingsRepository.getRecord.mockResolvedValue(record(null));
 
       const res = await api.get(`${BASE}/app_settings`).expect(200);
 
@@ -127,7 +133,7 @@ describe("Settings Routes", () => {
     });
 
     it("dashboard_settings default includes exclusionScope", async () => {
-      settingsRepository.get.mockResolvedValue(null);
+      settingsRepository.getRecord.mockResolvedValue(record(null));
 
       const res = await api.get(`${BASE}/dashboard_settings`).expect(200);
 
@@ -136,22 +142,26 @@ describe("Settings Routes", () => {
 
     it("returns false default for includeTransfers when unset", async () => {
       // Missing from SETTING_DEFAULTS this GET 404'd until the first toggle.
-      settingsRepository.get.mockResolvedValue(null);
+      settingsRepository.getRecord.mockResolvedValue(record(null));
 
       const res = await api.get(`${BASE}/includeTransfers`).expect(200);
 
-      expect(res.body.data).toEqual({ key: "includeTransfers", value: false });
+      expect(res.body.data).toEqual({
+        key: "includeTransfers",
+        value: false,
+        expected: { exists: false },
+      });
     });
 
     it("returns a 404 NOT_FOUND envelope for unknown missing key", async () => {
-      settingsRepository.get.mockResolvedValue(null);
+      settingsRepository.getRecord.mockResolvedValue(record(null));
 
       const res = await api.get(`${BASE}/unknown_key`).expect(404);
       expect(res.body).toEqual(errEnvelope({ code: "NOT_FOUND" }));
     });
 
     it("answers a 500 when fetching setting fails", async () => {
-      settingsRepository.get.mockRejectedValue(new Error("boom"));
+      settingsRepository.getRecord.mockRejectedValue(new Error("boom"));
 
       const res = await api.get(`${BASE}/app_settings`).expect(500);
       expect(res.body.error.message).toBe("boom");
@@ -161,7 +171,7 @@ describe("Settings Routes", () => {
   describe("PUT /:key", () => {
     it("accepts the complete brokerage cash category ID mapping", async () => {
       const value = { dividend: 7, interest: null, fee: 8, tax: 9 };
-      settingsRepository.set.mockResolvedValue({
+      settingsRepository.replace.mockResolvedValue({
         key: "brokerage_cash_category_ids",
         value,
       });
@@ -170,14 +180,15 @@ describe("Settings Routes", () => {
       await putSingleSetting(
         {
           params: { key: "brokerage_cash_category_ids" },
-          body: { value },
+          body: singleBody({ value }),
         },
         res,
       );
 
-      expect(settingsRepository.set).toHaveBeenCalledWith(
+      expect(settingsRepository.replace).toHaveBeenCalledWith(
         "brokerage_cash_category_ids",
         value,
+        { exists: false },
       );
     });
 
@@ -188,19 +199,19 @@ describe("Settings Routes", () => {
           putSingleSetting(
             {
               params: { key: "brokerage_cash_category_ids" },
-              body: {
+              body: singleBody({
                 value: {
                   dividend: invalidId,
                   interest: null,
                   fee: null,
                   tax: null,
                 },
-              },
+              }),
             },
             { ok: vi.fn() },
           ),
         ).rejects.toThrow();
-        expect(settingsRepository.set).not.toHaveBeenCalled();
+        expect(settingsRepository.replace).not.toHaveBeenCalled();
       },
     );
 
@@ -209,7 +220,7 @@ describe("Settings Routes", () => {
         excludedCategoryIds: [7],
         excludedRecipientIds: [8],
       };
-      settingsRepository.set.mockResolvedValue({
+      settingsRepository.replace.mockResolvedValue({
         key: "dashboard_settings",
         value: stored,
       });
@@ -218,16 +229,17 @@ describe("Settings Routes", () => {
       await putSingleSetting(
         {
           params: { key: "dashboard_settings" },
-          body: {
+          body: singleBody({
             value: { excludedCategoryIds: ["7"], excludedRecipientIds: ["8"] },
-          },
+          }),
         },
         res,
       );
 
-      expect(settingsRepository.set).toHaveBeenCalledWith(
+      expect(settingsRepository.replace).toHaveBeenCalledWith(
         "dashboard_settings",
         stored,
+        { exists: false },
       );
       expect(res.ok).toHaveBeenCalledWith({
         key: "dashboard_settings",
@@ -246,20 +258,20 @@ describe("Settings Routes", () => {
           putSingleSetting(
             {
               params: { key: "dashboard_settings" },
-              body: { value: { [field]: value } },
+              body: singleBody({ value: { [field]: value } }),
             },
             { ok: vi.fn() },
           ),
         ).rejects.toThrow();
 
-        expect(settingsRepository.set).not.toHaveBeenCalled();
+        expect(settingsRepository.replace).not.toHaveBeenCalled();
       },
     );
 
     it("returns a 400 VALIDATION_ERROR envelope when key length exceeds maximum", async () => {
       const res = await api
         .put(`${BASE}/${"k".repeat(101)}`)
-        .send({ value: true })
+        .send(singleBody({ value: true }))
         .expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
     });
@@ -267,7 +279,7 @@ describe("Settings Routes", () => {
     it("returns a 400 VALIDATION_ERROR envelope when value is missing from request body", async () => {
       const res = await api
         .put(`${BASE}/dashboard_settings`)
-        .send({})
+        .send(singleBody({}))
         .expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
     });
@@ -277,7 +289,7 @@ describe("Settings Routes", () => {
       async (key) => {
         const res = await api
           .put(`${BASE}/${key}`)
-          .send({ value: { polluted: true } })
+          .send(singleBody({ value: { polluted: true } }))
           .expect(400);
         expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
       },
@@ -287,7 +299,7 @@ describe("Settings Routes", () => {
       // typeof null === 'object' — a missing null check made this a 500.
       const res = await api
         .put(`${BASE}/dashboard_settings`)
-        .send({ value: null })
+        .send(singleBody({ value: null }))
         .expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
     });
@@ -295,7 +307,7 @@ describe("Settings Routes", () => {
     it("returns a 400 VALIDATION_ERROR envelope for dashboard_settings with invalid exclusionScope", async () => {
       const res = await api
         .put(`${BASE}/dashboard_settings`)
-        .send({ value: { exclusionScope: "invalid-scope" } })
+        .send(singleBody({ value: { exclusionScope: "invalid-scope" } }))
         .expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
     });
@@ -303,25 +315,29 @@ describe("Settings Routes", () => {
     it("returns a 400 VALIDATION_ERROR envelope for dashboard_settings when excludedCategoryIds contains invalid value", async () => {
       const res = await api
         .put(`${BASE}/dashboard_settings`)
-        .send({ value: { excludedCategoryIds: [1, "abc"] } })
+        .send(singleBody({ value: { excludedCategoryIds: [1, "abc"] } }))
         .expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
     });
 
     it("saves setting when payload is valid", async () => {
-      settingsRepository.set.mockResolvedValue({
+      settingsRepository.replace.mockResolvedValue({
         key: "theme_settings",
         value: { theme: "dark" },
       });
 
       const res = await api
         .put(`${BASE}/theme_settings`)
-        .send({ value: { theme: "dark" } })
+        .send(singleBody({ value: { theme: "dark" } }))
         .expect(200);
 
-      expect(settingsRepository.set).toHaveBeenCalledWith("theme_settings", {
-        theme: "dark",
-      });
+      expect(settingsRepository.replace).toHaveBeenCalledWith(
+        "theme_settings",
+        {
+          theme: "dark",
+        },
+        { exists: false },
+      );
       expect(res.body.data).toEqual({
         key: "theme_settings",
         value: { theme: "dark" },
@@ -331,7 +347,7 @@ describe("Settings Routes", () => {
     it("returns a 400 VALIDATION_ERROR envelope for theme_settings with unknown variant", async () => {
       const res = await api
         .put(`${BASE}/theme_settings`)
-        .send({ value: { variant: "matrix-green" } })
+        .send(singleBody({ value: { variant: "matrix-green" } }))
         .expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
     });
@@ -339,7 +355,7 @@ describe("Settings Routes", () => {
     it("returns a 400 VALIDATION_ERROR envelope for theme_settings with unknown mode", async () => {
       const res = await api
         .put(`${BASE}/theme_settings`)
-        .send({ value: { mode: "sepia" } })
+        .send(singleBody({ value: { mode: "sepia" } }))
         .expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
     });
@@ -347,15 +363,17 @@ describe("Settings Routes", () => {
     it("returns a 400 VALIDATION_ERROR envelope for theme_settings with malformed schedule time", async () => {
       const res = await api
         .put(`${BASE}/theme_settings`)
-        .send({
-          value: { schedule: { lightFrom: "25:00", darkFrom: "20:00" } },
-        })
+        .send(
+          singleBody({
+            value: { schedule: { lightFrom: "25:00", darkFrom: "20:00" } },
+          }),
+        )
         .expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
     });
 
     it("accepts theme_settings with known variant, mode, and schedule", async () => {
-      settingsRepository.set.mockResolvedValue({
+      settingsRepository.replace.mockResolvedValue({
         key: "theme_settings",
         value: {
           mode: "schedule",
@@ -366,83 +384,91 @@ describe("Settings Routes", () => {
 
       await api
         .put(`${BASE}/theme_settings`)
-        .send({
-          value: {
-            mode: "schedule",
-            schedule: { lightFrom: "07:00", darkFrom: "20:00" },
-            variant: "dracula",
-          },
-        })
+        .send(
+          singleBody({
+            value: {
+              mode: "schedule",
+              schedule: { lightFrom: "07:00", darkFrom: "20:00" },
+              variant: "dracula",
+            },
+          }),
+        )
         .expect(200);
 
-      expect(settingsRepository.set).toHaveBeenCalledWith("theme_settings", {
-        mode: "schedule",
-        schedule: { lightFrom: "07:00", darkFrom: "20:00" },
-        variant: "dracula",
-      });
+      expect(settingsRepository.replace).toHaveBeenCalledWith(
+        "theme_settings",
+        {
+          mode: "schedule",
+          schedule: { lightFrom: "07:00", darkFrom: "20:00" },
+          variant: "dracula",
+        },
+        { exists: false },
+      );
     });
 
     it("rejects an unknown setting key with a 400 naming the known keys", async () => {
       const res = await api
         .put(`${BASE}/totally_unknown_key`)
-        .send({ value: { any: "json" } })
+        .send(singleBody({ value: { any: "json" } }))
         .expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
       expect(res.body.error.message).toMatch(
         /Unknown setting key 'totally_unknown_key'.*Known keys:/,
       );
-      expect(settingsRepository.set).not.toHaveBeenCalled();
+      expect(settingsRepository.replace).not.toHaveBeenCalled();
     });
 
     it("accepts dismissed_recurring_patterns as an array (RecurringDetectionPanel payload)", async () => {
-      settingsRepository.set.mockResolvedValue({
+      settingsRepository.replace.mockResolvedValue({
         key: "dismissed_recurring_patterns",
         value: [3, 7],
       });
 
       await api
         .put(`${BASE}/dismissed_recurring_patterns`)
-        .send({ value: [3, 7] })
+        .send(singleBody({ value: [3, 7] }))
         .expect(200);
 
-      expect(settingsRepository.set).toHaveBeenCalledWith(
+      expect(settingsRepository.replace).toHaveBeenCalledWith(
         "dismissed_recurring_patterns",
         [3, 7],
+        { exists: false },
       );
     });
 
     it("rejects a non-array dismissed_recurring_patterns", async () => {
       const res = await api
         .put(`${BASE}/dismissed_recurring_patterns`)
-        .send({ value: "weekly" })
+        .send(singleBody({ value: "weekly" }))
         .expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
     });
 
     it("accepts a portfolio_tax_adjustments_v1 entry map (usePortfolioTaxAdjustments payload)", async () => {
       const value = { "2026:4": { taxes: 12.5, fees: 3 } };
-      settingsRepository.set.mockResolvedValue({
+      settingsRepository.replace.mockResolvedValue({
         key: "portfolio_tax_adjustments_v1",
         value,
       });
 
       await api
         .put(`${BASE}/portfolio_tax_adjustments_v1`)
-        .send({ value })
+        .send(singleBody({ value }))
         .expect(200);
 
-      expect(settingsRepository.set).toHaveBeenCalledWith(
+      expect(settingsRepository.replace).toHaveBeenCalledWith(
         "portfolio_tax_adjustments_v1",
         value,
+        { exists: false },
       );
     });
 
     it("answers a 500 when single setting save fails", async () => {
-      settingsRepository.set.mockRejectedValue(new Error("boom"));
+      settingsRepository.replace.mockRejectedValue(new Error("boom"));
 
       const res = await api
         .put(`${BASE}/theme_settings`)
-        .send({ value: { theme: "dark" } })
+        .send(singleBody({ value: { theme: "dark" } }))
         .expect(500);
       expect(res.body.error.message).toBe("boom");
     });
@@ -453,43 +479,51 @@ describe("Settings Routes", () => {
       await expect(
         putSettings(
           {
-            body: {
+            body: bulkBody({
               brokerage_cash_category_ids: {
                 dividend: null,
                 interest: null,
                 fee: 0,
                 tax: null,
               },
-            },
+            }),
           },
           { ok: vi.fn() },
         ),
       ).rejects.toThrow();
-      expect(settingsRepository.setMany).not.toHaveBeenCalled();
+      expect(settingsRepository.replaceMany).not.toHaveBeenCalled();
     });
 
     it("passes coerced exclusion ids from the registered route handler to the bulk writer", async () => {
-      settingsRepository.setMany.mockResolvedValue(undefined);
+      settingsRepository.replaceMany.mockResolvedValue(undefined);
       const res = { ok: vi.fn() };
 
       await putSettings(
         {
-          body: {
+          body: bulkBody({
             dashboard_settings: {
               excludedCategoryIds: ["7"],
               excludedRecipientIds: ["8"],
             },
-          },
+          }),
         },
         res,
       );
 
-      expect(settingsRepository.setMany).toHaveBeenCalledWith({
-        dashboard_settings: {
-          excludedCategoryIds: [7],
-          excludedRecipientIds: [8],
+      expect(settingsRepository.replaceMany).toHaveBeenCalledWith(
+        {
+          dashboard_settings: {
+            excludedCategoryIds: [7],
+            excludedRecipientIds: [8],
+          },
         },
-      });
+        bulkBody({
+          dashboard_settings: {
+            excludedCategoryIds: [7],
+            excludedRecipientIds: [8],
+          },
+        }).expected,
+      );
       expect(res.ok).toHaveBeenCalledWith({ saved: 1 });
     });
 
@@ -497,13 +531,15 @@ describe("Settings Routes", () => {
       await expect(
         putSettings(
           {
-            body: { dashboard_settings: { excludedRecipientIds: ["abc"] } },
+            body: bulkBody({
+              dashboard_settings: { excludedRecipientIds: ["abc"] },
+            }),
           },
           { ok: vi.fn() },
         ),
       ).rejects.toThrow();
 
-      expect(settingsRepository.setMany).not.toHaveBeenCalled();
+      expect(settingsRepository.replaceMany).not.toHaveBeenCalled();
     });
 
     it("returns a 400 VALIDATION_ERROR envelope when body is an array", async () => {
@@ -524,7 +560,7 @@ describe("Settings Routes", () => {
       const longKey = "x".repeat(101);
       const res = await api
         .put(BASE)
-        .send({ [longKey]: true })
+        .send(bulkBody({ [longKey]: true }))
         .expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
     });
@@ -532,35 +568,43 @@ describe("Settings Routes", () => {
     it("returns a 400 VALIDATION_ERROR envelope when dashboard_settings payload is not an object", async () => {
       const res = await api
         .put(BASE)
-        .send({ dashboard_settings: "invalid" })
+        .send(bulkBody({ dashboard_settings: "invalid" }))
         .expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
     });
 
     it("bulk saves settings when payload is valid", async () => {
-      settingsRepository.setMany.mockResolvedValue(undefined);
+      settingsRepository.replaceMany.mockResolvedValue(undefined);
 
       const res = await api
         .put(BASE)
-        .send({
-          onboarding_complete: true,
-          dashboard_settings: { excludedCategoryIds: [1, 2] },
-        })
+        .send(
+          bulkBody({
+            onboarding_complete: true,
+            dashboard_settings: { excludedCategoryIds: [1, 2] },
+          }),
+        )
         .expect(200);
 
-      expect(settingsRepository.setMany).toHaveBeenCalledWith({
-        onboarding_complete: true,
-        dashboard_settings: { excludedCategoryIds: [1, 2] },
-      });
+      expect(settingsRepository.replaceMany).toHaveBeenCalledWith(
+        {
+          onboarding_complete: true,
+          dashboard_settings: { excludedCategoryIds: [1, 2] },
+        },
+        bulkBody({
+          onboarding_complete: true,
+          dashboard_settings: { excludedCategoryIds: [1, 2] },
+        }).expected,
+      );
       expect(res.body.data).toEqual({ saved: 2 });
     });
 
     it("answers a 500 when bulk save fails", async () => {
-      settingsRepository.setMany.mockRejectedValue(new Error("boom"));
+      settingsRepository.replaceMany.mockRejectedValue(new Error("boom"));
 
       const res = await api
         .put(BASE)
-        .send({ onboarding_complete: true })
+        .send(bulkBody({ onboarding_complete: true }))
         .expect(500);
       expect(res.body.error.message).toBe("boom");
     });
@@ -568,50 +612,89 @@ describe("Settings Routes", () => {
     it("rejects an unknown key via bulk (no unknown-key bypass)", async () => {
       const res = await api
         .put(BASE)
-        .send({ onboarding_complete: true, mystery_key: { any: "json" } })
+        .send(
+          bulkBody({ onboarding_complete: true, mystery_key: { any: "json" } }),
+        )
         .expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
-      expect(settingsRepository.setMany).not.toHaveBeenCalled();
+      expect(settingsRepository.replaceMany).not.toHaveBeenCalled();
     });
 
     it("rejects an invalid cost_basis_method via bulk (no validation bypass)", async () => {
       const res = await api
         .put(BASE)
-        .send({ cost_basis_method: "bogus" })
+        .send(bulkBody({ cost_basis_method: "bogus" }))
         .expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
-      expect(settingsRepository.setMany).not.toHaveBeenCalled();
+      expect(settingsRepository.replaceMany).not.toHaveBeenCalled();
     });
 
     it("accepts a valid cost_basis_method via bulk", async () => {
-      settingsRepository.setMany.mockResolvedValue(undefined);
-      await api.put(BASE).send({ cost_basis_method: "fifo" }).expect(200);
-      expect(settingsRepository.setMany).toHaveBeenCalledWith({
-        cost_basis_method: "fifo",
-      });
+      settingsRepository.replaceMany.mockResolvedValue(undefined);
+      await api
+        .put(BASE)
+        .send(bulkBody({ cost_basis_method: "fifo" }))
+        .expect(200);
+      expect(settingsRepository.replaceMany).toHaveBeenCalledWith(
+        {
+          cost_basis_method: "fifo",
+        },
+        bulkBody({
+          cost_basis_method: "fifo",
+        }).expected,
+      );
     });
   });
 
   describe("DELETE /:key", () => {
-    it("returns a 404 NOT_FOUND envelope when setting does not exist", async () => {
-      settingsRepository.delete.mockResolvedValue(false);
+    it("returns a 409 CONFLICT envelope when a previously read setting disappeared", async () => {
+      settingsRepository.deleteExpected.mockRejectedValue(
+        new ConflictError("Settings changed"),
+      );
 
-      const res = await api.delete(`${BASE}/missing_key`).expect(404);
-      expect(res.body).toEqual(errEnvelope({ code: "NOT_FOUND" }));
+      const res = await api
+        .delete(`${BASE}/missing_key`)
+        .send({ expected: { exists: true, value: {} } })
+        .expect(409);
+      expect(res.body).toEqual(errEnvelope({ code: "CONFLICT" }));
     });
 
     it("returns 204 with no body when setting exists", async () => {
-      settingsRepository.delete.mockResolvedValue(true);
+      settingsRepository.deleteExpected.mockResolvedValue(true);
 
-      const res = await api.delete(`${BASE}/theme_settings`).expect(204);
+      const res = await api
+        .delete(`${BASE}/theme_settings`)
+        .send({ expected: { exists: true, value: {} } })
+        .expect(204);
       expect(res.text).toBe("");
     });
 
     it("answers a 500 when deleting setting fails", async () => {
-      settingsRepository.delete.mockRejectedValue(new Error("boom"));
+      settingsRepository.deleteExpected.mockRejectedValue(new Error("boom"));
 
-      const res = await api.delete(`${BASE}/theme_settings`).expect(500);
+      const res = await api
+        .delete(`${BASE}/theme_settings`)
+        .send({ expected: { exists: true, value: {} } })
+        .expect(500);
       expect(res.body.error.message).toBe("boom");
     });
   });
 });
+
+function singleBody(body) {
+  return { ...body, expected: { exists: false } };
+}
+function bulkBody(settings) {
+  return {
+    settings,
+    expected: Object.fromEntries(
+      Object.keys(settings).map((key) => [key, { exists: false }]),
+    ),
+  };
+}
+
+function record(value) {
+  return value === null
+    ? { expected: { exists: false } }
+    : { value, expected: { exists: true, value } };
+}

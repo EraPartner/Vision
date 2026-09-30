@@ -2,7 +2,7 @@
 title: Electron Desktop Architecture
 type: architecture-doc
 status: active
-date: 2026-09-26
+date: 2026-09-30
 updated: 2026-09-26
 tags:
   [
@@ -1353,6 +1353,15 @@ services:
 3. Rebuild packaged app: `npm run dist`
 
 With automatic pre-pull + `pull_policy: missing`, Docker Compose finds the locally-tagged image without attempting registry auth on first launch or subsequent boots.
+
+## Conditional preference persistence
+
+Backup and service settings load persisted baselines in the main process. Their IPC save handlers
+conditionally replace database values, then update the local mirror after acknowledgment. Renderer
+saves await the IPC result; they do not perform a second database write. Failed preload, conflicts
+and unknown HTTP outcomes fail persistence and require restarting/reloading the application before
+that writer saves again. See [[docs/adr/173-conditional-settings-replacement|ADR-173]].
+
 
 ## Related
 

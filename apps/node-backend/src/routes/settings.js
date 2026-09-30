@@ -322,7 +322,10 @@ router.get(
     req,
     res,
   ) => {
-    const settings = await settingsService.getAll();
+    const settings =
+      req.query.withBaselines === "true"
+        ? await settingsService.getAllWithBaselines()
+        : await settingsService.getAll();
     res.ok(settings);
   },
 );
@@ -418,15 +421,15 @@ router.get(
     res,
   ) => {
     const { key } = req.params;
-    const value = await settingsService.get(key);
-    if (value === null) {
-      if (key in SETTING_DEFAULTS) {
-        res.ok({ key, value: SETTING_DEFAULTS[key] });
+    const { value, expected } = await settingsService.getRecord(key);
+    if (!expected.exists) {
+      if (Object.hasOwn(SETTING_DEFAULTS, key)) {
+        res.ok({ key, value: SETTING_DEFAULTS[key], expected });
         return;
       }
       throw new NotFoundError(`Setting '${key}' not found`);
     }
-    res.ok({ key, value });
+    res.ok({ key, value, expected });
   },
 );
 
@@ -458,6 +461,21 @@ function validateSettingValue(key, value) {
   return result.data;
 }
 
+/** Baselines are persisted JSON, not display defaults or a fresh read at save time. */
+function assertExpected(expected) {
+  if (
+    !expected ||
+    typeof expected !== "object" ||
+    Array.isArray(expected) ||
+    typeof expected.exists !== "boolean" ||
+    Object.keys(expected).some((key) => key !== "exists" && key !== "value") ||
+    (expected.exists && !Object.hasOwn(expected, "value")) ||
+    (!expected.exists && Object.hasOwn(expected, "value"))
+  ) {
+    throw new ValidationError("Missing or invalid expected setting baseline");
+  }
+}
+
 router.put(
   "/:key",
   /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
@@ -465,16 +483,18 @@ router.put(
     res,
   ) => {
     const { key } = req.params;
-    const { value } = req.body;
+    const { value, expected } = req.body || {};
 
     assertSettingKeyLength(key);
     assertKnownSettingKey(key);
     if (value === undefined)
       throw new ValidationError('Missing "value" in request body');
 
-    const result = await settingsService.set(
+    assertExpected(expected);
+    const result = await settingsService.replace(
       key,
       validateSettingValue(key, value),
+      expected,
     );
     res.ok(result);
   },
@@ -486,7 +506,7 @@ router.put(
     req,
     res,
   ) => {
-    const settings = req.body;
+    const { settings, expected } = req.body || {};
     if (!settings || typeof settings !== "object" || Array.isArray(settings)) {
       throw new ValidationError(
         "Body must be a JSON object of key→value pairs",
@@ -498,13 +518,16 @@ router.put(
       assertKnownSettingKey(key);
     }
 
+    if (!expected || typeof expected !== "object" || Array.isArray(expected))
+      throw new ValidationError("Missing expected settings baselines");
+    for (const key of Object.keys(settings)) assertExpected(expected[key]);
     const validatedEntries = new Map();
     for (const [key, value] of Object.entries(settings)) {
       validatedEntries.set(key, validateSettingValue(key, value));
     }
     const validated = Object.fromEntries(validatedEntries);
 
-    await settingsService.setMany(validated);
+    await settingsService.replaceMany(validated, expected);
     res.ok({ saved: Object.keys(validated).length });
   },
 );
@@ -516,7 +539,12 @@ router.delete(
     res,
   ) => {
     const { key } = req.params;
-    const deleted = await settingsService.delete(key);
+    assertSettingKeyLength(key);
+    assertExpected(req.body?.expected);
+    const deleted = await settingsService.deleteExpected(
+      key,
+      req.body.expected,
+    );
     if (!deleted) throw new NotFoundError(`Setting '${key}' not found`);
     // Hard delete → 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
     res.status(204).send();
