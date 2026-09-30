@@ -3,7 +3,7 @@ title: Backend Architecture
 type: architecture
 status: active
 description: Node.js backend architecture and diagrams. Phase 3: infoRepository split into 7 domain-specific sub-modules. Phase 9: Decimal.js enforcement on all monetary paths. Phase E: Forecast cache materialization with 6-hour TTL and nightly job. May 2026: Transaction tags as orthogonal dimension (ADR-052). June 2026: Route→service boundary enforced (ADR-067, 14 new thin seams); global API rate limiter + trusted-proxy XFF + VISION_DEV fail-safe (ADR security); mv_recipient_monthly dropped (ADR-068); @vision/shared-utils package + banker's rounding canonical (ADR-069). September 2026: transaction ownership uses the ADR-088 Account entity and canonical account_id foreign keys.
-date: 2026-09-27
+date: 2026-09-30
 last_modified: 2026-09-27
 tags: [architecture, backend, uml, plantuml, phase-3, phase-6, phase-9, phase-e, decimal, money, precision, caching, materialization, nightly-job, startup, dependency-ordering, db-polling, graceful-shutdown, signal-handling, offline-resilience, network-reachability, tags, tagging, orthogonal-dimension, route-service-boundary, thin-seams, global-rate-limiter, trusted-proxies, vision-dev, mv-recipient-monthly-drop, shared-utils, banker-rounding]
 aliases: [backend architecture, node architecture, server design]
@@ -1419,3 +1419,13 @@ To regenerate these diagrams after code changes:
 - [[docs/api/index|API Documentation]] - API endpoint details
 - [[docs/adr/002-database-schema|Database Schema]] - Detailed schema documentation
 - [[docs/features/index|Features Overview]] - Feature descriptions
+
+## Daily jobs across restarts
+
+Vision supports one backend instance per shared database. [[docs/adr/174-single-instance-daily-job-catch-up|ADR-174]]
+defines persisted successful-completion checkpoints for daily forecast cache and holding-gap jobs.
+Startup and one-minute checks share a guard; overdue periods coalesce into one run after initial
+portfolio warmup settles. Failed or offline work retries after an hour and does not advance the
+checkpoint. Forecast cache writes are awaited for background refresh, and holding-gap completion
+includes snapshots even when a retry inserts no quotes. Hourly quotes and 12-hour FX retain their
+existing intervals. These guards do not coordinate multiple server instances.

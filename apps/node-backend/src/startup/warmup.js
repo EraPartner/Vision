@@ -44,6 +44,7 @@ import { backfillTransfersOnce } from "../services/transferReconciliationService
 import { refreshCashflowForecastMc } from "../jobs/refreshCashflowForecastMc.js";
 import * as researchProviderKeyService from "../services/research/researchProviderKeyService.js";
 import { isInternetReachable } from "../lib/network.js";
+import { createDailyJob } from "./dailyJobs.js";
 import investmentRepository from "../repositories/investmentRepository.js";
 
 /**
@@ -59,7 +60,7 @@ import investmentRepository from "../repositories/investmentRepository.js";
 
 const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
 const ONE_HOUR_MS = 60 * 60 * 1000;
-const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const DAILY_JOB_POLL_MS = 60 * 1000;
 
 // Terminal import-batch states safe to prune (no in-flight staging work).
 const IMPORT_RETENTION_DAYS = 30;
@@ -397,7 +398,10 @@ export async function runWarmupTasks({ warmupStatus, bootMark }) {
     });
   });
 
-  Promise.all([exchangeRateWarmPromise, fxBackfillPromise])
+  const portfolioWarmPromise = Promise.all([
+    exchangeRateWarmPromise,
+    fxBackfillPromise,
+  ])
     .then(() => computeAndStoreSnapshots())
     .then(() => {
       warmupStatus.portfolioSnapshots = "ready";
@@ -468,44 +472,34 @@ export async function runWarmupTasks({ warmupStatus, bootMark }) {
     ONE_HOUR_MS,
   );
 
-  const cashflowForecastRefreshInterval = setInterval(
-    withInFlightGuard("cashflow forecast MC refresh", async () => {
-      await refreshCashflowForecastMc().catch((err) => {
-        logger.error("Nightly cashflow forecast MC refresh failed", {
-          error: err.message,
-        });
-      });
-    }),
-    ONE_DAY_MS,
+  const refreshDailyForecast = createDailyJob("cashflow_forecast", async () => {
+    await portfolioWarmPromise;
+    const result = await refreshCashflowForecastMc();
+    return result.failed === 0;
+  });
+  const backfillDailyGaps = createDailyJob("holding_gaps", async () => {
+    await portfolioWarmPromise;
+    await materializedViewsReady;
+    if (!(await isInternetReachable({ force: true }))) return false;
+    const result = await backfillHoldingGaps();
+    // Always recompute: an earlier attempt may have persisted quotes before
+    // failing to persist snapshots, including across a process restart.
+    await computeAndStoreSnapshots();
+    return result.failed === 0;
+  });
+  // Catch up once after startup dependencies settle. Timer ticks use the same
+  // guard and successful-completion checkpoint, so restarts cannot postpone work.
+  Promise.all([exchangeRateWarmPromise, fxBackfillPromise]).then(() =>
+    refreshDailyForecast(),
   );
-
-  // Daily gap-fill: densify any holding window whose stored daily series has grown sparse
-  // (provider outages, the old Binance 365-day cap, etc). Recompute snapshots only when new
-  // rows were actually written, so the Performance page reflects the denser history.
+  materializedViewsReady.then(() => backfillDailyGaps());
+  const cashflowForecastRefreshInterval = setInterval(
+    refreshDailyForecast,
+    DAILY_JOB_POLL_MS,
+  );
   const holdingGapBackfillInterval = setInterval(
-    withInFlightGuard("holding-gap backfill", async () => {
-      if (!(await isInternetReachable({ force: true }))) {
-        logger.debug("Skipping scheduled holding-gap backfill — offline");
-        return;
-      }
-      const result = await backfillHoldingGaps().catch(
-        /** @returns {undefined} */
-        (err) => {
-          logger.error("Scheduled holding-gap backfill failed", {
-            error: err.message,
-          });
-          return undefined;
-        },
-      );
-      if (result && result.filled > 0) {
-        await computeAndStoreSnapshots().catch((err) => {
-          logger.error("Snapshot recompute after holding-gap backfill failed", {
-            error: err.message,
-          });
-        });
-      }
-    }),
-    ONE_DAY_MS,
+    backfillDailyGaps,
+    DAILY_JOB_POLL_MS,
   );
 
   return {

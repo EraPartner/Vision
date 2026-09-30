@@ -3040,7 +3040,7 @@
                 "from": "sv.forecast",
                 "to": "be.repos",
                 "payload": "cashflowForecastMcRepository.getCached(paramsHash, ttl: 6h)",
-                "annotation": "6-hour materialised cache (Phase E); nightly job re-materialises off the critical path."
+                "annotation": "6-hour materialised cache; startup/dailyJobs.js coalesces overdue refresh after restart, and the daily forecast job awaits persistence before checkpointing success."
               },
               {
                 "from": "be.repos",
@@ -3773,14 +3773,14 @@
               {
                 "from": "fe.pages",
                 "to": "fe.apiclient",
-                "payload": "PUT /api/settings/life_scenarios",
+                "payload": "PUT /api/settings/life_scenarios {value, expected}",
                 "annotation": "LifeScenarioPanel.tsx saves named definitions; forecast results stay on demand."
               },
               {
                 "from": "fe.apiclient",
                 "to": "be.routes",
                 "payload": "validated income_interruption definition",
-                "annotation": "apps/node-backend/src/routes/settings.js validates three months, monthly amounts, and optional paired goal fields."
+                "annotation": "apps/node-backend/src/routes/settings.js validates the scenario and persisted baseline; settingsRepository.replace rejects stale whole-value saves with 409."
               },
               {
                 "from": "be.routes",
