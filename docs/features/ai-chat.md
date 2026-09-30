@@ -2,8 +2,8 @@
 title: Feature - AI Chat
 type: feature
 status: active
-date: 2026-09-27
-updated: 2026-09-27
+date: 2026-09-30
+updated: 2026-09-30
 last_modified: 2026-09-27
 tags:
   [
@@ -108,12 +108,16 @@ Each tab has a short description of its purpose; the two question forms are not 
 
 ## Investigation controls
 
-The investigation question uses the full panel width. Labeled depth, research, and model-route
-selectors sit below it; the optional date range is collapsed initially. The privacy summary uses
+The investigation question uses the full panel width. Research settings collapse into a summary
+of the selected model route, answer depth, and research access. Expanding it reveals the labeled
+selectors. Documents and date range share a separate optional disclosure, with document count and
+active dates visible when closed. Public/cloud inputs remain visible when required. The privacy summary uses
 icons with text, and its keyboard-accessible disclosure retains the full selected model, research,
 depth, and cloud-retention explanation. Selected-evidence cloud synthesis explicitly says that it
 performs no automatic lookup; it does not describe local or public retrieval as active. Cloud
 preview and consent remain separate actions before sending the selected payload.
+
+The primary footer groups investigation lifecycle actions. Active grant revocation remains directly available. Disclosure record inspection, deletion and historical grants are grouped under the separate Disclosure history section, which is available before records are loaded.
 
 ## Investigation resource profile
 
@@ -466,3 +470,5 @@ See [[docs/security/ai-data-access|AI Data Access Policy]] for the full security
 - [[docs/features/portfolio|Portfolio & Investments]] — data surfaced by portfolio tools
 - [[docs/features/plannedTransactions|Planned Transactions]] — data surfaced by planned tools
 - [[docs/features/belgian-tax|Belgian Tax]] — data surfaced by tax tools
+
+Research question starters fill and focus the editable question without submitting or changing privacy options. Local-model unavailability is a calm status with Retry and setup actions; connection details remain available in a disclosure.

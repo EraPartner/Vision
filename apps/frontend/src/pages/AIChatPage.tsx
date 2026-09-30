@@ -163,7 +163,7 @@ export default function AIChatPage() {
         ? "bg-muted-foreground/50"
         : status?.ok
           ? "bg-success"
-          : "bg-destructive";
+          : "bg-muted-foreground";
 
     const composerDisabled = !status?.ok;
 
@@ -205,8 +205,8 @@ export default function AIChatPage() {
                 />
             </aside>
 
-            <main className="flex flex-1 flex-col overflow-hidden rounded-2xl glass-regular">
-                <header className="flex items-center justify-between border-b border-border/50 px-5 py-4">
+            <main className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl glass-regular">
+                <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border/50 px-5 py-4">
                     <div className="flex min-w-0 items-center gap-3">
                         <Sheet open={railOpen} onOpenChange={setRailOpen}>
                             <SheetTrigger asChild>

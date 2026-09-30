@@ -113,6 +113,11 @@ describe("AI status copy", () => {
             await screen.findByText(/install ollama and start it locally/i),
         ).toBeInTheDocument();
         expect(screen.queryByText(/econnrefused/i)).not.toBeInTheDocument();
+        expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+        expect(screen.getByRole("status")).toBeInTheDocument();
+        const connection = screen.getByText("http://localhost:11434");
+        expect(connection.closest("details")).not.toHaveAttribute("open");
+        expect(screen.getByRole("button", { name: "Retry" })).toBeEnabled();
     });
 
     it("loads the nested chart renderer only for a chart result", async () => {

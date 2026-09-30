@@ -1,5 +1,5 @@
 import { InvestigationPrivacySummary } from "./InvestigationPrivacySummary";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { apiClient } from "@/lib/api";
 import type {
     AiAnswer,
@@ -126,6 +126,7 @@ export function AIInvestigationPanel() {
     const { appSettings } = useAppSettings();
     const { data: aiResearchStatus } = useAiResearchStatus();
     const [question, setQuestion] = useState("");
+    const questionRef = useRef<HTMLTextAreaElement>(null);
     const [depthOverride, setDepthOverride] = useState<
         "quick" | "detailed" | null
     >(null);
@@ -313,6 +314,7 @@ export function AIInvestigationPanel() {
             </h2>
             <div className="mt-4 space-y-3">
                 <textarea
+                    ref={questionRef}
                     aria-label={t("aiResearch.question")}
                     className="min-h-28 w-full resize-y rounded-xl border bg-background p-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
                     value={question}
@@ -322,77 +324,139 @@ export function AIInvestigationPanel() {
                     }}
                     placeholder={t("aiResearch.question")}
                 />
-                <div className="grid items-start gap-3 sm:grid-cols-3">
-                    <label className="space-y-1.5 text-xs font-medium text-muted-foreground">
-                        <span>{t("aiResearch.depth")}</span>
-                        <select
-                            aria-label={t("aiResearch.depth")}
-                            className="h-10 w-full min-w-0 rounded-md border bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
-                            value={depth}
-                            onChange={(event) =>
-                                setDepthOverride(
-                                    event.target.value as "quick" | "detailed",
-                                )
-                            }
-                        >
-                            <option value="quick">
-                                {t("aiResearch.quick")}
-                            </option>
-                            <option value="detailed">
-                                {t("aiResearch.detailed")}
-                            </option>
-                        </select>
-                    </label>
-                    <label className="space-y-1.5 text-xs font-medium text-muted-foreground">
-                        <span>{t("aiResearch.researchMode")}</span>
-                        <select
-                            aria-label={t("aiResearch.researchMode")}
-                            className="h-10 w-full min-w-0 rounded-md border bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
-                            value={researchMode}
-                            disabled={
-                                route === "openai-api" &&
-                                disclosureMode === "cloud-synthesis-selected"
-                            }
-                            onChange={(event) =>
-                                setResearchMode(
-                                    event.target.value as typeof researchMode,
-                                )
-                            }
-                        >
-                            <option value="local-only">
-                                {t("aiResearch.localOnly")}
-                            </option>
-                            <option value="public-providers">
-                                {t("aiResearch.publicProviders")}
-                            </option>
-                            <option value="public-web">
-                                {t("aiResearch.publicWeb")}
-                            </option>
-                        </select>
-                    </label>
-                    <label className="space-y-1.5 text-xs font-medium text-muted-foreground">
-                        <span>{t("aiResearch.route")}</span>
-                        <select
-                            aria-label={t("aiResearch.route")}
-                            className="h-10 w-full min-w-0 rounded-md border bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
-                            value={route}
-                            onChange={(event) => {
-                                setRoute(event.target.value as typeof route);
-                                setPreview(null);
-                            }}
-                        >
-                            <option value="local">
-                                {t("aiResearch.localModel")}
-                            </option>
-                            <option
-                                value="openai-api"
-                                disabled={!openAiEnabled}
+                {!question && (
+                    <div
+                        className="flex flex-wrap gap-2"
+                        aria-label={t("aiResearch.questionIdeas")}
+                    >
+                        {["spending", "portfolio"].map((topic) => (
+                            <Button
+                                key={topic}
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-auto whitespace-normal py-2 text-left"
+                                onClick={() => {
+                                    setQuestion(
+                                        t(
+                                            `aiResearch.starter.${topic}.question`,
+                                        ),
+                                    );
+                                    setPreview(null);
+                                    questionRef.current?.focus();
+                                }}
                             >
-                                {t("aiResearch.openAi")}
-                            </option>
-                        </select>
-                    </label>
-                </div>
+                                {t(`aiResearch.starter.${topic}.label`)}
+                            </Button>
+                        ))}
+                    </div>
+                )}
+                <details className="rounded-lg border border-border/60 px-3 py-2">
+                    <summary className="cursor-pointer rounded-sm text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                        <span className="font-medium">
+                            {t("aiResearch.configure")}
+                        </span>
+                        <span className="ml-2 text-xs text-muted-foreground">
+                            {t(
+                                route === "local"
+                                    ? "aiResearch.localModel"
+                                    : "aiResearch.openAi",
+                            )}{" "}
+                            ·{" "}
+                            {t(
+                                depth === "quick"
+                                    ? "aiResearch.quick"
+                                    : "aiResearch.detailed",
+                            )}{" "}
+                            ·{" "}
+                            {t(
+                                researchMode === "local-only"
+                                    ? "aiResearch.localOnly"
+                                    : researchMode === "public-web"
+                                      ? "aiResearch.publicWeb"
+                                      : "aiResearch.publicProviders",
+                            )}
+                        </span>
+                    </summary>
+                    <div className="pt-3">
+                        <div className="grid items-start gap-3 sm:grid-cols-3">
+                            <label className="space-y-1.5 text-xs font-medium text-muted-foreground">
+                                <span>{t("aiResearch.depth")}</span>
+                                <select
+                                    aria-label={t("aiResearch.depth")}
+                                    className="h-10 w-full min-w-0 rounded-md border bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+                                    value={depth}
+                                    onChange={(event) =>
+                                        setDepthOverride(
+                                            event.target.value as
+                                                "quick" | "detailed",
+                                        )
+                                    }
+                                >
+                                    <option value="quick">
+                                        {t("aiResearch.quick")}
+                                    </option>
+                                    <option value="detailed">
+                                        {t("aiResearch.detailed")}
+                                    </option>
+                                </select>
+                            </label>
+                            <label className="space-y-1.5 text-xs font-medium text-muted-foreground">
+                                <span>{t("aiResearch.researchMode")}</span>
+                                <select
+                                    aria-label={t("aiResearch.researchMode")}
+                                    className="h-10 w-full min-w-0 rounded-md border bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+                                    value={researchMode}
+                                    disabled={
+                                        route === "openai-api" &&
+                                        disclosureMode ===
+                                            "cloud-synthesis-selected"
+                                    }
+                                    onChange={(event) =>
+                                        setResearchMode(
+                                            event.target
+                                                .value as typeof researchMode,
+                                        )
+                                    }
+                                >
+                                    <option value="local-only">
+                                        {t("aiResearch.localOnly")}
+                                    </option>
+                                    <option value="public-providers">
+                                        {t("aiResearch.publicProviders")}
+                                    </option>
+                                    <option value="public-web">
+                                        {t("aiResearch.publicWeb")}
+                                    </option>
+                                </select>
+                            </label>
+                            <label className="space-y-1.5 text-xs font-medium text-muted-foreground">
+                                <span>{t("aiResearch.route")}</span>
+                                <select
+                                    aria-label={t("aiResearch.route")}
+                                    className="h-10 w-full min-w-0 rounded-md border bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+                                    value={route}
+                                    onChange={(event) => {
+                                        setRoute(
+                                            event.target.value as typeof route,
+                                        );
+                                        setPreview(null);
+                                    }}
+                                >
+                                    <option value="local">
+                                        {t("aiResearch.localModel")}
+                                    </option>
+                                    <option
+                                        value="openai-api"
+                                        disabled={!openAiEnabled}
+                                    >
+                                        {t("aiResearch.openAi")}
+                                    </option>
+                                </select>
+                            </label>
+                        </div>
+                    </div>
+                </details>
             </div>
             {researchMode === "public-web" && (
                 <div className="mt-2">
@@ -438,101 +502,116 @@ export function AIInvestigationPanel() {
                     </p>
                 </div>
             )}
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                <label className="cursor-pointer rounded-md border px-3 py-2 hover:bg-muted focus-within:ring-2 focus-within:ring-ring/70">
-                    {t("aiResearch.addDocument")}
-                    <input
-                        className="sr-only"
-                        type="file"
-                        accept="text/plain,text/markdown,text/html,.md,.txt,.html"
-                        onChange={(event) => {
-                            const file = event.target.files?.[0];
-                            if (!file) return;
-                            setBusy(true);
-                            void apiClient
-                                .uploadResearchDocument(file)
-                                .then((document) =>
-                                    setDocuments((items) => [
-                                        document,
-                                        ...items,
-                                    ]),
-                                )
-                                .catch((cause) =>
-                                    setError(
-                                        cause instanceof Error
-                                            ? cause.message
-                                            : t("aiResearch.failed"),
-                                    ),
-                                )
-                                .finally(() => setBusy(false));
-                            event.target.value = "";
-                        }}
-                    />
-                </label>
-                <span className="text-muted-foreground">
-                    {t("aiResearch.documentCount", { count: documents.length })}
-                </span>
-                {documents.map((document) => (
-                    <span
-                        key={document.id}
-                        className="rounded-md bg-muted px-2 py-1"
-                    >
-                        {document.title} · {document.extractionStatus}
-                        <button
-                            type="button"
-                            className="ml-2 text-destructive"
-                            aria-label={t("aiResearch.deleteDocument")}
-                            onClick={() =>
+            <details className="mt-3 rounded-lg border border-border/60 px-3 py-2">
+                <summary className="cursor-pointer rounded-sm text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                    <span className="font-medium">
+                        {t("aiResearch.evidenceOptions")}
+                    </span>
+                    <span className="ml-2 text-xs text-muted-foreground">
+                        {t("aiResearch.documentCount", {
+                            count: documents.length,
+                        })}
+                        {(dateFrom || dateTo) &&
+                            ` · ${dateFrom || "…"} – ${dateTo || "…"}`}
+                    </span>
+                </summary>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                    <label className="cursor-pointer rounded-md border px-3 py-2 hover:bg-muted focus-within:ring-2 focus-within:ring-ring/70">
+                        {t("aiResearch.addDocument")}
+                        <input
+                            className="sr-only"
+                            type="file"
+                            accept="text/plain,text/markdown,text/html,.md,.txt,.html"
+                            onChange={(event) => {
+                                const file = event.target.files?.[0];
+                                if (!file) return;
+                                setBusy(true);
                                 void apiClient
-                                    .deleteResearchDocument(document.id)
-                                    .then(() =>
-                                        setDocuments((items) =>
-                                            items.filter(
-                                                (item) =>
-                                                    item.id !== document.id,
-                                            ),
+                                    .uploadResearchDocument(file)
+                                    .then((document) =>
+                                        setDocuments((items) => [
+                                            document,
+                                            ...items,
+                                        ]),
+                                    )
+                                    .catch((cause) =>
+                                        setError(
+                                            cause instanceof Error
+                                                ? cause.message
+                                                : t("aiResearch.failed"),
                                         ),
                                     )
-                            }
-                        >
-                            ×
-                        </button>
+                                    .finally(() => setBusy(false));
+                                event.target.value = "";
+                            }}
+                        />
+                    </label>
+                    <span className="text-muted-foreground">
+                        {t("aiResearch.documentCount", {
+                            count: documents.length,
+                        })}
                     </span>
-                ))}
-            </div>
-            <p className="mt-2 text-xs text-muted-foreground">
-                {t("aiResearch.effectivePreferences", {
-                    currency: resolvedPreferences.currency,
-                    benchmark:
-                        resolvedPreferences.benchmark ??
-                        t("aiResearch.noBenchmark"),
-                })}
-            </p>
-            <details className="mt-3 rounded-lg border px-3 py-2">
-                <summary className="cursor-pointer text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
-                    {t("aiResearch.dateRangeOptional")}
-                </summary>
-                <div className="mt-2 flex flex-wrap gap-2">
-                    <label className="text-xs">
-                        {t("aiResearch.dateFrom")}
-                        <input
-                            type="date"
-                            className="ml-2 rounded-md border bg-background px-2 py-1"
-                            value={dateFrom}
-                            onChange={(event) =>
-                                setDateFrom(event.target.value)
-                            }
-                        />
-                    </label>
-                    <label className="text-xs">
-                        {t("aiResearch.dateTo")}
-                        <input
-                            type="date"
-                            className="ml-2 rounded-md border bg-background px-2 py-1"
-                            value={dateTo}
-                            onChange={(event) => setDateTo(event.target.value)}
-                        />
-                    </label>
+                    {documents.map((document) => (
+                        <span
+                            key={document.id}
+                            className="rounded-md bg-muted px-2 py-1"
+                        >
+                            {document.title} · {document.extractionStatus}
+                            <button
+                                type="button"
+                                className="ml-2 text-destructive"
+                                aria-label={t("aiResearch.deleteDocument")}
+                                onClick={() =>
+                                    void apiClient
+                                        .deleteResearchDocument(document.id)
+                                        .then(() =>
+                                            setDocuments((items) =>
+                                                items.filter(
+                                                    (item) =>
+                                                        item.id !== document.id,
+                                                ),
+                                            ),
+                                        )
+                                }
+                            >
+                                ×
+                            </button>
+                        </span>
+                    ))}
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                    {t("aiResearch.effectivePreferences", {
+                        currency: resolvedPreferences.currency,
+                        benchmark:
+                            resolvedPreferences.benchmark ??
+                            t("aiResearch.noBenchmark"),
+                    })}
+                </p>
+                <div className="mt-3">
+                    <div className="mt-2 flex flex-wrap gap-2">
+                        <label className="text-xs">
+                            {t("aiResearch.dateFrom")}
+                            <input
+                                type="date"
+                                className="ml-2 rounded-md border bg-background px-2 py-1"
+                                value={dateFrom}
+                                onChange={(event) =>
+                                    setDateFrom(event.target.value)
+                                }
+                            />
+                        </label>
+                        <label className="text-xs">
+                            {t("aiResearch.dateTo")}
+                            <input
+                                type="date"
+                                className="ml-2 rounded-md border bg-background px-2 py-1"
+                                value={dateTo}
+                                onChange={(event) =>
+                                    setDateTo(event.target.value)
+                                }
+                            />
+                        </label>
+                    </div>
                 </div>
             </details>
             {route === "openai-api" && (
@@ -704,7 +783,7 @@ export function AIInvestigationPanel() {
                 researchMode={researchMode}
                 depth={depth}
             />
-            <div className="mt-2 flex flex-wrap gap-2">
+            <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border/50 pt-4">
                 <Button
                     size="sm"
                     onClick={run}
@@ -745,42 +824,6 @@ export function AIInvestigationPanel() {
                         }
                     >
                         {t("aiResearch.revoke")}
-                    </Button>
-                )}
-                <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() =>
-                        void Promise.all([
-                            apiClient.listAiDisclosureRecords(),
-                            apiClient.listAiDisclosureGrants(),
-                        ]).then(([records, grants]) => {
-                            setRecordCount(records.total);
-                            setDisclosureRecords(records.items);
-                            setDisclosureGrants(grants.items);
-                        })
-                    }
-                >
-                    {recordCount == null
-                        ? t("aiResearch.inspectRecords")
-                        : t("aiResearch.recordCount", { count: recordCount })}
-                </Button>
-                {recordCount != null && (
-                    <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() =>
-                            void apiClient
-                                .deleteAiDisclosureRecords()
-                                .then(() => {
-                                    setRecordCount(0);
-                                    setDisclosureRecords([]);
-                                    setDisclosureGrants([]);
-                                    setGrantId(null);
-                                })
-                        }
-                    >
-                        {t("aiResearch.deleteRecords")}
                     </Button>
                 )}
                 {job &&
@@ -850,62 +893,98 @@ export function AIInvestigationPanel() {
                         : t("aiResearch.localDefault")}
                 </span>
             </div>
-            {recordCount != null && (
-                <details className="mt-2 rounded-md border p-2 text-xs">
-                    <summary className="cursor-pointer text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
-                        {t("aiResearch.disclosureHistory")}
-                    </summary>
-                    <div className="mt-2 space-y-2">
-                        {disclosureGrants.map((grant) => (
-                            <div
-                                key={String(grant.id)}
-                                className="flex items-center justify-between gap-2"
-                            >
-                                <code>
-                                    {String(grant.mode)} · {String(grant.id)}
-                                </code>
-                                {!grant.revoked_at && (
-                                    <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={() =>
-                                            void apiClient
-                                                .revokeAiDisclosureGrant(
-                                                    String(grant.id),
-                                                )
-                                                .then(() =>
-                                                    setDisclosureGrants(
-                                                        (items) =>
-                                                            items.map((item) =>
-                                                                item.id ===
-                                                                grant.id
-                                                                    ? {
-                                                                          ...item,
-                                                                          revoked_at:
-                                                                              new Date().toISOString(),
-                                                                      }
-                                                                    : item,
-                                                            ),
+            <details className="mt-4 rounded-lg border border-border/60 p-3 text-xs">
+                <summary className="cursor-pointer text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
+                    {t("aiResearch.disclosureHistory")}
+                </summary>
+                <div className="mt-2 flex flex-wrap gap-2">
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() =>
+                            void Promise.all([
+                                apiClient.listAiDisclosureRecords(),
+                                apiClient.listAiDisclosureGrants(),
+                            ]).then(([records, grants]) => {
+                                setRecordCount(records.total);
+                                setDisclosureRecords(records.items);
+                                setDisclosureGrants(grants.items);
+                            })
+                        }
+                    >
+                        {recordCount == null
+                            ? t("aiResearch.inspectRecords")
+                            : t("aiResearch.recordCount", {
+                                  count: recordCount,
+                              })}
+                    </Button>
+                    {recordCount != null && (
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() =>
+                                void apiClient
+                                    .deleteAiDisclosureRecords()
+                                    .then(() => {
+                                        setRecordCount(0);
+                                        setDisclosureRecords([]);
+                                        setDisclosureGrants([]);
+                                        setGrantId(null);
+                                    })
+                            }
+                        >
+                            {t("aiResearch.deleteRecords")}
+                        </Button>
+                    )}
+                </div>
+                <div className="mt-2 space-y-2">
+                    {disclosureGrants.map((grant) => (
+                        <div
+                            key={String(grant.id)}
+                            className="flex items-center justify-between gap-2"
+                        >
+                            <code>
+                                {String(grant.mode)} · {String(grant.id)}
+                            </code>
+                            {!grant.revoked_at && (
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() =>
+                                        void apiClient
+                                            .revokeAiDisclosureGrant(
+                                                String(grant.id),
+                                            )
+                                            .then(() =>
+                                                setDisclosureGrants((items) =>
+                                                    items.map((item) =>
+                                                        item.id === grant.id
+                                                            ? {
+                                                                  ...item,
+                                                                  revoked_at:
+                                                                      new Date().toISOString(),
+                                                              }
+                                                            : item,
                                                     ),
-                                                )
-                                        }
-                                    >
-                                        {t("aiResearch.revoke")}
-                                    </Button>
-                                )}
-                            </div>
-                        ))}
-                        {disclosureRecords.map((record) => (
-                            <pre
-                                key={String(record.id)}
-                                className="overflow-auto rounded bg-muted p-2"
-                            >
-                                {JSON.stringify(record, null, 2)}
-                            </pre>
-                        ))}
-                    </div>
-                </details>
-            )}
+                                                ),
+                                            )
+                                    }
+                                >
+                                    {t("aiResearch.revoke")}
+                                </Button>
+                            )}
+                        </div>
+                    ))}
+                    {disclosureRecords.map((record) => (
+                        <pre
+                            key={String(record.id)}
+                            className="overflow-auto rounded bg-muted p-2"
+                        >
+                            {JSON.stringify(record, null, 2)}
+                        </pre>
+                    ))}
+                </div>
+            </details>
             {error && (
                 <p role="alert" className="mt-2 text-sm text-destructive">
                     {error}

@@ -11,6 +11,29 @@ import AIChatPage from "@/pages/AIChatPage";
 const API_BASE = "http://localhost:3002";
 
 describe("AIChatPage (integration)", () => {
+    it("offers an editable investigation starter without submitting it", async () => {
+        const user = userEvent.setup();
+        renderWithApp(<AIChatPage />, {
+            initialEntries: ["/ai-chat?mode=investigation"],
+        });
+        await user.click(
+            await screen.findByRole("button", { name: "Understand my spending" }),
+        );
+        const question = screen.getByRole("textbox", {
+            name: /ask a financial or research question/i,
+        });
+        expect(question).toHaveFocus();
+        expect(question).toHaveValue(
+            "What changed in my spending last month compared with the previous month? Show the supporting evidence.",
+        );
+        expect(
+            screen.queryByRole("button", { name: "Understand my spending" }),
+        ).not.toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: "Start investigation" }),
+        ).toBeInTheDocument();
+    });
+
     it("shows one question workflow at a time and preserves investigation drafts", async () => {
         const user = userEvent.setup();
         renderWithApp(<AIChatPage />);
@@ -44,14 +67,14 @@ describe("AIChatPage (integration)", () => {
         renderWithApp(<AIChatPage />, {
             initialEntries: ["/ai-chat?mode=investigation"],
         });
-        const tab = screen.getByRole("tab", {
+        const tab = await screen.findByRole("tab", {
             name: "Investigation",
             selected: true,
         });
         tab.focus();
         await user.keyboard("{ArrowLeft}");
         expect(
-            screen.getByRole("tab", { name: "Chat", selected: true }),
+            await screen.findByRole("tab", { name: "Chat", selected: true }),
         ).toHaveFocus();
         expect(screen.getByRole("tabpanel", { name: "Chat" })).toBeVisible();
     });
@@ -88,8 +111,8 @@ describe("AIChatPage (integration)", () => {
 
     it("shows AI unreachable status when local model is disabled", async () => {
         renderWithApp(<AIChatPage />);
-        // Default MSW handler returns { ok: false } — banner has role="alert"
-        expect(await screen.findByRole("alert")).toBeInTheDocument();
+        // Default MSW handler returns { ok: false } — banner has role="status"
+        expect(await screen.findByRole("status")).toBeInTheDocument();
     });
 
     it("renders empty state heading when no messages exist", async () => {
@@ -131,7 +154,7 @@ describe("AIChatPage (integration)", () => {
 
     it("uses the actionable banner as the sole unreachable status", async () => {
         renderWithApp(<AIChatPage />);
-        await screen.findByRole("alert");
+        await screen.findByRole("status");
         const matches = await screen.findAllByText(
             /local ai model unreachable/i,
         );
@@ -230,7 +253,7 @@ describe("AIChatPage (integration)", () => {
         renderWithApp(<AIChatPage />);
         // apiRequest retries on 500 (MAX_RETRIES=2, ~1.5 s backoff) — needs extended timeout
         expect(
-            await screen.findByRole("alert", {}, { timeout: 5000 }),
+            await screen.findByRole("status", {}, { timeout: 5000 }),
         ).toBeInTheDocument();
         consoleSpy.mockRestore();
     });
@@ -243,7 +266,7 @@ describe("AIChatPage (integration)", () => {
             http.get(`${API_BASE}/api/ai/status`, () => err(403, "Forbidden")),
         );
         renderWithApp(<AIChatPage />);
-        expect(await screen.findByRole("alert")).toBeInTheDocument();
+        expect(await screen.findByRole("status")).toBeInTheDocument();
         consoleSpy.mockRestore();
     });
 
