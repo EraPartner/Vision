@@ -2,8 +2,8 @@
 title: Analysis Workspace
 type: feature
 status: active
-date: 2026-09-27
-updated: 2026-09-27
+date: 2026-09-30
+updated: 2026-09-30
 tags:
   [
     feature,
@@ -46,7 +46,11 @@ retaining filters and ordering on the selected measures.
 
 The start panel also offers three ordinary, editable templates over the same synthetic-data-safe
 catalog: category spending, monthly cash flow, and portfolio activity. Applying a template copies
-its visual plan into the normal builder. It does not create a special execution mode or lock fields.
+its visual plan into the normal builder and collapses the editor into a summary of the dataset,
+columns, measures, filter count and row limit. Run remains visible. Focus moves to Edit configuration,
+which reveals the full editable plan. Blank starts, saved-analysis loads and failed runs open the
+editor. Export and scenario-file options use their own disclosure. Templates do not create a special
+execution mode or lock fields.
 The SQL editor and run-preference overrides live under progressive advanced controls; loading,
 failure, and empty catalog states are explicit.
 
@@ -64,6 +68,13 @@ compatible visual origin is retained when the result shape is unchanged.
 
 ## Result transformations
 
+- Table, Chart and Pivot are keyboard-accessible result tabs within one surface; Table opens first. Chart-axis choices survive tab changes. Pivot explains its requirements when unavailable, and the outdated-query warning remains visible in every view.
+- Catalog choices and recognized result columns use readable English or Dutch labels in the builder,
+  table, chart selectors, and pivot. Custom column aliases remain unchanged. Display labels do not
+  replace the identifiers used by queries, sorting, drill-through, saved definitions, or CSV exports.
+- Numeric table, chart, and pivot values use the selected number-format separators while preserving
+  the available decimal precision. Identifiers and text remain literal; display formatting does not
+  round or modify the underlying result or export values.
 - The grid pages through server results and shows whether more rows exist or a byte limit truncated it.
 - Header sorting reruns visual SQL with the selected order. Saving, reopening, and refreshing a
   visual analysis retain that order.
@@ -172,17 +183,16 @@ starting. See [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]] fo
 - [[docs/adr/149-cloud-authored-catalog-analysis-plans|ADR-149]]
 - [[docs/features/portfolio|Portfolio]]
 
-
 ## Template selection
 
-The template chooser closes after selecting a template, starting a blank analysis, or loading a saved analysis. Choose a template reopens it without discarding the current draft. Analysis name and optional source references have visible labels; Visual and SQL expose their selected state.
-
+The template chooser closes after selecting a template, starting a blank analysis, or loading a saved analysis. Choose a template reopens it without discarding the current draft. Analysis name and optional source references have visible labels; optional source references sit in a disclosure. Saving is a secondary action with guidance to run and review first. Visual and SQL expose their selected state.
 
 ## Task-focused guidance and hierarchy
 
 The builder explains columns versus totals and counts, including the explicit Group by requirement. Result guidance identifies the last completed run and asks users to rerun after editing; it does not imply automatic updates or SQL drill-through.
 
-
 ## Clarity and recovery feedback
 
 A query-input signature marks displayed results as needing an update after the query changes. The warning remains through a failed rerun and clears after a successful run for the current query. It concerns query inputs, not unsaved analysis metadata.
+
+The workspace provides task guidance alongside its templates. Advanced SQL controls use a disclosure that stays open while SQL mode is active; full editing remains available.

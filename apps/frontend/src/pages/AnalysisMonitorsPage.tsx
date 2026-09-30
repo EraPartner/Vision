@@ -772,6 +772,15 @@ export default function AnalysisMonitorsPage() {
                         <h2 className="text-lg font-semibold">
                             {t("monitors.rules")}
                         </h2>
+                        {monitors.isLoading && (
+                            <p
+                                role="status"
+                                aria-label={t("monitors.rules")}
+                                className="text-sm text-muted-foreground"
+                            >
+                                {t("common.loading")}
+                            </p>
+                        )}
                         {monitors.isError && (
                             <div role="alert" className="space-y-2 text-sm">
                                 <p>{t("monitors.loadFailed")}</p>
@@ -1122,6 +1131,15 @@ export default function AnalysisMonitorsPage() {
                         </h2>
                         {selectedId ? (
                             <>
+                                {observations.isLoading && (
+                                    <p
+                                        role="status"
+                                        aria-label={t("monitors.observations")}
+                                        className="text-sm text-muted-foreground"
+                                    >
+                                        {t("common.loading")}
+                                    </p>
+                                )}
                                 {observations.isError && (
                                     <div
                                         role="alert"
@@ -1204,6 +1222,15 @@ export default function AnalysisMonitorsPage() {
                         <h2 className="text-lg font-semibold">
                             {t("monitors.inbox")}
                         </h2>
+                        {notifications.isLoading && (
+                            <p
+                                role="status"
+                                aria-label={t("monitors.inbox")}
+                                className="text-sm text-muted-foreground"
+                            >
+                                {t("common.loading")}
+                            </p>
+                        )}
                         {notifications.isError && (
                             <div role="alert" className="space-y-2 text-sm">
                                 <p>{t("monitors.inboxFailed")}</p>
@@ -1227,7 +1254,7 @@ export default function AnalysisMonitorsPage() {
                             {notifications.data?.items.map((item) => (
                                 <li
                                     key={item.id}
-                                    className="flex items-start justify-between gap-3 rounded-lg border p-3 text-sm"
+                                    className="flex flex-wrap items-start justify-between gap-3 rounded-lg border p-3 text-sm"
                                 >
                                     <div>
                                         <p className="font-medium">

@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { http } from "msw";
+import { http, delay } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { err, ok } from "@/test/msw/handlers";
@@ -30,6 +30,34 @@ describe("AnalysisMonitorsPage", () => {
             ),
         );
     });
+    it("announces pending inbox loading without showing an empty state", async () => {
+        server.use(
+            http.get(`${api}/analysis/monitors/notifications`, async () => {
+                await delay(200);
+                return ok({
+                    items: [],
+                    total: 0,
+                    unreadCount: 0,
+                    limit: 200,
+                    offset: 0,
+                });
+            }),
+        );
+        renderWithApp(<AnalysisMonitorsPage />);
+        expect(
+            await screen.findByRole("status", { name: "Notification inbox" }),
+        ).toHaveTextContent("Loading");
+        expect(
+            screen.queryByText("No notifications yet."),
+        ).not.toBeInTheDocument();
+        expect(
+            await screen.findByText("No notifications yet."),
+        ).toBeInTheDocument();
+        expect(
+            screen.queryByRole("status", { name: "Notification inbox" }),
+        ).not.toBeInTheDocument();
+    });
+
     it("offers retry without claiming that failed rules are empty", async () => {
         const user = userEvent.setup();
         server.use(

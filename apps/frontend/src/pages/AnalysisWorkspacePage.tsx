@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Database, Play, Save, Square, Trash2 } from "lucide-react";
 import { apiClient } from "@/lib/api";
 import type {
+    AnalysisDataset,
     AnalysisEditProposal,
     AnalysisResult,
     AnalysisValue,
@@ -21,6 +22,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
 import { addAll } from "@vision/shared-utils/money";
@@ -33,6 +35,12 @@ import {
     ANALYSIS_TEMPLATES,
     cloneAnalysisPlan,
 } from "@/features/analysis/analysisTemplates";
+
+import {
+    analysisCatalogLabel,
+    analysisColumnLabel,
+    formatAnalysisValue,
+} from "@/features/analysis/analysisPresentation";
 
 function chartColumns(result: AnalysisResult | null) {
     const columns = result?.declaredColumns?.length
@@ -242,11 +250,15 @@ function ResultTable({
     result,
     onDrill,
     onSort,
+    datasets,
 }: {
     result: AnalysisResult;
     onDrill?: (row: Record<string, AnalysisValue>) => void;
     onSort: (id: string) => void;
+    datasets: AnalysisDataset[];
 }) {
+    const { t } = useLanguage();
+    const { appSettings } = useAppSettings();
     const columns = result.declaredColumns?.length
         ? result.declaredColumns.map((column) => column.id)
         : result.columns.map((column) => column.id);
@@ -268,7 +280,12 @@ function ResultTable({
                                     className="hover:text-primary"
                                     onClick={() => onSort(column)}
                                 >
-                                    {column}
+                                    {analysisColumnLabel(
+                                        result,
+                                        column,
+                                        datasets,
+                                        t,
+                                    )}
                                 </button>
                             </th>
                         ))}
@@ -292,9 +309,12 @@ function ResultTable({
                                     key={column}
                                     className="max-w-72 truncate px-3 py-2 font-mono text-xs"
                                 >
-                                    {row[column] == null
-                                        ? "—"
-                                        : String(row[column])}
+                                    {formatAnalysisValue(
+                                        row[column],
+                                        inferColumnType(result, column),
+                                        column,
+                                        appSettings.numberFormat,
+                                    )}
                                 </td>
                             ))}
                         </tr>
@@ -310,12 +330,16 @@ function PivotTable({
     rowId,
     columnId,
     valueId,
+    datasets,
 }: {
     result: AnalysisResult;
     rowId: string;
     columnId: string;
     valueId: string;
+    datasets: AnalysisDataset[];
 }) {
+    const { t } = useLanguage();
+    const { appSettings } = useAppSettings();
     const columns = [
         ...new Set(result.rows.map((row) => String(row[columnId] ?? "—"))),
     ];
@@ -335,10 +359,17 @@ function PivotTable({
             <table className="w-full text-sm">
                 <thead className="bg-muted/60">
                     <tr>
-                        <th className="px-3 py-2 text-left">{rowId}</th>
+                        <th className="px-3 py-2 text-left">
+                            {analysisColumnLabel(result, rowId, datasets, t)}
+                        </th>
                         {columns.map((column) => (
                             <th key={column} className="px-3 py-2 text-right">
-                                {column}
+                                {formatAnalysisValue(
+                                    column,
+                                    inferColumnType(result, columnId),
+                                    columnId,
+                                    appSettings.numberFormat,
+                                )}
                             </th>
                         ))}
                     </tr>
@@ -347,17 +378,28 @@ function PivotTable({
                     {rows.map((row) => (
                         <tr key={row} className="border-t border-border/50">
                             <th className="px-3 py-2 text-left font-medium">
-                                {row}
+                                {formatAnalysisValue(
+                                    row,
+                                    inferColumnType(result, rowId),
+                                    rowId,
+                                    appSettings.numberFormat,
+                                )}
                             </th>
                             {columns.map((column) => (
                                 <td
                                     key={column}
                                     className="px-3 py-2 text-right tabular-nums"
                                 >
-                                    {addAll(
-                                        values.get(`${row}\u0000${column}`) ??
-                                            [],
-                                    ).toString()}
+                                    {formatAnalysisValue(
+                                        addAll(
+                                            values.get(
+                                                `${row}\u0000${column}`,
+                                            ) ?? [],
+                                        ).toString(),
+                                        "decimal",
+                                        valueId,
+                                        appSettings.numberFormat,
+                                    )}
                                 </td>
                             ))}
                         </tr>
@@ -383,7 +425,9 @@ export default function AnalysisWorkspacePage() {
     );
     const [workspace, setWorkspace] = useState<AnalysisWorkspace>("budgeting");
     const [templatesOpen, setTemplatesOpen] = useState(true);
+    const [builderOpen, setBuilderOpen] = useState(true);
     const templateSummaryRef = useRef<HTMLElement>(null);
+    const builderSummaryRef = useRef<HTMLElement>(null);
     const [mode, setMode] = useState<"visual" | "sql">("visual");
     const [plan, setPlan] = useState<VisualAnalysisPlan>(EMPTY_PLAN);
     const [sql, setSql] = useState("");
@@ -457,6 +501,7 @@ export default function AnalysisWorkspacePage() {
     selectedRevision.current = selectedSaved
         ? `${selectedSaved.id}:${selectedSaved.version}`
         : "";
+    const [resultDatasetId, setResultDatasetId] = useState<string | null>(null);
     const [drillResult, setDrillResult] = useState<AnalysisResult | null>(null);
     const [chartX, setChartX] = useState("");
     const [chartY, setChartY] = useState("");
@@ -466,7 +511,24 @@ export default function AnalysisWorkspacePage() {
 
     const { catalog: catalogQuery, saved: savedQuery } =
         useAnalysisWorkspaceQueries(workspace);
-    const dataset = catalogQuery.data?.datasets.find(
+    const localizedDatasets = (catalogQuery.data?.datasets ?? []).map(
+        (entry) => ({
+            ...entry,
+            label: analysisCatalogLabel(entry.label, t),
+            fields: entry.fields.map((field) => ({
+                ...field,
+                label: analysisCatalogLabel(field.label, t),
+            })),
+            measures: entry.measures.map((measure) => ({
+                ...measure,
+                label: analysisCatalogLabel(measure.label, t),
+            })),
+        }),
+    );
+    const rawDataset = catalogQuery.data?.datasets.find(
+        (entry) => entry.id === plan.datasetId,
+    );
+    const dataset = localizedDatasets.find(
         (entry) => entry.id === plan.datasetId,
     );
     const effectivePreferences = resolveAnalysisPreferences({
@@ -482,8 +544,8 @@ export default function AnalysisWorkspacePage() {
     const reportingTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
     useEffect(() => {
-        if (!dataset) return;
-        const valid = new Set(dataset.fields.map((field) => field.id));
+        if (!rawDataset) return;
+        const valid = new Set(rawDataset.fields.map((field) => field.id));
         setPlan((current) => ({
             ...current,
             fields: current.fields.filter((id) => valid.has(id)),
@@ -492,13 +554,13 @@ export default function AnalysisWorkspacePage() {
                 valid.has(filter.fieldId),
             ),
             measures: current.measures.filter((id) =>
-                dataset.measures.some((measure) => measure.id === id),
+                rawDataset.measures.some((measure) => measure.id === id),
             ),
             joins: current.joins.filter((id) =>
-                dataset.joins.some((join) => join.id === id),
+                rawDataset.joins.some((join) => join.id === id),
             ),
         }));
-    }, [dataset]);
+    }, [rawDataset]);
 
     useEffect(() => {
         localStorage.setItem(
@@ -549,6 +611,9 @@ export default function AnalysisWorkspacePage() {
                       },
             );
             setResult(next);
+            setResultDatasetId(
+                mode === "visual" ? planOverride.datasetId : null,
+            );
             setResultQuery(
                 querySignature(mode, planOverride, sql, sqlValues, sqlDatasets),
             );
@@ -583,6 +648,7 @@ export default function AnalysisWorkspacePage() {
                 numericIds.includes(current) ? current : (numericIds[0] ?? ""),
             );
         } catch (cause) {
+            setBuilderOpen(true);
             setError(apiErrorToMessage(cause, t));
         } finally {
             setActiveRequest(null);
@@ -661,6 +727,7 @@ export default function AnalysisWorkspacePage() {
         (saved: SavedAnalysis) => {
             const source = sourceFromSaved(saved);
             setTemplatesOpen(false);
+            setBuilderOpen(true);
             setSelectedSaved(saved);
             setName(saved.name);
             setWorkspace(saved.workspace);
@@ -715,6 +782,11 @@ export default function AnalysisWorkspacePage() {
             );
             setOffset(0);
             setResult(saved.lastResult);
+            setResultDatasetId(
+                source.mode === "visual"
+                    ? (source.plan?.datasetId ?? null)
+                    : null,
+            );
             setLastUsableResult(saved.lastResult);
             setExportContext(
                 saved.lastResult
@@ -771,6 +843,9 @@ export default function AnalysisWorkspacePage() {
         selectedSaved?.id,
     ]);
 
+    const presentationDatasets = (catalogQuery.data?.datasets ?? []).filter(
+        (entry) => entry.id === resultDatasetId,
+    );
     const displayedResult = result ?? lastUsableResult;
     const availableChartColumns = chartColumns(displayedResult);
     const completeForChart =
@@ -786,11 +861,22 @@ export default function AnalysisWorkspacePage() {
         if (!displayedResult || !chartX || !chartY) return [];
         return displayedResult.rows
             .map((row) => ({
-                label: String(row[chartX] ?? "—"),
+                label: formatAnalysisValue(
+                    row[chartX],
+                    inferColumnType(displayedResult, chartX),
+                    chartX,
+                    appSettings.numberFormat,
+                ),
                 value: Number(row[chartY] ?? 0),
+                formattedValue: formatAnalysisValue(
+                    row[chartY],
+                    inferColumnType(displayedResult, chartY),
+                    chartY,
+                    appSettings.numberFormat,
+                ),
             }))
             .filter((row) => Number.isFinite(row.value));
-    }, [displayedResult, chartX, chartY]);
+    }, [displayedResult, chartX, chartY, appSettings.numberFormat]);
     const maxChart = Math.max(
         0,
         ...chartValues.map((row) => Math.abs(row.value)),
@@ -823,6 +909,9 @@ export default function AnalysisWorkspacePage() {
                                 )}
                             </summary>
                             <CardContent className="space-y-3">
+                                <p className="max-w-prose text-sm text-muted-foreground">
+                                    {t("analysis.taskStartHelp")}
+                                </p>
                                 <div className="grid gap-2 md:grid-cols-3">
                                     {ANALYSIS_TEMPLATES.map((template) => (
                                         <button
@@ -831,7 +920,8 @@ export default function AnalysisWorkspacePage() {
                                             className="rounded-lg border border-border bg-card/60 p-3 text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                             onClick={() => {
                                                 setTemplatesOpen(false);
-                                                templateSummaryRef.current?.focus();
+                                                setBuilderOpen(false);
+                                                builderSummaryRef.current?.focus();
                                                 setWorkspace(
                                                     template.workspace,
                                                 );
@@ -863,12 +953,13 @@ export default function AnalysisWorkspacePage() {
                                     variant="outline"
                                     onClick={() => {
                                         setTemplatesOpen(false);
-                                        templateSummaryRef.current?.focus();
+                                        setBuilderOpen(true);
+                                        builderSummaryRef.current?.focus();
                                         setMode("visual");
                                         setPlan({
                                             datasetId:
-                                                catalogQuery.data?.datasets[0]
-                                                    ?.id ?? "cash-flows",
+                                                localizedDatasets[0]?.id ??
+                                                "cash-flows",
                                             fields: [],
                                             filters: [],
                                             groups: [],
@@ -898,177 +989,361 @@ export default function AnalysisWorkspacePage() {
                             </p>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <div className="flex flex-wrap items-center gap-2">
-                                <Button
-                                    variant={
-                                        mode === "visual"
-                                            ? "default"
-                                            : "outline"
-                                    }
-                                    aria-pressed={mode === "visual"}
-                                    onClick={() => setMode("visual")}
-                                >
-                                    {t("analysis.visual")}
-                                </Button>
-                                <details>
-                                    <summary className="cursor-pointer rounded-md border px-3 py-2 text-sm">
-                                        {t("analysis.advanced")}
-                                    </summary>
-                                    <Button
-                                        className="mt-2"
-                                        aria-pressed={mode === "sql"}
-                                        variant={
-                                            mode === "sql"
-                                                ? "default"
-                                                : "outline"
-                                        }
-                                        onClick={() => {
-                                            if (!sql && result?.generatedSql)
-                                                setSql(result.generatedSql);
-                                            setVisualOrigin(plan);
-                                            setSqlDatasets([
-                                                plan.datasetId,
-                                                ...(plan.joins.length
-                                                    ? ["accounts"]
-                                                    : []),
-                                            ]);
-                                            setMode("sql");
-                                        }}
-                                    >
-                                        {t("analysis.sql")}
-                                    </Button>
-                                </details>
-                                <select
-                                    aria-label={t("analysis.workspace")}
-                                    value={workspace}
-                                    onChange={(event) =>
-                                        setWorkspace(
-                                            event.target
-                                                .value as AnalysisWorkspace,
-                                        )
-                                    }
-                                    className="rounded-md border bg-background px-3 py-2 text-sm"
-                                >
-                                    {WORKSPACES.map((value) => (
-                                        <option key={value} value={value}>
-                                            {t(`analysis.workspace.${value}`)}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                            {catalogQuery.isLoading ? (
-                                <p role="status">
-                                    {t("analysis.catalogLoading")}
-                                </p>
-                            ) : catalogQuery.isError ? (
-                                <p role="alert" className="text-destructive">
-                                    {t("analysis.catalogError")}
-                                </p>
-                            ) : catalogQuery.data?.datasets.length === 0 ? (
-                                <p>{t("analysis.catalogEmpty")}</p>
-                            ) : mode === "visual" && dataset ? (
-                                <>
+                            {!builderOpen && mode === "visual" && dataset && (
+                                <dl className="grid gap-3 text-sm sm:grid-cols-2">
                                     <div>
-                                        <Label htmlFor="analysis-dataset">
+                                        <dt className="text-xs text-muted-foreground">
                                             {t("analysis.dataset")}
-                                        </Label>
-                                        <select
-                                            id="analysis-dataset"
-                                            value={plan.datasetId}
-                                            onChange={(event) =>
-                                                setPlan({
-                                                    ...EMPTY_PLAN,
-                                                    datasetId:
-                                                        event.target.value,
-                                                })
-                                            }
-                                            className="mt-1 w-full rounded-md border bg-background px-3 py-2"
-                                        >
-                                            {catalogQuery.data?.datasets.map(
-                                                (entry) => (
-                                                    <option
-                                                        key={entry.id}
-                                                        value={entry.id}
-                                                    >
-                                                        {entry.label}
-                                                    </option>
-                                                ),
+                                        </dt>
+                                        <dd className="mt-1">
+                                            {dataset.label}
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-xs text-muted-foreground">
+                                            {t("analysis.fields")}
+                                        </dt>
+                                        <dd className="mt-1">
+                                            {plan.fields
+                                                .map(
+                                                    (id) =>
+                                                        dataset.fields.find(
+                                                            (field) =>
+                                                                field.id === id,
+                                                        )?.label ?? id,
+                                                )
+                                                .join(", ") || "—"}
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-xs text-muted-foreground">
+                                            {t("analysis.measures")}
+                                        </dt>
+                                        <dd className="mt-1">
+                                            {plan.measures
+                                                .map(
+                                                    (id) =>
+                                                        dataset.measures.find(
+                                                            (measure) =>
+                                                                measure.id ===
+                                                                id,
+                                                        )?.label ?? id,
+                                                )
+                                                .join(", ") || "—"}
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-xs text-muted-foreground">
+                                            {t("analysis.configurationScope")}
+                                        </dt>
+                                        <dd className="mt-1">
+                                            {t(
+                                                "analysis.configurationScopeValue",
+                                                {
+                                                    filters:
+                                                        plan.filters.length,
+                                                    limit: plan.limit,
+                                                },
                                             )}
+                                        </dd>
+                                    </div>
+                                </dl>
+                            )}
+                            <details
+                                open={builderOpen}
+                                onToggle={(event) =>
+                                    setBuilderOpen(event.currentTarget.open)
+                                }
+                            >
+                                <summary
+                                    ref={builderSummaryRef}
+                                    className="cursor-pointer rounded-sm text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                >
+                                    {t("analysis.editConfiguration")}
+                                </summary>
+                                <div className="mt-4 space-y-4">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <Button
+                                            variant={
+                                                mode === "visual"
+                                                    ? "default"
+                                                    : "outline"
+                                            }
+                                            aria-pressed={mode === "visual"}
+                                            onClick={() => setMode("visual")}
+                                        >
+                                            {t("analysis.visual")}
+                                        </Button>
+                                        <details
+                                            open={mode === "sql" || undefined}
+                                        >
+                                            <summary className="cursor-pointer rounded-lg border px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                                                {t("analysis.advanced")}
+                                            </summary>
+                                            <Button
+                                                className="mt-2"
+                                                aria-pressed={mode === "sql"}
+                                                variant={
+                                                    mode === "sql"
+                                                        ? "default"
+                                                        : "outline"
+                                                }
+                                                onClick={() => {
+                                                    if (
+                                                        !sql &&
+                                                        result?.generatedSql
+                                                    )
+                                                        setSql(
+                                                            result.generatedSql,
+                                                        );
+                                                    setVisualOrigin(plan);
+                                                    setSqlDatasets([
+                                                        plan.datasetId,
+                                                        ...(plan.joins.length
+                                                            ? ["accounts"]
+                                                            : []),
+                                                    ]);
+                                                    setMode("sql");
+                                                }}
+                                            >
+                                                {t("analysis.sql")}
+                                            </Button>
+                                        </details>
+                                        <select
+                                            aria-label={t("analysis.workspace")}
+                                            value={workspace}
+                                            onChange={(event) =>
+                                                setWorkspace(
+                                                    event.target
+                                                        .value as AnalysisWorkspace,
+                                                )
+                                            }
+                                            className="rounded-md border bg-background px-3 py-2 text-sm"
+                                        >
+                                            {WORKSPACES.map((value) => (
+                                                <option
+                                                    key={value}
+                                                    value={value}
+                                                >
+                                                    {t(
+                                                        `analysis.workspace.${value}`,
+                                                    )}
+                                                </option>
+                                            ))}
                                         </select>
                                     </div>
-                                    <div className="grid gap-4 lg:grid-cols-2">
-                                        <fieldset>
-                                            <legend className="text-sm font-medium">
-                                                {t("analysis.fields")}
-                                            </legend>
-                                            <p className="mt-1 text-xs text-muted-foreground">
-                                                {t("analysis.fieldsHelp")}
-                                            </p>
-                                            <div className="mt-2 grid max-h-48 grid-cols-2 gap-2 overflow-auto">
-                                                {dataset.fields.map((field) => (
-                                                    <label
-                                                        key={field.id}
-                                                        className="flex items-center gap-2 text-sm"
-                                                    >
-                                                        <Checkbox
-                                                            checked={plan.fields.includes(
-                                                                field.id,
-                                                            )}
-                                                            onCheckedChange={(
-                                                                checked,
-                                                            ) =>
-                                                                setPlan(
-                                                                    (
-                                                                        current,
-                                                                    ) => ({
-                                                                        ...current,
-                                                                        fields: checked
-                                                                            ? [
-                                                                                  ...current.fields,
-                                                                                  field.id,
-                                                                              ]
-                                                                            : current.fields.filter(
-                                                                                  (
-                                                                                      id,
-                                                                                  ) =>
-                                                                                      id !==
-                                                                                      field.id,
-                                                                              ),
-                                                                        groups: checked
-                                                                            ? current.groups
-                                                                            : current.groups.filter(
-                                                                                  (
-                                                                                      id,
-                                                                                  ) =>
-                                                                                      id !==
-                                                                                      field.id,
-                                                                              ),
-                                                                    }),
-                                                                )
-                                                            }
-                                                        />
-                                                        {field.label}
-                                                    </label>
-                                                ))}
+                                    {catalogQuery.isLoading ? (
+                                        <p role="status">
+                                            {t("analysis.catalogLoading")}
+                                        </p>
+                                    ) : catalogQuery.isError ? (
+                                        <p
+                                            role="alert"
+                                            className="text-destructive"
+                                        >
+                                            {t("analysis.catalogError")}
+                                        </p>
+                                    ) : localizedDatasets.length === 0 ? (
+                                        <p>{t("analysis.catalogEmpty")}</p>
+                                    ) : mode === "visual" && dataset ? (
+                                        <>
+                                            <div>
+                                                <Label htmlFor="analysis-dataset">
+                                                    {t("analysis.dataset")}
+                                                </Label>
+                                                <select
+                                                    id="analysis-dataset"
+                                                    value={plan.datasetId}
+                                                    onChange={(event) =>
+                                                        setPlan({
+                                                            ...EMPTY_PLAN,
+                                                            datasetId:
+                                                                event.target
+                                                                    .value,
+                                                        })
+                                                    }
+                                                    className="mt-1 w-full rounded-md border bg-background px-3 py-2"
+                                                >
+                                                    {localizedDatasets.map(
+                                                        (entry) => (
+                                                            <option
+                                                                key={entry.id}
+                                                                value={entry.id}
+                                                            >
+                                                                {entry.label}
+                                                            </option>
+                                                        ),
+                                                    )}
+                                                </select>
                                             </div>
-                                        </fieldset>
-                                        <fieldset>
-                                            <legend className="text-sm font-medium">
-                                                {t("analysis.measures")}
-                                            </legend>
-                                            <p className="mt-1 text-xs text-muted-foreground">
-                                                {t("analysis.measuresHelp")}
-                                            </p>
-                                            <div className="mt-2 space-y-2">
-                                                {dataset.measures.map(
-                                                    (measure) => (
+                                            <div className="grid gap-4 lg:grid-cols-2">
+                                                <fieldset>
+                                                    <legend className="text-sm font-medium">
+                                                        {t("analysis.fields")}
+                                                    </legend>
+                                                    <p className="mt-1 text-xs text-muted-foreground">
+                                                        {t(
+                                                            "analysis.fieldsHelp",
+                                                        )}
+                                                    </p>
+                                                    <div className="mt-2 grid max-h-48 grid-cols-2 gap-2 overflow-auto">
+                                                        {dataset.fields.map(
+                                                            (field) => (
+                                                                <label
+                                                                    key={
+                                                                        field.id
+                                                                    }
+                                                                    className="flex items-center gap-2 text-sm"
+                                                                >
+                                                                    <Checkbox
+                                                                        checked={plan.fields.includes(
+                                                                            field.id,
+                                                                        )}
+                                                                        onCheckedChange={(
+                                                                            checked,
+                                                                        ) =>
+                                                                            setPlan(
+                                                                                (
+                                                                                    current,
+                                                                                ) => ({
+                                                                                    ...current,
+                                                                                    fields: checked
+                                                                                        ? [
+                                                                                              ...current.fields,
+                                                                                              field.id,
+                                                                                          ]
+                                                                                        : current.fields.filter(
+                                                                                              (
+                                                                                                  id,
+                                                                                              ) =>
+                                                                                                  id !==
+                                                                                                  field.id,
+                                                                                          ),
+                                                                                    groups: checked
+                                                                                        ? current.groups
+                                                                                        : current.groups.filter(
+                                                                                              (
+                                                                                                  id,
+                                                                                              ) =>
+                                                                                                  id !==
+                                                                                                  field.id,
+                                                                                          ),
+                                                                                }),
+                                                                            )
+                                                                        }
+                                                                    />
+                                                                    {
+                                                                        field.label
+                                                                    }
+                                                                </label>
+                                                            ),
+                                                        )}
+                                                    </div>
+                                                </fieldset>
+                                                <fieldset>
+                                                    <legend className="text-sm font-medium">
+                                                        {t("analysis.measures")}
+                                                    </legend>
+                                                    <p className="mt-1 text-xs text-muted-foreground">
+                                                        {t(
+                                                            "analysis.measuresHelp",
+                                                        )}
+                                                    </p>
+                                                    <div className="mt-2 space-y-2">
+                                                        {dataset.measures.map(
+                                                            (measure) => (
+                                                                <label
+                                                                    key={
+                                                                        measure.id
+                                                                    }
+                                                                    className="flex items-center gap-2 text-sm"
+                                                                >
+                                                                    <Checkbox
+                                                                        checked={plan.measures.includes(
+                                                                            measure.id,
+                                                                        )}
+                                                                        onCheckedChange={(
+                                                                            checked,
+                                                                        ) =>
+                                                                            setPlan(
+                                                                                (
+                                                                                    current,
+                                                                                ) => ({
+                                                                                    ...current,
+                                                                                    measures:
+                                                                                        checked
+                                                                                            ? [
+                                                                                                  ...current.measures,
+                                                                                                  measure.id,
+                                                                                              ]
+                                                                                            : current.measures.filter(
+                                                                                                  (
+                                                                                                      id,
+                                                                                                  ) =>
+                                                                                                      id !==
+                                                                                                      measure.id,
+                                                                                              ),
+                                                                                }),
+                                                                            )
+                                                                        }
+                                                                    />
+                                                                    {
+                                                                        measure.label
+                                                                    }
+                                                                </label>
+                                                            ),
+                                                        )}
+                                                        {dataset.joins.map(
+                                                            (join) => (
+                                                                <label
+                                                                    key={
+                                                                        join.id
+                                                                    }
+                                                                    className="flex items-center gap-2 text-sm"
+                                                                >
+                                                                    <Checkbox
+                                                                        checked={plan.joins.includes(
+                                                                            join.id,
+                                                                        )}
+                                                                        onCheckedChange={(
+                                                                            checked,
+                                                                        ) =>
+                                                                            setPlan(
+                                                                                (
+                                                                                    current,
+                                                                                ) => ({
+                                                                                    ...current,
+                                                                                    joins: checked
+                                                                                        ? [
+                                                                                              join.id,
+                                                                                          ]
+                                                                                        : [],
+                                                                                }),
+                                                                            )
+                                                                        }
+                                                                    />
+                                                                    {t(
+                                                                        "analysis.safeAccountJoin",
+                                                                    )}
+                                                                </label>
+                                                            ),
+                                                        )}
+                                                    </div>
+                                                </fieldset>
+                                            </div>
+                                            <div>
+                                                <p className="text-sm font-medium">
+                                                    {t("analysis.groups")}
+                                                </p>
+                                                <div className="mt-2 flex flex-wrap gap-2">
+                                                    {plan.fields.map((id) => (
                                                         <label
-                                                            key={measure.id}
-                                                            className="flex items-center gap-2 text-sm"
+                                                            key={id}
+                                                            className="flex items-center gap-2 rounded-md border px-2 py-1 text-xs"
                                                         >
                                                             <Checkbox
-                                                                checked={plan.measures.includes(
-                                                                    measure.id,
+                                                                checked={plan.groups.includes(
+                                                                    id,
                                                                 )}
                                                                 onCheckedChange={(
                                                                     checked,
@@ -1078,521 +1353,489 @@ export default function AnalysisWorkspacePage() {
                                                                             current,
                                                                         ) => ({
                                                                             ...current,
-                                                                            measures:
-                                                                                checked
-                                                                                    ? [
-                                                                                          ...current.measures,
-                                                                                          measure.id,
-                                                                                      ]
-                                                                                    : current.measures.filter(
-                                                                                          (
-                                                                                              id,
-                                                                                          ) =>
-                                                                                              id !==
-                                                                                              measure.id,
-                                                                                      ),
+                                                                            groups: checked
+                                                                                ? [
+                                                                                      ...current.groups,
+                                                                                      id,
+                                                                                  ]
+                                                                                : current.groups.filter(
+                                                                                      (
+                                                                                          value,
+                                                                                      ) =>
+                                                                                          value !==
+                                                                                          id,
+                                                                                  ),
                                                                         }),
                                                                     )
                                                                 }
                                                             />
-                                                            {measure.label}
+                                                            {dataset.fields.find(
+                                                                (field) =>
+                                                                    field.id ===
+                                                                    id,
+                                                            )?.label ?? id}
                                                         </label>
-                                                    ),
-                                                )}
-                                                {dataset.joins.map((join) => (
-                                                    <label
-                                                        key={join.id}
-                                                        className="flex items-center gap-2 text-sm"
-                                                    >
-                                                        <Checkbox
-                                                            checked={plan.joins.includes(
-                                                                join.id,
-                                                            )}
-                                                            onCheckedChange={(
-                                                                checked,
-                                                            ) =>
-                                                                setPlan(
-                                                                    (
-                                                                        current,
-                                                                    ) => ({
-                                                                        ...current,
-                                                                        joins: checked
-                                                                            ? [
-                                                                                  join.id,
-                                                                              ]
-                                                                            : [],
-                                                                    }),
-                                                                )
-                                                            }
-                                                        />
-                                                        {t(
-                                                            "analysis.safeAccountJoin",
-                                                        )}
-                                                    </label>
-                                                ))}
+                                                    ))}
+                                                </div>
                                             </div>
-                                        </fieldset>
-                                    </div>
-                                    <div>
-                                        <p className="text-sm font-medium">
-                                            {t("analysis.groups")}
-                                        </p>
-                                        <div className="mt-2 flex flex-wrap gap-2">
-                                            {plan.fields.map((id) => (
-                                                <label
-                                                    key={id}
-                                                    className="flex items-center gap-2 rounded-md border px-2 py-1 text-xs"
-                                                >
-                                                    <Checkbox
-                                                        checked={plan.groups.includes(
-                                                            id,
-                                                        )}
-                                                        onCheckedChange={(
-                                                            checked,
-                                                        ) =>
+                                            <div>
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-sm font-medium">
+                                                        {t("analysis.filters")}
+                                                    </span>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() =>
                                                             setPlan(
                                                                 (current) => ({
                                                                     ...current,
-                                                                    groups: checked
-                                                                        ? [
-                                                                              ...current.groups,
-                                                                              id,
-                                                                          ]
-                                                                        : current.groups.filter(
-                                                                              (
-                                                                                  value,
-                                                                              ) =>
-                                                                                  value !==
-                                                                                  id,
-                                                                          ),
+                                                                    filters: [
+                                                                        ...current.filters,
+                                                                        {
+                                                                            fieldId:
+                                                                                dataset
+                                                                                    .fields[0]
+                                                                                    .id,
+                                                                            operator:
+                                                                                "eq",
+                                                                            value: "",
+                                                                        },
+                                                                    ],
                                                                 }),
                                                             )
                                                         }
-                                                    />
-                                                    {dataset.fields.find(
-                                                        (field) =>
-                                                            field.id === id,
-                                                    )?.label ?? id}
-                                                </label>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-sm font-medium">
-                                                {t("analysis.filters")}
-                                            </span>
-                                            <Button
-                                                size="sm"
-                                                variant="outline"
-                                                onClick={() =>
-                                                    setPlan((current) => ({
-                                                        ...current,
-                                                        filters: [
-                                                            ...current.filters,
-                                                            {
-                                                                fieldId:
-                                                                    dataset
-                                                                        .fields[0]
-                                                                        .id,
-                                                                operator: "eq",
-                                                                value: "",
-                                                            },
-                                                        ],
-                                                    }))
-                                                }
-                                            >
-                                                {t("analysis.addFilter")}
-                                            </Button>
-                                        </div>
-                                        <div className="mt-2 space-y-2">
-                                            {plan.filters.map(
-                                                (filter, index) => (
-                                                    <div
-                                                        key={index}
-                                                        className="grid gap-2 sm:grid-cols-[1fr_10rem_1fr_auto]"
                                                     >
-                                                        <select
-                                                            aria-label={t(
-                                                                "analysis.filterField",
-                                                                {
-                                                                    number:
-                                                                        index +
-                                                                        1,
-                                                                },
-                                                            )}
-                                                            value={
-                                                                filter.fieldId
-                                                            }
-                                                            onChange={(event) =>
-                                                                setPlan(
-                                                                    (
-                                                                        current,
-                                                                    ) => ({
-                                                                        ...current,
-                                                                        filters:
-                                                                            current.filters.map(
-                                                                                (
-                                                                                    item,
-                                                                                    i,
-                                                                                ) =>
-                                                                                    i ===
-                                                                                    index
-                                                                                        ? {
-                                                                                              ...item,
-                                                                                              fieldId:
-                                                                                                  event
-                                                                                                      .target
-                                                                                                      .value,
-                                                                                          }
-                                                                                        : item,
-                                                                            ),
-                                                                    }),
-                                                                )
-                                                            }
-                                                            className="rounded-md border bg-background px-2 py-1"
-                                                        >
-                                                            {dataset.fields.map(
-                                                                (field) => (
-                                                                    <option
-                                                                        key={
-                                                                            field.id
-                                                                        }
-                                                                        value={
-                                                                            field.id
-                                                                        }
-                                                                    >
-                                                                        {
-                                                                            field.label
-                                                                        }
-                                                                    </option>
-                                                                ),
-                                                            )}
-                                                        </select>
-                                                        <select
-                                                            aria-label={t(
-                                                                "analysis.filterOperator",
-                                                                {
-                                                                    number:
-                                                                        index +
-                                                                        1,
-                                                                    field:
-                                                                        dataset.fields.find(
-                                                                            (
-                                                                                field,
-                                                                            ) =>
-                                                                                field.id ===
-                                                                                filter.fieldId,
-                                                                        )
-                                                                            ?.label ??
-                                                                        filter.fieldId,
-                                                                },
-                                                            )}
-                                                            value={
-                                                                filter.operator
-                                                            }
-                                                            onChange={(event) =>
-                                                                setPlan(
-                                                                    (
-                                                                        current,
-                                                                    ) => ({
-                                                                        ...current,
-                                                                        filters:
-                                                                            current.filters.map(
-                                                                                (
-                                                                                    item,
-                                                                                    i,
-                                                                                ) =>
-                                                                                    i ===
-                                                                                    index
-                                                                                        ? {
-                                                                                              ...item,
-                                                                                              operator:
-                                                                                                  event
-                                                                                                      .target
-                                                                                                      .value,
-                                                                                          }
-                                                                                        : item,
-                                                                            ),
-                                                                    }),
-                                                                )
-                                                            }
-                                                            className="rounded-md border bg-background px-2 py-1"
-                                                        >
-                                                            {OPERATORS.map(
-                                                                (operator) => (
-                                                                    <option
-                                                                        key={
-                                                                            operator
-                                                                        }
-                                                                        value={
-                                                                            operator
-                                                                        }
-                                                                    >
-                                                                        {t(
-                                                                            `analysis.operator.${operator}`,
-                                                                        )}
-                                                                    </option>
-                                                                ),
-                                                            )}
-                                                        </select>
-                                                        <Input
-                                                            aria-label={t(
-                                                                "analysis.filterValue",
-                                                                {
-                                                                    number:
-                                                                        index +
-                                                                        1,
-                                                                    field:
-                                                                        dataset.fields.find(
-                                                                            (
-                                                                                field,
-                                                                            ) =>
-                                                                                field.id ===
-                                                                                filter.fieldId,
-                                                                        )
-                                                                            ?.label ??
-                                                                        filter.fieldId,
-                                                                },
-                                                            )}
-                                                            value={String(
-                                                                filter.value ??
-                                                                    "",
-                                                            )}
-                                                            disabled={[
-                                                                "is-null",
-                                                                "is-not-null",
-                                                            ].includes(
-                                                                filter.operator,
-                                                            )}
-                                                            onChange={(
-                                                                event,
-                                                            ) => {
-                                                                const field =
-                                                                    dataset.fields.find(
-                                                                        (
-                                                                            entry,
-                                                                        ) =>
-                                                                            entry.id ===
-                                                                            filter.fieldId,
-                                                                    );
-                                                                const raw =
-                                                                    event.target
-                                                                        .value;
-                                                                const value: AnalysisValue =
-                                                                    field?.type ===
-                                                                    "boolean"
-                                                                        ? raw ===
-                                                                          "true"
-                                                                        : field?.type ===
-                                                                            "integer"
-                                                                          ? Number(
-                                                                                raw,
-                                                                            )
-                                                                          : raw;
-                                                                setPlan(
-                                                                    (
-                                                                        current,
-                                                                    ) => ({
-                                                                        ...current,
-                                                                        filters:
-                                                                            current.filters.map(
-                                                                                (
-                                                                                    item,
-                                                                                    i,
-                                                                                ) =>
-                                                                                    i ===
-                                                                                    index
-                                                                                        ? {
-                                                                                              ...item,
-                                                                                              value,
-                                                                                          }
-                                                                                        : item,
-                                                                            ),
-                                                                    }),
-                                                                );
-                                                            }}
-                                                        />
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            aria-label={t(
-                                                                "analysis.removeFilterContext",
-                                                                {
-                                                                    number:
-                                                                        index +
-                                                                        1,
-                                                                    field:
-                                                                        dataset.fields.find(
-                                                                            (
-                                                                                field,
-                                                                            ) =>
-                                                                                field.id ===
-                                                                                filter.fieldId,
-                                                                        )
-                                                                            ?.label ??
-                                                                        filter.fieldId,
-                                                                },
-                                                            )}
-                                                            onClick={() =>
-                                                                setPlan(
-                                                                    (
-                                                                        current,
-                                                                    ) => ({
-                                                                        ...current,
-                                                                        filters:
-                                                                            current.filters.filter(
-                                                                                (
-                                                                                    _,
-                                                                                    i,
-                                                                                ) =>
-                                                                                    i !==
-                                                                                    index,
-                                                                            ),
-                                                                    }),
-                                                                )
-                                                            }
-                                                        >
-                                                            <Trash2 className="h-4 w-4" />
-                                                        </Button>
-                                                    </div>
-                                                ),
-                                            )}
-                                        </div>
-                                    </div>
-                                </>
-                            ) : (
-                                <div className="space-y-2">
-                                    <Label htmlFor="analysis-sql">
-                                        {t("analysis.sqlEditor")}
-                                    </Label>
-                                    <Textarea
-                                        id="analysis-sql"
-                                        className="min-h-56 font-mono text-xs"
-                                        value={sql}
-                                        onChange={(event) =>
-                                            setSql(event.target.value)
-                                        }
-                                        spellCheck={false}
-                                    />
-                                    <fieldset className="space-y-2 rounded-md border p-3">
-                                        <legend className="text-sm font-medium">
-                                            {t("analysis.approvedDatasets")}
-                                        </legend>
-                                        <div className="flex flex-wrap gap-3">
-                                            {catalogQuery.data?.datasets.map(
-                                                (entry) => (
-                                                    <label
-                                                        key={entry.id}
-                                                        className="flex items-center gap-2 text-xs"
-                                                    >
-                                                        <Checkbox
-                                                            checked={sqlDatasets.includes(
-                                                                entry.id,
-                                                            )}
-                                                            onCheckedChange={(
-                                                                checked,
-                                                            ) =>
-                                                                setSqlDatasets(
-                                                                    (
-                                                                        current,
-                                                                    ) =>
-                                                                        checked
-                                                                            ? [
-                                                                                  ...new Set(
-                                                                                      [
-                                                                                          ...current,
-                                                                                          entry.id,
-                                                                                      ],
-                                                                                  ),
-                                                                              ]
-                                                                            : current.filter(
-                                                                                  (
-                                                                                      id,
-                                                                                  ) =>
-                                                                                      id !==
-                                                                                      entry.id,
-                                                                              ),
-                                                                )
-                                                            }
-                                                        />
-                                                        {entry.label}
-                                                    </label>
-                                                ),
-                                            )}
-                                        </div>
-                                        <div className="flex flex-wrap gap-1">
-                                            {catalogQuery.data?.datasets
-                                                .filter((entry) =>
-                                                    sqlDatasets.includes(
-                                                        entry.id,
-                                                    ),
-                                                )
-                                                .flatMap((entry) =>
-                                                    entry.fields
-                                                        .slice(0, 12)
-                                                        .map((field) => ({
-                                                            datasetId: entry.id,
-                                                            field,
-                                                        })),
-                                                )
-                                                .map(({ datasetId, field }) => (
-                                                    <Button
-                                                        key={`${datasetId}:${field.id}`}
-                                                        size="sm"
-                                                        variant="ghost"
-                                                        onClick={() =>
-                                                            setSql(
-                                                                (current) =>
-                                                                    `${current}${current.endsWith(" ") || !current ? "" : " "}${field.id}`,
-                                                            )
-                                                        }
-                                                    >
-                                                        {field.id}
+                                                        {t(
+                                                            "analysis.addFilter",
+                                                        )}
                                                     </Button>
-                                                ))}
-                                        </div>
-                                    </fieldset>
-                                    <div>
-                                        <Label htmlFor="analysis-sql-values">
-                                            {t("analysis.sqlParameters")}
-                                        </Label>
-                                        <Input
-                                            id="analysis-sql-values"
-                                            className="font-mono text-xs"
-                                            value={sqlValues}
-                                            onChange={(event) =>
-                                                setSqlValues(event.target.value)
-                                            }
-                                            placeholder='["2026-01-01", 100]'
-                                        />
-                                        <p className="mt-1 text-xs text-muted-foreground">
-                                            {t("analysis.sqlParametersHint")}
-                                        </p>
-                                    </div>
-                                    <p className="text-xs text-muted-foreground">
-                                        {t("analysis.sqlHint")}
-                                    </p>
-                                    {sqlHistory.length > 0 && (
-                                        <details>
-                                            <summary className="cursor-pointer text-xs">
-                                                {t("analysis.queryHistory")}
-                                            </summary>
-                                            {sqlHistory.map((entry, index) => (
-                                                <button
-                                                    key={index}
-                                                    className="block max-w-full truncate py-1 text-left font-mono text-xs text-muted-foreground"
-                                                    onClick={() =>
-                                                        setSql(entry)
+                                                </div>
+                                                <div className="mt-2 space-y-2">
+                                                    {plan.filters.map(
+                                                        (filter, index) => (
+                                                            <div
+                                                                key={index}
+                                                                className="grid gap-2 sm:grid-cols-[1fr_10rem_1fr_auto]"
+                                                            >
+                                                                <select
+                                                                    aria-label={t(
+                                                                        "analysis.filterField",
+                                                                        {
+                                                                            number:
+                                                                                index +
+                                                                                1,
+                                                                        },
+                                                                    )}
+                                                                    value={
+                                                                        filter.fieldId
+                                                                    }
+                                                                    onChange={(
+                                                                        event,
+                                                                    ) =>
+                                                                        setPlan(
+                                                                            (
+                                                                                current,
+                                                                            ) => ({
+                                                                                ...current,
+                                                                                filters:
+                                                                                    current.filters.map(
+                                                                                        (
+                                                                                            item,
+                                                                                            i,
+                                                                                        ) =>
+                                                                                            i ===
+                                                                                            index
+                                                                                                ? {
+                                                                                                      ...item,
+                                                                                                      fieldId:
+                                                                                                          event
+                                                                                                              .target
+                                                                                                              .value,
+                                                                                                  }
+                                                                                                : item,
+                                                                                    ),
+                                                                            }),
+                                                                        )
+                                                                    }
+                                                                    className="rounded-md border bg-background px-2 py-1"
+                                                                >
+                                                                    {dataset.fields.map(
+                                                                        (
+                                                                            field,
+                                                                        ) => (
+                                                                            <option
+                                                                                key={
+                                                                                    field.id
+                                                                                }
+                                                                                value={
+                                                                                    field.id
+                                                                                }
+                                                                            >
+                                                                                {
+                                                                                    field.label
+                                                                                }
+                                                                            </option>
+                                                                        ),
+                                                                    )}
+                                                                </select>
+                                                                <select
+                                                                    aria-label={t(
+                                                                        "analysis.filterOperator",
+                                                                        {
+                                                                            number:
+                                                                                index +
+                                                                                1,
+                                                                            field:
+                                                                                dataset.fields.find(
+                                                                                    (
+                                                                                        field,
+                                                                                    ) =>
+                                                                                        field.id ===
+                                                                                        filter.fieldId,
+                                                                                )
+                                                                                    ?.label ??
+                                                                                filter.fieldId,
+                                                                        },
+                                                                    )}
+                                                                    value={
+                                                                        filter.operator
+                                                                    }
+                                                                    onChange={(
+                                                                        event,
+                                                                    ) =>
+                                                                        setPlan(
+                                                                            (
+                                                                                current,
+                                                                            ) => ({
+                                                                                ...current,
+                                                                                filters:
+                                                                                    current.filters.map(
+                                                                                        (
+                                                                                            item,
+                                                                                            i,
+                                                                                        ) =>
+                                                                                            i ===
+                                                                                            index
+                                                                                                ? {
+                                                                                                      ...item,
+                                                                                                      operator:
+                                                                                                          event
+                                                                                                              .target
+                                                                                                              .value,
+                                                                                                  }
+                                                                                                : item,
+                                                                                    ),
+                                                                            }),
+                                                                        )
+                                                                    }
+                                                                    className="rounded-md border bg-background px-2 py-1"
+                                                                >
+                                                                    {OPERATORS.map(
+                                                                        (
+                                                                            operator,
+                                                                        ) => (
+                                                                            <option
+                                                                                key={
+                                                                                    operator
+                                                                                }
+                                                                                value={
+                                                                                    operator
+                                                                                }
+                                                                            >
+                                                                                {t(
+                                                                                    `analysis.operator.${operator}`,
+                                                                                )}
+                                                                            </option>
+                                                                        ),
+                                                                    )}
+                                                                </select>
+                                                                <Input
+                                                                    aria-label={t(
+                                                                        "analysis.filterValue",
+                                                                        {
+                                                                            number:
+                                                                                index +
+                                                                                1,
+                                                                            field:
+                                                                                dataset.fields.find(
+                                                                                    (
+                                                                                        field,
+                                                                                    ) =>
+                                                                                        field.id ===
+                                                                                        filter.fieldId,
+                                                                                )
+                                                                                    ?.label ??
+                                                                                filter.fieldId,
+                                                                        },
+                                                                    )}
+                                                                    value={String(
+                                                                        filter.value ??
+                                                                            "",
+                                                                    )}
+                                                                    disabled={[
+                                                                        "is-null",
+                                                                        "is-not-null",
+                                                                    ].includes(
+                                                                        filter.operator,
+                                                                    )}
+                                                                    onChange={(
+                                                                        event,
+                                                                    ) => {
+                                                                        const field =
+                                                                            dataset.fields.find(
+                                                                                (
+                                                                                    entry,
+                                                                                ) =>
+                                                                                    entry.id ===
+                                                                                    filter.fieldId,
+                                                                            );
+                                                                        const raw =
+                                                                            event
+                                                                                .target
+                                                                                .value;
+                                                                        const value: AnalysisValue =
+                                                                            field?.type ===
+                                                                            "boolean"
+                                                                                ? raw ===
+                                                                                  "true"
+                                                                                : field?.type ===
+                                                                                    "integer"
+                                                                                  ? Number(
+                                                                                        raw,
+                                                                                    )
+                                                                                  : raw;
+                                                                        setPlan(
+                                                                            (
+                                                                                current,
+                                                                            ) => ({
+                                                                                ...current,
+                                                                                filters:
+                                                                                    current.filters.map(
+                                                                                        (
+                                                                                            item,
+                                                                                            i,
+                                                                                        ) =>
+                                                                                            i ===
+                                                                                            index
+                                                                                                ? {
+                                                                                                      ...item,
+                                                                                                      value,
+                                                                                                  }
+                                                                                                : item,
+                                                                                    ),
+                                                                            }),
+                                                                        );
+                                                                    }}
+                                                                />
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    aria-label={t(
+                                                                        "analysis.removeFilterContext",
+                                                                        {
+                                                                            number:
+                                                                                index +
+                                                                                1,
+                                                                            field:
+                                                                                dataset.fields.find(
+                                                                                    (
+                                                                                        field,
+                                                                                    ) =>
+                                                                                        field.id ===
+                                                                                        filter.fieldId,
+                                                                                )
+                                                                                    ?.label ??
+                                                                                filter.fieldId,
+                                                                        },
+                                                                    )}
+                                                                    onClick={() =>
+                                                                        setPlan(
+                                                                            (
+                                                                                current,
+                                                                            ) => ({
+                                                                                ...current,
+                                                                                filters:
+                                                                                    current.filters.filter(
+                                                                                        (
+                                                                                            _,
+                                                                                            i,
+                                                                                        ) =>
+                                                                                            i !==
+                                                                                            index,
+                                                                                    ),
+                                                                            }),
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </Button>
+                                                            </div>
+                                                        ),
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            <Label htmlFor="analysis-sql">
+                                                {t("analysis.sqlEditor")}
+                                            </Label>
+                                            <Textarea
+                                                id="analysis-sql"
+                                                className="min-h-56 font-mono text-xs"
+                                                value={sql}
+                                                onChange={(event) =>
+                                                    setSql(event.target.value)
+                                                }
+                                                spellCheck={false}
+                                            />
+                                            <fieldset className="space-y-2 rounded-md border p-3">
+                                                <legend className="text-sm font-medium">
+                                                    {t(
+                                                        "analysis.approvedDatasets",
+                                                    )}
+                                                </legend>
+                                                <div className="flex flex-wrap gap-3">
+                                                    {localizedDatasets.map(
+                                                        (entry) => (
+                                                            <label
+                                                                key={entry.id}
+                                                                className="flex items-center gap-2 text-xs"
+                                                            >
+                                                                <Checkbox
+                                                                    checked={sqlDatasets.includes(
+                                                                        entry.id,
+                                                                    )}
+                                                                    onCheckedChange={(
+                                                                        checked,
+                                                                    ) =>
+                                                                        setSqlDatasets(
+                                                                            (
+                                                                                current,
+                                                                            ) =>
+                                                                                checked
+                                                                                    ? [
+                                                                                          ...new Set(
+                                                                                              [
+                                                                                                  ...current,
+                                                                                                  entry.id,
+                                                                                              ],
+                                                                                          ),
+                                                                                      ]
+                                                                                    : current.filter(
+                                                                                          (
+                                                                                              id,
+                                                                                          ) =>
+                                                                                              id !==
+                                                                                              entry.id,
+                                                                                      ),
+                                                                        )
+                                                                    }
+                                                                />
+                                                                {entry.label}
+                                                            </label>
+                                                        ),
+                                                    )}
+                                                </div>
+                                                <div className="flex flex-wrap gap-1">
+                                                    {localizedDatasets
+                                                        .filter((entry) =>
+                                                            sqlDatasets.includes(
+                                                                entry.id,
+                                                            ),
+                                                        )
+                                                        .flatMap((entry) =>
+                                                            entry.fields
+                                                                .slice(0, 12)
+                                                                .map(
+                                                                    (
+                                                                        field,
+                                                                    ) => ({
+                                                                        datasetId:
+                                                                            entry.id,
+                                                                        field,
+                                                                    }),
+                                                                ),
+                                                        )
+                                                        .map(
+                                                            ({
+                                                                datasetId,
+                                                                field,
+                                                            }) => (
+                                                                <Button
+                                                                    key={`${datasetId}:${field.id}`}
+                                                                    size="sm"
+                                                                    variant="ghost"
+                                                                    onClick={() =>
+                                                                        setSql(
+                                                                            (
+                                                                                current,
+                                                                            ) =>
+                                                                                `${current}${current.endsWith(" ") || !current ? "" : " "}${field.id}`,
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    {field.id}
+                                                                </Button>
+                                                            ),
+                                                        )}
+                                                </div>
+                                            </fieldset>
+                                            <div>
+                                                <Label htmlFor="analysis-sql-values">
+                                                    {t(
+                                                        "analysis.sqlParameters",
+                                                    )}
+                                                </Label>
+                                                <Input
+                                                    id="analysis-sql-values"
+                                                    className="font-mono text-xs"
+                                                    value={sqlValues}
+                                                    onChange={(event) =>
+                                                        setSqlValues(
+                                                            event.target.value,
+                                                        )
                                                     }
-                                                >
-                                                    {entry}
-                                                </button>
-                                            ))}
-                                        </details>
+                                                    placeholder='["2026-01-01", 100]'
+                                                />
+                                                <p className="mt-1 text-xs text-muted-foreground">
+                                                    {t(
+                                                        "analysis.sqlParametersHint",
+                                                    )}
+                                                </p>
+                                            </div>
+                                            <p className="text-xs text-muted-foreground">
+                                                {t("analysis.sqlHint")}
+                                            </p>
+                                            {sqlHistory.length > 0 && (
+                                                <details>
+                                                    <summary className="cursor-pointer text-xs">
+                                                        {t(
+                                                            "analysis.queryHistory",
+                                                        )}
+                                                    </summary>
+                                                    {sqlHistory.map(
+                                                        (entry, index) => (
+                                                            <button
+                                                                key={index}
+                                                                className="block max-w-full truncate py-1 text-left font-mono text-xs text-muted-foreground"
+                                                                onClick={() =>
+                                                                    setSql(
+                                                                        entry,
+                                                                    )
+                                                                }
+                                                            >
+                                                                {entry}
+                                                            </button>
+                                                        ),
+                                                    )}
+                                                </details>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
-                            )}
+                            </details>
                             <div className="flex gap-2">
                                 <Button
                                     onClick={() => execute(0)}
@@ -1645,7 +1888,7 @@ export default function AnalysisWorkspacePage() {
                                     {t("analysis.resultsHelp")}
                                 </p>
                             </CardHeader>
-                            <CardContent className="space-y-3">
+                            <div className="px-6">
                                 {resultQuery !== null &&
                                     resultQuery !== currentQuery && (
                                         <p
@@ -1655,103 +1898,267 @@ export default function AnalysisWorkspacePage() {
                                             {t("analysis.resultsOutdated")}
                                         </p>
                                     )}
-                                <ResultTable
-                                    result={displayedResult}
-                                    onSort={(id) => {
-                                        if (mode === "visual") {
-                                            const next: VisualAnalysisPlan = {
-                                                ...plan,
-                                                orderBy: [
-                                                    {
-                                                        id,
-                                                        direction:
-                                                            plan.orderBy[0]
-                                                                ?.id === id &&
-                                                            plan.orderBy[0]
-                                                                .direction ===
-                                                                "asc"
-                                                                ? "desc"
-                                                                : "asc",
-                                                    },
-                                                ],
-                                            };
-                                            setPlan(next);
-                                            void execute(0, next);
-                                        }
-                                    }}
-                                    onDrill={
-                                        mode === "visual"
-                                            ? async (row) => {
-                                                  try {
-                                                      setDrillResult(
-                                                          await apiClient.drillAnalysis(
-                                                              plan,
-                                                              row,
-                                                              requestId(),
-                                                          ),
-                                                      );
-                                                  } catch (cause) {
-                                                      setError(
-                                                          apiErrorToMessage(
-                                                              cause,
-                                                              t,
-                                                          ),
-                                                      );
-                                                  }
-                                              }
-                                            : undefined
-                                    }
-                                />
-                                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                    <span>
-                                        {displayedResult.window.kind ===
-                                        "truncated"
-                                            ? t("analysis.truncated")
-                                            : displayedResult.window.hasMore
-                                              ? t("analysis.moreRows")
-                                              : t("analysis.completeRows")}
-                                    </span>
-                                    <div className="flex gap-2">
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            disabled={offset === 0}
-                                            onClick={() =>
-                                                execute(
-                                                    Math.max(
-                                                        0,
-                                                        offset - plan.limit,
-                                                    ),
-                                                )
-                                            }
-                                        >
-                                            {t("analysis.previous")}
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            disabled={
-                                                displayedResult.window.kind !==
-                                                    "page" ||
-                                                !displayedResult.window.hasMore
-                                            }
-                                            onClick={() =>
-                                                execute(offset + plan.limit)
-                                            }
-                                        >
-                                            {t("analysis.next")}
-                                        </Button>
-                                    </div>
+                            </div>
+                            <Tabs defaultValue="table">
+                                <div className="px-6 pb-3">
+                                    <TabsList
+                                        aria-label={t("analysis.resultViews")}
+                                    >
+                                        <TabsTrigger value="table">
+                                            {t("analysis.tableView")}
+                                        </TabsTrigger>
+                                        <TabsTrigger value="chart">
+                                            {t("analysis.chart")}
+                                        </TabsTrigger>
+                                        <TabsTrigger value="pivot">
+                                            {t("analysis.pivot")}
+                                        </TabsTrigger>
+                                    </TabsList>
                                 </div>
-                                <details>
-                                    <summary className="cursor-pointer text-sm font-medium">
-                                        {t("analysis.generatedSql")}
-                                    </summary>
-                                    <pre className="mt-2 overflow-auto rounded-lg bg-muted p-3 text-xs">
-                                        {displayedResult.generatedSql}
-                                    </pre>
-                                </details>
-                            </CardContent>
+                                <TabsContent value="table" className="mt-0">
+                                    <CardContent className="space-y-3">
+                                        <ResultTable
+                                            result={displayedResult}
+                                            datasets={presentationDatasets}
+                                            onSort={(id) => {
+                                                if (mode === "visual") {
+                                                    const next: VisualAnalysisPlan =
+                                                        {
+                                                            ...plan,
+                                                            orderBy: [
+                                                                {
+                                                                    id,
+                                                                    direction:
+                                                                        plan
+                                                                            .orderBy[0]
+                                                                            ?.id ===
+                                                                            id &&
+                                                                        plan
+                                                                            .orderBy[0]
+                                                                            .direction ===
+                                                                            "asc"
+                                                                            ? "desc"
+                                                                            : "asc",
+                                                                },
+                                                            ],
+                                                        };
+                                                    setPlan(next);
+                                                    void execute(0, next);
+                                                }
+                                            }}
+                                            onDrill={
+                                                mode === "visual"
+                                                    ? async (row) => {
+                                                          try {
+                                                              setDrillResult(
+                                                                  await apiClient.drillAnalysis(
+                                                                      plan,
+                                                                      row,
+                                                                      requestId(),
+                                                                  ),
+                                                              );
+                                                          } catch (cause) {
+                                                              setError(
+                                                                  apiErrorToMessage(
+                                                                      cause,
+                                                                      t,
+                                                                  ),
+                                                              );
+                                                          }
+                                                      }
+                                                    : undefined
+                                            }
+                                        />
+                                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                            <span>
+                                                {displayedResult.window.kind ===
+                                                "truncated"
+                                                    ? t("analysis.truncated")
+                                                    : displayedResult.window
+                                                            .hasMore
+                                                      ? t("analysis.moreRows")
+                                                      : t(
+                                                            "analysis.completeRows",
+                                                        )}
+                                            </span>
+                                            <div className="flex gap-2">
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    disabled={offset === 0}
+                                                    onClick={() =>
+                                                        execute(
+                                                            Math.max(
+                                                                0,
+                                                                offset -
+                                                                    plan.limit,
+                                                            ),
+                                                        )
+                                                    }
+                                                >
+                                                    {t("analysis.previous")}
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    disabled={
+                                                        displayedResult.window
+                                                            .kind !== "page" ||
+                                                        !displayedResult.window
+                                                            .hasMore
+                                                    }
+                                                    onClick={() =>
+                                                        execute(
+                                                            offset + plan.limit,
+                                                        )
+                                                    }
+                                                >
+                                                    {t("analysis.next")}
+                                                </Button>
+                                            </div>
+                                        </div>
+                                        <details>
+                                            <summary className="cursor-pointer text-sm font-medium">
+                                                {t("analysis.generatedSql")}
+                                            </summary>
+                                            <pre className="mt-2 overflow-auto rounded-lg bg-muted p-3 text-xs">
+                                                {displayedResult.generatedSql}
+                                            </pre>
+                                        </details>
+                                    </CardContent>
+                                </TabsContent>
+                                <TabsContent value="chart" className="mt-0">
+                                    <CardContent className="space-y-3">
+                                        <div className="flex gap-2">
+                                            <label className="grid gap-1 text-sm">
+                                                <span>
+                                                    {t(
+                                                        "analysis.chartCategory",
+                                                    )}
+                                                </span>
+                                                <select
+                                                    value={chartX}
+                                                    onChange={(event) =>
+                                                        setChartX(
+                                                            event.target.value,
+                                                        )
+                                                    }
+                                                    className="rounded-md border bg-background px-2 py-1"
+                                                >
+                                                    {availableChartColumns.ids.map(
+                                                        (id) => (
+                                                            <option
+                                                                key={id}
+                                                                value={id}
+                                                            >
+                                                                {analysisColumnLabel(
+                                                                    displayedResult,
+                                                                    id,
+                                                                    presentationDatasets,
+                                                                    t,
+                                                                )}
+                                                            </option>
+                                                        ),
+                                                    )}
+                                                </select>
+                                            </label>
+                                            <label className="grid gap-1 text-sm">
+                                                <span>
+                                                    {t("analysis.chartValue")}
+                                                </span>
+                                                <select
+                                                    value={chartY}
+                                                    onChange={(event) =>
+                                                        setChartY(
+                                                            event.target.value,
+                                                        )
+                                                    }
+                                                    className="rounded-md border bg-background px-2 py-1"
+                                                >
+                                                    {!chartY && (
+                                                        <option value="">
+                                                            —
+                                                        </option>
+                                                    )}
+                                                    {availableChartColumns.numericIds.map(
+                                                        (id) => (
+                                                            <option
+                                                                key={id}
+                                                                value={id}
+                                                            >
+                                                                {analysisColumnLabel(
+                                                                    displayedResult,
+                                                                    id,
+                                                                    presentationDatasets,
+                                                                    t,
+                                                                )}
+                                                            </option>
+                                                        ),
+                                                    )}
+                                                </select>
+                                            </label>
+                                        </div>
+                                        {!chartY ? (
+                                            <p className="text-sm text-muted-foreground">
+                                                {t("analysis.chartNoNumeric")}
+                                            </p>
+                                        ) : completeForChart ? (
+                                            <div className="space-y-2">
+                                                {chartValues
+                                                    .slice(0, 30)
+                                                    .map((row, index) => (
+                                                        <div
+                                                            key={`${row.label}-${index}`}
+                                                            className="grid grid-cols-[minmax(0,10rem)_minmax(2rem,1fr)_auto] items-center gap-2 text-xs"
+                                                        >
+                                                            <span className="truncate">
+                                                                {row.label}
+                                                            </span>
+                                                            <div className="h-3 rounded-full bg-primary/15">
+                                                                <div
+                                                                    className="h-3 rounded-full bg-primary"
+                                                                    style={{
+                                                                        width: `${maxChart ? (Math.abs(row.value) / maxChart) * 100 : 0}%`,
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                            <span className="text-right tabular-nums">
+                                                                {
+                                                                    row.formattedValue
+                                                                }
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                            </div>
+                                        ) : (
+                                            <p className="text-sm text-muted-foreground">
+                                                {t(
+                                                    "analysis.chartNeedsComplete",
+                                                )}
+                                            </p>
+                                        )}
+                                    </CardContent>
+                                </TabsContent>
+                                <TabsContent value="pivot" className="mt-0">
+                                    {pivotReady ? (
+                                        <CardContent>
+                                            <PivotTable
+                                                result={displayedResult}
+                                                datasets={presentationDatasets}
+                                                rowId={plan.groups[0]}
+                                                columnId={plan.groups[1]}
+                                                valueId={plan.measures[0]}
+                                            />
+                                        </CardContent>
+                                    ) : (
+                                        <CardContent>
+                                            <p className="text-sm text-muted-foreground">
+                                                {t("analysis.pivotHelp")}
+                                            </p>
+                                        </CardContent>
+                                    )}
+                                </TabsContent>
+                            </Tabs>
                         </Card>
                     )}
 
@@ -1765,112 +2172,9 @@ export default function AnalysisWorkspacePage() {
                             <CardContent>
                                 <ResultTable
                                     result={drillResult}
+                                    datasets={catalogQuery.data?.datasets ?? []}
                                     onSort={() => {}}
                                 />
-                            </CardContent>
-                        </Card>
-                    )}
-
-                    {pivotReady && displayedResult && (
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>{t("analysis.pivot")}</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <PivotTable
-                                    result={displayedResult}
-                                    rowId={plan.groups[0]}
-                                    columnId={plan.groups[1]}
-                                    valueId={plan.measures[0]}
-                                />
-                            </CardContent>
-                        </Card>
-                    )}
-
-                    {displayedResult && (
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>{t("analysis.chart")}</CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-3">
-                                <div className="flex gap-2">
-                                    <label className="grid gap-1 text-sm">
-                                        <span>
-                                            {t("analysis.chartCategory")}
-                                        </span>
-                                        <select
-                                            value={chartX}
-                                            onChange={(event) =>
-                                                setChartX(event.target.value)
-                                            }
-                                            className="rounded-md border bg-background px-2 py-1"
-                                        >
-                                            {availableChartColumns.ids.map(
-                                                (id) => (
-                                                    <option key={id}>
-                                                        {id}
-                                                    </option>
-                                                ),
-                                            )}
-                                        </select>
-                                    </label>
-                                    <label className="grid gap-1 text-sm">
-                                        <span>{t("analysis.chartValue")}</span>
-                                        <select
-                                            value={chartY}
-                                            onChange={(event) =>
-                                                setChartY(event.target.value)
-                                            }
-                                            className="rounded-md border bg-background px-2 py-1"
-                                        >
-                                            {!chartY && (
-                                                <option value="">—</option>
-                                            )}
-                                            {availableChartColumns.numericIds.map(
-                                                (id) => (
-                                                    <option key={id}>
-                                                        {id}
-                                                    </option>
-                                                ),
-                                            )}
-                                        </select>
-                                    </label>
-                                </div>
-                                {!chartY ? (
-                                    <p className="text-sm text-muted-foreground">
-                                        {t("analysis.chartNoNumeric")}
-                                    </p>
-                                ) : completeForChart ? (
-                                    <div className="space-y-2">
-                                        {chartValues
-                                            .slice(0, 30)
-                                            .map((row, index) => (
-                                                <div
-                                                    key={`${row.label}-${index}`}
-                                                    className="grid grid-cols-[10rem_1fr_5rem] items-center gap-2 text-xs"
-                                                >
-                                                    <span className="truncate">
-                                                        {row.label}
-                                                    </span>
-                                                    <div className="h-3 rounded-full bg-primary/15">
-                                                        <div
-                                                            className="h-3 rounded-full bg-primary"
-                                                            style={{
-                                                                width: `${maxChart ? (Math.abs(row.value) / maxChart) * 100 : 0}%`,
-                                                            }}
-                                                        />
-                                                    </div>
-                                                    <span className="text-right tabular-nums">
-                                                        {row.value}
-                                                    </span>
-                                                </div>
-                                            ))}
-                                    </div>
-                                ) : (
-                                    <p className="text-sm text-muted-foreground">
-                                        {t("analysis.chartNeedsComplete")}
-                                    </p>
-                                )}
                             </CardContent>
                         </Card>
                     )}
@@ -1880,6 +2184,9 @@ export default function AnalysisWorkspacePage() {
                     <Card>
                         <CardHeader>
                             <CardTitle>{t("analysis.saveTitle")}</CardTitle>
+                            <p className="text-sm text-muted-foreground">
+                                {t("analysis.saveHelp")}
+                            </p>
                         </CardHeader>
                         <CardContent className="space-y-3">
                             <Label htmlFor="analysis-name">
@@ -1893,17 +2200,28 @@ export default function AnalysisWorkspacePage() {
                                 }
                                 placeholder={t("analysis.namePlaceholder")}
                             />
-                            <Label htmlFor="analysis-sources">
-                                {t("analysis.sourcesLabel")}
-                            </Label>
-                            <Textarea
-                                id="analysis-sources"
-                                value={sourceReferences}
-                                onChange={(event) =>
-                                    setSourceReferences(event.target.value)
-                                }
-                                placeholder={t("analysis.sourcesPlaceholder")}
-                            />
+                            <details className="rounded-lg border border-border/60 p-3">
+                                <summary className="cursor-pointer text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 rounded-sm">
+                                    {t("analysis.sourcesLabel")}
+                                </summary>
+                                <div className="pt-3 space-y-2">
+                                    <Label htmlFor="analysis-sources">
+                                        {t("analysis.sourcesLabel")}
+                                    </Label>
+                                    <Textarea
+                                        id="analysis-sources"
+                                        value={sourceReferences}
+                                        onChange={(event) =>
+                                            setSourceReferences(
+                                                event.target.value,
+                                            )
+                                        }
+                                        placeholder={t(
+                                            "analysis.sourcesPlaceholder",
+                                        )}
+                                    />
+                                </div>
+                            </details>
                             <details>
                                 <summary className="cursor-pointer text-sm font-medium">
                                     {t("analysis.runPreferences")}
@@ -2018,26 +2336,40 @@ export default function AnalysisWorkspacePage() {
                                     {t("analysis.preferencePrecedence")}
                                 </p>
                             </details>
-                            <AnalysisInterchangePanel
-                                result={displayedResult}
-                                name={exportContext?.name ?? "analysis"}
-                                timezone={
-                                    exportContext?.timezone ?? reportingTimezone
-                                }
-                                workspace={
-                                    exportContext?.workspace ?? workspace
-                                }
-                                definitionId={exportContext?.definitionId}
-                                definitionVersion={
-                                    exportContext?.definitionVersion
-                                }
-                                datasetIds={exportContext?.datasetIds ?? []}
-                                sourceReferences={
-                                    exportContext?.sourceReferences ?? []
-                                }
-                                scenarioModel={scenarioModel}
-                                onScenarioModelChange={setScenarioModel}
-                            />
+                            <details>
+                                <summary className="cursor-pointer rounded-sm text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                                    {t("analysis.filesAndScenarios")}
+                                </summary>
+                                <div className="mt-3">
+                                    <AnalysisInterchangePanel
+                                        result={displayedResult}
+                                        name={exportContext?.name ?? "analysis"}
+                                        timezone={
+                                            exportContext?.timezone ??
+                                            reportingTimezone
+                                        }
+                                        workspace={
+                                            exportContext?.workspace ??
+                                            workspace
+                                        }
+                                        definitionId={
+                                            exportContext?.definitionId
+                                        }
+                                        definitionVersion={
+                                            exportContext?.definitionVersion
+                                        }
+                                        datasetIds={
+                                            exportContext?.datasetIds ?? []
+                                        }
+                                        sourceReferences={
+                                            exportContext?.sourceReferences ??
+                                            []
+                                        }
+                                        scenarioModel={scenarioModel}
+                                        onScenarioModelChange={setScenarioModel}
+                                    />
+                                </div>
+                            </details>
                             <details>
                                 <summary className="cursor-pointer text-sm font-medium">
                                     {t("analysis.formulasAndAssumptions")}
@@ -2087,6 +2419,7 @@ export default function AnalysisWorkspacePage() {
                             </details>
                             <Button
                                 className="w-full"
+                                variant="outline"
                                 onClick={() => saveMutation.mutate()}
                                 disabled={
                                     !displayedResult || saveMutation.isPending

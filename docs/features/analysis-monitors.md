@@ -2,7 +2,7 @@
 title: Analysis Monitors
 type: feature
 status: active
-date: 2026-09-27
+date: 2026-09-30
 tags: [feature, analysis, monitoring, research, dossiers, notifications]
 description: Local scheduled checks for saved-analysis thresholds and dossier evidence changes, with durable observations and an in-app inbox.
 aliases: [saved analysis conditions, evidence change monitors]
@@ -62,3 +62,5 @@ form, focus moves to it so the value can be corrected.
 ## Loading recovery
 
 Rules, target analyses and dossiers, observations, and the inbox offer Retry when loading fails. A failed request does not also claim the list is empty. Available cached rules, observations, and notifications remain visible with the failure message. Retrying preserves the current rule form and selection.
+
+Rules, observations and inbox sections announce initial loading rather than leaving an unexplained blank area. Inbox actions wrap within narrow windows.

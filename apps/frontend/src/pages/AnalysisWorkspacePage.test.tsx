@@ -9,6 +9,8 @@ import { apiClient } from "@/lib/api";
 import { downloadBlob } from "@/lib/downloadBlob";
 import AnalysisWorkspacePage from "@/pages/AnalysisWorkspacePage";
 
+const presentation = vi.hoisted(() => ({ language: "en" as "en" | "nl" }));
+
 vi.mock("@/lib/downloadBlob", () => ({ downloadBlob: vi.fn() }));
 
 vi.mock("@/stores/hydration/LanguageHydration", async (importOriginal) => {
@@ -17,16 +19,17 @@ vi.mock("@/stores/hydration/LanguageHydration", async (importOriginal) => {
             typeof import("@/stores/hydration/LanguageHydration")
         >();
     const { default: en } = await import("@/locales/en");
+    const { default: nl } = await import("@/locales/nl");
     return {
         ...actual,
         useLanguage: () => ({
-            language: "en" as const,
+            language: presentation.language,
             setLanguage: vi.fn(),
             t: (key: string, params: Record<string, string | number> = {}) =>
                 Object.entries(params).reduce(
                     (text, [name, value]) =>
                         text.replaceAll(`{${name}}`, String(value)),
-                    en[key] ?? key,
+                    (presentation.language === "nl" ? nl : en)[key] ?? key,
                 ),
         }),
     };
@@ -138,6 +141,7 @@ const savedChartAnalysis = {
 describe("AnalysisWorkspacePage", () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        presentation.language = "en";
         vi.spyOn(apiClient, "getAnalysisCatalog").mockResolvedValue(
             catalog as never,
         );
@@ -145,6 +149,38 @@ describe("AnalysisWorkspacePage", () => {
         vi.spyOn(apiClient, "executeAnalysis").mockResolvedValue(
             result as never,
         );
+    });
+
+    it("uses Dutch catalog and result labels without changing query identifiers", async () => {
+        presentation.language = "nl";
+        const user = userEvent.setup();
+        renderPage();
+        await screen.findByText("Kasstromen");
+        expect(
+            screen.getAllByRole("checkbox", { name: "Maand" }).length,
+        ).toBeGreaterThan(0);
+        const { default: nl } = await import("@/locales/nl");
+        await user.click(
+            screen.getByRole("button", { name: nl["analysis.run"] }),
+        );
+        expect(
+            await screen.findByRole("button", { name: "Uitgaven" }),
+        ).toBeInTheDocument();
+        await user.click(
+            screen.getByRole("tab", { name: nl["analysis.chart"] }),
+        );
+        expect(
+            screen.getAllByRole("option", { name: "Uitgaven" }),
+        ).toHaveLength(2);
+        expect(screen.getByLabelText(nl["analysis.chartValue"])).toHaveValue(
+            "sum_spending",
+        );
+        await user.click(
+            screen.getByRole("tab", { name: nl["analysis.pivot"] }),
+        );
+        expect(
+            screen.getByRole("columnheader", { name: "Maand" }),
+        ).toBeInTheDocument();
     });
 
     it("marks changed queries as outdated until a successful rerun", async () => {
@@ -173,6 +209,62 @@ describe("AnalysisWorkspacePage", () => {
         );
     });
 
+    it("shows one result view and preserves chart choices when switching views", async () => {
+        const user = userEvent.setup();
+        renderPage();
+        await screen.findByText("Cash flows");
+        await user.click(screen.getByRole("button", { name: "Run" }));
+        const table = await screen.findByRole("tab", { name: "Table" });
+        expect(table).toHaveAttribute("aria-selected", "true");
+        expect(
+            screen.queryByLabelText("Category axis"),
+        ).not.toBeInTheDocument();
+        await user.click(screen.getByRole("tab", { name: "Chart" }));
+        await user.selectOptions(
+            screen.getByLabelText("Category axis"),
+            "category_general",
+        );
+        await user.click(table);
+        expect(
+            screen.queryByLabelText("Category axis"),
+        ).not.toBeInTheDocument();
+        await user.click(screen.getByRole("tab", { name: "Chart" }));
+        expect(screen.getByLabelText("Category axis")).toHaveValue(
+            "category_general",
+        );
+        await user.click(
+            screen.getByRole("button", { name: "Remove filter 1: Transfer" }),
+        );
+        expect(await screen.findByText(/Results need updating/)).toBeVisible();
+    });
+
+    it("keeps SQL aliases that resemble catalog identifiers in result labels", async () => {
+        vi.mocked(apiClient.listSavedAnalyses).mockResolvedValue([
+            {
+                ...savedChartAnalysis,
+                definition: {
+                    source: {
+                        kind: "custom-sql",
+                        sql: "SELECT amount AS sum_spending",
+                        datasets: ["cash-flows"],
+                    },
+                },
+            },
+        ] as never);
+        const user = userEvent.setup();
+        renderPage();
+        await user.click(
+            await screen.findByRole("button", { name: "Monthly cashflow" }),
+        );
+        expect(
+            screen.getByRole("button", { name: "sum_spending" }),
+        ).toBeInTheDocument();
+        await user.click(screen.getByRole("tab", { name: "Chart" }));
+        expect(
+            screen.getAllByRole("option", { name: "sum_spending" }),
+        ).toHaveLength(2);
+    });
+
     it.each([
         { charts: [], expectedX: "month", expectedY: "sum_spending" },
         {
@@ -196,11 +288,12 @@ describe("AnalysisWorkspacePage", () => {
             await user.click(
                 await screen.findByRole("button", { name: "Monthly cashflow" }),
             );
+            await user.click(screen.getByRole("tab", { name: "Chart" }));
             expect(screen.getByLabelText("Category axis")).toHaveValue(
                 expectedX,
             );
             expect(screen.getByLabelText("Value axis")).toHaveValue(expectedY);
-            expect(screen.getByText("12.3")).toBeInTheDocument();
+            expect(screen.getByText("12,30")).toBeInTheDocument();
         },
     );
 
@@ -224,6 +317,7 @@ describe("AnalysisWorkspacePage", () => {
             screen.getByRole("button", { name: "Save new version" }),
         ).toBeDisabled();
         await user.click(screen.getByRole("button", { name: "Run" }));
+        await user.click(await screen.findByRole("tab", { name: "Chart" }));
         await waitFor(() =>
             expect(screen.getByLabelText("Category axis")).toHaveValue(
                 "category_general",
@@ -396,6 +490,15 @@ describe("AnalysisWorkspacePage", () => {
             .getByRole("button", { name: /Category spending/, hidden: true })
             .closest("details")!;
         expect(chooser).not.toHaveAttribute("open");
+        expect(screen.getByText("Edit configuration")).toHaveFocus();
+        const editor = screen
+            .getByText("Edit configuration")
+            .closest("details")!;
+        expect(editor).not.toHaveAttribute("open");
+        expect(screen.getByLabelText("Dataset")).not.toBeVisible();
+        expect(screen.getByRole("button", { name: "Run" })).toBeEnabled();
+        await user.click(screen.getByText("Edit configuration"));
+        expect(editor).toHaveAttribute("open");
         const nameInput = screen.getByLabelText("Analysis name");
         await user.clear(nameInput);
         await user.type(nameInput, "My edited analysis");
@@ -416,6 +519,24 @@ describe("AnalysisWorkspacePage", () => {
                 }),
             ),
         );
+    });
+
+    it("reveals template configuration after a failed run", async () => {
+        const user = userEvent.setup();
+        vi.mocked(apiClient.executeAnalysis).mockRejectedValueOnce(
+            new Error("Invalid configuration"),
+        );
+        renderPage();
+        await user.click(
+            await screen.findByRole("button", { name: /Category spending/ }),
+        );
+        const editor = screen
+            .getByText("Edit configuration")
+            .closest("details")!;
+        expect(editor).not.toHaveAttribute("open");
+        await user.click(screen.getByRole("button", { name: "Run" }));
+        await screen.findByRole("alert");
+        expect(editor).toHaveAttribute("open");
     });
 
     it("restores saved output ordering when reopening and running an analysis", async () => {
@@ -484,7 +605,7 @@ describe("AnalysisWorkspacePage", () => {
         const chooser = blank.closest("details")!;
         await user.click(blank);
         expect(chooser).not.toHaveAttribute("open");
-        expect(chooser.querySelector("summary")).toHaveFocus();
+        expect(screen.getByText("Edit configuration")).toHaveFocus();
         expect(screen.getByLabelText("Analysis name")).toHaveValue("");
         expect(
             screen.getByRole("button", { name: "Visual builder" }),
@@ -550,6 +671,7 @@ describe("AnalysisWorkspacePage", () => {
         await screen.findAllByText("Food");
         await user.clear(nameInput);
         await user.type(nameInput, "Changed after run");
+        await user.click(screen.getByText("Export and scenario files"));
         await user.click(
             screen.getByRole("button", { name: "Export safe CSV" }),
         );
