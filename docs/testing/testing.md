@@ -2,7 +2,7 @@
 title: Testing Documentation
 type: testing
 status: active
-date: 2026-09-25
+date: 2026-09-30
 updated: 2026-09-25
 last-updated: 2026-09-25
 last_updated_timestamp: 2026-09-25T00:00:00Z
@@ -135,6 +135,21 @@ A plain `bun run test` exits 0 while omitting several hundred DB-backed cases, a
 Run `bun run test:db` explicitly when database behavior or migrations change. It creates a
 disposable PostgreSQL cluster; `bun run test` alone reports skipped database-backed cases.
 
+### Destination Host HTTP smoke tests
+
+From `apps/node-backend`, run:
+
+```bash
+bun vitest run tests/hostGuard.test.js tests/hostGuardHttp.test.js
+```
+
+The socket suite exercises local health, SPA and API fixtures through the real Host middleware,
+rejects missing/duplicate/hostile authorities before preflight, body parsing and route effects,
+and covers a local proxy that either preserves an allowed public Host or rewrites it after
+checking the public authority. It requires loopback listeners. These fixtures complement the
+installed native Demo and deployed proxy acceptance checks; they do not validate a deployment's
+proxy configuration or the packaged runtime.
+
 ### Frontend Tests
 
 ```bash
@@ -216,6 +231,21 @@ apps/node-backend/tests/
 │   ├── revolutAdapter.test.js
 │   └── ...
 ```
+
+### Destination Host HTTP smoke tests
+
+From `apps/node-backend`, run:
+
+```bash
+bun vitest run tests/hostGuard.test.js tests/hostGuardHttp.test.js
+```
+
+The socket suite exercises local health, SPA and API fixtures through the real Host middleware,
+rejects missing/duplicate/hostile authorities before preflight, body parsing and route effects,
+and covers a local proxy that either preserves an allowed public Host or rewrites it after
+checking the public authority. It requires loopback listeners. These fixtures complement the
+installed native Demo and deployed proxy acceptance checks; they do not validate a deployment's
+proxy configuration or the packaged runtime.
 
 ### Frontend Tests
 
@@ -1324,6 +1354,25 @@ bun vitest run --reporter=basic --only --update
 # Debug with browser (if UI tests)
 bun vitest --ui
 ```
+
+## Non-analysis queue acceptance
+
+Run from the repository root:
+
+```bash
+bun run test:db tests/plannedExecutionConcurrency.db.test.js tests/historicalFxFallback.db.test.js tests/recipientMergeConcurrency.db.test.js tests/transactionRepository.db.test.js tests/portfolioImportSavepointRelease.db.test.js tests/settingsConflicts.db.test.js
+```
+
+The savepoint suite uses real PostgreSQL CHECK failures for a trade and a cash row, observes
+rollback/release before staging-error persistence, and independently checks successful siblings
+and counters. The settings suite tests concurrent absent-key creation, stale replacement/deletion,
+JSON null, and atomic bulk rollback. No inherited real database is used by the disposable wrapper.
+An unavailable database does not establish these acceptance properties.
+
+Listener-free checks cover daily-job checkpoints/retries, settings predicates and queues, and
+synthetic forecast benchmarks. Native/proxy Host acceptance additionally needs live legitimate,
+hostile and duplicate Host requests before OPTIONS/body/route effects; proxy preservation and
+rewriting policies must be verified independently. Use the synthetic Vision Demo for native checks.
 
 ## Related Documentation
 
