@@ -7,8 +7,6 @@ import {
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CardSheen } from "@/components/shared/CardSheen";
-import { TrendHue } from "@/components/shared/TrendHue";
 import { Money } from "@/components/shared/Money";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
@@ -97,14 +95,11 @@ export function NextSevenDaysStrip({
     });
 
     return (
-        <Card className="glass-elevated group relative overflow-hidden">
-            <TrendHue tone="neutral" />
-            <CardSheen animated />
-
+        <Card className="relative overflow-hidden">
             <CardContent variant="headerless" className="relative">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="min-w-0">
-                        <h2 className="eyebrow">
+                        <h2 className="font-sans text-sm font-medium text-muted-foreground">
                             {t("plannedPage.next7.title")}
                         </h2>
                         <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm">

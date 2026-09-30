@@ -7,7 +7,6 @@ import {
     CardTitle,
     CardDescription,
 } from "@/components/ui/card";
-import { CardSheen } from "@/components/shared/CardSheen";
 import {
     formatCurrency,
     formatCurrencyCompact,
@@ -256,12 +255,11 @@ export function BankBalancesWidget() {
                 variant="interactive"
                 className="group relative overflow-hidden"
             >
-                <CardSheen />
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
                     <CardTitle variant="label">
                         {t("bankWidget.netPosition")}
                     </CardTitle>
-                    <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/10 text-primary icon-tile-glow">
+                    <div className="h-10 w-10 rounded-xl flex items-center justify-center text-muted-foreground">
                         <Wallet className="h-5 w-5" />
                     </div>
                 </CardHeader>

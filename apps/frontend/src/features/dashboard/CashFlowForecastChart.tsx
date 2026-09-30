@@ -7,7 +7,6 @@
  */
 
 import { useState, useCallback } from "react";
-import { CardSheen } from "@/components/shared/CardSheen";
 import { useSearchParams } from "react-router";
 import { FlaskConical } from "lucide-react";
 
@@ -374,7 +373,6 @@ export function CashFlowForecastChart({
 
     return (
         <Card className="relative overflow-hidden lg:col-span-2">
-            <CardSheen />
             <CardHeader className="space-y-3">
                 <div>
                     <CardTitle variant="sm">

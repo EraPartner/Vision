@@ -1,29 +1,23 @@
 import { type ReactNode } from "react";
-import { CardSheen } from "@/components/shared/CardSheen";
 import { cva, type VariantProps } from "class-variance-authority";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RollingNumber } from "@/components/shared/RollingNumber";
 import { DeltaPill } from "@/components/shared/DeltaPill";
-import { TrendHue, type TrendTone } from "@/components/shared/TrendHue";
 import { CompactValueDisclosure } from "@/components/shared/TouchDisclosure";
 import { cn } from "@/lib/utils";
 import { LucideIcon } from "lucide-react";
 import { Link } from "react-router";
 
-/**
- * The app's shared stat tile. Every KPI/summary card composes this — page-specific
- * content, shared anatomy (title + trend-toned icon chip, odometer value,
- * DeltaPill / hint line). `size="compact"` is the dense 4-6-up summary rows on
- * the portfolio asset pages; the default size is the dashboard/overview tile.
- */
+/** Shared supporting metric tile. Primary emphasis is reserved for a page's
+ * selected total; only linked tiles advertise full-card activation. */
 
 const statHeaderVariants = cva(
     "flex flex-row items-center justify-between space-y-0",
     {
         variants: {
             size: {
-                default: "pb-3",
+                default: "px-5 pt-5 pb-2",
                 compact: "pb-1 pt-3 px-4",
             },
         },
@@ -34,8 +28,8 @@ const statHeaderVariants = cva(
 const statChipVariants = cva("flex items-center justify-center shrink-0", {
     variants: {
         size: {
-            default: "h-10 w-10 rounded-xl icon-tile-glow",
-            compact: "h-6 w-6 rounded-md",
+            default: "h-4 w-4",
+            compact: "h-4 w-4",
         },
     },
     defaultVariants: { size: "default" },
@@ -44,7 +38,7 @@ const statChipVariants = cva("flex items-center justify-center shrink-0", {
 const statContentVariants = cva("", {
     variants: {
         size: {
-            default: "",
+            default: "px-5 pb-5",
             compact: "pb-3 px-4",
         },
     },
@@ -54,7 +48,7 @@ const statContentVariants = cva("", {
 const statValueVariants = cva("font-bold tabular-nums", {
     variants: {
         size: {
-            default: "text-3xl",
+            default: "text-2xl",
             compact: "text-xl",
         },
     },
@@ -90,6 +84,8 @@ interface StatCardProps {
     /** Override the headline value colour (e.g. "text-primary" for a featured total). Defaults to neutral foreground. */
     valueClassName?: string;
     size?: StatCardSize;
+    /** Deliberate emphasis for one primary total, rather than every metric. */
+    emphasis?: "secondary" | "primary";
     /** Render a skeleton in the value slot while the data is still loading. */
     loading?: boolean;
     className?: string;
@@ -106,35 +102,17 @@ export function StatCard({
     changeType = "neutral",
     subtitle,
     icon: Icon,
-    trend = "neutral",
+    trend: _trend = "neutral",
     formatValue,
     titleValue,
     odometer = true,
     valueClassName = "text-foreground",
     size = "default",
+    emphasis = "secondary",
     loading = false,
     className,
     children,
 }: StatCardProps) {
-    const normalisedTrend =
-        trend === "up" ? "income" : trend === "down" ? "expense" : trend;
-
-    const tone: TrendTone =
-        normalisedTrend === "income"
-            ? "gain"
-            : normalisedTrend === "expense"
-              ? "loss"
-              : "neutral";
-
-    const iconBg =
-        {
-            income: "bg-gradient-to-br from-gain/20 to-gain/10 text-gain",
-            expense: "bg-gradient-to-br from-loss/20 to-loss/10 text-loss",
-            neutral:
-                "bg-gradient-to-br from-primary/20 to-primary/10 text-primary",
-        }[normalisedTrend] ??
-        "bg-gradient-to-br from-primary/20 to-primary/10 text-primary";
-
     const displayValue =
         numericValue !== undefined && formatValue
             ? formatValue(numericValue)
@@ -142,9 +120,10 @@ export function StatCard({
 
     return (
         <Card
-            variant="interactive"
+            variant={to ? "interactive" : "static"}
             className={cn(
-                "glass-elevated group relative overflow-hidden h-full",
+                "relative overflow-hidden h-full",
+                emphasis === "primary" && "glass-elevated border-primary/25",
                 className,
             )}
         >
@@ -152,21 +131,25 @@ export function StatCard({
                 <Link
                     to={to}
                     aria-label={title}
-                    className="absolute inset-0 z-10 rounded-[inherit] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2"
+                    className="absolute inset-0 z-10 rounded-[inherit] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 />
             )}
-            <TrendHue tone={tone} />
-            <CardSheen animated />
             <div className={cn(to && "pointer-events-none relative z-20")}>
                 <CardHeader className={statHeaderVariants({ size })}>
                     <CardTitle variant="label">{title}</CardTitle>
                     {Icon && (
-                        <div className={cn(statChipVariants({ size }), iconBg)}>
+                        <div
+                            className={cn(
+                                statChipVariants({ size }),
+                                "text-muted-foreground",
+                            )}
+                        >
                             <Icon
+                                aria-hidden="true"
                                 className={
                                     size === "compact"
                                         ? "h-3.5 w-3.5"
-                                        : "h-5 w-5"
+                                        : "h-4 w-4"
                                 }
                             />
                         </div>

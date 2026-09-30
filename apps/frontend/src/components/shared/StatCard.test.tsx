@@ -2,9 +2,60 @@
 import { describe, expect, test } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { StatCard } from "./StatCard";
-import { MemoryRouter } from "react-router";
+import { MemoryRouter, useLocation } from "react-router";
+import userEvent from "@testing-library/user-event";
 
 describe("shared StatCard odometer opt-out", () => {
+    test.each(["secondary", "primary"] as const)(
+        "keeps %s metrics informational unless linked",
+        (emphasis) => {
+            render(
+                <StatCard
+                    title="Portfolio value"
+                    value="€120"
+                    emphasis={emphasis}
+                />,
+            );
+            expect(
+                screen.getByRole("heading", { name: "Portfolio value" }),
+            ).toBeVisible();
+            expect(screen.queryByRole("link")).not.toBeInTheDocument();
+            expect(screen.queryByRole("button")).not.toBeInTheDocument();
+        },
+    );
+
+    test("allows keyboard drill-down while exact values remain independently accessible", async () => {
+        const user = userEvent.setup();
+        function Location() {
+            return (
+                <output aria-label="Current route">
+                    {useLocation().pathname}
+                </output>
+            );
+        }
+        render(
+            <MemoryRouter>
+                <StatCard
+                    title="Income"
+                    value="€1.2M"
+                    titleValue="€1,234,567.89"
+                    to="/transactions"
+                    emphasis="primary"
+                />
+                <Location />
+            </MemoryRouter>,
+        );
+        await user.click(screen.getByRole("button", { name: "€1,234,567.89" }));
+        expect(screen.getByText("€1,234,567.89")).toBeVisible();
+        expect(screen.getByLabelText("Current route")).toHaveTextContent("/");
+        await user.keyboard("{Escape}");
+        screen.getByRole("link", { name: "Income" }).focus();
+        await user.keyboard("{Enter}");
+        expect(screen.getByLabelText("Current route")).toHaveTextContent(
+            "/transactions",
+        );
+    });
+
     test("renders a non-numeric value as plain text (spaces preserved, no digit reels)", () => {
         const { container, getByText } = render(
             <StatCard

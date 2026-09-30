@@ -34,13 +34,15 @@ describe("CardTitle typography", () => {
         expect(statCard).not.toContain("statTitleVariants");
     });
 
-    it("keeps the smallest display variant at text-lg and labels on the body eyebrow role", () => {
+    it("keeps the smallest display variant at text-lg and labels on the readable body role", () => {
         const primitive = readFileSync(
             join(process.cwd(), "src/components/ui/card.tsx"),
             "utf8",
         );
         expect(primitive).toContain('sm: "font-display text-lg');
-        expect(primitive).toContain('label: "eyebrow"');
+        expect(primitive).toContain(
+            'label: "font-sans text-sm font-medium text-muted-foreground"',
+        );
         expect(primitive).not.toMatch(/font-display text-(?:2xs|xs|sm|base)\b/);
     });
 

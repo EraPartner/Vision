@@ -15,7 +15,7 @@ export function PageHeader({
     title,
     subtitle,
     icon: Icon,
-    iconColor = "from-primary/20 to-primary/5 text-primary",
+    iconColor = "text-muted-foreground",
     actions,
 }: PageHeaderProps) {
     // Register the title so the topbar can show it when this header scrolls out.
@@ -27,16 +27,16 @@ export function PageHeader({
 
     return (
         <div className="canvas-text flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-            <div className="flex items-center gap-4">
+            <div className="flex min-w-0 items-center gap-3">
                 {Icon && (
                     <div
                         className={cn(
-                            "hidden sm:flex h-12 w-12 shrink-0 rounded-xl bg-gradient-to-br",
+                            "hidden sm:flex h-9 w-9 shrink-0 rounded-lg bg-gradient-to-br",
                             iconColor,
-                            "items-center justify-center icon-tile-glow",
+                            "items-center justify-center",
                         )}
                     >
-                        <Icon className="h-6 w-6" />
+                        <Icon className="h-5 w-5" aria-hidden />
                     </div>
                 )}
                 <div>

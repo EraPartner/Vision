@@ -73,7 +73,7 @@ The UI primitives use a shared surface system defined in [[apps/frontend/src/ind
 | `.glass-regular`  | 20px | Explicit stronger content material and non-Card glass panes                                                                                                                                                  |
 | `.glass-chrome`   | 24px | Sidebar, AppLayout topbar — background alpha 0.55→0.72 (light) / 0.55→0.74 (dark) so aurora and Electron vibrancy glow through the blur                                                                      |
 | `.glass-thick`    | 28px | All floating overlays: Modal dialogs (Dialog, AlertDialog, Sheet), Sonner toasts **and** the full popover family (Popover, DropdownMenu/SubContent, SelectContent, ContextMenu, MenuBar, HoverCard, Tooltip) |
-| `.glass-elevated` | 32px | Dashboard hero cards (StatCard, NetSummaryCard)                                                                                                                                                              |
+| `.glass-elevated` | 32px | Explicit primary StatCards and Dashboard NetSummaryCard                                                                                                                                                              |
 
 All glass tiers include `saturate(var(--glass-saturate))` — 180% in light mode, 150% in dark. Thick and elevated tiers add lensing edges (inset specular + concave shade + drop shadow).
 
@@ -124,9 +124,9 @@ reduced-motion gate.
 
 Code links: [[apps/frontend/src/index.css]], [[apps/frontend/src/styles/tokens.css]], [[apps/frontend/src/components/ui/card.tsx]], [[apps/frontend/src/components/ui/dialog.tsx]], [[apps/frontend/src/components/ui/input.tsx]], [[apps/frontend/src/components/ui/button.tsx]]
 
-`CardTitle` has three named typography roles: `default` for a 2xl display title,
+`CardTitle` has three named typography roles: `default` for an xl display title,
 `sm` for the smallest supported display title (`text-lg`), and `label` for the
-body-font eyebrow role used by KPI labels. Call sites do not downsize the display
+readable `text-sm` body role used by metric labels. Call sites do not downsize the display
 face with `text-xs`, `text-sm`, or `text-base` overrides.
 
 Its semantic heading level is independent of typography. `CardTitle` defaults to
@@ -978,3 +978,7 @@ Shared chart tooltip numeric rendering is hardened to be zero-safe and robust fo
 Currency and percent formatting now resolves locale and decimal settings through [[apps/frontend/src/hooks/useCurrencyFormatter.ts]]. `Money` and chart currency adapters compose the same resolver and the pure utilities accept explicit configuration, so rendering no longer depends on an `App.tsx` bootstrap effect.
 
 Code links: `apps/frontend/src/components/charts/` (chart.tsx removed in ADR-018 visx/d3 migration), [[apps/frontend/src/utils/currency.ts]], [[apps/frontend/src/pages/StatisticsPage.tsx]]
+
+## Scanning hierarchy
+
+[[docs/adr/172-calm-information-hierarchy|ADR-172]] reserves prominent surfaces for selected totals. `StatCard` defaults to secondary emphasis; `emphasis="primary"` opts into elevated glass and a restrained accent border. Only tiles with a destination advertise whole-card interaction. Page headers use a small muted icon by default, preserving explicit semantic overrides. Badges and table headings use body text without forced capitals or wide tracking; severity colors and focus treatments remain intact. Resting card shadows are reduced while material and interactive states remain distinct.

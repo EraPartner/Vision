@@ -1,7 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { CardSheen } from "@/components/shared/CardSheen";
-import { TrendHue } from "@/components/shared/TrendHue";
 import { DeltaPill } from "@/components/shared/DeltaPill";
 import { Money } from "@/components/shared/Money";
 import { RollingNumber } from "@/components/shared/RollingNumber";
@@ -82,18 +80,12 @@ export function MonthlyRhythm({ data }: MonthlyRhythmProps) {
     const scrubbing = activeIndex !== null;
 
     return (
-        <Card
-            variant="interactive"
-            className="glass-elevated group relative overflow-hidden"
-        >
-            <TrendHue tone={shown.net >= 0 ? "gain" : "loss"} />
-            <CardSheen animated />
-
+        <Card className="relative overflow-hidden">
             <CardContent variant="headerless" className="relative">
                 <div className="grid gap-6 lg:grid-cols-[minmax(0,19rem)_minmax(0,1fr)] lg:gap-10">
                     {/* ── Headline: the scrubbed month's net ───────────────────────── */}
                     <div className="flex flex-col">
-                        <h2 className="eyebrow">
+                        <h2 className="font-sans text-sm font-medium text-muted-foreground">
                             {t("statsPage.rhythm.title")}
                         </h2>
 

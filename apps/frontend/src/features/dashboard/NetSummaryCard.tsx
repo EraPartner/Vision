@@ -112,12 +112,9 @@ export function NetSummaryCard({
     ].join("; ");
 
     return (
-        <Card
-            variant="interactive"
-            className="glass-elevated group relative overflow-hidden flex flex-col h-full"
-        >
+        <Card className="glass-elevated group relative overflow-hidden flex flex-col h-full">
             <TrendHue tone={isPositive ? "gain" : "loss"} />
-            <CardSheen tier="hero" animated />
+            <CardSheen tier="hero" />
 
             <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
                 <div>
@@ -132,7 +129,7 @@ export function NetSummaryCard({
                 </div>
                 <div
                     className={cn(
-                        "h-11 w-11 rounded-xl flex items-center justify-center icon-tile-glow transition-transform duration-normal group-hover:scale-105 bg-gradient-to-br",
+                        "h-8 w-8 rounded-xl flex items-center justify-center bg-gradient-to-br",
                         isPositive
                             ? "from-gain/20 to-gain/10 text-gain"
                             : "from-loss/20 to-loss/10 text-loss",

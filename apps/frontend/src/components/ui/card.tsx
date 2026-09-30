@@ -5,42 +5,11 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 /**
- * Hover affordance is HIERARCHICAL, not universal (ADR-105).
- *
- * Every Card used to lift, recolor its border to primary and fade in the
- * elevated shadow on hover. Uniform affordance is no affordance: a static
- * disclaimer reacted exactly like a clickable account tile, and the
- * glass-thin / glass-elevated elevation ladder collapsed the
- * moment the pointer moved. The character is kept in full — it is now *routed*
- * to the cards that have earned it rather than sprayed across all of them.
- *
- * - `static` (default): the glass material and `premium-frame`'s resting
- *   embossed frame, unchanged. It simply sits still under the cursor.
- * - `interactive`: today's exact hover — the −2px lift, the primary border
- *   glow and the pre-rendered elevated shadow fading in — plus the press
- *   settle, because anything that lifts on hover must acknowledge the click.
- *   Use it for cards you can activate (click / navigate / open) and for
- *   hero-KPI tiles, the "something you could pick up" tier.
- *
- * There is deliberately no third `elevated` hover tier: ADR-132 specifies
- * elevation as a *material* (`glass-thin` for ordinary cards vs explicit
- * `glass-elevated` for hero tiles/KPIs), orthogonal to this variant. Inventing
- * a third hover tier would add exactly the invented sameness ADR-105 set out to
- * remove.
- *
- * The lift is a single transform. `micro-lift` used to be re-added at the call
- * sites, stacking its `transform: translateY(-1px)` on top of the base
- * `hover:-translate-y-0.5`, which in Tailwind v4 rides the separate `translate`
- * property — two transforms composing to an inconsistent −3px on some pages and
- * −2px on others. The variant now owns the lift outright.
- *
- * That same `translate`-not-`transform` detail is why the reduced-motion
- * classes below come in pairs, and why they are not the whole story: an
- * unqualified `motion-reduce:*` utility (0,1,0) loses the cascade to
- * `.hover\:-translate-y-0\.5:hover` (0,2,0), so the lift is actually cancelled
- * by `.premium-frame-interactive:hover { translate: none }` in the
- * `prefers-reduced-motion` block of index.css. These stay as the declaration of
- * intent at the call site and to cover the resting/`:active` states.
+ * Static content keeps its glass material and rests under the pointer.
+ * Use interactive only for a card whose surface activates a link or action.
+ * A prominent total is a visual emphasis choice, not a click affordance.
+ * Interactive lift uses Tailwind's translate property; reduced-motion CSS
+ * cancels it with matching specificity in index.css.
  */
 const cardVariants = cva(
     "card-material glass-thin premium-frame relative rounded-[0.75rem] text-card-foreground",
@@ -95,9 +64,9 @@ const cardTitleVariants = cva("leading-tight", {
     variants: {
         variant: {
             default:
-                "font-display text-2xl font-semibold tracking-tight text-foreground",
+                "font-display text-xl font-semibold tracking-tight text-foreground",
             sm: "font-display text-lg font-semibold tracking-tight text-foreground",
-            label: "eyebrow",
+            label: "font-sans text-sm font-medium text-muted-foreground",
         },
     },
     defaultVariants: {

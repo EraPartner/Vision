@@ -3,7 +3,7 @@ title: Frontend Architecture
 type: architecture
 status: active
 description: React frontend architecture, design system, and diagrams with liquid-glass aesthetic, visx charts, Framer Motion, and Zustand store. May 2026 Tailwind v4 migration with unified CSS architecture. June 2026 Liquid Glass v2 — atmosphere layer, saturated blur tiers, CommandPalette, optimistic mutations, route preload. June 2026 Premium v3 — RollingNumber/Money/DeltaPill, chart scrub+sync, ChartSkeleton, PageTitleContext, palette v2, ShortcutsOverlay + go-to sequences, animated tabs, workspace aurora, ShaderAurora behind visual-effects tier model (ADR-075), per-widget dashboard hydration, optimistic create. 2026-06-24: --gain/--loss CSS semantic tokens unified app-wide (tokens.css baseline, skin-v2.css Okabe-Ito overrides); gain/loss Tailwind color utilities added; colorblindGainLoss default OFF/classic.
-date: 2026-04-23
+date: 2026-09-27
 updated: 2026-09-11
 tags: [architecture, frontend, uml, plantuml, react, phase-4, phase-6, phase-9, liquid-glass, liquid-glass-v2, premium-v3, visx, framer-motion, statistics-refactoring, zustand, state-management, tailwind-v4, css-architecture, command-palette, optimistic-updates, route-preload, chart-scrub, chart-sync, shader-aurora, visual-effects-tiers, auto-adapt-display, fx-reduced, role-based-glass, glass-by-default, june-2026, gain-loss, css-tokens, skin-v2, tailwind-colors]
 aliases: [frontend architecture, react architecture, frontend design, design system]
@@ -494,7 +494,7 @@ Five saturated blur tiers (blur + `saturate(var(--glass-saturate))`):
 | `glass-regular`  | 20px | 180%/150% | Explicit stronger content material and non-Card glass panes                                                                                                                                                           |
 | `glass-chrome`   | 24px | 180%/150% | Sidebar, AppLayout topbar                                                                                                                                                                                             |
 | `glass-thick`    | 28px | 180%/150% | All floating overlays: Modal dialogs (Dialog, AlertDialog, Sheet), Sonner toasts, **and** the full popover family (Popover, DropdownMenu/SubContent, SelectContent, ContextMenu, MenuBar content, HoverCard, Tooltip) |
-| `glass-elevated` | 32px | 180%/150% | Dashboard hero cards (StatCard, NetSummaryCard)                                                                                                                                                                       |
+| `glass-elevated` | 32px | 180%/150% | Explicit primary StatCards and Dashboard NetSummaryCard                                                                                                                                                                       |
 
 Saturate: 180% in light mode, 150% in dark (tokens `--glass-saturate`).
 
@@ -1182,3 +1182,7 @@ theme flash and the former pre-mount re-tint of the static boot placeholder.
 - [[docs/components/hooks|Hooks]] - Custom hooks reference (see useTransactions optimistic mutations)
 - [[docs/reference/code-patterns#motion-consumer-pattern-phase-9|Motion Consumer Pattern]]
 - [[docs/reference/code-patterns#surface-shell-pattern-phase-9|Surface Shell Pattern]]
+
+### Calm information hierarchy
+
+[[docs/adr/172-calm-information-hierarchy|ADR-172]] makes supporting StatCards neutral and thin by default, with explicit primary emphasis for selected totals. It separates visual importance from click affordance and removes repeated decoration on ordinary chart panels. Shared section, badge and table typography supports scanning; semantic colors, glass tiers and focus indicators remain unchanged. See [[docs/components/ui-components|UI components]] for the component contract.

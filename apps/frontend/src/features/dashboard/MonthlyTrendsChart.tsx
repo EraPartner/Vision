@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import { CardSheen } from "@/components/shared/CardSheen";
 import {
     Card,
     CardContent,
@@ -119,7 +118,12 @@ export function MonthlyTrendsChart({
                     maxBarSize={40}
                     valueTickFormat={(v) => formatCompact(v).display}
                     tooltipValueFormat={(v) =>
-                        formatCurrency(v, defaultCurrency, locale, appSettings.showDecimalPlaces ?? 2)
+                        formatCurrency(
+                            v,
+                            defaultCurrency,
+                            locale,
+                            appSettings.showDecimalPlaces ?? 2,
+                        )
                     }
                 />
             </div>
@@ -163,7 +167,6 @@ export function MonthlyTrendsChart({
 
     return (
         <Card className="relative overflow-hidden">
-            <CardSheen />
             <CardHeader className="space-y-3">
                 <div>
                     <CardTitle variant="sm">

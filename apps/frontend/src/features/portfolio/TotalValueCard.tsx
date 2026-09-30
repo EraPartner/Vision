@@ -292,10 +292,7 @@ export function TotalValueCard({
         isGain === undefined ? "neutral" : isGain ? "gain" : "loss";
 
     return (
-        <Card
-            variant="interactive"
-            className="liquid-glass border relative overflow-hidden h-full"
-        >
+        <Card className="liquid-glass border relative overflow-hidden h-full">
             <TrendHue tone={tone} />
             <CardSheen tier="feature" />
             <CardHeader className="flex flex-row items-start justify-between pb-3 space-y-0">

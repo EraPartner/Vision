@@ -781,7 +781,7 @@
         box-shadow:
             0 1px 0 hsl(var(--glass-highlight) / 0.16) inset,
             0 -1px 0 hsl(var(--glass-shadow) / 0.05) inset,
-            0 8px 24px hsl(var(--glass-shadow) / 0.06);
+            0 4px 12px hsl(var(--glass-shadow) / 0.04);
     }
 
     /* Icon tiles inherit their glow from their semantic text colour. A loss,
@@ -857,7 +857,7 @@
     .dark .premium-frame {
         box-shadow:
             0 1px 0 hsl(var(--glass-highlight) / 0.06) inset,
-            0 14px 30px hsl(var(--glass-shadow) / 0.38);
+            0 5px 16px hsl(var(--glass-shadow) / 0.2);
     }
 
     .dark .premium-frame-interactive::after {
@@ -882,8 +882,8 @@
        white), so they adapt to light/dark and every theme variant.
 
        TIER POLICY — which card gets which:
-       - `.card-sheen` (default, tier="default"): the KPI/widget tier. Every
-         stat tile, chart card and panel header orb. 8rem, reads
+       - `.card-sheen` (default, tier="default"): an opt-in prominent surface.
+         Ordinary metrics and chart panels omit it (ADR-172). 8rem, reads
          --glass-highlight, so it reads as a light sheen in both modes with the
          opacity dialed back in dark to keep it a whisper rather than a smear.
        - `.card-sheen-feature` (tier="feature"): a prominent in-page feature

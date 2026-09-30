@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import { CardSheen } from "@/components/shared/CardSheen";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DonutChart, ChartLegend } from "@/components/charts";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
@@ -77,7 +76,6 @@ export function CategoryPieChart({
 
         return (
             <Card className="relative overflow-hidden">
-                <CardSheen />
                 <CardHeader>
                     <CardTitle variant="sm">{t("categoryPie.title")}</CardTitle>
                     <p className="text-sm text-muted-foreground">
@@ -95,7 +93,6 @@ export function CategoryPieChart({
 
     return (
         <Card className="relative overflow-hidden">
-            <CardSheen />
             <CardHeader>
                 <CardTitle variant="sm">{t("categoryPie.title")}</CardTitle>
                 <p className="text-sm text-muted-foreground">

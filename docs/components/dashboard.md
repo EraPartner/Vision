@@ -2,7 +2,7 @@
 title: Dashboard Components
 type: component
 status: active
-date: 2026-04-17
+date: 2026-09-27
 updated: 2026-09-08
 tags:
   [
@@ -144,7 +144,7 @@ function MyCard() {
 
 ### Surface Consistency
 
-Dashboard stat cards use the shared interactive `Card` recipe with a `glass-elevated` surface. Chart wrapper cards use the standard `Card` surface. Depth, focus treatment, and reduced-motion behavior come from those shared primitives rather than page-local class recipes.
+Dashboard supporting stat cards use the thin secondary `StatCard` presentation. Only linked tiles use the interactive `Card` recipe. Net Summary remains the single elevated hero, with static decoration; its chart controls retain their keyboard and pointer behavior. Ordinary chart wrappers omit corner ornaments. See [[docs/adr/172-calm-information-hierarchy|ADR-172]].
 
 Code links: [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/components/shared/StatCard.tsx]], [[apps/frontend/src/features/dashboard/CategoryPieChart.tsx]], [[apps/frontend/src/features/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/features/dashboard/CashFlowForecastChart.tsx]], [[apps/frontend/src/index.css]]
 

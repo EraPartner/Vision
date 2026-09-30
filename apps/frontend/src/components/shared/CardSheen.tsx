@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
  * hierarchy, not a bag of size/colour knobs at the call site.
  *
  * - `default` — the KPI/widget tier: 8rem, `--glass-highlight`, a light sheen
- *   in both modes. Every stat tile, chart card and panel header.
+ *   in both modes. Opt in only for deliberately prominent surfaces.
  * - `feature` — a prominent in-page feature card: the same token and tone as
  *   `default`, at 10rem. Today this is PerformancePage's total-value card.
  * - `hero` — a page's single hero tile (today only the dashboard's
@@ -37,13 +37,13 @@ interface CardSheenProps extends VariantProps<typeof cardSheenVariants> {
 }
 
 /**
- * Decorative corner sheen for hero/KPI cards (ADR-105 elevation tier).
+ * Decorative corner sheen for explicitly prominent cards (ADR-172).
  *
  * One motif, one rule: a soft highlight bleeding from the top-right corner,
  * driven by theme tokens (see `.card-sheen` in index.css) so it adapts to
  * light/dark and every theme variant instead of hard-coding raw white. Purely
- * decorative — aria-hidden and non-interactive. Reserve it for hero/KPI cards,
- * never plain content cards; pick the tier with `tier` (see above).
+ * decorative — aria-hidden and non-interactive. Reserve it for selected hero cards,
+ * never ordinary metrics or chart panels; pick the tier with `tier` (see above).
  */
 export function CardSheen({ animated = false, tier, className }: CardSheenProps) {
     return (

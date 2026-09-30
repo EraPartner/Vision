@@ -2,7 +2,7 @@
 title: Demo UI review and simplification
 type: session
 date: 2026-09-25
-updated: 2026-09-27
+updated: 2026-09-30
 tags: [session, frontend, accessibility, demo, verification]
 description: Computer-use coverage, implemented UI corrections, and remaining acceptance work from the synthetic Demo walkthrough.
 ---
@@ -432,3 +432,18 @@ Final review also reset account acknowledgement when reopening the dialog or ret
 The first rebuilt package started successfully and returned healthy on persisted port 36962. Native navigation reached Transactions in the accessibility tree, but screenshots continued to show the earlier Dashboard and search-control observations lagged or failed to change. Therefore this pass does not claim visual acceptance of the new filter or merge states. No merges, records, uploads or administrator actions were submitted. Obsidian Reading View was not inspected.
 
 The final Demo rebuild and installation passed after the additional acknowledgement reset. Whitespace checks passed.
+
+## September 27 application-wide scanning hierarchy
+
+The user supplied Net Worth's asymmetric summary as an example of visual competition and wasted space. Shared StatCard now defaults to quiet secondary emphasis with an explicit primary option. Its labels and icons are restrained, and only linked tiles advertise whole-card interaction. PageHeader, CardTitle, Badge and TableHead use a clearer visual scale; resting frame shadows are reduced. Ordinary Dashboard chart panels, Monthly Rhythm and the planned-payment strip omit repeated corner or color decoration. Dashboard Net Summary and Portfolio Total Value remain deliberate primary surfaces, without whole-card hover motion. Net Worth pairs its total with a single compact asset/liability breakdown instead of three stacked large cards. Values, percentages, freshness, disclosures and operations remain available.
+
+Source coverage includes 37 PageHeader consumers, 12 StatCard consumers, 64 Badge consumers and 65 CardTitle consumers. This is shared presentation coverage, not a claim that every route and action was manually retested. Independent source review found no concrete accessibility or functional regressions and identified stale sheen comments, which were corrected. Existing focus, semantic colors, warnings and chart controls remain. The palette, atmosphere and glass material tiers are preserved. ADR-172 and affected component/feature/architecture docs record the new hierarchy; no architectural boundary or flow changed, so diagrams and the flow visualizer are unchanged.
+
+Verification so far: 45 shared/chart/dashboard tests plus nine Net Worth tests passed; typecheck, locale validation and lint passed (34 existing warnings, zero errors). Six documentation frontmatter checks passed; the new ADR is linked from the index and affected notes. Native screenshot before rebuild confirmed the supplied empty-column problem. Final packaged visual results follow.
+
+The first package rebuilt and installed successfully; Demo health returned 200 on port 36962. A native Dashboard screenshot confirmed quiet supporting cards, simpler badges and reduced header ornament. That inspection caught a nonexistent `font-body` utility leaving metric headings serif; it was corrected to the existing `font-sans` utility, including the planned strip and Monthly Rhythm labels. Eleven relevant tests passed again. Native accessibility confirmed Net Worth's three-row definition list and all values, but screenshots lagged navigation and continued to show Dashboard, so the Net Worth spacing was not yet visually accepted. A final package rebuild follows the font correction.
+
+
+September 30 completion: the final September 27 package rebuild/install succeeded after the font correction. On resume, Demo returned healthy on its persisted port 36962. Native screenshot and accessibility inspection now both confirm Net Worth's compact three-row breakdown beside the primary total, readable body-font labels, restrained icons and the reduced empty column. The screenshot also preserves the exchange-rate freshness warning and account reconciliation notice. No financial records, uploads or administrator actions were submitted.
+
+The resumed checks passed typecheck, frontend lint (34 existing warnings, zero errors), and 112 tests across shared cards, heading contracts, planned payments and portfolio pages. The first broader run exposed one stale investment test expecting a toast; it now checks the linked inline amount error, focus and absence of a create request. All 112 tests passed after that correction. Previous shared/chart/dashboard and locale checks remain recorded above. This is not a fresh manual test of every route, action, theme or viewport. Obsidian Reading View was not inspected.
