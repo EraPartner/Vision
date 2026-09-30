@@ -162,10 +162,11 @@ export default function SavingsPage() {
                 />
 
                 {/* Summary Cards */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                     <StatCard
                         size="compact"
                         title={t("portfolio.totalBalance")}
+                        emphasis="primary"
                         value={<RollingNumber parts={fmtParts(totalBalance)} />}
                         icon={Banknote}
                         valueClassName="text-primary"
@@ -175,7 +176,7 @@ export default function SavingsPage() {
                         title={t("portfolio.avgInterestRate")}
                         value={formatPercent(weightedRate, { digits: 2 })}
                         icon={Percent}
-                        valueClassName="text-accent"
+                        valueClassName="text-foreground"
                     />
                     <StatCard
                         size="compact"
@@ -201,7 +202,7 @@ export default function SavingsPage() {
                                 })}
                             />
                         }
-                        valueClassName="text-primary"
+                        valueClassName="text-foreground"
                         subtitle={
                             totalAccrued > 0 ? (
                                 <>

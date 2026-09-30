@@ -118,6 +118,11 @@ export function NetWorthByAccountTable({ rows, currency, headline, t }: Props) {
                         </TableRow>
                     </TableFooter>
                 </Table>
+                {!matches && (
+                    <p className="mt-3 max-w-prose text-xs text-muted-foreground">
+                        {t("networth.byAccount.differenceHint")}
+                    </p>
+                )}
             </CardContent>
         </Card>
     );

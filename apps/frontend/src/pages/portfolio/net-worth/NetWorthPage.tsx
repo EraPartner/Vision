@@ -12,7 +12,7 @@ import {
     useCurrencyPartsFormatter,
     usePercentFormatter,
 } from "@/hooks/useCurrencyFormatter";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
@@ -193,15 +193,23 @@ export default function NetWorthPage() {
                     title={t("networth.title")}
                     icon={PAGE_ICONS["/portfolio/net-worth"]}
                 />
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    {[1, 2, 3].map((i) => (
-                        <Card key={i}>
-                            <CardContent variant="headerless">
-                                <Skeleton className="h-16 w-full" />
-                            </CardContent>
-                        </Card>
-                    ))}
-                </div>
+                <Card>
+                    <CardContent
+                        variant="flush"
+                        className="grid lg:grid-cols-2"
+                    >
+                        <div className="space-y-3 p-5 sm:p-6">
+                            <Skeleton className="h-4 w-24" />
+                            <Skeleton className="h-10 w-48 max-w-full" />
+                            <Skeleton className="h-4 w-40 max-w-full" />
+                        </div>
+                        <div className="space-y-3 border-t border-border/50 p-5 sm:p-6 lg:border-l lg:border-t-0">
+                            {[1, 2, 3].map((i) => (
+                                <Skeleton key={i} className="h-10 w-full" />
+                            ))}
+                        </div>
+                    </CardContent>
+                </Card>
                 <Card>
                     <CardContent variant="headerless">
                         <Skeleton className="h-[400px] w-full" />
@@ -321,24 +329,27 @@ export default function NetWorthPage() {
                         <Badge
                             variant="outline"
                             className={cn(
-                                "text-sm px-3 py-1",
+                                "max-w-full flex-wrap gap-x-2 gap-y-1 text-sm px-3 py-1",
                                 allTimeChange >= 0
                                     ? "border-gain/30 text-gain"
                                     : "border-loss/30 text-loss",
                             )}
                         >
                             {allTimeChange >= 0 ? (
-                                <TrendingUp className="h-3.5 w-3.5 mr-1" />
+                                <TrendingUp className="h-3.5 w-3.5 shrink-0" />
                             ) : (
-                                <TrendingDown className="h-3.5 w-3.5 mr-1" />
+                                <TrendingDown className="h-3.5 w-3.5 shrink-0" />
                             )}
-                            <Money amount={allTimeChange} signed />{" "}
-                            {t("networth.allTime")} (
-                            {formatPercent(allTimePercent, {
-                                digits: 1,
-                                signed: true,
-                            })}
-                            )
+                            <Money amount={allTimeChange} signed />
+                            <span>{t("networth.allTime")}</span>
+                            <span className="whitespace-nowrap">
+                                (
+                                {formatPercent(allTimePercent, {
+                                    digits: 1,
+                                    signed: true,
+                                })}
+                                )
+                            </span>
                         </Badge>
                     </span>
                 }
@@ -350,38 +361,32 @@ export default function NetWorthPage() {
                 isRefreshing={isRefreshingPrices}
             />
 
-            {/* Headline beside one compact component breakdown. */}
-            <div className="grid items-start gap-4 lg:grid-cols-2 animate-stagger">
-                <div>
-                    <StatCard
-                        title={t("networth.title")}
-                        emphasis="primary"
-                        value={
+            {/* One surface keeps the total and its components visually connected. */}
+            <Card>
+                <CardContent variant="flush" className="grid lg:grid-cols-2">
+                    <div className="flex min-w-0 flex-col justify-center gap-3 p-5 sm:p-6">
+                        <CardTitle variant="label">
+                            {t("networth.title")}
+                        </CardTitle>
+                        <div className="text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl">
                             <RollingNumber parts={fmtParts(current.netWorth)} />
-                        }
-                        icon={Wallet}
-                        valueClassName="text-primary"
-                        trend={monthlyChange >= 0 ? "income" : "expense"}
-                        subtitle={
-                            <span className="flex flex-col gap-0.5">
-                                <span>
-                                    <Money amount={monthlyChange} signed /> (
-                                    {formatPercent(monthlyChangePercent, {
-                                        digits: 1,
-                                        signed: true,
-                                    })}
-                                    ) {t("networth.thisMonth")}
-                                </span>
-                                <PriceFreshnessCaption
-                                    investments={investments}
-                                    scope="investment"
-                                />
-                            </span>
-                        }
-                    />
-                </div>
-                <Card>
-                    <CardContent variant="compact">
+                        </div>
+                        <div className="space-y-1 text-sm text-muted-foreground">
+                            <p>
+                                <Money amount={monthlyChange} signed /> (
+                                {formatPercent(monthlyChangePercent, {
+                                    digits: 1,
+                                    signed: true,
+                                })}
+                                ) {t("networth.thisMonth")}
+                            </p>
+                            <PriceFreshnessCaption
+                                investments={investments}
+                                scope="investment"
+                            />
+                        </div>
+                    </div>
+                    <div className="min-w-0 border-t border-border/50 p-5 sm:p-6 lg:border-l lg:border-t-0">
                         <dl className="divide-y divide-border/50">
                             {[
                                 {
@@ -435,9 +440,14 @@ export default function NetWorthPage() {
                                 ),
                             )}
                         </dl>
-                    </CardContent>
-                </Card>
-            </div>
+                        {hasLiabilities && (
+                            <p className="mt-4 max-w-prose text-xs text-muted-foreground">
+                                {t("networth.shareExplanation")}
+                            </p>
+                        )}
+                    </div>
+                </CardContent>
+            </Card>
 
             {accountsQuery.isLoading ||
             portfolioSummaryQuery.isLoading ||

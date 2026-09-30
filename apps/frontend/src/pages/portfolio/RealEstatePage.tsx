@@ -194,10 +194,11 @@ export default function RealEstatePage() {
                 />
 
                 {/* Summary Cards */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
                     <StatCard
                         size="compact"
                         title={t("portfolio.totalValue")}
+                        emphasis="primary"
                         value={<RollingNumber parts={fmtParts(totalValue)} />}
                         icon={Banknote}
                         valueClassName="text-primary"

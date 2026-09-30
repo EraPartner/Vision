@@ -118,9 +118,19 @@ export function PortfolioExposureCard({ currency }: { currency: string }) {
                 </div>
                 {query.isLoading && <p role="status">{t("common.loading")}</p>}
                 {query.isError && (
-                    <p role="alert" className="text-sm text-destructive">
-                        {apiErrorToMessage(query.error, t)}
-                    </p>
+                    <div className="flex flex-wrap items-center gap-3">
+                        <p role="alert" className="text-sm text-destructive">
+                            {apiErrorToMessage(query.error, t)}
+                        </p>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={query.isFetching}
+                            onClick={() => void query.refetch()}
+                        >
+                            {t("common.retry")}
+                        </Button>
+                    </div>
                 )}
                 {error && (
                     <p role="alert" className="text-sm text-destructive">
@@ -130,9 +140,19 @@ export function PortfolioExposureCard({ currency }: { currency: string }) {
                 {query.data && selected && (
                     <>
                         <div className="space-y-3 rounded-lg border bg-muted/10 p-4">
-                            <h3 className="text-sm font-medium">
-                                {t("portfolio.exposure.coverage")}
-                            </h3>
+                            <div className="space-y-1">
+                                <h3 className="text-sm font-medium">
+                                    {t("portfolio.exposure.coverage")}
+                                </h3>
+                                {(Number(selected.unclassifiedValue) > 0 ||
+                                    Number(query.data.uncoveredValue) > 0) && (
+                                    <p className="max-w-prose text-sm text-muted-foreground">
+                                        {t(
+                                            "portfolio.exposure.partialCoverageHint",
+                                        )}
+                                    </p>
+                                )}
+                            </div>
                             {canChartCoverage && (
                                 <div
                                     aria-hidden="true"
@@ -143,7 +163,7 @@ export function PortfolioExposureCard({ currency }: { currency: string }) {
                                             key={key}
                                             className={`h-full shrink-0 ${color}`}
                                             style={{
-                                                width: `${formatPercent(Number(percent), { digits: 2, minDigits: 0 })}`,
+                                                width: `${Number(percent)}%`,
                                             }}
                                         />
                                     ))}
@@ -209,13 +229,13 @@ export function PortfolioExposureCard({ currency }: { currency: string }) {
                                     .join(", ")}
                             </p>
                         )}
-                        <div className="space-y-2">
+                        <div className="divide-y divide-border/60 rounded-lg border border-border/60">
                             {selected.rows.map((row) => (
                                 <details
                                     key={row.id}
-                                    className="rounded-lg border"
+                                    className="first:rounded-t-lg last:rounded-b-lg"
                                 >
-                                    <summary className="cursor-pointer rounded-lg p-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                                    <summary className="cursor-pointer rounded-lg p-3 text-sm font-medium hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
                                         <span className="ml-1 inline-flex w-[calc(100%-1.5rem)] flex-wrap items-center justify-between gap-x-4 gap-y-1 align-middle">
                                             <span>{row.label}</span>
                                             <span className="flex items-baseline gap-3 tabular-nums">
@@ -274,7 +294,7 @@ export function PortfolioExposureCard({ currency }: { currency: string }) {
                                 </details>
                             ))}
                             {selected.rows.length === 0 && (
-                                <p className="text-sm text-muted-foreground">
+                                <p className="p-3 text-sm text-muted-foreground">
                                     {t("portfolio.exposure.noneClassified")}
                                 </p>
                             )}

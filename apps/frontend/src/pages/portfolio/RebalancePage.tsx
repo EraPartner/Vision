@@ -500,22 +500,22 @@ export default function RebalancePage() {
             <Card>
                 <CardContent
                     variant="compact"
-                    className="flex flex-wrap items-end gap-3"
+                    className="flex flex-wrap items-start gap-3"
                 >
-                    <div className="space-y-1.5">
-                        <label
+                    <div className="flex min-w-0 flex-col gap-1.5">
+                        <Label
                             className="text-xs text-muted-foreground"
                             htmlFor="rebalance-source"
                         >
                             {t("rebalance.targetModel")}
-                        </label>
+                        </Label>
                         <Select
                             value={source}
                             onValueChange={handleSourceChange}
                         >
                             <SelectTrigger
                                 id="rebalance-source"
-                                className="w-64"
+                                className="w-64 max-w-full"
                             >
                                 <SelectValue />
                             </SelectTrigger>
@@ -558,7 +558,7 @@ export default function RebalancePage() {
                             </SelectContent>
                         </Select>
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="flex min-w-0 flex-col gap-1.5">
                         <Label
                             htmlFor="rebalance-reserve-floor"
                             className="text-xs text-muted-foreground"
@@ -586,20 +586,6 @@ export default function RebalancePage() {
                             })}
                         </p>
                     </div>
-                    <Button
-                        onClick={() => compute.mutate()}
-                        disabled={
-                            compute.isPending || (showEditor && !hasValidRows)
-                        }
-                        className="gap-2"
-                    >
-                        {compute.isPending ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                            <Scale className="h-4 w-4" />
-                        )}
-                        {t("rebalance.compute")}
-                    </Button>
                 </CardContent>
                 {presetModel && (
                     <div className="border-t border-border/60 px-4 py-3">
@@ -878,6 +864,7 @@ export default function RebalancePage() {
                                 />
                             </div>
                             <Button
+                                variant="outline"
                                 onClick={onSave}
                                 disabled={isSaving || !hasValidRows}
                                 className="gap-2"
@@ -906,11 +893,36 @@ export default function RebalancePage() {
                 </Card>
             )}
 
-            {compute.isError && (
-                <p className="text-sm text-destructive">
-                    {apiErrorToMessage(compute.error, t)}
-                </p>
-            )}
+            <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3">
+                    <p
+                        id="rebalance-compute-help"
+                        className="max-w-2xl text-sm text-muted-foreground"
+                    >
+                        {t("rebalance.noSellNote")}
+                    </p>
+                    <Button
+                        aria-describedby="rebalance-compute-help"
+                        onClick={() => compute.mutate()}
+                        disabled={
+                            compute.isPending || (showEditor && !hasValidRows)
+                        }
+                        className="gap-2"
+                    >
+                        {compute.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                            <Scale className="h-4 w-4" />
+                        )}
+                        {t("rebalance.compute")}
+                    </Button>
+                </div>
+                {compute.isError && (
+                    <p role="alert" className="text-sm text-destructive">
+                        {apiErrorToMessage(compute.error, t)}
+                    </p>
+                )}
+            </div>
 
             <ConfirmDialog />
 
@@ -924,7 +936,7 @@ export default function RebalancePage() {
                                 </CardTitle>
                             </CardHeader>
                             <CardContent>
-                                <p className="text-2xl font-bold text-primary">
+                                <p className="text-2xl font-semibold tabular-nums">
                                     <Money
                                         amount={
                                             availableCash ||
@@ -946,7 +958,7 @@ export default function RebalancePage() {
                                 </CardTitle>
                             </CardHeader>
                             <CardContent>
-                                <p className="text-2xl font-bold text-accent">
+                                <p className="text-2xl font-semibold tabular-nums">
                                     <Money
                                         amount={totalDeployed}
                                         currency={currency}
@@ -1049,9 +1061,6 @@ export default function RebalancePage() {
                                         })}
                                 </TableBody>
                             </Table>
-                            <p className="text-xs text-muted-foreground mt-3">
-                                {t("rebalance.noSellNote")}
-                            </p>
                         </CardContent>
                     </Card>
                 </>

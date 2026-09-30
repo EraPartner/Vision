@@ -30,5 +30,21 @@ describe("NetWorthByAccountTable", () => {
         const message = screen.getByText(/below net worth by/i);
         expect(message.parentElement).toHaveTextContent(/50,00/);
         expect(message.parentElement).not.toHaveTextContent(/-50\.00/);
+        expect(
+            screen.getByText("networth.byAccount.differenceHint"),
+        ).toBeVisible();
+    });
+    it("does not suggest investigating a matching breakdown", () => {
+        renderWithApp(
+            <NetWorthByAccountTable
+                rows={[]}
+                currency="EUR"
+                headline={0}
+                t={(key) => key}
+            />,
+        );
+        expect(
+            screen.queryByText("networth.byAccount.differenceHint"),
+        ).not.toBeInTheDocument();
     });
 });

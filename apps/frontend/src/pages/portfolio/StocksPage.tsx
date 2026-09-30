@@ -394,12 +394,13 @@ export default function StocksPage({
                 <div
                     className={cn(
                         "grid grid-cols-2 sm:grid-cols-3 gap-3",
-                        showDividends ? "lg:grid-cols-6" : "lg:grid-cols-5",
+                        showDividends ? "xl:grid-cols-6" : "xl:grid-cols-5",
                     )}
                 >
                     <StatCard
                         size="compact"
                         title={t("portfolio.portfolioValue")}
+                        emphasis="primary"
                         value={<RollingNumber parts={fmtParts(totalValue)} />}
                         icon={Banknote}
                         valueClassName="text-primary"

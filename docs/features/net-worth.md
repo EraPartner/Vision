@@ -2,8 +2,8 @@
 title: Net Worth Feature
 type: feature
 status: active
-date: 2026-09-27
-updated: 2026-09-27
+date: 2026-09-30
+updated: 2026-09-30
 tags:
   [
     feature,
@@ -255,9 +255,9 @@ domain recomputation — the visible window is whatever the period selector scop
 
 ### Summary Cards
 
-The summary uses a two-column desktop composition. The left side is an
-intrinsic-height **Net Worth** hero with the current total and monthly change.
-The right side is one compact neutral panel with label/value rows:
+The summary uses one neutral surface with two desktop columns separated by a fine divider.
+The left side centers the **Net Worth** total and monthly change within the shared height.
+The right side contains compact label/value rows:
 
 1. **Liquid**: Current non-liability bank balances with percentage of net worth
 2. **Investments**: Current portfolio value with percentage of net worth
@@ -341,3 +341,5 @@ currently implemented.
 - [[docs/adr/108-portfolio-accounts-v2-broker-tags|ADR-108]] — Retires the per-account net-worth path and keeps portfolio account tags
 - [[docs/adr/100-net-worth-account-native-holdings|ADR-100]] — Historical per-account design, superseded by ADR-108
 - [[docs/adr/093-net-worth-sum-of-accounts|ADR-093]] — Net worth = Σ accounts definition
+
+The summary explains that liabilities reduce net worth, so asset shares can exceed 100%. Account reconciliation retains its exact difference warning and provides context when balances do not match.

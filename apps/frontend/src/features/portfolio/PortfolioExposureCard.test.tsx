@@ -78,12 +78,14 @@ vi.mock("@/hooks/portfolio/usePortfolioExposure", () => ({
 
 describe("PortfolioExposureCard", () => {
     it("uses the selected number format for exposure percentages", () => {
-        render(
+        const { container } = render(
             <QueryClientProvider client={new QueryClient()}>
                 <PortfolioExposureCard currency="EUR" />
             </QueryClientProvider>,
         );
         expect(screen.getByText("99,94%")).toBeInTheDocument();
+        // CSS needs an invariant decimal separator even when visible labels use commas.
+        expect(container.querySelector('[style="width: 99.94%;"]')).not.toBeNull();
         expect(screen.getByText("0,06%")).toBeInTheDocument();
         act(() =>
             useSettingsStore

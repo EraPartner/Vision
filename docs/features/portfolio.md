@@ -2,9 +2,9 @@
 title: Feature - Portfolio & Investments
 type: feature
 status: active
-date: 2026-09-27
+date: 2026-09-30
 last_modified: 2026-09-27
-updated: 2026-09-27
+updated: 2026-09-30
 tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding, fx-attribution, asset-gain, fx-gain, purchase-date-rates, value-fx-neutral, adr-074, adr-091, adr-100, per-account, move-holding, close-account, brokerage-fanout, rebalancing, saved-plans, cash-aware, cross-workspace, adr-098, portfolio-ticker, marquee, live-quotes, ticker-manager, show-in-ticker, migration-0061, fx-aware-pnl, unified-detail-dialog, useFxAwarePnl]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections. 2026-05-29 adds historical FX in snapshots and loading/error states on all asset pages. June 2026 adds snapshotBuilder split/return_of_capital events, APP_TIMEZONE day-boundary fix, shared portfolioUnitMath.ts, and FX attribution UI (ADR-074): asset gain / FX effect decomposition on overview, performance, asset pages, and investment detail.
@@ -1007,6 +1007,8 @@ Code links: [[apps/frontend/src/hooks/portfolio/useFxAwarePnl.ts]], [[apps/front
 
 ## Cash-Aware Rebalancing (ADR-098, updated 2026-06-19)
 
+Compute follows all inputs, including custom allocation targets. The nearby explanation identifies cash-only/no-sells behavior before calculation; errors appear at the action. Saving or updating a plan is secondary to computing it.
+
 The Rebalance page (`/portfolio/rebalance`, nav: Portfolio → Analysis → Rebalance) runs a
 cash-deploy-only rebalancing calculation: given target sleeve weights and the user's available
 spendable cash, it computes how much to put into each underweight sleeve without proposing any
@@ -1119,6 +1121,8 @@ unclassified, and explicit fund cash stays separate. Rows and coverage totals sh
 currency values plus percentages of total portfolio value. Rows drill through to direct positions
 or the source fund and show stale-source state. The view does not infer economic foreign-exchange exposure.
 
+Exposure rows share one inset list with separators; each row retains its keyboard-accessible expander, provenance and values.
+
 The coverage summary shows a proportional bar with a text legend, reporting-currency amounts, and
 percentages for classified value, unclassified value, missing fund data, and fund cash. It renders
 the bar only when these values form a valid nonnegative percentage partition; the numeric summary
@@ -1187,3 +1191,5 @@ Add and Edit investment show linked inline errors for malformed numeric text and
 Transfer portfolio lots distinguishes account loading and failures from a successfully loaded list. Destination selection and submission wait for account data; a load failure offers Retry. The lot preview also offers Retry on failure. Unassigned remains an explicit choice once the account list loads, and existing transfer limits and receipt behavior are unchanged.
 
 Exposure coverage and holding percentages use the app number-format locale, matching the amounts beside them. Display retains up to two decimal places without padding whole percentages; coverage calculations and visual bar widths remain unchanged.
+
+Asset pages emphasize one primary total and keep supporting metrics neutral. Exposure explains incomplete coverage and offers retry on failure. Coverage-bar CSS widths use locale-independent numeric percentages while visible percentages retain the selected number format.
