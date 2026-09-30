@@ -454,7 +454,7 @@ describe("Portfolio pages (integration)", () => {
         consoleSpy.mockRestore();
     });
 
-    it("NetWorthPage renders the conditional liabilities fact without stretching the hero", async () => {
+    it("NetWorthPage presents current components as labeled amounts and percentages", async () => {
         server.use(
             http.get(`${API_BASE}/api/info/net-worth`, () =>
                 ok({
@@ -488,15 +488,23 @@ describe("Portfolio pages (integration)", () => {
 
         renderWithApp(<NetWorthPage />);
 
+        const liquid = await screen.findByText("Liquid Assets", {
+            selector: "dt",
+        });
+        const investments = screen.getByText("Investments", { selector: "dt" });
+        const liabilities = screen.getByText("Liabilities", { selector: "dt" });
         expect(
-            await screen.findByRole("heading", { name: "Liquid Assets" }),
+            within(liquid.parentElement!).getByLabelText(/5\.000,00/),
         ).toBeInTheDocument();
         expect(
-            screen.getByRole("heading", { name: "Investments" }),
+            within(investments.parentElement!).getByLabelText(/7\.000,00/),
         ).toBeInTheDocument();
         expect(
-            screen.getByRole("heading", { name: "Liabilities" }),
+            within(liabilities.parentElement!).getByLabelText(/1\.000,00/),
         ).toBeInTheDocument();
+        expect(liquid.parentElement).toHaveTextContent(/45\s*%/);
+        expect(investments.parentElement).toHaveTextContent(/64\s*%/);
+        expect(liabilities.parentElement).toHaveTextContent(/-9\s*%/);
     }, 15_000);
 
     it("NetWorthPage reconciles the displayed By Account rows to its headline", async () => {

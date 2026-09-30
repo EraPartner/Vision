@@ -350,11 +350,12 @@ export default function NetWorthPage() {
                 isRefreshing={isRefreshingPrices}
             />
 
-            {/* Summary — intrinsic Net Worth hero beside the component breakdown. */}
+            {/* Headline beside one compact component breakdown. */}
             <div className="grid items-start gap-4 lg:grid-cols-2 animate-stagger">
                 <div>
                     <StatCard
                         title={t("networth.title")}
+                        emphasis="primary"
                         value={
                             <RollingNumber parts={fmtParts(current.netWorth)} />
                         }
@@ -379,45 +380,63 @@ export default function NetWorthPage() {
                         }
                     />
                 </div>
-                <div className="grid gap-4">
-                    <StatCard
-                        title={t("networth.liquid")}
-                        value={
-                            <RollingNumber parts={fmtParts(current.liquid)} />
-                        }
-                        icon={Landmark}
-                        trend="neutral"
-                        subtitle={t("networth.ofNetWorth", { n: liquidPct })}
-                    />
-                    <StatCard
-                        title={t("networth.investments")}
-                        value={
-                            <RollingNumber
-                                parts={fmtParts(current.investments)}
-                            />
-                        }
-                        icon={PiggyBank}
-                        trend="neutral"
-                        subtitle={t("networth.ofNetWorth", {
-                            n: investmentsPct,
-                        })}
-                    />
-                    {hasLiabilities && (
-                        <StatCard
-                            title={t("networth.liabilities")}
-                            value={
-                                <RollingNumber
-                                    parts={fmtParts(current.liabilities)}
-                                />
-                            }
-                            icon={CreditCard}
-                            trend="expense"
-                            subtitle={t("networth.ofNetWorth", {
-                                n: liabilitiesPct,
-                            })}
-                        />
-                    )}
-                </div>
+                <Card>
+                    <CardContent variant="compact">
+                        <dl className="divide-y divide-border/50">
+                            {[
+                                {
+                                    label: t("networth.liquid"),
+                                    value: current.liquid,
+                                    percentage: liquidPct,
+                                    icon: Landmark,
+                                },
+                                {
+                                    label: t("networth.investments"),
+                                    value: current.investments,
+                                    percentage: investmentsPct,
+                                    icon: PiggyBank,
+                                },
+                                ...(hasLiabilities
+                                    ? [
+                                          {
+                                              label: t("networth.liabilities"),
+                                              value: current.liabilities,
+                                              percentage: liabilitiesPct,
+                                              icon: CreditCard,
+                                          },
+                                      ]
+                                    : []),
+                            ].map(
+                                ({ label, value, percentage, icon: Icon }) => (
+                                    <div
+                                        key={label}
+                                        className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-3 first:pt-1 last:pb-1"
+                                    >
+                                        <dt className="flex items-center gap-2 text-sm text-muted-foreground">
+                                            <Icon
+                                                className="h-4 w-4 shrink-0"
+                                                aria-hidden="true"
+                                            />
+                                            {label}
+                                        </dt>
+                                        <dd className="ml-auto text-right">
+                                            <div className="text-lg font-semibold tabular-nums">
+                                                <RollingNumber
+                                                    parts={fmtParts(value)}
+                                                />
+                                            </div>
+                                            <div className="text-xs text-muted-foreground">
+                                                {t("networth.ofNetWorth", {
+                                                    n: percentage,
+                                                })}
+                                            </div>
+                                        </dd>
+                                    </div>
+                                ),
+                            )}
+                        </dl>
+                    </CardContent>
+                </Card>
             </div>
 
             {accountsQuery.isLoading ||
@@ -464,18 +483,21 @@ export default function NetWorthPage() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <StatCard
                     title={t("networth.peak")}
+                    size="compact"
                     value={<RollingNumber parts={fmtParts(peak)} />}
                     icon={TrendingUp}
                     trend="income"
                 />
                 <StatCard
                     title={t("networth.lowest")}
+                    size="compact"
                     value={<RollingNumber parts={fmtParts(trough)} />}
                     icon={TrendingDown}
                     trend="expense"
                 />
                 <StatCard
                     title={t("networth.daysTracked")}
+                    size="compact"
                     value={String(displaySnapshots.length)}
                     icon={Wallet}
                 />

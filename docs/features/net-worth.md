@@ -257,14 +257,13 @@ domain recomputation — the visible window is whatever the period selector scop
 
 The summary uses a two-column desktop composition. The left side is an
 intrinsic-height **Net Worth** hero with the current total and monthly change.
-The right side is a vertical component breakdown:
+The right side is one compact neutral panel with label/value rows:
 
 1. **Liquid**: Current non-liability bank balances with percentage of net worth
 2. **Investments**: Current portfolio value with percentage of net worth
 3. **Liabilities**: Current liability-account balance with percentage of net worth; hidden when zero
 
-The hero is not stretched to match the component stack. On smaller viewports,
-the hero and breakdown stack in reading order.
+The breakdown no longer stacks three full-size cards beside one short headline. On smaller viewports, the headline and breakdown stack in reading order. Historical peak, low and day-count cards use compact secondary emphasis. See [[docs/adr/172-calm-information-hierarchy|ADR-172]].
 
 ### Current By Account table
 
