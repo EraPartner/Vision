@@ -222,40 +222,40 @@ export default function PlannedPaymentsPage() {
     return (
         <>
             <PageShell className="">
-                <div className="flex items-start justify-between">
-                    <PageHeader
-                        title={t("plannedPage.title")}
-                        subtitle={t("plannedPage.subtitle")}
-                        icon={PAGE_ICONS["/planned"]}
-                    />
-                    <div className="flex flex-wrap items-center gap-2">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setHistoryOpen(true)}
-                            className="gap-1.5"
-                        >
-                            <History className="h-4 w-4" />
-                            {t("plannedPage.history.button")}
-                        </Button>
-                        <ListFilterToggle
-                            checked={showAll}
-                            onCheckedChange={setShowAll}
-                            label={t("plannedPage.includePaused")}
-                        />
-                        <Button
-                            onClick={() => {
-                                setEditing(undefined);
-                                setCreateFormKey((key) => key + 1);
-                                setFormOpen(true);
-                            }}
-                            className="gap-2"
-                        >
-                            <Plus className="h-4 w-4" />
-                            {t("plannedPage.newPayment")}
-                        </Button>
-                    </div>
-                </div>
+                <PageHeader
+                    title={t("plannedPage.title")}
+                    subtitle={t("plannedPage.subtitle")}
+                    icon={PAGE_ICONS["/planned"]}
+                    actions={
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setHistoryOpen(true)}
+                                className="gap-1.5"
+                            >
+                                <History className="h-4 w-4" />
+                                {t("plannedPage.history.button")}
+                            </Button>
+                            <ListFilterToggle
+                                checked={showAll}
+                                onCheckedChange={setShowAll}
+                                label={t("plannedPage.includePaused")}
+                            />
+                            <Button
+                                onClick={() => {
+                                    setEditing(undefined);
+                                    setCreateFormKey((key) => key + 1);
+                                    setFormOpen(true);
+                                }}
+                                className="gap-2"
+                            >
+                                <Plus className="h-4 w-4" />
+                                {t("plannedPage.newPayment")}
+                            </Button>
+                        </div>
+                    }
+                />
 
                 <NextSevenDaysStrip
                     payments={payments}

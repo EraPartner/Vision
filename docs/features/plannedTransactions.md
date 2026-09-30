@@ -2,8 +2,8 @@
 title: Planned Transactions
 type: feature
 status: active
-date: 2026-09-27
-updated: 2026-09-27
+date: 2026-09-30
+updated: 2026-09-30
 tags: [feature, planned, recurring, bills, loans, phase-3, phase-12, calculations, immutability, error-handling, toast, atomic-patch, virtual-data-table, i18n-toasts, upcoming-payments-hook, occurrence-key-dismissal, june-2026, auto-link, planned-match, exchange-rates, fx]
 aliases: [planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loan-amortization]
 description: Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses. June 2026: auto-link & auto-clear planned payments on match — ingested transactions are automatically linked to matching planned payments (same recipient cluster, same sign, ±5% amount, ±5 days); ambiguous matches surface as confirmable suggestions. PlannedPaymentsPage migrated from DataTable to VirtualDataTable; native alert() replaced with toast.error (new i18n keys plannedPage.toggleFailed/deleteFailed). V11: useUpcomingPlannedPayments shared hook (single fetch + shared dismissed-ID store); UpcomingPaymentsNotification renders its dashboard reminder without duplicating the planned-payments page, while native badge synchronization remains active throughout AppLayout. June 2026 (B1 fix): dismissals now keyed per occurrence (id:YYYY-MM-DD) so recurring reminders re-surface each cycle; past-dated keys pruned on load; legacy id-only entries silently dropped on next load. August 2026: Planned aggregates omit payments whose exchange rate is unavailable and visibly report the omission instead of blending currencies.
@@ -180,6 +180,10 @@ The top-level upcoming-planned-payments notification is dismissible with persist
 - Dismissal state is stored in browser local storage keyed by `id:YYYY-MM-DD` (occurrence key — see above)
 - Dismissing an occurrence hides it for that cycle only; recurring reminders re-surface when `planned_date` advances
 - Dismissing the banner hides all currently visible upcoming planned payments for their respective occurrences
+
+### Recurring review presentation
+
+Recurring patterns and amount changes start as compact rows with their title, count and a visible Review action. Opening a row reveals its explanation and existing review actions. Amount changes retain warning styling; the empty state is a quiet status line.
 
 ### Recurring Detection Dismissals
 
@@ -825,3 +829,5 @@ Include paused is a labeled switch with a stable label and an explicit on/off st
 ## Clarity and recovery feedback
 
 The visibility switch is labeled Include paused to match the Paused row status. It retains the show_all URL and query behavior.
+
+Execution history reports failed or partial transaction loads and offers Retry without claiming that failed history is empty. Request versioning prevents an obsolete response from replacing reopened history. The history grid scrolls inside a keyboard-focusable region at narrow widths, with a dedicated amount column. Closing the dialog restores focus to its connected opener.

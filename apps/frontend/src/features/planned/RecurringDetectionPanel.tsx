@@ -2,13 +2,7 @@ import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { plannedKeys } from "@/lib/queryKeys";
-import {
-    Card,
-    CardContent,
-    CardHeader,
-    CardTitle,
-    CardDescription,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -240,7 +234,10 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
         return (
             <Card>
                 <CardHeader className="pb-3">
-                    <CardTitle variant="sm" className="flex items-center gap-2">
+                    <CardTitle
+                        variant="label"
+                        className="flex items-center gap-2"
+                    >
                         <Sparkles className="h-4 w-4 text-primary" />
                         {t("recurring.loading")}
                     </CardTitle>
@@ -256,19 +253,14 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
 
     if (patterns.length === 0 && amountAlerts.length === 0) {
         return (
-            <Card className="!border-dashed">
-                <CardContent variant="row" className="flex items-center gap-3">
-                    <CheckCircle2 className="h-5 w-5 text-accent shrink-0" />
-                    <div>
-                        <p className="text-sm font-medium text-foreground">
-                            {t("recurring.allCaughtUp")}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                            {t("recurring.noPatterns")}
-                        </p>
-                    </div>
-                </CardContent>
-            </Card>
+            <p
+                className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 text-sm text-muted-foreground"
+                role="status"
+            >
+                <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
+                <span>{t("recurring.allCaughtUp")}</span>
+                <span className="text-xs">{t("recurring.noPatterns")}</span>
+            </p>
         );
     }
 
@@ -277,13 +269,11 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
             {/* Amount Change Alerts */}
             {amountAlerts.length > 0 && (
                 <Card className="!border-destructive/60 bg-destructive/5">
-                    <CardHeader
-                        className={cn("pb-2", !amountAlertsExpanded && "pb-4")}
-                    >
+                    <CardHeader className="p-4">
                         <div className="flex items-start justify-between gap-3">
                             <div>
                                 <CardTitle
-                                    variant="sm"
+                                    variant="label"
                                     className="flex items-center gap-2 text-destructive"
                                 >
                                     <AlertTriangle className="h-4 w-4" />
@@ -295,21 +285,23 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                         {amountAlerts.length}
                                     </Badge>
                                 </CardTitle>
-                                <CardDescription className="mt-1">
-                                    {t("recurring.amountChangesDesc")}
-                                </CardDescription>
                             </div>
                             <Button
                                 type="button"
                                 variant="ghost"
-                                size="icon"
-                                className="icon-touch-target shrink-0"
-                                aria-label={t("recurring.toggleAmountChanges")}
+                                size="sm"
+                                className="shrink-0"
+                                aria-label={`${t(amountAlertsExpanded ? "recurring.hide" : "recurring.review")}: ${t("recurring.amountChanges")}`}
                                 aria-expanded={amountAlertsExpanded}
                                 onClick={() =>
                                     setAmountAlertsExpanded((value) => !value)
                                 }
                             >
+                                {t(
+                                    amountAlertsExpanded
+                                        ? "recurring.hide"
+                                        : "recurring.review",
+                                )}
                                 {amountAlertsExpanded ? (
                                     <ChevronUp className="mt-0.5 h-4 w-4 shrink-0" />
                                 ) : (
@@ -319,7 +311,10 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                         </div>
                     </CardHeader>
                     {amountAlertsExpanded && (
-                        <CardContent>
+                        <CardContent className="px-4 pb-4">
+                            <p className="mb-3 text-sm text-muted-foreground">
+                                {t("recurring.amountChangesDesc")}
+                            </p>
                             <div className="space-y-3">
                                 {amountAlerts.slice(0, 5).map((pattern) => {
                                     const lastChange =
@@ -423,11 +418,11 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
             {/* Suggested Recurring Patterns */}
             {patterns.length > 0 && (
                 <Card>
-                    <CardHeader className="pb-2">
+                    <CardHeader className="p-4">
                         <div className="flex items-center justify-between">
                             <div>
                                 <CardTitle
-                                    variant="sm"
+                                    variant="label"
                                     className="flex items-center gap-2"
                                 >
                                     <Sparkles className="h-4 w-4 text-primary" />
@@ -436,18 +431,20 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                         {patterns.length}
                                     </Badge>
                                 </CardTitle>
-                                <CardDescription className="mt-1">
-                                    {t("recurring.patternsDesc")}
-                                </CardDescription>
                             </div>
                             <Button
                                 variant="ghost"
-                                size="icon"
-                                className="icon-touch-target"
-                                aria-label={t("recurring.togglePatterns")}
+                                size="sm"
+                                className="shrink-0"
+                                aria-label={`${t(expanded ? "recurring.hide" : "recurring.review")}: ${t("recurring.patterns")}`}
                                 aria-expanded={expanded}
                                 onClick={() => setExpanded(!expanded)}
                             >
+                                {t(
+                                    expanded
+                                        ? "recurring.hide"
+                                        : "recurring.review",
+                                )}
                                 {expanded ? (
                                     <ChevronUp className="h-4 w-4" />
                                 ) : (
@@ -457,12 +454,15 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                         </div>
                     </CardHeader>
                     {expanded && (
-                        <CardContent>
+                        <CardContent className="px-4 pb-4">
+                            <p className="mb-3 text-sm text-muted-foreground">
+                                {t("recurring.patternsDesc")}
+                            </p>
                             <div className="space-y-3">
                                 {patterns.map((pattern) => (
                                     <div
                                         key={`${pattern.recipientId}-${pattern.direction}`}
-                                        className="flex items-center gap-3 rounded-lg border bg-card p-3 hover:shadow-sm transition-shadow"
+                                        className="flex items-center gap-3 rounded-lg border bg-card p-3"
                                     >
                                         <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                                             <Repeat className="h-4 w-4 text-primary" />

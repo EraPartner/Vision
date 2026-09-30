@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Money } from "@/components/shared/Money";
 import logger from "@/lib/logger";
 import { ExternalLink } from "lucide-react";
@@ -45,12 +45,17 @@ export function ExecutionHistoryDialog({
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
 
+    const requestVersion = useRef(0);
+    const returnFocus = useRef<HTMLElement | null>(null);
+    const [historyFailed, setHistoryFailed] = useState(false);
     const [historyLoading, setHistoryLoading] = useState(false);
     const [executionHistory, setExecutionHistory] = useState<
         ExecutionHistoryItem[]
     >([]);
 
     const loadExecutionHistory = useCallback(async () => {
+        const version = ++requestVersion.current;
+        setHistoryFailed(false);
         const links = payments.flatMap((payment) => {
             if (payment.executions && payment.executions.length > 0) {
                 return payment.executions.map((execution) => ({
@@ -78,6 +83,7 @@ export function ExecutionHistoryDialog({
 
         if (links.length === 0) {
             setExecutionHistory([]);
+            setHistoryLoading(false);
             return;
         }
 
@@ -126,17 +132,26 @@ export function ExecutionHistoryDialog({
                     ),
                 );
 
+            if (version !== requestVersion.current) return;
+            setHistoryFailed(
+                results.some((result) => result.status === "rejected"),
+            );
             setExecutionHistory(resolved);
         } catch (err) {
+            if (version !== requestVersion.current) return;
+            setHistoryFailed(true);
             logger.error("Failed to load planned execution history", err);
             setExecutionHistory([]);
         } finally {
-            setHistoryLoading(false);
+            if (version === requestVersion.current) setHistoryLoading(false);
         }
     }, [payments]);
 
     useEffect(() => {
         if (open) void loadExecutionHistory();
+        return () => {
+            requestVersion.current += 1;
+        };
     }, [open, loadExecutionHistory]);
 
     const handleOpenChange = (isOpen: boolean) => {
@@ -145,115 +160,160 @@ export function ExecutionHistoryDialog({
 
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
-            <DialogContent className="sm:max-w-4xl max-h-[85vh] overflow-y-auto">
+            <DialogContent
+                className="sm:max-w-4xl max-h-[85vh] overflow-y-auto"
+                onOpenAutoFocus={() => {
+                    returnFocus.current =
+                        document.activeElement instanceof HTMLElement
+                            ? document.activeElement
+                            : null;
+                }}
+                onCloseAutoFocus={(event) => {
+                    if (returnFocus.current?.isConnected) {
+                        event.preventDefault();
+                        returnFocus.current.focus();
+                    }
+                }}
+            >
                 <DialogHeader>
                     <DialogTitle>{t("plannedPage.history.title")}</DialogTitle>
                 </DialogHeader>
 
+                {historyFailed && !historyLoading && (
+                    <div
+                        role="alert"
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warning/30 bg-warning/5 p-3 text-sm"
+                    >
+                        <p>{t("plannedPage.history.loadFailed")}</p>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => void loadExecutionHistory()}
+                        >
+                            {t("common.retry")}
+                        </Button>
+                    </div>
+                )}
+
                 {historyLoading ? (
-                    <div className="py-10 text-center text-muted-foreground">
+                    <div
+                        role="status"
+                        className="py-10 text-center text-muted-foreground"
+                    >
                         {t("plannedPage.history.loading")}
                     </div>
                 ) : executionHistory.length === 0 ? (
-                    <div className="py-10 text-center text-muted-foreground">
-                        {t("plannedPage.history.empty")}
-                    </div>
-                ) : (
-                    <div className="rounded-md border">
-                        <div className="grid grid-cols-12 gap-3 border-b bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground">
-                            <div className="col-span-2">
-                                {t("plannedPage.history.colExecutedOn")}
-                            </div>
-                            <div className="col-span-3">
-                                {t("plannedPage.history.colPlanned")}
-                            </div>
-                            <div className="col-span-5">
-                                {t("plannedPage.history.colTransaction")}
-                            </div>
-                            <div className="col-span-2 text-right">
-                                {t("plannedPage.col.amount")}
-                            </div>
+                    historyFailed ? null : (
+                        <div className="py-10 text-center text-muted-foreground">
+                            {t("plannedPage.history.empty")}
                         </div>
-                        <div className="max-h-[55vh] overflow-y-auto">
-                            {executionHistory.map((item) => (
-                                <div
-                                    key={`${item.plannedPaymentId}-${item.transactionId}-${item.executionDate}`}
-                                    className="grid grid-cols-12 gap-3 border-b px-3 py-2 text-sm last:border-b-0"
-                                >
-                                    <div className="col-span-2 text-muted-foreground">
-                                        {formatDateStringWithAppSettings(
-                                            item.executionDate,
-                                            appSettings.dateFormat,
-                                        ) || "—"}
-                                    </div>
-                                    <div className="col-span-3 font-medium">
-                                        {item.plannedPaymentName}
-                                    </div>
-                                    <div className="col-span-5 min-w-0">
-                                        <div className="truncate">
-                                            {item.memo ||
-                                                t(
-                                                    "plannedPage.link.txFallback",
-                                                    { id: item.transactionId },
-                                                )}
-                                        </div>
-                                        <div className="text-xs text-muted-foreground truncate">
-                                            {[
-                                                item.recipientName,
-                                                item.categoryName,
-                                                formatDateStringWithAppSettings(
-                                                    item.transactionDate,
-                                                    appSettings.dateFormat,
-                                                ),
-                                            ]
-                                                .filter(Boolean)
-                                                .join(" • ")}
-                                        </div>
-                                    </div>
-                                    <div className="col-span-2 flex items-center justify-end gap-2">
-                                        <span
-                                            className={cn(
-                                                "tabular-nums font-semibold",
-                                                item.amount < 0
-                                                    ? "text-loss"
-                                                    : "text-gain",
-                                            )}
-                                        >
-                                            <Money
-                                                amount={item.amount}
-                                                currency={item.currency}
-                                                signed
-                                            />
-                                        </span>
-                                        <Button
-                                            asChild
-                                            variant="ghost"
-                                            size="icon"
-                                            className="icon-touch-target"
-                                        >
-                                            <Link
-                                                to={`/transactions?transaction_id=${item.transactionId}`}
-                                                aria-label={t(
-                                                    "plannedPage.history.openTransaction",
-                                                )}
-                                                onClick={(event) => {
-                                                    if (
-                                                        event.button === 0 &&
-                                                        !event.metaKey &&
-                                                        !event.ctrlKey &&
-                                                        !event.shiftKey &&
-                                                        !event.altKey
-                                                    ) {
-                                                        onOpenChange(false);
-                                                    }
-                                                }}
-                                            >
-                                                <ExternalLink className="h-4 w-4" />
-                                            </Link>
-                                        </Button>
-                                    </div>
+                    )
+                ) : (
+                    <div
+                        role="region"
+                        aria-label={t("plannedPage.history.title")}
+                        tabIndex={0}
+                        className="overflow-x-auto rounded-md border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+                    >
+                        <div className="min-w-[36rem]">
+                            <div className="grid grid-cols-[7rem_10rem_minmax(12rem,1fr)_max-content] gap-3 border-b bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground">
+                                <div>
+                                    {t("plannedPage.history.colExecutedOn")}
                                 </div>
-                            ))}
+                                <div>
+                                    {t("plannedPage.history.colPlanned")}
+                                </div>
+                                <div>
+                                    {t("plannedPage.history.colTransaction")}
+                                </div>
+                                <div className="text-right">
+                                    {t("plannedPage.col.amount")}
+                                </div>
+                            </div>
+                            <div className="max-h-[55vh] overflow-y-auto">
+                                {executionHistory.map((item) => (
+                                    <div
+                                        key={`${item.plannedPaymentId}-${item.transactionId}-${item.executionDate}`}
+                                        className="grid grid-cols-[7rem_10rem_minmax(12rem,1fr)_max-content] gap-3 border-b px-3 py-2 text-sm last:border-b-0"
+                                    >
+                                        <div className="text-muted-foreground">
+                                            {formatDateStringWithAppSettings(
+                                                item.executionDate,
+                                                appSettings.dateFormat,
+                                            ) || "—"}
+                                        </div>
+                                        <div className="font-medium">
+                                            {item.plannedPaymentName}
+                                        </div>
+                                        <div className="min-w-0">
+                                            <div className="truncate">
+                                                {item.memo ||
+                                                    t(
+                                                        "plannedPage.link.txFallback",
+                                                        {
+                                                            id: item.transactionId,
+                                                        },
+                                                    )}
+                                            </div>
+                                            <div className="text-xs text-muted-foreground truncate">
+                                                {[
+                                                    item.recipientName,
+                                                    item.categoryName,
+                                                    formatDateStringWithAppSettings(
+                                                        item.transactionDate,
+                                                        appSettings.dateFormat,
+                                                    ),
+                                                ]
+                                                    .filter(Boolean)
+                                                    .join(" • ")}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center justify-end gap-2">
+                                            <span
+                                                className={cn(
+                                                    "tabular-nums font-semibold",
+                                                    item.amount < 0
+                                                        ? "text-loss"
+                                                        : "text-gain",
+                                                )}
+                                            >
+                                                <Money
+                                                    amount={item.amount}
+                                                    currency={item.currency}
+                                                    signed
+                                                />
+                                            </span>
+                                            <Button
+                                                asChild
+                                                variant="ghost"
+                                                size="icon"
+                                                className="icon-touch-target"
+                                            >
+                                                <Link
+                                                    to={`/transactions?transaction_id=${item.transactionId}`}
+                                                    aria-label={t(
+                                                        "plannedPage.history.openTransaction",
+                                                    )}
+                                                    onClick={(event) => {
+                                                        if (
+                                                            event.button ===
+                                                                0 &&
+                                                            !event.metaKey &&
+                                                            !event.ctrlKey &&
+                                                            !event.shiftKey &&
+                                                            !event.altKey
+                                                        ) {
+                                                            onOpenChange(false);
+                                                        }
+                                                    }}
+                                                >
+                                                    <ExternalLink className="h-4 w-4" />
+                                                </Link>
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 )}

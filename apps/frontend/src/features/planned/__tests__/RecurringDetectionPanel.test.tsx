@@ -65,10 +65,12 @@ function servePatternsAndCapturePost(direction: "income" | "expense") {
 
 async function clickTrack(user: ReturnType<typeof userEvent.setup>) {
     const toggle = await screen.findByRole("button", {
-        name: /show or hide detected recurring patterns/i,
+        name: /review: detected recurring patterns/i,
     });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
     await user.click(toggle);
+    expect(toggle).toHaveAccessibleName(/hide: detected recurring patterns/i);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
     const trackBtn = await screen.findByRole("button", { name: /track/i });
     await user.click(trackBtn);
 }
@@ -155,7 +157,7 @@ describe("RecurringDetectionPanel — detected sign carried into the planned pay
         renderWithApp(<RecurringDetectionPanel />);
 
         const toggle = await screen.findByRole("button", {
-            name: /show or hide amount changes/i,
+            name: /review:.*amount changes/i,
         });
         expect(toggle).toHaveAttribute("aria-expanded", "false");
         expect(screen.queryByText(/€100/)).not.toBeInTheDocument();
@@ -202,7 +204,7 @@ describe("RecurringDetectionPanel — detected sign carried into the planned pay
         renderWithApp(<RecurringDetectionPanel />);
         await user.click(
             await screen.findByRole("button", {
-                name: /show or hide detected recurring patterns/i,
+                name: /review: detected recurring patterns/i,
             }),
         );
         expect(await screen.findByText("SPECIAL:VALUE")).toBeInTheDocument();
