@@ -327,6 +327,7 @@ The execute endpoint is now **atomic and idempotent**:
 
 - **Database:** A unique index on `planned_transaction_executions (planned_transaction_id, executed_transaction_id)` prevents duplicate execution pairs. The insert uses `ON CONFLICT DO NOTHING`.
 - **Service:** `executePlanned` locks the planned parent row before reading its date, execution count, bounds, and tags. The read, advance calculation, execution insert, inherited tags, and final read share one transaction. Distinct concurrent executions therefore advance from successive states.
+- **Calendar dates:** Execution normalizes PostgreSQL DATE values with local calendar getters and advances them with `nextOccurrenceYmd`. It does not interpret host-local midnight as an instant in `APP_TIMEZONE`; a July 1 monthly plan advances to August 1 even when the host and application timezones differ. Month-end clamping remains sequential (January 31, February 28, March 28).
 - **Bounds:** A new execution after maximum-count or end-date completion returns `409 CONFLICT` without inserting an execution or copying tags. Replaying an existing pair remains a `200` response with `Idempotent-Replay: true`, even after the series completes.
 - **Result:** Double-clicks, retries, and network replays return the same result without creating duplicate execution rows.
 
@@ -820,11 +821,9 @@ multi-currency amounts cannot be summed in mismatched units.
 - `0002_add_url_to_planned_transactions.py` — Added `url` field for linking to billing portals
 - `0011_planned_loans.py` — Added loan support fields (`is_loan`, `loan_type`, `loan_principal`, `loan_annual_interest_rate`, `loan_term_months`, `loan_start_date`, `loan_payment_day`, `loan_regular_payment_amount`, `loan_first_payment_date`) and `planned_transaction_loan_schedule` table
 
-
 ## List visibility filters
 
 Include paused is a labeled switch with a stable label and an explicit on/off state. Recipients also uses an Uncategorized only switch. These controls retain the existing filtering and URL behavior.
-
 
 ## Clarity and recovery feedback
 

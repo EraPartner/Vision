@@ -97,6 +97,47 @@ describe("executePlanned — recurrence bounds (migration 0071)", () => {
     });
   });
 
+  it("preserves pg DATE calendar days across consecutive monthly executions", async () => {
+    for (const [base, next] of [
+      [new Date(2026, 6, 1), "2026-08-01"],
+      [new Date(2026, 7, 1), "2026-09-01"],
+      [new Date(2026, 0, 31), "2026-02-28"],
+      [new Date(2026, 1, 28), "2026-03-28"],
+    ]) {
+      plannedTransactionService.executeAndAdvance.mockClear();
+      plannedTransactionService.getById.mockResolvedValue(
+        planned({ planned_date: base }),
+      );
+      await executePlanned({
+        id: 1,
+        executedTransactionId: 9,
+        executionDate: "2026-07-01",
+      });
+      expect(advancedFields()).toMatchObject({
+        planned_date: next,
+        is_executed: false,
+      });
+    }
+  });
+
+  it("includes an end-date occurrence for pg DATE values", async () => {
+    plannedTransactionService.getById.mockResolvedValue(
+      planned({
+        planned_date: new Date(2026, 6, 1),
+        recurrence_end_date: new Date(2026, 7, 1),
+      }),
+    );
+    await executePlanned({
+      id: 1,
+      executedTransactionId: 9,
+      executionDate: "2026-07-01",
+    });
+    expect(advancedFields()).toMatchObject({
+      planned_date: "2026-08-01",
+      is_executed: false,
+    });
+  });
+
   it("completes the series when the execution count reaches max_occurrences", async () => {
     // 11 prior executions + this one = 12 = max → done, no advance.
     plannedTransactionService.getById.mockResolvedValue(

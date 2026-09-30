@@ -13,9 +13,9 @@
 
 import plannedTransactionService from "./plannedTransactionService.js";
 import { withTransaction } from "../database/connection.js";
-import { calculateNextDate } from "../lib/calculations/recurrence.js";
+import { nextOccurrenceYmd } from "../lib/calculations/recurrence.js";
 import { ConflictError, NotFoundError } from "../middleware/errorHandler.js";
-import { toAppDateString, todayAppDateString } from "../lib/timezone.js";
+import { todayAppDateString } from "../lib/timezone.js";
 import { toWireDate } from "../lib/dateFormat.js";
 
 /**
@@ -83,15 +83,13 @@ export async function executePlanned({
         existing.max_occurrences != null &&
         priorExecutions + 1 >= Number(existing.max_occurrences);
 
-      const baseDate = new Date(existing.planned_date);
-      const nextDate = calculateNextDate(baseDate, existing.recurrence_pattern);
-      if (nextDate) {
-        // calculateNextDate returns a UTC instant for start-of-day in APP_TIMEZONE.
-        // toISOString() takes the UTC calendar day, which is the *previous* day in
-        // a UTC+ zone — moving a monthly payment one day earlier per cycle.
-        // toAppDateString reads the date back in APP_TIMEZONE. (Day-of-month anchor
-        // is intentionally sticky-clamped — see docs/features planned-transactions.)
-        const nextYmd = toAppDateString(nextDate);
+      // pg DATE values represent local calendar days, not instants in APP_TIMEZONE.
+      // Preserve the stored day before applying the shared calendar recurrence.
+      const nextYmd = nextOccurrenceYmd(
+        toWireDate(existing.planned_date),
+        existing.recurrence_pattern,
+      );
+      if (nextYmd) {
         const endYmd = toWireDate(existing.recurrence_end_date);
         const pastEndDate = endYmd != null && nextYmd > endYmd;
 
