@@ -275,7 +275,11 @@ describe("Portfolio pages (integration)", () => {
             screen.getByRole("button", { name: /fx.?neutral/i }),
         ).toHaveClass("bg-background");
         expect(requestedPeriods).toContain("3m");
-        expect(screen.getByText("The period changes the charts. Summary returns cover all available history.")).toBeInTheDocument();
+        expect(
+            screen.getByText(
+                "The period changes the charts. Summary returns cover all available history.",
+            ),
+        ).toBeInTheDocument();
     });
 
     it("PerformancePage shows empty state when no snapshots", async () => {
@@ -1391,7 +1395,6 @@ describe("Portfolio pages (integration)", () => {
         // Regression: this used to create the investment and silently drop the
         // buy behind a success toast; now nothing is POSTed until the initial
         // purchase is filled in (or toggled off).
-        const toastSpy = vi.spyOn(toast, "error");
         let postCalls = 0;
         server.use(
             http.post(`${API_BASE}/api/investments`, () => {
@@ -1420,15 +1423,11 @@ describe("Portfolio pages (integration)", () => {
 
         await user.click(screen.getByRole("button", { name: /^add$/i }));
 
-        await vi.waitFor(
-            () => {
-                expect(toastSpy).toHaveBeenCalled();
-            },
-            { timeout: 3000 },
-        );
+        const amountInput = screen.getByLabelText(/^total cost/i);
+        expect(amountInput).toHaveAttribute("aria-invalid", "true");
+        expect(amountInput).toHaveAccessibleDescription("Amount is required");
+        expect(amountInput).toHaveFocus();
         expect(postCalls).toBe(0);
-
-        toastSpy.mockRestore();
     });
 
     it("StocksPage Add Investment type selector shows Stock and ETF options", async () => {
