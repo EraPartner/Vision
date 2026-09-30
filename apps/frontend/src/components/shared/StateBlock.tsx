@@ -34,41 +34,22 @@ export function StateBlock({
         <div
             className={cn(
                 "flex flex-col items-center justify-center px-4 text-center animate-in",
-                compact ? "py-8" : "py-16",
+                compact ? "py-6" : "py-10 sm:py-12",
                 className,
             )}
         >
-            <div className={cn("relative", compact ? "mb-3" : "mb-5")}>
-                <div
-                    aria-hidden="true"
-                    className={cn(
-                        "absolute rounded-3xl blur-2xl",
-                        compact ? "-inset-2" : "-inset-3",
-                        destructive
-                            ? "bg-destructive/10"
-                            : "bg-gradient-to-br from-primary/15 to-accent/10",
-                    )}
-                />
-                <div
-                    className={cn(
-                        "relative flex items-center justify-center rounded-2xl glass-regular",
-                        compact ? "h-12 w-12" : "h-16 w-16",
-                        destructive && "border-destructive/20 bg-destructive/5",
-                    )}
-                >
-                    <Icon
-                        className={cn(
-                            compact ? "h-6 w-6" : "h-8 w-8",
-                            destructive
-                                ? "text-destructive/80"
-                                : "text-muted-foreground/70",
-                        )}
-                    />
-                </div>
+            <div
+                aria-hidden="true"
+                className={cn(
+                    "mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-muted/50",
+                    destructive ? "text-destructive" : "text-muted-foreground",
+                )}
+            >
+                <Icon className="h-5 w-5" />
             </div>
             <Heading
                 className={cn(
-                    "font-display font-semibold text-foreground",
+                    "font-semibold text-foreground text-balance",
                     compact ? "text-base" : "text-lg",
                 )}
             >
@@ -77,7 +58,7 @@ export function StateBlock({
             {description && (
                 <p
                     className={cn(
-                        "mt-1 text-sm text-muted-foreground",
+                        "mt-1 text-sm leading-relaxed text-pretty text-muted-foreground",
                         compact ? "max-w-xs" : "max-w-sm",
                     )}
                 >
@@ -86,7 +67,14 @@ export function StateBlock({
             )}
             {details && <div className="mt-3 w-full max-w-lg">{details}</div>}
             {action && (
-                <div className={compact ? "mt-4" : "mt-5"}>{action}</div>
+                <div
+                    className={cn(
+                        "flex max-w-full flex-wrap justify-center gap-2",
+                        compact ? "mt-4" : "mt-5",
+                    )}
+                >
+                    {action}
+                </div>
             )}
         </div>
     );

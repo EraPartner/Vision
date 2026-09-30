@@ -8,7 +8,6 @@ import {
     useRef,
     useState,
 } from "react";
-import { CardSheen } from "@/components/shared/CardSheen";
 import { parseDecimal } from "@/lib/decimal";
 import {
     formatEditableNumber,
@@ -1214,16 +1213,15 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
 
     return (
         <Card className="relative overflow-hidden">
-            <CardSheen />
             {(title || subtitle || actions) && (
                 <CardHeader
                     className={cn(
-                        "flex flex-row items-start space-y-0 pb-4",
+                        "flex flex-row flex-wrap items-start gap-3 space-y-0 pb-4",
                         title || subtitle ? "justify-between" : "justify-end",
                     )}
                 >
                     {(title || subtitle) && (
-                        <div>
+                        <div className="min-w-0 flex-1 basis-48">
                             {title && (
                                 <CardTitle variant="sm">{title}</CardTitle>
                             )}
@@ -1235,14 +1233,19 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                         </div>
                     )}
                     {actions && (
-                        <div className="flex items-center gap-2">{actions}</div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            {actions}
+                        </div>
                     )}
                 </CardHeader>
             )}
 
             {/* Search bar */}
-            <div className="px-6 pb-3 flex items-center gap-3">
-                <div className="relative flex-1" ref={searchContainerRef}>
+            <div className="px-6 pb-3 flex flex-wrap items-center gap-3">
+                <div
+                    className="relative min-w-0 flex-1 basis-48"
+                    ref={searchContainerRef}
+                >
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                         placeholder={
@@ -1257,7 +1260,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                 ? () => setSearchFocused(true)
                                 : undefined
                         }
-                        className="pl-9 h-9"
+                        className="pl-9 pr-12 h-9"
                     />
                     {localSearchQuery && (
                         <Button

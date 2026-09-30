@@ -958,8 +958,8 @@
        approach. Two expressions of one rule, picked by what the surface
        already does on hover:
 
-       1. `.press-feedback` — surfaces that LIFT or float on hover (buttons,
-          cards, option tiles, the sidebar segmented control). Uses the
+       1. `.press-feedback` — buttons and other pressable surfaces, including
+          hover-lifting cards, option tiles and sidebar controls. Uses the
           composite `transform`, which in Tailwind v4 is a different property
           from the `translate`/`scale` its hover utilities ride, so it stacks
           with them; it also outranks `.micro-lift:hover` (declared above), so

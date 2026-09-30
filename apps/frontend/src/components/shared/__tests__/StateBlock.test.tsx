@@ -7,14 +7,14 @@ import { StateBlock } from "@/components/shared/StateBlock";
 describe("StateBlock", () => {
     it("renders the shared neutral anatomy and action slot", () => {
         render(<StateBlock icon={Inbox} title="Nothing here" description="Add the first item." action={<button>Start</button>} />);
-        expect(screen.getByRole("heading", { name: "Nothing here" })).toHaveClass("font-display", "text-lg");
+        expect(screen.getByRole("heading", { name: "Nothing here" })).toHaveClass("font-semibold", "text-lg");
         expect(screen.getByRole("button", { name: "Start" })).toBeInTheDocument();
     });
 
     it("supports compact destructive states", () => {
         const { container } = render(<StateBlock icon={AlertTriangle} tone="destructive" size="compact" headingLevel={2} title="Failed" />);
         expect(screen.getByRole("heading", { level: 2, name: "Failed" })).toHaveClass("text-base");
-        expect(container.querySelector(".bg-destructive\\/10")).toBeInTheDocument();
+        expect(container.querySelector("[aria-hidden='true']")).toHaveClass("text-destructive");
     });
 
     it("supports nested in-card heading levels", () => {

@@ -26,8 +26,8 @@ export function PageHeader({
     }, [title, setTitle]);
 
     return (
-        <div className="canvas-text flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-            <div className="flex min-w-0 items-center gap-3">
+        <div className="canvas-text flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:gap-4">
+            <div className="flex min-w-0 items-center gap-3 sm:flex-1 sm:basis-80">
                 {Icon && (
                     <div
                         className={cn(
@@ -39,19 +39,19 @@ export function PageHeader({
                         <Icon className="h-5 w-5" aria-hidden />
                     </div>
                 )}
-                <div>
-                    <h1 className="page-header-title text-3xl font-bold text-foreground tracking-tight">
+                <div className="min-w-0">
+                    <h1 className="page-header-title break-words text-3xl font-bold text-foreground tracking-tight">
                         {title}
                     </h1>
                     {subtitle && (
-                        <p className="page-header-subtitle text-muted-foreground mt-1">
+                        <p className="page-header-subtitle max-w-prose text-pretty text-muted-foreground mt-1">
                             {subtitle}
                         </p>
                     )}
                 </div>
             </div>
             {actions && (
-                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <div className="flex max-w-full flex-wrap items-center gap-2 sm:ml-auto">
                     {actions}
                 </div>
             )}

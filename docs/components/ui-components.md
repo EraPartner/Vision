@@ -2,8 +2,8 @@
 title: UI Components
 type: component
 status: active
-date: 2026-09-27
-updated: 2026-09-27
+date: 2026-09-30
+updated: 2026-09-30
 tags:
   [
     components,
@@ -146,7 +146,7 @@ parent section heading; do not choose a level to obtain a visual size.
 - `.liquid-canvas-grain` — SVG grain child of the atmosphere layer
 - `.canvas-text` — canvas-text legibility guarantee (see below)
 
-Dense table shells override the base material with an opaque surface. They do not add Card hover motion unless the table itself has a real activation affordance.
+Dense table shells override the base material with an opaque surface. They do not add Card hover motion unless the table itself has a real activation affordance. VirtualDataTable also omits decorative corner sheen. Its header actions and search controls wrap within the available width, and search text reserves space for its clear action. PageHeader allows action groups to wrap below the title when space is limited; subtitles have a readable line length.
 
 `prefers-reduced-motion`: transitions/animations disabled; aurora drift paused; sidebar `ActiveRail` transitions are instant.
 
@@ -388,7 +388,7 @@ Code links: [[apps/frontend/src/App.tsx]], [[apps/frontend/src/components/ui/son
 
 ## Button
 
-Primary action component with multiple variants.
+Primary action component with multiple variants. Standard and small buttons share the same corner radius across primary, outline, secondary and destructive styles. Large buttons retain their larger radius. Color and border distinguish emphasis; hover changes the surface without lifting the control or adding a colored glow. Shared press feedback, keyboard focus, disabled states and reduced-motion handling remain intact.
 
 ### Variants
 
@@ -982,3 +982,7 @@ Code links: `apps/frontend/src/components/charts/` (chart.tsx removed in ADR-018
 ## Scanning hierarchy
 
 [[docs/adr/172-calm-information-hierarchy|ADR-172]] reserves prominent surfaces for selected totals. `StatCard` defaults to secondary emphasis; `emphasis="primary"` opts into elevated glass and a restrained accent border. Only tiles with a destination advertise whole-card interaction. Page headers use a small muted icon by default, preserving explicit semantic overrides. Badges and table headings use body text without forced capitals or wide tracking; severity colors and focus treatments remain intact. Resting card shadows are reduced while material and interactive states remain distinct.
+
+Shared empty and error states use a compact neutral icon, a body-font heading, and a constrained readable description. Decorative glow is omitted; recovery actions wrap at narrow widths. Categories, planned payments, and statistics use the shared page-header action slot so controls follow the same responsive placement.
+
+The shared dialog close control uses the current application language for its accessible name.
