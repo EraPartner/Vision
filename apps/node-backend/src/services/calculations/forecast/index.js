@@ -91,9 +91,9 @@ const DEFAULT_ROLLING_MC_PERCENTILES = [25, 75];
  *     label: string,
  *     mae: number,
  *     rmse: number,
- *     mape: number,
+ *     mape: number | null,
  *     months: number,
- *     per_month: Array<{ month: string, mae: number, rmse: number, mape: number, sample_days: number }>,
+ *     per_month: Array<{ month: string, mae: number, rmse: number, mape: number | null, sample_days: number }>,
  *   }>,
  * }} DiagnosticsPayload
  *
@@ -651,7 +651,7 @@ export async function computeCashflowForecast({
         months: b.aggregate.months,
         per_month: b.perMonth.map(
           (
-            /** @type {{ month: string, mae: number, rmse: number, mape: number, sampleDays: number }} */ {
+            /** @type {{ month: string, mae: number, rmse: number, mape: number | null, sampleDays: number }} */ {
               month,
               mae,
               rmse,
@@ -706,15 +706,16 @@ export async function computeCashflowForecast({
   // Write to cache whenever default MC params used (nightly job + any live compute).
   // Cache stores the base payload without breakdown (breakdown is always computed on demand).
   if (isDefaultMcParams(mcPaths, mcPercentiles)) {
-    mcCacheRepo
-      .upsert({
-        userId,
-        month: yyyymm,
-        filterHash: hash,
-        mcPaths,
-        payload: basePayload,
-      })
-      .catch((err) => {
+    const write = mcCacheRepo.upsert({
+      userId,
+      month: yyyymm,
+      filterHash: hash,
+      mcPaths,
+      payload: basePayload,
+    });
+    if (_forceCache) await write;
+    else
+      write.catch((err) => {
         logger.warn("Cashflow forecast MC cache write failed", {
           error: err.message,
         });
@@ -865,7 +866,7 @@ export async function computeCashflowForecastRolling({
         months: b.aggregate.windows,
         per_month: b.perWindow.map(
           (
-            /** @type {{ window_end: string, mae: number, rmse: number, mape: number, sampleDays: number }} */ {
+            /** @type {{ window_end: string, mae: number, rmse: number, mape: number | null, sampleDays: number }} */ {
               window_end,
               mae,
               rmse,

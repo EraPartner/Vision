@@ -412,7 +412,7 @@ describe("walkForwardBacktest", () => {
     expect(result[0].aggregate).toEqual({
       mae: 0,
       rmse: 0,
-      mape: 0,
+      mape: null,
       months: 0,
     });
   });

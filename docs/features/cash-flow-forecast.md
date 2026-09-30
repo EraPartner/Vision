@@ -2,7 +2,7 @@
 title: Cash Flow Forecast
 type: feature
 status: active
-date: 2026-04-25
+date: 2026-09-30
 updated: 2026-09-25
 last_modified: 2026-09-05
 tags: [feature, cash-flow, forecast, planning, aggregations, phase-6, phase-10, phase-c, phase-d, phase-e, phase-g, planned-transactions, statistical-forecasting, ensemble-methods, ensemble-v2, empirical-bayes, frontend-visualization, multi-method-forecast, diagnostics-sheet, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience]
@@ -582,6 +582,27 @@ Plan for this when reviewing the forecast. Use [[docs/features/exchange-rates|Ex
 4. **Handle unusual months** — Mark one-time bonuses or vacation expenses explicitly (they clutter averages)
 5. **Combine approaches** — Use Phase 6 for known upcoming events; Phase 10 for remaining uncertainty
 6. **Trust metrics** — When choosing a method, prefer highest MAPE or lowest RMSE over gut feel
+
+## Forecast regression benchmarks and percentage errors
+
+`tests/services/forecastQuality.test.js` fixes UTC daily synthetic series and a 30-day holdout.
+Zero/constant mean absolute error (MAE) is bounded by 1e-6; linear trend by 0.05 reporting currency
+units. Weekly and weekly-trend series use 1.5 at 60/90 training days and 0.25 at 180/365/730 days.
+A trend that becomes a plateau uses 0.3. Calendar annual seasonality uses 6 at 365/730/1095 days;
+that wider bound records limited annual fit, not evidence of precise seasonal predictions.
+These are deterministic regression ceilings, not real-data accuracy guarantees. Current results
+do not justify changing ridge fitting or introducing trend damping from old examples alone.
+
+Mean absolute percentage error (MAPE) is unavailable (`null`) when the absolute cumulative actual
+is at most 0.01 reporting currency units. MAE and root mean square error remain available. Aggregate
+MAPE averages only eligible months/windows; it is null when none qualify. Total window counts still
+include every evaluated window. Empty backtests also have unavailable MAPE. The existing diagnostics
+placeholder displays unavailable values. Historical stored accuracy and old cached payloads retain
+their original metrics until recomputed; no history rewrite occurs.
+
+The daily cache job now follows [[docs/adr/174-single-instance-daily-job-catch-up|ADR-174]] rather
+than a fixed nightly time. It records success only after cache persistence completes.
+
 
 ## Related Features
 

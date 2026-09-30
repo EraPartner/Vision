@@ -120,7 +120,7 @@ describe("walkForwardBacktestRolling", () => {
     expect(entry.aggregate).toMatchObject({
       mae: expect.any(Number),
       rmse: expect.any(Number),
-      mape: expect.any(Number),
+      mape: null,
       windows: expect.any(Number),
     });
     expect(Array.isArray(entry.perWindow)).toBe(true);
@@ -138,7 +138,7 @@ describe("walkForwardBacktestRolling", () => {
       expect(w.window_end).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(typeof w.mae).toBe("number");
       expect(typeof w.rmse).toBe("number");
-      expect(typeof w.mape).toBe("number");
+      expect(w.mape === null || typeof w.mape === "number").toBe(true);
       expect(typeof w.sampleDays).toBe("number");
     }
   });
@@ -181,7 +181,7 @@ describe("walkForwardBacktestRolling", () => {
     expect(result[0].aggregate).toMatchObject({
       mae: 0,
       rmse: 0,
-      mape: 0,
+      mape: null,
       windows: 0,
     });
     expect(result[0].perWindow).toHaveLength(0);

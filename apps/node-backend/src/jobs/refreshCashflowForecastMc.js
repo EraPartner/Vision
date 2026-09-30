@@ -7,7 +7,7 @@
  * simulation. The backtest is included so the cached payload is complete for
  * the UI; the cost is paid once per user per night rather than per request.
  *
- * Called from main.js via setInterval every 24 hours. Also exported so it
+ * Scheduled by startup/warmup.js with a persisted daily completion checkpoint. Also exported so it
  * can be triggered manually or in integration tests.
  */
 
@@ -24,7 +24,7 @@ export async function refreshCashflowForecastMc() {
   const start = Date.now();
   logger.info('Nightly cashflow forecast MC refresh started');
 
-  const userIds = await getActiveUserIds();
+  const userIds = await getActiveUserIds({ strict: true });
   let success = 0;
   let failed = 0;
 
@@ -54,4 +54,5 @@ export async function refreshCashflowForecastMc() {
     failed,
     elapsed_ms: elapsed,
   });
+  return { success, failed };
 }

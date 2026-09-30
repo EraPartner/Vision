@@ -22,7 +22,7 @@ import { query } from "../database/connection.js";
 /**
  * Upsert a backtest result. Idempotent per (user_id, method_id, as_of_month).
  * @param {{ userId: string, methodId: string, asOfMonth: string,
- *            mae: number, rmse: number, mape: number, sampleDays: number }} params
+ *            mae: number, rmse: number, mape: number | null, sampleDays: number }} params
  */
 async function upsert({
   userId,

@@ -56,7 +56,7 @@ export async function clearAll() {
  * Returns distinct user_ids that have ever triggered a forecast (via accuracy records).
  * Used by the nightly job to know which users to pre-warm.
  */
-export async function getActiveUserIds() {
+export async function getActiveUserIds({ strict = false } = {}) {
   try {
     const res = await query(
       `SELECT DISTINCT user_id FROM cashflow_forecast_accuracy`,
@@ -64,7 +64,8 @@ export async function getActiveUserIds() {
     const ids = res.rows.map((/** @type {any} */ r) => r.user_id);
     if (!ids.includes("anonymous")) ids.push("anonymous");
     return ids;
-  } catch {
+  } catch (err) {
+    if (strict) throw err;
     return ["anonymous"];
   }
 }

@@ -68,6 +68,11 @@ describe('cashflowForecastMcRepository.getActiveUserIds', () => {
     expect(ids).toContain('anonymous');
   });
 
+  it('fails closed when daily refresh requires complete user discovery', async () => {
+    query.mockRejectedValueOnce(new Error('user discovery unavailable'));
+    await expect(getActiveUserIds({ strict: true })).rejects.toThrow('user discovery unavailable');
+  });
+
   it('does not duplicate anonymous if already in result', async () => {
     query.mockResolvedValueOnce({ rows: [{ user_id: 'anonymous' }] });
     const ids = await getActiveUserIds();

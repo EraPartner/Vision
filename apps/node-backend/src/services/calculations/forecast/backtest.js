@@ -5,10 +5,14 @@
  * RMSE, MAPE (on end-of-month cumulative) per method + residual series.
  */
 
-import { densifyDailyHistory } from './_densify.js';
-import { epochMsToUtcYmd } from '../../../lib/dateFormat.js';
+import { densifyDailyHistory } from "./_densify.js";
+import { epochMsToUtcYmd } from "../../../lib/dateFormat.js";
 
 const DEFAULT_BACKTEST_MONTHS = 12;
+
+// Percentage error is unavailable at or below one hundredth of a reporting
+// currency unit. Absolute errors remain meaningful for near-zero net cashflow.
+const MIN_PERCENTAGE_ACTUAL = 0.01;
 
 /**
  * @typedef {{date: string, net: number}} DailyNetPoint
@@ -21,14 +25,14 @@ const DEFAULT_BACKTEST_MONTHS = 12;
  * @param {number} delta
  */
 function addMonths(iso, delta) {
-  const [y, m] = iso.split('-').map(Number);
+  const [y, m] = iso.split("-").map(Number);
   const d = new Date(Date.UTC(y, m - 1 + delta, 1));
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
 /** @param {string} yyyymm */
 function daysInMonth(yyyymm) {
-  const [y, m] = yyyymm.split('-').map(Number);
+  const [y, m] = yyyymm.split("-").map(Number);
   return new Date(Date.UTC(y, m, 0)).getUTCDate();
 }
 
@@ -36,7 +40,8 @@ function daysInMonth(yyyymm) {
 function monthDates(yyyymm) {
   const n = daysInMonth(yyyymm);
   const out = [];
-  for (let d = 1; d <= n; d++) out.push(`${yyyymm}-${String(d).padStart(2, '0')}`);
+  for (let d = 1; d <= n; d++)
+    out.push(`${yyyymm}-${String(d).padStart(2, "0")}`);
   return out;
 }
 
@@ -61,7 +66,10 @@ function actualForMonth(history, yyyymm) {
       byDate.set(r.date, (byDate.get(r.date) ?? 0) + r.net);
     }
   }
-  return monthDates(yyyymm).map((date) => ({ date, net: byDate.get(date) ?? 0 }));
+  return monthDates(yyyymm).map((date) => ({
+    date,
+    net: byDate.get(date) ?? 0,
+  }));
 }
 
 /**
@@ -87,7 +95,10 @@ function stats(predictedSeries, actualSeries) {
   }
   const mae = n > 0 ? sumAbs / n : 0;
   const rmse = n > 0 ? Math.sqrt(sumSq / n) : 0;
-  const mape = Math.abs(cumActual) > 1e-9 ? Math.abs(cumPred - cumActual) / Math.abs(cumActual) : 0;
+  const mape =
+    Math.abs(cumActual) > MIN_PERCENTAGE_ACTUAL + Number.EPSILON
+      ? Math.abs(cumPred - cumActual) / Math.abs(cumActual)
+      : null;
   return { mae, rmse, mape, residuals, cumPred, cumActual, sampleDays: n };
 }
 
@@ -99,10 +110,20 @@ function stats(predictedSeries, actualSeries) {
  *   windowMonths?: number,
  * }} ctx
  */
-export function walkForwardBacktest({ history, methods, asOfMonth, windowMonths = DEFAULT_BACKTEST_MONTHS }) {
+export function walkForwardBacktest({
+  history,
+  methods,
+  asOfMonth,
+  windowMonths = DEFAULT_BACKTEST_MONTHS,
+}) {
   const perMethod = new Map();
   for (const m of methods) {
-    perMethod.set(m.id, { id: m.id, label: m.label, perMonth: [], aggregate: null });
+    perMethod.set(m.id, {
+      id: m.id,
+      label: m.label,
+      perMonth: [],
+      aggregate: null,
+    });
   }
 
   for (let k = windowMonths; k >= 1; k--) {
@@ -111,8 +132,11 @@ export function walkForwardBacktest({ history, methods, asOfMonth, windowMonths 
     // per-DOM means match the live forecast path; otherwise backtest MAE is
     // computed against a differently-biased model than the one shipped.
     const prevMonth = addMonths(targetMonth, -1);
-    const trainEnd = `${prevMonth}-${String(daysInMonth(prevMonth)).padStart(2, '0')}`;
-    const trainHistory = densifyDailyHistory(filterHistoryBefore(history, targetMonth), trainEnd);
+    const trainEnd = `${prevMonth}-${String(daysInMonth(prevMonth)).padStart(2, "0")}`;
+    const trainHistory = densifyDailyHistory(
+      filterHistoryBefore(history, targetMonth),
+      trainEnd,
+    );
     if (trainHistory.length === 0) continue;
     const actual = actualForMonth(history, targetMonth);
     const forecastDates = actual.map((a) => a.date);
@@ -140,19 +164,28 @@ export function walkForwardBacktest({ history, methods, asOfMonth, windowMonths 
 
   for (const entry of perMethod.values()) {
     if (entry.perMonth.length === 0) {
-      entry.aggregate = { mae: 0, rmse: 0, mape: 0, months: 0 };
+      entry.aggregate = { mae: 0, rmse: 0, mape: null, months: 0 };
       continue;
     }
     let mae = 0;
     let rmse = 0;
     let mape = 0;
+    let percentageSamples = 0;
     for (const m of entry.perMonth) {
       mae += m.mae;
       rmse += m.rmse;
-      mape += m.mape;
+      if (m.mape !== null) {
+        mape += m.mape;
+        percentageSamples++;
+      }
     }
     const n = entry.perMonth.length;
-    entry.aggregate = { mae: mae / n, rmse: rmse / n, mape: mape / n, months: n };
+    entry.aggregate = {
+      mae: mae / n,
+      rmse: rmse / n,
+      mape: percentageSamples ? mape / percentageSamples : null,
+      months: n,
+    };
   }
 
   return Array.from(perMethod.values());
@@ -171,15 +204,30 @@ export function walkForwardBacktest({ history, methods, asOfMonth, windowMonths 
  *   windowCount?: number,
  * }} ctx
  */
-export function walkForwardBacktestRolling({ history, methods, daysBack: _daysBack, daysForward, windowCount = 8 }) {
+export function walkForwardBacktestRolling({
+  history,
+  methods,
+  daysBack: _daysBack,
+  daysForward,
+  windowCount = 8,
+}) {
   const now = new Date();
-  const todayMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const todayMs = Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
+  );
   /** @param {number} offset */
   const isoAt = (offset) => epochMsToUtcYmd(todayMs + offset * 86_400_000);
 
   const perMethod = new Map();
   for (const m of methods) {
-    perMethod.set(m.id, { id: m.id, label: m.label, perWindow: [], aggregate: null });
+    perMethod.set(m.id, {
+      id: m.id,
+      label: m.label,
+      perWindow: [],
+      aggregate: null,
+    });
   }
 
   const actualByDate = new Map(history.map((r) => [r.date, r.net]));
@@ -197,10 +245,16 @@ export function walkForwardBacktestRolling({ history, methods, daysBack: _daysBa
 
     // Train on all data up to (and including) anchorEnd, matching live forecast
     // behaviour — zero-filled to a dense daily grid (same as the live path).
-    const trainHistory = densifyDailyHistory(history.filter((r) => r.date <= anchorEnd), anchorEnd);
+    const trainHistory = densifyDailyHistory(
+      history.filter((r) => r.date <= anchorEnd),
+      anchorEnd,
+    );
     if (trainHistory.length === 0) continue;
 
-    const actualSeries = forecastDates.map((date) => ({ date, net: actualByDate.get(date) ?? 0 }));
+    const actualSeries = forecastDates.map((date) => ({
+      date,
+      net: actualByDate.get(date) ?? 0,
+    }));
 
     for (const method of methods) {
       let predicted;
@@ -223,13 +277,28 @@ export function walkForwardBacktestRolling({ history, methods, daysBack: _daysBa
 
   for (const entry of perMethod.values()) {
     if (entry.perWindow.length === 0) {
-      entry.aggregate = { mae: 0, rmse: 0, mape: 0, windows: 0 };
+      entry.aggregate = { mae: 0, rmse: 0, mape: null, windows: 0 };
       continue;
     }
-    let mae = 0, rmse = 0, mape = 0;
-    for (const w of entry.perWindow) { mae += w.mae; rmse += w.rmse; mape += w.mape; }
+    let mae = 0,
+      rmse = 0,
+      mape = 0;
+    let percentageSamples = 0;
+    for (const w of entry.perWindow) {
+      mae += w.mae;
+      rmse += w.rmse;
+      if (w.mape !== null) {
+        mape += w.mape;
+        percentageSamples++;
+      }
+    }
     const n = entry.perWindow.length;
-    entry.aggregate = { mae: mae / n, rmse: rmse / n, mape: mape / n, windows: n };
+    entry.aggregate = {
+      mae: mae / n,
+      rmse: rmse / n,
+      mape: percentageSamples ? mape / percentageSamples : null,
+      windows: n,
+    };
   }
 
   return Array.from(perMethod.values());

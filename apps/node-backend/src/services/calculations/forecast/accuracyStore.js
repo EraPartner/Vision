@@ -19,7 +19,7 @@ import { logger } from "../../../config/logger.js";
  * `withFallback` — DB and in-memory — return this same camelCase shape.
  * @typedef {{
  *   userId: string, methodId: string, asOfMonth: string,
- *   mae: number, rmse: number, mape: number, sampleDays: number,
+ *   mae: number, rmse: number, mape: number | null, sampleDays: number,
  *   recordedAt: string,
  * }} AccuracyRecord
  */
@@ -107,7 +107,7 @@ function isTableMissingError(err) {
 }
 
 /**
- * @param {{ userId: string, methodId: string, asOfMonth: string, mae: number, rmse: number, mape: number, sampleDays: number }} params
+ * @param {{ userId: string, methodId: string, asOfMonth: string, mae: number, rmse: number, mape: number | null, sampleDays: number }} params
  */
 export async function recordAccuracy({
   userId,
