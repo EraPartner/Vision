@@ -2,7 +2,7 @@
 title: Aggregations API
 type: endpoint
 status: active
-date: 2026-04-25
+date: 2026-09-30
 updated: 2026-09-19
 last_modified: 2026-09-19
 recipient_pivot_added: 2026-04-28
@@ -1188,7 +1188,7 @@ When using default parameters (mc_paths=1000, mc_percentiles=[10,50,90]), respon
 
 - `meta.source === 'cache'` indicates cached result (likely within last 6 hours, from nightly pre-compute)
 - `meta.source === 'live'` indicates freshly computed result (custom parameters or cache miss/expiry)
-- Nightly job (`refreshCashflowForecastMc`) precomputes forecasts for all active users at ~02:00 UTC
+- Daily job (`refreshCashflowForecastMc`) precomputes forecasts after its successful-completion checkpoint becomes 24 hours old
 - Cache lookup is O(1) DB query (~5ms); live computation with 1000 paths ≈ 300-500ms
 
 **Ensemble Method (Phase F + v2, June 2026):**
@@ -1464,6 +1464,16 @@ See [[apps/frontend/src/lib/api.ts|api.ts]] (lines ~1019–1107) for type defini
 - **Phase 9**: Remove legacy `/api/info/*` endpoints after proven parity.
 
 ---
+
+## Forecast accuracy availability
+
+Forecast diagnostics and persisted accuracy expose `mape` as `number | null`. At cumulative
+actual magnitudes of at most 0.01 reporting currency units, percentage error is unavailable.
+Aggregate MAPE excludes these windows and is null if no eligible windows exist; MAE/RMSE and
+window counts are preserved. Existing stored history is not rewritten. See
+[[docs/features/cash-flow-forecast|Forecast benchmarks]] and
+[[docs/adr/174-single-instance-daily-job-catch-up|Daily cache scheduling]].
+
 
 ## Related
 

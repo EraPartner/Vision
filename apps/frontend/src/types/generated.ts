@@ -68,7 +68,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Compile a visual analysis plan to generated SQL */
+        /**
+         * Compile a visual analysis plan to generated SQL
+         * @description Money sums require currency grouping or a single-currency equality filter. Event unit sums require investment grouping or a single-investment equality filter. Visual limit is an executor page size, not an inner SQL cap.
+         */
         post: operations["compileAnalysis"];
         delete?: never;
         options?: never;
@@ -85,7 +88,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Execute a bounded visual or custom-SQL analysis */
+        /**
+         * Execute a bounded visual or custom-SQL analysis
+         * @description Visual money and unit measures enforce currency and investment scope. Visual limits paginate the full query result; custom SQL retains author-defined limits and currency semantics.
+         */
         post: operations["executeAnalysis"];
         delete?: never;
         options?: never;
@@ -138,7 +144,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Evaluate bounded typed formulas and isolated assumptions */
+        /**
+         * Evaluate bounded typed formulas and isolated assumptions
+         * @description Optional inputComplete defaults to true. Incomplete input suppresses evaluated aggregates with INCOMPLETE_INPUT. Failed cells report a zero-based rowIndex without clearing other rows; consumed failed references report DEPENDENCY_ERROR. Numeric aggregates reject mixed contributing currency values with MIXED_CURRENCIES; omitted currency metadata cannot be inferred.
+         */
         post: operations["evaluateAnalysisFormulas"];
         delete?: never;
         options?: never;
@@ -1181,7 +1190,7 @@ export interface paths {
         };
         /** Get all settings */
         get: operations["getSettings"];
-        /** Bulk save settings (key→value map) */
+        /** Atomically replace settings with persisted baselines */
         put: operations["saveSettings"];
         post?: never;
         delete?: never;
@@ -1204,7 +1213,7 @@ export interface paths {
         /** Save setting */
         put: operations["saveSetting"];
         post?: never;
-        /** Delete setting */
+        /** Conditionally delete setting */
         delete: operations["deleteSetting"];
         options?: never;
         head?: never;
@@ -5974,9 +5983,19 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
+        /** @description Persisted JSON from the read that produced the edit. Absence is distinct from JSON null. */
+        SettingBaseline: {
+            /** @enum {boolean} */
+            exists: false;
+        } | {
+            /** @enum {boolean} */
+            exists: true;
+            value: unknown;
+        };
         Setting: {
             key: string;
             value: unknown;
+            expected: components["schemas"]["SettingBaseline"];
         };
         Split: {
             id: number;
@@ -9416,7 +9435,10 @@ export interface operations {
     };
     getSettings: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Return data as {settings, expected} maps from the same database read. */
+                withBaselines?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -9448,7 +9470,12 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    [key: string]: unknown;
+                    settings: {
+                        [key: string]: unknown;
+                    };
+                    expected: {
+                        [key: string]: components["schemas"]["SettingBaseline"];
+                    };
                 };
             };
         };
@@ -9466,8 +9493,15 @@ export interface operations {
                     };
                 };
             };
-            /** @description Body must be a JSON object of key→value pairs */
+            /** @description Invalid settings or missing persisted baseline */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A setting changed; the entire request is rolled back */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9512,6 +9546,7 @@ export interface operations {
             content: {
                 "application/json": {
                     value: unknown;
+                    expected: components["schemas"]["SettingBaseline"];
                 };
             };
         };
@@ -9527,6 +9562,20 @@ export interface operations {
                     };
                 };
             };
+            /** @description Invalid value or missing persisted baseline */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Setting changed; reload before saving */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     deleteSetting: {
@@ -9538,10 +9587,30 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": {
+                    expected: components["schemas"]["SettingBaseline"];
+                };
+            };
+        };
         responses: {
             /** @description No Content */
             204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid persisted baseline */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Setting changed or disappeared */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

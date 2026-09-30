@@ -3392,13 +3392,33 @@ components:
           format: date-time
 
     # ─── Settings ────────────────────────────────────────────────────────────
+    SettingBaseline:
+      description: Persisted JSON from the read that produced the edit. Absence is distinct from JSON null.
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [exists]
+          properties:
+            exists:
+              type: boolean
+              enum: [false]
+        - type: object
+          additionalProperties: false
+          required: [exists, value]
+          properties:
+            exists:
+              type: boolean
+              enum: [true]
+            value: {}
     Setting:
       type: object
-      required: [key, value]
+      required: [key, value, expected]
       properties:
         key:
           type: string
         value: {}
+        expected:
+          $ref: "#/components/schemas/SettingBaseline"
 
     # ─── Splits ──────────────────────────────────────────────────────────────
     # A transaction_splits row as emitted by splitRepository's formatSplit:
@@ -4246,6 +4266,7 @@ paths:
   /api/analysis/compile:
     post:
       summary: Compile a visual analysis plan to generated SQL
+      description: Money sums require currency grouping or a single-currency equality filter. Event unit sums require investment grouping or a single-investment equality filter. Visual limit is an executor page size, not an inner SQL cap.
       operationId: compileAnalysis
       tags: [Analysis]
       requestBody:
@@ -4264,6 +4285,7 @@ paths:
   /api/analysis/execute:
     post:
       summary: Execute a bounded visual or custom-SQL analysis
+      description: Visual money and unit measures enforce currency and investment scope. Visual limits paginate the full query result; custom SQL retains author-defined limits and currency semantics.
       operationId: executeAnalysis
       tags: [Analysis]
       requestBody:
@@ -4318,6 +4340,7 @@ paths:
   /api/analysis/formulas/evaluate:
     post:
       summary: Evaluate bounded typed formulas and isolated assumptions
+      description: Optional inputComplete defaults to true. Incomplete input suppresses evaluated aggregates with INCOMPLETE_INPUT. Failed cells report a zero-based rowIndex without clearing other rows; consumed failed references report DEPENDENCY_ERROR. Numeric aggregates reject mixed contributing currency values with MIXED_CURRENCIES; omitted currency metadata cannot be inferred.
       operationId: evaluateAnalysisFormulas
       tags: [Analysis]
       requestBody:
@@ -6483,6 +6506,13 @@ paths:
       summary: Get all settings
       operationId: getSettings
       tags: [Settings]
+      parameters:
+        - in: query
+          name: withBaselines
+          schema:
+            type: boolean
+            default: false
+          description: Return data as {settings, expected} maps from the same database read.
       responses:
         "200":
           description: All settings as key-value map
@@ -6497,7 +6527,7 @@ paths:
                         type: object
                         additionalProperties: true
     put:
-      summary: Bulk save settings (key→value map)
+      summary: Atomically replace settings with persisted baselines
       operationId: saveSettings
       tags: [Settings]
       requestBody:
@@ -6506,8 +6536,15 @@ paths:
           application/json:
             schema:
               type: object
-              additionalProperties: true
-              description: Map of setting key → value pairs to persist
+              required: [settings, expected]
+              properties:
+                settings:
+                  type: object
+                  additionalProperties: true
+                expected:
+                  type: object
+                  additionalProperties:
+                    $ref: "#/components/schemas/SettingBaseline"
       responses:
         "200":
           description: Number of settings saved
@@ -6524,7 +6561,9 @@ paths:
                           saved:
                             type: integer
         "400":
-          description: Body must be a JSON object of key→value pairs
+          description: Invalid settings or missing persisted baseline
+        "409":
+          description: A setting changed; the entire request is rolled back
 
   /api/settings/{key}:
     parameters:
@@ -6559,9 +6598,11 @@ paths:
           application/json:
             schema:
               type: object
-              required: [value]
+              required: [value, expected]
               properties:
                 value: {}
+                expected:
+                  $ref: "#/components/schemas/SettingBaseline"
       responses:
         "200":
           description: Saved setting
@@ -6574,13 +6615,31 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/Setting"
+        "400":
+          description: Invalid value or missing persisted baseline
+        "409":
+          description: Setting changed; reload before saving
     delete:
-      summary: Delete setting
+      summary: Conditionally delete setting
       operationId: deleteSetting
       tags: [Settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expected]
+              properties:
+                expected:
+                  $ref: "#/components/schemas/SettingBaseline"
       responses:
         "204":
           description: No Content
+        "400":
+          description: Missing or invalid persisted baseline
+        "409":
+          description: Setting changed or disappeared
 
   /api/investments:
     get:
