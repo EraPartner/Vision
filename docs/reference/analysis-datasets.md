@@ -2,7 +2,7 @@
 title: Analysis Datasets
 type: reference
 status: active
-date: 2026-09-19
+date: 2026-09-30
 tags: [analysis, datasets, reconciliation, money, portfolio, security]
 description: Versioned analysis datasets, including ordered category paths, financial meanings, joins, and reconciliation rules.
 aliases: [financial datasets, vision_analysis]
@@ -49,7 +49,7 @@ settings, audit, AI transcript, or raw provenance tables.
   income or refund. Classification needs more evidence than sign.
 - `spending_amount` is the positive magnitude only for non-transfer negative rows.
 - `positive_flow_amount` is positive only for non-transfer positive rows.
-- Cross-currency totals require an explicit reporting currency and dated exchange-rate evidence.
+- Cross-currency totals require an explicit reporting currency and dated exchange-rate evidence. The current visual catalog does not convert currencies: every money sum requires selected currency grouping or an equality filter on one uppercase currency code. Raw custom SQL remains the author's responsibility.
 - Portfolio event amounts use event currency. `fx_rate_to_eur` is transaction-date evidence, not a
   current valuation rate.
 
@@ -59,6 +59,8 @@ Ledger and portfolio dates are calendar dates. Business grouping uses `APP_TIMEZ
 shift a `DATE` through Coordinated Universal Time. Timestamps such as `updated_at` remain instants.
 
 ## Holdings
+
+The catalog labels `sum_amount` and `sum_units` as raw event totals. They preserve stored event values and do not apply buy/sell direction. Unit totals require selected `investment_id` grouping or a single-investment equality filter, so unrelated instruments are not added together.
 
 Do not sum event units blindly. Buys and gifts add units and sells remove them, but splits, mergers,
 spinoffs, returns of capital, fees, taxes, and cost-basis methods require the canonical Portfolio

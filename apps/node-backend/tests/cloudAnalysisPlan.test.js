@@ -9,12 +9,12 @@ const spendingPlan = {
   schemaVersion: 1,
   catalogVersion: 1,
   datasetId: "cash-flows",
-  fields: ["month", "category_general"],
+  fields: ["month", "category_general", "currency"],
   filters: [
     { fieldId: "is_transfer", operator: "eq", value: false },
     { fieldId: "is_active", operator: "eq", value: true },
   ],
-  groups: ["month", "category_general"],
+  groups: ["month", "category_general", "currency"],
   measures: ["sum_spending"],
   joins: [],
   orderBy: [{ id: "month", direction: "asc" }],
@@ -115,4 +115,58 @@ describe("cloud-authored analysis plans", () => {
       }),
     ).toThrow();
   });
+
+  it.each([
+    [{ kind: "page", offset: 0, hasMore: true }, null],
+    [{ kind: "page", offset: 100, hasMore: false }, null],
+    [{ kind: "truncated", reason: "byte-limit" }, null],
+    [{ kind: "page", offset: 0, hasMore: false }, "100"],
+  ])(
+    "evaluates totals only for complete cloud plan results %j",
+    async (window, total) => {
+      const execute = vi.fn().mockResolvedValue({
+        rows: [{ sum_spending: "100", currency: "EUR" }],
+        columns: [],
+        window,
+      });
+      const result = await executeCloudAnalysisPlan(
+        {
+          ...spendingPlan,
+          formulas: [
+            {
+              id: "total",
+              label: "Total",
+              resultType: "decimal",
+              scope: "summary",
+              expression: "SUM(sum_spending)",
+            },
+            {
+              id: "local",
+              label: "Local",
+              resultType: "decimal",
+              scope: "row",
+              expression: "sum_spending * 2",
+            },
+          ],
+        },
+        { workspaces: ["budgeting"] },
+        { execute },
+      );
+      expect(result.formulaSummaries.total).toBe(total);
+      expect(result.rows[0].local).toBe("200");
+      if (total === null) {
+        expect(result.formulaErrors).toEqual([
+          expect.objectContaining({
+            formulaId: "total",
+            code: "INCOMPLETE_INPUT",
+          }),
+        ]);
+      } else {
+        expect(result.formulaErrors).toEqual([]);
+      }
+      expect(execute).toHaveBeenCalledWith(
+        expect.objectContaining({ limit: 100 }),
+      );
+    },
+  );
 });

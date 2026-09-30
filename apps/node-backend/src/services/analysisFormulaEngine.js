@@ -188,6 +188,30 @@ function decimal(value) {
 function comparable(value) {
   return value instanceof Decimal ? value.toNumber() : value;
 }
+function condition(value) {
+  if (
+    value instanceof Decimal ||
+    typeof value === "number" ||
+    (typeof value === "string" &&
+      /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(value))
+  )
+    return !new Decimal(value).isZero();
+  return Boolean(value);
+}
+function assertSingleCurrency(entries) {
+  // Formula outputs do not carry units yet; retain the source row's currency
+  // even when aggregating a derived column rather than a raw money field.
+  const currencies = new Set(
+    entries
+      .map(({ row }) => row.currency)
+      .filter((currency) => currency !== null && currency !== undefined),
+  );
+  if (currencies.size > 1)
+    throw new AnalysisFormulaError(
+      "MIXED_CURRENCIES",
+      "Numeric aggregates cannot combine rows with different currencies",
+    );
+}
 function compare(left, op, right) {
   if (left instanceof Decimal || right instanceof Decimal) {
     const ordering = decimal(left).comparedTo(decimal(right));
@@ -233,6 +257,15 @@ function resolveReference(name, context) {
   }
   if (name.startsWith("formula.")) {
     const key = name.slice(8);
+    if (
+      context.rowErrors.get(context.row)?.has(key) ||
+      ((!context.row || !Object.hasOwn(context.row, key)) &&
+        context.summaryErrors.has(key))
+    )
+      throw new AnalysisFormulaError(
+        "DEPENDENCY_ERROR",
+        `Referenced formula failed: ${key}`,
+      );
     if (context.row && Object.hasOwn(context.row, key)) return context.row[key];
     if (!Object.hasOwn(context.formulas, key))
       throw new AnalysisFormulaError(
@@ -242,6 +275,11 @@ function resolveReference(name, context) {
     return context.formulas[key];
   }
   const key = name.startsWith("row.") ? name.slice(4) : name;
+  if (context.rowErrors.get(context.row)?.has(key))
+    throw new AnalysisFormulaError(
+      "DEPENDENCY_ERROR",
+      `Referenced formula failed: ${key}`,
+    );
   if (!context.row || !Object.hasOwn(context.row, key))
     throw new AnalysisFormulaError(
       "BROKEN_REFERENCE",
@@ -273,11 +311,16 @@ function evaluate(ast, context) {
       throw new AnalysisFormulaError("DIVIDE_BY_ZERO", "Division by zero");
     return a.dividedBy(b);
   }
+  if (AGGREGATES.has(ast.name) && !context.inputComplete)
+    throw new AnalysisFormulaError(
+      "INCOMPLETE_INPUT",
+      "Aggregate formulas require the complete analysis result",
+    );
   const values = () => ast.args.map((arg) => evaluate(arg, context));
   if (ast.name === "IF") {
     if (ast.args.length !== 3)
       throw new AnalysisFormulaError("ARITY", "IF requires three arguments");
-    return evaluate(ast.args[0], context)
+    return condition(evaluate(ast.args[0], context))
       ? evaluate(ast.args[1], context)
       : evaluate(ast.args[2], context);
   }
@@ -307,13 +350,15 @@ function evaluate(ast, context) {
     const [start, end] = values();
     return Math.round((date(end).getTime() - date(start).getTime()) / 86400000);
   }
-  const aggregateValues = (arg) =>
-    context.rows
-      .map((row) => evaluate(arg, { ...context, row }))
-      .filter((value) => value !== null && value !== undefined);
-  if (ast.name === "COUNT") return aggregateValues(ast.args[0]).length;
+  const aggregateEntries = (arg, rows = context.rows) =>
+    rows
+      .map((row) => ({ row, value: evaluate(arg, { ...context, row }) }))
+      .filter(({ value }) => value !== null && value !== undefined);
+  if (ast.name === "COUNT") return aggregateEntries(ast.args[0]).length;
   if (["SUM", "AVERAGE", "MIN", "MAX"].includes(ast.name)) {
-    const list = aggregateValues(ast.args[0]).map(decimal);
+    const entries = aggregateEntries(ast.args[0]);
+    assertSingleCurrency(entries);
+    const list = entries.map(({ value }) => decimal(value));
     if (!list.length) return null;
     if (ast.name === "SUM") return Decimal.sum(...list);
     if (ast.name === "AVERAGE")
@@ -340,11 +385,11 @@ function evaluate(ast, context) {
       compare(evaluate(ast.args[0], { ...context, row }), operator, expected),
     );
     if (ast.name === "COUNTIF") return selected.length;
+    const entries = aggregateEntries(ast.args[3], selected);
+    assertSingleCurrency(entries);
     return Decimal.sum(
-      ...selected.map(
-        (row) =>
-          decimal(evaluate(ast.args[3], { ...context, row })) ?? new Decimal(0),
-      ),
+      ...entries.map(({ value }) => decimal(value) ?? new Decimal(0)),
+      new Decimal(0),
     );
   }
   throw new AnalysisFormulaError(
@@ -434,6 +479,7 @@ export function evaluateAnalysisFormulas({
   rows,
   formulas = [],
   assumptions = {},
+  inputComplete = true,
 }) {
   if (!Array.isArray(rows) || rows.length > MAX_ROWS)
     throw new AnalysisFormulaError(
@@ -470,39 +516,55 @@ export function evaluateAnalysisFormulas({
   const calculatedRows = rows.map((row) => ({ ...row }));
   const summaries = {};
   const errors = [];
+  const rowErrors = new Map(calculatedRows.map((row) => [row, new Set()]));
+  const summaryErrors = new Set();
+  const recordError = (formula, error, rowIndex) => {
+    errors.push({
+      formulaId: formula.id,
+      ...(rowIndex === undefined ? {} : { rowIndex }),
+      code: error.code || "EVALUATION_ERROR",
+      message: error.message,
+    });
+  };
   for (const formula of sequence) {
-    try {
-      if (formula.scope === "row") {
-        for (const row of calculatedRows)
+    if (formula.scope === "row") {
+      for (const [rowIndex, row] of calculatedRows.entries()) {
+        try {
           row[formula.id] = output(
             evaluate(formula.ast, {
               row,
               rows: calculatedRows,
               assumptions,
               formulas: row,
+              rowErrors,
+              summaryErrors,
+              inputComplete,
             }),
           );
-      } else {
+        } catch (error) {
+          recordError(formula, error, rowIndex);
+          row[formula.id] = null;
+          rowErrors.get(row).add(formula.id);
+        }
+      }
+    } else {
+      try {
         summaries[formula.id] = output(
           evaluate(formula.ast, {
             row: null,
             rows: calculatedRows,
             assumptions,
             formulas: summaries,
+            rowErrors,
+            summaryErrors,
+            inputComplete,
           }),
         );
+      } catch (error) {
+        recordError(formula, error);
+        summaries[formula.id] = null;
+        summaryErrors.add(formula.id);
       }
-    } catch (error) {
-      errors.push({
-        formulaId: formula.id,
-        code: error.code || "EVALUATION_ERROR",
-        message: error.message,
-      });
-      if (formula.scope === "row")
-        calculatedRows.forEach((row) => {
-          row[formula.id] = null;
-        });
-      else summaries[formula.id] = null;
     }
   }
   return {

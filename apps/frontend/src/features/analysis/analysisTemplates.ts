@@ -16,12 +16,12 @@ export const ANALYSIS_TEMPLATES: readonly AnalysisTemplate[] = [
         descriptionKey: "analysis.template.monthlyCategory.description",
         plan: {
             datasetId: "cash-flows",
-            fields: ["month", "category_general"],
+            fields: ["month", "category_general", "currency"],
             filters: [
                 { fieldId: "is_transfer", operator: "eq", value: false },
                 { fieldId: "is_active", operator: "eq", value: true },
             ],
-            groups: ["month", "category_general"],
+            groups: ["month", "category_general", "currency"],
             measures: ["sum_spending"],
             joins: [],
             orderBy: [{ id: "month", direction: "asc" }],

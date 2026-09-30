@@ -70,12 +70,12 @@ function chartColumns(result: AnalysisResult | null) {
 
 const EMPTY_PLAN: VisualAnalysisPlan = {
     datasetId: "cash-flows",
-    fields: ["month", "category_general"],
+    fields: ["month", "category_general", "currency"],
     filters: [
         { fieldId: "is_transfer", operator: "eq", value: false },
         { fieldId: "is_active", operator: "eq", value: true },
     ],
-    groups: ["month", "category_general"],
+    groups: ["month", "category_general", "currency"],
     measures: ["sum_spending"],
     joins: [],
     orderBy: [{ id: "month", direction: "asc" }],
@@ -852,14 +852,22 @@ export default function AnalysisWorkspacePage() {
         displayedResult?.window.kind === "page" &&
         displayedResult.window.hasMore === false &&
         offset === 0;
+    const mixedCurrencies =
+        new Set(
+            displayedResult?.rows
+                .map((row) => row.currency)
+                .filter((value) => value != null),
+        ).size > 1;
     const pivotReady =
         completeForChart &&
+        resultQuery === currentQuery &&
         mode === "visual" &&
-        plan.groups.length >= 2 &&
+        plan.groups.length === 2 &&
         plan.measures.length >= 1;
     const chartValues = useMemo(() => {
         if (!displayedResult || !chartX || !chartY) return [];
         return displayedResult.rows
+            .filter((row) => row[chartY] != null && row[chartY] !== "")
             .map((row) => ({
                 label: formatAnalysisValue(
                     row[chartX],
@@ -1899,6 +1907,30 @@ export default function AnalysisWorkspacePage() {
                                         </p>
                                     )}
                             </div>
+                            {!!displayedResult.formulaErrors?.length && (
+                                <div
+                                    role="alert"
+                                    className="mx-6 mb-3 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm"
+                                >
+                                    <p>{t("analysis.formulaErrorsNotice")}</p>
+                                    <ul className="mt-2 list-disc pl-5">
+                                        {displayedResult.formulaErrors.map(
+                                            (issue, index) => (
+                                                <li
+                                                    key={`${issue.formulaId}-${issue.rowIndex ?? "summary"}-${index}`}
+                                                >
+                                                    {issue.formulaId}
+                                                    {issue.rowIndex ===
+                                                    undefined
+                                                        ? ""
+                                                        : ` (${t("analysis.formulaErrorRow", { row: issue.rowIndex + 1 })})`}
+                                                    : {issue.message}
+                                                </li>
+                                            ),
+                                        )}
+                                    </ul>
+                                </div>
+                            )}
                             <Tabs defaultValue="table">
                                 <div className="px-6 pb-3">
                                     <TabsList
@@ -2102,11 +2134,16 @@ export default function AnalysisWorkspacePage() {
                                             <p className="text-sm text-muted-foreground">
                                                 {t("analysis.chartNoNumeric")}
                                             </p>
+                                        ) : mixedCurrencies ? (
+                                            <p className="text-sm text-muted-foreground">
+                                                {t(
+                                                    "analysis.chartMixedCurrencies",
+                                                )}
+                                            </p>
                                         ) : completeForChart ? (
                                             <div className="space-y-2">
-                                                {chartValues
-                                                    .slice(0, 30)
-                                                    .map((row, index) => (
+                                                {chartValues.map(
+                                                    (row, index) => (
                                                         <div
                                                             key={`${row.label}-${index}`}
                                                             className="grid grid-cols-[minmax(0,10rem)_minmax(2rem,1fr)_auto] items-center gap-2 text-xs"
@@ -2114,11 +2151,29 @@ export default function AnalysisWorkspacePage() {
                                                             <span className="truncate">
                                                                 {row.label}
                                                             </span>
-                                                            <div className="h-3 rounded-full bg-primary/15">
+                                                            <div className="relative h-3 rounded-full bg-primary/15">
+                                                                <span
+                                                                    aria-hidden="true"
+                                                                    className="absolute inset-y-0 left-1/2 border-l border-foreground/50"
+                                                                />
                                                                 <div
-                                                                    className="h-3 rounded-full bg-primary"
+                                                                    className="absolute h-3 rounded-full bg-primary"
+                                                                    data-sign={
+                                                                        row.value <
+                                                                        0
+                                                                            ? "negative"
+                                                                            : "positive"
+                                                                    }
                                                                     style={{
-                                                                        width: `${maxChart ? (Math.abs(row.value) / maxChart) * 100 : 0}%`,
+                                                                        width: `${maxChart ? (Math.abs(row.value) / maxChart) * 50 : 0}%`,
+                                                                        ...(row.value <
+                                                                        0
+                                                                            ? {
+                                                                                  right: "50%",
+                                                                              }
+                                                                            : {
+                                                                                  left: "50%",
+                                                                              }),
                                                                     }}
                                                                 />
                                                             </div>
@@ -2128,7 +2183,8 @@ export default function AnalysisWorkspacePage() {
                                                                 }
                                                             </span>
                                                         </div>
-                                                    ))}
+                                                    ),
+                                                )}
                                             </div>
                                         ) : (
                                             <p className="text-sm text-muted-foreground">

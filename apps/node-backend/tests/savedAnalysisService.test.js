@@ -32,7 +32,7 @@ describe("saved analysis definitions", () => {
             fields: ["month"],
             groups: ["month"],
             measures: ["sum_spending"],
-            filters: [],
+            filters: [{ fieldId: "currency", operator: "eq", value: "EUR" }],
             joins: [],
             orderBy: [{ id: "month", direction: "desc" }],
             limit: 500,
@@ -49,6 +49,8 @@ describe("saved analysis definitions", () => {
         definition.source.generatedSql,
       );
       expect(definition.source.generatedSql).toMatch(/ORDER BY.*month.*DESC/);
+      expect(runtimeRequest({ definition, parameters: {} }).limit).toBe(500);
+      expect(definition.source.generatedSql).not.toMatch(/LIMIT/i);
     }
   });
 
@@ -110,6 +112,7 @@ describe("saved analysis definitions", () => {
               operator: "contains",
               value: "Current",
             },
+            { fieldId: "currency", operator: "eq", value: "EUR" },
           ],
           joins: ["cash-flows.account"],
           orderBy: [],
@@ -254,9 +257,75 @@ describe("saved analysis definitions", () => {
     );
 
     expect(finalized.complete).toBe(true);
+    expect(finalized.result.columns).toContainEqual(
+      expect.objectContaining({
+        id: "difference",
+        type: "decimal",
+        calculationId: "difference",
+      }),
+    );
     expect(finalized.result.rows[0]).toMatchObject({
       "options.cost": "40.5",
       difference: "2.5",
     });
+  });
+
+  it.each([
+    { kind: "page", hasMore: true, offset: 0 },
+    { kind: "page", hasMore: false, offset: 100 },
+    { kind: "truncated", reason: "byte-limit" },
+  ])(
+    "withholds whole-result formulas for an incomplete window %j",
+    (window) => {
+      const finalized = __finalizeSavedAnalysisResult(
+        { rows: [{ amount: "10" }, { amount: "20" }], window },
+        {
+          formulaModel: {
+            formulas: [
+              { id: "total", scope: "summary", expression: "SUM(amount)" },
+              {
+                id: "twice_total",
+                scope: "summary",
+                expression: "formula.total * 2",
+              },
+              { id: "local", scope: "row", expression: "amount * 2" },
+              { id: "constant", scope: "summary", expression: "2 + 3" },
+            ],
+          },
+        },
+      );
+      expect(finalized.complete).toBe(false);
+      expect(finalized.result.formulaSummaries).toEqual({
+        total: null,
+        twice_total: null,
+        constant: "5",
+      });
+      expect(finalized.result.rows.map((row) => row.local)).toEqual([
+        "20",
+        "40",
+      ]);
+      expect(
+        finalized.result.formulaErrors.map((error) => error.formulaId),
+      ).toEqual(["total", "twice_total"]);
+    },
+  );
+
+  it("calculates summaries when the entire source result is available", () => {
+    const finalized = __finalizeSavedAnalysisResult(
+      {
+        rows: [{ amount: "10" }, { amount: "20" }],
+        window: { kind: "page", hasMore: false, offset: 0 },
+      },
+      {
+        formulaModel: {
+          formulas: [
+            { id: "total", scope: "summary", expression: "SUM(amount)" },
+          ],
+        },
+      },
+    );
+    expect(finalized.complete).toBe(true);
+    expect(finalized.result.formulaSummaries.total).toBe("30");
+    expect(finalized.result.formulaErrors).toEqual([]);
   });
 });

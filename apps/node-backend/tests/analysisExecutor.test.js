@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import pg from "pg";
+import { compileVisualAnalysis } from "../src/services/analysisCatalog.js";
 import {
   __validateAnalysisSql,
   executeAnalysisSql,
@@ -66,6 +67,106 @@ describe("analysis result dates", () => {
     );
     expect(pg.types.getTypeParser(1082, "text")).toBe(defaultDateParser);
     expect(release).toHaveBeenCalledWith(undefined);
+  });
+});
+
+describe("visual analysis pagination", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("detects additional groups and retrieves the next page without an inner result limit", async () => {
+    const compiled = compileVisualAnalysis({
+      datasetId: "transactions",
+      fields: ["month"],
+      groups: ["month"],
+      measures: ["sum_amount"],
+      filters: [{ fieldId: "currency", operator: "eq", value: "EUR" }],
+      orderBy: [{ id: "month", direction: "asc" }],
+      limit: 2,
+    });
+    const allRows = [
+      { month: "2026-01-01", sum_amount: "10" },
+      { month: "2026-02-01", sum_amount: "20" },
+      { month: "2026-03-01", sum_amount: "30" },
+      { month: "2026-04-01", sum_amount: "40" },
+    ];
+    const query = vi.fn(async (config) => {
+      if (typeof config === "string") return { rows: [{ pid: 123 }] };
+      // Simulate PostgreSQL applying the executor's outer pagination only.
+      expect(config.text).toBe(
+        `SELECT * FROM (${compiled.sql}) AS vision_analysis_result LIMIT $2 OFFSET $3`,
+      );
+      expect(compiled.sql).not.toMatch(/\bLIMIT\b/i);
+      expect(config.values[0]).toBe("EUR");
+      const [, fetchLimit, offset] = config.values;
+      return {
+        fields: [
+          { name: "month", dataTypeID: 1082 },
+          { name: "sum_amount", dataTypeID: 1700 },
+        ],
+        rows: allRows.slice(offset, offset + fetchLimit),
+      };
+    });
+    const release = vi.fn();
+    vi.spyOn(pg.Pool.prototype, "connect").mockResolvedValue({
+      query,
+      release,
+    });
+    const request = {
+      sql: compiled.sql,
+      values: compiled.values,
+      datasetIds: compiled.datasetIds,
+      limit: compiled.visualPlan.limit,
+    };
+
+    const first = await executeAnalysisSql({
+      ...request,
+      requestId: "first-page",
+      offset: 0,
+    });
+    expect(first.rows).toEqual(allRows.slice(0, 2));
+    expect(first.window).toMatchObject({
+      kind: "page",
+      offset: 0,
+      limit: 2,
+      hasMore: true,
+    });
+
+    const second = await executeAnalysisSql({
+      ...request,
+      requestId: "second-page",
+      offset: 2,
+    });
+    expect(second.rows).toEqual(allRows.slice(2));
+    expect(second.window).toMatchObject({
+      kind: "page",
+      offset: 2,
+      limit: 2,
+      hasMore: false,
+    });
+
+    const exact = await executeAnalysisSql({
+      ...request,
+      requestId: "exact-page",
+      limit: 4,
+      offset: 0,
+    });
+    expect(exact.rows).toEqual(allRows);
+    expect(exact.window).toMatchObject({
+      kind: "page",
+      offset: 0,
+      limit: 4,
+      hasMore: false,
+    });
+    expect(
+      query.mock.calls
+        .filter(([config]) => typeof config === "object")
+        .map(([config]) => config.values),
+    ).toEqual([
+      ["EUR", 3, 0],
+      ["EUR", 3, 2],
+      ["EUR", 5, 0],
+    ]);
+    expect(release).toHaveBeenCalledTimes(3);
   });
 });
 

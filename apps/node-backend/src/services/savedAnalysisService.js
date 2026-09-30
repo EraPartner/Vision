@@ -535,6 +535,7 @@ function runtimeRequest(saved) {
     sql: compiled.sql,
     values: compiled.values,
     datasetIds: compiled.datasetIds,
+    limit: compiled.visualPlan.limit,
   };
 }
 
@@ -557,14 +558,38 @@ function finalizeSavedAnalysisResult(result, parameters) {
   );
   const formulaResult = evaluateAnalysisFormulas({
     rows: scenarioRows,
+    inputComplete:
+      result.window?.kind === "page" &&
+      result.window.hasMore === false &&
+      (result.window.offset || 0) === 0,
     formulas: formulaModel.formulas || [],
     assumptions,
   });
+  const formulaColumns = (formulaModel.formulas || [])
+    .filter((formula) => formula.scope === "row")
+    .map((formula) => ({
+      id: formula.id,
+      label: formula.label || formula.id,
+      type: formula.resultType || "decimal",
+      nullable: true,
+      calculationId: formula.id,
+      calculationVersion: formulaResult.languageVersion,
+      ...(formula.unit ? { unit: formula.unit } : {}),
+    }));
+  const formulaIds = new Set(formulaColumns.map((column) => column.id));
+  const appendFormulaColumns = (columns = []) => [
+    ...columns.filter((column) => !formulaIds.has(column.id)),
+    ...formulaColumns,
+  ];
   return {
     complete: formulaResult.complete,
     result: {
       ...result,
       rows: formulaResult.rows,
+      columns: appendFormulaColumns(result.columns),
+      ...(result.declaredColumns?.length
+        ? { declaredColumns: appendFormulaColumns(result.declaredColumns) }
+        : {}),
       formulaSummaries: formulaResult.summaries,
       formulaErrors: formulaResult.errors,
       formulaLanguageVersion: formulaResult.languageVersion,

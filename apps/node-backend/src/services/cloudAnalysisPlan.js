@@ -165,6 +165,10 @@ export async function executeCloudAnalysisPlan(
   });
   const formulas = evaluateAnalysisFormulas({
     rows: result.rows,
+    inputComplete:
+      result.window?.kind === "page" &&
+      result.window.hasMore === false &&
+      (result.window.offset || 0) === 0,
     formulas: plan.formulas,
     assumptions: {},
   });

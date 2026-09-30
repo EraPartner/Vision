@@ -44,7 +44,7 @@ const DATASETS = {
     },
     measures: {
       count: ["Transaction count", "integer", "COUNT(*)"],
-      sum_amount: ["Net amount", "decimal", "SUM(amount)"],
+      sum_amount: ["Net amount", "decimal", "SUM(amount)", "currency"],
     },
     joins: ["transactions.account"],
   },
@@ -73,6 +73,7 @@ const DATASETS = {
       event_id: ["Event ID", "integer", "event_id"],
       event_date: ["Date", "date", "event_date"],
       month: ["Month", "date", "date_trunc('month', event_date)::date"],
+      investment_id: ["Investment ID", "integer", "investment_id"],
       investment_name: ["Investment", "string", "investment_name"],
       symbol: ["Symbol", "string", "symbol"],
       asset_class: ["Asset class", "string", "asset_class"],
@@ -95,8 +96,8 @@ const DATASETS = {
     },
     measures: {
       count: ["Event count", "integer", "COUNT(*)"],
-      sum_amount: ["Net event amount", "decimal", "SUM(amount)"],
-      sum_units: ["Net units", "decimal", "SUM(units)"],
+      sum_amount: ["Raw event amount total", "decimal", "SUM(amount)", "currency"],
+      sum_units: ["Raw event units total", "decimal", "SUM(units)"],
     },
     joins: ["holdings.account"],
   },
@@ -148,13 +149,19 @@ const DATASETS = {
     },
     measures: {
       count: ["Cash-flow count", "integer", "COUNT(*)"],
-      sum_spending: ["Spending", "decimal", "SUM(spending_amount)"],
+      sum_spending: ["Spending", "decimal", "SUM(spending_amount)", "currency"],
       sum_positive_flow: [
         "Income and refunds",
         "decimal",
         "SUM(positive_flow_amount)",
+        "currency",
       ],
-      sum_amount: ["Net cash flow", "decimal", "SUM(signed_amount)"],
+      sum_amount: [
+        "Net cash flow",
+        "decimal",
+        "SUM(signed_amount)",
+        "currency",
+      ],
     },
     joins: ["cash-flows.account"],
   },
@@ -299,6 +306,49 @@ export function compileVisualAnalysis(plan) {
     );
   }
 
+  // Native amounts have no common unit until currency is fixed or grouped.
+  // All visual filters are joined with AND, so one equality is sufficient.
+  const hasMoneyMeasure = measures.some(
+    (id) => dataset.measures[id][3] === "currency",
+  );
+  const hasSingleCurrencyFilter = (plan.filters ?? []).some(
+    (filter) =>
+      filter.fieldId === "currency" &&
+      filter.operator === "eq" &&
+      typeof filter.value === "string" &&
+      /^[A-Z]{3}$/.test(filter.value),
+  );
+  if (
+    hasMoneyMeasure &&
+    !groups.includes("currency") &&
+    !hasSingleCurrencyFilter
+  ) {
+    throw new Error(
+      "Money measures require grouping by currency or an equality filter for one currency",
+    );
+  }
+
+  const hasSingleInvestmentFilter = (plan.filters ?? []).some(
+    (filter) =>
+      filter.fieldId === "investment_id" &&
+      filter.operator === "eq" &&
+      ((typeof filter.value === "number" &&
+        Number.isSafeInteger(filter.value) &&
+        filter.value > 0) ||
+        (typeof filter.value === "string" &&
+          /^[1-9][0-9]*$/.test(filter.value))),
+  );
+  if (
+    plan.datasetId === "holdings" &&
+    measures.includes("sum_units") &&
+    !groups.includes("investment_id") &&
+    !hasSingleInvestmentFilter
+  ) {
+    throw new Error(
+      "Event units totals require grouping by investment_id or an equality filter for one investment",
+    );
+  }
+
   const groupSql =
     measures.length && groups.length
       ? `\nGROUP BY ${groups.map((id) => fieldExpression(dataset, id, joined)).join(", ")}`
@@ -316,7 +366,7 @@ export function compileVisualAnalysis(plan) {
     : dataset.relation;
   const sql = `SELECT ${selected.join(", ")}\nFROM ${fromSql}${
     where.length ? `\nWHERE ${where.join(" AND ")}` : ""
-  }${groupSql}${orderSql}\nLIMIT ${limit}`;
+  }${groupSql}${orderSql}`;
 
   return {
     sql,
@@ -330,6 +380,7 @@ export function compileVisualAnalysis(plan) {
       groups,
       measures,
       joins,
+      limit,
       generatedSql: sql,
     },
   };

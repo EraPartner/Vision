@@ -105,7 +105,7 @@ function MethodRow({
                 {formatCurrency(entry.rmse, currency, locale, fractionDigits)}
             </TableCell>
             <TableCell className="py-2 text-right tabular-nums text-sm">
-                {!Number.isFinite(entry.mape) || entry.mape > 9999
+                {entry.mape === null || !Number.isFinite(entry.mape) || entry.mape > 9999
                     ? "N/A"
                     : formatPercent(entry.mape, { digits: 1 })}
             </TableCell>

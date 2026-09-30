@@ -159,8 +159,8 @@ The historical price series that feeds snapshot computation is now kept dense at
 
 - Binance paginates with `startTime`/`endTime`/`limit=1000` across the full holding window (30-page guard).
 - `fetchHistoricalPrices` accepts a `force=true` option that bypasses the `needsHistoryRefresh` short-circuit.
-- A daily `setInterval` in `warmup.js` calls `backfillHoldingGaps()` from `quoteBackfillService`, which uses `holdingWindowsNeedBackfill` (gap threshold: 9 days) to detect interior holes across all holding windows (including closed positions) and re-fetches with `force=true`.
-- When `backfillHoldingGaps` writes new rows (`filled > 0`), it calls `computeAndStoreSnapshots()` so the Net Worth chart reflects the denser history in the same daily job cycle.
+- A checkpointed daily job in `warmup.js` calls `backfillHoldingGaps()` from `quoteBackfillService`, which uses `holdingWindowsNeedBackfill` (gap threshold: 9 days) to detect interior holes across all holding windows (including closed positions) and re-fetches with `force=true`.
+- The daily job always calls `computeAndStoreSnapshots()` after backfill, including retries with no new rows so the Net Worth chart reflects the denser history in the same daily job cycle.
 - A one-time `bun run quotes:densify` script (see [[docs/reference/scripts|Scripts Reference]]) heals existing sparse deployments without requiring a restart.
 
 **Frontend downsampling removed (2026-06-19)**: The net-worth chart no longer applies LTTB (or any

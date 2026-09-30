@@ -55,6 +55,13 @@ export interface AnalysisResult {
     }>;
     generatedSql: string;
     byteLength: number;
+    formulaErrors?: Array<{
+        formulaId: string;
+        rowIndex?: number;
+        code: string;
+        message: string;
+    }>;
+    formulaSummaries?: Record<string, AnalysisValue>;
     window:
         | {
               kind: "page";

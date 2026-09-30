@@ -60,6 +60,7 @@ const catalog = {
             relation: "vision_analysis.cash_flows_v1",
             fields: [
                 { id: "month", label: "Month", type: "date" },
+                { id: "currency", label: "Currency", type: "currency" },
                 {
                     id: "category_general",
                     label: "Category",
@@ -178,9 +179,7 @@ describe("AnalysisWorkspacePage", () => {
         await user.click(
             screen.getByRole("tab", { name: nl["analysis.pivot"] }),
         );
-        expect(
-            screen.getByRole("columnheader", { name: "Maand" }),
-        ).toBeInTheDocument();
+        expect(screen.getByText(nl["analysis.pivotHelp"])).toBeInTheDocument();
     });
 
     it("marks changed queries as outdated until a successful rerun", async () => {
@@ -236,6 +235,79 @@ describe("AnalysisWorkspacePage", () => {
             screen.getByRole("button", { name: "Remove filter 1: Transfer" }),
         );
         expect(await screen.findByText(/Results need updating/)).toBeVisible();
+    });
+
+    it("charts every returned row and puts negative values left of zero", async () => {
+        vi.mocked(apiClient.executeAnalysis).mockResolvedValue({
+            ...result,
+            rows: Array.from({ length: 32 }, (_, i) => ({
+                month: `period-${i + 1}`,
+                sum_spending: i === 31 ? null : i === 0 ? "-12.3" : "12.3",
+            })),
+            window: { ...result.window, returnedRows: 32 },
+        } as never);
+        const user = userEvent.setup();
+        const { container } = renderPage();
+        await screen.findByText("Cash flows");
+        await user.click(screen.getByRole("button", { name: "Run" }));
+        await user.click(await screen.findByRole("tab", { name: "Chart" }));
+        expect(screen.getByText("period-31")).toBeVisible();
+        expect(screen.queryByText("period-32")).not.toBeInTheDocument();
+        expect(container.querySelectorAll("[data-sign]")).toHaveLength(31);
+        expect(container.querySelector('[data-sign="negative"]')).toHaveStyle({
+            right: "50%",
+            width: "50%",
+        });
+        expect(container.querySelector('[data-sign="positive"]')).toHaveStyle({
+            left: "50%",
+            width: "50%",
+        });
+    });
+
+    it("does not compare unconverted currencies on one chart or collapse a third pivot group", async () => {
+        vi.mocked(apiClient.executeAnalysis).mockResolvedValue({
+            ...result,
+            rows: [
+                { ...result.rows[0], currency: "EUR" },
+                { ...result.rows[0], currency: "USD" },
+            ],
+        } as never);
+        const user = userEvent.setup();
+        renderPage();
+        await screen.findByText("Cash flows");
+        await user.click(screen.getByRole("button", { name: "Run" }));
+        await user.click(await screen.findByRole("tab", { name: "Chart" }));
+        expect(screen.getByText(/Filter to one currency/)).toBeVisible();
+        await user.click(screen.getByRole("tab", { name: "Pivot table" }));
+        expect(screen.getByText(/exactly two groups/)).toBeVisible();
+        expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    });
+
+    it("shows saved formula errors with the affected row", async () => {
+        vi.mocked(apiClient.listSavedAnalyses).mockResolvedValue([
+            {
+                ...savedChartAnalysis,
+                lastResult: {
+                    ...result,
+                    formulaErrors: [
+                        {
+                            formulaId: "ratio",
+                            rowIndex: 1,
+                            code: "DIVIDE_BY_ZERO",
+                            message: "Division by zero",
+                        },
+                    ],
+                },
+            },
+        ] as never);
+        const user = userEvent.setup();
+        renderPage();
+        await user.click(
+            await screen.findByRole("button", { name: "Monthly cashflow" }),
+        );
+        expect(screen.getByRole("alert")).toHaveTextContent(
+            "ratio (row 2): Division by zero",
+        );
     });
 
     it("keeps SQL aliases that resemble catalog identifiers in result labels", async () => {
@@ -513,7 +585,7 @@ describe("AnalysisWorkspacePage", () => {
                     mode: "visual",
                     plan: expect.objectContaining({
                         datasetId: "cash-flows",
-                        fields: ["month", "category_general"],
+                        fields: ["month", "category_general", "currency"],
                         measures: ["sum_spending"],
                     }),
                 }),

@@ -8,8 +8,8 @@ describe("analysis catalog compiler", () => {
   it("compiles the no-AI monthly spending workflow with typed values", () => {
     const compiled = compileVisualAnalysis({
       datasetId: "cash-flows",
-      fields: ["month", "category_general"],
-      groups: ["month", "category_general"],
+      fields: ["month", "category_general", "currency"],
+      groups: ["month", "category_general", "currency"],
       measures: ["sum_spending"],
       filters: [
         { fieldId: "is_transfer", operator: "eq", value: false },
@@ -41,7 +41,7 @@ describe("analysis catalog compiler", () => {
       limit: 500,
     });
     expect(compiled.sql).toBe(
-      'SELECT COUNT(*) AS "count"\nFROM vision_analysis.transactions_v2\nLIMIT 500',
+      'SELECT COUNT(*) AS "count"\nFROM vision_analysis.transactions_v2',
     );
     expect(compiled.columns).toEqual([
       {
@@ -59,14 +59,123 @@ describe("analysis catalog compiler", () => {
       fields: [],
       groups: [],
       measures: ["count", "sum_amount"],
-      filters: [{ fieldId: "is_active", operator: "eq", value: true }],
+      filters: [
+        { fieldId: "is_active", operator: "eq", value: true },
+        { fieldId: "currency", operator: "eq", value: "EUR" },
+      ],
       orderBy: [{ id: "sum_amount", direction: "desc" }],
     });
     expect(compiled.sql).not.toContain("GROUP BY");
     expect(compiled.sql).toContain(
-      'WHERE is_active = $1\nORDER BY "sum_amount" DESC\nLIMIT 500',
+      'WHERE is_active = $1 AND currency = $2\nORDER BY "sum_amount" DESC',
     );
-    expect(compiled.values).toEqual([true]);
+    expect(compiled.values).toEqual([true, "EUR"]);
+  });
+
+  it.each([
+    ["transactions", "sum_amount"],
+    ["holdings", "sum_amount"],
+    ["cash-flows", "sum_spending"],
+    ["cash-flows", "sum_positive_flow"],
+    ["cash-flows", "sum_amount"],
+  ])("requires a common currency for %s %s", (datasetId, measure) => {
+    const plan = { datasetId, fields: [], groups: [], measures: [measure] };
+    expect(() => compileVisualAnalysis(plan)).toThrow("grouping by currency");
+    const grouped = compileVisualAnalysis({
+      ...plan,
+      fields: ["currency"],
+      groups: ["currency"],
+    });
+    expect(grouped.sql).toContain("GROUP BY currency");
+    const filtered = compileVisualAnalysis({
+      ...plan,
+      filters: [{ fieldId: "currency", operator: "eq", value: "USD" }],
+    });
+    expect(filtered.values).toEqual(["USD"]);
+  });
+
+  it.each([
+    { fieldId: "currency", operator: "neq", value: "EUR" },
+    { fieldId: "currency", operator: "contains", value: "EUR" },
+    { fieldId: "currency", operator: "is-not-null" },
+    { fieldId: "currency", operator: "eq", value: ["EUR", "USD"] },
+    { fieldId: "currency", operator: "eq", value: "EUR,USD" },
+    { fieldId: "account_id", operator: "eq", value: 1 },
+  ])("does not mistake filter %j for single-currency evidence", (filter) => {
+    expect(() =>
+      compileVisualAnalysis({
+        datasetId: "transactions",
+        fields: [],
+        groups: [],
+        measures: ["sum_amount"],
+        filters: [filter],
+      }),
+    ).toThrow("grouping by currency");
+  });
+
+  it("labels holding event sums as raw totals rather than positions or net flows", () => {
+    const compiled = compileVisualAnalysis({
+      datasetId: "holdings",
+      fields: ["currency"],
+      groups: ["currency"],
+      measures: ["sum_amount", "sum_units"],
+      filters: [{ fieldId: "investment_id", operator: "eq", value: 42 }],
+    });
+    expect(compiled.columns.map(({ label }) => label)).toEqual([
+      "Currency",
+      "Raw event amount total",
+      "Raw event units total",
+    ]);
+    expect(compiled.sql).toContain('SUM(units) AS "sum_units"');
+    const holdings = getAnalysisCatalog().datasets.find(
+      ({ id }) => id === "holdings",
+    );
+    expect(holdings.measures.map(({ label }) => label)).toEqual([
+      "Event count",
+      "Raw event amount total",
+      "Raw event units total",
+    ]);
+  });
+
+  it("does not combine unrelated investment units", () => {
+    const plan = {
+      datasetId: "holdings",
+      fields: [],
+      groups: [],
+      measures: ["sum_units"],
+    };
+    expect(() => compileVisualAnalysis(plan)).toThrow(
+      "grouping by investment_id",
+    );
+    const grouped = compileVisualAnalysis({
+      ...plan,
+      fields: ["investment_id"],
+      groups: ["investment_id"],
+    });
+    expect(grouped.sql).toContain("GROUP BY investment_id");
+    expect(() =>
+      compileVisualAnalysis({
+        ...plan,
+        filters: [{ fieldId: "investment_id", operator: "neq", value: 42 }],
+      }),
+    ).toThrow("grouping by investment_id");
+  });
+
+  it("keeps the page limit out of SQL so the executor can detect additional rows", () => {
+    const compiled = compileVisualAnalysis({
+      datasetId: "transactions",
+      fields: ["amount"],
+      limit: 25,
+    });
+    expect(compiled.sql).not.toContain("LIMIT");
+    expect(compiled.visualPlan.limit).toBe(25);
+    expect(
+      compileVisualAnalysis({
+        datasetId: "transactions",
+        fields: ["amount"],
+        limit: 5000,
+      }).visualPlan.limit,
+    ).toBe(1000);
   });
 
   it("rejects unknown fields, outputs, and duplication-unsafe joins", () => {

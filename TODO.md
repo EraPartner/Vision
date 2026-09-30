@@ -20,39 +20,44 @@ Run `bun run todo:list` for the concise queue and `bun run todo:check` for ledge
 
 ## Findings
 
-- [ ] **Verify destination Host policy in native and proxy runtimes** 🔼
-  - Tracking: 🔎 runtime-unverified 2026-09-27. The early global Host guard passes 53 listener-free tests and independent bypass review. Run native health, SPA, and API requests with legitimate localhost/IP authorities and hostile or duplicate Host headers; verify rejection before OPTIONS/body/route effects. Test a proxy preserving its explicitly allowed public host and confirm its own hostname policy when rewriting upstream Host. This sandbox blocks HTTP listeners, so live HTTP/browser and deployed proxy behavior remain unverified.
-  - ↪ _from: [[apps/node-backend/src/middleware/hostGuard.js]] current implementation_
+### Analysis capability roadmap
 
-- [ ] **Verify planned-execution concurrency on disposable PostgreSQL** 🔼
-  - Tracking: 🔎 runtime-unverified 2026-09-26. Parent locking, replay, and bounded-series guards are implemented. Service tests pass. Run `bun run test:db tests/plannedExecutionConcurrency.db.test.js` and `bun vitest run tests/routes/plannedTransactions.test.js` from the backend for the HTTP checks. This sandbox rejects PostgreSQL `shmget` and HTTP `listen`; the four DB cases and route suite have not passed here.
-  - ↪ _from: [[apps/node-backend/src/services/plannedExecutionService.js]] current implementation_
+Deliver these as separate, reviewed changes. The target is practical Excel-level financial analysis
+without SQL or JSON for common workflows; AI remains optional. Completed correctness fixes belong
+in the analysis documentation, not as checked-off history here.
 
-- [ ] **Verify historical FX fallback against disposable PostgreSQL** 🔼
-  - Tracking: 🔎 runtime-unverified 2026-09-26. On-or-before index, prefetch, and SQL fallback changes pass focused unit tests. Run `bun run test:db tests/historicalFxFallback.db.test.js`. PostgreSQL startup is blocked by sandbox `shmget`; the two real-database fallback cases have not passed here.
-  - ↪ _from: [[apps/node-backend/src/services/currency/rateFetcher.js]] current implementation_
+- [ ] **Verify analysis correctness in the native Demo and disposable PostgreSQL** 🔼
+  - Tracking: 🔎 runtime-unverified 2026-09-30. Verify currency-separated totals, raw holdings labels, complete-result pagination, formula cell errors and withheld partial summaries, signed charts, and every displayed chart row. The previous Demo review stopped at Starting Vision; local browser health access was denied. Rebuild the Demo after these changes and verify synthetic data only. Reconcile totals against independently computed fixture values. Focused tests, typecheck and workspace lint pass; production compilation passes to a temporary output directory because clearing the existing dist/assets is denied. Refresh existing analyses after correcting any newly rejected currency scope.
+  - ↪ _from: [[docs/features/analysis-workspace|Analysis Workspace]] correctness review_
 
+- [ ] **Build configurable complete-result pivots** 🔼
+  - Tracking: 🔎 verified-present 2026-09-30. Replace the fixed two-group, first-measure pivot with explicit Rows, Columns, Values and Filters; support multiple measures, totals, subtotals, hierarchy expansion, percentage of total and drill-through. Aggregate on the server over the complete filtered population and preserve currency/instrument boundaries. Acceptance: monthly category spending and share of total without SQL or JSON.
+  - ↪ _from: [[apps/frontend/src/pages/AnalysisWorkspacePage.tsx]] PivotTable_
 
-- [ ] **Verify recipient merge races on disposable PostgreSQL** 🔼
-  - Tracking: 🔎 runtime-unverified 2026-09-27. Ordered participant locks and post-lock target checks pass focused tests and independent review. Run `bun run test:db tests/recipientMergeConcurrency.db.test.js` from the backend. The two database cases cover a deterministic lock race and the opposite serial order; they remain unrun because this sandbox rejects PostgreSQL startup.
-  - ↪ _from: [[apps/node-backend/src/services/recipientMergeService.js]] current implementation_
+- [ ] **Replace formula JSON with a guided formula editor** 🔼
+  - Tracking: 🔎 verified-present 2026-09-30. Add autocomplete, field references, function help, live previews and cell-level errors; support reusable derived measures and selected financial/statistical functions with defined semantics. Carry units and currency provenance through formulas, including results that omit a currency column, rather than relying on the current mixed-currency row guard. Acceptance: create and debug a savings-rate calculation without JSON.
+  - ↪ _from: [[apps/frontend/src/pages/AnalysisWorkspacePage.tsx]] formulas and assumptions controls_
 
-- [ ] **Verify uncategorized totals on disposable PostgreSQL** 🔼
-  - Tracking: 🔎 runtime-unverified 2026-09-27. Shared count/page filters pass listener-free tests. Run `bun run test:db tests/transactionRepository.db.test.js`. The suite checks filtered and empty-page totals against a hand-counted corpus. Its 63 cases skipped here because PostgreSQL startup is blocked.
-  - ↪ _from: [[apps/node-backend/src/repositories/transactionRepository.js]] current implementation_
+- [ ] **Add reusable time comparisons to visual analysis** 🔼
+  - Tracking: 🔎 verified-present 2026-09-30. Support day/week/month/quarter/year buckets, previous-period and year-over-year comparisons, rolling averages, cumulative totals and explicit missing-period handling. Acceptance: compare category spending with the prior year without SQL and with calendar-correct period boundaries.
+  - ↪ _from: [[apps/node-backend/src/services/analysisCatalog.js]] visual time fields_
 
-- [ ] **Verify failed-row savepoint release on disposable PostgreSQL** 🔽
-  - Tracking: 🔎 runtime-unverified 2026-09-27. Portfolio trade and cash failures now roll back to and release each savepoint before marking the error; failure/continuation unit tests and independent review pass. Add and run a real-database case forcing an insert failure, checking release and subsequent successful rows in the same chunk. Existing batch rollback tests cover a different contract. PostgreSQL startup is blocked here.
-  - ↪ _from: [[apps/node-backend/src/services/portfolioImportPipeline/commit.js]] current implementation_
+- [ ] **Expose canonical financial datasets and unit-aware measures** 🔼
+  - Tracking: 🔎 verified-present 2026-09-30. Add current positions, cost basis, valuation history, returns, dated currency conversion and benchmark data through the approved catalog. Reuse canonical portfolio replay and rate logic; distinguish native currency, reporting currency and missing-rate coverage. Raw event sums must remain explicitly separate from position and performance measures.
+  - ↪ _from: [[docs/reference/analysis-datasets|Analysis Datasets]] catalog boundary_
 
-- [ ] **Define and implement settings save conflict handling** 🔼
-  - Tracking: 🔎 verified-present 2026-09-27. `settingsRepository.set` replaces the whole value and browser hydration saves whole settings objects. Concurrent tabs or AI-tool writes can overwrite sibling fields. Define one contract covering field removal, nested values, stale saves, and every writer before adding version checks or field patches; do not silently merge arbitrary JSON.
-  - ↪ _from: [[apps/node-backend/src/repositories/settingsRepository.js]] current implementation_
+- [ ] **Expand analysis chart types and series controls** 🔽
+  - Tracking: 🔎 verified-present 2026-09-30. Add line, grouped/stacked bar, scatter and waterfall charts, multiple series, explicit units and meaningful axes. Persist bindings and show data coverage. Acceptance: compare income, spending and net cash flow over time with no silent omissions or cross-currency comparisons.
+  - ↪ _from: [[apps/frontend/src/pages/AnalysisWorkspacePage.tsx]] chart result view_
 
-- [ ] **Define job scheduling across restarts and multiple instances** 🔽
-  - Tracking: 🔎 decision-needed 2026-09-27. Guards remain process-local and interval schedules restart with the process. Establish whether concurrent server instances are supported and which daily jobs require catch-up after restart, then implement that scheduling contract. Single-process guards alone do not establish distributed exclusion.
-  - ↪ _from: [[apps/node-backend/src/startup/warmup.js]] current implementation_
+- [ ] **Add named scenario comparison and sensitivity analysis** 🔽
+  - Tracking: 🔎 verified-present 2026-09-30. Replace raw assumption-value JSON with named input sets, side-by-side outcomes and one/two-variable sensitivity tables. Add bounded Goal Seek with explicit convergence/failure reporting after deterministic scenarios work. Scenario changes must never mutate ledger data.
+  - ↪ _from: [[docs/features/analysis-workspace|Analysis Workspace]] formulas and scenarios_
 
-- [ ] **Reproduce forecast model quality against defined benchmarks** 🔽
-  - Tracking: 🔎 partial 2026-09-27. July claims about unstandardized fitting, undamped trend, and near-zero percentage-error metrics have not been rerun against current models. Define baseline series and error criteria, reproduce current results, and fix validated failures without changing forecast policy from historical examples alone.
-  - ↪ _from: [[apps/node-backend/src/services/calculations/forecast/methods/prophetLite.js]] current implementation_
+- [ ] **Add repeatable analysis data preparation** 🔽
+  - Tracking: 🔎 verified-present 2026-09-30. Provide typed import previews, conversion, lookup/merge, append, calculated columns and pivot/unpivot steps with refresh and lineage. Validate cardinality and unmatched rows; expand beyond the current small one-key CSV attachment only with explicit resource limits.
+  - ↪ _from: [[apps/frontend/src/features/analysis/AnalysisInterchangePanel.tsx]] scenario inputs_
+
+- [ ] **Add typed Excel workbook interchange** 🔽
+  - Tracking: 🔎 verified-present 2026-09-30. Export XLSX results, assumptions and provenance on separate sheets with exact numeric/date handling and completeness metadata. Define supported formula export/import and refresh behavior explicitly; do not imply arbitrary Excel workbook round trips. Acceptance: open a workbook in Excel and reconcile values and types with Vision.
+  - ↪ _from: [[apps/frontend/src/features/analysis/analysisInterchange.ts]] CSV-only export_

@@ -309,13 +309,13 @@ export interface ForecastBacktestEntry {
     readonly label: string;
     readonly mae: number;
     readonly rmse: number;
-    readonly mape: number;
+    readonly mape: number | null;
     readonly months: number;
     readonly per_month: ReadonlyArray<{
         readonly month: string;
         readonly mae: number;
         readonly rmse: number;
-        readonly mape: number;
+        readonly mape: number | null;
         readonly sample_days: number;
     }>;
 }
@@ -447,7 +447,7 @@ export interface AccuracyHistoryPoint {
     readonly month: string;
     readonly mae: number;
     readonly rmse: number;
-    readonly mape: number;
+    readonly mape: number | null;
     readonly sample_days: number;
 }
 
@@ -456,7 +456,7 @@ export interface AccuracyMethodEntry {
     readonly as_of_month: string;
     readonly mae: number;
     readonly rmse: number;
-    readonly mape: number;
+    readonly mape: number | null;
     readonly sample_days: number;
     readonly history: AccuracyHistoryPoint[];
 }

@@ -76,7 +76,7 @@ router.post("/execute", async (req, res) => {
       sql: source.sql,
       values: source.values,
       datasetIds: source.datasetIds,
-      limit: req.body.limit,
+      limit: req.body.limit ?? source.visualPlan?.limit,
       offset: req.body.offset,
     });
     res.ok({

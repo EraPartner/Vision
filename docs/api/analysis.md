@@ -2,7 +2,7 @@
 title: Analysis API
 type: endpoint
 status: active
-date: 2026-09-14
+date: 2026-09-30
 tags: [api, analysis, sql, query-builder, saved-analysis]
 description: Catalog, compile, bounded execution, cancellation, drill-through, and versioned saved-analysis operations under /api/analysis.
 path: /api/analysis
@@ -43,6 +43,19 @@ columns. Page limits are clamped to 1–1,000 rows; results above two megabytes 
 `truncated`. PostgreSQL cancellation or timeout returns `408 ANALYSIS_CANCELLED_OR_TIMED_OUT`.
 Rejected SQL returns `400 ANALYSIS_EXECUTION_REJECTED`; a PostgreSQL character position is included
 when available.
+
+Visual plans reject money sums without selected currency grouping or a single-currency equality
+filter, and event unit sums without selected investment grouping or a single-investment equality
+filter. These are intentionally stricter validations: existing unsafe plans now return 400 until
+edited. Measure identifiers remain stable; holdings labels now describe raw totals.
+Visual `limit` is a page size, not an inner SQL cap. SQL authors remain responsible for units,
+currency conversion and explicit SQL limits.
+
+Formula evaluation accepts optional `inputComplete` (default true). Saved and cloud-plan execution
+set it from the result window; aggregate formulas on incomplete input return `INCOMPLETE_INPUT`
+errors rather than page-only summaries. Errors carry `formulaId`, `code`, `message`, and optional
+zero-based `rowIndex`. A failed cell does not clear other rows. Consumed failed references produce
+`DEPENDENCY_ERROR`. Numeric aggregates reject mixed contributing `currency` values with `MIXED_CURRENCIES`; missing or renamed currency metadata cannot be inferred. Formula result columns are included in saved result metadata.
 
 ## Persistence contract
 

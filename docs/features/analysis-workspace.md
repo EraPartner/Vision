@@ -38,7 +38,7 @@ related_code:
 4. Run the plan and inspect the generated SQL.
 5. Double-click a grouped result to read at most 100 contributing source records.
 
-The default example groups non-transfer active cash flow by month and category. Join IDs come from
+The default example groups non-transfer active cash flow by month, category, and currency. Join IDs come from
 the catalog; raw join expressions are not accepted. Sorting reruns the server query rather than
 sorting only the loaded page. For a single total across the filtered dataset, select measures such
 as Count or Sum with no fields or groups. The compiler omits `GROUP BY` for this form while
@@ -79,11 +79,15 @@ compatible visual origin is retained when the result shape is unchanged.
 - Header sorting reruns visual SQL with the selected order. Saving, reopening, and refreshing a
   visual analysis retain that order.
 - Drill-through uses the selected group values as typed filters.
-- A pivot uses the first two groups and first measure only when the complete result is loaded.
-- A bar chart uses chosen result columns only when the complete result is loaded. Its selectors
+- A pivot requires exactly two groups and uses the first measure only when the complete result is loaded and the query is current. It never silently collapses additional currency or investment groups.
+- A bar chart uses chosen result columns only when the complete result is loaded. It renders all numeric, non-missing rows with negative values left of zero and positive values right of zero. Mixed-currency results must be filtered to one currency before charting. Its selectors
   are labelled **Category axis** and **Value axis**; the value selector offers only numeric
   columns. Results without a numeric column show an explanation instead of an empty chart.
 - A failed run leaves the last usable result visible with an explicit error.
+
+Visual money sums require currency grouping or an explicit equality filter for one currency. The reporting-currency preference does not convert amounts. Raw event unit sums also require investment grouping or a single-investment filter. Holdings event totals are explicitly raw sums, not net positions or canonical portfolio replay. Existing unsafe saved visual plans must be edited before rerunning.
+
+Visual limits are page sizes, applied by the executor rather than an inner SQL limit; the extra-row probe can therefore report more available data. User-authored SQL may still define its own limited population and arithmetic.
 
 These rules prevent a loaded page from being presented as a whole-population chart or pivot.
 Calendar-date results stay `YYYY-MM-DD` strings without a timezone conversion; timestamp results
@@ -95,7 +99,8 @@ Saved analyses can add calculated row columns, summary formulas, named assumptio
 scenario values. Vision evaluates them with decimal arithmetic and a bounded expression language.
 Arithmetic, comparisons, conditionals, date operations, and conditional aggregates are supported.
 Dependencies are ordered explicitly; cycles, broken references, null/type errors, and resource caps
-produce visible formula errors. The language has no JavaScript, macros, file access, network access,
+produce visible formula errors. Numeric zero is false in `IF`. A row error clears only the affected cell and reports its zero-based row index; consumed failed dependencies also fail, including summaries. The UI shows the errors and does not chart missing values as zero. On incomplete result windows, aggregate formulas and calculations consuming their errors are withheld while independent row calculations remain available. Numeric aggregate formulas reject contributing rows with different `currency` values using `MIXED_CURRENCIES`; counts remain available and conditional sums may select one currency. This conservative guard also blocks non-money numeric aggregates across currencies. It cannot infer units when custom SQL omits or renames currency metadata.
+The language has no JavaScript, macros, file access, network access,
 or ledger writes. Scenario values remain analysis parameters and never mutate transactions.
 
 Version 1 tabular scenario inputs accept CSV files up to 1 MB, 1,000 rows, and 32 columns. Vision
