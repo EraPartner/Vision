@@ -1,5 +1,58 @@
 import { apiRequest } from "@/lib/api/client";
 
+export interface AnalysisUnit {
+    kind: string;
+    currency?: string;
+    currencyColumn?: string;
+    instrumentColumn?: string;
+    instrumentId?: string;
+    percentageBasis?: string;
+}
+export interface AnalysisPivotConfig {
+    rows: string[];
+    columns: string[];
+    values: string[];
+    filters: AnalysisFilter[];
+}
+export interface AnalysisPivotResult {
+    levels: Array<{
+        rowDepth: number;
+        columnDepth: number;
+        groups: string[];
+        rows: Array<
+            Record<string, AnalysisValue | Record<string, AnalysisValue>>
+        >;
+        columns: AnalysisField[];
+    }>;
+    partitions: string[];
+    config: AnalysisPivotConfig;
+    coverage: {
+        complete: boolean;
+        rows: number;
+        financialComplete?: boolean;
+        unavailableRows?: number;
+    };
+}
+export interface AnalysisExtensionResult {
+    rows?: Array<Record<string, AnalysisValue>>;
+    columns?: AnalysisField[];
+    [key: string]: unknown;
+}
+export const evaluateAnalysisExtension = (input: Record<string, unknown>) =>
+    apiRequest<AnalysisExtensionResult>("/api/analysis/extensions/evaluate", {
+        method: "POST",
+        body: JSON.stringify(input),
+    });
+export const executeAnalysisPivot = (
+    plan: VisualAnalysisPlan,
+    config: AnalysisPivotConfig,
+    requestId: string,
+) =>
+    apiRequest<AnalysisPivotResult>("/api/analysis/pivot", {
+        method: "POST",
+        body: JSON.stringify({ plan, config, requestId }),
+    });
+
 export type AnalysisWorkspace =
     "budgeting" | "portfolio" | "research" | "cross-workspace";
 export type AnalysisValue = string | number | boolean | null;
@@ -7,6 +60,7 @@ export interface AnalysisField {
     id: string;
     label: string;
     type: string;
+    unit?: AnalysisUnit;
 }
 export interface AnalysisDataset {
     id: string;
@@ -39,19 +93,41 @@ export interface VisualAnalysisPlan {
     joins: string[];
     orderBy: Array<{ id: string; direction: "asc" | "desc" }>;
     limit: number;
+    reportingCurrency?: string;
+    from?: string;
+    to?: string;
+    symbol?: string;
+    range?: string;
+    costBasisMethod?: string;
 }
 export interface AnalysisResult {
+    complete?: boolean;
+    transformationCoverage?: Array<{
+        complete?: boolean;
+        [key: string]: unknown;
+    }>;
+    transformationErrors?: Array<{ message?: string; [key: string]: unknown }>;
+    preparationLineage?: Array<Record<string, unknown>>;
+    sourceResult?: AnalysisResult;
+    coverage?: {
+        complete?: boolean;
+        status?: string;
+        unavailableRows?: number;
+        sourceRows?: number;
+    };
+    provenance?: Record<string, unknown>;
     requestId: string;
     startedAt: string;
     completedAt: string;
     executor: string;
     rows: Array<Record<string, AnalysisValue>>;
-    columns: Array<{ id: string; type: string }>;
+    columns: Array<{ id: string; type: string; unit?: AnalysisUnit }>;
     declaredColumns?: Array<{
         id: string;
         label: string;
         type: string;
         nullable: boolean;
+        unit?: AnalysisUnit;
     }>;
     generatedSql: string;
     byteLength: number;
@@ -109,6 +185,9 @@ export function executeAnalysis(input: {
     columns?: AnalysisField[];
     limit?: number;
     offset?: number;
+    workbench?: Record<string, unknown>;
+    formulaModel?: Record<string, unknown>;
+    scenarioModel?: unknown;
 }) {
     return apiRequest<AnalysisResult>("/api/analysis/execute", {
         method: "POST",

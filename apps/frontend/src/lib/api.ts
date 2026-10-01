@@ -266,6 +266,8 @@ export const apiClient = {
     // Shared manual analysis workspace
     getAnalysisCatalog: analysis.getAnalysisCatalog,
     executeAnalysis: analysis.executeAnalysis,
+    executeAnalysisPivot: analysis.executeAnalysisPivot,
+    evaluateAnalysisExtension: analysis.evaluateAnalysisExtension,
     cancelAnalysis: analysis.cancelAnalysis,
     drillAnalysis: analysis.drillAnalysis,
     listSavedAnalyses: analysis.listSavedAnalyses,

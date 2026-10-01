@@ -99,6 +99,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/analysis/pivot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Aggregate complete-source pivot hierarchy with unit partitions */
+        post: operations["executeAnalysisPivot"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/analysis/extensions/evaluate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Evaluate repeatable preparation, calendar comparisons and isolated scenarios */
+        post: operations["evaluateAnalysisExtension"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/analysis/cancel/{requestId}": {
         parameters: {
             query?: never;
@@ -6517,6 +6551,93 @@ export interface operations {
             };
             /** @description Query cancelled or timed out */
             408: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    executeAnalysisPivot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    plan: {
+                        [key: string]: unknown;
+                    };
+                    config: {
+                        rows: string[];
+                        columns: string[];
+                        values: string[];
+                        filters?: {
+                            [key: string]: unknown;
+                        }[];
+                    };
+                    requestId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Full-source detail and subtotal levels, partitioned percentages and coverage */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description Invalid pivot or complete output exceeds limits */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    evaluateAnalysisExtension: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    operation: "prepare" | "time" | "scenarios" | "sensitivity" | "goal" | "formulas";
+                    rows: {
+                        [key: string]: unknown;
+                    }[];
+                    columns?: {
+                        [key: string]: unknown;
+                    }[];
+                    complete?: boolean;
+                } & {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Bounded transformed values, coverage, lineage and explicit calculation errors */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description Invalid operation */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

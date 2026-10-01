@@ -116,3 +116,25 @@ export function formatAnalysisValue(
           }).format(value)
         : text;
 }
+
+export function analysisDraftSignature(inputs: {
+    formulasJson: string;
+    assumptionsJson: string;
+    assumptionValuesJson: string;
+    workbench: unknown;
+    scenarioModel: unknown;
+}) {
+    const parseDraft = (raw: string): unknown => {
+        try {
+            return JSON.parse(raw);
+        } catch {
+            return { invalidJson: raw };
+        }
+    };
+    return JSON.stringify({
+        ...inputs,
+        formulasJson: parseDraft(inputs.formulasJson),
+        assumptionsJson: parseDraft(inputs.assumptionsJson),
+        assumptionValuesJson: parseDraft(inputs.assumptionValuesJson),
+    });
+}

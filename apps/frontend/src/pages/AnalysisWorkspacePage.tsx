@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Database, Play, Save, Square, Trash2 } from "lucide-react";
+import { Database, Loader2, Play, Save, Square, Trash2 } from "lucide-react";
 import { apiClient } from "@/lib/api";
 import type {
     AnalysisDataset,
@@ -25,10 +25,20 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
-import { addAll } from "@vision/shared-utils/money";
 import { useAnalysisWorkspaceQueries } from "@/hooks/useAnalysisQueries";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { resolveAnalysisPreferences } from "@/lib/analysisPreferences";
+import { AnalysisChartPanel } from "@/features/analysis/AnalysisChartPanel";
+import {
+    normalizeAnalysisChartSpec,
+    type AnalysisChartSpec,
+} from "@/features/analysis/analysisChartModel";
+import { AnalysisPivotPanel } from "@/features/analysis/AnalysisPivotPanel";
+import {
+    AnalysisWorkbenchPanel,
+    type AnalysisWorkbenchConfig,
+} from "@/features/analysis/AnalysisWorkbenchPanel";
+import type { AnalysisPivotConfig } from "@/lib/api/analysis";
 import { AnalysisInterchangePanel } from "@/features/analysis/AnalysisInterchangePanel";
 import type { AnalysisScenarioModel } from "@/features/analysis/analysisInterchange";
 import {
@@ -40,6 +50,7 @@ import {
     analysisCatalogLabel,
     analysisColumnLabel,
     formatAnalysisValue,
+    analysisDraftSignature,
 } from "@/features/analysis/analysisPresentation";
 
 function chartColumns(result: AnalysisResult | null) {
@@ -49,20 +60,8 @@ function chartColumns(result: AnalysisResult | null) {
     return {
         ids: columns.map((column) => column.id),
         numericIds: columns
-            .filter(
-                (column) =>
-                    /^(decimal|number|integer|currency|numeric|float|double)$/.test(
-                        column.type,
-                    ) ||
-                    result?.rows.some((row) => {
-                        const value = row[column.id];
-                        return (
-                            (typeof value === "number" ||
-                                (typeof value === "string" &&
-                                    value.trim() !== "")) &&
-                            Number.isFinite(Number(value))
-                        );
-                    }),
+            .filter((column) =>
+                /decimal|number|integer|numeric|float|double/.test(column.type),
             )
             .map((column) => column.id),
     };
@@ -325,91 +324,6 @@ function ResultTable({
     );
 }
 
-function PivotTable({
-    result,
-    rowId,
-    columnId,
-    valueId,
-    datasets,
-}: {
-    result: AnalysisResult;
-    rowId: string;
-    columnId: string;
-    valueId: string;
-    datasets: AnalysisDataset[];
-}) {
-    const { t } = useLanguage();
-    const { appSettings } = useAppSettings();
-    const columns = [
-        ...new Set(result.rows.map((row) => String(row[columnId] ?? "—"))),
-    ];
-    const rows = [
-        ...new Set(result.rows.map((row) => String(row[rowId] ?? "—"))),
-    ];
-    const values = new Map<string, string[]>();
-    for (const item of result.rows) {
-        const key = `${String(item[rowId] ?? "—")}\u0000${String(item[columnId] ?? "—")}`;
-        values.set(key, [
-            ...(values.get(key) ?? []),
-            String(item[valueId] ?? 0),
-        ]);
-    }
-    return (
-        <div className="overflow-auto rounded-xl border border-border/70">
-            <table className="w-full text-sm">
-                <thead className="bg-muted/60">
-                    <tr>
-                        <th className="px-3 py-2 text-left">
-                            {analysisColumnLabel(result, rowId, datasets, t)}
-                        </th>
-                        {columns.map((column) => (
-                            <th key={column} className="px-3 py-2 text-right">
-                                {formatAnalysisValue(
-                                    column,
-                                    inferColumnType(result, columnId),
-                                    columnId,
-                                    appSettings.numberFormat,
-                                )}
-                            </th>
-                        ))}
-                    </tr>
-                </thead>
-                <tbody>
-                    {rows.map((row) => (
-                        <tr key={row} className="border-t border-border/50">
-                            <th className="px-3 py-2 text-left font-medium">
-                                {formatAnalysisValue(
-                                    row,
-                                    inferColumnType(result, rowId),
-                                    rowId,
-                                    appSettings.numberFormat,
-                                )}
-                            </th>
-                            {columns.map((column) => (
-                                <td
-                                    key={column}
-                                    className="px-3 py-2 text-right tabular-nums"
-                                >
-                                    {formatAnalysisValue(
-                                        addAll(
-                                            values.get(
-                                                `${row}\u0000${column}`,
-                                            ) ?? [],
-                                        ).toString(),
-                                        "decimal",
-                                        valueId,
-                                        appSettings.numberFormat,
-                                    )}
-                                </td>
-                            ))}
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
-    );
-}
-
 export default function AnalysisWorkspacePage() {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
@@ -426,6 +340,7 @@ export default function AnalysisWorkspacePage() {
     const [workspace, setWorkspace] = useState<AnalysisWorkspace>("budgeting");
     const [templatesOpen, setTemplatesOpen] = useState(true);
     const [builderOpen, setBuilderOpen] = useState(true);
+    const [toolsOpen, setToolsOpen] = useState(false);
     const templateSummaryRef = useRef<HTMLElement>(null);
     const builderSummaryRef = useRef<HTMLElement>(null);
     const [mode, setMode] = useState<"visual" | "sql">("visual");
@@ -467,6 +382,14 @@ export default function AnalysisWorkspacePage() {
     );
     const [lastUsableResult, setLastUsableResult] =
         useState<AnalysisResult | null>(null);
+    const [exportInputsKnown, setExportInputsKnown] = useState(false);
+    const [resultInputs, setResultInputs] = useState({
+        formulasJson: "[]",
+        assumptionsJson: "[]",
+        assumptionValuesJson: "{}",
+        workbench: {} as AnalysisWorkbenchConfig,
+        scenarioModel: { attachments: [], joins: [] } as AnalysisScenarioModel,
+    });
     const [exportContext, setExportContext] =
         useState<AnalysisExportContext | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -497,14 +420,71 @@ export default function AnalysisWorkspacePage() {
     const [selectedSaved, setSelectedSaved] = useState<SavedAnalysis | null>(
         null,
     );
+    const draftEpoch = useRef(0);
+    const draftSnapshot = useRef("");
+    const runRequest = useRef<string | null>(null);
+    const [savedAction, setSavedAction] = useState(false);
+    const savedActionLock = useRef(false);
+    const [savedFeedback, setSavedFeedback] = useState<{
+        error: boolean;
+        message: string;
+    } | null>(null);
+    const resetPendingDraft = () => {
+        draftEpoch.current += 1;
+        runRequest.current = null;
+        setActiveRequest(null);
+        setSavedFeedback(null);
+    };
+    const savedOperation = async (
+        operation: (epoch: number, canApply: () => boolean) => Promise<void>,
+    ) => {
+        if (savedActionLock.current) return;
+        savedActionLock.current = true;
+        setSavedAction(true);
+        setSavedFeedback(null);
+        const epoch = draftEpoch.current;
+        const snapshot = draftSnapshot.current;
+        try {
+            await operation(
+                epoch,
+                () =>
+                    epoch === draftEpoch.current &&
+                    snapshot === draftSnapshot.current,
+            );
+            if (epoch === draftEpoch.current)
+                setSavedFeedback({
+                    error: false,
+                    message: t("analysis.savedActionComplete"),
+                });
+        } catch (cause) {
+            if (epoch === draftEpoch.current)
+                setSavedFeedback({
+                    error: true,
+                    message: apiErrorToMessage(cause, t),
+                });
+        } finally {
+            savedActionLock.current = false;
+            setSavedAction(false);
+        }
+    };
     const selectedRevision = useRef("");
     selectedRevision.current = selectedSaved
         ? `${selectedSaved.id}:${selectedSaved.version}`
         : "";
     const [resultDatasetId, setResultDatasetId] = useState<string | null>(null);
     const [drillResult, setDrillResult] = useState<AnalysisResult | null>(null);
-    const [chartX, setChartX] = useState("");
-    const [chartY, setChartY] = useState("");
+    const [chartSpec, setChartSpec] = useState<AnalysisChartSpec>({
+        kind: "bar",
+        x: "",
+        y: [],
+    });
+    const [workbench, setWorkbench] = useState<AnalysisWorkbenchConfig>({});
+    const [pivotConfig, setPivotConfig] = useState<AnalysisPivotConfig>({
+        rows: ["category_general"],
+        columns: ["month"],
+        values: ["sum_spending"],
+        filters: [],
+    });
     const [visualOrigin, setVisualOrigin] = useState<VisualAnalysisPlan | null>(
         null,
     );
@@ -569,11 +549,21 @@ export default function AnalysisWorkspacePage() {
         );
     }, [sqlHistory]);
 
+    const resultHeadingRef = useRef<HTMLHeadingElement>(null);
+    const [resultFocusRequest, setResultFocusRequest] = useState(0);
+    useEffect(() => {
+        if (!resultFocusRequest) return;
+        resultHeadingRef.current?.focus();
+        resultHeadingRef.current?.scrollIntoView?.({ block: "start" });
+    }, [resultFocusRequest]);
+
     const execute = async (
         pageOffset = 0,
         planOverride: VisualAnalysisPlan = plan,
+        revealResult = false,
     ) => {
         const id = requestId();
+        runRequest.current = id;
         setActiveRequest(id);
         setError(null);
         try {
@@ -583,6 +573,14 @@ export default function AnalysisWorkspacePage() {
                           requestId: id,
                           mode,
                           plan: planOverride,
+                          workbench: workbench as Record<string, unknown>,
+                          scenarioModel,
+                          formulaModel: {
+                              formulas: JSON.parse(formulasJson),
+                              assumptions: JSON.parse(assumptionsJson),
+                              assumptionValues:
+                                  JSON.parse(assumptionValuesJson),
+                          },
                           limit: planOverride.limit,
                           offset: pageOffset,
                       }
@@ -590,6 +588,14 @@ export default function AnalysisWorkspacePage() {
                           requestId: id,
                           mode,
                           sql,
+                          workbench: workbench as Record<string, unknown>,
+                          scenarioModel,
+                          formulaModel: {
+                              formulas: JSON.parse(formulasJson),
+                              assumptions: JSON.parse(assumptionsJson),
+                              assumptionValues:
+                                  JSON.parse(assumptionValuesJson),
+                          },
                           values: parseSqlValues(
                               sqlValues,
                               t("analysis.sqlParametersInvalid"),
@@ -610,7 +616,21 @@ export default function AnalysisWorkspacePage() {
                           offset: pageOffset,
                       },
             );
+            if (runRequest.current !== id) return;
+            setExportInputsKnown(true);
+            setResultInputs({
+                formulasJson,
+                assumptionsJson,
+                assumptionValuesJson,
+                workbench,
+                scenarioModel,
+            });
             setResult(next);
+            if (revealResult) {
+                setBuilderOpen(false);
+                setToolsOpen(false);
+                setResultFocusRequest((value) => value + 1);
+            }
             setResultDatasetId(
                 mode === "visual" ? planOverride.datasetId : null,
             );
@@ -641,21 +661,30 @@ export default function AnalysisWorkspacePage() {
                     ),
                 );
             const { ids, numericIds } = chartColumns(next);
-            setChartX((current) =>
-                ids.includes(current) ? current : (ids[0] ?? ""),
-            );
-            setChartY((current) =>
-                numericIds.includes(current) ? current : (numericIds[0] ?? ""),
-            );
+            setChartSpec((current) => ({
+                ...current,
+                x: ids.includes(current.x) ? current.x : (ids[0] ?? ""),
+                y: current.y.some((id) => numericIds.includes(id))
+                    ? current.y.filter((id) => numericIds.includes(id))
+                    : [numericIds[0]].filter(Boolean),
+            }));
         } catch (cause) {
+            if (runRequest.current !== id) return;
             setBuilderOpen(true);
             setError(apiErrorToMessage(cause, t));
         } finally {
-            setActiveRequest(null);
+            if (runRequest.current === id) {
+                runRequest.current = null;
+                setActiveRequest(null);
+            }
         }
     };
 
     const saveMutation = useMutation({
+        onMutate: () => {
+            setSavedFeedback(null);
+            return draftEpoch.current;
+        },
         mutationFn: () => {
             if (!name.trim()) throw new Error(t("analysis.nameRequired"));
             const querySpec =
@@ -699,11 +728,23 @@ export default function AnalysisWorkspacePage() {
                         t("analysis.sqlParametersInvalid"),
                     ),
                     scenarioModel,
+                    workbench,
+                    pivotConfig,
+                    financialPlan: Object.fromEntries(
+                        [
+                            "reportingCurrency",
+                            "from",
+                            "to",
+                            "symbol",
+                            "range",
+                            "costBasisMethod",
+                        ].map((key) => [
+                            key,
+                            plan[key as keyof VisualAnalysisPlan],
+                        ]),
+                    ),
                 },
-                charts:
-                    chartX && chartY
-                        ? [{ kind: "bar", x: chartX, y: chartY }]
-                        : [],
+                charts: [chartSpec],
                 sourceReferences: sourceReferences
                     .split("\n")
                     .map((value) => value.trim())
@@ -716,15 +757,31 @@ export default function AnalysisWorkspacePage() {
                 ? apiClient.updateSavedAnalysis(selectedSaved.id, input)
                 : apiClient.createSavedAnalysis(input);
         },
-        onSuccess: (saved) => {
-            setSelectedSaved(saved);
+        onSuccess: (saved, _variables, epoch) => {
+            if (epoch === draftEpoch.current) {
+                setSelectedSaved(saved);
+                setSavedFeedback({
+                    error: false,
+                    message: t("analysis.savedActionComplete"),
+                });
+            }
             queryClient.invalidateQueries({ queryKey: ["analysis", "saved"] });
         },
-        onError: (cause) => setError(apiErrorToMessage(cause, t)),
+        onError: (cause, _variables, epoch) => {
+            if (epoch === draftEpoch.current)
+                setSavedFeedback({
+                    error: true,
+                    message: apiErrorToMessage(cause, t),
+                });
+        },
     });
 
     const loadSaved = useCallback(
         (saved: SavedAnalysis) => {
+            draftEpoch.current += 1;
+            runRequest.current = null;
+            setActiveRequest(null);
+            setSavedFeedback(null);
             const source = sourceFromSaved(saved);
             setTemplatesOpen(false);
             setBuilderOpen(true);
@@ -759,28 +816,71 @@ export default function AnalysisWorkspacePage() {
             setRunAnswerDepth("");
             setRunLanguage("");
             const { ids, numericIds } = chartColumns(saved.lastResult);
-            const binding = saved.charts.find(
-                (chart): chart is { kind: string; x: string; y: string } =>
-                    typeof chart === "object" &&
-                    chart !== null &&
-                    "kind" in chart &&
-                    chart.kind === "bar" &&
-                    "x" in chart &&
-                    typeof chart.x === "string" &&
-                    "y" in chart &&
-                    typeof chart.y === "string",
+            const binding = normalizeAnalysisChartSpec(saved.charts[0]);
+            setChartSpec({
+                ...binding,
+                x:
+                    binding.x && (!saved.lastResult || ids.includes(binding.x))
+                        ? binding.x
+                        : ids[0] || "",
+                y:
+                    binding.y.length &&
+                    (!saved.lastResult ||
+                        binding.y.some((id) => numericIds.includes(id)))
+                        ? binding.y.filter(
+                              (id) =>
+                                  !saved.lastResult || numericIds.includes(id),
+                          )
+                        : [numericIds[0]].filter(Boolean),
+            });
+            setWorkbench(
+                (saved.parameters.workbench as AnalysisWorkbenchConfig) || {},
             );
-            setChartX(
-                binding && (!saved.lastResult || ids.includes(binding.x))
-                    ? binding.x
-                    : (ids[0] ?? ""),
+            setPivotConfig(
+                (saved.parameters.pivotConfig as AnalysisPivotConfig) || {
+                    rows: source.plan?.groups.slice(0, 1) || [],
+                    columns: source.plan?.groups.slice(1, 2) || [],
+                    values: source.plan?.measures || [],
+                    filters: [],
+                },
             );
-            setChartY(
-                binding && (!saved.lastResult || numericIds.includes(binding.y))
-                    ? binding.y
-                    : (numericIds[0] ?? ""),
-            );
+            if (source.plan)
+                setPlan({
+                    ...source.plan,
+                    ...((saved.parameters
+                        .financialPlan as Partial<VisualAnalysisPlan>) || {}),
+                });
             setOffset(0);
+            setExportInputsKnown(false);
+            setResultInputs({
+                formulasJson: JSON.stringify(
+                    (
+                        saved.parameters.formulaModel as
+                            { formulas?: unknown[] } | undefined
+                    )?.formulas ?? [],
+                ),
+                assumptionsJson: JSON.stringify(
+                    (
+                        saved.parameters.formulaModel as
+                            { assumptions?: unknown[] } | undefined
+                    )?.assumptions ?? [],
+                ),
+                assumptionValuesJson: JSON.stringify(
+                    (
+                        saved.parameters.formulaModel as
+                            | { assumptionValues?: Record<string, unknown> }
+                            | undefined
+                    )?.assumptionValues ?? {},
+                ),
+                workbench:
+                    (saved.parameters.workbench as AnalysisWorkbenchConfig) ||
+                    {},
+                scenarioModel: (saved.parameters
+                    .scenarioModel as AnalysisScenarioModel) || {
+                    attachments: [],
+                    joins: [],
+                },
+            });
             setResult(saved.lastResult);
             setResultDatasetId(
                 source.mode === "visual"
@@ -847,48 +947,29 @@ export default function AnalysisWorkspacePage() {
         (entry) => entry.id === resultDatasetId,
     );
     const displayedResult = result ?? lastUsableResult;
-    const availableChartColumns = chartColumns(displayedResult);
-    const completeForChart =
-        displayedResult?.window.kind === "page" &&
-        displayedResult.window.hasMore === false &&
-        offset === 0;
-    const mixedCurrencies =
-        new Set(
-            displayedResult?.rows
-                .map((row) => row.currency)
-                .filter((value) => value != null),
-        ).size > 1;
-    const pivotReady =
-        completeForChart &&
-        resultQuery === currentQuery &&
-        mode === "visual" &&
-        plan.groups.length === 2 &&
-        plan.measures.length >= 1;
-    const chartValues = useMemo(() => {
-        if (!displayedResult || !chartX || !chartY) return [];
-        return displayedResult.rows
-            .filter((row) => row[chartY] != null && row[chartY] !== "")
-            .map((row) => ({
-                label: formatAnalysisValue(
-                    row[chartX],
-                    inferColumnType(displayedResult, chartX),
-                    chartX,
-                    appSettings.numberFormat,
-                ),
-                value: Number(row[chartY] ?? 0),
-                formattedValue: formatAnalysisValue(
-                    row[chartY],
-                    inferColumnType(displayedResult, chartY),
-                    chartY,
-                    appSettings.numberFormat,
-                ),
-            }))
-            .filter((row) => Number.isFinite(row.value));
-    }, [displayedResult, chartX, chartY, appSettings.numberFormat]);
-    const maxChart = Math.max(
-        0,
-        ...chartValues.map((row) => Math.abs(row.value)),
-    );
+    draftSnapshot.current = JSON.stringify({
+        currentQuery,
+        name,
+        formulasJson,
+        assumptionsJson,
+        assumptionValuesJson,
+        workbench,
+        scenarioModel,
+        chartSpec,
+        pivotConfig,
+        sourceReferences,
+        workspace,
+    });
+    const transformationsOutdated =
+        analysisDraftSignature(resultInputs) !==
+        analysisDraftSignature({
+            formulasJson,
+            assumptionsJson,
+            assumptionValuesJson,
+            workbench,
+            scenarioModel,
+        });
+    const queryOutdated = resultQuery !== null && resultQuery !== currentQuery;
 
     return (
         <PageShell>
@@ -897,8 +978,65 @@ export default function AnalysisWorkspacePage() {
                 subtitle={t("analysis.subtitle")}
                 icon={PAGE_ICONS["/analysis"]}
             />
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
-                <div className="space-y-4">
+            <nav
+                aria-label={t("analysis.workflow.title")}
+                className="mb-4 flex flex-wrap gap-2"
+            >
+                {["data", "prepare", "calculate", "present"].map((step) => (
+                    <a
+                        key={step}
+                        className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        href={`#analysis-${step}`}
+                        onClick={() => {
+                            if (step === "prepare" || step === "calculate")
+                                setToolsOpen(true);
+                        }}
+                    >
+                        {t(`analysis.workflow.${step}`)}
+                    </a>
+                ))}
+            </nav>
+            <div className="space-y-4">
+                <div className="min-w-0 space-y-4">
+                    {dataset?.relation?.startsWith("service:") && (
+                        <Card>
+                            <CardContent className="flex flex-wrap gap-3 pt-4">
+                                {(
+                                    [
+                                        "reportingCurrency",
+                                        "from",
+                                        "to",
+                                        "symbol",
+                                        "range",
+                                        "costBasisMethod",
+                                    ] as const
+                                ).map((key) => (
+                                    <label
+                                        key={key}
+                                        className="grid gap-1 text-sm"
+                                    >
+                                        {t(`analysis.ext.financial.${key}`)}
+                                        <Input
+                                            type={
+                                                key === "from" || key === "to"
+                                                    ? "date"
+                                                    : "text"
+                                            }
+                                            value={String(plan[key] ?? "")}
+                                            onChange={(event) =>
+                                                setPlan({
+                                                    ...plan,
+                                                    [key]:
+                                                        event.target.value ||
+                                                        undefined,
+                                                })
+                                            }
+                                        />
+                                    </label>
+                                ))}
+                            </CardContent>
+                        </Card>
+                    )}
                     <Card>
                         <details
                             open={templatesOpen}
@@ -927,6 +1065,7 @@ export default function AnalysisWorkspacePage() {
                                             type="button"
                                             className="rounded-lg border border-border bg-card/60 p-3 text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                             onClick={() => {
+                                                resetPendingDraft();
                                                 setTemplatesOpen(false);
                                                 setBuilderOpen(false);
                                                 builderSummaryRef.current?.focus();
@@ -960,6 +1099,7 @@ export default function AnalysisWorkspacePage() {
                                     type="button"
                                     variant="outline"
                                     onClick={() => {
+                                        resetPendingDraft();
                                         setTemplatesOpen(false);
                                         setBuilderOpen(true);
                                         builderSummaryRef.current?.focus();
@@ -991,7 +1131,12 @@ export default function AnalysisWorkspacePage() {
                     </Card>
                     <Card>
                         <CardHeader>
-                            <CardTitle>{t("analysis.build")}</CardTitle>
+                            <CardTitle
+                                id="analysis-data"
+                                className="scroll-mt-4"
+                            >
+                                {t("analysis.workflow.data")}
+                            </CardTitle>
                             <p className="max-w-2xl text-sm text-muted-foreground">
                                 {t("analysis.buildHelp")}
                             </p>
@@ -1846,11 +1991,17 @@ export default function AnalysisWorkspacePage() {
                             </details>
                             <div className="flex gap-2">
                                 <Button
-                                    onClick={() => execute(0)}
+                                    onClick={() => execute(0, plan, true)}
                                     disabled={!!activeRequest}
                                 >
-                                    <Play className="mr-2 h-4 w-4" />
-                                    {t("analysis.run")}
+                                    {activeRequest ? (
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" />
+                                    ) : (
+                                        <Play className="mr-2 h-4 w-4" />
+                                    )}
+                                    {activeRequest
+                                        ? t("analysis.running")
+                                        : t("analysis.run")}
                                 </Button>
                                 {activeRequest && (
                                     <Button
@@ -1885,9 +2036,14 @@ export default function AnalysisWorkspacePage() {
                     {displayedResult && (
                         <Card>
                             <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
+                                <CardTitle
+                                    id="analysis-present"
+                                    ref={resultHeadingRef}
+                                    tabIndex={-1}
+                                    className="flex scroll-mt-4 flex-wrap items-center gap-2"
+                                >
                                     <Database className="h-4 w-4" />
-                                    {t("analysis.results")}
+                                    {t("analysis.workflow.present")}
                                     <Badge variant="secondary">
                                         {displayedResult.window.returnedRows}
                                     </Badge>
@@ -1897,15 +2053,14 @@ export default function AnalysisWorkspacePage() {
                                 </p>
                             </CardHeader>
                             <div className="px-6">
-                                {resultQuery !== null &&
-                                    resultQuery !== currentQuery && (
-                                        <p
-                                            role="status"
-                                            className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm"
-                                        >
-                                            {t("analysis.resultsOutdated")}
-                                        </p>
-                                    )}
+                                {(queryOutdated || transformationsOutdated) && (
+                                    <p
+                                        role="status"
+                                        className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm"
+                                    >
+                                        {t("analysis.resultsOutdated")}
+                                    </p>
+                                )}
                             </div>
                             {!!displayedResult.formulaErrors?.length && (
                                 <div
@@ -2059,160 +2214,108 @@ export default function AnalysisWorkspacePage() {
                                         </details>
                                     </CardContent>
                                 </TabsContent>
-                                <TabsContent value="chart" className="mt-0">
-                                    <CardContent className="space-y-3">
-                                        <div className="flex gap-2">
-                                            <label className="grid gap-1 text-sm">
-                                                <span>
-                                                    {t(
-                                                        "analysis.chartCategory",
-                                                    )}
-                                                </span>
-                                                <select
-                                                    value={chartX}
-                                                    onChange={(event) =>
-                                                        setChartX(
-                                                            event.target.value,
-                                                        )
-                                                    }
-                                                    className="rounded-md border bg-background px-2 py-1"
-                                                >
-                                                    {availableChartColumns.ids.map(
-                                                        (id) => (
-                                                            <option
-                                                                key={id}
-                                                                value={id}
-                                                            >
-                                                                {analysisColumnLabel(
-                                                                    displayedResult,
-                                                                    id,
-                                                                    presentationDatasets,
-                                                                    t,
-                                                                )}
-                                                            </option>
-                                                        ),
-                                                    )}
-                                                </select>
-                                            </label>
-                                            <label className="grid gap-1 text-sm">
-                                                <span>
-                                                    {t("analysis.chartValue")}
-                                                </span>
-                                                <select
-                                                    value={chartY}
-                                                    onChange={(event) =>
-                                                        setChartY(
-                                                            event.target.value,
-                                                        )
-                                                    }
-                                                    className="rounded-md border bg-background px-2 py-1"
-                                                >
-                                                    {!chartY && (
-                                                        <option value="">
-                                                            —
-                                                        </option>
-                                                    )}
-                                                    {availableChartColumns.numericIds.map(
-                                                        (id) => (
-                                                            <option
-                                                                key={id}
-                                                                value={id}
-                                                            >
-                                                                {analysisColumnLabel(
-                                                                    displayedResult,
-                                                                    id,
-                                                                    presentationDatasets,
-                                                                    t,
-                                                                )}
-                                                            </option>
-                                                        ),
-                                                    )}
-                                                </select>
-                                            </label>
-                                        </div>
-                                        {!chartY ? (
-                                            <p className="text-sm text-muted-foreground">
-                                                {t("analysis.chartNoNumeric")}
-                                            </p>
-                                        ) : mixedCurrencies ? (
-                                            <p className="text-sm text-muted-foreground">
-                                                {t(
-                                                    "analysis.chartMixedCurrencies",
-                                                )}
-                                            </p>
-                                        ) : completeForChart ? (
-                                            <div className="space-y-2">
-                                                {chartValues.map(
-                                                    (row, index) => (
-                                                        <div
-                                                            key={`${row.label}-${index}`}
-                                                            className="grid grid-cols-[minmax(0,10rem)_minmax(2rem,1fr)_auto] items-center gap-2 text-xs"
-                                                        >
-                                                            <span className="truncate">
-                                                                {row.label}
-                                                            </span>
-                                                            <div className="relative h-3 rounded-full bg-primary/15">
-                                                                <span
-                                                                    aria-hidden="true"
-                                                                    className="absolute inset-y-0 left-1/2 border-l border-foreground/50"
-                                                                />
-                                                                <div
-                                                                    className="absolute h-3 rounded-full bg-primary"
-                                                                    data-sign={
-                                                                        row.value <
-                                                                        0
-                                                                            ? "negative"
-                                                                            : "positive"
-                                                                    }
-                                                                    style={{
-                                                                        width: `${maxChart ? (Math.abs(row.value) / maxChart) * 50 : 0}%`,
-                                                                        ...(row.value <
-                                                                        0
-                                                                            ? {
-                                                                                  right: "50%",
-                                                                              }
-                                                                            : {
-                                                                                  left: "50%",
-                                                                              }),
-                                                                    }}
-                                                                />
-                                                            </div>
-                                                            <span className="text-right tabular-nums">
-                                                                {
-                                                                    row.formattedValue
-                                                                }
-                                                            </span>
-                                                        </div>
-                                                    ),
-                                                )}
+                                {displayedResult.coverage && (
+                                    <div
+                                        className="px-6 pb-3 text-xs text-muted-foreground"
+                                        role="status"
+                                    >
+                                        {t("analysis.ext.financial.coverage", {
+                                            status:
+                                                displayedResult.coverage
+                                                    .status ?? "—",
+                                            missing:
+                                                displayedResult.coverage
+                                                    .unavailableRows ?? 0,
+                                        })}
+                                    </div>
+                                )}
+                                {displayedResult.provenance && (
+                                    <details className="px-6 pb-3 text-xs">
+                                        <summary>
+                                            {t(
+                                                "analysis.ext.financial.provenance",
+                                            )}
+                                        </summary>
+                                        {Object.entries(
+                                            displayedResult.provenance,
+                                        ).map(([key, value]) => (
+                                            <div
+                                                className="flex gap-2"
+                                                key={key}
+                                            >
+                                                <span>{key}</span>
+                                                <span>{String(value)}</span>
                                             </div>
-                                        ) : (
-                                            <p className="text-sm text-muted-foreground">
-                                                {t(
-                                                    "analysis.chartNeedsComplete",
-                                                )}
-                                            </p>
-                                        )}
+                                        ))}
+                                    </details>
+                                )}
+                                <TabsContent value="chart" className="mt-0">
+                                    <CardContent>
+                                        <AnalysisChartPanel
+                                            result={{
+                                                ...displayedResult,
+                                                declaredColumns:
+                                                    (displayedResult
+                                                        .declaredColumns?.length
+                                                        ? displayedResult.declaredColumns
+                                                        : displayedResult.columns
+                                                    ).map((column) => ({
+                                                        ...column,
+                                                        label: analysisColumnLabel(
+                                                            displayedResult,
+                                                            column.id,
+                                                            presentationDatasets,
+                                                            t,
+                                                        ),
+                                                        nullable: true,
+                                                    })),
+                                            }}
+                                            spec={chartSpec}
+                                            onChange={setChartSpec}
+                                        />
                                     </CardContent>
                                 </TabsContent>
                                 <TabsContent value="pivot" className="mt-0">
-                                    {pivotReady ? (
-                                        <CardContent>
-                                            <PivotTable
-                                                result={displayedResult}
-                                                datasets={presentationDatasets}
-                                                rowId={plan.groups[0]}
-                                                columnId={plan.groups[1]}
-                                                valueId={plan.measures[0]}
+                                    <CardContent>
+                                        {mode === "visual" && dataset ? (
+                                            <AnalysisPivotPanel
+                                                plan={plan}
+                                                dataset={dataset}
+                                                config={pivotConfig}
+                                                onChange={setPivotConfig}
+                                                onDrill={async (
+                                                    groups,
+                                                    row,
+                                                ) => {
+                                                    try {
+                                                        setDrillResult(
+                                                            await apiClient.drillAnalysis(
+                                                                {
+                                                                    ...plan,
+                                                                    groups,
+                                                                    filters: [
+                                                                        ...plan.filters,
+                                                                        ...pivotConfig.filters,
+                                                                    ],
+                                                                },
+                                                                row,
+                                                                requestId(),
+                                                            ),
+                                                        );
+                                                    } catch (cause) {
+                                                        setError(
+                                                            apiErrorToMessage(
+                                                                cause,
+                                                                t,
+                                                            ),
+                                                        );
+                                                    }
+                                                }}
                                             />
-                                        </CardContent>
-                                    ) : (
-                                        <CardContent>
-                                            <p className="text-sm text-muted-foreground">
-                                                {t("analysis.pivotHelp")}
-                                            </p>
-                                        </CardContent>
-                                    )}
+                                        ) : (
+                                            <p>{t("analysis.pivotHelp")}</p>
+                                        )}
+                                    </CardContent>
                                 </TabsContent>
                             </Tabs>
                         </Card>
@@ -2234,9 +2337,85 @@ export default function AnalysisWorkspacePage() {
                             </CardContent>
                         </Card>
                     )}
+                    <Card>
+                        <details
+                            open={toolsOpen}
+                            onToggle={(event) =>
+                                setToolsOpen(event.currentTarget.open)
+                            }
+                        >
+                            <summary className="cursor-pointer rounded-lg px-6 py-4 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                                {t("analysis.refineTitle")}
+                                <span className="mt-1 block max-w-2xl font-normal text-muted-foreground">
+                                    {t("analysis.refineHelp")}
+                                </span>
+                            </summary>
+                            <CardContent className="min-w-0 pt-2">
+                                <AnalysisWorkbenchPanel
+                                    result={
+                                        displayedResult?.sourceResult ||
+                                        displayedResult
+                                    }
+                                    formulasJson={formulasJson}
+                                    onFormulasChange={setFormulasJson}
+                                    assumptionsJson={assumptionsJson}
+                                    onAssumptionsChange={setAssumptionsJson}
+                                    assumptionValuesJson={assumptionValuesJson}
+                                    onAssumptionValuesChange={
+                                        setAssumptionValuesJson
+                                    }
+                                    config={workbench}
+                                    onConfigChange={setWorkbench}
+                                    attachments={scenarioModel.attachments}
+                                    sourceStale={
+                                        queryOutdated ||
+                                        Boolean(activeRequest) ||
+                                        JSON.stringify(
+                                            resultInputs.scenarioModel,
+                                        ) !== JSON.stringify(scenarioModel)
+                                    }
+                                    onResultChange={(next) => {
+                                        setResultInputs({
+                                            formulasJson,
+                                            assumptionsJson,
+                                            assumptionValuesJson,
+                                            workbench,
+                                            scenarioModel,
+                                        });
+                                        const updated = {
+                                            ...next,
+                                            sourceResult:
+                                                displayedResult?.sourceResult ||
+                                                displayedResult ||
+                                                undefined,
+                                        };
+                                        setResult(updated);
+                                        setLastUsableResult(updated);
+                                    }}
+                                />
+                            </CardContent>
+                        </details>
+                    </Card>
                 </div>
 
-                <aside className="space-y-4">
+                <aside className="grid items-start gap-4 lg:grid-cols-2">
+                    {(savedAction ||
+                        saveMutation.isPending ||
+                        savedFeedback) && (
+                        <p
+                            role={savedFeedback?.error ? "alert" : "status"}
+                            className="lg:col-span-2 rounded-lg border border-border px-4 py-3 text-sm break-words"
+                        >
+                            {savedAction || saveMutation.isPending
+                                ? t("analysis.savedActionWorking")
+                                : savedFeedback?.message}
+                            {savedFeedback?.error && (
+                                <span className="mt-1 block text-muted-foreground">
+                                    {t("analysis.savedActionRetry")}
+                                </span>
+                            )}
+                        </p>
+                    )}
                     <Card>
                         <CardHeader>
                             <CardTitle>{t("analysis.saveTitle")}</CardTitle>
@@ -2397,8 +2576,25 @@ export default function AnalysisWorkspacePage() {
                                     {t("analysis.filesAndScenarios")}
                                 </summary>
                                 <div className="mt-3">
+                                    {displayedResult &&
+                                        (!exportInputsKnown ||
+                                            queryOutdated ||
+                                            transformationsOutdated) && (
+                                            <p
+                                                role="status"
+                                                className="mb-3 text-sm text-muted-foreground"
+                                            >
+                                                {t("analysis.exportNeedsRun")}
+                                            </p>
+                                        )}
                                     <AnalysisInterchangePanel
-                                        result={displayedResult}
+                                        result={
+                                            !exportInputsKnown ||
+                                            queryOutdated ||
+                                            transformationsOutdated
+                                                ? null
+                                                : displayedResult
+                                        }
                                         name={exportContext?.name ?? "analysis"}
                                         timezone={
                                             exportContext?.timezone ??
@@ -2421,56 +2617,20 @@ export default function AnalysisWorkspacePage() {
                                             exportContext?.sourceReferences ??
                                             []
                                         }
+                                        assumptions={{
+                                            definitions: JSON.parse(
+                                                resultInputs.assumptionsJson,
+                                            ),
+                                            values: JSON.parse(
+                                                resultInputs.assumptionValuesJson,
+                                            ),
+                                        }}
+                                        formulas={JSON.parse(
+                                            resultInputs.formulasJson,
+                                        )}
                                         scenarioModel={scenarioModel}
                                         onScenarioModelChange={setScenarioModel}
                                     />
-                                </div>
-                            </details>
-                            <details>
-                                <summary className="cursor-pointer text-sm font-medium">
-                                    {t("analysis.formulasAndAssumptions")}
-                                </summary>
-                                <div className="mt-2 space-y-2">
-                                    <Label htmlFor="analysis-formulas-json">
-                                        {t("analysis.formulasJson")}
-                                    </Label>
-                                    <Textarea
-                                        id="analysis-formulas-json"
-                                        className="font-mono text-xs"
-                                        value={formulasJson}
-                                        onChange={(event) =>
-                                            setFormulasJson(event.target.value)
-                                        }
-                                    />
-                                    <Label htmlFor="analysis-assumptions-json">
-                                        {t("analysis.assumptionsJson")}
-                                    </Label>
-                                    <Textarea
-                                        id="analysis-assumptions-json"
-                                        className="font-mono text-xs"
-                                        value={assumptionsJson}
-                                        onChange={(event) =>
-                                            setAssumptionsJson(
-                                                event.target.value,
-                                            )
-                                        }
-                                    />
-                                    <Label htmlFor="analysis-scenarios-json">
-                                        {t("analysis.scenarioValuesJson")}
-                                    </Label>
-                                    <Textarea
-                                        id="analysis-scenarios-json"
-                                        className="font-mono text-xs"
-                                        value={assumptionValuesJson}
-                                        onChange={(event) =>
-                                            setAssumptionValuesJson(
-                                                event.target.value,
-                                            )
-                                        }
-                                    />
-                                    <p className="text-xs text-muted-foreground">
-                                        {t("analysis.formulaSafety")}
-                                    </p>
                                 </div>
                             </details>
                             <Button
@@ -2478,7 +2638,9 @@ export default function AnalysisWorkspacePage() {
                                 variant="outline"
                                 onClick={() => saveMutation.mutate()}
                                 disabled={
-                                    !displayedResult || saveMutation.isPending
+                                    !displayedResult ||
+                                    saveMutation.isPending ||
+                                    savedAction
                                 }
                             >
                                 <Save className="mr-2 h-4 w-4" />
@@ -2566,14 +2728,36 @@ export default function AnalysisWorkspacePage() {
                                                 key={version}
                                                 size="sm"
                                                 variant="ghost"
+                                                disabled={
+                                                    savedAction ||
+                                                    saveMutation.isPending
+                                                }
                                                 onClick={() =>
-                                                    void apiClient
-                                                        .restoreSavedAnalysisVersion(
-                                                            selectedSaved.id,
-                                                            version,
-                                                            selectedSaved.version,
-                                                        )
-                                                        .then(loadSaved)
+                                                    void savedOperation(
+                                                        async (
+                                                            _epoch,
+                                                            canApply,
+                                                        ) => {
+                                                            const restored =
+                                                                await apiClient.restoreSavedAnalysisVersion(
+                                                                    selectedSaved.id,
+                                                                    version,
+                                                                    selectedSaved.version,
+                                                                );
+                                                            if (canApply())
+                                                                loadSaved(
+                                                                    restored,
+                                                                );
+                                                            queryClient.invalidateQueries(
+                                                                {
+                                                                    queryKey: [
+                                                                        "analysis",
+                                                                        "saved",
+                                                                    ],
+                                                                },
+                                                            );
+                                                        },
+                                                    )
                                                 }
                                             >
                                                 {t("analysis.restoreVersion", {
@@ -2672,12 +2856,34 @@ export default function AnalysisWorkspacePage() {
                                         {proposalPreview && (
                                             <Button
                                                 size="sm"
+                                                disabled={
+                                                    savedAction ||
+                                                    saveMutation.isPending
+                                                }
                                                 onClick={() =>
-                                                    void apiClient
-                                                        .applyAnalysisProposal(
-                                                            proposalPreview.proposal,
-                                                        )
-                                                        .then(loadSaved)
+                                                    void savedOperation(
+                                                        async (
+                                                            _epoch,
+                                                            canApply,
+                                                        ) => {
+                                                            const applied =
+                                                                await apiClient.applyAnalysisProposal(
+                                                                    proposalPreview.proposal,
+                                                                );
+                                                            if (canApply())
+                                                                loadSaved(
+                                                                    applied,
+                                                                );
+                                                            queryClient.invalidateQueries(
+                                                                {
+                                                                    queryKey: [
+                                                                        "analysis",
+                                                                        "saved",
+                                                                    ],
+                                                                },
+                                                            );
+                                                        },
+                                                    )
                                                 }
                                             >
                                                 {t("analysis.applyProposal")}
@@ -2711,7 +2917,7 @@ export default function AnalysisWorkspacePage() {
                                     className="rounded-lg border p-3"
                                 >
                                     <button
-                                        className="w-full text-left font-medium hover:text-primary"
+                                        className="w-full break-words text-left font-medium hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                         onClick={() => loadSaved(saved)}
                                     >
                                         {saved.name}
@@ -2728,30 +2934,35 @@ export default function AnalysisWorkspacePage() {
                                                 aria-label={t(
                                                     "analysis.refresh",
                                                 )}
-                                                onClick={async () => {
-                                                    try {
-                                                        loadSaved(
-                                                            await apiClient.runSavedAnalysis(
-                                                                saved.id,
-                                                            ),
-                                                        );
-                                                        queryClient.invalidateQueries(
-                                                            {
-                                                                queryKey: [
-                                                                    "analysis",
-                                                                    "saved",
-                                                                ],
-                                                            },
-                                                        );
-                                                    } catch (cause) {
-                                                        setError(
-                                                            apiErrorToMessage(
-                                                                cause,
-                                                                t,
-                                                            ),
-                                                        );
-                                                    }
-                                                }}
+                                                disabled={
+                                                    savedAction ||
+                                                    saveMutation.isPending
+                                                }
+                                                onClick={() =>
+                                                    void savedOperation(
+                                                        async (
+                                                            _epoch,
+                                                            canApply,
+                                                        ) => {
+                                                            const refreshed =
+                                                                await apiClient.runSavedAnalysis(
+                                                                    saved.id,
+                                                                );
+                                                            if (canApply())
+                                                                loadSaved(
+                                                                    refreshed,
+                                                                );
+                                                            queryClient.invalidateQueries(
+                                                                {
+                                                                    queryKey: [
+                                                                        "analysis",
+                                                                        "saved",
+                                                                    ],
+                                                                },
+                                                            );
+                                                        },
+                                                    )
+                                                }
                                             >
                                                 <Play className="h-3.5 w-3.5" />
                                             </Button>
@@ -2761,19 +2972,34 @@ export default function AnalysisWorkspacePage() {
                                                 aria-label={t(
                                                     "analysis.delete",
                                                 )}
-                                                onClick={async () => {
-                                                    await apiClient.deleteSavedAnalysis(
-                                                        saved.id,
-                                                    );
-                                                    queryClient.invalidateQueries(
-                                                        {
-                                                            queryKey: [
-                                                                "analysis",
-                                                                "saved",
-                                                            ],
+                                                disabled={
+                                                    savedAction ||
+                                                    saveMutation.isPending
+                                                }
+                                                onClick={() =>
+                                                    void savedOperation(
+                                                        async () => {
+                                                            await apiClient.deleteSavedAnalysis(
+                                                                saved.id,
+                                                            );
+                                                            setSelectedSaved(
+                                                                (current) =>
+                                                                    current?.id ===
+                                                                    saved.id
+                                                                        ? null
+                                                                        : current,
+                                                            );
+                                                            queryClient.invalidateQueries(
+                                                                {
+                                                                    queryKey: [
+                                                                        "analysis",
+                                                                        "saved",
+                                                                    ],
+                                                                },
+                                                            );
                                                         },
-                                                    );
-                                                }}
+                                                    )
+                                                }
                                             >
                                                 <Trash2 className="h-3.5 w-3.5" />
                                             </Button>
