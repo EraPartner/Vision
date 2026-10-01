@@ -2,7 +2,7 @@
 title: Analysis Definition and Result Contract Reference
 type: reference
 status: active
-date: 2026-09-13
+date: 2026-10-01
 tags: [reference, analysis, contract, lineage, versioning, datasets, money]
 description: Exact version-1 shapes, invariants, compatibility rules, and acceptance fixtures for shared Vision financial analyses.
 aliases:
@@ -37,6 +37,26 @@ related_code:
 | `checkAnalysisResultCompatibility()` | Non-mutating, fail-closed consumer compatibility check         |
 | `AnalysisDefinition`                 | TypeScript declaration paired with the runtime schema          |
 | `AnalysisExecutionResult`            | Discriminated TypeScript result declaration                    |
+
+## Unit provenance extension
+
+Money units now permit exactly one of `currency`, `currencyParameterId` or `currencyColumn`.
+The column form resolves currency against each result row and fails closed when omitted or missing.
+Quantity units may identify `instrumentColumn` or a fixed `instrumentId`. These are additive
+version-1 metadata fields; existing literal/parameter definitions retain their meaning. Formula
+ratios cancel like units, incompatible addition/subtraction fails, and unavailable financial
+contributors withhold aggregate values. Saved expected columns and metrics preserve this metadata. COUNT and COUNTIF produce count
+units rather than inheriting money or quantity units from their arguments. Lookup preparation
+remaps column-based unit references to imported output identifiers and rejects missing scope
+bindings. Preparation rejects output-column identifier collisions.
+
+The workspace runtime DTO additionally carries overall `complete`, source/value `coverage`,
+`transformationCoverage`, transformation errors and preparation lineage. Consumers combine these
+with the result window; a complete page alone does not establish complete financial values. These
+runtime DTO fields do not change the strict immutable execution-result schema.
+
+See [[docs/adr/175-bounded-analysis-workbench|ADR-175]] and
+[[docs/features/analysis-workspace|Analysis Workspace]] for runtime limits and user controls.
 
 ## Definition Version 1
 

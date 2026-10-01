@@ -143,6 +143,16 @@ package "External / Data" {
     +cancelAnalysisQuery(requestId): Promise<CancelResult>
   }
 
+  class AnalysisFinancialDatasets <<ADR-175>> {
+    +executeFinancialAnalysis(plan): Result
+  }
+  class AnalysisPivotService <<ADR-175>> {
+    +executeAnalysisPivot(plan, config): Pivot
+  }
+  class AnalysisWorkbenchService <<ADR-175>> {
+    +applyAnalysisWorkbench(result, settings): Result
+    +evaluateAnalysisExtension(input): Result
+  }
   class SavedAnalysisService <<ADR-144>> {
     +createSavedAnalysis(input): Promise<SavedAnalysis>
     +updateSavedAnalysis(id, input): Promise<SavedAnalysis>
@@ -389,6 +399,13 @@ PortfolioPerformanceSnapshotService --> PriceProviderService
 PortfolioPerformanceSnapshotService --> CurrencyConversionService
 PortfolioPerformanceSnapshotService --> PortfolioSummaryService
 
+AnalysisCatalog --> AnalysisFinancialDatasets : enumerated service descriptors
+AnalysisPivotService --> AnalysisCatalog : complete-source level plans
+AnalysisPivotService --> AnalysisExecutor : one SQL snapshot
+AnalysisPivotService --> AnalysisFinancialDatasets : one canonical source snapshot
+SavedAnalysisService --> AnalysisFinancialDatasets : canonical source refresh
+SavedAnalysisService --> AnalysisWorkbenchService : repeatable local pipeline
+AnalysisFinancialDatasets --> PortfolioSummaryService : shared canonical replay
 AnalysisExecutor --> AnalysisCatalog : validates approved relations
 SavedAnalysisService --> AnalysisCatalog : compiles visual definitions
 SavedAnalysisService --> AnalysisExecutor : refreshes saved runs

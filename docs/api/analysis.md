@@ -2,7 +2,7 @@
 title: Analysis API
 type: endpoint
 status: active
-date: 2026-09-30
+date: 2026-10-01
 tags: [api, analysis, sql, query-builder, saved-analysis]
 description: Catalog, compile, bounded execution, cancellation, drill-through, and versioned saved-analysis operations under /api/analysis.
 path: /api/analysis
@@ -19,6 +19,8 @@ limiter. This is an additive API introduced with [[docs/adr/144-isolated-manual-
 | -------- | ------------------------------------- | ------------------------------------------------------------- |
 | `GET`    | `/api/analysis/catalog`               | List approved datasets, fields, measures, and safe joins      |
 | `POST`   | `/api/analysis/compile`               | Compile and normalize a visual plan without executing it      |
+| `POST`   | `/api/analysis/pivot`                 | Complete-source hierarchy, subtotals and percentages          |
+| `POST`   | `/api/analysis/extensions/evaluate`   | Preparation, time comparisons and isolated scenario evaluation |
 | `POST`   | `/api/analysis/execute`               | Run a visual plan or custom SQL with row/byte/time limits     |
 | `POST`   | `/api/analysis/cancel/:requestId`     | Cancel a running query through a same-role PostgreSQL session |
 | `POST`   | `/api/analysis/drill`                 | Resolve one grouped row to a bounded source-record page       |
@@ -55,7 +57,36 @@ Formula evaluation accepts optional `inputComplete` (default true). Saved and cl
 set it from the result window; aggregate formulas on incomplete input return `INCOMPLETE_INPUT`
 errors rather than page-only summaries. Errors carry `formulaId`, `code`, `message`, and optional
 zero-based `rowIndex`. A failed cell does not clear other rows. Consumed failed references produce
-`DEPENDENCY_ERROR`. Numeric aggregates reject mixed contributing `currency` values with `MIXED_CURRENCIES`; missing or renamed currency metadata cannot be inferred. Formula result columns are included in saved result metadata.
+`DEPENDENCY_ERROR`. Numeric aggregates reject mixed contributing `currency` values with `MIXED_CURRENCIES`; result units identify literal, parameter or result-column currency. Missing scope returns CURRENCY_PROVENANCE_REQUIRED; missing financial contributors withhold aggregates. Quantity arithmetic checks investment identity. Formula result columns are included in saved result metadata.
+
+## Workbench extensions
+
+`/execute` accepts `workbench`, `formulaModel` and `scenarioModel`. Fresh and saved runs apply
+validated attachment joins, repeatable preparation, calendar comparisons and formulas in that order.
+`parameters.workbench`, `pivotConfig`, `financialPlan` and chart bindings are version snapshots.
+A source result accompanies transformed results for repeatable previews. Partial financial coverage
+or transformation/formula errors persist a partial run rather than a completed run.
+
+`/pivot` receives `{plan, config:{rows,columns,values,filters}, requestId}`. SQL levels use one
+restricted statement. Financial levels reuse one canonical source snapshot. Every total aggregates
+original source values; average totals are never sums of averages. Partition percentages are exact
+decimal ratios. Output exposes population completeness separately from financial coverage.
+
+`/extensions/evaluate` receives operation `prepare`, `time`, `scenarios`, `sensitivity`, `goal` or
+`formulas`, typed rows/columns and `complete`. Formula dispatch combines this flag with window and transformation coverage before setting `inputComplete`.
+Formula responses return the transformed column schema, inferred formula units, overall `complete`,
+coverage and lineage. Pagination remains separate from value completeness.
+The optional `workbench` pipeline runs before formula/scenario operations. Preparation and calendar comparison each run once before formula/scenario evaluation.
+Steps/time/scenarios are bounded pure functions. No ledger or portfolio history writes occur. Oversized output and
+partial population operations return validation errors; Goal Seek reports convergence explicitly.
+
+Service dataset plans additionally accept reportingCurrency/from/to/symbol/range/costBasisMethod.
+Current positions reject historical date parameters. History reads stored snapshots; benchmark
+history fetches price points through the existing research aggregator. Benchmark returns are
+based on the first positive close within `from`/`to`, before other field filters. Stock measures
+aggregate closing observations per currency and broker account, while unavailable history
+contributors still produce partial coverage. Arbitrary SQL remains
+limited to approved views; service dataset markers are not executable SQL.
 
 ## Persistence contract
 
@@ -73,6 +104,8 @@ before formulas and rejects duplicate scenario keys. Safe CSV export is a client
 of the current result window; it is not a new API operation.
 
 ## Related
+
+- [[docs/adr/175-bounded-analysis-workbench|ADR-175]]
 
 - [[docs/api/index|API Documentation]]
 - [[docs/features/analysis-workspace|Analysis Workspace]]

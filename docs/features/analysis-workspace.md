@@ -2,8 +2,8 @@
 title: Analysis Workspace
 type: feature
 status: active
-date: 2026-09-30
-updated: 2026-09-30
+date: 2026-10-01
+updated: 2026-10-01
 tags:
   [
     feature,
@@ -32,7 +32,16 @@ related_code:
 
 ## Visual workflow
 
-1. Choose Transactions, Accounts, Holding events, or Cash flows.
+The workspace uses full-width Data, Prepare, Calculate and Present sections. Data holds the source
+configuration. After a successful explicit Run, focus moves to Present, which appears directly below
+Data. Sorting and paging do not move focus to the result heading. A successful explicit Run collapses the
+source editor and optional tools so the result stays prominent. Prepare and Calculate live in the
+closed-by-default Refine this analysis disclosure after the results; collapsing it preserves all inputs.
+Their section links open the disclosure. Save/library panels share the bottom area instead of reserving
+an empty side column. Selected preparation operations, formula scope and scenario tasks include short
+contextual guidance. Missing prerequisites and conflicting output names explain what to correct.
+
+1. Choose a ledger dataset or Current positions, Current cost basis, Portfolio/Broker valuation history, Stored dated exchange rates, or Benchmark price history.
 2. Select fields and measures. Every selected field must be grouped when a measure is present.
 3. Add typed filters, ordering, and the published many-to-one account join when needed.
 4. Run the plan and inspect the generated SQL.
@@ -53,6 +62,66 @@ editor. Export and scenario-file options use their own disclosure. Templates do 
 execution mode or lock fields.
 The SQL editor and run-preference overrides live under progressive advanced controls; loading,
 failure, and empty catalog states are explicit.
+
+## Guided calculations and repeatable preparation
+
+The workbench edits named formulas and assumptions without JSON. Formula rows show their name and
+scope; one editor expands at a time, with technical identifiers under a separate disclosure. A searchable
+field picker inserts into the active expression and returns focus there. Select row or summary scope,
+insert fields/functions, inspect the live preview, and apply the calculation. Errors include the
+formula identifier and row. Saved definitions retain derived formulas. Monetary fields carry a fixed
+currency or a result-column currency reference; omitted provenance blocks arithmetic. Quantity
+fields require investment identity. Money/quantity aggregates with unavailable contributors are
+withheld. Result completeness includes transformation errors and unavailable values, independently
+of pagination. Previews, saved refresh, charts and workbook provenance retain that coverage. Ratios of like money units are dimensionless.
+
+Functions include IF, COALESCE, ABS, ROUND, calendar helpers, SUM/AVERAGE/MIN/MAX/COUNT,
+COUNTIF/SUMIF, MEDIAN, sample STDEV/VARIANCE, and NPV/PV/FV/PMT. NPV discounts the first supplied
+cash flow at period one; annuity functions use periodic rates and default to end-of-period payments, with an explicit beginning-of-period option. Financial
+arguments and iteration counts are bounded; errors are explicit.
+
+Preparation starts with Add preparation step and reveals the selected operation. Required fields must
+be chosen before a step can be queued; queue summaries use readable operation and field names.
+Preparation queues typed conversion, many-to-one lookup/merge, schema/unit-compatible append,
+calculated columns, pivot and unpivot. Imported CSV/XLSX values have a type preview. Joins reject
+row multiplication and can require all rows to match. Imported column-based currency and
+instrument units are remapped to their selected output columns; the matching scope column must
+also be imported. New output identifiers cannot overwrite existing columns. Lineage records step counts, unmatched rows
+and source hashes. Refresh starts from the source snapshot, so applying the same queue twice does
+not append twice. Population transforms require the full first page. Limits: 32 steps, 1,000 rows,
+128 columns and 2 MiB output. Up to five imported tables have 1,000 rows and 32 columns each.
+
+Time comparisons have day/week/month/quarter/year buckets, prior period, prior year, rolling
+average and cumulative columns. Choose sum, average or last. Stock valuations require last and
+broker history requires account grouping. Missing periods may remain null or become zero;
+present unavailable values remain null. Weeks start on Monday; calendar boundaries use UTC date
+arithmetic without shifting source calendar dates. Complete input is required.
+
+Compare scenarios, Explore a variable, and Find a target are separate selected tasks. The second
+sensitivity value list appears only when a second variable is selected; switching tasks retains inputs.
+Named scenarios copy and edit assumption sets and display outcomes side by side. One/two-variable
+sensitivity uses explicit value lists. Goal Seek uses lower/upper bounds, tolerance and a finite
+iteration cap; convergence, unbracketed targets and failures are reported. These operations modify
+only analysis inputs, never the ledger. Scenario evaluations use the same preparation and time
+pipeline as formula previews and saved refresh.
+
+## Excel workbook interchange
+
+XLSX exports Results, typed Assumptions, Provenance, Formula definitions and Summary results.
+The Summary results sheet contains the evaluated summary formula identifiers and exact values. Dates use the Excel
+1900 calendar; values above 15 significant digits remain text to preserve precision. Formula
+expressions remain text and are never executed. Provenance records units, source identifiers,
+result-window completeness and static refresh instructions. Export reflects the displayed window;
+refresh in Vision and export again.
+
+Attachment names and row counts precede their expandable previews. Matching uses visible Result field
+and Imported field labels and retains existing saved column choices when updated. Upload controls have
+visible keyboard focus.
+
+Import supports value snapshots produced by Vision, restores identifiers from provenance, and
+rejects formula cells and unsupported ZIP compression. This is not an arbitrary Excel round trip.
+Excel desktop opening remains a native verification task; independent workbook-reader fixtures
+check value/type reconciliation in portable tests.
 
 ## SQL workflow
 
@@ -79,10 +148,18 @@ compatible visual origin is retained when the result shape is unchanged.
 - Header sorting reruns visual SQL with the selected order. Saving, reopening, and refreshing a
   visual analysis retain that order.
 - Drill-through uses the selected group values as typed filters.
-- A pivot requires exactly two groups and uses the first measure only when the complete result is loaded and the query is current. It never silently collapses additional currency or investment groups.
-- A bar chart uses chosen result columns only when the complete result is loaded. It renders all numeric, non-missing rows with negative values left of zero and positive values right of zero. Mixed-currency results must be filtered to one currency before charting. Its selectors
-  are labelled **Category axis** and **Value axis**; the value selector offers only numeric
-  columns. Results without a numeric column show an explanation instead of an empty chart.
+- Pivot has independent Rows, Columns, Values and Filters, up to three hierarchy levels per axis
+  and eight measures. Row groups expand and collapse independently. Rows, column groups and values have explicit
+  ordering controls, and hierarchy labels use the selected language. Column depth controls the
+  visible column hierarchy. Values
+  include server-computed row totals and percentage of partition total. Click a cell for bounded
+  contributing records. Currency and investment partitions survive every subtotal. SQL pivot
+  levels share one database statement (1,000 grouped output rows); canonical financial pivots reuse
+  one source snapshot (1,000 rows per level and 4,000 across levels). Oversized pivots fail explicitly.
+- Chart offers grouped/stacked bar, line, scatter and waterfall, persisted X and multiple series,
+  unit-labelled axes, coverage counts and an accessible exact-value table. It requires a complete
+  first page. Missing values remain gaps; waterfall rejects missing values. Currency and quantity
+  scope must be compatible. Plot geometry uses numbers; the grid and export retain exact values.
 - A failed run leaves the last usable result visible with an explicit error.
 
 Visual money sums require currency grouping or an explicit equality filter for one currency. The reporting-currency preference does not convert amounts. Raw event unit sums also require investment grouping or a single-investment filter. Holdings event totals are explicitly raw sums, not net positions or canonical portfolio replay. Existing unsafe saved visual plans must be edited before rerunning.
@@ -99,7 +176,7 @@ Saved analyses can add calculated row columns, summary formulas, named assumptio
 scenario values. Vision evaluates them with decimal arithmetic and a bounded expression language.
 Arithmetic, comparisons, conditionals, date operations, and conditional aggregates are supported.
 Dependencies are ordered explicitly; cycles, broken references, null/type errors, and resource caps
-produce visible formula errors. Numeric zero is false in `IF`. A row error clears only the affected cell and reports its zero-based row index; consumed failed dependencies also fail, including summaries. The UI shows the errors and does not chart missing values as zero. On incomplete result windows, aggregate formulas and calculations consuming their errors are withheld while independent row calculations remain available. Numeric aggregate formulas reject contributing rows with different `currency` values using `MIXED_CURRENCIES`; counts remain available and conditional sums may select one currency. This conservative guard also blocks non-money numeric aggregates across currencies. It cannot infer units when custom SQL omits or renames currency metadata.
+produce visible formula errors. Numeric zero is false in `IF`. A row error clears only the affected cell and reports its zero-based row index; consumed failed dependencies also fail, including summaries. The UI shows the errors and does not chart missing values as zero. On incomplete result windows, aggregate formulas and calculations consuming their errors are withheld while independent row calculations remain available. Unit-aware monetary aggregates reject contributing rows with different currencies using `MIXED_CURRENCIES`; quantity aggregates likewise require one instrument. Counts and dimensionless ratios may span currencies. Conditional sums may select one currency. Fixed or column-based units preserve provenance when a result omits the original currency field. Untyped custom SQL retains a conservative currency guard; explicitly declared units are required to resolve omitted or renamed metadata.
 The language has no JavaScript, macros, file access, network access,
 or ledger writes. Scenario values remain analysis parameters and never mutate transactions.
 
@@ -117,8 +194,11 @@ metadata. It labels column units as unavailable when the executor did not return
 values as returned and does not relabel or convert them to the preferred reporting currency.
 Vision snapshots this export context when a result is produced or loaded, so later editor changes
 cannot relabel an older result.
-Spreadsheet-formula prefixes are neutralized. Version 1 intentionally does not export XLSX or
-round-trip formulas.
+Spreadsheet-formula prefixes are neutralized. CSV and XLSX exports are blocked after query,
+preparation, calendar, formula, assumption or scenario-input edits until a successful rerun.
+Exports use the inputs captured with that result. A cached saved result requires a fresh run before
+export because its exact calculation input snapshot is not available. XLSX preserves formula
+definitions as text; it does not round-trip executable formulas.
 
 ## Preference precedence
 
@@ -143,9 +223,8 @@ history. A local model can propose a typed edit against the current version. The
 before/after document; applying it requires a separate action and a stale base version is rejected.
 Users can continue editing and saving with AI unavailable.
 
-Opening a saved analysis restores valid bar-chart column choices. Missing or stale choices fall
-back independently to the first result column for categories and the first numeric column for
-values. Without a cached result, stored axis choices are preserved until the next run can check
+Opening a saved analysis restores its chart kind, X binding and selected series. Missing or stale
+bindings are checked against returned columns and receive compatible defaults. Without a cached result, stored axis choices are preserved until the next run can check
 them against the returned columns. Opening the analysis also returns its result paging to the
 beginning.
 
@@ -178,6 +257,8 @@ starting. See [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]] fo
 
 ## Related
 
+- [[docs/adr/175-bounded-analysis-workbench|ADR-175: Bounded Analysis Workbench]]
+
 - [[docs/features/index|Features]]
 
 - [[docs/features/analysis-monitors|Analysis Monitors]]
@@ -198,6 +279,33 @@ The builder explains columns versus totals and counts, including the explicit Gr
 
 ## Clarity and recovery feedback
 
-A query-input signature marks displayed results as needing an update after the query changes. The warning remains through a failed rerun and clears after a successful run for the current query. It concerns query inputs, not unsaved analysis metadata.
+Run shows an in-progress label and respects reduced-motion preferences. Saved refresh, restore,
+proposal application and deletion show pending feedback beside the saved-analysis area and prevent
+duplicate submissions. Failures keep the current draft and expose a local retry explanation. Opening
+another analysis invalidates older query, refresh and save completions so they cannot replace the new
+document. Saved-operation results also preserve edits made while the request is pending. Deleting the selected definition keeps its visible draft available as a new analysis.
+
+Formula label and scope share a responsive row. Empty row formulas can start from a real numeric
+result field with an editable reference, avoiding examples that refer to unavailable fields.
+Formula previews show pending feedback, support retry after failure and ignore obsolete responses.
+Stale sources suspend previews until rerun. Empty preparation and formula sections omit inactive
+Apply controls; entered configuration remains mounted when tools are collapsed.
+
+A query-input signature marks displayed results as needing an update after the query changes. The warning remains through a failed rerun and clears after a successful run for the current query. Calculation and preparation edits also mark exports as needing a new run. Unsaved analysis
+metadata alone does not change the calculation result.
 
 The workspace provides task guidance alongside its templates. Advanced SQL controls use a disclosure that stays open while SQL mode is active; full editing remains available.
+
+
+## Presentation controls
+
+Pivot axes explain their roles; incomplete setup, changed configuration, empty results and failed
+builds provide a next step. Failure details remain expandable. Empty charts show guidance instead of
+empty axes. Long field and formula labels wrap, and pivot controls stack until wide layouts.
+
+
+Charts use aligned labeled controls and shared selection styling. Dates and scale ticks follow the
+application display preferences; tooltips and chart-data tables preserve exact localized decimal values.
+Pivot axes list selected fields first, with searchable Add field controls and explicit reorder/remove
+actions. Selecting a field or pressing Escape returns focus to the corresponding Add field control.
+Scenario result tables scroll at narrow widths, and solver details remain expandable below the outcome.

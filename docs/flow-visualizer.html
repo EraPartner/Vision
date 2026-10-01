@@ -1304,12 +1304,12 @@
           {
             "id": "sv.analysis",
             "label": "Restricted analysis runtime",
-            "sub": "catalog · executor · saved analysis · cloud plan adapter",
+            "sub": "restricted SQL · canonical datasets · pivots · bounded workbench",
             "kind": "service",
             "x": 1120,
             "y": 740,
             "path": "apps/node-backend/src/services/analysisExecutor.js",
-            "desc": "ADR-144 and ADR-149: compiles manual or cloud-authored identifier-only catalog plans, injects trusted scope locally, executes only approved views through the vision_analysis_executor role, and persists immutable definitions plus success/failure runs. Read-only transactions, timeouts, row/byte limits, and same-role cancellation are enforced independently of the UI."
+            "desc": "ADR-144, ADR-149 and ADR-175: restricted SQL views stay isolated; enumerated financial adapters reuse canonical replay and stored FX, while complete-source pivots and pure preparation/time/scenario operations preserve unit provenance, resource limits, coverage and immutable saved settings."
           },
           {
             "id": "sv.dossiers",
@@ -1942,7 +1942,7 @@
             "id": "manual-analysis",
             "name": "Build, run, and save a manual analysis",
             "category": "Analysis",
-            "summary": "A visual or custom SQL query crosses one bounded API and restricted PostgreSQL role, then an immutable definition version and explicit run state can be saved.",
+            "summary": "Guided visual/SQL plans, complete-source pivots and deterministic workbench transformations share bounded execution and immutable saved versions.",
             "steps": [
               {
                 "from": "build.native",
@@ -1971,26 +1971,26 @@
               {
                 "from": "fe.apiclient",
                 "to": "be.routes",
-                "payload": "POST /api/analysis/execute",
-                "annotation": "routes/analysis.js compiles visual plans or forwards custom SQL through the same executor."
+                "payload": "POST /api/analysis/execute, /pivot or /extensions/evaluate",
+                "annotation": "apps/frontend/src/lib/api/analysis.ts sends typed plans and saved workbench settings without requiring AI."
               },
               {
                 "from": "be.routes",
                 "to": "sv.analysis",
-                "payload": "catalog validation, SQL validation, row/byte/time limits",
-                "annotation": "analysisExecutor.js begins a read-only transaction on the dedicated vision_analysis_executor pool."
+                "payload": "validated SQL or canonical service plan; bounded preparation and scenarios",
+                "annotation": "apps/node-backend/src/routes/analysis.js selects restricted SQL, analysisFinancialDatasets.js or analysisWorkbenchService.js. No arbitrary application-table access."
               },
               {
                 "from": "sv.analysis",
                 "to": "db.postgres",
-                "payload": "SELECT approved vision_analysis views only",
-                "annotation": "apps/node-backend/src/database/analysisRoleBootstrap.js revokes public and unapproved table grants before granting the six approved v1/v2 views after migrations."
+                "payload": "restricted-view SELECT or enumerated read-only financial adapter",
+                "annotation": "analysisPivotService.js uses one SQL statement or cached canonical source for every hierarchy level; analysisFinancialDatasets.js projects approved portfolio/history/rate fields without writes."
               },
               {
                 "from": "be.routes",
                 "to": "sv.analysis",
                 "payload": "POST /api/analysis/saved or /saved/:id/run",
-                "annotation": "savedAnalysisService.js appends strict definition versions and records refresh success or failure without deleting the last usable result."
+                "annotation": "savedAnalysisService.js snapshots workbench, pivot, financial options and chart bindings, applies the same pipeline, and records partial coverage/errors without clearing the last usable run."
               }
             ]
           },

@@ -393,4 +393,15 @@ note right of ImportPage
   in ImportPage component
 end note
 
+package "Analysis Workbench (ADR-175)" {
+  class AnalysisWorkspacePage
+  class AnalysisChartPanel
+  class AnalysisPivotPanel
+  class AnalysisWorkbenchPanel
+  class AnalysisInterchangePanel
+}
+AnalysisWorkspacePage --> AnalysisChartPanel : persisted multiple series
+AnalysisWorkspacePage --> AnalysisPivotPanel : complete-source totals and drill
+AnalysisWorkspacePage --> AnalysisWorkbenchPanel : formulas, preparation and scenarios
+AnalysisWorkspacePage --> AnalysisInterchangePanel : typed snapshot values
 @enduml

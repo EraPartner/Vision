@@ -8,7 +8,7 @@ last_modified: 2026-09-30
 adr-reference: 026
 # Authoritative HTTP-operation count from openapi.yaml. The CI checker also
 # compares every method/path pair; update concrete resource rows when routes change.
-api_operation_count: 295
+api_operation_count: 297
 tags:
   [
     reference,
@@ -72,7 +72,7 @@ tags:
     auto-link,
     planned-match,
   ]
-description: Complete matrix of all 295 HTTP API operations (authoritative count from openapi.yaml), 2 health endpoints, and 25 Electron IPC invoke channels. The Electron contract also defines 6 renderer event channels.
+description: Complete matrix of all 297 HTTP API operations (authoritative count from openapi.yaml), 2 health endpoints, and 25 Electron IPC invoke channels. The Electron contract also defines 6 renderer event channels.
 aliases:
   [api matrix, endpoint matrix, all endpoints, api overview, endpoint list]
 ---
@@ -80,7 +80,7 @@ aliases:
 # API Endpoint Matrix
 
 > [!abstract] Overview
-> **295 HTTP API operations** (the count and concrete method/path pairs in `openapi.yaml` are checked by `scripts/check-endpoint-matrix.js` in CI), 2 unversioned `/health` endpoints, and 25 Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
+> **297 HTTP API operations** (the count and concrete method/path pairs in `openapi.yaml` are checked by `scripts/check-endpoint-matrix.js` in CI), 2 unversioned `/health` endpoints, and 25 Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
 >
 > **Note:** As of Phase 2.4, `openapi.yaml` is the authoritative API specification. This matrix provides a quick lookup; see the OpenAPI spec for formal schemas and examples.
 >
@@ -171,6 +171,8 @@ encodings return 400. Saved parser configs retain this option. See [[docs/api/im
 
 | Method           | Path                                  | Description                                        | Rate Limit  | Doc                             |
 | ---------------- | ------------------------------------- | -------------------------------------------------- | ----------- | ------------------------------- |
+| POST             | `/api/analysis/pivot`                 | Complete-source pivot detail, subtotals and shares | 600 req/min | [[docs/api/analysis\|Analysis]] |
+| POST             | `/api/analysis/extensions/evaluate`   | Preparation, calendar comparisons, scenarios and Goal Seek | 600 req/min | [[docs/api/analysis\|Analysis]] |
 | GET              | `/api/analysis/catalog`               | Approved dataset, field, measure, and join catalog | 600 req/min | [[docs/api/analysis\|Analysis]] |
 | POST             | `/api/analysis/compile`               | Currency-safe visual plan to inspectable SQL           | 600 req/min | [[docs/api/analysis\|Analysis]] |
 | POST             | `/api/analysis/execute`               | Paged visual or bounded custom SQL execution             | 600 req/min | [[docs/api/analysis\|Analysis]] |
@@ -673,7 +675,7 @@ equal the main senders and preload subscriptions.
 | Electron IPC invoke channels         | 25                            |
 | **Total**                            | **322**                       |
 
-> **295** versioned `/api` HTTP operations are declared in `openapi.yaml`. The checker compares their concrete method/path pairs with the resource tables and also checks `api_operation_count`. The 2 health routes and 25 Electron invoke channels are separate contracts; the 6 Electron event channels are not request endpoints. Resource summary counts and rate-limit descriptions are navigation aids and are not independently gate-checked.
+> **297** versioned `/api` HTTP operations are declared in `openapi.yaml`. The checker compares their concrete method/path pairs with the resource tables and also checks `api_operation_count`. The 2 health routes and 25 Electron invoke channels are separate contracts; the 6 Electron event channels are not request endpoints. Resource summary counts and rate-limit descriptions are navigation aids and are not independently gate-checked.
 
 ## Phase G Endpoint Consolidation (April 2026)
 

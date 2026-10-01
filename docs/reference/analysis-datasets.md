@@ -2,7 +2,7 @@
 title: Analysis Datasets
 type: reference
 status: active
-date: 2026-09-30
+date: 2026-10-01
 tags: [analysis, datasets, reconciliation, money, portfolio, security]
 description: Versioned analysis datasets, including ordered category paths, financial meanings, joins, and reconciliation rules.
 aliases: [financial datasets, vision_analysis]
@@ -87,7 +87,34 @@ security decision.
 6. Compare broker partitions with the global portfolio result.
 7. Record missing exchange rates or source fields as partial coverage.
 
+## Canonical service datasets
+
+The service catalog adds `positions`, `cost-basis`, `portfolio-history`, `broker-history`,
+`fx-history` and `benchmark-history` (schema version 1). These IDs are registered separately from
+SQL views. They use whitelisted projections and the canonical partitioned portfolio replay;
+application tables remain unavailable to user-authored SQL.
+
+Current positions/cost basis value today's active investments using stored FX evidence and the
+selected weighted-average/FIFO/LIFO policy. Stamped event FX takes precedence. Missing FX or an
+open market asset's missing quote withholds affected figures and reports partial coverage; known
+units/basis may remain available. History reads existing snapshots and never creates history.
+Returns are gain/capital ratios; benchmark returns are price returns without dividend reinvestment.
+Neither is claimed as time-weighted performance. Stock values require closing-period comparisons,
+with broker account partitions preserved. Aggregated stocks first select the last observation
+per currency and, for broker history, per account inside each output bucket, then combine those
+closing observations. Missing older observations remain partial coverage even when a later closing
+observation is available. Benchmark price returns use the first positive close within the inclusive
+`from`/`to` interval, before applying other field filters; those filters do not rebase returns.
+
+Money units retain native/original currency identity and explicit reporting-currency semantics.
+Conversion uses stored on-or-before rates and decimal source/target ratios; missing evidence never
+becomes 1:1. Dataset coverage and methodology accompany every result. Source reads cap at 100,000
+rows/20 MiB; grouped output paginates only after filtering and aggregation, capped at 1,000 rows
+and 2 MiB per output page. Financial pivots reuse one source snapshot across hierarchy levels.
+
 ## Related
+
+- [[docs/adr/175-bounded-analysis-workbench|ADR-175]]
 
 - [[docs/adr/140-versioned-analysis-datasets|ADR-140: Versioned Analysis Datasets]]
 - [[docs/reference/analysis-contract|Analysis Contract Reference]]
