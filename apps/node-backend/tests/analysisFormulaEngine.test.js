@@ -292,3 +292,139 @@ describe("analysisFormulaEngine", () => {
     expect(result.errors[0]).toMatchObject({ code: "TYPE_ERROR" });
   });
 });
+
+describe("analysis formula statistical, financial and dimensional semantics", () => {
+  it("computes median and sample dispersion with Decimal arithmetic", () => {
+    const result = evaluateAnalysisFormulas({
+      rows: [{ x: "1" }, { x: "2" }, { x: "3" }],
+      formulas: [
+        { id: "median", scope: "summary", expression: "MEDIAN(x)" },
+        { id: "variance", scope: "summary", expression: "VARIANCE(x)" },
+        { id: "deviation", scope: "summary", expression: "STDEV(x)" },
+      ],
+    });
+    expect(result.summaries).toEqual({
+      median: "2",
+      variance: "1",
+      deviation: "1",
+    });
+    expect(result.errors).toEqual([]);
+  });
+  it("calculates periodic finance with cash-flow signs and zero-rate branches", () => {
+    const result = evaluateAnalysisFormulas({
+      rows: [{}],
+      formulas: [
+        { id: "npv", scope: "row", expression: "NPV(0.1, 110, 121)" },
+        { id: "payment", scope: "row", expression: "PMT(0, 10, 1000)" },
+        { id: "future", scope: "row", expression: "FV(0, 10, -100, -1000)" },
+        { id: "present", scope: "row", expression: "PV(0, 10, -100, 0)" },
+      ],
+    });
+    expect(result.rows[0]).toEqual({
+      npv: "200",
+      payment: "-100",
+      future: "2000",
+      present: "1000",
+    });
+  });
+  it("preserves literal currency metadata without needing a currency column", () => {
+    const result = evaluateAnalysisFormulas({
+      rows: [{ amount: "10", income: "20" }],
+      columns: [
+        { id: "amount", unit: { kind: "money", currency: "EUR" } },
+        { id: "income", unit: { kind: "money", currency: "EUR" } },
+      ],
+      formulas: [
+        { id: "total", scope: "summary", expression: "SUM(amount)" },
+        { id: "rate", scope: "row", expression: "amount / income" },
+      ],
+    });
+    expect(result.formulaUnits.total).toMatchObject({
+      kind: "money",
+      currency: "EUR",
+    });
+    expect(result.formulaUnits.rate).toEqual({
+      kind: "percentage",
+      percentageBasis: "ratio",
+    });
+    expect(result.rows[0].rate).toBe("0.5");
+    expect(result.summaries.total).toBe("10");
+  });
+  it("rejects incompatible currencies and money with unresolved provenance", () => {
+    const result = evaluateAnalysisFormulas({
+      rows: [{ eur: "10", usd: "12", unknown: "3" }],
+      columns: [
+        { id: "eur", unit: { kind: "money", currency: "EUR" } },
+        { id: "usd", unit: { kind: "money", currency: "USD" } },
+        {
+          id: "unknown",
+          unit: { kind: "money", currencyParameterId: "reporting" },
+        },
+      ],
+      formulas: [
+        { id: "invalid", scope: "row", expression: "eur + usd" },
+        { id: "missing", scope: "summary", expression: "SUM(unknown)" },
+      ],
+    });
+    expect(result.errors.map((error) => error.code)).toEqual([
+      "UNIT_MISMATCH",
+      "CURRENCY_PROVENANCE_REQUIRED",
+    ]);
+    expect(result.rows[0].invalid).toBeNull();
+    expect(result.summaries.missing).toBeNull();
+  });
+});
+
+describe("aggregate currency and instrument coverage", () => {
+  it("withholds money totals with missing contributors while COUNT counts known cells", () => {
+    const result = evaluateAnalysisFormulas({
+      rows: [{ value: "10" }, { value: null }],
+      columns: [{ id: "value", unit: { kind: "money", currency: "EUR" } }],
+      formulas: [
+        { id: "total", scope: "summary", expression: "SUM(value)" },
+        { id: "count", scope: "summary", expression: "COUNT(value)" },
+      ],
+    });
+    expect(result.summaries).toEqual({ total: null, count: 1 });
+    expect(result.errors[0].code).toBe("MISSING_CONTRIBUTOR");
+  });
+  it("propagates dynamic currency metadata and permits dimensionless ratios across currencies", () => {
+    const columns = [
+      { id: "value", unit: { kind: "money", currencyColumn: "currency" } },
+      { id: "income", unit: { kind: "money", currencyColumn: "currency" } },
+    ];
+    const result = evaluateAnalysisFormulas({
+      rows: [
+        { value: "10", income: "20", currency: "EUR" },
+        { value: "12", income: "24", currency: "USD" },
+      ],
+      columns,
+      formulas: [
+        { id: "rate", scope: "row", expression: "value/income" },
+        { id: "mean", scope: "summary", expression: "AVERAGE(formula.rate)" },
+        { id: "total", scope: "summary", expression: "SUM(value)" },
+      ],
+    });
+    expect(result.summaries.mean).toBe("0.5");
+    expect(result.summaries.total).toBeNull();
+    expect(result.errors[0].code).toBe("MIXED_CURRENCIES");
+    const missing = evaluateAnalysisFormulas({
+      rows: [{ value: "10" }],
+      columns,
+      formulas: [{ id: "valueCopy", scope: "row", expression: "value" }],
+    });
+    expect(missing.errors[0].code).toBe("CURRENCY_PROVENANCE_REQUIRED");
+  });
+  it("rejects quantity totals across investment identities even without explicit column binding", () => {
+    const result = evaluateAnalysisFormulas({
+      rows: [
+        { units: "10", investment_id: 1 },
+        { units: "2", investment_id: 2 },
+      ],
+      columns: [{ id: "units", unit: { kind: "quantity" } }],
+      formulas: [{ id: "total", scope: "summary", expression: "SUM(units)" }],
+    });
+    expect(result.summaries.total).toBeNull();
+    expect(result.errors[0].code).toBe("MIXED_INSTRUMENTS");
+  });
+});

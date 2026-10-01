@@ -1,5 +1,10 @@
 /** Allowlisted analysis fields, dimensions, measures, joins, and SQL compiler. */
 
+import {
+  FINANCIAL_ANALYSIS_DATASETS,
+  isFinancialAnalysisDataset,
+} from "./analysisFinancialDatasets.js";
+
 const DATASETS = {
   transactions: {
     relation: "vision_analysis.transactions_v2",
@@ -96,7 +101,12 @@ const DATASETS = {
     },
     measures: {
       count: ["Event count", "integer", "COUNT(*)"],
-      sum_amount: ["Raw event amount total", "decimal", "SUM(amount)", "currency"],
+      sum_amount: [
+        "Raw event amount total",
+        "decimal",
+        "SUM(amount)",
+        "currency",
+      ],
       sum_units: ["Raw event units total", "decimal", "SUM(units)"],
     },
     joins: ["holdings.account"],
@@ -167,6 +177,20 @@ const DATASETS = {
   },
 };
 
+for (const dataset of Object.values(DATASETS)) {
+  const dateField = Object.keys(dataset.fields).find((id) =>
+    id.endsWith("_date"),
+  );
+  if (dateField)
+    for (const bucket of ["day", "week", "quarter", "year"]) {
+      dataset.fields[bucket] = [
+        bucket[0].toUpperCase() + bucket.slice(1),
+        "date",
+        `date_trunc('${bucket}', ${dateField})::date`,
+      ];
+    }
+}
+
 const OPERATORS = {
   eq: "=",
   neq: "<>",
@@ -185,29 +209,32 @@ const quoteIdent = (value) => `"${value.replace(/"/g, '""')}"`;
 export function getAnalysisCatalog() {
   return {
     version: 1,
-    datasets: Object.entries(DATASETS).map(([id, dataset]) => ({
-      id,
-      label: dataset.label,
-      relation: dataset.relation,
-      fields: Object.entries(dataset.fields).map(([fieldId, field]) => ({
-        id: fieldId,
-        label: field[0],
-        type: field[1],
-      })),
-      measures: Object.entries(dataset.measures).map(
-        ([measureId, measure]) => ({
-          id: measureId,
-          label: measure[0],
-          type: measure[1],
-        }),
-      ),
-      joins: dataset.joins.map((id) => ({
+    datasets: [
+      ...Object.entries(DATASETS).map(([id, dataset]) => ({
         id,
-        datasetId: "accounts",
-        cardinality: "many-to-one",
-        duplicationSafe: true,
+        label: dataset.label,
+        relation: dataset.relation,
+        fields: Object.entries(dataset.fields).map(([fieldId, field]) => ({
+          id: fieldId,
+          label: field[0],
+          type: field[1],
+        })),
+        measures: Object.entries(dataset.measures).map(
+          ([measureId, measure]) => ({
+            id: measureId,
+            label: measure[0],
+            type: measure[1],
+          }),
+        ),
+        joins: dataset.joins.map((id) => ({
+          id,
+          datasetId: "accounts",
+          cardinality: "many-to-one",
+          duplicationSafe: true,
+        })),
       })),
-    })),
+      ...FINANCIAL_ANALYSIS_DATASETS,
+    ],
   };
 }
 
@@ -228,12 +255,46 @@ function fieldExpression(dataset, id, joined) {
   if (/^[a-z_][a-z0-9_]*$/i.test(expression))
     return `analysis_base.${expression}`;
   return expression.replace(
-    /date_trunc\('month',\s*([a-z_][a-z0-9_]*)\)/i,
-    "date_trunc('month', analysis_base.$1)",
+    /date_trunc\('(day|week|month|quarter|year)',\s*([a-z_][a-z0-9_]*)\)/i,
+    "date_trunc('$1', analysis_base.$2)",
   );
 }
 
 export function compileVisualAnalysis(plan) {
+  if (isFinancialAnalysisDataset(plan?.datasetId)) {
+    const descriptor = FINANCIAL_ANALYSIS_DATASETS.find(
+      (d) => d.id === plan.datasetId,
+    );
+    const fields = [...new Set(plan.fields || [])],
+      measures = [...new Set(plan.measures || [])];
+    const available = [...descriptor.fields, ...descriptor.measures];
+    const columns = [...fields, ...measures].map((id) => {
+      const column = available.find((c) => c.id === id);
+      if (!column) throw new Error(`Unsupported analysis output: ${id}`);
+      const unit =
+        column.unit?.kind === "money" &&
+        !["benchmark-history", "fx-history"].includes(plan.datasetId)
+          ? { kind: "money", currency: plan.reportingCurrency || "EUR" }
+          : column.unit;
+      return { ...column, nullable: true, ...(unit ? { unit } : {}) };
+    });
+    if (!columns.length)
+      throw new Error("Select at least one field or measure");
+    return {
+      sql: "/* Canonical financial service; SQL execution is unavailable */",
+      values: [],
+      datasetIds: [plan.datasetId],
+      columns,
+      visualPlan: {
+        ...plan,
+        fields,
+        measures,
+        groups: plan.groups || [],
+        joins: [],
+        limit: Math.min(plan.limit || 500, 1000),
+      },
+    };
+  }
   const dataset = DATASETS[plan?.datasetId];
   if (!dataset)
     throw new Error(`Unsupported analysis dataset: ${plan?.datasetId}`);
@@ -257,13 +318,82 @@ export function compileVisualAnalysis(plan) {
     selected.push(
       `${fieldExpression(dataset, id, joined)} AS ${quoteIdent(id)}`,
     );
-    columns.push({ id, label: field[0], type: field[1], nullable: true });
+    const fixedCurrency = (plan.filters || []).find(
+      (f) => f.fieldId === "currency" && f.operator === "eq",
+    )?.value;
+    const investment = (plan.filters || []).find(
+      (f) => f.fieldId === "investment_id" && f.operator === "eq",
+    )?.value;
+    const unit = [
+      "amount",
+      "signed_amount",
+      "spending_amount",
+      "positive_flow_amount",
+    ].includes(id)
+      ? {
+          kind: "money",
+          ...(fixedCurrency
+            ? { currency: fixedCurrency }
+            : { currencyColumn: "currency" }),
+        }
+      : id === "units"
+        ? {
+            kind: "quantity",
+            ...(investment
+              ? { instrumentId: String(investment) }
+              : { instrumentColumn: "investment_id" }),
+          }
+        : undefined;
+    columns.push({
+      id,
+      label: field[0],
+      type: field[1],
+      nullable: true,
+      ...(unit ? { unit } : {}),
+    });
   }
   for (const id of measures) {
     const measure = dataset.measures[id];
     if (!measure) throw new Error(`Unsupported analysis measure: ${id}`);
     selected.push(`${measure[2]} AS ${quoteIdent(id)}`);
-    columns.push({ id, label: measure[0], type: measure[1], nullable: false });
+    const currency = (plan.filters || []).find(
+      (f) => f.fieldId === "currency" && f.operator === "eq",
+    )?.value;
+    columns.push({
+      id,
+      label: measure[0],
+      type: measure[1],
+      nullable: false,
+      ...(measure[3] === "currency"
+        ? {
+            unit: {
+              kind: "money",
+              ...(currency ? { currency } : { currencyColumn: "currency" }),
+            },
+          }
+        : id === "count"
+          ? { unit: { kind: "count" } }
+          : id === "sum_units"
+            ? {
+                unit: {
+                  kind: "quantity",
+                  ...((plan.filters || []).find(
+                    (f) => f.fieldId === "investment_id" && f.operator === "eq",
+                  )?.value
+                    ? {
+                        instrumentId: String(
+                          (plan.filters || []).find(
+                            (f) =>
+                              f.fieldId === "investment_id" &&
+                              f.operator === "eq",
+                          ).value,
+                        ),
+                      }
+                    : { instrumentColumn: "investment_id" }),
+                },
+              }
+            : {}),
+    });
   }
   if (measures.length && groups.some((id) => !fields.includes(id))) {
     throw new Error("Every group must also be a selected field");

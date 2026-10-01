@@ -21,6 +21,13 @@ const FUNCTIONS = new Set([
   "COUNT",
   "COUNTIF",
   "SUMIF",
+  "MEDIAN",
+  "STDEV",
+  "VARIANCE",
+  "NPV",
+  "PV",
+  "FV",
+  "PMT",
 ]);
 const AGGREGATES = new Set([
   "SUM",
@@ -30,6 +37,9 @@ const AGGREGATES = new Set([
   "COUNT",
   "COUNTIF",
   "SUMIF",
+  "MEDIAN",
+  "STDEV",
+  "VARIANCE",
 ]);
 
 export class AnalysisFormulaError extends Error {
@@ -177,7 +187,9 @@ function parseExpression(source) {
 function decimal(value) {
   if (value === null || value === undefined || value === "") return null;
   try {
-    return new Decimal(value);
+    const result = new Decimal(value);
+    if (!result.isFinite()) throw new Error("non-finite decimal");
+    return result;
   } catch {
     throw new AnalysisFormulaError(
       "TYPE_ERROR",
@@ -285,6 +297,23 @@ function resolveReference(name, context) {
       "BROKEN_REFERENCE",
       `Unknown column: ${key}`,
     );
+  const declared = context.columns?.find((column) => column.id === key)?.unit;
+  if (
+    declared?.currencyColumn &&
+    !/^[A-Z]{3}$/.test(context.row[declared.currencyColumn] || "")
+  )
+    throw new AnalysisFormulaError(
+      "CURRENCY_PROVENANCE_REQUIRED",
+      `Column ${key} needs its source currency column ${declared.currencyColumn}`,
+    );
+  if (
+    declared?.instrumentColumn &&
+    context.row[declared.instrumentColumn] == null
+  )
+    throw new AnalysisFormulaError(
+      "INSTRUMENT_PROVENANCE_REQUIRED",
+      `Column ${key} needs its source instrument column ${declared.instrumentColumn}`,
+    );
   return context.row[key];
 }
 function evaluate(ast, context) {
@@ -351,14 +380,16 @@ function evaluate(ast, context) {
     return Math.round((date(end).getTime() - date(start).getTime()) / 86400000);
   }
   const aggregateEntries = (arg, rows = context.rows) =>
-    rows
-      .map((row) => ({ row, value: evaluate(arg, { ...context, row }) }))
-      .filter(({ value }) => value !== null && value !== undefined);
-  if (ast.name === "COUNT") return aggregateEntries(ast.args[0]).length;
+    rows.map((row) => ({ row, value: evaluate(arg, { ...context, row }) }));
+  if (ast.name === "COUNT")
+    return aggregateEntries(ast.args[0]).filter(({ value }) => value != null)
+      .length;
   if (["SUM", "AVERAGE", "MIN", "MAX"].includes(ast.name)) {
     const entries = aggregateEntries(ast.args[0]);
-    assertSingleCurrency(entries);
-    const list = entries.map(({ value }) => decimal(value));
+    assertAggregateUnits(ast.args[0], entries, context);
+    const list = entries
+      .filter(({ value }) => value != null)
+      .map(({ value }) => decimal(value));
     if (!list.length) return null;
     if (ast.name === "SUM") return Decimal.sum(...list);
     if (ast.name === "AVERAGE")
@@ -386,11 +417,87 @@ function evaluate(ast, context) {
     );
     if (ast.name === "COUNTIF") return selected.length;
     const entries = aggregateEntries(ast.args[3], selected);
-    assertSingleCurrency(entries);
+    assertAggregateUnits(ast.args[3], entries, context);
     return Decimal.sum(
       ...entries.map(({ value }) => decimal(value) ?? new Decimal(0)),
       new Decimal(0),
     );
+  }
+  if (["MEDIAN", "STDEV", "VARIANCE"].includes(ast.name)) {
+    if (ast.args.length !== 1)
+      throw new AnalysisFormulaError(
+        "ARITY",
+        `${ast.name} requires one argument`,
+      );
+    const entries = aggregateEntries(ast.args[0]);
+    assertAggregateUnits(ast.args[0], entries, context);
+    const list = entries
+      .filter(({ value }) => value != null)
+      .map(({ value }) => decimal(value));
+    if (!list.length) return null;
+    if (ast.name === "MEDIAN") {
+      list.sort((a, b) => a.comparedTo(b));
+      const mid = Math.floor(list.length / 2);
+      return list.length % 2 ? list[mid] : list[mid - 1].plus(list[mid]).div(2);
+    }
+    if (list.length < 2)
+      throw new AnalysisFormulaError(
+        "INSUFFICIENT_DATA",
+        `${ast.name} requires at least two values`,
+      );
+    const mean = Decimal.sum(...list).div(list.length);
+    const variance = Decimal.sum(
+      ...list.map((value) => value.minus(mean).pow(2)),
+    ).div(list.length - 1);
+    return ast.name === "STDEV" ? variance.sqrt() : variance;
+  }
+  if (["NPV", "PV", "FV", "PMT"].includes(ast.name)) {
+    const args = values().map((value) => decimal(value));
+    if (args.some((value) => value === null)) return null;
+    if (ast.name === "NPV") {
+      if (args.length < 2)
+        throw new AnalysisFormulaError(
+          "ARITY",
+          "NPV requires rate and one or more end-of-period cash flows",
+        );
+      const [rate, ...flows] = args;
+      if (rate.lte(-1))
+        throw new AnalysisFormulaError("TYPE_ERROR", "NPV rate must exceed -1");
+      return Decimal.sum(
+        ...flows.map((flow, index) => flow.div(rate.plus(1).pow(index + 1))),
+      );
+    }
+    if (args.length < 3 || args.length > 5)
+      throw new AnalysisFormulaError(
+        "ARITY",
+        `${ast.name} requires rate, periods, amount, optional future/present value, and timing`,
+      );
+    const [
+      rate,
+      periods,
+      amount,
+      other = new Decimal(0),
+      timing = new Decimal(0),
+    ] = args;
+    if (rate.lte(-1) || !periods.gt(0) || ![0, 1].includes(timing.toNumber()))
+      throw new AnalysisFormulaError(
+        "TYPE_ERROR",
+        "Financial formulas require rate above -1, positive periods, and timing 0 or 1",
+      );
+    if (periods.gt(10000) || rate.abs().gt(100))
+      throw new AnalysisFormulaError(
+        "NUMERIC_RANGE",
+        "Financial formulas allow at most 10000 periods and rates with absolute value at most 100",
+      );
+    const factor = rate.plus(1).pow(periods);
+    const annuity = rate.isZero()
+      ? periods
+      : factor.minus(1).div(rate).times(rate.times(timing).plus(1));
+    if (ast.name === "FV")
+      return other.times(factor).plus(amount.times(annuity)).negated();
+    if (ast.name === "PV")
+      return other.plus(amount.times(annuity)).negated().div(factor);
+    return amount.times(factor).plus(other).negated().div(annuity);
   }
   throw new AnalysisFormulaError(
     "UNKNOWN_FUNCTION",
@@ -469,6 +576,11 @@ function ordered(formulas) {
 }
 function output(value) {
   if (!(value instanceof Decimal)) return value;
+  if (!value.isFinite() || Math.abs(value.e) > 1000)
+    throw new AnalysisFormulaError(
+      "NUMERIC_RANGE",
+      "Formula result exceeds the finite decimal range",
+    );
   const fixed = value.toDecimalPlaces(12, Decimal.ROUND_HALF_EVEN).toFixed();
   return fixed.includes(".")
     ? fixed.replace(/0+$/, "").replace(/\.$/, "")
@@ -480,6 +592,8 @@ export function evaluateAnalysisFormulas({
   formulas = [],
   assumptions = {},
   inputComplete = true,
+  columns = [],
+  assumptionUnits = {},
 }) {
   if (!Array.isArray(rows) || rows.length > MAX_ROWS)
     throw new AnalysisFormulaError(
@@ -518,6 +632,7 @@ export function evaluateAnalysisFormulas({
   const errors = [];
   const rowErrors = new Map(calculatedRows.map((row) => [row, new Set()]));
   const summaryErrors = new Set();
+  const formulaUnits = {};
   const recordError = (formula, error, rowIndex) => {
     errors.push({
       formulaId: formula.id,
@@ -527,6 +642,39 @@ export function evaluateAnalysisFormulas({
     });
   };
   for (const formula of sequence) {
+    try {
+      const inferred = inferFormulaUnit(formula.ast, {
+        columns,
+        assumptions,
+        assumptionUnits,
+        formulaUnits,
+        rows,
+      });
+      if (
+        formula.unit &&
+        inferred &&
+        !sameDimension(normalizeUnit(formula.unit, assumptions), inferred)
+      )
+        throw new AnalysisFormulaError(
+          "UNIT_MISMATCH",
+          "Declared formula unit does not match its expression",
+        );
+      if (inferred) formulaUnits[formula.id] = inferred;
+      else if (formula.unit)
+        formulaUnits[formula.id] = normalizeUnit(formula.unit, assumptions);
+    } catch (error) {
+      recordError(formula, error);
+      if (formula.scope === "row")
+        for (const row of calculatedRows) {
+          row[formula.id] = null;
+          rowErrors.get(row).add(formula.id);
+        }
+      else {
+        summaries[formula.id] = null;
+        summaryErrors.add(formula.id);
+      }
+      continue;
+    }
     if (formula.scope === "row") {
       for (const [rowIndex, row] of calculatedRows.entries()) {
         try {
@@ -539,6 +687,9 @@ export function evaluateAnalysisFormulas({
               rowErrors,
               summaryErrors,
               inputComplete,
+              columns,
+              assumptionUnits,
+              formulaUnits,
             }),
           );
         } catch (error) {
@@ -558,6 +709,9 @@ export function evaluateAnalysisFormulas({
             rowErrors,
             summaryErrors,
             inputComplete,
+            columns,
+            assumptionUnits,
+            formulaUnits,
           }),
         );
       } catch (error) {
@@ -567,11 +721,262 @@ export function evaluateAnalysisFormulas({
       }
     }
   }
+  if (
+    Buffer.byteLength(
+      JSON.stringify({ rows: calculatedRows, summaries, errors }),
+    ) >
+    2 * 1024 * 1024
+  )
+    throw new AnalysisFormulaError(
+      "RESULT_BYTE_LIMIT",
+      "Formula result exceeds 2 MiB",
+    );
   return {
     rows: calculatedRows,
     summaries,
     errors,
     complete: errors.length === 0,
+    formulaUnits,
     languageVersion: "vision-formula-v1",
   };
+}
+
+/** Unit inference is conservative: incompatible dimensions are never silently combined. */
+function normalizeUnit(unit, assumptions = {}) {
+  if (!unit) return undefined;
+  if (typeof unit === "string") {
+    if (/^[A-Z]{3}$/.test(unit)) return { kind: "money", currency: unit };
+    if (unit === "percent")
+      return { kind: "percentage", percentageBasis: "percent" };
+    if (unit === "ratio")
+      return { kind: "percentage", percentageBasis: "ratio" };
+    if (unit === "currency") return { kind: "money" };
+    return { kind: unit };
+  }
+  if (unit.currencyParameterId && assumptions[unit.currencyParameterId]) {
+    const { currencyParameterId, ...resolved } = unit;
+    return { ...resolved, currency: assumptions[currencyParameterId] };
+  }
+  return { ...unit };
+}
+function sameDimension(a, b) {
+  return (
+    a?.kind === b?.kind &&
+    a?.currency === b?.currency &&
+    a?.percentageBasis === b?.percentageBasis &&
+    a?.currencyColumn === b?.currencyColumn &&
+    a?.instrumentColumn === b?.instrumentColumn &&
+    a?.instrumentId === b?.instrumentId
+  );
+}
+function inferFormulaUnit(ast, context) {
+  const infer = (node) => inferFormulaUnit(node, context);
+  const dimensionless = (unit) =>
+    !unit || ["percentage", "count"].includes(unit.kind);
+  const compatible = (a, b) => {
+    if (a && b && !sameDimension(a, b))
+      throw new AnalysisFormulaError(
+        "UNIT_MISMATCH",
+        "Formula combines incompatible units or currencies",
+      );
+    return a || b;
+  };
+  if (ast.kind === "literal") return undefined;
+  if (ast.kind === "reference") {
+    if (ast.name.startsWith("formula."))
+      return context.formulaUnits[ast.name.slice(8)];
+    if (ast.name.startsWith("assumption."))
+      return normalizeUnit(
+        context.assumptionUnits[ast.name.slice(11)],
+        context.assumptions,
+      );
+    const id = ast.name.startsWith("row.") ? ast.name.slice(4) : ast.name;
+    if (context.formulaUnits[id]) return context.formulaUnits[id];
+    const column = context.columns.find((value) => value.id === id);
+    const unit = normalizeUnit(column?.unit, context.assumptions);
+    if (unit?.kind === "money" && !unit.currency) {
+      const currencies = new Set(
+        context.rows
+          .map((row) => row[unit.currencyColumn || "currency"])
+          .filter(Boolean),
+      );
+      if (currencies.size === 1) {
+        const {
+          currencyColumn: _currencyColumn,
+          currencyParameterId: _currencyParameterId,
+          ...resolved
+        } = unit;
+        return { ...resolved, currency: [...currencies][0] };
+      }
+    }
+    if (
+      unit?.kind === "quantity" &&
+      !unit.instrumentColumn &&
+      !unit.instrumentId &&
+      context.rows.some((row) => row.investment_id != null)
+    )
+      return { ...unit, instrumentColumn: "investment_id" };
+    return unit;
+  }
+  if (ast.kind === "unary") return infer(ast.value);
+  if (ast.kind === "binary") {
+    const a = infer(ast.left);
+    const b = infer(ast.right);
+    if (["+", "-", "==", "!=", "<", "<=", ">", ">="].includes(ast.op)) {
+      const unit = compatible(a, b);
+      return ["+", "-"].includes(ast.op) ? unit : undefined;
+    }
+    if (ast.op === "/") {
+      if (a && b && sameDimension(a, b))
+        return { kind: "percentage", percentageBasis: "ratio" };
+      if (b && !dimensionless(b))
+        throw new AnalysisFormulaError(
+          "UNIT_MISMATCH",
+          "Division by a dimensional value requires matching units",
+        );
+      return a;
+    }
+    if (a && b && !dimensionless(a) && !dimensionless(b))
+      throw new AnalysisFormulaError(
+        "UNIT_MISMATCH",
+        "Multiplication of two dimensional values is unsupported",
+      );
+    return dimensionless(a) ? b || a : a;
+  }
+  const units = ast.args.map(infer);
+  if (["COUNT", "COUNTIF", "YEAR", "MONTH"].includes(ast.name))
+    return { kind: "count" };
+  if (ast.name === "DATEDIFF") return { kind: "duration" };
+  if (ast.name === "IF") return compatible(units[1], units[2]);
+  if (ast.name === "COALESCE") return units.reduce(compatible, undefined);
+  if (["NPV", "PV", "FV", "PMT"].includes(ast.name)) {
+    if (
+      !dimensionless(units[0]) ||
+      (ast.name !== "NPV" && !dimensionless(units[1]))
+    )
+      throw new AnalysisFormulaError(
+        "UNIT_MISMATCH",
+        "Financial rate and period inputs must be dimensionless",
+      );
+    return units
+      .slice(ast.name === "NPV" ? 1 : 2, ast.name === "NPV" ? undefined : 4)
+      .reduce(compatible, undefined);
+  }
+  const unit = ast.name === "SUMIF" ? units[3] : units[0];
+  if (
+    AGGREGATES.has(ast.name) &&
+    !["COUNT", "COUNTIF"].includes(ast.name) &&
+    unit?.kind === "money" &&
+    !unit.currency &&
+    !unit.currencyColumn
+  )
+    throw new AnalysisFormulaError(
+      "CURRENCY_PROVENANCE_REQUIRED",
+      "Money aggregates require a literal currency or resolved currency parameter, even when the result omits the currency column",
+    );
+  if (ast.name === "VARIANCE" && unit && !dimensionless(unit))
+    throw new AnalysisFormulaError(
+      "UNIT_MISMATCH",
+      "Variance of dimensional data has squared units; use STDEV or a dimensionless ratio",
+    );
+  return unit;
+}
+
+export function previewAnalysisFormula({
+  expression,
+  scope = "row",
+  id = "preview",
+  rows = [],
+  ...input
+}) {
+  return evaluateAnalysisFormulas({
+    ...input,
+    rows,
+    formulas: [{ id, scope, expression }],
+  });
+}
+export function getAnalysisFormulaFunctions() {
+  return [...FUNCTIONS].map((name) => ({
+    name,
+    aggregate: AGGREGATES.has(name),
+    semantics: ["STDEV", "VARIANCE"].includes(name)
+      ? "sample (n-1)"
+      : ["NPV", "PV", "FV", "PMT"].includes(name)
+        ? "periodic rates; payments use cash-flow signs; timing 0=end, 1=start"
+        : "Decimal arithmetic",
+  }));
+}
+export function validateAnalysisFormula(expression) {
+  const ast = parseExpression(expression);
+  assertBoundedAggregateTree(ast);
+  return { valid: true, dependencies: [...dependencies(ast)] };
+}
+
+function assertAggregateUnits(ast, entries, context) {
+  const unit = inferFormulaUnit(ast, {
+    columns: context.columns || [],
+    assumptions: context.assumptions,
+    assumptionUnits: context.assumptionUnits || {},
+    formulaUnits: context.formulaUnits || {},
+    rows: context.rows,
+  });
+  if (!unit) {
+    assertSingleCurrency(entries.filter(({ value }) => value != null));
+    return;
+  }
+  if (unit.kind === "money") {
+    if (entries.some(({ value }) => value == null))
+      throw new AnalysisFormulaError(
+        "MISSING_CONTRIBUTOR",
+        "Money aggregate withheld because a contributing value is missing",
+      );
+    const values = entries.map(
+      ({ row }) => unit.currency || row[unit.currencyColumn || "currency"],
+    );
+    if (
+      values.some(
+        (value) => typeof value !== "string" || !/^[A-Z]{3}$/.test(value),
+      )
+    )
+      throw new AnalysisFormulaError(
+        "CURRENCY_PROVENANCE_REQUIRED",
+        "Every money contributor needs a known currency",
+      );
+    if (new Set(values).size > 1)
+      throw new AnalysisFormulaError(
+        "MIXED_CURRENCIES",
+        "Money aggregates cannot combine different currencies",
+      );
+    if (
+      entries.some(
+        ({ row, value }) =>
+          value == null ||
+          (unit.currencyColumn && row[unit.currencyColumn] == null),
+      )
+    )
+      throw new AnalysisFormulaError(
+        "CURRENCY_PROVENANCE_REQUIRED",
+        "Money contributor provenance is missing",
+      );
+  }
+  if (unit.kind === "quantity") {
+    if (!unit.instrumentColumn && !unit.instrumentId)
+      throw new AnalysisFormulaError(
+        "INSTRUMENT_PROVENANCE_REQUIRED",
+        "Quantity aggregate needs a known instrument or instrument column",
+      );
+    if (entries.some(({ value }) => value == null))
+      throw new AnalysisFormulaError(
+        "MISSING_CONTRIBUTOR",
+        "Quantity aggregate withheld because a contributing value is missing",
+      );
+    const values = entries.map(
+      ({ row }) => unit.instrumentId ?? row[unit.instrumentColumn],
+    );
+    if (values.some((value) => value == null) || new Set(values).size > 1)
+      throw new AnalysisFormulaError(
+        "MIXED_INSTRUMENTS",
+        "Quantity aggregates require one known instrument",
+      );
+  }
 }

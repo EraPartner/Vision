@@ -57,6 +57,9 @@ const unitSchema = z
     kind: z.enum(["money", "percentage", "quantity", "count", "duration"]),
     currency: currencySchema.optional(),
     currencyParameterId: identifierSchema.optional(),
+    currencyColumn: identifierSchema.optional(),
+    instrumentColumn: identifierSchema.optional(),
+    instrumentId: z.string().min(1).max(128).optional(),
     percentageBasis: z.enum(["ratio", "percent"]).optional(),
     scale: z.number().int().min(0).max(12).optional(),
   })
@@ -64,24 +67,37 @@ const unitSchema = z
   .superRefine((unit, context) => {
     if (unit.kind === "money") {
       if (
-        (unit.currency === undefined) ===
-        (unit.currencyParameterId === undefined)
+        [unit.currency, unit.currencyParameterId, unit.currencyColumn].filter(
+          (value) => value !== undefined,
+        ).length !== 1
       ) {
         context.addIssue({
           code: "custom",
           path: ["currency"],
           message:
-            "Money units require exactly one literal or parameter currency",
+            "Money units require exactly one literal, parameter or result-column currency",
         });
       }
     } else if (
       unit.currency !== undefined ||
-      unit.currencyParameterId !== undefined
+      unit.currencyParameterId !== undefined ||
+      unit.currencyColumn !== undefined
     ) {
       context.addIssue({
         code: "custom",
         path: ["currency"],
         message: "Only money units may declare currency",
+      });
+    }
+    if (
+      (unit.instrumentColumn !== undefined ||
+        unit.instrumentId !== undefined) &&
+      unit.kind !== "quantity"
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["instrumentColumn"],
+        message: "Only quantities may reference an instrument column",
       });
     }
     if ((unit.kind === "percentage") !== (unit.percentageBasis !== undefined)) {

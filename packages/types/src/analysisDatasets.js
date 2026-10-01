@@ -98,10 +98,39 @@ function deepFreeze(value) {
   return value;
 }
 
+export const ANALYSIS_FINANCIAL_DATASETS_V1 = deepFreeze(
+  [
+    ["positions", "one current investment position"],
+    ["cost-basis", "one current investment cost basis"],
+    ["portfolio-history", "one portfolio valuation per calendar date"],
+    ["broker-history", "one broker valuation per calendar date"],
+    ["fx-history", "one stored exchange rate per currency and date"],
+    ["benchmark-history", "one benchmark price per market date"],
+  ].map(([id, grain]) => ({
+    id,
+    schemaVersion: 1,
+    relation: `service:${id}@1`,
+    grain,
+    authorizationScope: "local-user-database",
+    timeBasis: "calendar dates; positions are current only",
+    currencySemantics:
+      "explicit reporting currency; missing dated rates retain partial coverage",
+    signSemantics:
+      "canonical portfolio replay; benchmark returns are price returns",
+    coverage:
+      "stored local evidence; benchmark explicitly requests provider data",
+    primaryKey:
+      id === "positions" || id === "cost-basis"
+        ? ["investment_id"]
+        : ["date", "currency"],
+    joinPaths: [],
+  })),
+);
+
 export const ANALYSIS_DATASETS_V1 = deepFreeze(DATASETS);
 
 export function getAnalysisDataset(id, schemaVersion = 1) {
-  return ANALYSIS_DATASETS_V1.find(
+  return [...ANALYSIS_DATASETS_V1, ...ANALYSIS_FINANCIAL_DATASETS_V1].find(
     (dataset) => dataset.id === id && dataset.schemaVersion === schemaVersion,
   );
 }

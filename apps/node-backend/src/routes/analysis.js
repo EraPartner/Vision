@@ -31,6 +31,18 @@ import {
   ValidationError,
 } from "../middleware/errorHandler.js";
 
+import {
+  executeFinancialAnalysis,
+  isFinancialAnalysisDataset,
+} from "../services/analysisFinancialDatasets.js";
+import { executeAnalysisPivot } from "../services/analysisPivotService.js";
+import {
+  applyAnalysisWorkbench,
+  applyAnalysisScenarioModel,
+  applyAnalysisFormulaModel,
+  evaluateAnalysisExtension,
+} from "../services/analysisWorkbenchService.js";
+
 const router = Router();
 
 function inputError(_res, error) {
@@ -71,19 +83,38 @@ router.post("/execute", async (req, res) => {
             datasetIds: req.body.datasetIds || [],
             columns: req.body.columns || [],
           };
-    const result = await executeAnalysisSql({
-      requestId: req.body.requestId,
-      sql: source.sql,
-      values: source.values,
-      datasetIds: source.datasetIds,
-      limit: req.body.limit ?? source.visualPlan?.limit,
-      offset: req.body.offset,
-    });
-    res.ok({
-      ...result,
-      generatedSql: source.sql,
-      declaredColumns: source.columns,
-    });
+    const result =
+      req.body.mode === "visual" &&
+      isFinancialAnalysisDataset(req.body.plan.datasetId)
+        ? await executeFinancialAnalysis(req.body.plan, {
+            requestId: req.body.requestId,
+            limit: req.body.limit,
+            offset: req.body.offset,
+          })
+        : await executeAnalysisSql({
+            requestId: req.body.requestId,
+            sql: source.sql,
+            values: source.values,
+            datasetIds: source.datasetIds,
+            limit: req.body.limit ?? source.visualPlan?.limit,
+            offset: req.body.offset,
+          });
+    const prepared = applyAnalysisWorkbench(
+      applyAnalysisScenarioModel(
+        {
+          ...result,
+          generatedSql: source.sql,
+          declaredColumns: result.declaredColumns || source.columns,
+        },
+        req.body.scenarioModel,
+      ),
+      req.body.workbench,
+    );
+    res.ok(
+      req.body.formulaModel
+        ? applyAnalysisFormulaModel(prepared, req.body.formulaModel)
+        : prepared,
+    );
   } catch (error) {
     const status = error.code === "57014" ? 408 : 400;
     const location = error.position ? ` (SQL character ${error.position})` : "";
@@ -94,6 +125,26 @@ router.post("/execute", async (req, res) => {
           ? "ANALYSIS_CANCELLED_OR_TIMED_OUT"
           : "ANALYSIS_EXECUTION_REJECTED",
     });
+  }
+});
+
+router.post("/pivot", async (req, res) => {
+  try {
+    const catalog = getAnalysisCatalog().datasets.find(
+      (d) => d.id === req.body.plan?.datasetId,
+    );
+    if (!catalog) throw new Error("Unsupported pivot dataset");
+    res.ok(await executeAnalysisPivot(req.body, { catalog }));
+  } catch (error) {
+    inputError(res, error);
+  }
+});
+
+router.post("/extensions/evaluate", (req, res) => {
+  try {
+    res.ok(evaluateAnalysisExtension(req.body));
+  } catch (error) {
+    inputError(res, error);
   }
 });
 
@@ -147,19 +198,22 @@ router.post("/drill", async (req, res) => {
       (entry) => entry.id === req.body.plan?.datasetId,
     );
     if (!dataset) throw new Error("Unknown drill-through dataset");
-    const primaryKey = {
-      transactions: "transaction_id",
-      accounts: "account_id",
-      holdings: "event_id",
-      "cash-flows": "cash_flow_id",
-    }[dataset.id];
+    const primaryKey =
+      {
+        transactions: "transaction_id",
+        accounts: "account_id",
+        holdings: "event_id",
+        "cash-flows": "cash_flow_id",
+      }[dataset.id] || dataset.fields[0].id;
     const groups = req.body.plan.groups || [];
     const filters = [
       ...(req.body.plan.filters || []),
       ...groups.map((fieldId) => ({
         fieldId,
-        operator: "eq",
-        value: req.body.row?.[fieldId],
+        operator: req.body.row?.[fieldId] == null ? "is-null" : "eq",
+        ...(req.body.row?.[fieldId] == null
+          ? {}
+          : { value: req.body.row[fieldId] }),
       })),
     ];
     const fields = [
@@ -169,7 +223,8 @@ router.post("/drill", async (req, res) => {
         .filter((id) => id !== primaryKey)
         .slice(0, 7),
     ];
-    const compiled = compileVisualAnalysis({
+    const drillPlan = {
+      ...req.body.plan,
       datasetId: dataset.id,
       fields,
       filters,
@@ -177,18 +232,24 @@ router.post("/drill", async (req, res) => {
       measures: [],
       orderBy: [{ id: primaryKey, direction: "asc" }],
       limit: 100,
-    });
-    const result = await executeAnalysisSql({
-      requestId: req.body.requestId,
-      sql: compiled.sql,
-      values: compiled.values,
-      datasetIds: compiled.datasetIds,
-      limit: 100,
-    });
+    };
+    const compiled = compileVisualAnalysis(drillPlan);
+    const result = isFinancialAnalysisDataset(dataset.id)
+      ? await executeFinancialAnalysis(drillPlan, {
+          requestId: req.body.requestId,
+          limit: 100,
+        })
+      : await executeAnalysisSql({
+          requestId: req.body.requestId,
+          sql: compiled.sql,
+          values: compiled.values,
+          datasetIds: compiled.datasetIds,
+          limit: 100,
+        });
     res.ok({
       ...result,
       generatedSql: compiled.sql,
-      declaredColumns: compiled.columns,
+      declaredColumns: result.declaredColumns || compiled.columns,
     });
   } catch (error) {
     inputError(res, error);

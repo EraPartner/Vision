@@ -8,7 +8,17 @@ export interface AnalysisDatasetJoinPath {
 }
 
 export interface AnalysisDatasetDescriptor {
-  id: "transactions" | "accounts" | "holdings" | "cash-flows";
+  id:
+    | "transactions"
+    | "accounts"
+    | "holdings"
+    | "cash-flows"
+    | "positions"
+    | "cost-basis"
+    | "portfolio-history"
+    | "broker-history"
+    | "fx-history"
+    | "benchmark-history";
   schemaVersion: 1;
   relation: string;
   grain: string;
@@ -22,6 +32,7 @@ export interface AnalysisDatasetDescriptor {
 }
 
 export declare const ANALYSIS_DATASETS_V1: readonly AnalysisDatasetDescriptor[];
+export declare const ANALYSIS_FINANCIAL_DATASETS_V1: readonly AnalysisDatasetDescriptor[];
 
 export declare function getAnalysisDataset(
   id: string,

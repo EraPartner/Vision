@@ -1,3 +1,12 @@
+import {
+  executeFinancialAnalysis,
+  isFinancialAnalysisDataset,
+} from "./analysisFinancialDatasets.js";
+import {
+  applyAnalysisWorkbench,
+  applyAnalysisScenarioModel,
+  isCompleteAnalysisResult,
+} from "./analysisWorkbenchService.js";
 /** Versioned saved-analysis persistence and refresh orchestration. */
 
 import { randomUUID } from "node:crypto";
@@ -9,7 +18,6 @@ import { executeAnalysisSql } from "./analysisExecutor.js";
 import { evaluateAnalysisFormulas } from "./analysisFormulaEngine.js";
 import {
   analysisScenarioModelSchema,
-  applyScenarioInputs,
   validateScenarioBindings,
 } from "./analysisScenarioInputs.js";
 
@@ -88,6 +96,7 @@ function definitionColumns(compiled) {
     label: column.label,
     type: column.type,
     nullable: column.nullable,
+    ...(column.type === "decimal" && column.unit ? { unit: column.unit } : {}),
     ...(measureIds.has(column.id)
       ? { calculationId: column.id, calculationVersion: "analysis-catalog-v1" }
       : {}),
@@ -126,6 +135,9 @@ function buildDefinition({
         languageVersion: "analysis-sql-v1",
         metricVersion: "analysis-catalog-v1",
         dependencies: [],
+        ...(column.type === "decimal" && column.unit
+          ? { unit: column.unit }
+          : {}),
       }));
     source = {
       kind: "visual-plan",
@@ -497,6 +509,14 @@ function runtimeRequest(saved) {
   const source = saved.definition.source;
   if (source.kind === "custom-sql") {
     return {
+      financialPlan: undefined,
+      declaredColumns: saved.definition.expectedResult?.columns.filter(
+        (column) =>
+          !saved.definition.calculations.some(
+            (calculation) =>
+              calculation.kind === "formula" && calculation.id === column.id,
+          ),
+      ),
       sql: source.text,
       values: saved.parameters.sqlValues || [],
       datasetIds: source.datasetIds,
@@ -530,8 +550,23 @@ function runtimeRequest(saved) {
     })),
     limit: source.limit,
   };
+  for (const key of [
+    "reportingCurrency",
+    "from",
+    "to",
+    "symbol",
+    "range",
+    "costBasisMethod",
+  ]) {
+    if (saved.parameters.financialPlan?.[key] !== undefined)
+      plan[key] = saved.parameters.financialPlan[key];
+  }
   const compiled = compileVisualAnalysis(plan);
   return {
+    ...(isFinancialAnalysisDataset(plan.datasetId)
+      ? { financialPlan: plan }
+      : {}),
+    declaredColumns: compiled.columns,
     sql: compiled.sql,
     values: compiled.values,
     datasetIds: compiled.datasetIds,
@@ -540,6 +575,10 @@ function runtimeRequest(saved) {
 }
 
 function finalizeSavedAnalysisResult(result, parameters) {
+  result = applyAnalysisWorkbench(
+    applyAnalysisScenarioModel(result, parameters.scenarioModel),
+    parameters.workbench,
+  );
   const formulaModel = parameters.formulaModel || {
     formulas: [],
     assumptions: [],
@@ -551,18 +590,17 @@ function finalizeSavedAnalysisResult(result, parameters) {
       formulaModel.assumptionValues?.[item.id] ?? item.defaultValue,
     ]),
   );
-  const scenarioRows = applyScenarioInputs(
-    result.rows || [],
-    parameters.scenarioModel,
-    result.declaredColumns?.length ? result.declaredColumns : result.columns,
-  );
+  const scenarioRows = result.rows;
   const formulaResult = evaluateAnalysisFormulas({
     rows: scenarioRows,
-    inputComplete:
-      result.window?.kind === "page" &&
-      result.window.hasMore === false &&
-      (result.window.offset || 0) === 0,
+    inputComplete: isCompleteAnalysisResult(result),
     formulas: formulaModel.formulas || [],
+    columns: result.declaredColumns || result.columns,
+    assumptionUnits: Object.fromEntries(
+      (formulaModel.assumptions || [])
+        .filter((item) => item.unit)
+        .map((item) => [item.id, item.unit]),
+    ),
     assumptions,
   });
   const formulaColumns = (formulaModel.formulas || [])
@@ -574,7 +612,9 @@ function finalizeSavedAnalysisResult(result, parameters) {
       nullable: true,
       calculationId: formula.id,
       calculationVersion: formulaResult.languageVersion,
-      ...(formula.unit ? { unit: formula.unit } : {}),
+      ...(formulaResult.formulaUnits?.[formula.id] || formula.unit
+        ? { unit: formulaResult.formulaUnits?.[formula.id] || formula.unit }
+        : {}),
     }));
   const formulaIds = new Set(formulaColumns.map((column) => column.id));
   const appendFormulaColumns = (columns = []) => [
@@ -582,9 +622,21 @@ function finalizeSavedAnalysisResult(result, parameters) {
     ...formulaColumns,
   ];
   return {
-    complete: formulaResult.complete,
+    complete: formulaResult.complete && isCompleteAnalysisResult(result),
     result: {
       ...result,
+      complete: formulaResult.complete && isCompleteAnalysisResult(result),
+      coverage: {
+        ...result.coverage,
+        complete: formulaResult.complete && isCompleteAnalysisResult(result),
+        status:
+          formulaResult.complete && isCompleteAnalysisResult(result)
+            ? "complete"
+            : "partial",
+      },
+      ...((formulaModel.formulas || []).length
+        ? { sourceResult: result.sourceResult || result }
+        : {}),
       rows: formulaResult.rows,
       columns: appendFormulaColumns(result.columns),
       ...(result.declaredColumns?.length
@@ -615,10 +667,16 @@ export async function runSavedAnalysis(id, options = {}) {
     );
   });
   try {
-    const result = await executeAnalysisSql({
-      requestId: runId,
-      ...runtimeRequest(saved),
-    });
+    const request = runtimeRequest(saved);
+    const rawResult = request.financialPlan
+      ? await executeFinancialAnalysis(request.financialPlan, {
+          requestId: runId,
+        })
+      : await executeAnalysisSql({ requestId: runId, ...request });
+    const result = {
+      ...rawResult,
+      declaredColumns: rawResult.declaredColumns || request.declaredColumns,
+    };
     const finalized = finalizeSavedAnalysisResult(result, saved.parameters);
     const completedResult = finalized.result;
     const status =

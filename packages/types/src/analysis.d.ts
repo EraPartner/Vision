@@ -27,6 +27,9 @@ export interface AnalysisUnit {
   kind: "money" | "percentage" | "quantity" | "count" | "duration";
   currency?: string;
   currencyParameterId?: string;
+  currencyColumn?: string;
+  instrumentColumn?: string;
+  instrumentId?: string;
   percentageBasis?: "ratio" | "percent";
   scale?: number;
 }

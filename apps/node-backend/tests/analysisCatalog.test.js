@@ -48,6 +48,7 @@ describe("analysis catalog compiler", () => {
         id: "count",
         label: "Transaction count",
         type: "integer",
+        unit: { kind: "count" },
         nullable: false,
       },
     ]);
