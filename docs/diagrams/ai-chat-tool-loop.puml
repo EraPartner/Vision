@@ -1,76 +1,88 @@
-@startuml AI Chat Tool Loop
-title AI Chat Tool Loop (Ollama)
+@startuml ai-chat-tool-loop
+title AI chat: streamed answer with a bounded tool loop
 
 !theme plain
-skinparam participantSpacing 10
-skinparam ranksep 50
+hide footbox
+skinparam participantPadding 15
+skinparam sequenceMessageAlign center
 
-actor "User" as User
-
-participant "AIChatPage" as Page
-participant "ApiClient\n(lib/api/ai.ts)" as API
+actor User
+participant "AIChatPage\naiChatStreamStore + lib/api/ai.ts" as Frontend
 participant "routes/ai.js" as Route
-participant "aiChatService" as ChatSvc
-participant "ollama client\n(integrations/ollama)" as Ollama
-participant "Local Ollama\n(127.0.0.1:11434)" as OllamaSrv
-participant "transactionRepository\n(+ other repos)" as Repos
-participant "aiChatRepository" as ChatRepo
-database  "PostgreSQL" as DB
+participant "aiChatService" as Chat
+participant "Ollama client\nintegrations/ollama/client.js" as Client
+participant "Configured Ollama endpoint" as Ollama
+participant "Tool registry\naiChat/tools/index.js" as Tools
+database "PostgreSQL\naiChatRepository + application data" as DB
 
-group 1. Open chat
-  User -> Page : type prompt
-  Page -> API : POST /api/ai/chat\n{ message, conversationId }
-  API -> Route : envelope-wrapped request
+group 1. Start and persist the turn
+  User -> Frontend : Send message
+  Frontend -> Route : POST /api/ai/chat/stream\nMessage, conversationId, model, useTools
+  Route -> Route : Validate body; create Server-Sent Events writer
+  Route -> Chat : runChatTurn(streaming: true, onEvent, signal)
+  Chat -> Chat : Hold conversation turn lock
+  Chat -> DB : Load conversation and history\nAppend user message
+  Chat -> Chat : Build bounded history and optional tool schemas
 end
 
-group 2. Load history + tool schema
-  Route -> ChatSvc : respond(messages, tools)
-  ChatSvc -> ChatRepo : loadConversation(id)
-  ChatRepo -> DB : SELECT * FROM ai_conversations ...
-  ChatSvc -> ChatSvc : build tool schema\n(query_transactions,\nquery_categories, ...)
-end
+loop Until final answer, at most MAX_TOOL_ITERATIONS = 6 model calls
+  Chat -> Client : chatStream(messages, tools, signal, onToken)
+  Client -> Ollama : POST /api/chat\nStreaming request
+  Ollama --> Client : Content deltas + optional tool calls
+  Client --> Chat : onToken(delta)
+  Chat --> Route : token event
+  Route --> Frontend : Stream token to background store
 
-group 3. First Ollama call
-  ChatSvc -> Ollama : chat({ messages, tools })
-  Ollama -> OllamaSrv : POST /api/chat
-  OllamaSrv -> Ollama : { tool_calls: [...] } OR final answer
-end
-
-group 4. Tool-call loop  [until model returns pure assistant message]
-  loop until response.tool_calls is empty
-    Ollama -> ChatSvc : tool_calls
-    loop for each tool_call
-      ChatSvc -> ChatSvc : dispatchTool(name, args)
-      ChatSvc -> Repos : repo.search(args)
-      Repos -> DB : parameterised SELECT
-      DB -> Repos : rows
-      Repos -> ChatSvc : tool_result
+  alt Tool calls returned
+    loop Each returned tool call
+      Chat --> Route : tool_call event
+      Route --> Frontend : Show tool progress
+      Chat -> Tools : dispatchTool(name, rawArgs, context)
+      Tools -> Tools : Allowlisted name; coerce arguments\nTool-specific validation
+      Tools -> DB : Read through canonical services / repositories
+      DB --> Tools : Application data
+      Tools --> Chat : Validated args + result or structured error
+      Chat -> DB : Append tool message with args and result
+      Chat --> Route : tool_result event
+      Route --> Frontend : Show result card
+      Chat -> Chat : Append bounded tool result to model context
     end
-    ChatSvc -> Ollama : chat({ messages + tool_results })
-    Ollama -> OllamaSrv : POST /api/chat
-    OllamaSrv -> Ollama : next response
+  else Final assistant answer
+    Chat -> DB : Append assistant message
+    Chat -> Chat : Finish loop
   end
 end
 
-group 5. Persist + stream
-  ChatSvc -> ChatRepo : persistTurn(prompt, toolTranscript, answer)
-  ChatRepo -> DB : INSERT INTO ai_conversations ...
-  ChatSvc -> Route : stream tokens
-  Route -> API : Server-Sent tokens
-  API -> Page : render assistant message + result cards
+opt Iteration cap reached without a final answer
+  Chat -> DB : Append assistant error message\nwith iteration-limit explanation
 end
+Chat --> Route : Persisted turn + usage
+Route --> Frontend : complete event; end stream
+Frontend --> User : Render answer and result cards
 
-note over OllamaSrv
-  Local-only by design — privacy is a hard
-  constraint (see project.md). No transaction
-  or portfolio data ever leaves the machine.
+note over Client, Ollama
+  OLLAMA_URL configures the destination.
+  Default: http://127.0.0.1:11434.
+  An operator can configure a remote endpoint.
 end note
 
-note over ChatSvc
-  Tool dispatch is bounded to read-only repository
-  calls. The LLM never produces raw SQL — it picks
-  a tool by name and the service runs the
-  parameterised query.
+note over Tools
+  The model selects registered tools; it does not supply SQL.
+  Tools call application services after validation.
+  Enabled research tools may contact public providers.
 end note
+
+note over Frontend, Route
+  The background stream survives page navigation.
+  Closing the connection aborts the backend turn.
+  Provider / service failures use an error event after
+  stream headers have been written.
+end note
+
+legend bottom
+  Sources: lib/aiChatStreamStore.ts; lib/api/ai.ts;
+  routes/ai.js; services/aiChatService.js; services/aiChat/tools/;
+  integrations/ollama/client.js; config/config.js.
+endlegend
 
 @enduml

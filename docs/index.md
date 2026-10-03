@@ -2,9 +2,9 @@
 title: Vision Project Knowledge Base
 type: index
 status: active
-date: 2026-09-25
-updated: 2026-09-25
-last_modified: 2026-09-25
+date: 2026-10-03
+updated: 2026-10-03
+last_modified: 2026-10-03
 tags:
   [
     knowledge-base,
@@ -176,7 +176,7 @@ LIMIT 20
 **View all diagrams:** [[docs/diagrams/index|Diagrams Index]] | [[docs/architecture/index|Architecture Overview]] | [Interactive Flow Visualizer](flow-visualizer.html)
 
 > [!tip] Interactive Flow Visualizer
-> `docs/flow-visualizer.html` is a single-page, interactive map of all packages (78 components) + 39 end-to-end flows (create-transaction, CSV import, category hierarchy editing, manual analysis, persistent research dossiers, local analysis monitoring, local execution of cloud-authored catalog plans, portfolio look-through exposure, AgentCloak Desktop setup, bounded AI research with scoped local reference restoration and optional AgentCloak Desktop protection or MCP preflight, forward-only broker history, AI chat, AES-256-GCM backup, native Demo seed activation, app update, macro-series-fetch, close-account, db-data-edit, …). Open it directly in any browser — click a flow on the left, watch the path light up, and read the payload at each hop. Add new flows by editing the JSON block at the bottom of the file.
+> [Open the visualizer](flow-visualizer.html#api-request) for 78 components and 46 flows. Journey view shows one ordered handoff at a time; Architecture map shows the full system. Five learning paths cover foundations, everyday money, portfolio, research/AI, and backup/trust. Each flow links to its notes and keeps payload/source details folded until needed. Start with [[docs/guides/visual-learning|Understand Vision Visually]] for small conceptual diagrams and a reading order.
 
 | Resource                                 | Description                           |
 | ---------------------------------------- | ------------------------------------- |

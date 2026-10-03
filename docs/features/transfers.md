@@ -2,14 +2,17 @@
 title: Feature - Internal Transfers
 type: feature
 status: active
-date: 2026-06-18
-updated: 2026-09-04
+date: 2026-10-03
+updated: 2026-10-03
 tags: [feature, transfers, internal-transfer, cash-flow, reconciliation, detection, statistics, aggregations, adr-083, migration-0044, migration-0045, mark-transfer-validation, release-orphans-manual]
-description: Automatic detection of transfers between a user's own accounts via a windowed cross-batch reconciliation pass, persisted as a transfer_peer_id pairing, and excluded from cash-flow aggregates by default with a global includeTransfers toggle. 2026-06-25: markTransfer() now validates both rows exist, are active, are on different accounts, and have opposite signs; releaseOrphans() now covers MANUAL transfers.
+description: "Automatic detection of transfers between a user's own accounts via a windowed cross-batch reconciliation pass, persisted as a transfer_peer_id pairing, and excluded from cash-flow aggregates by default with a global includeTransfers toggle. 2026-06-25: markTransfer() now validates both rows exist, are active, are on different accounts, and have opposite signs; releaseOrphans() now covers MANUAL transfers."
 aliases: [internal transfers, transfer detection, transfer exclusion]
 ---
 
 # Feature: Internal Transfers
+
+> [!tip] Internal transfer reconciliation
+> [Open the journey](../flow-visualizer.html#internal-transfer-reconciliation). See [[docs/guides/visual-learning|Understand Vision Visually]] for the reading paths and conceptual diagrams.
 
 > [!abstract] Overview
 > Money moved between a user's own accounts (e.g. checking → savings) is recorded as two

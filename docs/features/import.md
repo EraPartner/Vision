@@ -2,9 +2,9 @@
 title: Feature - CSV Import, Export, Attachments & Deduplication
 type: feature
 status: active
-date: 2026-09-27
-updated: 2026-09-27
-last_modified: 2026-09-27
+date: 2026-10-03
+updated: 2026-10-03
+last_modified: 2026-10-03
 tags:
   [
     feature,
@@ -99,6 +99,9 @@ related_code:
 ---
 
 # Feature: CSV Import & Deduplication
+
+> [!tip] Import and review
+> [Open the journey](../flow-visualizer.html#csv-import) or [the companion flow](../flow-visualizer.html#import-commit). See [[docs/guides/visual-learning|Understand Vision Visually]] for the reading paths and conceptual diagrams.
 
 ## Overview
 

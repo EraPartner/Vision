@@ -2,8 +2,8 @@
 title: Views & Pages
 type: feature
 status: active
-date: 2026-09-27
-updated: 2026-09-27
+date: 2026-10-03
+updated: 2026-10-03
 tags:
   [
     feature,
@@ -251,7 +251,7 @@ Track upcoming and recurring payments.
 - **Recurring Payments**: Weekly, monthly, yearly schedules
 - **Loan Tracking**: Special loan repayment management
 - **Currency Defaults Enforced**: New/reset planned payment currency now defaults to `appSettings.defaultCurrency`
-- **Execute**: Mark as paid (creates transaction)
+- **Execute**: Link an already posted transaction and advance or complete the plan
 - **Overdue Alerts**: Highlight missed payments
 
 Code links: [[apps/frontend/src/features/planned/PlannedPaymentForm.tsx]], [[apps/frontend/src/hooks/usePlannedPayments.ts]]
@@ -727,7 +727,7 @@ Typing a bare ticker symbol (`AAPL`, `BRK-B`, `ASML.AS`, `BTC-USD`) or a `$`-cas
 
 ## AI Chat (`/ai-chat`)
 
-Natural-language chat against the user's financial data — purely local (Ollama, no data egress).
+Natural-language chat against the user's financial data through the configured Ollama endpoint. The default desktop endpoint is local; a configured remote `OLLAMA_URL` receives prompts and tool results.
 
 ### Features
 
@@ -785,7 +785,8 @@ Workspace-agnostic observability hub (gated by Settings → App → Developer to
 - [[docs/features/index]] - Feature documentation
 - [[docs/api/index]] - API documentation
 - [[docs/components/index]] - UI Components
-- `docs/flow-visualizer.html` — interactive package + flow map (open in browser)
+- [Interactive flow visualizer](../flow-visualizer.html#api-request) — 78 components / 46 flows, with Journey and Architecture views and five learning paths
+- [[docs/guides/visual-learning|Understand Vision Visually]] — conceptual diagrams and a suggested reading order
 
 
 ## Workspace navigation

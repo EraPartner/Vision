@@ -2,9 +2,9 @@
 title: Feature - AI Chat
 type: feature
 status: active
-date: 2026-09-30
-updated: 2026-09-30
-last_modified: 2026-09-27
+date: 2026-10-03
+updated: 2026-10-03
+last_modified: 2026-10-03
 tags:
   [
     feature,
@@ -18,7 +18,7 @@ tags:
     phase-1,
     phase-10,
   ]
-description: Local AI chat with background streaming via module-level store; conversations persist in URL (`?c=<id>`), sidebar shows live indicator for active streams, streams survive navigation and component unmount
+description: Ollama AI chat with background streaming via module-level store; the default desktop endpoint is local, while an explicitly configured remote endpoint receives prompts and tool results. Conversations persist in URL and streams survive navigation.
 aliases:
   [
     ai-chat,
@@ -47,8 +47,12 @@ related_code:
 
 # Feature: AI Chat
 
+> [!tip] Bounded chat and configured Ollama
+> [Open the journey](../flow-visualizer.html#ai-chat). See [[docs/guides/visual-learning|Understand Vision Visually]] for the reading paths and conceptual diagrams.
+
 > [!abstract] Overview
-> Natural-language chat remains local via Ollama. The separate investigation panel adds recoverable,
+> Natural-language chat uses the configured Ollama endpoint, which defaults to local on desktop.
+> An explicitly configured remote `OLLAMA_URL` receives prompts and tool results. The separate investigation panel adds recoverable,
 > evidence-backed local work. The packaged OpenAI API investigation route is code-capable only with
 > explicit private runtime configuration. Live synthetic route acceptance is still pending; see
 > [[docs/adr/171-packaged-openai-explicit-configuration|ADR-171]]. The Codex experiment is synthetic-only.
@@ -57,7 +61,7 @@ related_code:
 
 ### User Story
 
-> As a Vision user, I want to ask questions about my finances in plain English (e.g., "what was my biggest expense category in 2025?") so that I can explore my data without building custom reports — with full privacy because the AI runs locally.
+> As a Vision user, I want to ask questions about my finances in plain English (e.g., "what was my biggest expense category in 2025?") so that I can explore my data without building custom reports and choose a local Ollama endpoint to keep prompts and tool results on my machine.
 
 ### Key Capabilities
 
@@ -240,7 +244,7 @@ Shared contract
 
 | Component                     | Type                  | Description                                                                                                                                                                                                                                                                                                                              |
 | ----------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `AIChatPage`                  | Frontend Page         | Page shell with a display-scale conversation heading; hosts conversation list, message stream, composer; manages conversation (`?c=<id>`) and mode (`?mode=investigation`) URL state; retains both mode panels while hiding the inactive one, and auto-selects active stream on mount                                                                                                                                                           |
+| `AIChatPage`                  | Frontend Page         | Page shell with a display-scale conversation heading; hosts conversation list, message stream, composer; manages conversation (`?c=<id>`) and mode (`?mode=investigation`) URL state; retains both mode panels while hiding the inactive one, and auto-selects active stream on mount                                                    |
 | `ChatConversationList`        | Frontend Component    | List conversations; on-hover action menu; shows pulsing indicator for active streams via `useStreamingConversationIds()`                                                                                                                                                                                                                 |
 | `ChatMessageList`             | Frontend Component    | Renders ordered messages; shows thinking indicator when streaming w/no content yet; retains and labels stopped/interrupted/timed-out drafts with Retry; handles autoscroll — the view follows the stream only while it is pinned to the bottom, so scrolling up mid-answer is not overridden; re-pins on conversation switch and on send |
 | `ChatBubble`                  | Frontend Component    | User vs assistant styling                                                                                                                                                                                                                                                                                                                |

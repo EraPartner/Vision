@@ -2,8 +2,8 @@
 title: Feature - Splits & Owes
 type: feature
 status: active
-date: 2026-09-27
-updated: 2026-09-27
+date: 2026-10-03
+updated: 2026-10-03
 tags:
   [
     feature,
@@ -41,6 +41,9 @@ related_code:
 ---
 
 # Feature: Splits & Owes
+
+> [!tip] Shared expenses and repayments
+> [Open the journey](../flow-visualizer.html#split-shared-expense). See [[docs/guides/visual-learning|Understand Vision Visually]] for the reading paths and conceptual diagrams.
 
 ## Overview
 

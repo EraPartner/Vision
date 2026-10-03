@@ -1,102 +1,91 @@
-@startuml Import Flow Sequence Diagram
-title Import Flow Sequence Diagram
+@startuml import-sequence
+title CSV import: upload, review, durable rows and derived views
 
 !theme plain
-skinparam participantSpacing 10
-skinparam ranksep 50
-skinparam linetype ortho
+hide footbox
+skinparam participantPadding 15
+skinparam sequenceMessageAlign center
 
-actor "User" as User
+actor User
+participant "ImportPage / ImportReviewPage\nlib/api/imports.ts" as Frontend
+participant "routes/importRoutes.js" as Route
+participant "importPipeline\nindex.js + stage / validate / match / commit" as Pipeline
+database "PostgreSQL\nbatches, staging rows, canonical ledger" as DB
+participant "Post-commit services" as Derived
 
-participant "ImportPage" as Page
-participant "useImport" as Hook
-participant "ApiClient\n(lib/api/imports.ts)" as API
-participant "Express" as Express
-participant "importRoutes.js" as Router
-participant "importPipeline\n(stage / validate / match / commit)" as Pipeline
-participant "BankAdapters" as Adapter
-participant "DeduplicationService\n+ RecipientPatternService" as Dedup
-participant "RecipientRepository" as RecipientRepo
-participant "TransactionRepository" as TransRepo
-participant "ImportBatchRepository" as BatchRepo
-participant "RawTransactionRepository" as RawRepo
-participant "AggregationRefresh\n+ MaterializedViewService" as MV
-participant "PostgreSQL" as DB
-
-note over Pipeline
-  Phase C consolidation (2026): the legacy
-  RawTransactionPipeline + StreamingPipeline
-  are folded into a single importPipeline with 4 phases.
-end note
-
-group Step 1: User uploads CSV
-  User -> Page : Upload CSV File
-  Page -> Hook : selectBank(bankName)
-  Page -> Hook : importCSV(file)
+group 1. Prepare the uploaded rows
+  User -> Frontend : Upload CSV and choose adapter
+  Frontend -> Route : POST /api/import/csv/stream\nMultipart CSV + bank_name
+  Route -> Pipeline : runImportPipeline(filePath, adapterName, onProgress)
+  Pipeline -> DB : createBatch() and stageBatch()\nStore parsed rows with source metadata
+  Pipeline -> Pipeline : validateBatch()\nRequired fields + source/occurrence identity
+  Pipeline -> DB : Mark validated or error rows; persist fingerprints
+  Pipeline -> Pipeline : matchBatch()\nPatterns, exact/fuzzy, then new recipients
+  Pipeline -> DB : Resolve / upsert recipients;\nrecord match source and similarity
+  Pipeline --> Route : Phase progress
+  Route --> Frontend : Server-Sent Events progress
 end
 
-group Step 2: API call
-  Hook -> API : POST /api/import/csv
-  API -> Express : multipart/form-data
-  Express -> Router : route to /import/csv
+alt Pattern, fuzzy, new or unresolved recipient needs review
+  Pipeline -> DB : Set awaiting_review
+  Pipeline --> Route : requiresReview + batchId
+  Route --> Frontend : review_required event
+  Frontend --> User : Open review page
+  Frontend -> Route : GET /api/import/batches/:id/preview
+  Route -> DB : Read staged rows and match provenance
+  DB --> Route : Grouped review data
+  Route --> Frontend : Preview
+  opt User corrects a recipient or category
+    User -> Frontend : Choose replacement
+    Frontend -> Route : POST .../rows/:rowId/override\nor .../rows/:rowId/category-override
+    Route -> DB : Validate IDs and update matched staging row
+    Route --> Frontend : Applied override
+  end
+  User -> Frontend : Commit reviewed batch
+  Frontend -> Route : POST /api/import/batches/:id/commit
+  Route -> Pipeline : commitImport(batchId)
+else All eligible recipient matches are exact
+  Pipeline -> Pipeline : commitImport(batchId)
 end
 
-group Step 3: Raw transaction import service
-  Router -> Pipeline : importCSVWithRawStorage(filePath, bankName, config)
-  Pipeline -> Adapter : createAdapter(bankName)
-
-  alt Supported Bank
-    Adapter -> Adapter : parse(filePath)
-    Adapter -> Pipeline : TransactionData[]
-  else Custom Config
-    Pipeline -> Adapter : parse with custom config
+group 2. Write canonical transactions
+  Pipeline -> DB : Read matched rows; apply overrides;\nmark unresolved recipients as errors
+  loop At most 1,000 rows per write transaction
+    Pipeline -> DB : Resolve accounts; probe fingerprint / legacy identity
+    Pipeline -> DB : Insert rows with savepoints + provenance;\nretain committed / duplicate / error staging status
+    DB --> Pipeline : Committed chunk outcomes
+    Pipeline -> DB : Checkpoint batch counters
   end
 end
 
-group Step 4: Raw storage + deduplication
-  loop For each transaction
-    Pipeline -> RawRepo : insert(rawData, hash)
-    Pipeline -> Dedup : isDuplicateByFields(date, amount, recipient, memo)
-    Dedup -> DB : check existing hash
-   
-    alt Not duplicate
-      Pipeline -> RecipientRepo : getOrCreateRecipient(name)
-      RecipientRepo -> DB : INSERT ON CONFLICT
-      DB -> RecipientRepo : recipient_id
-      RecipientRepo -> Pipeline : recipientId
-    else Duplicate
-      Dedup -> Pipeline : skip
-    end
-  end
+group 3. Reconcile after durable writes
+  Pipeline -> Derived : autoLinkTransactions(insertedRows)
+  Derived -> DB : Link unambiguous planned-payment matches
+  Pipeline -> DB : Mark batch complete
+  Pipeline -> Derived : reconcileTransfers() across full ledger
+  Derived -> DB : Record internal-transfer pairs
+  Pipeline -> Derived : Clear forecast caches if imported > 0;\nscheduleMaterializedViewRefresh()
+  Pipeline --> Route : Imported / duplicate / error / auto-linked counts
+  Route --> Frontend : complete event (auto path)\nor JSON result (review commit)
+  Frontend --> User : Show summary
+  Derived ->> DB : Refresh materialized views asynchronously
 end
 
-group Step 5: Batch Insert
-  Pipeline -> TransRepo : batchInsert(transactions)
-  TransRepo -> DB : INSERT (250 rows/batch)
-  DB -> TransRepo : inserted_count
-end
-
-group Step 6: Response
-  TransRepo -> Pipeline : results {imported, duplicates, errors}
-  Pipeline -> Router : ImportResult
-  Router -> API : JSON
-  API -> Hook : ImportResult
-  Hook -> Page : update UI
-  Page -> User : Show Summary
-end
-
-note over Pipeline
-  Phase 1: Dedup + Recipient Resolution
-  Phase 2: Raw storage (audit/re-import)
-  Phase 3: Batch Insert (250 rows)
+note over Pipeline, DB
+  Source hashes preserve provenance; occurrence fingerprints identify rows.
+  A failed later chunk does not undo earlier committed chunks.
+  Planned matching and transfer reconciliation failures are non-fatal.
 end note
 
-note over Adapter
-  Supported: Belfius, Revolut, KBC
-  ING, BNP Paribas Fortis
-  SABB, Wise, Vision
-  Custom: User-defined column mapping (no raw table)
-  Manual: Deduplication via manual_raw_transactions
+note over Frontend, Route
+  Non-streaming POST /api/import/csv is also supported:
+  201 for committed counts; 202 for review-required batches.
 end note
+
+legend bottom
+  Sources: lib/api/imports.ts; routes/importRoutes.js;
+  services/importPipeline/; repositories/importBatchRepository.js;
+  services/plannedMatchService.js; services/transferReconciliationService.js.
+endlegend
 
 @enduml

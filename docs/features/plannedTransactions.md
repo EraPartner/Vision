@@ -2,17 +2,20 @@
 title: Planned Transactions
 type: feature
 status: active
-date: 2026-09-30
-updated: 2026-09-30
+date: 2026-10-03
+updated: 2026-10-03
 tags: [feature, planned, recurring, bills, loans, phase-3, phase-12, calculations, immutability, error-handling, toast, atomic-patch, virtual-data-table, i18n-toasts, upcoming-payments-hook, occurrence-key-dismissal, june-2026, auto-link, planned-match, exchange-rates, fx]
 aliases: [planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loan-amortization]
-description: Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses. June 2026: auto-link & auto-clear planned payments on match — ingested transactions are automatically linked to matching planned payments (same recipient cluster, same sign, ±5% amount, ±5 days); ambiguous matches surface as confirmable suggestions. PlannedPaymentsPage migrated from DataTable to VirtualDataTable; native alert() replaced with toast.error (new i18n keys plannedPage.toggleFailed/deleteFailed). V11: useUpcomingPlannedPayments shared hook (single fetch + shared dismissed-ID store); UpcomingPaymentsNotification renders its dashboard reminder without duplicating the planned-payments page, while native badge synchronization remains active throughout AppLayout. June 2026 (B1 fix): dismissals now keyed per occurrence (id:YYYY-MM-DD) so recurring reminders re-surface each cycle; past-dated keys pruned on load; legacy id-only entries silently dropped on next load. August 2026: Planned aggregates omit payments whose exchange rate is unavailable and visibly report the omission instead of blending currencies.
+description: "Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses. June 2026: auto-link & auto-clear planned payments on match — ingested transactions are automatically linked to matching planned payments (same recipient cluster, same sign, ±5% amount, ±5 days); ambiguous matches surface as confirmable suggestions. PlannedPaymentsPage migrated from DataTable to VirtualDataTable; native alert() replaced with toast.error (new i18n keys plannedPage.toggleFailed/deleteFailed). V11: useUpcomingPlannedPayments shared hook (single fetch + shared dismissed-ID store); UpcomingPaymentsNotification renders its dashboard reminder without duplicating the planned-payments page, while native badge synchronization remains active throughout AppLayout. June 2026 (B1 fix): dismissals now keyed per occurrence (id:YYYY-MM-DD) so recurring reminders re-surface each cycle; past-dated keys pruned on load; legacy id-only entries silently dropped on next load. August 2026: Planned aggregates omit payments whose exchange rate is unavailable and visibly report the omission instead of blending currencies."
 related_code: ["apps/node-backend/src/routes/plannedTransactions.js", "apps/node-backend/src/services/plannedTransactionService.js", "apps/node-backend/src/repositories/plannedTransactionRepository.js", "apps/node-backend/src/services/plannedExecutionService.js", "apps/node-backend/src/services/plannedMatchService.js", "apps/node-backend/src/services/calculations/loanSchedule.js", "apps/node-backend/src/services/calculations/recurrence.js", "apps/node-backend/src/services/recurringDetectionService.js", "apps/frontend/src/pages/PlannedPaymentsPage.tsx", "apps/frontend/src/features/planned/PlannedPaymentsTable.tsx", "apps/frontend/src/features/planned/PlannedDueBadge.tsx", "apps/frontend/src/features/planned/plannedDueDate.ts", "apps/frontend/src/features/planned/NextSevenDaysStrip.tsx", "apps/frontend/src/features/planned/nextSevenDays.ts", "apps/frontend/src/features/planned/plannedCurrencyTotals.ts", "apps/frontend/src/hooks/useCurrencyConverter.ts", "apps/frontend/src/features/planned/PlannedPaymentForm.tsx", "apps/frontend/src/features/planned/LinkTransactionDialog.tsx", "apps/frontend/src/features/planned/MatchSuggestionsBanner.tsx", "apps/frontend/src/features/planned/ExecutionHistoryDialog.tsx", "apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx", "apps/frontend/src/components/shared/DatePicker.tsx", "apps/frontend/src/lib/dateUtils.ts", "apps/frontend/src/hooks/useUpcomingPlannedPayments.ts", "apps/frontend/src/hooks/usePlannedMatchSuggestions.ts", "apps/frontend/src/components/layout/AppLayout.tsx"]
 ---
 
 # Planned Transactions
 
-Account detail pages expose active, unexecuted plans in a separate forecast section. The section is informational: planned amounts do not affect the account's current balance, posted ledger, running-balance calculation, or reconciliation until execution creates a real transaction.
+> [!tip] Recurring suggestions and posted-payment matching
+> [Open the journey](../flow-visualizer.html#recurring-detection) or [the companion flow](../flow-visualizer.html#planned-payment-completion). See [[docs/guides/visual-learning|Understand Vision Visually]] for the reading paths and conceptual diagrams.
+
+Account detail pages expose active, unexecuted plans in a separate forecast section. The section is informational: planned amounts do not affect the account's current balance, posted ledger, running-balance calculation, or reconciliation when a real posted transaction is linked to the plan. Execution does not create a new ledger row.
 
 ## List URL state
 
@@ -22,7 +25,7 @@ Vision's planned transaction system helps track upcoming payments, recurring bil
 
 ## Overview
 
-Planned transactions represent expected financial activities that haven't occurred yet. They can be one-time or recurring, and can be manually executed or auto-generated.
+Planned transactions represent expected financial activities that haven't occurred yet. They can be one-time or recurring. Create a plan manually or accept a detected pattern with Track; complete it by linking a real posted transaction, manually or through unambiguous auto-linking.
 
 ## Transaction Types
 

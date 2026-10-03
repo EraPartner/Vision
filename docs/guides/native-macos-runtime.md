@@ -2,7 +2,7 @@
 title: Native macOS Runtime Guide
 type: guide
 status: active
-date: 2026-09-26
+date: 2026-10-03
 tags:
   [guide, native-runtime, macos, electron, postgresql-18, backup, restore, demo]
 description: Build, operate, diagnose, back up, and restore Vision's bundled native macOS runtime.
@@ -12,6 +12,9 @@ related_code:
 ---
 
 # Native macOS Runtime Guide
+
+> [!tip] Desktop startup and readiness
+> [Open the journey](../flow-visualizer.html#native-startup). See [[docs/guides/visual-learning|Understand Vision Visually]] for the reading paths and conceptual diagrams.
 
 Vision for macOS bundles PostgreSQL 18.6, Bun, the Alembic migration executable, and Chrome Headless
 Shell. Electron owns their lifecycle. A host database service is neither used nor required.
@@ -121,7 +124,7 @@ disposable synthetic PostgreSQL cluster and checks package startup, backup,
 restore, audit history, and runtime-role writes without contacting data providers.
 
 For an installed app, read the persisted `appPort` from settings and probe `GET /health` and
-`GET /api/health/detailed`. Do not reset the database merely because startup failed; inspect the
+`GET /health/detailed`. Do not reset the database merely because startup failed; inspect the
 native logs, runtime marker, payload manifest, and seed activation state first.
 
 ## Backup and restore

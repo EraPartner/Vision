@@ -708,6 +708,254 @@
         font-size: 11.5px;
         line-height: 1.5;
       }
+
+      /* Journey view keeps each handoff readable without the full system map. */
+      button:focus-visible,
+      a:focus-visible,
+      select:focus-visible,
+      .step:focus-visible {
+        outline: 2px solid var(--emerald);
+        outline-offset: 3px;
+      }
+      .search label {
+        display: block;
+        color: var(--text-dim);
+        font-size: 12px;
+        margin-bottom: 6px;
+      }
+      .search select {
+        width: 100%;
+        margin-bottom: 12px;
+        padding: 8px;
+        background: var(--bg);
+        color: var(--text);
+        border: 1px solid var(--border-strong);
+        border-radius: 8px;
+        font: inherit;
+      }
+      .track-hint,
+      .no-results {
+        padding: 0 16px;
+        color: var(--text-dim);
+        font-size: 12px;
+      }
+      .canvas-toolbar {
+        position: sticky;
+        top: 0;
+        z-index: 4;
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 12px 18px;
+        background: var(--bg-2);
+        border-bottom: 1px solid var(--border);
+      }
+      .canvas-toolbar button {
+        padding: 7px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--border-strong);
+        color: var(--text-dim);
+        background: var(--panel);
+        font: inherit;
+        cursor: pointer;
+      }
+      .canvas-toolbar button[aria-pressed="true"] {
+        color: #d1fae5;
+        background: var(--emerald-soft);
+        border-color: var(--emerald);
+      }
+      .canvas-toolbar span {
+        color: var(--text-dim);
+        font-size: 12px;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      .journey {
+        max-width: 860px;
+        padding: 24px;
+        margin: 0 auto;
+      }
+      .journey-intro h1 {
+        font-size: 22px;
+        line-height: 1.3;
+        margin: 0 0 8px;
+      }
+      .journey-intro p {
+        color: var(--text-dim);
+        margin: 0 0 18px;
+      }
+      .takeaway {
+        padding: 12px 14px;
+        border-left: 3px solid var(--gold);
+        background: var(--gold-soft);
+        border-radius: 6px;
+      }
+      .journey-step {
+        width: 100%;
+        display: grid;
+        grid-template-columns: 28px minmax(0, 1fr) 24px minmax(0, 1fr);
+        align-items: center;
+        gap: 10px;
+        margin: 12px 0;
+        padding: 14px;
+        border: 1px solid var(--border-strong);
+        border-radius: 12px;
+        background: var(--panel);
+        color: var(--text);
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+      }
+      .journey-step.active {
+        border-color: var(--emerald);
+        background: var(--emerald-soft);
+      }
+      .journey-step.past {
+        border-color: var(--gold);
+      }
+      .journey-step .step-num {
+        grid-column: 1;
+        grid-row: 1 / 3;
+      }
+      .journey-action {
+        grid-column: 2 / -1;
+        font-weight: 600;
+      }
+      .journey-node {
+        display: block;
+        padding: 10px;
+        border-radius: 8px;
+        background: var(--node-bg);
+        border: 1px solid var(--border-strong);
+        overflow-wrap: anywhere;
+      }
+      .journey-node small {
+        display: block;
+        color: var(--text-dim);
+        font-size: 11px;
+      }
+      .journey-arrow {
+        color: var(--emerald);
+        text-align: center;
+      }
+      .journey-step .journey-node:first-of-type {
+        grid-column: 2;
+      }
+      .journey-note {
+        grid-column: 2 / -1;
+        color: var(--text-dim);
+        font-size: 12px;
+      }
+      .doc-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 12px;
+        margin-top: 12px;
+      }
+      .doc-links a {
+        color: #a7f3d0;
+        font-size: 12px;
+      }
+      .step details {
+        cursor: auto;
+        margin-top: 8px;
+      }
+      .step summary {
+        color: var(--text-dim);
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .step-title {
+        margin: 0 0 8px;
+        font-weight: 600;
+      }
+      .step-select {
+        display: block;
+        width: 100%;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+      }
+      .step-select > span {
+        display: block;
+      }
+      .step-select .step-head {
+        display: flex;
+      }
+      .legend {
+        padding: 10px 18px;
+        color: var(--text-dim);
+        font-size: 12px;
+      }
+      @media (max-width: 1200px) {
+        .app {
+          grid-template-columns: 240px minmax(0, 1fr);
+        }
+        aside.right {
+          grid-column: 1 / -1;
+          max-height: 42vh;
+          border-top: 1px solid var(--border);
+        }
+        .app {
+          grid-template-rows: 56px minmax(0, 1fr) auto;
+        }
+      }
+      @media (max-width: 700px) {
+        body {
+          overflow: auto;
+        }
+        .app {
+          display: flex;
+          flex-direction: column;
+          height: auto;
+          min-height: 100vh;
+        }
+        header.top {
+          min-height: 56px;
+          padding: 10px 14px;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+        .header-right {
+          gap: 6px;
+        }
+        aside.left {
+          max-height: 320px;
+        }
+        main.canvas {
+          overflow: auto;
+        }
+        aside.right {
+          max-height: none;
+        }
+        .journey {
+          padding: 16px;
+        }
+        .journey-step {
+          padding: 10px;
+          gap: 6px;
+          font-size: 12px;
+        }
+        .brand-text .muted {
+          font-size: 12px;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          transition: none !important;
+        }
+        .token {
+          display: none;
+        }
+      }
     </style>
   </head>
   <body>
@@ -729,6 +977,9 @@
 
       <aside class="left">
         <div class="search">
+          <label for="track">Learning path</label>
+          <select id="track"></select>
+          <label for="search">Find a flow</label>
           <input
             id="search"
             type="text"
@@ -736,10 +987,27 @@
             autocomplete="off"
           />
         </div>
+        <p class="track-hint" id="track-hint"></p>
         <div class="flow-list" id="flow-list"></div>
       </aside>
 
       <main class="canvas">
+        <div class="canvas-toolbar" role="group" aria-label="Diagram view">
+          <button id="view-journey" type="button" aria-pressed="true">
+            Journey
+          </button>
+          <button id="view-architecture" type="button" aria-pressed="false">
+            Architecture map
+          </button>
+          <span id="view-hint"
+            >Follow one handoff at a time. Select a card for details.</span
+          >
+        </div>
+        <section
+          class="journey"
+          id="journey"
+          aria-label="Ordered flow diagram"
+        ></section>
         <svg
           class="diagram"
           id="diagram"
@@ -747,6 +1015,9 @@
           width="1520"
           height="1420"
           viewBox="0 0 1520 1420"
+          role="img"
+          aria-label="Vision architecture and the selected flow"
+          hidden
         >
           <defs>
             <marker
@@ -773,9 +1044,9 @@
             </marker>
           </defs>
           <g id="layer-labels"></g>
-          <g id="components"></g>
           <g id="base-edges"></g>
           <g id="flow-edges"></g>
+          <g id="components"></g>
           <g id="token-layer"></g>
           <text id="empty-hint" class="empty-canvas-hint" x="760" y="60">
             Pick a flow on the left to trace data across the system.
@@ -791,14 +1062,36 @@
           </p>
         </div>
         <div class="controls" id="controls" style="display: none">
-          <button id="btn-restart" title="Restart (R)">⟲</button>
-          <button id="btn-prev" title="Previous step (←)">‹</button>
-          <button id="btn-play" class="play" title="Play / pause (Space)">
+          <button id="btn-restart" aria-label="Restart" title="Restart (R)">
+            ⟲
+          </button>
+          <button
+            id="btn-prev"
+            aria-label="Previous step"
+            title="Previous step (←)"
+          >
+            ‹
+          </button>
+          <button
+            id="btn-play"
+            class="play"
+            aria-label="Play"
+            title="Play / pause (Space)"
+          >
             ▶
           </button>
-          <button id="btn-next" title="Next step (→)">›</button>
-          <button id="btn-all" title="Show all steps at once">⤧</button>
-          <span class="progress" id="progress">— / —</span>
+          <button id="btn-next" aria-label="Next step" title="Next step (→)">
+            ›
+          </button>
+          <button
+            id="btn-all"
+            aria-label="Show all steps"
+            aria-pressed="false"
+            title="Show all steps at once"
+          >
+            ⤧
+          </button>
+          <span class="progress" id="progress" aria-live="polite">— / —</span>
         </div>
         <div class="step-list" id="step-list"></div>
         <div class="shortcuts">
@@ -818,7 +1111,11 @@
   Schema:
     components[]: { id, label, sub?, kind, x, y, w?, h?, path?, desc? }
       kind ∈ client | frontend | shared | backend | service | data | external | build
-    flows[]: { id, name, category, summary, steps: [ { from, to, payload?, annotation } ] }
+    flows[]: { id, name, category, summary, takeaway?, docs?: [{ path, label }],
+      steps: [{ from, to, title?, note?, payload, annotation }] }
+    learningPaths[]: { id, name, description, flows: [flowId] }
+    Journey view uses ordered steps; architecture view uses fixed component positions.
+    Documentation paths are relative to docs/; annotations cite repository source paths.
 -->
     <script type="application/json" id="flow-data">
       {
@@ -1021,11 +1318,13 @@
           },
           {
             "id": "sv.backup",
-            "label": "Backup service",
-            "sub": "backup/  \u00b7 AES-256-GCM",
+            "label": "Backup bundle",
+            "sub": "backup/bundle.js",
             "kind": "service",
             "x": 760,
-            "y": 448
+            "y": 448,
+            "path": "packaging/electron/backup/bundle.js",
+            "desc": "Native bundle validation and optional authenticated encryption."
           },
           {
             "id": "sv.aichat",
@@ -1041,7 +1340,9 @@
             "sub": "services/recurringDetectionService",
             "kind": "service",
             "x": 1120,
-            "y": 448
+            "y": 448,
+            "desc": "Read-time suggestions; user Track creates a plan.",
+            "path": "apps/node-backend/src/services/recurringDetectionService.js"
           },
           {
             "id": "sv.merge",
@@ -1221,11 +1522,13 @@
           },
           {
             "id": "ex.ollama",
-            "label": "Local Ollama",
+            "label": "Configured Ollama",
             "sub": "127.0.0.1:11434  \u00b7 local LLM",
             "kind": "external",
             "x": 1320,
-            "y": 944
+            "y": 944,
+            "desc": "Default desktop endpoint is local. OLLAMA_URL can explicitly point to another host.",
+            "path": "apps/node-backend/src/integrations/ollama/client.js"
           },
           {
             "id": "build.electron",
@@ -1254,7 +1557,7 @@
           {
             "id": "build.native",
             "label": "Native runtime",
-            "sub": "bundled PostgreSQL 18.6 · Bun · migrations · Chrome",
+            "sub": "bundled PostgreSQL 18.6 \u00b7 Bun \u00b7 migrations \u00b7 Chrome",
             "kind": "build",
             "path": "packaging/electron/runtime/",
             "desc": "Default macOS provider. Verifies the bundled PostgreSQL 18.6, migration, backend, and Chrome Headless Shell payloads; manages private loopback clusters with distinct administrator, owner, application, and Analysis executor roles; the administrator provisions executor credentials and read-only defaults, while the NOCREATEROLE owner grants approved views after migrations; owns readiness, logs, backup transport, verified cutover, and the split-brain marker (ADR-113); and atomically activates the isolated deterministic Vision Demo seed (ADR-114).",
@@ -1294,7 +1597,7 @@
           {
             "id": "sv.transactiondomains",
             "label": "Transaction domain services",
-            "sub": "splitService · plannedTransactionService · portfolioTransactionService",
+            "sub": "splitService \u00b7 plannedTransactionService \u00b7 portfolioTransactionService",
             "kind": "service",
             "path": "apps/node-backend/src/services/",
             "desc": "Owns split lifecycle validation, owed projections, transactional audit writes, atomic planned parent/tag/loan-schedule updates, and portfolio transaction domain rules. Repositories provide parameterized persistence and transaction-client primitives.",
@@ -1304,7 +1607,7 @@
           {
             "id": "sv.analysis",
             "label": "Restricted analysis runtime",
-            "sub": "restricted SQL · canonical datasets · pivots · bounded workbench",
+            "sub": "restricted SQL \u00b7 canonical datasets \u00b7 pivots \u00b7 bounded workbench",
             "kind": "service",
             "x": 1120,
             "y": 740,
@@ -1314,7 +1617,7 @@
           {
             "id": "sv.dossiers",
             "label": "Research dossiers",
-            "sub": "versioned local content · citation snapshots · links",
+            "sub": "versioned local content \u00b7 citation snapshots \u00b7 links",
             "kind": "service",
             "x": 580,
             "y": 960,
@@ -1324,7 +1627,7 @@
           {
             "id": "sv.monitors",
             "label": "Local analysis monitors",
-            "sub": "due scheduler · thresholds · evidence · inbox",
+            "sub": "due scheduler \u00b7 thresholds \u00b7 evidence \u00b7 inbox",
             "kind": "service",
             "x": 220,
             "y": 960,
@@ -1334,7 +1637,7 @@
           {
             "id": "sv.portfolioexposure",
             "label": "Portfolio exposure",
-            "sub": "explicit classifications · supported fund look-through",
+            "sub": "explicit classifications \u00b7 supported fund look-through",
             "kind": "service",
             "x": 760,
             "y": 960,
@@ -1360,7 +1663,7 @@
           {
             "id": "sv.airesearch",
             "label": "AI research orchestration",
-            "sub": "jobs · typed tools · disclosure · local restoration",
+            "sub": "jobs \u00b7 typed tools \u00b7 disclosure \u00b7 local restoration",
             "kind": "service",
             "path": "apps/node-backend/src/services/aiInvestigationService.js",
             "desc": "ADR-145, ADR-146, ADR-149, and ADR-151: serial, recoverable investigations compose bounded local tools and cited evidence. Optional OpenAI planning may propose identifier-only catalog plans while execution and results remain local; the distinct selected-evidence mode sends only the previewed evidence for a cloud-written final answer. Provider-form answers are checkpointed before local reversible-reference restoration.",
@@ -1370,7 +1673,7 @@
           {
             "id": "sv.aireference",
             "label": "AI reference boundary",
-            "sub": "typed tokens · AES-256-GCM · allowlisted restore",
+            "sub": "typed tokens \u00b7 AES-256-GCM \u00b7 allowlisted restore",
             "kind": "service",
             "path": "apps/node-backend/src/services/aiReferenceService.js",
             "desc": "ADR-151: converts explicit selected-text markers to one-job CSPRNG tokens, stores only authenticated ciphertext, validates scope claims, and restores known tokens only in allowlisted answer text. The installation key stays outside PostgreSQL and database backup. This is pseudonymization, not anonymity.",
@@ -1380,7 +1683,7 @@
           {
             "id": "sv.cashplanning",
             "label": "Commitment-aware cash",
-            "sub": "90-day bills · reserve floor · candidate cap",
+            "sub": "90-day bills \u00b7 reserve floor \u00b7 candidate cap",
             "kind": "service",
             "path": "apps/node-backend/src/services/commitmentAwareCashService.js",
             "desc": "Reads active unexecuted planned bills and spendable balances, expands bounded recurrence, uses one checked stored-rate map, and computes a candidate cap.",
@@ -1390,7 +1693,7 @@
           {
             "id": "sv.portfolioprojection",
             "label": "Portfolio projection",
-            "sub": "Research · matched scenario paths",
+            "sub": "Research \u00b7 matched scenario paths",
             "kind": "service",
             "path": "apps/node-backend/src/services/research/projection/portfolioProjection.js",
             "desc": "Simulates aggregate portfolio value using snapshot risk and optional provider drift. A monthly contribution schedule and goal month support income-interruption comparisons with one explicit seed.",
@@ -1400,7 +1703,7 @@
           {
             "id": "sv.auditverify",
             "label": "Audit verifier",
-            "sub": "chain · domain links · migration heads",
+            "sub": "chain \u00b7 domain links \u00b7 migration heads",
             "kind": "service",
             "path": "apps/node-backend/src/services/auditVerificationService.js",
             "desc": "Scans the complete chain, linked domain rows, migration heads, and legacy cutover against an authenticated checkpoint supplied by Electron.",
@@ -1410,7 +1713,7 @@
           {
             "id": "build.auditanchor",
             "label": "Local audit receipt",
-            "sub": "Electron safeStorage · HMAC",
+            "sub": "Electron safeStorage \u00b7 HMAC",
             "kind": "build",
             "path": "packaging/electron/audit-anchor.js",
             "desc": "HMAC receipt and encrypted key outside PostgreSQL and backup bundles. Version 3 is checked against a separate macOS Keychain checkpoint.",
@@ -1430,7 +1733,7 @@
           {
             "id": "sv.auditretention",
             "label": "Audit retention",
-            "sub": "one-year prefix · guarded prune",
+            "sub": "one-year prefix \u00b7 guarded prune",
             "kind": "service",
             "path": "apps/node-backend/src/services/auditRetentionService.js",
             "desc": "Plans a verified year-old chain prefix and asks migration 0118 to prune only after Electron signs the boundary outside PostgreSQL.",
@@ -1440,7 +1743,7 @@
           {
             "id": "ex.brave",
             "label": "Brave Search API",
-            "sub": "public queries · hard daily ceiling",
+            "sub": "public queries \u00b7 hard daily ceiling",
             "kind": "external",
             "x": 1320,
             "y": 1220
@@ -1448,7 +1751,7 @@
           {
             "id": "ex.openai",
             "label": "OpenAI Responses API",
-            "sub": "opt-in · store:false · no hosted tools",
+            "sub": "opt-in \u00b7 store:false \u00b7 no hosted tools",
             "kind": "external",
             "x": 1320,
             "y": 1310
@@ -1456,7 +1759,7 @@
           {
             "id": "sv.agentcloaksetup",
             "label": "AgentCloak setup",
-            "sub": "Desktop probe · private key",
+            "sub": "Desktop probe \u00b7 private key",
             "kind": "service",
             "path": "apps/node-backend/src/services/agentCloakDesktopSetupService.js",
             "desc": "ADR-171: AI settings probes Desktop /detect, creates a missing or blank Vision reference key in the private runtime environment, and stores only the enabled preference in PostgreSQL. Setup can precede OpenAI configuration.",
@@ -1466,7 +1769,7 @@
           {
             "id": "sv.agentcloak",
             "label": "AgentCloak preflight",
-            "sub": "Desktop detect · MCP gate",
+            "sub": "Desktop detect \u00b7 MCP gate",
             "kind": "service",
             "path": "apps/node-backend/src/services/agentCloakPreflight.js",
             "desc": "ADR-169/170: Desktop detects selected-text spans before Vision creates encrypted scoped tokens, then checks for remaining findings at preview and before each OpenAI attempt. MCP mode blocks changed results. Neither mode rewrites the consent-bound send payload.",
@@ -1485,7 +1788,7 @@
           {
             "id": "sv.codexsession",
             "label": "Codex experiment",
-            "sub": "synthetic-only · disposable",
+            "sub": "synthetic-only \u00b7 disposable",
             "kind": "service",
             "x": 220,
             "y": 1160,
@@ -1495,7 +1798,7 @@
           {
             "id": "sv.codexchild",
             "label": "Codex App Server",
-            "sub": "private home · Seatbelt",
+            "sub": "private home \u00b7 Seatbelt",
             "kind": "service",
             "x": 400,
             "y": 1160,
@@ -1505,7 +1808,7 @@
           {
             "id": "sv.codexproxy",
             "label": "Codex CONNECT proxy",
-            "sub": "two hosts · byte caps",
+            "sub": "two hosts \u00b7 byte caps",
             "kind": "service",
             "x": 580,
             "y": 1160,
@@ -1644,179 +1947,256 @@
                 "from": "browser",
                 "to": "fe.features",
                 "payload": "click 'Add transaction' \u2192 AddTransactionDialog submit",
-                "annotation": "User fills the dialog inside the transactions feature module and hits Save."
+                "annotation": "apps/frontend/src/features/transactions/components/AddTransactionDialog.tsx",
+                "title": "Enter a payment"
               },
               {
                 "from": "fe.features",
                 "to": "fe.apiclient",
                 "payload": "useCreateTransaction() \u00b7 React Query mutation",
-                "annotation": "The feature calls a typed hook; types come from packages/types (OpenAPI codegen)."
+                "annotation": "apps/frontend/src/hooks/useTransactions.ts",
+                "title": "Submit the form"
               },
               {
                 "from": "fe.apiclient",
                 "to": "be.middleware",
-                "payload": "POST /api/transactions  \u00b7  Bearer ADMIN_AUTH_TOKEN",
-                "annotation": "lib/api/transactions.ts uses the shared transport; adminAuth is token-or-open (timingSafeEqual when ADMIN_AUTH_TOKEN set, see ADR-063); csrfGuard blocks cross-site POSTs via Sec-Fetch-Site."
+                "payload": "POST /api/transactions; request ID and optional stored Bearer token",
+                "annotation": "apps/frontend/src/lib/api/client.ts; apps/frontend/src/lib/api/transactions.ts",
+                "title": "Send the transaction request",
+                "note": "Admin token authentication protects admin routes. Host, rate and mutation-origin guards apply to this transaction request."
               },
               {
                 "from": "be.middleware",
                 "to": "be.routes",
                 "payload": "validated request body",
-                "annotation": "main.js assigns requestId then validates the destination with middleware/hostGuard.js before CORS or body parsing; the remaining chain validates the envelope and forwards to routes/transactions.js."
+                "annotation": "apps/node-backend/src/routes/transactions.js",
+                "title": "Validate the body",
+                "note": "The route validates the request body before calling the service."
               },
               {
                 "from": "be.routes",
                 "to": "sv.transactiondomains",
                 "payload": "transactionService.createManualTransaction({... account_id ...})",
-                "annotation": "routes/transactions.js delegates the validated canonical account identity to services/transactionService.js. The temporary bank_account field remains only for older clients during the compatibility soak."
+                "annotation": "apps/node-backend/src/services/transactionService.js",
+                "title": "Apply transaction rules",
+                "note": "An active canonical account_id is required; bank_account is rejected on writes."
               },
               {
                 "from": "sv.transactiondomains",
                 "to": "db.postgres",
-                "payload": "BEGIN · pg_advisory_xact_lock(manual-v2 hash) · duplicate lookup",
-                "annotation": "transactionService.js and services/deduplication.js hold one ambient transaction and serialize identical manual identities before checking active neutral claims or the rolling-deployment field fallback."
+                "payload": "BEGIN \u00b7 pg_advisory_xact_lock(manual-v2 hash) \u00b7 duplicate lookup",
+                "annotation": "apps/node-backend/src/services/transactionService.js; apps/node-backend/src/services/deduplication.js",
+                "title": "Lock the duplicate identity"
               },
               {
                 "from": "sv.transactiondomains",
                 "to": "be.repos",
                 "payload": "transactionRepository.create({... account_id ...})",
-                "annotation": "The repository validates an existing active account_id. A nested repository transaction becomes a savepoint on the same ambient PostgreSQL client."
+                "annotation": "apps/node-backend/src/repositories/transactionRepository.js",
+                "title": "Create the canonical row"
               },
               {
                 "from": "be.repos",
                 "to": "db.postgres",
                 "payload": "INSERT transaction + tags; UPSERT manual_transaction_dedup_claims; COMMIT",
-                "annotation": "The canonical transaction and provider-neutral manual identity commit atomically. Unexpected claim failures roll back the row; only a missing claim table is tolerated during rolling deployment."
+                "annotation": "apps/node-backend/src/services/transactionService.js; apps/node-backend/src/services/deduplication.js",
+                "title": "Commit the row and neutral claim"
               },
               {
-                "from": "be.repos",
+                "from": "sv.transactiondomains",
+                "to": "sv.transactiondomains",
+                "title": "Match plans and schedule transfer reconciliation",
+                "note": "These follow the durable create. Auto-link failure does not roll back the transaction.",
+                "payload": "autoLinkTransactions; scheduleReconcile",
+                "annotation": "apps/node-backend/src/services/transactionService.js"
+              },
+              {
+                "from": "sv.transactiondomains",
                 "to": "sv.aggrefresh",
                 "payload": "scheduleAggregationRefresh(rowIds)",
-                "annotation": "Fire-and-forget debounced refresh; keeps statistics warm without blocking the response."
+                "annotation": "apps/node-backend/src/services/transactionService.js; apps/node-backend/src/services/transferReconciliationService.js",
+                "title": "Schedule derived-total refresh",
+                "note": "scheduleReconcile invalidates statistics and schedules aggregation refresh after reconciliation."
               },
               {
                 "from": "sv.aggrefresh",
                 "to": "sv.matview",
                 "payload": "REFRESH MATERIALIZED VIEW CONCURRENTLY mv_*",
-                "annotation": "Materialized views are refreshed concurrently so reads stay unblocked."
+                "annotation": "apps/node-backend/src/services/aggregationRefresh.js; apps/node-backend/src/services/materializedViewService.js",
+                "title": "Refresh materialized views"
               },
               {
                 "from": "be.routes",
                 "to": "fe.apiclient",
-                "payload": "{ data: Transaction, error: null }",
-                "annotation": "Unified envelope (ADR-026). React Query updates the cache and the UI rerenders."
+                "payload": "201 { ok: true, data: { transaction fields, auto_linked }, meta }",
+                "annotation": "apps/node-backend/src/routes/transactions.js; apps/node-backend/src/middleware/envelope.js; apps/frontend/src/hooks/useTransactions.ts",
+                "title": "Return the saved transaction",
+                "note": "The response uses the unified success envelope. The mutation invalidates affected queries."
               }
-            ]
+            ],
+            "docs": [
+              {
+                "path": "features/transactions.md",
+                "label": "Transactions"
+              }
+            ],
+            "takeaway": "A manual payment uses an active account_id. The row and duplicate claim commit together; plan matching and transfer reconciliation follow the durable write."
           },
           {
             "id": "csv-import",
-            "name": "Import a Belfius CSV",
+            "name": "Upload a bank CSV and stage its rows",
             "category": "Imports",
-            "summary": "Streaming upload \u2192 adapter detection \u2192 stage / validate / match \u2192 review or auto-commit.",
+            "summary": "Choose a bank adapter, upload a CSV, and stage validated rows before review or automatic commit.",
             "steps": [
               {
                 "from": "browser",
                 "to": "fe.features",
-                "payload": "drop file in ImportPage",
-                "annotation": "User drags the .csv into TransactionImportCard."
+                "title": "Choose the file and adapter",
+                "note": "The import form previews the selected bank format.",
+                "payload": "TransactionImportCard",
+                "annotation": "apps/frontend/src/features/imports/TransactionImportCard.tsx"
               },
               {
                 "from": "fe.features",
                 "to": "fe.apiclient",
-                "payload": "POST /api/import/upload  \u00b7  multipart",
-                "annotation": "useCsvPreview pre-detects columns client-side; the actual upload still streams server-side."
+                "title": "Upload the CSV",
+                "note": "The streaming route reports progress; a one-shot route is also supported.",
+                "payload": "POST /api/import/csv/stream or /api/import/csv; multipart bank_name",
+                "annotation": "apps/frontend/src/lib/api/imports.ts; apps/node-backend/src/routes/importRoutes.js"
               },
               {
                 "from": "fe.apiclient",
                 "to": "be.routes",
-                "payload": "multipart body  \u00b7  adapter='belfius'",
-                "annotation": "routes/importRoutes.js parses the upload and constructs a Batch."
+                "title": "Validate the upload",
+                "note": "Check the file and adapter before running the pipeline.",
+                "payload": "filePath and adapterName",
+                "annotation": "apps/node-backend/src/routes/importRoutes.js"
               },
               {
                 "from": "be.routes",
                 "to": "sv.import",
-                "payload": "createBatch(csvStream, adapter)",
-                "annotation": "Pipeline orchestrator (services/importPipeline/index.js) runs the four phases."
+                "title": "Run the import phases",
+                "note": "Stage, validate and match prepare a reviewable batch.",
+                "payload": "runImportPipeline",
+                "annotation": "apps/node-backend/src/services/importPipeline/index.js"
               },
               {
                 "from": "sv.import",
                 "to": "be.bankadapters",
-                "payload": "adapter.parseRow(line)",
-                "annotation": "Belfius adapter parses financial fields and retains the exact logical CSV record, including quoting and embedded newlines."
+                "title": "Parse bank records",
+                "note": "Interpret financial fields while retaining exact logical CSV records.",
+                "payload": "adapter parsing",
+                "annotation": "apps/node-backend/src/services/importPipeline/stage.js"
               },
               {
                 "from": "sv.import",
-                "to": "be.repos",
-                "payload": "importBatchRepository.insertStaged(rows)",
-                "annotation": "stage.js writes exact raw records; validate.js calls services/importIdentity.js for separate provenance hashes and versioned occurrence fingerprints, then match.js runs recipient clustering."
-              },
-              {
-                "from": "be.repos",
                 "to": "db.postgres",
-                "payload": "INSERT INTO import_batches, import_staging_rows",
-                "annotation": "Migration 0103 metadata keeps exact provenance separate from duplicate identity so repeated legitimate rows remain reviewable and distinct."
+                "title": "Persist staging and identity evidence",
+                "note": "Validation separates provenance hashes and occurrence fingerprints; matching resolves recipient candidates.",
+                "payload": "import_batches and import_staging_rows",
+                "annotation": "apps/node-backend/src/services/importPipeline/stage.js; apps/node-backend/src/services/importPipeline/validate.js; apps/node-backend/src/services/importPipeline/match.js; apps/node-backend/src/services/importIdentity.js"
               },
               {
-                "from": "be.routes",
-                "to": "fe.apiclient",
-                "payload": "{ batchId, requiresReview, autoCommittedCount }",
-                "annotation": "If every row matched uniquely the pipeline auto-commits; otherwise the user is sent to review."
+                "from": "sv.import",
+                "to": "fe.pages",
+                "title": "Choose review or automatic commit",
+                "note": "Uncertain rows go to review; eligible rows use the commit pipeline.",
+                "payload": "batch result and review status",
+                "annotation": "apps/node-backend/src/services/importPipeline/index.js; apps/frontend/src/pages/ImportReviewPage.tsx"
+              }
+            ],
+            "takeaway": "Duplicate identity and exact source provenance are separate. Staging preserves reviewable source evidence.",
+            "docs": [
+              {
+                "path": "features/import.md",
+                "label": "Feature - CSV Import, Export, Attachments & Deduplication"
+              },
+              {
+                "path": "integrations/bank-adapters.md",
+                "label": "Integration - Bank Adapters"
               }
             ]
           },
           {
             "id": "import-commit",
-            "name": "Commit a reviewed import",
+            "name": "Review import rows and save accepted transactions",
             "category": "Imports",
-            "summary": "User confirms recipient overrides; pipeline writes final transactions and warms aggregations.",
+            "summary": "Store row choices, commit accepted rows in bounded chunks, and report duplicates or errors.",
             "steps": [
               {
                 "from": "browser",
-                "to": "fe.features",
-                "payload": "ImportReviewPage  \u00b7  user picks overrides",
-                "annotation": "Each ambiguous row gets a chosen recipient."
+                "to": "fe.pages",
+                "title": "Review staged rows",
+                "note": "Load the batch preview.",
+                "payload": "GET /api/import/batches/:id/preview",
+                "annotation": "apps/frontend/src/pages/ImportReviewPage.tsx; apps/node-backend/src/routes/importRoutes.js"
               },
               {
-                "from": "fe.features",
-                "to": "fe.apiclient",
-                "payload": "PATCH /api/import/batches/:id/commit",
-                "annotation": "Sends the override map keyed by row id."
-              },
-              {
-                "from": "fe.apiclient",
+                "from": "fe.pages",
                 "to": "be.routes",
-                "payload": "{ user_override_recipient_id: { rowId: id } }",
-                "annotation": "Routes hand to the commit phase of the pipeline."
+                "title": "Save recipient and category choices",
+                "note": "Each row override is persisted separately.",
+                "payload": "POST /api/import/batches/:id/rows/:rowId/override or category-override",
+                "annotation": "apps/frontend/src/lib/api/imports.ts; apps/node-backend/src/routes/importRoutes.js"
+              },
+              {
+                "from": "fe.pages",
+                "to": "be.routes",
+                "title": "Confirm the batch",
+                "note": "Commit uses the choices already stored.",
+                "payload": "POST /api/import/batches/:id/commit",
+                "annotation": "apps/node-backend/src/routes/importRoutes.js"
               },
               {
                 "from": "be.routes",
                 "to": "sv.import",
-                "payload": "commitBatch(batchId, overrides)",
-                "annotation": "commit.js applies overrides, then runs insertMany."
+                "title": "Prepare reviewed rows",
+                "note": "Unresolved recipients become row errors.",
+                "payload": "commitImport / commitBatch",
+                "annotation": "apps/node-backend/src/services/importPipeline/index.js; apps/node-backend/src/services/importPipeline/commit.js"
               },
               {
                 "from": "sv.import",
-                "to": "be.repos",
-                "payload": "transactionRepository.insertMany(rows)",
-                "annotation": "Bulk insert; recipientRepository / categoryRepository upserts run in parallel."
-              },
-              {
-                "from": "be.repos",
                 "to": "db.postgres",
-                "payload": "COPY-like batch insert",
-                "annotation": "Single transaction; rollback on any conflict."
+                "title": "Commit bounded chunks",
+                "note": "Canonical accounts, fingerprints, row savepoints and chunk checkpoints preserve successful work.",
+                "payload": "transactions, provenance and per-row outcomes",
+                "annotation": "apps/node-backend/src/services/importPipeline/commit.js"
               },
               {
                 "from": "sv.import",
-                "to": "sv.matview",
-                "payload": "clearForecastMcCaches(); scheduleMaterializedViewRefresh()",
-                "annotation": "Forecast-cache invalidation is attempted before the response; failures are non-fatal. One coalesced MV rebuild runs asynchronously after reconciliation."
+                "to": "sv.transactiondomains",
+                "title": "Link real payments and transfers",
+                "note": "Plan matching uses inserted rows; transfer reconciliation includes earlier imports.",
+                "payload": "autoLinkTransactions / reconcileTransfers",
+                "annotation": "apps/node-backend/src/services/importPipeline/commit.js; apps/node-backend/src/services/importPipeline/index.js"
+              },
+              {
+                "from": "sv.import",
+                "to": "sv.aggrefresh",
+                "title": "Refresh derived totals",
+                "note": "Attempt forecast invalidation and schedule one coalesced asynchronous refresh.",
+                "payload": "scheduleMaterializedViewRefresh()",
+                "annotation": "apps/node-backend/src/services/importPipeline/index.js; apps/node-backend/src/services/aggregationRefresh.js"
               },
               {
                 "from": "be.routes",
-                "to": "fe.apiclient",
-                "payload": "{ imported, skipped, totals }",
-                "annotation": "Toast in the UI summarises the commit."
+                "to": "fe.pages",
+                "title": "Report accepted and failed rows",
+                "note": "Show imported, duplicate and error counts.",
+                "payload": "imported, duplicates, errors, auto_linked_count",
+                "annotation": "apps/node-backend/src/routes/importRoutes.js; apps/frontend/src/pages/ImportReviewPage.tsx"
+              }
+            ],
+            "takeaway": "Successful chunks remain committed. Review choices are stored before the commit request; the whole batch is not one atomic write.",
+            "docs": [
+              {
+                "path": "features/import.md",
+                "label": "Feature - CSV Import, Export, Attachments & Deduplication"
+              },
+              {
+                "path": "reference/provider-neutral-transaction-provenance.md",
+                "label": "Provider-Neutral Transaction Provenance"
               }
             ]
           },
@@ -1880,61 +2260,94 @@
                 "payload": "{ data: { [id]: { price, source } } }",
                 "annotation": "UI tags stale prices via StalePricesBanner when sources fail."
               }
+            ],
+            "docs": [
+              {
+                "path": "integrations/price-providers.md",
+                "label": "Integration - Price Providers"
+              }
             ]
           },
           {
             "id": "portfolio-valuation",
-            "name": "Recompute portfolio valuation",
+            "name": "Understand the portfolio performance chart",
             "category": "Portfolio",
-            "summary": "Aggregate units \u00d7 price across asset classes, convert to base currency, snapshot for trend charts.",
+            "summary": "Read persisted daily snapshots, combine the current summary, and render the chosen period and currency.",
             "steps": [
               {
                 "from": "browser",
                 "to": "fe.pages",
-                "payload": "PortfolioOverviewPage",
-                "annotation": "Heatmap + per-class breakdown."
+                "title": "Choose period and currency",
+                "note": "Open Performance.",
+                "payload": "PerformancePage",
+                "annotation": "apps/frontend/src/pages/portfolio/PerformancePage.tsx"
               },
               {
                 "from": "fe.pages",
-                "to": "fe.apiclient",
-                "payload": "GET /api/info/portfolio-performance?period=1y",
-                "annotation": "Single call replaces 4 historical legacy calls (ADR-008)."
+                "to": "fe.hooks",
+                "title": "Request performance data",
+                "note": "The named query shares server state.",
+                "payload": "usePerformanceQueries(currency, period)",
+                "annotation": "apps/frontend/src/features/portfolio/usePortfolioQueries.ts"
               },
               {
-                "from": "fe.apiclient",
+                "from": "fe.hooks",
                 "to": "be.routes",
-                "payload": "period query param",
-                "annotation": "routes/info.js."
+                "title": "Fetch the payload",
+                "note": "Specify period and currency.",
+                "payload": "GET /api/info/portfolio-performance?currency=EUR&period=1y",
+                "annotation": "apps/node-backend/src/routes/info/performance.js"
               },
               {
                 "from": "be.routes",
-                "to": "be.repos",
-                "payload": "infoRepositoryNetWorth.getNetWorthFromSnapshots(period)",
-                "annotation": "Reads snapshot rows with spike sanitisation (geometric mean)."
-              },
-              {
-                "from": "be.repos",
-                "to": "sv.currency",
-                "payload": "convertRowsToEur(snapshots)",
-                "annotation": "Batch FX conversion with historical-rate fallback."
-              },
-              {
-                "from": "be.repos",
                 "to": "sv.snapshot",
-                "payload": "computeMetrics + computeHeatmap + period filter",
-                "annotation": "Returns full-resolution daily snapshots; avoids LTTB preserving isolated price needles."
+                "title": "Reuse or read snapshots",
+                "note": "Use cache/in-flight reuse before loading history.",
+                "payload": "getSnapshots",
+                "annotation": "apps/node-backend/src/routes/info/performance.js"
               },
               {
                 "from": "sv.snapshot",
                 "to": "db.postgres",
-                "payload": "INSERT INTO portfolio_performance_snapshots",
-                "annotation": "Daily snapshot rows with per-class invested/value columns."
+                "title": "Read daily history",
+                "note": "Select persisted rows for currency and date range.",
+                "payload": "SELECT portfolio_performance_snapshots",
+                "annotation": "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js"
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.snapshot",
+                "title": "Shape the chart response",
+                "note": "Filter series, compute metrics and heatmap, and retrieve current summary.",
+                "payload": "buildPortfolioPerformancePayload",
+                "annotation": "apps/node-backend/src/services/info/performanceHelpers.js"
               },
               {
                 "from": "be.routes",
                 "to": "fe.apiclient",
-                "payload": "{ metrics, heatmap, breakdown, snapshots[~400] }",
-                "annotation": "Single payload powers the whole Performance page."
+                "title": "Return history and current totals",
+                "note": "The response combines historical series and live summary.",
+                "payload": "snapshots, metrics, heatmap, breakdownSummary, totals",
+                "annotation": "apps/node-backend/src/services/info/performanceHelpers.js"
+              },
+              {
+                "from": "fe.hooks",
+                "to": "fe.pages",
+                "title": "Render performance with its limits",
+                "note": "The latest plotted snapshot is marked provisional.",
+                "payload": "chart and current totals",
+                "annotation": "apps/frontend/src/pages/portfolio/PerformancePage.tsx"
+              }
+            ],
+            "takeaway": "A performance GET does not write snapshots. Startup rebuilds history separately; the latest plotted snapshot is provisional.",
+            "docs": [
+              {
+                "path": "features/portfolio.md",
+                "label": "Feature - Portfolio & Investments"
+              },
+              {
+                "path": "adr/125-provisional-latest-portfolio-snapshot.md",
+                "label": "ADR-125 Provisional Latest Portfolio Snapshot"
               }
             ]
           },
@@ -1948,49 +2361,63 @@
                 "from": "build.native",
                 "to": "db.postgres",
                 "payload": "startup: provision restricted Analysis login and read-only defaults",
-                "annotation": "packaging/electron/runtime/native.js uses the private cluster administrator to create or reset vision_analysis_executor before starting the backend; the migration owner remains NOCREATEROLE."
+                "annotation": "packaging/electron/runtime/native.js uses the private cluster administrator to create or reset vision_analysis_executor before starting the backend; the migration owner remains NOCREATEROLE.",
+                "title": "Provision the restricted analysis role"
               },
               {
                 "from": "db.alembic",
                 "to": "db.postgres",
                 "payload": "after successful migrations: validate executor and grant six approved views",
-                "annotation": "apps/node-backend/src/main.js calls database/analysisRoleBootstrap.js after runMigrations(); a restricted owner validates the preprovisioned role and resets relation grants without ALTER ROLE."
+                "annotation": "apps/node-backend/src/main.js calls database/analysisRoleBootstrap.js after runMigrations(); a restricted owner validates the preprovisioned role and resets relation grants without ALTER ROLE.",
+                "title": "Grant approved views after migration"
               },
               {
                 "from": "browser",
                 "to": "fe.pages",
                 "payload": "select fields, filters, groups, measures or edit SQL",
-                "annotation": "AnalysisWorkspacePage.tsx works without AI and keeps visual origin, typed scalar parameters, paging, drill-through, pivots, and charts explicit."
+                "annotation": "AnalysisWorkspacePage.tsx works without AI and keeps visual origin, typed scalar parameters, paging, drill-through, pivots, and charts explicit.",
+                "title": "Build a visual plan or SQL query"
               },
               {
                 "from": "fe.pages",
                 "to": "fe.apiclient",
                 "payload": "visual plan or custom SQL plus declared dataset IDs",
-                "annotation": "lib/api/analysis.ts sends one request ID and the selected approved datasets."
+                "annotation": "lib/api/analysis.ts sends one request ID and the selected approved datasets.",
+                "title": "Prepare the declared datasets"
               },
               {
                 "from": "fe.apiclient",
                 "to": "be.routes",
                 "payload": "POST /api/analysis/execute, /pivot or /extensions/evaluate",
-                "annotation": "apps/frontend/src/lib/api/analysis.ts sends typed plans and saved workbench settings without requiring AI."
+                "annotation": "apps/frontend/src/lib/api/analysis.ts sends typed plans and saved workbench settings without requiring AI.",
+                "title": "Request bounded execution"
               },
               {
                 "from": "be.routes",
                 "to": "sv.analysis",
                 "payload": "validated SQL or canonical service plan; bounded preparation and scenarios",
-                "annotation": "apps/node-backend/src/routes/analysis.js selects restricted SQL, analysisFinancialDatasets.js or analysisWorkbenchService.js. No arbitrary application-table access."
+                "annotation": "apps/node-backend/src/routes/analysis.js selects restricted SQL, analysisFinancialDatasets.js or analysisWorkbenchService.js. No arbitrary application-table access.",
+                "title": "Validate and select the execution path"
               },
               {
                 "from": "sv.analysis",
                 "to": "db.postgres",
                 "payload": "restricted-view SELECT or enumerated read-only financial adapter",
-                "annotation": "analysisPivotService.js uses one SQL statement or cached canonical source for every hierarchy level; analysisFinancialDatasets.js projects approved portfolio/history/rate fields without writes."
+                "annotation": "analysisPivotService.js uses one SQL statement or cached canonical source for every hierarchy level; analysisFinancialDatasets.js projects approved portfolio/history/rate fields without writes.",
+                "title": "Read approved views or financial adapters"
               },
               {
                 "from": "be.routes",
                 "to": "sv.analysis",
                 "payload": "POST /api/analysis/saved or /saved/:id/run",
-                "annotation": "savedAnalysisService.js snapshots workbench, pivot, financial options and chart bindings, applies the same pipeline, and records partial coverage/errors without clearing the last usable run."
+                "annotation": "savedAnalysisService.js snapshots workbench, pivot, financial options and chart bindings, applies the same pipeline, and records partial coverage/errors without clearing the last usable run.",
+                "title": "Save an immutable analysis version"
+              }
+            ],
+            "docs": [
+              {
+                "path": "features/analysis-workspace.md",
+                "label": "Analysis Workspace"
               }
             ]
           },
@@ -2035,6 +2462,12 @@
                 "to": "fe.apiclient",
                 "payload": "GET /api/research-dossiers/:id/versions or /:id/export",
                 "annotation": "researchDossierService.js returns history and portable JSON; old versions are not changed by restore."
+              }
+            ],
+            "docs": [
+              {
+                "path": "features/research-dossiers.md",
+                "label": "Research Dossiers"
               }
             ]
           },
@@ -2086,6 +2519,12 @@
                 "payload": "paged history and server-owned unread count",
                 "annotation": "analysisMonitorService.js returns persisted status and coverage unknown; it never reports an unverified source-coverage guarantee."
               }
+            ],
+            "docs": [
+              {
+                "path": "features/analysis-monitors.md",
+                "label": "Analysis Monitors"
+              }
             ]
           },
           {
@@ -2136,6 +2575,12 @@
                 "payload": "private local rows and bounded formula output",
                 "annotation": "The investigation step is marked private and undisclosed; final synthesis uses the local model and never returns rows to the planning provider."
               }
+            ],
+            "docs": [
+              {
+                "path": "security/ai-data-access.md",
+                "label": "AI Data Access Policy"
+              }
             ]
           },
           {
@@ -2174,6 +2619,12 @@
                 "payload": "issuer, sector, country rows plus uncovered cash and warnings",
                 "annotation": "Supported weights use Decimal multiplication; unsupported and missing weight is not renormalized, and economic FX exposure is not inferred."
               }
+            ],
+            "docs": [
+              {
+                "path": "features/portfolio.md",
+                "label": "Feature - Portfolio & Investments"
+              }
             ]
           },
           {
@@ -2206,191 +2657,308 @@
                 "payload": "broker value series",
                 "annotation": "PerformancePage.tsx renders the dedicated area chart from the first post-migration snapshot onward."
               }
+            ],
+            "docs": [
+              {
+                "path": "features/portfolio.md",
+                "label": "Feature - Portfolio & Investments"
+              }
             ]
           },
           {
             "id": "ai-chat",
-            "name": "Local AI chat with tool calls",
+            "name": "Ask Ollama about your financial data",
             "category": "AI",
-            "summary": "User asks a question; aiChat orchestrates an Ollama tool-loop against canonical financial services and read-only repositories.",
+            "summary": "Stream a bounded tool loop, run financial reads locally, and store the conversation.",
             "steps": [
               {
                 "from": "browser",
                 "to": "fe.pages",
-                "payload": "AIChatPage  \u00b7  user types prompt",
-                "annotation": "Renders previous turns from aiChatRepository."
+                "title": "Ask a question",
+                "note": "Choose whether tools are enabled this turn.",
+                "payload": "AIChatPage",
+                "annotation": "apps/frontend/src/pages/AIChatPage.tsx"
               },
               {
                 "from": "fe.pages",
                 "to": "fe.apiclient",
-                "payload": "POST /api/ai/chat  \u00b7 { message, conversationId }",
-                "annotation": "Stream subscriber on the client."
+                "title": "Start the stream",
+                "note": "The client handles server-sent events.",
+                "payload": "streamChat",
+                "annotation": "apps/frontend/src/lib/api/ai.ts"
               },
               {
                 "from": "fe.apiclient",
                 "to": "be.routes",
-                "payload": "envelope-wrapped prompt",
-                "annotation": "routes/ai.js."
+                "title": "Validate the stream request",
+                "note": "Use the streaming chat route.",
+                "payload": "POST /api/ai/chat/stream",
+                "annotation": "apps/node-backend/src/routes/ai.js"
               },
               {
                 "from": "be.routes",
                 "to": "sv.aichat",
-                "payload": "aiChatService.respond(messages, tools)",
-                "annotation": "Loads history; builds tool schema (query_transactions, query_categories, ...)."
+                "title": "Run the chat turn",
+                "note": "Load conversation history and tool definitions.",
+                "payload": "runChatTurn",
+                "annotation": "apps/node-backend/src/services/aiChatService.js"
               },
               {
                 "from": "sv.aichat",
                 "to": "be.ollamaclient",
-                "payload": "client.chat({ messages, tools })",
-                "annotation": "HTTP call against the local Ollama daemon."
+                "title": "Send the model context",
+                "note": "Use the configured Ollama endpoint.",
+                "payload": "chatStream",
+                "annotation": "apps/node-backend/src/services/aiChatService.js"
               },
               {
                 "from": "be.ollamaclient",
                 "to": "ex.ollama",
-                "payload": "POST http://127.0.0.1:11434/api/chat",
-                "annotation": "Local-only; no data leaves the machine (privacy non-negotiable)."
+                "title": "Generate text or tool requests",
+                "note": "The endpoint can be local or explicitly remote.",
+                "payload": "settings.ollama.url /api/chat",
+                "annotation": "apps/node-backend/src/integrations/ollama/client.js; apps/node-backend/src/config/config.js"
               },
               {
-                "from": "ex.ollama",
+                "from": "sv.aichat",
                 "to": "sv.aichat",
-                "payload": "{ tool_calls: [{ name, arguments }] }",
-                "annotation": "Model decides which tools to dispatch."
+                "title": "Validate requested tools",
+                "note": "Reject unknown tools, coerce once and delegate argument validation.",
+                "payload": "dispatchTool",
+                "annotation": "apps/node-backend/src/services/aiChat/tools/index.js"
               },
               {
                 "from": "sv.aichat",
                 "to": "be.repos",
-                "payload": "dispatchTool(name, args)  \u2192  canonical calculation service or repository",
-                "annotation": "Financial metrics reuse monthly-summary and portfolio-summary calculations; all tools remain read-only."
+                "title": "Read and calculate locally",
+                "note": "Use canonical services and read-only repositories. Enabled research tools can also contact public providers.",
+                "payload": "financial tool result",
+                "annotation": "apps/node-backend/src/services/aiChat/tools/"
               },
               {
                 "from": "be.repos",
                 "to": "db.postgres",
-                "payload": "SELECT \u2026 FROM transactions WHERE \u2026",
-                "annotation": "Parameterised queries; no LLM-supplied SQL ever runs raw."
+                "title": "Read private records",
+                "note": "Financial calculations use locally stored data.",
+                "payload": "parameterized financial reads",
+                "annotation": "apps/node-backend/src/services/aiChat/tools/"
               },
               {
                 "from": "sv.aichat",
-                "to": "ex.ollama",
-                "payload": "second call with tool results in context",
-                "annotation": "Loop until the model returns a pure assistant message."
+                "to": "be.ollamaclient",
+                "title": "Continue within the limit",
+                "note": "Tool results return to the configured model for at most six iterations.",
+                "payload": "MAX_TOOL_ITERATIONS = 6",
+                "annotation": "apps/node-backend/src/services/aiChatService.js"
               },
               {
                 "from": "sv.aichat",
                 "to": "be.repos",
-                "payload": "aiChatRepository.persistTurn(...)",
-                "annotation": "Conversation + tool transcript stored for the next turn."
+                "title": "Persist the transcript",
+                "note": "Store user, assistant and tool messages.",
+                "payload": "conversation messages",
+                "annotation": "apps/node-backend/src/services/aiChatService.js"
               },
               {
                 "from": "be.routes",
                 "to": "fe.apiclient",
-                "payload": "streamed assistant tokens",
-                "annotation": "Streamed back into the AIChatPage; structured result cards render inline."
+                "title": "Stream tokens and completion",
+                "note": "Report tokens, tools, completion, abort or failure.",
+                "payload": "Server-Sent Events",
+                "annotation": "apps/node-backend/src/routes/ai.js; apps/frontend/src/lib/api/ai.ts"
+              },
+              {
+                "from": "fe.apiclient",
+                "to": "fe.pages",
+                "title": "Render across navigation",
+                "note": "The module store retains streaming state after unmount.",
+                "payload": "aiChatStreamStore",
+                "annotation": "apps/frontend/src/lib/aiChatStreamStore.ts"
+              }
+            ],
+            "takeaway": "Default desktop Ollama is local. A configured remote Ollama URL sends prompts and tool results to that host.",
+            "docs": [
+              {
+                "path": "features/ai-chat.md",
+                "label": "Feature - AI Chat"
+              },
+              {
+                "path": "integrations/ollama.md",
+                "label": "Ollama Integration"
               }
             ]
           },
           {
             "id": "backup-create",
-            "name": "Create an encrypted backup",
+            "name": "Create a backup bundle",
             "category": "Backup",
-            "summary": "Electron bundles DB + attachments + UI state, encrypts with AES-256-GCM (v2), writes .visionbak.enc.",
+            "summary": "Bundle database SQL, attachments and optional frontend state, then write to the configured destination.",
             "steps": [
               {
                 "from": "electron",
-                "to": "fe.pages",
-                "payload": "BackupTab  \u00b7  user clicks 'Create backup'",
-                "annotation": "Optional passphrase input; modal collects it."
+                "to": "fe.features",
+                "title": "Choose the destination",
+                "note": "A manual backup can include current frontend state.",
+                "payload": "BackupSection",
+                "annotation": "apps/frontend/src/features/settings/sections/BackupSection.tsx"
               },
               {
-                "from": "fe.pages",
+                "from": "fe.features",
                 "to": "build.electron",
-                "payload": "ipcRenderer.invoke('backup:run', opts)",
-                "annotation": "Renderer\u2192main IPC; never crosses the network."
+                "title": "Request the local backup",
+                "note": "Validate the renderer and destination.",
+                "payload": "backup:run(destDir, frontendStateJson)",
+                "annotation": "packaging/electron/main.js; packaging/electron/preload.js"
               },
               {
                 "from": "build.electron",
+                "to": "build.native",
+                "title": "Export local data",
+                "note": "Use the native backup transport.",
+                "payload": "runBundleBackup",
+                "annotation": "packaging/electron/backup/restore.js; packaging/electron/backup/native-transport.js"
+              },
+              {
+                "from": "build.native",
                 "to": "db.postgres",
-                "payload": "pg_dump  \u00b7  schema + data",
-                "annotation": "Streams into the bundle."
+                "title": "Dump schema and records",
+                "note": "Include database SQL in the bundle.",
+                "payload": "dumpDatabase; pg_dump",
+                "annotation": "packaging/electron/runtime/native.js"
               },
               {
-                "from": "build.electron",
+                "from": "build.native",
                 "to": "db.attachments",
-                "payload": "copy $ATTACHMENTS_DIR/*  \u2192  bundle/attachments/",
-                "annotation": "Mirrors the receipts volume."
+                "title": "Collect attachments",
+                "note": "Receipt files accompany metadata.",
+                "payload": "exportAttachments",
+                "annotation": "packaging/electron/backup/native-transport.js"
               },
               {
                 "from": "build.electron",
                 "to": "sv.backup",
-                "payload": "AEAD encrypt(bundle, passphrase)",
-                "annotation": "v2 format: per-backup random salt, scrypt N=2^15, AES-256-GCM auth tag (ADR-040)."
+                "title": "Bundle and optionally encrypt",
+                "note": "Include schema/app metadata and optional UI state; encrypt with a configured passphrase.",
+                "payload": "createBundle; encryptBundle",
+                "annotation": "packaging/electron/backup/restore.js; packaging/electron/backup/bundle.js"
               },
               {
                 "from": "sv.backup",
-                "to": "db.attachments",
-                "payload": "fs.writeFile vision_\u2026visionbak.enc",
-                "annotation": "Written next to the existing attachments volume (or chosen folder)."
+                "to": "build.electron",
+                "title": "Write and apply retention",
+                "note": "Use the selected directory and device-scoped old-backup cleanup.",
+                "payload": "success, file, encrypted, warning, cleanupRemoved",
+                "annotation": "packaging/electron/backup/restore.js"
               },
               {
                 "from": "build.electron",
-                "to": "fe.pages",
-                "payload": "{ ok, sha256, bytes, path }",
-                "annotation": "UI shows checksum + size; toast confirms success."
+                "to": "fe.features",
+                "title": "Show result or warning",
+                "note": "Automated and quit backups omit the frontend-state snapshot.",
+                "payload": "backup result",
+                "annotation": "packaging/electron/main.js; packaging/electron/backup/restore.js"
+              }
+            ],
+            "takeaway": "Encryption needs a configured passphrase. Without one, the bundle is plaintext with a warning. Mapping keys and audit anchors stay external.",
+            "docs": [
+              {
+                "path": "features/backup-coverage-audit.md",
+                "label": "Backup Coverage Audit"
+              },
+              {
+                "path": "guides/native-macos-runtime.md",
+                "label": "Native macOS Runtime Guide"
               }
             ]
           },
           {
             "id": "backup-restore",
-            "name": "Restore an encrypted backup",
+            "name": "Restore a bundle with rollback protection",
             "category": "Backup",
-            "summary": "Authenticate the bundle, stage data, and compare its audit chain with the local receipt before finalizing. A second default-Cancel warning can authorize one internally checked recovery retry.",
+            "summary": "Validate a bundle, stage a fresh database and attachments, and finalize after readiness and audit checks.",
             "steps": [
               {
-                "from": "electron",
-                "to": "fe.pages",
-                "payload": "user picks .visionbak.enc",
-                "annotation": "useRestoreBackup hook drives the flow consistently."
-              },
-              {
-                "from": "fe.pages",
+                "from": "fe.features",
                 "to": "build.electron",
-                "payload": "ipcRenderer.invoke('backup:restore', file)",
-                "annotation": "Renderer\u2192main IPC."
+                "title": "Choose and confirm the file",
+                "note": "Validate the selected file and ask for restore confirmation.",
+                "payload": "backup:restore",
+                "annotation": "packaging/electron/main.js; packaging/electron/preload.js"
               },
               {
                 "from": "build.electron",
                 "to": "sv.backup",
-                "payload": "detect magic header \u2192 require passphrase",
-                "annotation": "If encrypted but no passphrase yet, return PASSPHRASE_REQUIRED so the UI can show the modal."
+                "title": "Open and validate the bundle",
+                "note": "Authenticate encrypted data, reject unsafe entries, and inspect schema and checksums.",
+                "payload": "runBundleRestore; openBundle",
+                "annotation": "packaging/electron/backup/restore.js; packaging/electron/backup/bundle.js"
               },
               {
                 "from": "sv.backup",
-                "to": "build.electron",
-                "payload": "AEAD decrypt(bundle, passphrase)",
-                "annotation": "AES-256-GCM auth tag check detects tampering; wrong passphrase throws cleanly."
+                "to": "build.native",
+                "title": "Prepare rollback plans",
+                "note": "Coordinate both storage switches.",
+                "payload": "restoreNativeBundle",
+                "annotation": "packaging/electron/backup/native-transport.js"
               },
               {
-                "from": "build.electron",
+                "from": "build.native",
                 "to": "db.postgres",
-                "payload": "DROP / pg_restore  \u00b7  schema-checked",
-                "annotation": "Aborts with BUNDLE_SCHEMA_NEWER if the bundle is from a newer Vision than what's installed."
+                "title": "Restore into a fresh staging database",
+                "note": "Validate before stopping the backend and renaming databases.",
+                "payload": "activateRestoredDatabase; persisted rename plan",
+                "annotation": "packaging/electron/runtime/native.js"
               },
               {
-                "from": "build.electron",
+                "from": "build.native",
                 "to": "db.attachments",
-                "payload": "swap attachments/  \u00b7  hydrate localStorage",
-                "annotation": "Database and attachments remain rollback-capable until native readiness and audit verification finish."
+                "title": "Switch attachments with a rollback copy",
+                "note": "Preserve the previous tree until finalization.",
+                "payload": "replaceAttachments preservePrevious",
+                "annotation": "packaging/electron/backup/native-transport.js"
+              },
+              {
+                "from": "build.native",
+                "to": "be.routes",
+                "title": "Restart and check readiness",
+                "note": "Wait for backend and database readiness.",
+                "payload": "GET /health/detailed",
+                "annotation": "packaging/electron/runtime/native.js"
+              },
+              {
+                "from": "build.native",
+                "to": "build.auditanchor",
+                "title": "Compare the restored audit chain",
+                "note": "Match the external receipt unless the specific recovery path is explicitly approved.",
+                "payload": "assertRestoredAuditHistory",
+                "annotation": "packaging/electron/backup/native-transport.js; packaging/electron/audit-anchor.js"
+              },
+              {
+                "from": "build.native",
+                "to": "db.postgres",
+                "title": "Finalize or roll back",
+                "note": "Finalize the database then clean previous attachments; on failure restore both switches.",
+                "payload": "finalizeDatabaseSwitch; rollback",
+                "annotation": "packaging/electron/backup/native-transport.js; packaging/electron/runtime/native.js"
               },
               {
                 "from": "build.electron",
-                "to": "build.auditanchor",
-                "payload": "compare candidate chain with trusted local receipt",
-                "annotation": "packaging/electron/backup/native-transport.js first rolls back any non-verified candidate. After successful rollback, a separate default-Cancel warning can permit one retry with a full internal chain check; the original receipt remains unchanged and continuity unverified."
+                "to": "fe.stores",
+                "title": "Hydrate restored UI state",
+                "note": "Return available frontend state after activation.",
+                "payload": "frontendState",
+                "annotation": "packaging/electron/backup/restore.js; packaging/electron/preload.js"
+              }
+            ],
+            "takeaway": "Failures roll back database and attachment switches. An approved audit-recovery retry requires successful rollback; the external receipt stays unchanged.",
+            "docs": [
+              {
+                "path": "features/backup-coverage-audit.md",
+                "label": "Backup Coverage Audit"
               },
               {
-                "from": "fe.pages",
-                "to": "browser",
-                "payload": "window.location.reload()",
-                "annotation": "Tracked via ref so the timer cleans up on unmount."
+                "path": "guides/native-macos-runtime.md",
+                "label": "Native macOS Runtime Guide"
               }
             ]
           },
@@ -2448,43 +3016,106 @@
                 "payload": "{ data: { mergedInto, affectedRows } }",
                 "annotation": "UI removes the duplicates from the list."
               }
+            ],
+            "docs": [
+              {
+                "path": "features/recipients.md",
+                "label": "Recipients"
+              }
             ]
           },
           {
             "id": "recurring-detection",
-            "name": "Detect recurring transactions (background)",
-            "category": "Background jobs",
-            "summary": "Scheduled job scans for repeating patterns and materialises planned transactions.",
+            "name": "Recognize a recurring payment and choose to track it",
+            "category": "Planned payments",
+            "summary": "Read-time detection suggests patterns. A plan is created only when the user chooses Track.",
             "steps": [
               {
-                "from": "be.jobs",
+                "from": "browser",
+                "to": "fe.features",
+                "title": "Open recurring suggestions",
+                "note": "The panel requests detected patterns.",
+                "payload": "RecurringDetectionPanel",
+                "annotation": "apps/frontend/src/features/planned/RecurringDetectionPanel.tsx"
+              },
+              {
+                "from": "fe.features",
+                "to": "fe.hooks",
+                "title": "Request patterns",
+                "note": "A named query hook loads suggestions.",
+                "payload": "useRecurringPatterns",
+                "annotation": "apps/frontend/src/hooks/usePlannedMatchSuggestions.ts"
+              },
+              {
+                "from": "fe.hooks",
+                "to": "be.routes",
+                "title": "Fetch the read-time analysis",
+                "note": "Detection runs when this endpoint is requested.",
+                "payload": "GET /api/info/recurring-patterns",
+                "annotation": "apps/frontend/src/lib/api/info.ts; apps/node-backend/src/routes/info/statistics.js"
+              },
+              {
+                "from": "be.routes",
                 "to": "sv.recurring",
-                "payload": "tick(now)",
-                "annotation": "Job loop wakes periodically; respects graceful shutdown."
+                "title": "Detect patterns",
+                "note": "Consider cadence, direction and confidence.",
+                "payload": "detectRecurringPatterns",
+                "annotation": "apps/node-backend/src/services/recurringDetectionService.js"
               },
               {
                 "from": "sv.recurring",
-                "to": "be.repos",
-                "payload": "transactionRepository.recentByRecipient(window)",
-                "annotation": "Read-only scan over the recent window."
-              },
-              {
-                "from": "be.repos",
                 "to": "db.postgres",
-                "payload": "SELECT \u2026 window function partition by recipient",
-                "annotation": "Detects cadence (monthly, weekly, biweekly) per cluster."
+                "title": "Read history and plans",
+                "note": "Three years of active transactions, aliases and existing plans inform suggestions.",
+                "payload": "transactions and planned_transactions",
+                "annotation": "apps/node-backend/src/services/recurringDetectionService.js"
               },
               {
                 "from": "sv.recurring",
-                "to": "be.repos",
-                "payload": "plannedTransactionRepository.upsertPattern(...)",
-                "annotation": "Idempotent \u2014 re-running the job won't duplicate."
+                "to": "fe.features",
+                "title": "Show suggestions",
+                "note": "Display confidence, amount changes and already-tracked context.",
+                "payload": "RecurringPattern[]",
+                "annotation": "apps/frontend/src/features/planned/RecurringDetectionPanel.tsx"
               },
               {
-                "from": "be.repos",
+                "from": "browser",
+                "to": "fe.features",
+                "title": "Choose Track",
+                "note": "Accept one suggestion, preserving account and direction.",
+                "payload": "handleCreatePlanned",
+                "annotation": "apps/frontend/src/features/planned/RecurringDetectionPanel.tsx"
+              },
+              {
+                "from": "fe.features",
+                "to": "be.routes",
+                "title": "Create the plan",
+                "note": "Creation is a separate write after the explicit choice.",
+                "payload": "POST /api/planned-transactions",
+                "annotation": "apps/node-backend/src/routes/plannedTransactions.js"
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.transactiondomains",
+                "title": "Validate the plan",
+                "note": "The domain service checks the planned payment.",
+                "payload": "plannedTransactionService.create",
+                "annotation": "apps/node-backend/src/services/plannedTransactionService.js"
+              },
+              {
+                "from": "sv.transactiondomains",
                 "to": "db.postgres",
-                "payload": "INSERT INTO planned_transactions ON CONFLICT DO UPDATE",
-                "annotation": "Pattern stored with next_date + interval."
+                "title": "Save the plan",
+                "note": "Refresh planned queries so reminders can show it.",
+                "payload": "INSERT planned_transactions",
+                "annotation": "apps/node-backend/src/services/plannedTransactionService.js; apps/frontend/src/hooks/usePlannedPayments.ts"
+              }
+            ],
+            "takeaway": "Detection does not automatically create planned payments or posted transactions.",
+            "docs": [
+              {
+                "path": "features/plannedTransactions.md",
+                "label": "Planned Transactions"
               }
             ]
           },
@@ -2542,6 +3173,12 @@
                 "payload": "{ ok, latencyMs, statusCode }",
                 "annotation": "Status pill updates inline."
               }
+            ],
+            "docs": [
+              {
+                "path": "features/provider-health.md",
+                "label": "Provider Health Tracking"
+              }
             ]
           },
           {
@@ -2598,6 +3235,16 @@
                 "payload": "application/pdf stream",
                 "annotation": "Puppeteer renders themed HTML to a streamed PDF with paginated footer + break-inside rules."
               }
+            ],
+            "docs": [
+              {
+                "path": "features/pdf-report-export.md",
+                "label": "PDF Report Export"
+              },
+              {
+                "path": "features/belgian-tax.md",
+                "label": "Feature - Belgian Tax"
+              }
             ]
           },
           {
@@ -2636,55 +3283,86 @@
                 "payload": "rendered ApiInspector (virtualised)",
                 "annotation": "Filter, request detail, metrics, top endpoints, slow requests, TanStack devtools."
               }
+            ],
+            "docs": [
+              {
+                "path": "features/dev-observability.md",
+                "label": "Observability Layer (API Inspector)"
+              }
             ]
           },
           {
             "id": "signin",
-            "name": "Initial sign-in / admin auth",
+            "name": "Use an optional admin API token",
             "category": "Admin",
-            "summary": "First request after launch confirms the admin token before anything else runs.",
+            "summary": "Admin Mode exposes screens. An operator-provided session token authorizes API requests when configured.",
             "steps": [
               {
                 "from": "browser",
                 "to": "fe.pages",
-                "payload": "AppLayout mount",
-                "annotation": "Reads stored token from secure storage."
+                "title": "Open the admin overview",
+                "note": "Enable Admin Mode to expose the screens. The token card stays available when requests fail.",
+                "payload": "AdminTokenCard",
+                "annotation": "apps/frontend/src/pages/admin/AdminOverviewPage.tsx; apps/frontend/src/components/auth/RequireAdmin.tsx"
               },
               {
                 "from": "fe.pages",
+                "to": "browser",
+                "title": "Store the token for this session",
+                "note": "Saving stores the trimmed operator token; it does not validate it.",
+                "payload": "sessionStorage vision.adminToken",
+                "annotation": "apps/frontend/src/lib/adminToken.ts"
+              },
+              {
+                "from": "browser",
                 "to": "fe.apiclient",
-                "payload": "GET /api/settings/identity",
-                "annotation": "Initial bootstrap call."
+                "title": "Read the session token",
+                "note": "Attach Bearer only when a token is stored.",
+                "payload": "getAdminToken / apiRequest",
+                "annotation": "apps/frontend/src/lib/api/client.ts"
               },
               {
                 "from": "fe.apiclient",
                 "to": "be.middleware",
-                "payload": "Authorization: Bearer \u2026",
-                "annotation": "Header attached by the transport layer."
+                "title": "Send an admin request",
+                "note": "Use a real protected admin endpoint.",
+                "payload": "GET /api/admin/database/stats",
+                "annotation": "apps/frontend/src/lib/api/admin.ts"
               },
               {
                 "from": "be.middleware",
-                "to": "be.repos",
-                "payload": "settingsRepository.matchToken(token)",
-                "annotation": "timingSafeEqual against ADMIN_AUTH_TOKEN (2026-04-28 hardening)."
+                "to": "be.routes",
+                "title": "Check configured authentication",
+                "note": "Timing-safe in-memory comparison; missing/wrong token gives 401 when configured. Without a configured token, access is open.",
+                "payload": "ADMIN_AUTH_TOKEN",
+                "annotation": "apps/node-backend/src/middleware/adminAuth.js"
               },
               {
-                "from": "be.repos",
+                "from": "be.routes",
                 "to": "db.postgres",
-                "payload": "SELECT \u2026 FROM settings WHERE key=\u2026",
-                "annotation": "Single indexed lookup."
+                "title": "Read requested statistics",
+                "note": "The database supplies the requested data, never token matching.",
+                "payload": "database statistics",
+                "annotation": "apps/node-backend/src/routes/admin.js"
               },
               {
-                "from": "be.middleware",
-                "to": "fe.apiclient",
-                "payload": "{ data: { ok, identity } }",
-                "annotation": "On failure, 401 \u2192 frontend kicks user to onboarding."
+                "from": "be.routes",
+                "to": "fe.pages",
+                "title": "Show data or access guidance",
+                "note": "No onboarding redirect. Tokenless non-loopback startup needs explicit acknowledgement of external access controls.",
+                "payload": "data or UNAUTHORIZED",
+                "annotation": "apps/frontend/src/components/shared/AdminErrorState.tsx; apps/node-backend/src/main.js"
+              }
+            ],
+            "takeaway": "There is no global startup sign-in. UI visibility is a preference; server authorization depends on the configured token and deployment controls.",
+            "docs": [
+              {
+                "path": "features/admin-observability.md",
+                "label": "Admin Observability Dashboard"
               },
               {
-                "from": "fe.apiclient",
-                "to": "fe.stores",
-                "payload": "useAppSettings.set(identity)",
-                "annotation": "Zustand store hydrates; gated routes unlock."
+                "path": "api/admin.md",
+                "label": "Admin API"
               }
             ]
           },
@@ -2717,6 +3395,12 @@
                 "to": "electron",
                 "payload": "GitHub latest release ZIP + required checksum",
                 "annotation": "updater.js trusts GitHub as the publisher and checks the sibling checksum before installation; it does not verify a separate release-signing key."
+              }
+            ],
+            "docs": [
+              {
+                "path": "guides/cicd-pipelines.md",
+                "label": "CI/CD Pipelines"
               }
             ]
           },
@@ -2780,6 +3464,12 @@
                 "payload": "{ ok: true, data: { updated, truncated } }",
                 "annotation": "React Query invalidates ['transactions'] / ['monthlySummary'] caches."
               }
+            ],
+            "docs": [
+              {
+                "path": "features/bulk-actions.md",
+                "label": "Bulk Transaction Actions"
+              }
             ]
           },
           {
@@ -2841,6 +3531,12 @@
                 "to": "fe.apiclient",
                 "payload": "{ ok: true, data: Attachment }",
                 "annotation": "AttachmentPanel shows the new thumbnail via React Query refetch."
+              }
+            ],
+            "docs": [
+              {
+                "path": "api/attachments.md",
+                "label": "API - Attachments"
               }
             ]
           },
@@ -2910,6 +3606,12 @@
                 "payload": "{ ok: true, data: { applied, transactions: N } }",
                 "annotation": "Toolbar clears selection; transactions table refetches with the new tag pills."
               }
+            ],
+            "docs": [
+              {
+                "path": "features/tags.md",
+                "label": "Transaction Tags"
+              }
             ]
           },
           {
@@ -2954,6 +3656,12 @@
                 "payload": "reloaded production frontend after /health/detailed",
                 "annotation": "The renderer returns only after the native runtime is ready."
               }
+            ],
+            "docs": [
+              {
+                "path": "features/application-updates.md",
+                "label": "Application Updates"
+              }
             ]
           },
           {
@@ -2965,13 +3673,13 @@
               {
                 "from": "build.release",
                 "to": "build.native",
-                "payload": "isolated VISION_FRONTEND_DIST · build-native-package.js --demo",
+                "payload": "isolated VISION_FRONTEND_DIST \u00b7 build-native-package.js --demo",
                 "annotation": "scripts/lib/native-mac-build.sh stages the frontend in a private temporary directory; build-native-package.js prepares the normal native payload from it, then invokes build-demo-seed.js before Electron Builder."
               },
               {
                 "from": "build.native",
                 "to": "db.postgres",
-                "payload": "disposable PostgreSQL 18 · guarded migration to head · data-only seed SQL",
+                "payload": "disposable PostgreSQL 18 \u00b7 guarded migration to head \u00b7 data-only seed SQL",
                 "annotation": "build-demo-seed.js uses the packaged PostgreSQL and migration executable; native.js applies generate.mjs output as the owner with ON_ERROR_STOP and one transaction."
               },
               {
@@ -2983,26 +3691,32 @@
               {
                 "from": "electron",
                 "to": "build.electron",
-                "payload": "Vision Demo marker · runtime id vision_demo · PostgreSQL port 54330",
+                "payload": "Vision Demo marker \u00b7 runtime id vision_demo \u00b7 PostgreSQL port 54330",
                 "annotation": "packaging/electron/main.js always selects the isolated native provider for Demo and never imports real Vision environment values."
               },
               {
                 "from": "build.electron",
                 "to": "build.native",
-                "payload": "prepareNativeDemo(demo-seed) · checksum and dump validation",
+                "payload": "prepareNativeDemo(demo-seed) \u00b7 checksum and dump validation",
                 "annotation": "runtime/native-demo.js retries interrupted switches, detects seed or reset changes, and refuses any application-data path outside Vision Demo."
               },
               {
                 "from": "build.native",
                 "to": "db.postgres",
-                "payload": "admin extension bootstrap · restricted transactional restore · exact table verification · atomic database rename",
+                "payload": "admin extension bootstrap \u00b7 restricted transactional restore \u00b7 exact table verification \u00b7 atomic database rename",
                 "annotation": "native.js installs required extensions in the template0-based staging database with the private cluster administrator, then restores application objects as the migration owner. The previous Demo database remains available until the native backend passes detailed readiness and stable important-row counts."
               },
               {
                 "from": "build.electron",
                 "to": "fe.pages",
-                "payload": "/health/detailed ready · finalize seed marker or rollback",
+                "payload": "/health/detailed ready \u00b7 finalize seed marker or rollback",
                 "annotation": "Successful readiness finalizes the switch and reset request; any start or verification failure restores the previous Demo database before Electron exits."
+              }
+            ],
+            "docs": [
+              {
+                "path": "guides/native-macos-runtime.md",
+                "label": "Native macOS Runtime Guide"
               }
             ]
           },
@@ -3072,6 +3786,12 @@
                 "payload": "{ paths: { p25, p50, p75 }, methods: [...], accuracy: {...} }",
                 "annotation": "Widget renders the fan chart + diagnostics panel."
               }
+            ],
+            "docs": [
+              {
+                "path": "features/cash-flow-forecast.md",
+                "label": "Cash Flow Forecast"
+              }
             ]
           },
           {
@@ -3140,12 +3860,18 @@
                 "payload": "updated parsers list with Bookmark icon entries",
                 "annotation": "On next import session the saved parser appears in the bank-source dropdown; selecting it sets adapterName to the parser name and loads its config into the form."
               }
+            ],
+            "docs": [
+              {
+                "path": "features/import.md",
+                "label": "Feature - CSV Import, Export, Attachments & Deduplication"
+              }
             ]
           },
           {
             "id": "portfolio-csv-import",
             "name": "Portfolio CSV import (brokerage trades)",
-            "category": "Import",
+            "category": "Imports",
             "summary": "User uploads a brokerage CSV; backend runs a stage\u2192validate\u2192matchInvestments pipeline and either auto-commits all rows or sends the batch to awaiting_review for instrument resolution.",
             "steps": [
               {
@@ -3225,6 +3951,12 @@
                 "to": "db.postgres",
                 "payload": "INSERT INTO portfolio_transactions (via portfolioTransactionService.create)",
                 "annotation": "Commit keeps portfolio validation and oversell rules, checks exact versioned fingerprints, and relies on migration 0103's partial unique index as the concurrent-import race guard."
+              }
+            ],
+            "docs": [
+              {
+                "path": "features/portfolio-import.md",
+                "label": "Feature - Portfolio CSV Import"
               }
             ]
           },
@@ -3306,6 +4038,12 @@
                 "payload": "Macro series rendered as a line in the ComposedChart alongside equities",
                 "annotation": "Provider dropdown hidden (pinned); candlestick disabled. Rebase-to-100 works across macro + equity series. Monthly macro data plots at month boundaries with null gaps between when overlaid with daily equity data."
               }
+            ],
+            "docs": [
+              {
+                "path": "features/research.md",
+                "label": "Research Feature"
+              }
             ]
           },
           {
@@ -3318,37 +4056,49 @@
                 "from": "browser",
                 "to": "fe.pages",
                 "payload": "AccountsPage -> CloseAccountDialog open",
-                "annotation": "The dialog checks native balance_parts. Residual cash defaults to a visible zero-out adjustment; the user can preserve it instead. Holdings-only accounts skip this choice."
+                "annotation": "The dialog checks native balance_parts. Residual cash defaults to a visible zero-out adjustment; the user can preserve it instead. Holdings-only accounts skip this choice.",
+                "title": "Choose cash-preservation or adjustment"
               },
               {
                 "from": "fe.pages",
                 "to": "fe.apiclient",
                 "payload": "POST /api/accounts/:id/close { balance_handling }",
-                "annotation": "CloseAccountDialog explicitly sends adjustment or preserve. Cancel leaves the account unchanged."
+                "annotation": "CloseAccountDialog explicitly sends adjustment or preserve. Cancel leaves the account unchanged.",
+                "title": "Request account closure"
               },
               {
                 "from": "fe.apiclient",
                 "to": "be.routes",
                 "payload": "POST /api/accounts/:id/close body",
-                "annotation": "routes/accounts.js -> accountCloseService.closeAccount."
+                "annotation": "routes/accounts.js -> accountCloseService.closeAccount.",
+                "title": "Validate and route the request"
               },
               {
                 "from": "be.routes",
                 "to": "be.repos",
                 "payload": "Lock account; optionally insert inverse adjustment rows; close",
-                "annotation": "One database transaction reads canonical native balance partitions, inserts balance-free system adjustments, and closes the row. An already-closed retry creates nothing."
+                "annotation": "One database transaction reads canonical native balance partitions, inserts balance-free system adjustments, and closes the row. An already-closed retry creates nothing.",
+                "title": "Lock the account and close atomically"
               },
               {
                 "from": "be.repos",
                 "to": "db.postgres",
                 "payload": "INSERT adjustments; UPDATE accounts SET is_active=false, closed_at=?, in_net_worth=false",
-                "annotation": "Each non-zero currency reaches zero as of the close date. Existing statement readings, planned rows, future-dated activity, holdings, and history remain linked for audit."
+                "annotation": "Each non-zero currency reaches zero as of the close date. Existing statement readings, planned rows, future-dated activity, holdings, and history remain linked for audit.",
+                "title": "Persist adjustments and closed state"
               },
               {
                 "from": "fe.pages",
                 "to": "fe.hooks",
                 "payload": "invalidateAccountRepoint(queryClient)",
-                "annotation": "After success, account, transaction, planned-payment, portfolio, bank-balance, cash-forecast, and net-worth query trees are invalidated before the dialog closes."
+                "annotation": "After success, account, transaction, planned-payment, portfolio, bank-balance, cash-forecast, and net-worth query trees are invalidated before the dialog closes.",
+                "title": "Refresh affected query families"
+              }
+            ],
+            "docs": [
+              {
+                "path": "features/accounts.md",
+                "label": "Accounts"
               }
             ]
           },
@@ -3442,12 +4192,18 @@
                 "payload": "scheduleRefresh() \u2014 debounced 2 s",
                 "annotation": "Only triggered when the committed table is a materialized-view base table (transactions, recipients, categories). Keeps dashboard MVs fresh after raw edits without synchronous overhead."
               }
+            ],
+            "docs": [
+              {
+                "path": "features/database-maintenance.md",
+                "label": "Database Maintenance UI"
+              }
             ]
           },
           {
             "id": "agentcloak-desktop-setup",
             "name": "Enable AgentCloak Desktop in AI settings",
-            "category": "AI and research",
+            "category": "AI",
             "summary": "The user enables Desktop protection. Vision probes the loopback detector, ensures a private reference key, and stores only the preference in PostgreSQL; OpenAI configuration is optional at setup time.",
             "steps": [
               {
@@ -3492,18 +4248,24 @@
                 "payload": "{enabled,available,mappingKeyConfigured,openAiEnabled}",
                 "annotation": "The response contains booleans only. OpenAI can still be unconfigured; live packaged synthetic API acceptance remains pending under ADR-171."
               }
+            ],
+            "docs": [
+              {
+                "path": "security/ai-data-access.md",
+                "label": "AI Data Access Policy"
+              }
             ]
           },
           {
             "id": "ai-research-investigation",
             "name": "Run a bounded AI research investigation",
-            "category": "AI and research",
+            "category": "AI",
             "summary": "A user selects scope, evidence access, depth, a privacy profile, and an approved API model. In Desktop mode, detected selected text becomes encrypted one-job tokens before consent; MCP mode blocks proposed changes. Vision restores answer text locally.",
             "steps": [
               {
                 "from": "browser",
                 "to": "fe.apiclient",
-                "payload": "POST /api/ai-research/disclosures/preview · optional [[vision-ref:type|value]] markers",
+                "payload": "POST /api/ai-research/disclosures/preview \u00b7 optional [[vision-ref:type|value]] markers",
                 "annotation": "AIInvestigationPanel.tsx sends the full selected disclosure request for exact preview. Only selectedSummary and selectedEvidence support explicit reversible markers. The UI warns that replacement is pseudonymization, not anonymity."
               },
               {
@@ -3557,13 +4319,13 @@
               {
                 "from": "fe.apiclient",
                 "to": "be.routes",
-                "payload": "POST /api/ai-research/investigations · preview outboundRequest",
+                "payload": "POST /api/ai-research/investigations \u00b7 preview outboundRequest",
                 "annotation": "The request carries explicit scope, EN/NL language, quick/detailed depth, research mode, model route, optional approved OpenAI model, grant, and optional one-use referenceScopeId."
               },
               {
                 "from": "be.routes",
                 "to": "sv.airesearch",
-                "payload": "strict request · bounded plan · serial execution queue",
+                "payload": "strict request \u00b7 bounded plan \u00b7 serial execution queue",
                 "annotation": "aiInvestigationService.js rejects raw markers and unknown, cross-scope, expired, or already used tokens before persistence. It creates a bounded baseline and keeps one investigation and tool run active at a time."
               },
               {
@@ -3638,6 +4400,16 @@
                 "payload": "local structured result or visible failed state",
                 "annotation": "result_json stores the restored answer on success. A completed result remains readable after backup restore; an in-flight token-bearing checkpoint additionally needs the original installation key and unexpired map."
               }
+            ],
+            "docs": [
+              {
+                "path": "features/research.md",
+                "label": "Research Feature"
+              },
+              {
+                "path": "security/ai-data-access.md",
+                "label": "AI Data Access Policy"
+              }
             ]
           },
           {
@@ -3693,6 +4465,12 @@
                 "to": "fe.apiclient",
                 "payload": "ordered path segments, path IDs and stable category ID",
                 "annotation": "The node response contains name, parentId, path, pathIds and depth. Legacy /api/categories remains available to old clients."
+              }
+            ],
+            "docs": [
+              {
+                "path": "features/categories.md",
+                "label": "Categories"
               }
             ]
           },
@@ -3755,6 +4533,16 @@
                 "to": "fe.pages",
                 "payload": "buy-only deployment proposal",
                 "annotation": "crossWorkspace.js returns a plan without executing trades."
+              }
+            ],
+            "docs": [
+              {
+                "path": "features/cash-flow-forecast.md",
+                "label": "Cash Flow Forecast"
+              },
+              {
+                "path": "features/portfolio.md",
+                "label": "Feature - Portfolio & Investments"
               }
             ]
           },
@@ -3823,6 +4611,12 @@
                 "to": "fe.pages",
                 "payload": "approximate median gap and goal probabilities",
                 "annotation": "LifeScenarioPanel.tsx hides stale draft results and rejects changed reported market inputs."
+              }
+            ],
+            "docs": [
+              {
+                "path": "features/cash-flow-forecast.md",
+                "label": "Cash Flow Forecast"
               }
             ]
           },
@@ -3916,6 +4710,12 @@
                 "payload": "restore candidate must match local receipt before database switch finalizes",
                 "annotation": "packaging/electron/backup/native-transport.js first rolls back a non-verified candidate. Explicit recovery then retries once only after successful rollback, requires a full internally valid chain, and preserves the external receipt."
               }
+            ],
+            "docs": [
+              {
+                "path": "features/backup-coverage-audit.md",
+                "label": "Backup Coverage Audit"
+              }
             ]
           },
           {
@@ -3954,6 +4754,733 @@
                 "payload": "bounded TLS tunnel to exact allowed host",
                 "annotation": "apps/node-backend/src/integrations/codex/connectProxy.js validates CONNECT host and port, with byte caps; encrypted payload content remains opaque."
               }
+            ],
+            "docs": [
+              {
+                "path": "security/ai-data-access.md",
+                "label": "AI Data Access Policy"
+              }
+            ]
+          },
+          {
+            "id": "api-request",
+            "name": "Follow a page request through Vision",
+            "category": "Start here",
+            "summary": "A page uses a server-state hook, sends an API request, and receives data or a structured error.",
+            "takeaway": "React Query owns server data. Zustand owns client preferences. Repositories handle database access; services apply business rules.",
+            "steps": [
+              {
+                "from": "browser",
+                "to": "fe.pages",
+                "title": "Open a page",
+                "note": "Pages compose visible features and consume named hooks.",
+                "payload": "React page",
+                "annotation": "apps/frontend/src/pages/TransactionsPage.tsx"
+              },
+              {
+                "from": "fe.pages",
+                "to": "fe.hooks",
+                "title": "Ask for server data",
+                "note": "A query key identifies the requested data and filters.",
+                "payload": "useTransactions(params)",
+                "annotation": "apps/frontend/src/hooks/useTransactions.ts"
+              },
+              {
+                "from": "fe.hooks",
+                "to": "fe.apiclient",
+                "title": "Send the request",
+                "note": "The client adds a request ID, timeout and optional stored admin token.",
+                "payload": "apiRequest(endpoint, options)",
+                "annotation": "apps/frontend/src/lib/api/client.ts"
+              },
+              {
+                "from": "fe.apiclient",
+                "to": "be.middleware",
+                "title": "Check the API boundary",
+                "note": "Host, cross-origin, rate and mutation-origin checks apply before routes. Admin requests also use token authentication.",
+                "payload": "HTTP request and X-Request-Id",
+                "annotation": "apps/node-backend/src/main.js; apps/node-backend/src/middleware/csrfGuard.js"
+              },
+              {
+                "from": "be.middleware",
+                "to": "be.routes",
+                "title": "Validate the request",
+                "note": "The route validates inputs and delegates work.",
+                "payload": "GET /api/transactions",
+                "annotation": "apps/node-backend/src/routes/transactions.js"
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.transactiondomains",
+                "title": "Apply business rules",
+                "note": "Domain services coordinate reads and mutations.",
+                "payload": "transactionService.getAllWithCount",
+                "annotation": "apps/node-backend/src/services/transactionService.js"
+              },
+              {
+                "from": "sv.transactiondomains",
+                "to": "be.repos",
+                "title": "Read stored records",
+                "note": "Repositories own SQL access.",
+                "payload": "transactionRepository",
+                "annotation": "apps/node-backend/src/repositories/transactionRepository.js"
+              },
+              {
+                "from": "be.repos",
+                "to": "db.postgres",
+                "title": "Query PostgreSQL",
+                "note": "Stored transactions are the source records.",
+                "payload": "SELECT transactions",
+                "annotation": "apps/node-backend/src/repositories/transactionRepository.js"
+              },
+              {
+                "from": "be.routes",
+                "to": "be.envelope",
+                "title": "Wrap success or failure",
+                "note": "Success carries data; failures carry a code and message.",
+                "payload": "{ ok, data or error, meta: { requestId } }",
+                "annotation": "apps/node-backend/src/middleware/envelope.js; apps/node-backend/src/middleware/errorHandler.js"
+              },
+              {
+                "from": "be.envelope",
+                "to": "fe.apiclient",
+                "title": "Decode the response",
+                "note": "Unwrap data or raise a typed error.",
+                "payload": "unwrapEnvelope / ApiClientError",
+                "annotation": "apps/frontend/src/lib/api/client.ts"
+              },
+              {
+                "from": "fe.apiclient",
+                "to": "fe.hooks",
+                "title": "Cache the result",
+                "note": "Consumers sharing a query key reuse server state.",
+                "payload": "React Query result",
+                "annotation": "apps/frontend/src/hooks/useTransactions.ts; apps/frontend/src/lib/queryKeys.ts"
+              },
+              {
+                "from": "fe.hooks",
+                "to": "fe.pages",
+                "title": "Render the page",
+                "note": "Mutations invalidate related queries so affected widgets can refetch.",
+                "payload": "data / loading / error",
+                "annotation": "apps/frontend/src/hooks/useTransactions.ts"
+              }
+            ],
+            "docs": [
+              {
+                "path": "architecture/frontend-architecture.md",
+                "label": "Frontend Architecture"
+              },
+              {
+                "path": "architecture/backend-architecture.md",
+                "label": "Backend Architecture"
+              }
+            ]
+          },
+          {
+            "id": "dashboard-summary",
+            "name": "Understand where dashboard totals come from",
+            "category": "Start here",
+            "summary": "Resolve exclusions, share one monthly-summary query, and render server-computed totals.",
+            "takeaway": "Filtered totals can differ from the raw transaction count. The count is independent of currency and exclusions.",
+            "steps": [
+              {
+                "from": "fe.pages",
+                "to": "fe.stores",
+                "title": "Read display preferences",
+                "note": "Currency and exclusion settings determine the visible totals.",
+                "payload": "defaultCurrency and dashboard exclusions",
+                "annotation": "apps/frontend/src/pages/DashboardPage.tsx; apps/frontend/src/hooks/useExcludedIds.ts"
+              },
+              {
+                "from": "fe.pages",
+                "to": "fe.hooks",
+                "title": "Wait for exclusion resolution",
+                "note": "Hidden categories must resolve before requesting totals.",
+                "payload": "useFilteredDashboardStats / useMonthlySummary",
+                "annotation": "apps/frontend/src/hooks/useFilteredDashboardStats.ts"
+              },
+              {
+                "from": "fe.hooks",
+                "to": "fe.apiclient",
+                "title": "Share the monthly query",
+                "note": "Cards and charts with matching settings share one query key.",
+                "payload": "GET /api/aggregations/monthly-summary",
+                "annotation": "apps/frontend/src/hooks/useFilteredDashboardStats.ts; apps/frontend/src/lib/api/aggregations.ts"
+              },
+              {
+                "from": "fe.apiclient",
+                "to": "be.routes",
+                "title": "Validate filters",
+                "note": "Validate repeated IDs, dates and currency.",
+                "payload": "currency and exclusion IDs",
+                "annotation": "apps/node-backend/src/routes/aggregations.js"
+              },
+              {
+                "from": "be.routes",
+                "to": "be.repos",
+                "title": "Calculate the summary",
+                "note": "The calculation delegates to the financial summary repository and checks invariants.",
+                "payload": "computeMonthlySummary / getMonthlyFinancialSummary",
+                "annotation": "apps/node-backend/src/services/calculations/aggregation/monthly.js; apps/node-backend/src/repositories/infoRepository.js"
+              },
+              {
+                "from": "be.repos",
+                "to": "db.postgres",
+                "title": "Choose derived or live data",
+                "note": "Default scope can use a materialized view; exclusions or custom dates use live SQL.",
+                "payload": "monthly totals; source = mv or live",
+                "annotation": "apps/node-backend/src/services/calculations/aggregation/monthly.js"
+              },
+              {
+                "from": "be.routes",
+                "to": "fe.hooks",
+                "title": "Return totals and provenance",
+                "note": "A separate query reads the raw transaction count.",
+                "payload": "{ data, meta } plus transaction count",
+                "annotation": "apps/frontend/src/hooks/useFilteredDashboardStats.ts; apps/frontend/src/lib/api/info.ts"
+              },
+              {
+                "from": "fe.hooks",
+                "to": "fe.pages",
+                "title": "Render the latest active month",
+                "note": "Cards use the latest month with transactions; charts keep their own date scope.",
+                "payload": "income, spending, net and history",
+                "annotation": "apps/frontend/src/hooks/useFilteredDashboardStats.ts; apps/frontend/src/pages/DashboardPage.tsx"
+              }
+            ],
+            "docs": [
+              {
+                "path": "features/statistics.md",
+                "label": "Statistics Feature"
+              },
+              {
+                "path": "features/views.md",
+                "label": "Views & Pages"
+              }
+            ]
+          },
+          {
+            "id": "native-startup",
+            "name": "Open Vision and reach the first page",
+            "category": "Deployment",
+            "summary": "Start the managed database and backend, check readiness, assess audit continuity, and load the app.",
+            "takeaway": "A running process differs from readiness. Audit failure or unavailability produces a notice and does not block app access.",
+            "steps": [
+              {
+                "from": "electron",
+                "to": "build.electron",
+                "title": "Resolve the local profile",
+                "note": "Select the profile and backend port; show the splash.",
+                "payload": "launch",
+                "annotation": "packaging/electron/main.js"
+              },
+              {
+                "from": "build.electron",
+                "to": "build.native",
+                "title": "Verify and start the runtime",
+                "note": "Verify packaged manifest and ensure private layout.",
+                "payload": "discover; ensureLayout; start",
+                "annotation": "packaging/electron/runtime/native.js"
+              },
+              {
+                "from": "build.native",
+                "to": "db.postgres",
+                "title": "Open the private database cluster",
+                "note": "Provision separate administrator, owner, app and restricted analysis roles.",
+                "payload": "ensurePostgresReady; bootstrapDatabase",
+                "annotation": "packaging/electron/runtime/native.js"
+              },
+              {
+                "from": "build.native",
+                "to": "be.routes",
+                "title": "Start the backend",
+                "note": "Spawn with allowlisted environment and private audit bridge.",
+                "payload": "backend process",
+                "annotation": "packaging/electron/runtime/native.js"
+              },
+              {
+                "from": "be.routes",
+                "to": "db.alembic",
+                "title": "Run guarded migrations",
+                "note": "Use the reviewed migration path before normal requests.",
+                "payload": "runMigrations",
+                "annotation": "apps/node-backend/src/main.js; apps/node-backend/src/database/migrate.js"
+              },
+              {
+                "from": "db.alembic",
+                "to": "db.postgres",
+                "title": "Finish database initialization",
+                "note": "Ensure the analysis role and application grants after migrations.",
+                "payload": "ensureAnalysisRole",
+                "annotation": "apps/node-backend/src/main.js"
+              },
+              {
+                "from": "build.electron",
+                "to": "be.routes",
+                "title": "Wait for detailed readiness",
+                "note": "Poll backend health and database/cache gates.",
+                "payload": "GET /health/detailed; pollAndLoad; pingReady",
+                "annotation": "packaging/electron/main.js; packaging/electron/runtime/native.js"
+              },
+              {
+                "from": "build.electron",
+                "to": "build.auditanchor",
+                "title": "Assess audit continuity",
+                "note": "Establish a trusted session where possible; surface failure or unavailability.",
+                "payload": "checkAuditIntegrity({ establishSession: true })",
+                "annotation": "packaging/electron/main.js; packaging/electron/audit-anchor.js"
+              },
+              {
+                "from": "build.electron",
+                "to": "fe.pages",
+                "title": "Load and watch the renderer",
+                "note": "Navigate to the app and await its ready signal.",
+                "payload": "loadApplicationPage and watchdog",
+                "annotation": "packaging/electron/main.js; apps/frontend/src/App.tsx"
+              }
+            ],
+            "docs": [
+              {
+                "path": "guides/native-macos-runtime.md",
+                "label": "Native macOS Runtime Guide"
+              },
+              {
+                "path": "architecture/electron.md",
+                "label": "Electron Desktop Architecture"
+              }
+            ]
+          },
+          {
+            "id": "internal-transfer-reconciliation",
+            "name": "Recognize transfers between your accounts",
+            "category": "Transactions",
+            "summary": "Match the two posted legs so internal movement does not inflate income or spending.",
+            "takeaway": "Transfers remain real account movements. Auto matching requires same-currency equal and opposite amounts. Manual resolution is an API capability.",
+            "steps": [
+              {
+                "from": "sv.import",
+                "to": "sv.transactiondomains",
+                "title": "Reconcile after a write",
+                "note": "Imports and manual mutations trigger the corpus-wide scan.",
+                "payload": "reconcileTransfers",
+                "annotation": "apps/node-backend/src/services/importPipeline/index.js; apps/node-backend/src/services/transactionService.js"
+              },
+              {
+                "from": "sv.transactiondomains",
+                "to": "be.repos",
+                "title": "Find candidate pairs",
+                "note": "Clean invalid auto links; find opposite equal amounts, same currency, different accounts, within three days.",
+                "payload": "listTransferCandidatePairs",
+                "annotation": "apps/node-backend/src/services/transferReconciliationService.js; apps/node-backend/src/repositories/transactionRepository.js"
+              },
+              {
+                "from": "be.repos",
+                "to": "db.postgres",
+                "title": "Search across imports",
+                "note": "The second leg may arrive in a later import.",
+                "payload": "whole recent corpus",
+                "annotation": "apps/node-backend/src/repositories/transactionRepository.js"
+              },
+              {
+                "from": "sv.transactiondomains",
+                "to": "sv.transactiondomains",
+                "title": "Require mutual uniqueness",
+                "note": "Leave ambiguity open and preserve manual pairs.",
+                "payload": "resolveTransferMatches",
+                "annotation": "apps/node-backend/src/services/calculations/transfers.js"
+              },
+              {
+                "from": "sv.transactiondomains",
+                "to": "db.postgres",
+                "title": "Mark both legs together",
+                "note": "Guarded peer writes commit together; a partial concurrent match is reverted.",
+                "payload": "transfer_source = auto; peer IDs",
+                "annotation": "apps/node-backend/src/services/transferReconciliationService.js"
+              },
+              {
+                "from": "sv.transactiondomains",
+                "to": "sv.aggrefresh",
+                "title": "Refresh derived state",
+                "note": "The calling mutation refreshes statistics after reconciliation.",
+                "payload": "scheduleAggregationRefresh",
+                "annotation": "apps/node-backend/src/services/transactionService.js; apps/node-backend/src/services/importPipeline/index.js"
+              },
+              {
+                "from": "sv.matview",
+                "to": "db.postgres",
+                "title": "Separate balance from spending",
+                "note": "Omit transfers from income/spending totals; include actual movements in balances.",
+                "payload": "materialized summaries and account ledger",
+                "annotation": "apps/node-backend/src/services/materializedViewService.js"
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.transactiondomains",
+                "title": "Optional API resolution",
+                "note": "API capability: confirm ambiguous or cross-currency pairs, or dismiss a wrong pair. Current frontend has no dedicated transfer controls.",
+                "payload": "GET /api/transactions/transfer-suggestions; POST /api/transactions/transfers; DELETE /api/transactions/transfers/:id",
+                "annotation": "apps/node-backend/src/routes/transactions.js; apps/node-backend/src/services/transferReconciliationService.js"
+              }
+            ],
+            "docs": [
+              {
+                "path": "features/transfers.md",
+                "label": "Feature - Internal Transfers"
+              }
+            ]
+          },
+          {
+            "id": "split-shared-expense",
+            "name": "Split a shared expense and track repayments",
+            "category": "Transactions",
+            "summary": "Allocate an existing expense between people, then record repayments and remaining debt.",
+            "takeaway": "A split repayment records debt tracking. It does not post another ledger transaction.",
+            "steps": [
+              {
+                "from": "browser",
+                "to": "fe.features",
+                "title": "Allocate an existing expense",
+                "note": "Choose a posted transaction and assign shares.",
+                "payload": "SplitTransactionDialog",
+                "annotation": "apps/frontend/src/features/splits/SplitTransactionDialog.tsx"
+              },
+              {
+                "from": "fe.features",
+                "to": "fe.hooks",
+                "title": "Submit all shares",
+                "note": "Send one batch request.",
+                "payload": "useCreateSplits; POST /api/splits/batch",
+                "annotation": "apps/frontend/src/hooks/useSplits.ts"
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.transactiondomains",
+                "title": "Validate the allocation",
+                "note": "Validate all rows before writing.",
+                "payload": "createSplitsBatchAtomic",
+                "annotation": "apps/node-backend/src/routes/splits.js; apps/node-backend/src/services/splitService.js"
+              },
+              {
+                "from": "sv.transactiondomains",
+                "to": "db.postgres",
+                "title": "Save shares atomically",
+                "note": "Lock the parent, enforce four-decimal allocation precision and save creation audits.",
+                "payload": "splits and split_audit",
+                "annotation": "apps/node-backend/src/services/splitService.js"
+              },
+              {
+                "from": "fe.pages",
+                "to": "be.repos",
+                "title": "Show what each person owes",
+                "note": "The Owes page groups debt and recipient aliases.",
+                "payload": "GET /api/splits/owed",
+                "annotation": "apps/frontend/src/pages/OwesPage.tsx; apps/node-backend/src/routes/splits.js"
+              },
+              {
+                "from": "browser",
+                "to": "be.routes",
+                "title": "Record a repayment",
+                "note": "Record an amount against one split.",
+                "payload": "POST /api/splits/:id/pay",
+                "annotation": "apps/frontend/src/hooks/useSplits.ts; apps/node-backend/src/routes/splits.js"
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.transactiondomains",
+                "title": "Check the debt",
+                "note": "Lock the split, recompute paid total and reject overpayment.",
+                "payload": "addPayment",
+                "annotation": "apps/node-backend/src/services/splitService.js"
+              },
+              {
+                "from": "sv.transactiondomains",
+                "to": "db.postgres",
+                "title": "Store payment and audit",
+                "note": "Payment, optional settled state and audit record commit together.",
+                "payload": "split_payments and split_audit",
+                "annotation": "apps/node-backend/src/services/splitService.js"
+              },
+              {
+                "from": "fe.hooks",
+                "to": "fe.pages",
+                "title": "Show remaining debt",
+                "note": "Refetch queries and render remaining or settled amounts.",
+                "payload": "invalidate split queries",
+                "annotation": "apps/frontend/src/hooks/useSplits.ts; apps/frontend/src/pages/OwesPage.tsx"
+              }
+            ],
+            "docs": [
+              {
+                "path": "features/splits.md",
+                "label": "Feature - Splits & Owes"
+              }
+            ]
+          },
+          {
+            "id": "planned-payment-completion",
+            "name": "Match a posted payment to a plan",
+            "category": "Planned payments",
+            "summary": "After a real payment arrives, link it to a plan and advance or complete the planned occurrence.",
+            "takeaway": "A due date never creates a ledger transaction. Executing a plan links an existing posted transaction.",
+            "steps": [
+              {
+                "from": "browser",
+                "to": "fe.features",
+                "title": "Create a plan",
+                "note": "One-time or recurring plans appear in upcoming reminders.",
+                "payload": "planned amount, date and recurrence",
+                "annotation": "apps/frontend/src/pages/PlannedPaymentsPage.tsx"
+              },
+              {
+                "from": "sv.transactiondomains",
+                "to": "sv.transactiondomains",
+                "title": "Try matching after a real write",
+                "note": "Imports and manual mutations call the same service.",
+                "payload": "autoLinkTransactions",
+                "annotation": "apps/node-backend/src/services/transactionService.js; apps/node-backend/src/services/plannedMatchService.js; apps/node-backend/src/services/importPipeline/commit.js"
+              },
+              {
+                "from": "sv.transactiondomains",
+                "to": "db.postgres",
+                "title": "Read matching candidates",
+                "note": "Match recipient cluster and sign, a five-day window and amount tolerance.",
+                "payload": "active plans and posted transactions",
+                "annotation": "apps/node-backend/src/services/plannedMatchService.js"
+              },
+              {
+                "from": "sv.transactiondomains",
+                "to": "fe.features",
+                "title": "Keep ambiguity reviewable",
+                "note": "Auto execution needs mutual uniqueness and enabled auto-clear. Other plans stay unchanged.",
+                "payload": "GET /api/planned-transactions/match-suggestions",
+                "annotation": "apps/node-backend/src/services/plannedMatchService.js; apps/frontend/src/features/planned/MatchSuggestionsBanner.tsx"
+              },
+              {
+                "from": "browser",
+                "to": "fe.features",
+                "title": "Select a posted transaction",
+                "note": "The user can resolve a suggestion or choose a real payment.",
+                "payload": "LinkTransactionDialog",
+                "annotation": "apps/frontend/src/features/planned/LinkTransactionDialog.tsx"
+              },
+              {
+                "from": "fe.features",
+                "to": "be.routes",
+                "title": "Execute this occurrence",
+                "note": "The selected transaction ID is required.",
+                "payload": "POST /api/planned-transactions/:id/execute; executed_transaction_id",
+                "annotation": "apps/frontend/src/hooks/usePlannedPayments.ts; apps/node-backend/src/routes/plannedTransactions.js"
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.transactiondomains",
+                "title": "Lock and record execution",
+                "note": "The same transaction-plan pair is an idempotent replay.",
+                "payload": "executePlanned",
+                "annotation": "apps/node-backend/src/services/plannedExecutionService.js"
+              },
+              {
+                "from": "sv.transactiondomains",
+                "to": "db.postgres",
+                "title": "Advance or finish the plan",
+                "note": "Record execution, inherit tags and advance unless recurrence bounds are reached.",
+                "payload": "execution history; nextOccurrenceYmd",
+                "annotation": "apps/node-backend/src/services/plannedExecutionService.js"
+              },
+              {
+                "from": "fe.hooks",
+                "to": "fe.pages",
+                "title": "Refresh reminders and history",
+                "note": "The next occurrence has its own dismissal key.",
+                "payload": "id:YYYY-MM-DD",
+                "annotation": "apps/frontend/src/hooks/usePlannedPayments.ts; apps/frontend/src/pages/PlannedPaymentsPage.tsx"
+              }
+            ],
+            "docs": [
+              {
+                "path": "features/plannedTransactions.md",
+                "label": "Planned Transactions"
+              }
+            ]
+          },
+          {
+            "id": "cloud-evidence-disclosure",
+            "name": "Approve selected evidence for a cloud answer",
+            "category": "AI",
+            "summary": "Preview exact selected evidence, grant one bounded disclosure, and restore the answer locally.",
+            "takeaway": "This profile sends approved evidence to OpenAI and skips cloud planning and Ollama synthesis. Uncertain sends stay recorded as sent and are not automatically replayed.",
+            "steps": [
+              {
+                "from": "fe.pages",
+                "to": "be.routes",
+                "title": "Preview selected evidence",
+                "note": "Choose exact evidence and an approved model.",
+                "payload": "POST /api/ai-research/disclosures/preview",
+                "annotation": "apps/node-backend/src/routes/aiResearch.js; apps/node-backend/src/services/aiDisclosureService.js"
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.aireference",
+                "title": "Protect selected identifiers",
+                "note": "Replace explicit markers and optional Desktop detections.",
+                "payload": "prepareReferencePreview",
+                "annotation": "apps/node-backend/src/services/aiReferenceService.js"
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.agentcloak",
+                "title": "Check the final payload",
+                "note": "Optional preflight checks exact text and digest.",
+                "payload": "disclosurePayload",
+                "annotation": "apps/node-backend/src/services/aiDisclosureService.js; apps/node-backend/src/services/agentCloakPreflight.js"
+              },
+              {
+                "from": "fe.pages",
+                "to": "be.routes",
+                "title": "Grant the bounded disclosure",
+                "note": "The user approves a mode-specific grant.",
+                "payload": "POST /api/ai-research/disclosures/grants",
+                "annotation": "apps/node-backend/src/routes/aiResearch.js; apps/node-backend/src/services/aiDisclosureService.js"
+              },
+              {
+                "from": "be.routes",
+                "to": "db.postgres",
+                "title": "Persist the approved grant",
+                "note": "The disclosure service writes the grant through its repository.",
+                "payload": "createDisclosureGrant",
+                "annotation": "apps/node-backend/src/services/aiDisclosureService.js; apps/node-backend/src/repositories/aiDisclosureRepository.js"
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.airesearch",
+                "title": "Create the investigation",
+                "note": "Claim the optional reference scope for the job.",
+                "payload": "investigation and disclosure grant",
+                "annotation": "apps/node-backend/src/services/aiInvestigationService.js"
+              },
+              {
+                "from": "sv.airesearch",
+                "to": "db.postgres",
+                "title": "Reserve permission before sending",
+                "note": "Check mode, expiry, hash, fields and budgets; record sent before egress.",
+                "payload": "reserveDisclosure",
+                "annotation": "apps/node-backend/src/repositories/aiDisclosureRepository.js"
+              },
+              {
+                "from": "sv.airesearch",
+                "to": "ex.openai",
+                "title": "Send the approved payload",
+                "note": "Fixed Responses broker, no tools, response storage disabled (store:false), rejected redirects and macOS sandbox.",
+                "payload": "generateProvider; callOpenAiBroker; store: false",
+                "annotation": "apps/node-backend/src/services/aiProviderAdapters.js; apps/node-backend/src/integrations/openai/brokerClient.js; apps/node-backend/src/integrations/openai/egress-helper.mjs"
+              },
+              {
+                "from": "ex.openai",
+                "to": "sv.airesearch",
+                "title": "Validate the provider answer",
+                "note": "Schema-check before restoration.",
+                "payload": "resolveProviderAnswer / parseModelAnswer",
+                "annotation": "apps/node-backend/src/services/aiInvestigationService.js"
+              },
+              {
+                "from": "sv.airesearch",
+                "to": "db.postgres",
+                "title": "Checkpoint the protected answer",
+                "note": "Persist provider output before replacing references.",
+                "payload": "provider answer checkpoint",
+                "annotation": "apps/node-backend/src/services/aiInvestigationService.js"
+              },
+              {
+                "from": "sv.airesearch",
+                "to": "sv.aireference",
+                "title": "Restore allowed same-job references",
+                "note": "Fail closed on malformed or cross-scope tokens. A definite synthesis failure does not silently switch providers.",
+                "payload": "restoreAnswerForJob",
+                "annotation": "apps/node-backend/src/services/aiInvestigationService.js; apps/node-backend/src/services/aiReferenceService.js"
+              },
+              {
+                "from": "sv.airesearch",
+                "to": "fe.pages",
+                "title": "Show the restored result",
+                "note": "Publish after local validation and restoration.",
+                "payload": "result or explicit failure",
+                "annotation": "apps/node-backend/src/services/aiInvestigationService.js"
+              }
+            ],
+            "docs": [
+              {
+                "path": "security/ai-data-access.md",
+                "label": "AI Data Access Policy"
+              },
+              {
+                "path": "api/ai-research.md",
+                "label": "AI Research API"
+              }
+            ]
+          }
+        ],
+        "learningPaths": [
+          {
+            "id": "start",
+            "name": "1. Start here",
+            "description": "Learn request boundaries, dashboard data and desktop startup.",
+            "flows": ["api-request", "dashboard-summary", "native-startup"]
+          },
+          {
+            "id": "money",
+            "name": "2. Everyday money",
+            "description": "Follow records from imports to plans, shared expenses and derived totals.",
+            "flows": [
+              "create-tx",
+              "csv-import",
+              "import-commit",
+              "internal-transfer-reconciliation",
+              "split-shared-expense",
+              "recurring-detection",
+              "planned-payment-completion",
+              "cashflow-forecast"
+            ]
+          },
+          {
+            "id": "portfolio",
+            "name": "3. Portfolio and planning",
+            "description": "Separate prices, historical performance, exposure and cash decisions.",
+            "flows": [
+              "portfolio-csv-import",
+              "refresh-prices",
+              "portfolio-valuation",
+              "broker-history",
+              "portfolio-look-through-exposure",
+              "commitment-aware-cash",
+              "close-account"
+            ]
+          },
+          {
+            "id": "research",
+            "name": "4. Research and AI",
+            "description": "Compare local calculations, Ollama, cloud catalog plans and explicitly disclosed evidence.",
+            "flows": [
+              "manual-analysis",
+              "macro-series-fetch",
+              "research-dossier",
+              "local-analysis-monitor",
+              "ai-chat",
+              "cloud-catalog-analysis",
+              "cloud-evidence-disclosure",
+              "ai-research-investigation"
+            ]
+          },
+          {
+            "id": "trust",
+            "name": "5. Backup and trust",
+            "description": "Understand admin access, backup coverage, restore rollback and the external receipt.",
+            "flows": [
+              "signin",
+              "backup-create",
+              "backup-restore",
+              "native-audit-receipt",
+              "app-update"
             ]
           }
         ]
@@ -4083,7 +5610,7 @@
           tooltipEl.innerHTML = `
       <div class="tip-title">${escapeHtml(c.label)}</div>
       ${c.sub ? `<div class="tip-path">${escapeHtml(c.sub)}</div>` : ""}
-      <div class="tip-desc">${kindDesc(c.kind)}</div>
+      <div class="tip-desc">${escapeHtml(c.desc || kindDesc(c.kind))}</div>
     `;
           tooltipEl.classList.add("shown");
           moveTooltip(e);
@@ -4106,7 +5633,7 @@
               backend: "Node.js / Express on Bun.",
               service: "Backend business-logic service.",
               data: "Persistence — Postgres, attachments, migrations.",
-              external: "External API the system depends on.",
+              external: "External provider or operating-system service.",
               build: "Build / packaging / distribution surface.",
             }[k] || ""
           );
@@ -4127,11 +5654,35 @@
 
         // ── Flow list ───────────────────────────────────────────────
         const flowListEl = document.getElementById("flow-list");
+        const trackSelect = document.getElementById("track");
+        let activeTrack = "start";
+        trackSelect.innerHTML =
+          `<option value="all">All flows</option>` +
+          DATA.learningPaths
+            .map(
+              (path) =>
+                `<option value="${escapeHtml(path.id)}">${escapeHtml(path.name)}</option>`,
+            )
+            .join("");
+        trackSelect.value = activeTrack;
+        trackSelect.addEventListener("change", () => {
+          activeTrack = trackSelect.value;
+          renderFlowList(document.getElementById("search").value);
+        });
         function renderFlowList(filter = "") {
           flowListEl.innerHTML = "";
           const f = filter.trim().toLowerCase();
           const grouped = {};
-          DATA.flows.forEach((flow) => {
+          const track = DATA.learningPaths.find(
+            (path) => path.id === activeTrack,
+          );
+          document.getElementById("track-hint").textContent = track
+            ? track.description
+            : "Choose a learning path for a suggested reading order, or search all flows.";
+          const candidates = track
+            ? track.flows.map((id) => DATA.flows.find((flow) => flow.id === id))
+            : DATA.flows;
+          candidates.forEach((flow) => {
             const hay = (
               flow.name +
               " " +
@@ -4144,8 +5695,17 @@
                 .join(" ")
             ).toLowerCase();
             if (f && !hay.includes(f)) return;
-            (grouped[flow.category] ||= []).push(flow);
+            (grouped[track ? "Suggested order" : flow.category] ||= []).push(
+              flow,
+            );
           });
+          if (!Object.keys(grouped).length) {
+            const message = document.createElement("p");
+            message.className = "no-results";
+            message.textContent =
+              "No flows match. Try another search or learning path.";
+            flowListEl.appendChild(message);
+          }
           Object.entries(grouped).forEach(([cat, flows]) => {
             const h = document.createElement("div");
             h.className = "category";
@@ -4157,6 +5717,7 @@
               b.dataset.flow = flow.id;
               b.innerHTML = `<span>${escapeHtml(flow.name)}</span><span class="badge">${flow.steps.length}</span>`;
               b.addEventListener("click", () => selectFlow(flow.id));
+              b.setAttribute("aria-pressed", String(activeFlowId === flow.id));
               if (activeFlowId === flow.id) b.classList.add("active");
               flowListEl.appendChild(b);
             });
@@ -4177,6 +5738,9 @@
         let showAll = false;
         let playing = false;
         let playTimer = null;
+        const reducedMotion = window.matchMedia(
+          "(prefers-reduced-motion: reduce)",
+        );
         const PLAY_INTERVAL_MS = 1600;
         const TOKEN_TRAVEL_MS = 900;
 
@@ -4184,10 +5748,108 @@
         const tokenLayer = document.getElementById("token-layer");
         const emptyHint = document.getElementById("empty-hint");
         const diagram = document.getElementById("diagram");
+        const journey = document.getElementById("journey");
+        let viewMode = "journey";
+
+        function setView(mode) {
+          viewMode = mode;
+          diagram.toggleAttribute("hidden", mode !== "architecture");
+          journey.hidden = mode !== "journey";
+          document
+            .getElementById("view-journey")
+            .setAttribute("aria-pressed", String(mode === "journey"));
+          document
+            .getElementById("view-architecture")
+            .setAttribute("aria-pressed", String(mode === "architecture"));
+          document.getElementById("view-hint").textContent =
+            mode === "journey"
+              ? "Follow one handoff at a time. Select a card for details."
+              : "See where the flow sits in the full system. Scroll to explore.";
+          applyStepHighlight();
+        }
+        document
+          .getElementById("view-journey")
+          .addEventListener("click", () => setView("journey"));
+        document
+          .getElementById("view-architecture")
+          .addEventListener("click", () => setView("architecture"));
+
+        function docLinks(flow) {
+          return `<nav class="doc-links" aria-label="Related documentation">${(
+            flow.docs || []
+          )
+            .map(
+              (doc) =>
+                `<a href="${escapeHtml(doc.path)}">${escapeHtml(doc.label)}</a>`,
+            )
+            .join("")}</nav>`;
+        }
+        function nodeKindLabel(kind) {
+          return (
+            {
+              client: "App surface",
+              frontend: "User interface",
+              shared: "Shared contract",
+              backend: "API boundary",
+              service: "Business rules",
+              data: "Stored data",
+              external: "Provider or OS service",
+              build: "Desktop runtime",
+            }[kind] || kind
+          );
+        }
+        function renderJourney() {
+          journey.innerHTML = "";
+          if (!activeFlow) {
+            journey.innerHTML = `<div class="journey-intro"><h1>Explore Vision visually</h1><p>Choose a learning path or a flow. Journey shows the order; Architecture map shows the system.</p></div>`;
+            return;
+          }
+          const intro = document.createElement("div");
+          intro.className = "journey-intro";
+          intro.innerHTML =
+            `<h1>${escapeHtml(activeFlow.name)}</h1><p>${escapeHtml(activeFlow.summary)}</p>` +
+            (activeFlow.takeaway
+              ? `<p class="takeaway"><strong>Remember:</strong> ${escapeHtml(activeFlow.takeaway)}</p>`
+              : "") +
+            docLinks(activeFlow);
+          journey.appendChild(intro);
+          activeFlow.steps.forEach((step, i) => {
+            const from = byId[step.from];
+            const to = byId[step.to];
+            const card = document.createElement("button");
+            card.type = "button";
+            card.className = "journey-step";
+            card.dataset.step = String(i);
+            card.innerHTML =
+              `<span class="step-num">${i + 1}</span>` +
+              `<span class="journey-action">${escapeHtml(step.title || `${from.label} to ${to.label}`)}</span>` +
+              `<span class="journey-node" style="grid-column:2">${escapeHtml(from.label)}<small>${escapeHtml(nodeKindLabel(from.kind))}</small></span>` +
+              `<span class="journey-arrow" aria-label="sends to">→</span>` +
+              `<span class="journey-node">${escapeHtml(to.label)}<small>${escapeHtml(nodeKindLabel(to.kind))}</small></span>` +
+              `<span class="journey-note">${escapeHtml(step.note || step.payload)}</span>`;
+            card.addEventListener("click", () => {
+              stopPlay();
+              gotoStep(i);
+            });
+            journey.appendChild(card);
+          });
+        }
 
         function selectFlow(id) {
+          const flow = DATA.flows.find((f) => f.id === id);
+          if (!flow) return;
+          const track = DATA.learningPaths.find(
+            (path) => path.id === activeTrack,
+          );
+          if (track && !track.flows.includes(id)) {
+            activeTrack = "all";
+            trackSelect.value = activeTrack;
+            document.getElementById("search").value = "";
+            renderFlowList();
+          }
           activeFlowId = id;
-          activeFlow = DATA.flows.find((f) => f.id === id);
+          activeFlow = flow;
+          if (window.location.hash !== `#${id}`) window.location.hash = id;
           stepIndex = 0;
           showAll = false;
           stopPlay();
@@ -4197,11 +5859,14 @@
           // Update sidebar active
           document.querySelectorAll(".flow-btn").forEach((b) => {
             b.classList.toggle("active", b.dataset.flow === id);
+            b.setAttribute("aria-pressed", String(b.dataset.flow === id));
           });
 
           drawFlowEdges();
           markTouchedNodes();
           renderRight();
+          renderJourney();
+          document.querySelector("main.canvas").scrollTop = 0;
           applyStepHighlight();
         }
 
@@ -4218,12 +5883,22 @@
             const dx = p2.x - p1.x;
             const dy = p2.y - p1.y;
             const len = Math.hypot(dx, dy) || 1;
-            const offset = 10;
+            const priorHops = activeFlow.steps
+              .slice(0, i)
+              .filter(
+                (s) =>
+                  (s.from === step.from && s.to === step.to) ||
+                  (s.from === step.to && s.to === step.from),
+              ).length;
+            const offset = 16 + priorHops * 22;
             const nx = (-dy / len) * offset;
             const ny = (dx / len) * offset;
             const cx = (p1.x + p2.x) / 2 + nx;
             const cy = (p1.y + p2.y) / 2 + ny;
-            const d = `M ${p1.x},${p1.y} Q ${cx},${cy} ${p2.x},${p2.y}`;
+            const selfHop = step.from === step.to;
+            const d = selfHop
+              ? `M ${from.x + NODE_W - 12},${from.y} C ${from.x + NODE_W + 34},${from.y - 28} ${from.x + NODE_W + 34},${from.y + NODE_H + 28} ${from.x + NODE_W - 12},${from.y + NODE_H}`
+              : `M ${p1.x},${p1.y} Q ${cx},${cy} ${p2.x},${p2.y}`;
 
             const path = document.createElementNS(
               "http://www.w3.org/2000/svg",
@@ -4250,8 +5925,8 @@
               "circle",
             );
             circle.setAttribute("class", "step-badge-circle");
-            circle.setAttribute("cx", cx);
-            circle.setAttribute("cy", cy);
+            circle.setAttribute("cx", selfHop ? from.x + NODE_W + 22 : cx);
+            circle.setAttribute("cy", selfHop ? from.y + NODE_H / 2 : cy);
             circle.setAttribute("r", 10);
             badge.appendChild(circle);
 
@@ -4260,8 +5935,8 @@
               "text",
             );
             t.setAttribute("class", "step-badge-text");
-            t.setAttribute("x", cx);
-            t.setAttribute("y", cy + 0.5);
+            t.setAttribute("x", selfHop ? from.x + NODE_W + 22 : cx);
+            t.setAttribute("y", (selfHop ? from.y + NODE_H / 2 : cy) + 0.5);
             t.textContent = String(i + 1);
             badge.appendChild(t);
 
@@ -4338,6 +6013,17 @@
             else if (i === stepIndex) el.classList.add("active");
           });
 
+          journey.querySelectorAll(".journey-step").forEach((card, i) => {
+            card.classList.toggle("active", showAll || i === stepIndex);
+            card.classList.toggle("past", !showAll && i < stepIndex);
+            if (!showAll && i === stepIndex)
+              card.setAttribute("aria-current", "step");
+            else card.removeAttribute("aria-current");
+          });
+          document
+            .getElementById("btn-all")
+            .setAttribute("aria-pressed", String(showAll));
+
           // Progress
           const total = activeFlow.steps.length;
           document.getElementById("progress").textContent =
@@ -4349,15 +6035,27 @@
           const activeStepEl = document.querySelector(
             "#step-list .step.active",
           );
-          if (activeStepEl)
+          if (activeStepEl && !showAll)
             activeStepEl.scrollIntoView({
-              behavior: "smooth",
+              behavior: reducedMotion.matches ? "auto" : "smooth",
+              block: "nearest",
+            });
+          const activeCard = journey.querySelector('[aria-current="step"]');
+          if (activeCard && viewMode === "journey" && !showAll)
+            activeCard.scrollIntoView({
+              behavior: reducedMotion.matches ? "auto" : "smooth",
               block: "nearest",
             });
         }
 
         function animateToken(step) {
           tokenLayer.innerHTML = "";
+          if (
+            reducedMotion.matches ||
+            viewMode !== "architecture" ||
+            step.from === step.to
+          )
+            return;
           const from = byId[step.from];
           const to = byId[step.to];
           if (!from || !to) return;
@@ -4406,6 +6104,7 @@
           rh.innerHTML = `
       <h2 class="flow-name">${escapeHtml(activeFlow.name)}</h2>
       <p class="flow-summary">${escapeHtml(activeFlow.summary)}</p>
+      ${docLinks(activeFlow)}
     `;
           ctrls.style.display = "flex";
 
@@ -4418,19 +6117,28 @@
             const el = document.createElement("div");
             el.className = "step";
             el.innerHTML = `
-        <div class="step-head">
+        <button type="button" class="step-select" aria-label="${escapeHtml(`Step ${i + 1}: ${s.title || fromLabel + " to " + toLabel}`)}">
+        <span class="step-head">
           <span class="step-num">${i + 1}</span>
           <span>Step ${i + 1} of ${activeFlow.steps.length}</span>
-        </div>
-        <div class="step-route">
+        </span>
+        ${s.title ? `<span class="step-title">${escapeHtml(s.title)}</span>` : ""}
+        <span class="step-route">
           <span class="endpoint">${escapeHtml(fromLabel)}</span>
           <span class="arrow-glyph">→</span>
           <span class="endpoint">${escapeHtml(toLabel)}</span>
-        </div>
-        ${s.payload ? `<div class="step-payload">${escapeHtml(s.payload)}</div>` : ""}
-        ${s.annotation ? `<div class="step-annotation">${escapeHtml(s.annotation)}</div>` : ""}
+        </span>
+        ${s.note ? `<span class="step-annotation">${escapeHtml(s.note)}</span>` : ""}
+        </button>
+        <details><summary>Payload and source details</summary>
+          <div class="step-payload">${escapeHtml(s.payload)}</div>
+          <div class="step-annotation">${escapeHtml(s.annotation)}</div>
+        </details>
       `;
-            el.addEventListener("click", () => gotoStep(i));
+            el.querySelector(".step-select").addEventListener("click", () => {
+              stopPlay();
+              gotoStep(i);
+            });
             list.appendChild(el);
           });
         }
@@ -4465,6 +6173,9 @@
           if (!activeFlow) return;
           playing = true;
           document.getElementById("btn-play").textContent = "❚❚";
+          document
+            .getElementById("btn-play")
+            .setAttribute("aria-label", "Pause");
           if (stepIndex >= activeFlow.steps.length - 1) stepIndex = -1;
           playTimer = setInterval(() => {
             if (stepIndex >= activeFlow.steps.length - 1) {
@@ -4479,6 +6190,9 @@
         function stopPlay() {
           playing = false;
           document.getElementById("btn-play").textContent = "▶";
+          document
+            .getElementById("btn-play")
+            .setAttribute("aria-label", "Play");
           if (playTimer) {
             clearInterval(playTimer);
             playTimer = null;
@@ -4487,6 +6201,12 @@
         function clearFlow() {
           activeFlowId = null;
           activeFlow = null;
+          if (window.location.hash)
+            window.history.replaceState(
+              null,
+              "",
+              window.location.pathname + window.location.search,
+            );
           stepIndex = -1;
           showAll = false;
           stopPlay();
@@ -4497,10 +6217,12 @@
             g.classList.remove("touched", "active"),
           );
           emptyHint.style.display = "";
-          document
-            .querySelectorAll(".flow-btn")
-            .forEach((b) => b.classList.remove("active"));
+          document.querySelectorAll(".flow-btn").forEach((b) => {
+            b.classList.remove("active");
+            b.setAttribute("aria-pressed", "false");
+          });
           renderRight();
+          renderJourney();
         }
 
         document.getElementById("btn-next").addEventListener("click", next);
@@ -4515,7 +6237,13 @@
 
         // Keyboard
         window.addEventListener("keydown", (e) => {
-          if (e.target.tagName === "INPUT") return;
+          if (
+            e.defaultPrevented ||
+            e.target.closest?.(
+              "input, select, textarea, button, a, summary, [contenteditable], [role='button']",
+            )
+          )
+            return;
           if (e.key === "ArrowRight") {
             e.preventDefault();
             next();
@@ -4541,8 +6269,23 @@
         renderFlowList();
         renderRight();
 
-        // Auto-select the first flow so visitors land on something interesting
-        selectFlow("create-tx");
+        // A note can link directly to a flow; browser back/forward retains that selection.
+        function selectFromHash() {
+          const id = window.location.hash.slice(1);
+          if (!id) {
+            clearFlow();
+            return;
+          }
+          if (id !== activeFlowId && DATA.flows.some((flow) => flow.id === id))
+            selectFlow(id);
+        }
+        window.addEventListener("hashchange", selectFromHash);
+        const initialId = window.location.hash.slice(1);
+        selectFlow(
+          DATA.flows.some((flow) => flow.id === initialId)
+            ? initialId
+            : "api-request",
+        );
       })();
     </script>
   </body>

@@ -2,8 +2,8 @@
 title: Guides Index
 type: guides-index
 status: active
-date: 2026-08-30
-updated: 2026-09-08
+date: 2026-10-03
+updated: 2026-10-03
 tags: [guides, index, how-to]
 description: Setup, development, deployment, and contribution guides for the Vision project
 aliases: [guides, how-to, getting started]
@@ -26,6 +26,8 @@ SORT title ASC
 ## By Category
 
 ### Getting Started
+
+- [[docs/guides/visual-learning|Understand Vision Visually]] - Conceptual diagrams and guided paths through the interactive flows
 
 - [[docs/guides/setup\|Setup Guide]] - Local development environment setup
 - [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]] - Bundled PostgreSQL 18, Electron lifecycle, diagnostics, backup, and restore

@@ -2,8 +2,8 @@
 title: AI Data Access Policy
 type: security
 status: active
-date: 2026-09-14
-updated: 2026-09-25
+date: 2026-10-03
+updated: 2026-10-03
 tags:
   [
     security,
@@ -37,6 +37,9 @@ related_code:
 ---
 
 # AI Data Access Policy
+
+> [!tip] Compare AI disclosure boundaries
+> [Open the journey](../flow-visualizer.html#cloud-catalog-analysis) or [the companion flow](../flow-visualizer.html#cloud-evidence-disclosure). See [[docs/guides/visual-learning|Understand Vision Visually]] for the reading paths and conceptual diagrams.
 
 Security policies governing the AI chat feature introduced by [[docs/adr/024-local-llm-chat|ADR-024]]. The feature gives a local LLM (Ollama) indirect access to financial data through a bounded tool registry. This document defines the constraints.
 

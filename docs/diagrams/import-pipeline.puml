@@ -1,124 +1,63 @@
-@startuml Import Pipeline - CSV Processing
-title Import Pipeline - CSV Processing
+@startuml import-pipeline
+title CSV import: stage, review when needed, then commit
 
 !theme plain
-skinparam linetype ortho
-skinparam nodesep 35
-skinparam ranksep 50
+skinparam activityBackgroundColor #F5F7FA
+skinparam activityBorderColor #49586A
+skinparam activityDiamondBackgroundColor #E8EDF4
 
-actor "User" as User
+start
+:Upload CSV and select bank or custom mapping;
 
-package "Frontend" {
-  class ImportPage {
-    +Bank Selector
-    +CSV Upload
-    +Preview
-    +Progress Display
-    +Results Summary
-  }
-
-  class ImportForm {
-    +file: File
-    +bankName: string
-    +customConfig?: CSVConfig
-  }
+partition "importPipeline: prepare" {
+  :createBatch()\nRecord source file and adapter;
+  :stageBatch()\nParse with bank or generic adapter,\nstore import_staging_rows;
+  :validateBatch()\nValidate required fields, assign source hash\nand versioned occurrence fingerprint;
+  note right
+    Invalid rows retain error details.
+    Repeated equal rows have distinct occurrences.
+  end note
+  :matchBatch()\nPatterns, then exact/fuzzy, then recipient upsert,\nrecord match source and similarity;
+  if (Any pattern, fuzzy, new\nor unresolved recipient?) then (yes)
+    :Set batch to awaiting_review;
+  else (no)
+    :Continue directly to commit;
+  endif
 }
 
-package "Backend - Import Services" {
-  class ImportService {
-    +importCSV(filePath, bankName, config): ImportResult
+if (Batch awaiting_review?) then (yes)
+  partition "ImportReviewPage: user decision" {
+    :Inspect grouped rows and match provenance;
+    :POST row recipient or category override\nwhen a correction is needed;
+    :POST /api/import/batches/:id/commit;
   }
+else (no)
+endif
 
-  class RawTransactionImportService {
-    +importRawTransactions(bankName, data): Promise<RawImportResult>
-    +deduplicate(data): Promise<DedupeResult>
-  }
-
-  class StreamingImportService {
-    +streamImport(stream, handler): Promise<void>
-    +processBatch(items): Promise<void>
-  }
-
-  class DataImportService {
-    +importRecipientsCSV(path, opts): Promise<ImportResult>
-    +importCategoriesCSV(path, opts): Promise<ImportResult>
-  }
-
-  class BankAdapters {
-    +createAdapter(bankName, config): BankParser
-  }
-
-  class CSVParser {
-    +parse(filePath): TransactionData[]
-  }
-
-  class DeduplicationService {
-    +isDuplicateByFields(date, amount, recipient, memo): boolean
-  }
-
-  class RecipientRepository {
-    +getOrCreate(data): Promise<{recipient, created}>
-  }
+partition "commitImport() / commitBatch()" {
+  :Apply overrides and mark unresolved rows as errors;
+  :Resolve canonical account IDs;
+  :Commit at most 1,000 rows per transaction,\ncheck fingerprints and legacy field counts,\nwrite canonical transactions and provenance;
+  note right
+    Row savepoints isolate insert errors.
+    Fingerprint uniqueness handles import races.
+    Staging outcomes retain committed,
+    duplicate and error rows for audit.
+    Earlier committed chunks survive a later failure.
+  end note
+  :Checkpoint imported / duplicate / error counts;
+  :autoLinkTransactions()\nMatch durable rows to planned payments;
+  :Mark batch complete, reconcileTransfers()\nFind transfer pairs across the full ledger;
+  :Invalidate forecast cache when rows were imported,\nscheduleMaterializedViewRefresh();
 }
 
-package "Database Tables" {
-  class RawTransactionsTable {
-    +id: serial PK
-    +bank_name: text
-    +deduplication_hash: varchar(64)
-    +raw_data: jsonb
-    +created_at: timestamptz
-  }
+:Return import summary,\nderived views refresh asynchronously;
+stop
 
-  class TransactionTable {
-    +Final transaction storage
-  }
-
-  class RecipientTable {
-    +Recipient storage
-  }
-}
-
-package "Import Flow" {
-  User --> ImportPage : Upload CSV
-  ImportPage --> ImportForm : Select Bank
-  ImportForm --> Backend : POST /api/import/csv
-
-  Backend --> BankAdapters : bankName
-  BankAdapters --> CSVParser : Parse CSV
-  CSVParser --> DeduplicationService : Check Duplicates
-  DeduplicationService --> RawTransactionsTable : Store Raw First
-
-  RawTransactionsTable --> DeduplicationService : Mark Duplicates
-
-  DeduplicationService --> ImportService : Insert New
-  ImportService --> RecipientRepository : getOrCreate(name)
-  ImportService --> TransactionTable : INSERT transactions
-}
-
-note right of ImportService
-  Phase 1: Dedup + Recipient Resolution (20 concurrent)
-  Phase 2: Batch Insert (250 rows per batch)
-  Phase 3: Raw storage for audit/re-import
-end note
-
-note right of BankAdapters
-  Supported Banks:
-  - Belfius, Revolut, KBC
-  - ING, BNP Paribas Fortis
-  - SABB, Wise, Vision
-  - Custom: User-defined column mapping
-end note
-
-note right of RawTransactionsTable
-  Bank-specific raw tables:
-  - belfius_raw_transactions
-  - revolut_raw_transactions
-  - kbc_raw_transactions
-  - sabb_raw_transactions
-  - wise_raw_transactions
-  - vision_raw_transactions
-  (Bank-specific raw storage with SHA-256 deduplication)
-end note
+legend bottom
+  Sources: routes/importRoutes.js; services/importPipeline/index.js;
+  stage.js; validate.js; match.js; commit.js; services/importIdentity.js.
+  Recipient/category corrections use POST row override endpoints.
+endlegend
 
 @enduml

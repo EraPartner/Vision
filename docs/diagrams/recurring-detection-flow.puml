@@ -1,82 +1,58 @@
-@startuml Recurring Transaction Detection Flow
-title Recurring Transaction Detection Flow
+@startuml recurring-detection-flow
+title Recurring patterns: read suggestions, then choose Track
 
 !theme plain
-skinparam linetype ortho
-skinparam nodesep 35
-skinparam ranksep 50
+hide footbox
+skinparam participantPadding 15
+skinparam sequenceMessageAlign center
 
-actor "User" as User
+actor User
+participant "RecurringDetectionPanel\nuseRecurringPatterns" as Panel
+participant "Express routes\ninfo/statistics.js + plannedTransactions.js" as Routes
+participant "recurringDetectionService" as Detection
+participant "plannedTransactionService" as Planned
+database PostgreSQL as DB
 
-package "Frontend" {
-  class PlannedPaymentsPage
-  class usePlannedPayments
-}
+group 1. Read suggestions
+  User -> Panel : Open planned payments
+  Panel -> Routes : GET /api/info/recurring-patterns
+  Routes -> Detection : detectRecurringPatterns()
+  opt Three-minute cache expired or empty
+    Detection -> DB : Read active transactions from last three years\nResolve recipient aliases and effective categories
+    DB --> Detection : Transaction history
+    Detection -> DB : Read active planned recipient IDs\nwhen planned_transactions exists
+    DB --> Detection : Already tracked recipients
+    Detection -> Detection : Group by recipient + income/expense\nDetect cadence and recent amount changes
+  end
+  Detection --> Routes : Patterns, predicted next dates,\nconfidence and isAlreadyPlanned
+  Routes --> Panel : Suggestions
+  Panel --> User : Show untracked, undismissed patterns
+end
 
-package "Backend Services" {
-  class RecurringDetectionService {
-    +detectRecurring(): Promise<RecurringPattern[]>
-    +detectRecurringPatterns(): Promise<RecurringPattern[]>
-  }
-
-  class TransactionRepository {
-    +getAll(opts): Promise<Transaction[]>
-  }
-
-  class PlannedTransactionRepository {
-    +create(data): Promise<PlannedTransaction>
-    +update(id, data): Promise<PlannedTransaction>
-  }
-}
-
-package "Detection Logic" as Logic {
-  class PatternAnalyzer {
-    +analyzeAmount(transactions): number
-    +analyzeInterval(transactions): interval
-    +analyzeRecipient(transactions): recipient
-  }
-
-  class RecurrenceService {
-    +generateOccurrences(start, pattern, end): Date[]
-    +getNextOccurrence(date, pattern): Date
-    +calculateNextDate(date, pattern): Date
-  }
-}
-
-database "PostgreSQL" as DB {
-  table "transactions"
-  table "planned_transactions"
-}
-
-package "Detection Flow" {
-  User --> PlannedPaymentsPage : "Detect Recurring"
-  PlannedPaymentsPage --> usePlannedPayments : detectRecurring()
-  usePlannedPayments --> RecurringDetectionService : detectRecurring()
-
-  RecurringDetectionService --> TransactionRepository : getLastNTransactions(n=1000)
-  TransactionRepository --> DB : SELECT
-  DB --> TransactionRepository : transactions
-
-  RecurringDetectionService --> Logic : group by (recipient, amount)
-  Logic --> RecurringDetectionService : candidate patterns
-
-  RecurringDetectionService --> PlannedTransactionRepository : create planned
-  PlannedTransactionRepository --> DB : INSERT
-  DB --> PlannedTransactionRepository : created
-  PlannedTransactionRepository --> PlannedPaymentsPage : created planned transactions
-}
-
-note right of Logic
-  Detection criteria:
-  - Same recipient, same amount
-  - Regular interval (25% tolerance)
-  - Min 3 occurrences, Consistency >= 60%
+note over Detection
+  Minimum three occurrences. Known intervals require
+  at least 60% consistency; custom intervals use a
+  coefficient of variation below 25% and at least five days.
+  Detection reads data and returns suggestions.
 end note
 
-note right of RecurrenceService
-  Supported intervals:
-  - weekly, biweekly, monthly
-  - quarterly, yearly, custom
-end note
+group 2. User chooses to track a pattern
+  User -> Panel : Track
+  Panel -> Routes : POST /api/planned-transactions\nDate, signed amount, account, recipient, recurrence
+  Routes -> Routes : Validate planned-transaction body
+  Routes -> Planned : create(data)
+  Planned -> DB : Validate account and insert plan\nin one write transaction
+  DB --> Planned : Created planned transaction
+  Planned --> Routes : Hydrated plan
+  Routes --> Panel : 201 Created
+  Panel -> Panel : Invalidate planned-payment queries
+  Panel --> User : Show tracked plan
+end
+
+legend bottom
+  Sources: features/planned/RecurringDetectionPanel.tsx;
+  routes/info/statistics.js; services/recurringDetectionService.js;
+  routes/plannedTransactions.js; services/plannedTransactionService.js.
+endlegend
 
 @enduml
