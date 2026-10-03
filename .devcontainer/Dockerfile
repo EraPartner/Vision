@@ -115,9 +115,9 @@ RUN printf 'export PATH="/usr/local/share/npm-global/bin:/opt/python/bin:/usr/lo
 # the real binary is a per-arch optional dep that postinstall copies to
 # bin/claude.exe, so we hash the PAYLOAD and restore it if postinstall was blocked
 # (npm >= 12 leaves a 500-byte stub), then re-check PATH. Fail-closed.
-ARG CLAUDE_CODE_VERSION=2.1.280
-ARG CLAUDE_CODE_SHA256_ARM64=92f2b4fd05d0bdcf7b9a0d4e0ecef4a1e4b368b290cd8fd07cff9a50013f45a2
-ARG CLAUDE_CODE_SHA256_AMD64=1e08503dbdf3c2cb0d706d32f3408277388d1c76ef108673e8fe42c1b322925b
+ARG CLAUDE_CODE_VERSION=2.1.287
+ARG CLAUDE_CODE_SHA256_ARM64=e4daf793d1e74fb0d9874dd09e98690bbfd7be515f78a87fd05b9e2b4bb33b03
+ARG CLAUDE_CODE_SHA256_AMD64=3920489a5109cff5786a1a392c25277408ff22bc796d5edb9c16a60e5a1718f0
 RUN set -eux; \
     npm install -g --no-fund --no-audit "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"; \
     case "$(dpkg --print-architecture)" in arm64) na=linux-arm64; want="${CLAUDE_CODE_SHA256_ARM64}" ;; amd64) na=linux-x64; want="${CLAUDE_CODE_SHA256_AMD64}" ;; *) exit 1 ;; esac; \
@@ -139,9 +139,9 @@ RUN set -eux; \
     claude --version
 
 # --- OpenAI Codex CLI (native payload hash-pinned per architecture) ----------
-ARG CODEX_VERSION=0.156.1
-ARG CODEX_SHA256_ARM64=876fe6bb5f7af7d1e4eda629be0d8ba042f6f24a7bb07475f6a995849f50c068
-ARG CODEX_SHA256_AMD64=0b2e9301d6100dddda3b9d5c80ebaeaa3a2f1962388f2f36f6b96a9f08b1f33f
+ARG CODEX_VERSION=0.160.0
+ARG CODEX_SHA256_ARM64=50b06603bdcdac39b714f5c3e68583c002b8ad8779ebfdaaf4932ff016b379c0
+ARG CODEX_SHA256_AMD64=12eb3e81114588aca3b7998f4f19e8997b056aca08e57a7ca7c8a3ec8c652aad
 RUN set -eux; \
     npm install -g --no-fund --no-audit "@openai/codex@${CODEX_VERSION}"; \
     case "$(dpkg --print-architecture)" in arm64) target=aarch64-unknown-linux-musl; want="${CODEX_SHA256_ARM64}" ;; amd64) target=x86_64-unknown-linux-musl; want="${CODEX_SHA256_AMD64}" ;; *) exit 1 ;; esac; \
@@ -155,7 +155,7 @@ RUN set -eux; \
 
 # safe-chain is baked at a reviewed version before the npm prefix becomes
 # dev-writable. Its transitive dependency closure is not hash-pinned.
-ARG SAFE_CHAIN_VERSION=1.5.20
+ARG SAFE_CHAIN_VERSION=1.5.24
 RUN npm install -g --no-fund --no-audit "@aikidosec/safe-chain@${SAFE_CHAIN_VERSION}" \
   && command -v safe-chain
 # Version output is diagnostic only; install/presence failures above stay fatal.
@@ -167,6 +167,16 @@ RUN install -d -o dev -g dev -m 0755 /home/dev/.npm-global
 ENV NPM_CONFIG_PREFIX=/home/dev/.npm-global
 
 # Bake privileged scripts into the image (root-owned, source-only repo copies).
+# Claude policy bundle; exact formatting opt-ins come from reviewed profiles.
+ARG CLAUDE_POLICY_PROJECT=Vision
+ARG CLAUDE_POLICY_ROOT=/workspaces/Vision
+COPY claude-guard.mjs /usr/local/share/claude-guard/guard.mjs
+COPY claude-post-edit.mjs /usr/local/share/claude-guard/hooks/post-edit.mjs
+COPY claude-explicit-format.sh /usr/local/share/claude-guard/managed/explicit-format
+COPY claude-policy-verify.sh /usr/local/share/claude-guard/verify-policy.sh
+COPY claude-policy-install.sh /usr/local/share/claude-guard/install-policy.sh
+RUN bash /usr/local/share/claude-guard/install-policy.sh "$CLAUDE_POLICY_PROJECT" "$CLAUDE_POLICY_ROOT"
+
 COPY init-firewall.sh /usr/local/sbin/egress-firewall
 COPY perms-fix.sh     /usr/local/sbin/vision-perms-fix
 COPY entrypoint.sh    /usr/local/sbin/vision-entrypoint

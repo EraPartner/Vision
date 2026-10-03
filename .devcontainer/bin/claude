@@ -45,17 +45,22 @@ LIB="$DC/launcher-common.sh"
 [[ -f "$LIB" ]] || { echo "claude (vision): missing $LIB (run LockBox/sync.sh)." >&2; exit 1; }
 # shellcheck source=/dev/null
 source "$LIB"
+CID="$NAME"
 if [[ "$AGENT" == claude ]]; then sandbox_stage_claude_config vision; fi
 # Lock host-executed git paths (.git + relocated core.hooksPath, e.g. .githooks)
 # :ro over the RW workspace — an in-container agent must not plant a hook the HOST
 # git runs on commit/push. Populates GIT_RO_MOUNTS; see launcher-common.sh.
 sandbox_git_ro_mounts "$PROJECT_ROOT" /workspaces/Vision
+sandbox_devcontainer_ro_mounts "$PROJECT_ROOT" /workspaces/Vision
+sandbox_ro_mount_policy_id
 
 # --- 2) Build (cached) -------------------------------------------------------
 container build -t "$IMAGE" "$DC" >/dev/null
 # Free the ~2GB build-shim RAM now the image is built; it auto-restarts on the next
 # `container build`. Set SANDBOX_KEEP_BUILDER=1 to leave it up (rapid rebuilds).
 [[ -n "${SANDBOX_KEEP_BUILDER:-}" ]] || container builder stop >/dev/null 2>&1 || true
+sandbox_image_policy_id "$IMAGE"
+LAUNCH_POLICY="$RO_MOUNT_POLICY_ID:$IMAGE_POLICY_ID:sibling-edit-v1"
 
 # --- 2b) Container-local dependency trees ------------------------------------
 # `node_modules/` and `./venv` hold PLATFORM-SPECIFIC artifacts: prebuilt native
@@ -94,8 +99,6 @@ if [[ "$AGENT" == claude ]]; then
   AGENT_MOUNTS=(
     -v vision-claude:/home/dev/.claude
     -v "$HOME/.claude-sandbox/stage/vision:/home/dev/.claude-stage:ro"
-    -v "$HOME/.claude/hooks/guard.mjs:/usr/local/share/claude-guard/guard.mjs:ro"
-    -v "$HOME/.claude/hooks/managed-settings.json:/etc/claude-code/managed-settings.json:ro"
     -v "$HOME/.claude/projects/-Users-computer-Code-Vision/memory:/home/dev/.claude-memory-seed:ro"
   )
 else
@@ -105,9 +108,17 @@ fi
 if [[ "${VISION_REBUILD:-0}" == 1 ]]; then
   container rm -f "$NAME" >/dev/null 2>&1 || true
 fi
-if container ls -q 2>/dev/null | grep -qx "$NAME"; then
+RUNNING_NAMES="$(container ls -q)" || { echo "launcher: cannot inspect running containers." >&2; exit 1; }
+ALL_NAMES="$(container ls -aq)" || { echo "launcher: cannot inspect existing containers." >&2; exit 1; }
+if grep -qx "$NAME" <<< "$ALL_NAMES"; then
+sandbox_require_container_policy "$NAME" "$AGENT" "$LAUNCH_POLICY" || {
+  echo "launcher: recreate with VISION_REBUILD=1 $0" >&2; exit 1;
+}
+fi
+sandbox_install_stop_trap "$CID" "${VISION_STOP_ON_EXIT:-1}"
+if grep -qx "$NAME" <<< "$RUNNING_NAMES"; then
   :
-elif container ls -aq 2>/dev/null | grep -qx "$NAME"; then
+elif grep -qx "$NAME" <<< "$ALL_NAMES"; then
   container start "$NAME" >/dev/null
 else
   container run -d --name "$NAME" \
@@ -120,6 +131,7 @@ else
     -p 127.0.0.1:8080:8080 -p 127.0.0.1:3002:3002 \
     -e DEVCONTAINER=true \
     -e SANDBOX_AGENT="$AGENT" \
+    -e SANDBOX_LAUNCH_POLICY="$LAUNCH_POLICY" \
     -e PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
     -e PUPPETEER_SKIP_DOWNLOAD=true \
     -e DATABASE_URL=postgresql://ftm_user:localdev@127.0.0.1:5432/financial_transactions \
@@ -135,7 +147,6 @@ else
     -e ALEMBIC_BIN=/workspaces/Vision/venv/bin/alembic \
     -e DISABLE_TELEMETRY=1 \
     -e DISABLE_ERROR_REPORTING=1 \
-    -e BASH_ENV=/home/dev/.safe-chain/scripts/init-posix.sh \
     -e NODE_USE_ENV_PROXY=1 \
     -e HTTP_PROXY=http://127.0.0.1:3128 \
     -e HTTPS_PROXY=http://127.0.0.1:3128 \
@@ -146,12 +157,36 @@ else
     -v "$PROJECT_ROOT:/workspaces/Vision" \
     ${DEP_MOUNTS[@]+"${DEP_MOUNTS[@]}"} \
     ${GIT_RO_MOUNTS[@]+"${GIT_RO_MOUNTS[@]}"} \
-    -v "$DC:/workspaces/Vision/.devcontainer:ro" \
+    ${DEVCONTAINER_RO_MOUNTS[@]+"${DEVCONTAINER_RO_MOUNTS[@]}"} \
     ${AGENT_MOUNTS[@]+"${AGENT_MOUNTS[@]}"} \
     -v vision-pgdata:/var/lib/postgresql \
     "$IMAGE" >/dev/null
 fi
-CID="$NAME"
+sandbox_require_container_policy "$NAME" "$AGENT" "$LAUNCH_POLICY" || {
+  echo "launcher: recreate with VISION_REBUILD=1 $0" >&2; exit 1;
+}
+
+
+# Verify root-owned tool pins before lifecycle scripts or credentials -----------------------
+# A missing checker is NOT a soft warning: the current Dockerfile always bakes
+# vision-verify-pins, so its absence means a stale pre-pin image is running
+# UNVERIFIED. Clear shell startup and exclude private-home tools from PATH.
+VERIFY_PATH=/usr/local/share/npm-global/bin:/opt/python/bin:/usr/local/bin:/usr/bin:/bin
+if ! container exec --user "$SVC_USER" -e BASH_ENV= -e PATH="$VERIFY_PATH" "$NAME" /usr/bin/test -x /usr/local/bin/vision-verify-pins; then
+  echo "claude (vision): ABORT — vision-verify-pins is not baked into this image (stale pre-pin image)." >&2
+  echo "  The launch-integrity gate is mandatory; rebuild to bake it in: VISION_REBUILD=1 $0" >&2
+  exit 1
+fi
+if ! container exec --user "$SVC_USER" -e BASH_ENV= -e PATH="$VERIFY_PATH" "$NAME" /usr/local/bin/vision-verify-pins --quiet; then
+  echo "claude (vision): ABORT — binary fingerprint drift (see above)." >&2
+  echo "  If you intentionally upgraded a tool, rebuild to re-pin: VISION_REBUILD=1 $0" >&2
+  exit 1
+fi
+
+sandbox_require_claude_policy "$NAME" "$SVC_USER" "$DC" Vision /workspaces/Vision || {
+  echo "launcher: Shared agent policy bundle is missing or stale; rebuild the image and recreate this container." >&2
+  exit 1
+}
 
 # Wait for the egress proxy (entrypoint: perms → firewall → Postgres → squid).
 container exec "$NAME" bash -lc 'for i in $(seq 1 40); do (exec 3<>/dev/tcp/127.0.0.1/3128) 2>/dev/null && break; sleep 1; done' || true
@@ -161,7 +196,7 @@ container exec "$NAME" bash -lc 'for i in $(seq 1 40); do (exec 3<>/dev/tcp/127.
 sandbox_warn_stale_allowlist "$NAME" "$DC/allowlist.txt" "VISION_REBUILD=1 $0"
 
 # --- 4) Replay lifecycle as dev (post-create once, post-start every start) ----
-container exec --user "$SVC_USER" "$NAME" bash -lc '
+container exec --user "$SVC_USER" -e BASH_ENV=/home/dev/.safe-chain/scripts/init-posix.sh "$NAME" bash -lc '
   set -e
   cd /workspaces/Vision
   if [[ ! -f /home/dev/.postcreate-done ]]; then
@@ -171,43 +206,21 @@ container exec --user "$SVC_USER" "$NAME" bash -lc '
   bash .devcontainer/post-start.sh'
 
 # --- 5) Forward the Claude OAuth token from the macOS Keychain at exec time ---
-EXEC_ENV=()
+EXEC_ENV=(-e BASH_ENV=/home/dev/.safe-chain/scripts/init-posix.sh)
 if [[ "$AGENT" == claude ]]; then sandbox_forward_llm_creds vision-claude-code-token; fi
 
-# --- 6) Launch-integrity gate (mandatory; fail closed) -----------------------
-# A missing checker is NOT a soft warning: the current Dockerfile always bakes
-# vision-verify-pins, so its absence means a stale pre-pin image is running
-# UNVERIFIED. Hard-abort and tell the operator to rebuild (matches bin/dev).
-if ! container exec --user "$SVC_USER" "$NAME" bash -lc 'command -v vision-verify-pins >/dev/null 2>&1'; then
-  echo "claude (vision): ABORT — vision-verify-pins is not baked into this image (stale pre-pin image)." >&2
-  echo "  The launch-integrity gate is mandatory; rebuild to bake it in: VISION_REBUILD=1 $0" >&2
-  exit 1
-fi
-if ! container exec --user "$SVC_USER" -e BASH_ENV= "$NAME" vision-verify-pins --quiet; then
-  echo "claude (vision): ABORT — binary fingerprint drift (see above)." >&2
-  echo "  If you intentionally upgraded a tool, rebuild to re-pin: VISION_REBUILD=1 $0" >&2
-  exit 1
-fi
 
-# --- 7) On-exit hooks: config-sync push (OPT-IN) + power-down ------------------
-# Pushing container config back to the host is a code-exec persistence channel (a
-# prompt-injected agent could push hooks/plugins the host Claude later runs). The
-# push path is sanitized AND this is opt-in: enable per session with VISION_AUTOSYNC=1.
-# Power-down: stop the VM when your session ends so it stops pinning its 4 GB — a
-# container you start cleans up after itself. Set VISION_STOP_ON_EXIT=0 to keep it
-# WARM for instant reuse across sessions.
-if [[ "$AGENT" == claude ]]; then AUTOSYNC="${VISION_AUTOSYNC:-0}"; else AUTOSYNC=0; fi
-sandbox_install_autosync_trap vision "$CID" "$AUTOSYNC" "${VISION_STOP_ON_EXIT:-1}"
+# --- 7) Stop the detached container on exit ----------------------------------
 
 # --- 8) Open an interactive claude session -----------------------------------
-TTY_FLAGS=()
-[[ -t 0 && -t 1 ]] && TTY_FLAGS=(-i -t)
+TTY_FLAGS=(-i)
+[[ -t 0 && -t 1 ]] && TTY_FLAGS+=(-t)
 if [[ "$AGENT" == codex ]] && ! container exec --user "$SVC_USER" "$NAME" codex login status >/dev/null 2>&1; then
   if [[ -n "${OPENAI_API_KEY:-}" ]]; then
     container exec -i --user "$SVC_USER" -e OPENAI_API_KEY "$NAME" bash -c 'printenv OPENAI_API_KEY | codex login --with-api-key'
   elif [[ -n "${CODEX_ACCESS_TOKEN:-}" ]]; then
     container exec -i --user "$SVC_USER" -e CODEX_ACCESS_TOKEN "$NAME" bash -c 'printenv CODEX_ACCESS_TOKEN | codex login --with-access-token'
-  elif (( ${#TTY_FLAGS[@]} > 0 )); then
+  elif [[ -t 0 && -t 1 ]]; then
     echo "codex (vision): no cached login; starting ChatGPT device-code login." >&2
     container exec -i -t --user "$SVC_USER" "$NAME" codex login --device-auth
   else
@@ -224,7 +237,7 @@ _rc=$?
 # (post-start.sh), so a headless / prompt-injected run's memory writes are wiped.
 # Only an interactive operator session's edits — layered on the clean host seed —
 # are pushed back (additive tar, mirroring Brain's bin/agent). (F10/F27)
-if [[ "$AGENT" == claude && ${#TTY_FLAGS[@]} -gt 0 ]]; then
+if [[ "$AGENT" == claude && -t 0 && -t 1 ]]; then
   host_mem="$HOME/.claude/projects/-Users-computer-Code-Vision/memory"
   if mkdir -p "$host_mem" 2>/dev/null; then
     if container exec --user "$SVC_USER" "$NAME" \

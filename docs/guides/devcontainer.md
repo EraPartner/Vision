@@ -2,8 +2,8 @@
 title: Devcontainer Guide
 type: guide
 status: active
-date: 2026-09-27
-updated: 2026-09-27
+date: 2026-10-03
+updated: 2026-10-03
 tags:
   [
     guide,
@@ -21,6 +21,21 @@ aliases:
 ---
 
 # Devcontainer Guide
+
+Container reuse checks the creation-time provider, image descriptor and read-only
+mount policy. A changed policy stops the launch before project lifecycle scripts
+or the agent run. Recreate with `VISION_REBUILD=1` and the selected provider
+launcher; private named volumes retain login and configuration. The image check
+hashes the full inspected descriptor conservatively, so descriptor metadata
+changes can also require recreation. Host metadata is validated before a stopped
+container starts. Cleanup applies after selecting a validated container or beginning
+creation; failed host preflight preserves existing sessions.
+
+Claude also verifies the complete root-owned policy bundle against current host
+source before lifecycle scripts or credential handoff. Its command guard and
+post-edit monitor use the shared reviewed policy, with automatic formatting only
+at approved roots. User hook mounts are unnecessary. Rebuild after policy changes;
+a stale or writable dependency stops startup.
 
 The Vision devcontainer provides a hardened, self-contained development environment designed for running Claude Code with `--dangerously-skip-permissions`. It runs the entire stack — PostgreSQL 18, backend, and frontend — natively inside one container, with no nested containers.
 
@@ -83,7 +98,7 @@ PostgreSQL major version (18) intentionally matches production so schema behavio
 
    The first run does a `container build` of the hardened image, then `container run -d --name vision-dev …` and replays the lifecycle scripts as `dev`. The build takes a few minutes (PostgreSQL apt install + bun install). Subsequent launches reuse the running container or `container start` a stopped one, so they are fast.
 
-   On launch the wrapper stages a sanitized copy of your host `~/.claude`, forwards the Keychain token into the container, runs `post-create.sh` once (Postgres cluster init, `ftm_user` role + `financial_transactions` database, Python venv, `bun install`) and `post-start.sh` on every start.
+   On launch the wrapper stages a sanitized copy of your host `~/.claude`, verifies the provider and image, then runs the root-owned `/usr/local/bin/vision-verify-pins` with cleared `BASH_ENV` and fixed root-tool `PATH`. It runs `post-create.sh` once (Postgres cluster init, `ftm_user` role + `financial_transactions` database, Python venv, `bun install`) and `post-start.sh` on every start, then forwards the Keychain token into the agent process.
 
 3. **Start the app and a Claude session.** `vision-claude` drops you straight into Claude. To run the dev stack, open a shell in the container:
 
@@ -166,20 +181,16 @@ variables. Setup does not create or update a repository `.env`; because the
 workspace is bind-mounted, doing so would leak container defaults into host-side
 commands. Host and container may therefore keep independent environment setup.
 
-## Claude config sync (host ↔ container)
+## Claude configuration import
 
-The container's `~/.claude` and `~/.claude.json` are an **isolated copy**, not a live bind of your host config (a raw bind would expose host secrets and corrupt `~/.claude.json` under concurrent writes). The `vision-claude` wrapper stages a sanitized copy of host `~/.claude` and `post-start.sh` pulls it in on every start, so host-side changes (new agents, edited rules) are picked up automatically. Note that `hooks`, `mcpServers`, and `enabledPlugins` are stripped during staging — re-add them inside the container if you want them active there.
+The launcher stages a sanitized host snapshot and `post-start.sh` imports it into
+Claude's private volume on each start. There are no manual configuration sync
+commands or host exports. Container edits stay in the volume; global JSON outside
+the volume in these sibling images can be lost on recreation. Move durable authored
+changes into their canonical host or repository sources deliberately.
 
-> [!warning] In-container config changes must be pushed back
-> If you change Claude config **inside** the container (agents, plugins, slash commands, hooks, MCP servers, rules, settings, memory), it is not part of the mounted workspace and will be lost on the next rebuild unless it is synced back to the host. The wrapper autosyncs on session exit (opt-in via `VISION_AUTOSYNC=1`); the manual fallback (e.g. after a crash) is:
->
-> ```sh
-> vision-claude-sync push
-> ```
->
-> Repo-level config (`CLAUDE.md`, `.claude/skills/`, `.claude/agents/`) lives in the mounted workspace and needs **no** sync.
-
-The `vision-claude-sync` fish function also supports `pull` (refresh container from host) and `status` (show what differs). Both directions use `rsync --update` (newer-wins) and a `jq` merge for `.claude.json`; no deletes. Host values win key conflicts on pull, while container values win on push and host-only keys remain intact. Pull failures are surfaced through a non-zero exit instead of being reported as successful.
+Repository guidance and provider adapters live in the mounted workspace and need
+no copy step. Authentication and the read-only workspace protections are unchanged.
 
 ## Authentication
 

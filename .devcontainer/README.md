@@ -30,9 +30,10 @@ the system VM started (`container system start`).
 A host launcher at `.devcontainer/bin/claude` forwards every invocation into the
 container: it stages a sanitized `~/.claude`, runs an idempotent
 `container build` + `container run` (reuses an existing container if already
-running), replays the post-create (once) / post-start (every start)
-lifecycle as `dev`, forwards the Claude token from the Keychain, and auto-syncs
-`~/.claude` back to the host on session exit.
+running), verifies the provider, image and root-owned tool pins, replays the
+post-create (once) / post-start (every start) lifecycle as `dev`, then forwards the
+Claude token from the Keychain. Configuration
+changes stay in the container.
 
 Codex uses `.devcontainer/bin/codex` or `vision-codex`. It shares the image and
 security controls, but uses a separate container and private `~/.codex` volume.
@@ -57,6 +58,15 @@ To force a full rebuild (e.g. after changing the Dockerfile or allowlist):
 ```sh
 VISION_REBUILD=1 vision-claude --dangerously-skip-permissions
 ```
+
+Container reuse checks the creation-time provider, image descriptor and read-only
+mount policy. A changed policy stops the launch before project lifecycle scripts
+or the agent run. Recreate with `VISION_REBUILD=1` and the selected provider
+launcher; private named volumes retain login and configuration. The image check
+hashes the full inspected descriptor conservatively, so descriptor metadata
+changes can also require recreation. Host metadata is validated before a stopped
+container starts. Cleanup applies after selecting a validated container or beginning
+creation; failed host preflight preserves existing sessions.
 
 ## Browser access from the host
 
@@ -229,28 +239,13 @@ expose host secrets): the container gets its own writable copy seeded
 from the sanitized stage, refreshed read-only on each start. No `gh`/git
 token is forwarded at all — git inside the container is read-only (see "Git").
 
-## Syncing Claude config between host and container
+## Claude configuration import
 
-The fish function `vision-claude-sync` propagates Claude config
-(settings, rules, plugins, agents, slash commands, hooks, MCP server
-definitions, session history) between your host `~/.claude` and the
-container's `~/.claude`. It's a manual command — nothing runs
-continuously in the background — so corruption-by-concurrent-write
-isn't possible.
+Claude uses a private container configuration volume. The launcher imports a
+sanitized host snapshot through a read-only stage; configuration is never exported
+back to the host. Repository guidance lives in the mounted workspace.
 
-```sh
-vision-claude-sync pull     # refresh container from host (also auto-runs on launch)
-vision-claude-sync push     # propagate container changes back to host (also auto-runs on session exit)
-vision-claude-sync status   # show what differs
-```
-
-Both `pull` and `push` use `rsync --update` (per-file newer-wins) and a
-`jq` recursive merge for `.claude.json` (container values win on key
-conflict, so pulls add new host keys without clobbering container edits;
-pushes overwrite host values with container's). No deletes — files
-removed on one side stay on the other until manually cleaned up.
-
-### Auto-pull on container start
+### Import on container start
 
 The `vision-claude` wrapper re-stages a sanitized copy of host
 `~/.claude` into `~/.claude-sandbox/stage/vision` on every invocation, and
@@ -260,37 +255,12 @@ The `vision-claude` wrapper re-stages a sanitized copy of host
 `mcpServers`, and `enabledPlugins` are stripped during staging — re-add
 them inside the container if you want them active there.
 
-Pull-on-start is safe under concurrency: it only reads from the stage, so
+Import-on-start is safe under concurrency: it only reads from the stage, so
 there's no write race against a host-side claude session.
 
-### Push on session exit (opt-in)
-
-The reverse (container → host) is **off by default** — set `VISION_AUTOSYNC=1`
-for the session to enable it. Left unset, config Claude changes inside the
-container stays in the container and is lost when it goes away; run
-`vision-claude-sync push` by hand to keep it. The `vision-claude`
-wrapper no longer `exec`s the session — it stays the parent process and, on
-**session exit** (normal or Ctrl-C), runs `vision-claude-sync push` against the
-exact container it launched. So if Claude inside the container modifies its own
-config — adds an agent, edits a rule, registers an MCP, writes a memory — those
-changes land back on the host with no manual step. Pushing only after the
-session ends keeps a single writer, so it can't race a live host-side claude on
-`~/.claude.json`. `vision-claude-sync push` remains the manual fallback — and the
-only path at all unless you opted in (e.g. after a crash, or to retry a failed
-auto-push).
-
-**Files excluded from sync** (volatile runtime state, not portable):
-`.credentials.json`, `backups/`, `cache/`, `paste-cache/`, `daemon.log`,
-`debug/`, `telemetry/`, `session-env/`, `shell-snapshots/`.
-
-**Push safety.** Every push backs up `~/.claude.json` to
-`~/.claude.json.pre-push.<timestamp>` before merging. Roll back with:
-
-```sh
-mv ~/.claude.json.pre-push.<timestamp> ~/.claude.json
-```
-
-The function ships at `~/.config/fish/functions/vision-claude-sync.fish`.
+Container configuration edits remain private. Existing launch-time import behavior
+is unchanged. Interactive project-memory copy-back, where supported, remains
+separate from configuration import.
 
 **Auth — threat-model conscious version.** Your host Claude credentials
 live in the macOS Keychain (encrypted, ACL-protected, prompts on access).
@@ -430,3 +400,12 @@ this: it has `cap-drop=ALL` (no `CAP_SYS_ADMIN`, so no remount/unmount), and
 `.devcontainer` is a busy mountpoint that can't be replaced — the protection
 re-applies on every `container run`. **Edit `.devcontainer` on the host only,**
 then rebuild.
+
+Binary verification uses `/usr/local/bin/vision-verify-pins`, a cleared
+`BASH_ENV` and a fixed root-tool `PATH` before lifecycle scripts or credentials.
+
+The Claude policy bundle is baked into root-owned image paths. It includes the shared
+command guard, post-edit monitor, bounded formatter and exact project opt-ins. The
+launcher streams the reviewed host checker and verifies every dependency against
+current source before lifecycle scripts or credentials. No host hook mount is used.
+Rebuild after changing the canonical LockBox bundle; stale policy stops startup.
