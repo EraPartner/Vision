@@ -11,10 +11,10 @@ spec.loader.exec_module(classifier)
 
 class ClassificationTests(unittest.TestCase):
     def test_documentation_and_instructions(self):
-        self.assertFalse(classifier.classify(['docs/guide.md', 'AGENTS.md', '.agents/skills/example/SKILL.md', '.codex/cloud/README.md']))
+        self.assertFalse(classifier.classify(['docs/guide.md', 'AGENTS.md', '.agents/skills/example/SKILL.md', '.codex/prompts/example.md']))
 
     def test_executable_mixed_and_configuration_changes(self):
-        for path in ['.agents/skills/example/run.sh', '.codex/agents/reviewer.toml', '.codex/cloud/setup.sh', 'apps/frontend/README.md', '.github/workflows/ci.yml']:
+        for path in ['.agents/skills/example/run.sh', '.codex/agents/reviewer.toml', '.codex/scripts/example.sh', 'apps/frontend/README.md', '.github/workflows/ci.yml']:
             with self.subTest(path=path):
                 self.assertTrue(classifier.classify(['.agents/roles/reviewer.md', path]))
 
@@ -25,12 +25,12 @@ class ClassificationTests(unittest.TestCase):
         with patch.object(classifier, 'git', side_effect=subprocess.CalledProcessError(1, 'git')):
             self.assertTrue(classifier.classify_range('base', 'head'))
 
-    def test_cloud_check_cannot_be_silently_skipped(self):
+    def test_agent_check_cannot_be_silently_skipped(self):
         workflow = (Path(__file__).parents[2] / '.github/workflows/ci.yml').read_text()
         quality = workflow.split('  quality-gate:', 1)[1].split('  build-image:', 1)[0]
-        self.assertIn('      - cloud-tooling', quality)
-        self.assertIn('CLOUD_TOOLING_RESULT: ${{ needs.cloud-tooling.result }}', quality)
-        self.assertIn('case "$CLOUD_TOOLING_RESULT" in', quality)
+        self.assertIn('      - agent-tooling', quality)
+        self.assertIn('AGENT_TOOLING_RESULT: ${{ needs.agent-tooling.result }}', quality)
+        self.assertIn('case "$AGENT_TOOLING_RESULT" in', quality)
         self.assertIn('success|cancelled)', quality)
         self.assertIn('node scripts/ci-cancellation-policy.js', quality)
 

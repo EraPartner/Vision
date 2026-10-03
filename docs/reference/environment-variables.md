@@ -2,7 +2,7 @@
 title: Environment Variables Reference
 type: reference
 status: active
-date: 2026-09-27
+date: 2026-10-03
 updated: 2026-09-27
 tags:
   [
@@ -262,7 +262,7 @@ These variables affect only `bun run test:db`. By default, the runner ignores in
 | `VISION_TEST_DB_PORT`       | `55432`    | No       | Loopback port for the disposable test server. Values outside 1024 through 65535 are rejected, and native mode fails closed if the port is occupied.                                    | [[scripts/with-test-db.sh\|with-test-db.sh]] |
 | `VISION_TEST_DB_KEEP`       | `0`        | No       | Set to `1` to retain the generated native cluster for diagnostics. The default removes only the generated test resource.                                                               | [[scripts/with-test-db.sh\|with-test-db.sh]] |
 | `VISION_TEST_DB_CHECK_ONLY` | `0`        | No       | Set to `1` to verify that the selected provider is available without initializing a cluster.                                                                                           | [[scripts/with-test-db.sh\|with-test-db.sh]] |
-| `VISION_TEST_DB_USE_CALLER` | `0`        | No       | Set to `1` only for an already-disposable, migrated test database named by `TEST_DATABASE_URL`. The fixed managed Codex cloud test database is recognized and reset without this flag. | [[scripts/with-test-db.sh\|with-test-db.sh]] |
+| `VISION_TEST_DB_USE_CALLER` | `0`        | No       | Set to `1` only for an already-disposable, migrated test database named by `TEST_DATABASE_URL`. | [[scripts/with-test-db.sh\|with-test-db.sh]] |
 
 ## Source-of-Truth
 

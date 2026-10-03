@@ -41,6 +41,18 @@ test("test:db ignores an inherited database URL unless explicitly opted in", () 
     assert.match(safe.stdout, /Ignoring inherited database URLs/);
     assert.match(safe.stdout, /Native PostgreSQL 18 tools are available/);
 
+    const retiredCloud = spawnSync("sh", [wrapper], {
+      env: {
+        ...env,
+        CODEX_SESSION_ENV: "cloud",
+        TEST_DATABASE_URL: "postgresql://vision_test:vision_test@127.0.0.1:5432/vision_test",
+      },
+      encoding: "utf8",
+    });
+    assert.equal(retiredCloud.status, 0, retiredCloud.stderr);
+    assert.match(retiredCloud.stdout, /Ignoring inherited database URLs/);
+    assert.match(retiredCloud.stdout, /Native PostgreSQL 18 tools are available/);
+
     const explicit = spawnSync("sh", [wrapper], {
       env: { ...env, VISION_TEST_DB_USE_CALLER: "1" },
       encoding: "utf8",

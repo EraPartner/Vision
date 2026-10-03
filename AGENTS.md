@@ -54,9 +54,8 @@ documentation synchronization, and TODO backlog batches.
 
 For TODO backlog implementation, read `.agents/skills/implement-todo-batch/SKILL.md` for the
 canonical selection, recovery, delegation, validation, and publication workflow. Use
-`.agents/prompts/implement-todo-batch.md` as the cloud kickoff when its goal and explicit
-publication authorization match the user's request. Deliver one batch, then stop; the skill itself
-does not authorize publication or merge.
+`.agents/prompts/implement-todo-batch.md` as the portable kickoff. Deliver one batch,
+then stop; the skill itself does not authorize publication or merge.
 
 ## Provider and host behavior
 
@@ -79,9 +78,8 @@ replace these rules.
   seed activation state first. When a canonical synthetic reset is intended, use
   `bun run demo:reset-native` and reopen the Demo app. Never apply that workflow to real Vision.
 - Charts render lazily. Scroll a chart into view before capturing an in-viewport screenshot.
-- There is no Codex TypeScript-LSP plugin in this project; `bun run typecheck` and the relevant build/test
-  commands are the authoritative diagnostics and must not be skipped because editor diagnostics
-  appear clean.
+- For every agent, `bun run typecheck` and the relevant build/test commands are authoritative.
+  Do not skip them because editor or Language Server Protocol diagnostics appear clean.
 
 ## Conventions
 
@@ -134,47 +132,25 @@ Finish with changed files, checks run, skipped checks, residual risk, and follow
 
 ## Key paths
 
-| Path                                      | Purpose                                       |
-| ----------------------------------------- | --------------------------------------------- |
-| `apps/frontend/src/`                      | React frontend                                |
-| `apps/node-backend/src/main.js`           | Backend entry point                           |
-| `alembic/versions/`                       | Database migrations                           |
-| `config/`                                 | Shared tool configuration                     |
-| `i18n/source/`                            | Locale source files                           |
-| `apps/frontend/src/locales/`              | Generated locales                             |
-| `packaging/electron/`                     | Desktop shell                                 |
-| `docs/`                                   | Obsidian knowledge base                       |
-| `.devcontainer/`                          | Hardened development sandbox                  |
-| `.agents/skills/implement-todo-batch/`    | Cloud-first bounded TODO batch orchestration  |
-| `.agents/prompts/implement-todo-batch.md` | Short kickoff for one TODO batch pull request |
+| Path                                      | Purpose                                      |
+| ----------------------------------------- | -------------------------------------------- |
+| `apps/frontend/src/`                      | React frontend                               |
+| `apps/node-backend/src/main.js`           | Backend entry point                          |
+| `alembic/versions/`                       | Database migrations                          |
+| `config/`                                 | Shared tool configuration                    |
+| `i18n/source/`                            | Locale source files                          |
+| `apps/frontend/src/locales/`              | Generated locales                            |
+| `packaging/electron/`                     | Desktop shell                                |
+| `docs/`                                   | Obsidian knowledge base                      |
+| `.devcontainer/`                          | Hardened development sandbox                 |
+| `.agents/skills/implement-todo-batch/`    | Bounded TODO batch orchestration |
+| `.agents/prompts/implement-todo-batch.md` | Portable kickoff for one TODO batch          |
 
 When an authorized local publication workflow uses direct commits, commit to `main` unless the user
-asks for a branch. Cloud TODO batches instead use the platform-managed task branch and pull-request
-flow described above; do not update `main` directly.
+asks for a branch. Local editing sessions leave the reviewed diff for the LockBox `git-agent`.
 
 Create a session note only when a substantial session produces durable context not already captured
 in an ADR, feature, reference, or guide. Examples include a multi-stage investigation, a cross-module
 delivery, or operational findings needed for later work. Do not create session notes for review-only
 work, routine fixes or refactors, formatting, generated-output refreshes, or documentation-only
 maintenance unless the user asks for one.
-
-## Cloud sessions
-
-Run `bash .codex/cloud/setup.sh` as the Codex cloud environment setup command. Use only disposable,
-non-production database credentials in cloud environment variables. Cloud sessions cannot validate
-the macOS Electron package, host Demo app, Apple Container isolation, or hardware-backed signing;
-report those checks as skipped and leave them for a local session. In cloud sessions, do not
-publish with shell Git commands, configure Git credentials, or create a pull request with `gh`.
-The platform-managed **Open pull request** action may create a pull request, and the connected
-GitHub integration may update the same branch for pull-request-linked follow-ups. When the user
-explicitly requests it, that integration may enable native squash auto-merge for the exact pull
-request. Confirm the auto-merge request by reading back the pull-request state; do not infer it from
-green local checks or a submitted request. If native auto-merge is unavailable, the integration may
-merge after all required checks and approvals pass and no blocking review, code-quality, or
-code-scanning condition remains. Do not use an admin bypass or directly update a default or
-protected branch outside that approved merge.
-
-The **Open pull request** action is a post-task platform control and does not need to appear as a
-terminal command, MCP resource, or agent-visible `make_pr` tool. A missing shell remote or absent
-in-task publication tool is not an implementation blocker. Finish the reviewed diff and report the
-publication handoff separately from known CI or ruleset failures.

@@ -2,7 +2,7 @@
 title: Testing Documentation
 type: testing
 status: active
-date: 2026-09-30
+date: 2026-10-03
 updated: 2026-09-25
 last-updated: 2026-09-25
 last_updated_timestamp: 2026-09-25T00:00:00Z
@@ -111,9 +111,7 @@ loopback port and fails closed on a collision.
 
 The wrapper ignores inherited database URLs by default and creates a private cluster. Set
 `VISION_TEST_DB_USE_CALLER=1` only for an already-disposable `TEST_DATABASE_URL`; this skips native
-provisioning. The Codex cloud setup recognizes its fixed disposable PostgreSQL 18 database and
-resets it before each run; see [[.codex/cloud/README|Codex cloud environment]]. Destructive
-migration lifecycle tasks refuse caller-managed databases.
+provisioning. Destructive migration lifecycle tasks refuse caller-managed databases.
 
 #### The skip banner
 
@@ -841,7 +839,6 @@ The helper returns `null` when `TEST_DATABASE_URL` is unset, so tests skip grace
 | ------------------------- | ------------------------------------------------------------------- | ----------------------------------- |
 | CI — `Test (Backend)` job | private native PostgreSQL 18 cluster from `scripts/with-test-db.sh` | the same script                     |
 | Local                     | private native PostgreSQL 18 cluster from `scripts/with-test-db.sh` | the same script                     |
-| Codex cloud               | native PostgreSQL 18 from `.codex/cloud/provision-test-db.sh`       | cloud setup and maintenance scripts |
 
 Backend vitest runs in exactly one CI job, so the service is wired only there. `quality-gate` runs no tests — it only aggregates results.
 

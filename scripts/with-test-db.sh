@@ -17,8 +17,7 @@
 # An exported TEST_DATABASE_URL is ignored by default: this suite deletes test
 # tables and must not accidentally target a development or production database.
 # VISION_TEST_DB_USE_CALLER=1 explicitly opts into an already-disposable test
-# database. The fixed Codex cloud test database is recognized and reset before
-# each run without that opt-in.
+# database.
 
 set -eu
 umask 077
@@ -68,12 +67,7 @@ if [ "$PORT" -lt 1024 ] || [ "$PORT" -gt 65535 ]; then
   exit 1
 fi
 
-if [ -n "${TEST_DATABASE_URL:-}" ] && {
-  [ "${VISION_TEST_DB_USE_CALLER:-0}" = 1 ] || {
-    [ "${CODEX_SESSION_ENV:-}" = cloud ] &&
-      [ "$TEST_DATABASE_URL" = 'postgresql://vision_test:vision_test@127.0.0.1:5432/vision_test' ];
-  };
-}; then
+if [ -n "${TEST_DATABASE_URL:-}" ] && [ "${VISION_TEST_DB_USE_CALLER:-0}" = 1 ]; then
   if [ "$CHECK_ONLY" = 1 ]; then
     echo "[test-db] Caller-managed TEST_DATABASE_URL is available."
     exit 0
@@ -83,13 +77,7 @@ if [ -n "${TEST_DATABASE_URL:-}" ] && {
     echo "[test-db] Unset it so this script provisions a disposable database." >&2
     exit 1
   fi
-  if [ "${CODEX_SESSION_ENV:-}" = cloud ] && \
-    [ "$TEST_DATABASE_URL" = 'postgresql://vision_test:vision_test@127.0.0.1:5432/vision_test' ]; then
-    echo "[test-db] Resetting the managed Codex cloud database."
-    bash "$REPO_ROOT/.codex/cloud/reset-test-db.sh"
-  else
-    echo "[test-db] Using caller-managed TEST_DATABASE_URL; no database provider was started."
-  fi
+  echo "[test-db] Using caller-managed TEST_DATABASE_URL; no database provider was started."
   DATABASE_URL=$TEST_DATABASE_URL
   unset DATABASE_URL_MIGRATIONS DATABASE_URL_ANALYSIS VISION_BASELINE_BRIDGE_APPROVED
   export DATABASE_URL TEST_DATABASE_URL

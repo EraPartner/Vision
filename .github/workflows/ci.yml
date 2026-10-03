@@ -50,8 +50,8 @@ jobs:
         with:
           fail-on-severity: high
 
-  cloud-tooling:
-    name: Cloud Tooling
+  agent-tooling:
+    name: Agent Tooling
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -60,13 +60,6 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
         with:
           persist-credentials: false
-      - name: Check generated cloud agreement
-        run: python3 .codex/cloud/check-instructions.py
-      - name: Check cloud shell syntax and mocked regressions
-        run: |
-          set -euo pipefail
-          while IFS= read -r -d '' script; do bash -n "$script"; done < <(find .codex/cloud -name '*.sh' -print0)
-          for suite in .codex/cloud/tests/*.test.sh; do bash "$suite"; done
       - name: Check agent instructions and CI classification
         run: |
           python3 scripts/check-agent-instructions.py
@@ -103,7 +96,7 @@ jobs:
   # a nested *.md outside docs/ and .agents/ or .codex/ — counts as code,
   # because such files can be referenced by builds or tooling. Executable files,
   # symlinks and agent configuration also count as code. Plain agent Markdown
-  # uses the focused cloud-tooling checks; mixed changes run the full pipeline.
+  # uses the focused agent-tooling checks; mixed changes run the full pipeline.
   #
   # Fails safe: if the base cannot be resolved for any reason, `code` is 'true'
   # and the full pipeline runs.
@@ -649,7 +642,7 @@ jobs:
     needs:
       - changes
       - commitlint
-      - cloud-tooling
+      - agent-tooling
       - dependency-review
       - secrets-scan
       - deps-audit
@@ -678,7 +671,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
-          CLOUD_TOOLING_RESULT: ${{ needs.cloud-tooling.result }}
+          AGENT_TOOLING_RESULT: ${{ needs.agent-tooling.result }}
           DEPENDENCY_REVIEW_RESULT: ${{ needs.dependency-review.result }}
         run: |
           set -euo pipefail
@@ -688,9 +681,9 @@ jobs:
           fi
           # Cancellation passes only after the existing superseded-PR policy
           # below verifies a newer live head. Skipping is never allowed.
-          case "$CLOUD_TOOLING_RESULT" in
+          case "$AGENT_TOOLING_RESULT" in
             success|cancelled) ;;
-            *) echo "Cloud tooling did not pass: $CLOUD_TOOLING_RESULT"; exit 1 ;;
+            *) echo "Agent tooling did not pass: $AGENT_TOOLING_RESULT"; exit 1 ;;
           esac
 
           # 'skipped' is tolerated here BY DESIGN: on a docs-only diff the eleven
