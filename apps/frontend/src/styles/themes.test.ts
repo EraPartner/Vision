@@ -1,10 +1,15 @@
-import { describe, expect, test } from 'vitest';
+import { readFileSync } from 'node:fs';
+
+import { describe, expect, test, vi } from 'vitest';
 import {
   THEME_VARIANTS,
   TOKEN_KEYS,
+  applyThemePalette,
   isThemeVariant,
   themes,
 } from './themes';
+
+const tokensCss = readFileSync(new URL('./tokens.css', import.meta.url), 'utf8');
 
 function hslToRgb(value: string): [number, number, number] {
   const [h, saturation, lightness] = value.split(/\s+/).map((part) => Number.parseFloat(part));
@@ -95,5 +100,31 @@ describe('theme variants', () => {
     expect(isThemeVariant(undefined)).toBe(false);
     expect(isThemeVariant(null)).toBe(false);
     expect(isThemeVariant(42)).toBe(false);
+  });
+});
+
+describe('gain token', () => {
+  test('gives the default light palette a gain colour that reads at AA on page, card and muted', () => {
+    const lightGain = tokensCss.match(/:root\s*\{[^}]*?--gain:\s*([^;]+);/)?.[1] ?? '';
+    expect(lightGain).toBe('36 74% 33%');
+    const palette = themes.default.light;
+    for (const surface of ['background', 'card', 'muted'] as const) {
+      expect(contrastRatio(lightGain, palette[surface]), `gain/${surface}`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  test('keeps dark mode and the other variants on their accent gain', () => {
+    expect(tokensCss).toMatch(/\.dark\s*\{[^}]*?--gain:\s*var\(--accent\);/);
+    expect(tokensCss).toMatch(
+      /:root\[data-theme-variant\]:not\(\[data-theme-variant="default"\]\)\s*\{\s*--gain:\s*var\(--accent\);/,
+    );
+  });
+
+  test('applyThemePalette records the variant that scopes the light gain colour', () => {
+    const setProperty = vi.fn();
+    const root = { style: { setProperty }, dataset: {} } as unknown as HTMLElement;
+    applyThemePalette('nord', 'light', root);
+    expect(root.dataset.themeVariant).toBe('nord');
+    expect(setProperty).toHaveBeenCalledWith('--accent', themes.nord.light.accent);
   });
 });

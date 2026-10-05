@@ -610,6 +610,8 @@ export const TOKEN_KEYS: readonly TokenKey[] = Object.keys(
 /**
  * Apply a palette to `document.documentElement` by setting CSS custom
  * properties. Caller is responsible for setting the `.dark` class separately.
+ * The variant is also recorded as `data-theme-variant`, which tokens.css uses
+ * to keep its default-palette light gain colour off the other variants.
  */
 export function applyThemePalette(
     variant: ThemeVariant,
@@ -620,4 +622,5 @@ export function applyThemePalette(
     for (const key of TOKEN_KEYS) {
         root.style.setProperty(`--${key}`, palette[key]);
     }
+    root.dataset.themeVariant = variant;
 }

@@ -50,11 +50,18 @@
         --loss-colorblind: 24 85% 45%;
 
         /* Gain/loss palette — the single source every gain/loss surface (text,
-           badges, icons, charts) reads. Legacy (no .skin-v2): variant-aware
-           champagne-gold gain / red loss via the accent & destructive tokens.
-           styles/skin-v2.css overrides these with fixed Okabe-Ito colorblind-
-           safe hues, so the accessibility toggle recolors everything at once. */
-        --gain: var(--accent);
+           badges, icons, charts) reads. Legacy (no .skin-v2): red loss via
+           --destructive and a champagne-gold gain. In the default light theme
+           gain has its own deeper gold, because the decorative --accent gold
+           (38 58% 52%) reads at only 2.4:1 on the page; 36 74% 33% reaches
+           WCAG AA for text: 4.9:1 on --background, 5.3:1 on --card and 4.5:1
+           on --muted. Dark mode and the other theme variants keep the
+           variant-aware accent gain (the .dark block and the
+           [data-theme-variant] rule below; styles/themes.ts sets the
+           attribute). styles/skin-v2.css overrides these with fixed Okabe-Ito
+           colorblind-safe hues, so the accessibility toggle recolors
+           everything at once. */
+        --gain: 36 74% 33%;
         --loss: var(--destructive);
 
         --radius: 0.625rem;
@@ -193,6 +200,8 @@
         --warning: 38 88% 62%;
         --expense: 358 92% 68%;
         --loss-colorblind: 24 90% 62%;
+        /* The luminous accent gold already reads at 10.9:1 here (see :root). */
+        --gain: var(--accent);
 
         /* -------- Charts -------- */
         --chart-1: 158 64% 58%;
@@ -239,5 +248,11 @@
         --aurora-accent-alpha: 0.1;
         --aurora-wash-alpha: 0.08;
         --grain-alpha: 0.028;
+    }
+
+    /* The deeper light-mode gain gold belongs to the default palette only:
+       the other theme variants keep gain on their own accent in both modes. */
+    :root[data-theme-variant]:not([data-theme-variant="default"]) {
+        --gain: var(--accent);
     }
 }
