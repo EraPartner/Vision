@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { ok } from "@/test/msw/handlers";
+import { ok, settingsWithBaselines } from "@/test/msw/handlers";
 import { InsightsDigestPanel } from "@/features/statistics/InsightsDigestPanel";
 import type { InsightsDigestResponse } from "@/lib/api/info";
 
@@ -132,7 +132,7 @@ describe("InsightsDigestPanel", () => {
     it("renders the exact partial-month comparison window in Dutch", async () => {
         server.use(
             http.get(`${API_BASE}/api/settings`, () =>
-                ok({ app_settings: { language: "nl" } }),
+                ok(settingsWithBaselines({ app_settings: { language: "nl" } })),
             ),
         );
         stubDigest(DIGEST);

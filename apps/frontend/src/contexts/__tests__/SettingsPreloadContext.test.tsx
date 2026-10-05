@@ -4,7 +4,7 @@ import { type ReactNode } from "react";
 import { renderHook, waitFor } from "@testing-library/react";
 import { http } from "msw";
 import { server } from "@/test/msw/server";
-import { ok } from "@/test/msw/handlers";
+import { ok, settingsWithBaselines } from "@/test/msw/handlers";
 import { apiClient } from "@/lib/api";
 import {
     SettingsPreloadProvider,
@@ -28,7 +28,11 @@ describe("SettingsPreloadContext", () => {
     });
 
     it("returns null for a key absent from the settings map", async () => {
-        server.use(http.get(`${API_BASE}/api/settings`, () => ok({})));
+        server.use(
+            http.get(`${API_BASE}/api/settings`, () =>
+                ok(settingsWithBaselines({})),
+            ),
+        );
         const { result } = renderHook(() => usePreloadedSetting("nonexistent"), {
             wrapper: makeWrapper(),
         });
@@ -39,7 +43,11 @@ describe("SettingsPreloadContext", () => {
     it("returns value from key-value map response format", async () => {
         server.use(
             http.get(`${API_BASE}/api/settings`, () =>
-                ok({ app_settings: { defaultCurrency: "USD" } }),
+                ok(
+                    settingsWithBaselines({
+                        app_settings: { defaultCurrency: "USD" },
+                    }),
+                ),
             ),
         );
         const { result } = renderHook(() => usePreloadedSetting("app_settings"), {
@@ -52,7 +60,14 @@ describe("SettingsPreloadContext", () => {
     it("returns value from array of { key, value } response format", async () => {
         server.use(
             http.get(`${API_BASE}/api/settings`, () =>
-                ok([{ key: "theme_settings", value: { mode: "dark" } }]),
+                ok({
+                    settings: [
+                        { key: "theme_settings", value: { mode: "dark" } },
+                    ],
+                    expected: {
+                        theme_settings: { exists: true, value: { mode: "dark" } },
+                    },
+                }),
             ),
         );
         const { result } = renderHook(() => usePreloadedSetting("theme_settings"), {
@@ -107,7 +122,7 @@ describe("SettingsPreloadContext", () => {
         server.use(
             http.get(`${API_BASE}/api/settings`, () => {
                 calls += 1;
-                return ok({ shared_key: { foo: "bar" } });
+                return ok(settingsWithBaselines({ shared_key: { foo: "bar" } }));
             }),
         );
         const { result: a } = renderHook(() => usePreloadedSetting("shared_key"), {
