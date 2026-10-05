@@ -3,8 +3,8 @@ title: Frontend Architecture
 type: architecture
 status: active
 description: "React frontend architecture, design system, and diagrams with liquid-glass aesthetic, visx charts, Framer Motion, and Zustand store. May 2026 Tailwind v4 migration with unified CSS architecture. June 2026 Liquid Glass v2 — atmosphere layer, saturated blur tiers, CommandPalette, optimistic mutations, route preload. June 2026 Premium v3 — RollingNumber/Money/DeltaPill, chart scrub+sync, ChartSkeleton, PageTitleContext, palette v2, ShortcutsOverlay + go-to sequences, animated tabs, workspace aurora, ShaderAurora behind visual-effects tier model (ADR-075), per-widget dashboard hydration, optimistic create. 2026-06-24: --gain/--loss CSS semantic tokens unified app-wide (tokens.css baseline, skin-v2.css Okabe-Ito overrides); gain/loss Tailwind color utilities added; colorblindGainLoss default OFF/classic."
-date: 2026-10-04
-updated: 2026-10-04
+date: 2026-10-05
+updated: 2026-10-05
 tags: [architecture, frontend, uml, plantuml, react, phase-4, phase-6, phase-9, liquid-glass, liquid-glass-v2, premium-v3, visx, framer-motion, statistics-refactoring, zustand, state-management, tailwind-v4, css-architecture, command-palette, optimistic-updates, route-preload, chart-scrub, chart-sync, shader-aurora, visual-effects-tiers, auto-adapt-display, fx-reduced, role-based-glass, glass-by-default, june-2026, gain-loss, css-tokens, skin-v2, tailwind-colors]
 aliases: [frontend architecture, react architecture, frontend design, design system]
 ---
@@ -1134,7 +1134,7 @@ The frontend uses a token-based theming system with runtime color palette swappi
 
 **Location**: `apps/frontend/src/styles/` with `themes.ts` as the source of truth for color values.
 
-- **tokens.css**: HSL-component CSS variables (`--primary-h`, `--primary-s`, `--primary-l`, etc.). Also defines always-present **gain/loss semantic tokens**: `--gain: var(--accent)` (classic gold) and `--loss: var(--destructive)` (classic red). These are the baseline values; `skin-v2.css` overrides them to Okabe-Ito green/orange when colorblind mode is active.
+- **tokens.css**: HSL-component CSS variables (`--primary-h`, `--primary-s`, `--primary-l`, etc.). Also defines always-present **gain/loss semantic tokens**: `--gain` (classic gold) and `--loss: var(--destructive)` (classic red). Gain is `36 74% 33%` in the default light theme, a deeper gold than `--accent` that meets WCAG AA for text, and `var(--accent)` in dark mode and in the other variants. These are the baseline values; `skin-v2.css` overrides them to Okabe-Ito green/orange when colorblind mode is active.
 - **themes.ts**: Five variant definitions with light/dark sub-palettes
   - `default` (emerald + gold) — Apple liquid glass
   - `dracula` (purple + pink) — Dark-optimized moody
@@ -1146,10 +1146,10 @@ The frontend uses a token-based theming system with runtime color palette swappi
 
 `--gain` and `--loss` are app-wide semantic CSS tokens for financial positive/negative values. They live in `tokens.css` and are the single source of truth for all gain/loss coloring — text, backgrounds, gradients, borders, charts, and glass trend indicators all consume them.
 
-| Mode                                     | `--gain` resolves to                 | `--loss` resolves to                     |
-| ---------------------------------------- | ------------------------------------ | ---------------------------------------- |
-| Classic (default, `.skin-v2` absent)     | `var(--accent)` — variant-aware gold | `var(--destructive)` — variant-aware red |
-| Colorblind-safe (`.skin-v2` on `<html>`) | Okabe-Ito green `#009E73`            | Okabe-Ito orange/vermillion `#D55E00`    |
+| Mode                                     | `--gain` resolves to                                                                                     | `--loss` resolves to                     |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| Classic (default, `.skin-v2` absent)     | `36 74% 33%` — AA gold in the default light theme; `var(--accent)` in dark mode and the other variants   | `var(--destructive)` — variant-aware red |
+| Colorblind-safe (`.skin-v2` on `<html>`) | Okabe-Ito green `#009E73`                                                                                | Okabe-Ito orange/vermillion `#D55E00`    |
 
 The toggle is controlled by `AppSettings.colorblindGainLoss` (default `false`) via **Settings → Appearance → Accessibility → Gain & loss colors**. See [[docs/features/appearance#gain--loss-colors--accessibility-setting-2026-06-24|Appearance — Gain & Loss Colors]].
 
@@ -1167,7 +1167,7 @@ Enables utilities such as `text-gain`, `text-loss`, `bg-gain/12`, `bg-loss/12`, 
 
 ### Runtime Palette Application
 
-`applyThemePalette(variant, mode, root)` in `themes.ts` updates all CSS variables on the document root, enabling instant theme switching without CSS rebuilding.
+`applyThemePalette(variant, mode, root)` in `themes.ts` updates all CSS variables on the document root, enabling instant theme switching without CSS rebuilding. It also records the variant as `data-theme-variant` on the root, which `tokens.css` uses to keep the default theme's light gain gold off the other variants.
 
 > [!info] Inline-token constraint
 > `applyThemePalette()` writes color tokens (`--background`, `--card`, `--primary`, `--accent`, `--destructive`, etc.) as **inline styles** on `document.documentElement`. Inline styles beat any external stylesheet. `skin-v2.css` therefore overrides only `--gain` and `--loss`, which `applyThemePalette()` does NOT set — those two tokens are safe to override from CSS.

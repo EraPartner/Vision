@@ -2,8 +2,8 @@
 title: DashboardSettingsDialog
 type: component
 status: active
-date: 2026-04-23
-updated: 2026-09-11
+date: 2026-10-05
+updated: 2026-10-05
 tags:
   [
     components,
@@ -297,7 +297,7 @@ All backup state (`backupDir`, `backupPassphrase`, `backupEncrypt`, `showRestore
 - **App updates**: manual update check + install (Electron)
 - **Restart onboarding**: reset onboarding completion + reshow wizard
 - **Developer / admin mode**: toggle (with confirmation)
-- **Reset to defaults** (danger zone): resets all settings; requires AlertDialog confirmation; replaces the old `handleReset()` in the orchestrator
+- **Reset to defaults** (danger zone): replaces the old `handleReset()` in the orchestrator. Since 2026-10-05 the **Reset** button asks first through the destructive `useConfirmDialog` confirmation (`settings.app.resetAllConfirm.*`), which says what is reset and what is kept. Confirming resets the app preferences, the session visual-effects override and the dashboard statistics settings (exclusions), and saves the server-side `includeTransfers` setting as `false`. Theme variant and color mode, accounts, transactions, categories and other data are kept. See [[docs/features/settings#instant-apply-model|Settings — Instant-Apply Model]] for the full list.
 
 ---
 

@@ -2,10 +2,10 @@
 title: Appearance Feature
 type: feature
 status: active
-date: 2026-04-21
-updated: 2026-09-11
+date: 2026-10-05
+updated: 2026-10-05
 tags: [feature, appearance, theming, personalization, frontend, settings, phase-1, visual-effects-tiers, auto-adapt-display, fx-reduced, shader-aurora, webgl, premium-v3, system-accent, vibrancy, electron-native, macos, june-2026, canvas-text, aurora-legibility, liquid-glass-sidebar, accessibility, colorblind, gain-loss, skin-v2]
-description: Per-user theme variant selection with five color palettes, light/dark mode switching, and schedule-based mode transitions. June 2026 (ADR-075): Visual-effects tier model (reduced/standard/enhanced) + autoAdaptDisplay replaces the ADR-071 enhancedEffects boolean; large-display heuristic auto-drops to reduced on 4K-class screens. June 2026 V12 (ADR-072): system accent color overlay (Electron/macOS only, persisted in theme_settings.systemAccent) and vibrancy gated on effective tier. 2026-06-24: colorblind gain/loss palette promoted to a persisted user setting (colorblindGainLoss, default false/classic); --gain/--loss CSS tokens unified app-wide; gain/loss Tailwind color utilities added.
+description: Per-user theme variant selection with five color palettes, light/dark mode switching, and schedule-based mode transitions. June 2026 (ADR-075): Visual-effects tier model (reduced/standard/enhanced) + autoAdaptDisplay replaces the ADR-071 enhancedEffects boolean; large-display heuristic auto-drops to reduced on 4K-class screens. June 2026 V12 (ADR-072): system accent color overlay (Electron/macOS only, persisted in theme_settings.systemAccent) and vibrancy gated on effective tier. 2026-06-24: colorblind gain/loss palette promoted to a persisted user setting (colorblindGainLoss, default false/classic); --gain/--loss CSS tokens unified app-wide; gain/loss Tailwind color utilities added. 2026-10-05 — the default light theme gives --gain its own WCAG AA gold (36 74% 33%); dark mode and the other variants keep the accent gain.
 aliases: [appearance, theming, theme variants, color palettes, dark mode, light mode, system accent, vibrancy]
 related_code:
   - apps/frontend/src/styles/themes.ts
@@ -480,7 +480,7 @@ Code links: [[apps/frontend/src/lib/accentColor.ts]], [[apps/frontend/src/stores
 
 | Value             | Palette                                                                           | CSS class on `<html>` |
 | ----------------- | --------------------------------------------------------------------------------- | --------------------- |
-| `false` (default) | Classic: gold gain (`--accent`), red loss (`--destructive`)                       | `.skin-v2` absent     |
+| `false` (default) | Classic: gold gain, red loss (`--destructive`)                                    | `.skin-v2` absent     |
 | `true`            | Okabe-Ito colorblind-safe: green gain `#009E73`, orange/vermillion loss `#D55E00` | `.skin-v2` applied    |
 
 `AppSettingsProvider` (`stores/hydration/AppSettingsHydration.tsx`) calls `setSkinV2(appSettings.colorblindGainLoss)` immediately on settings hydration and again whenever the value changes, keeping the DOM class in sync with the stored preference.
@@ -501,8 +501,14 @@ The gain/loss palette is now surfaced as two always-defined CSS custom propertie
 ```css
 /* tokens.css — base (classic/legacy) */
 :root {
-  --gain: var(--accent); /* variant-aware gold in default theme */
+  --gain: 36 74% 33%; /* default light theme: deeper gold, WCAG AA for text */
   --loss: var(--destructive); /* variant-aware red */
+}
+.dark {
+  --gain: var(--accent); /* luminous accent gold */
+}
+:root[data-theme-variant]:not([data-theme-variant="default"]) {
+  --gain: var(--accent); /* other variants keep their own accent gold */
 }
 
 /* skin-v2.css — Okabe-Ito overrides (active when .skin-v2 is on <html>) */
@@ -515,6 +521,9 @@ The gain/loss palette is now surfaced as two always-defined CSS custom propertie
   --loss: 24 90% 62%;
 }
 ```
+
+> [!info] 2026-10-05: AA-readable gain in the default light theme
+> The default light palette used to draw gain from the decorative `--accent` gold (`38 58% 52%`), which reads at 2.41:1 on `--background`, 2.60:1 on `--card` and 2.20:1 on `--muted`, below the WCAG AA 4.5:1 minimum for text. Gain now has its own deeper gold, `36 74% 33%`, at 4.94:1, 5.33:1 and 4.53:1 on the same surfaces. `--accent`, the dark palette and `skin-v2.css` are unchanged, and dark mode keeps the accent gain (10.90:1 on `--background`). `applyThemePalette()` records the active variant as `data-theme-variant` on `<html>`, so the Dracula, Solarized, Nord and High Contrast variants keep gain on their own accent in both modes. `styles/themes.test.ts` checks the light contrast and both scoping rules.
 
 Tailwind routes `text-gain`, `text-loss`, and the related opacity-aware utilities through these tokens:
 
@@ -566,7 +575,8 @@ This enables opacity-aware utilities that follow the toggle automatically:
 - `AppSettingsHydration.tsx` — calls `setSkinV2(appSettings.colorblindGainLoss)` in a `useEffect` on `[appSettings.colorblindGainLoss]`.
 - `lib/skin.ts` — `setSkinV2(flag: boolean)` toggles `.skin-v2` on `document.documentElement`; unchanged in behavior.
 - `AppearanceSection.tsx` — new `SettingsGroup` with `id="accessibility"`, containing a `SettingRow` stack wrapping a Select.
-- `styles/tokens.css` — adds `--gain: var(--accent)` and `--loss: var(--destructive)` at `:root` (always-defined legacy values).
+- `styles/tokens.css` — defines the always-present legacy values at `:root`: `--loss: var(--destructive)` and `--gain: 36 74% 33%` for the default light theme. The `.dark` block and the `[data-theme-variant]` rule set `--gain: var(--accent)` for dark mode and the other variants (2026-10-05).
+- `styles/themes.ts` — `applyThemePalette()` sets `data-theme-variant` on `<html>` alongside the inline palette tokens (2026-10-05).
 - `styles/skin-v2.css` — overrides only `--gain` and `--loss` tokens (Okabe-Ito values, light + dark).
 - `tailwind.config.ts` — exposes `gain`/`loss` utilities; the old `.amount-gain`/`.amount-loss` aliases were removed after the source sweep.
 - `tailwind.config.ts` — `gain` and `loss` color entries added.
