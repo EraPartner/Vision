@@ -4278,7 +4278,7 @@
   "txPage.col.status": "Status",
   "txPage.col.tags": "Tags",
   "txPage.delete.confirm": "Verwijderen",
-  "txPage.delete.desc": "Weet je zeker dat je \"{desc}\" wilt verwijderen? Dit kan niet ongedaan worden gemaakt.",
+  "txPage.delete.desc": "\"{desc}\" verwijderen? Meestal kun je dit enkele seconden ongedaan maken. Bijlagen, splitsingen en koppelingen met geplande betalingen worden niet hersteld.",
   "txPage.delete.title": "Transactie verwijderen",
   "txPage.deleteAttachment": "Bijlage verwijderen",
   "txPage.deleteAttachment.desc": "Weet je zeker dat je \"{name}\" wilt verwijderen? Dit kan niet ongedaan worden gemaakt.",
