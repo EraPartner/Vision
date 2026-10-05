@@ -41,7 +41,11 @@ test("Chromium preparation pins the executable and carries its license", async (
       path.join(source, "LICENSE.headless_shell"),
       "synthetic license fixture\n",
     );
-    const metadata = prepareChromiumRuntime({ source, destination });
+    const metadata = prepareChromiumRuntime({
+      source,
+      destination,
+      platform: "darwin",
+    });
     assert.equal(metadata.browserVersion, CHROMIUM_VERSION);
     assert.equal(
       await fs.promises.readFile(
