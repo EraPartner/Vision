@@ -59,8 +59,9 @@ export const banksRepository = {
    *
    * The 12-month history uses that SAME definition evaluated as of each day,
    * and both sides convert at the rate of the day they represent (the history
-   * at each day, the headline at today — `CURRENT_DATE`, where the series
-   * ends). Future-dated rows remain visible in the ledger but do not enter
+   * at each day, the headline at today — the APP_TIMEZONE date from
+   * `todayAppDateString()`, where the series ends). Future-dated rows remain
+   * visible in the ledger but do not enter
    * either current figure until their effective date. So the last history point equals `total_net_position`, in every
    * currency, by construction. The series is no longer gated on stamped rows
    * (which hid manual-only accounts from the chart while they counted in the
