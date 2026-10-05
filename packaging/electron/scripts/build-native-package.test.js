@@ -4,12 +4,18 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 const test = require("node:test");
 const { getConfig } = require("app-builder-lib/out/util/config/config");
+const { log } = require("electron-builder");
 
 const {
   packageConfig,
   packageResources,
   parseArgs,
 } = require("./build-native-package");
+
+// The test runner reads its report messages from this process's stdout, where
+// electron-builder's "  • " log prefix can be misread as a message length and
+// fail the file with "Unable to deserialize cloned data".
+log.stream = process.stderr;
 
 test("native package builder accepts only the isolated directory mode flag", () => {
   assert.deepEqual(parseArgs([]), { demo: false, directoryOnly: false });
