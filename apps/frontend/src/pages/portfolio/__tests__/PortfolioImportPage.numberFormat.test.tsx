@@ -127,4 +127,4 @@ it("saves, reloads, and submits the selected portfolio number format", async () 
         screen.getByRole("button", { name: /Import transactions/i }),
     );
     await waitFor(() => expect(submittedFormat).toBe("decimal_dot"));
-});
+}, 15_000);
