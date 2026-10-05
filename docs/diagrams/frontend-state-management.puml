@@ -117,6 +117,11 @@ package "Custom Hooks (Business Logic)" {
     +createPortfolioTransaction(data): Promise<PortfolioTransaction>
   }
 
+  class usePortfolioSummaryQuery {
+    +canonical active holdings / custody / gains
+    +loading / error / refetch
+  }
+
   class useAccountPositions <<ADR-091, ADR-100>> {
     ' hooks/portfolio/useAccountPositions.ts
     +byAccount: AccountPositionRow[]
@@ -227,6 +232,25 @@ package "Utility Hooks" {
 }
 
 ' Provider Hierarchy (React Context nesting)
+package "Portfolio Import Session State (ADR-177)" {
+  class PortfolioImportSession {
+    +statements + optional File objects
+    +global/per-statement adoption policy
+    +XML policy/result/blockers + explicit original import ID
+    +effective managed clone/supplemental scope
+    +scopeKey + reviewed planFingerprint
+    +operation state + blockers
+  }
+  class "tab sessionStorage" as ImportSessionStorage {
+    +staged metadata / batch IDs only
+    +no file bytes or commit authority
+  }
+  class "server staging + history" as ImportSessionServerState
+}
+PortfolioImportSession --> ImportSessionStorage : resume staged scope
+PortfolioImportSession --> ImportSessionServerState : preview then fingerprint-pinned commit
+PortfolioImportSession ..> QueryClient : invalidate only confirmed success
+
 package "Provider Stack" {
   class QueryClientProvider
   class ThemeHydration
@@ -242,7 +266,9 @@ useTransactions ..> QueryClient : uses
 useCategories ..> QueryClient : uses
 useRecipients ..> QueryClient : uses
 usePlannedPayments ..> QueryClient : uses
-usePortfolio ..> QueryClient : uses
+usePortfolio ..> QueryClient : metadata + CRUD
+usePortfolio --> usePortfolioSummaryQuery : authoritative active summaries
+usePortfolioSummaryQuery ..> QueryClient : shared server state
 useStatistics ..> QueryClient : uses
 useOwedSummary ..> QueryClient : uses
 useOwedByRecipient ..> QueryClient : uses

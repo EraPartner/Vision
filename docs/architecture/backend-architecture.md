@@ -2,9 +2,9 @@
 title: Backend Architecture
 type: architecture
 status: active
-description: Node.js backend architecture and diagrams. Phase 3: infoRepository split into 7 domain-specific sub-modules. Phase 9: Decimal.js enforcement on all monetary paths. Phase E: Forecast cache materialization with 6-hour TTL and nightly job. May 2026: Transaction tags as orthogonal dimension (ADR-052). June 2026: Route→service boundary enforced (ADR-067, 14 new thin seams); global API rate limiter + trusted-proxy XFF + VISION_DEV fail-safe (ADR security); mv_recipient_monthly dropped (ADR-068); @vision/shared-utils package + banker's rounding canonical (ADR-069). September 2026: transaction ownership uses the ADR-088 Account entity and canonical account_id foreign keys.
-date: 2026-09-30
-last_modified: 2026-09-27
+description: "Node.js backend architecture and diagrams. Phase 3: infoRepository split into 7 domain-specific sub-modules. Phase 9: Decimal.js enforcement on all monetary paths. Phase E: Forecast cache materialization with 6-hour TTL and nightly job. May 2026: Transaction tags as orthogonal dimension (ADR-052). June 2026: Route→service boundary enforced (ADR-067, 14 new thin seams); global API rate limiter + trusted-proxy XFF + VISION_DEV fail-safe (ADR security); mv_recipient_monthly dropped (ADR-068); @vision/shared-utils package + banker's rounding canonical (ADR-069). September 2026: transaction ownership uses the ADR-088 Account entity and canonical account_id foreign keys."
+date: 2026-10-04
+last_modified: 2026-10-04
 tags: [architecture, backend, uml, plantuml, phase-3, phase-6, phase-9, phase-e, decimal, money, precision, caching, materialization, nightly-job, startup, dependency-ordering, db-polling, graceful-shutdown, signal-handling, offline-resilience, network-reachability, tags, tagging, orthogonal-dimension, route-service-boundary, thin-seams, global-rate-limiter, trusted-proxies, vision-dev, mv-recipient-monthly-drop, shared-utils, banker-rounding]
 aliases: [backend architecture, node architecture, server design]
 ---
@@ -14,6 +14,40 @@ aliases: [backend architecture, node architecture, server design]
 This document contains UML diagrams for the Node.js backend application.
 
 > **Note**: These diagrams are generated from the codebase and should be regenerated when significant changes are made.
+
+## Portfolio Upload Boundary
+
+The portfolio router uses `lib/portfolioUpload.js` for CSV and detailed Saxo XLSX. Workbook
+preflight validates archive bounds and joined accounting detail before batch creation or SSE
+headers. Maintained statements stage first, then `portfolioImportReconciliationService.js` builds
+one reviewed source/history plan. `portfolioImportCommitService.js` locks the scope and applies
+adoption, canonical rows, and custody events atomically. Immutable receipt repositories retain
+before/after financial images. The separate duplicate-repair service retains both manual/imported
+images plus original staging/batch counters and restores them under strict checks. Custody
+repositories store dated gross units and asset fees.
+`portfolioAssetAdjustmentService.js` adds immutable dated yield reversals/asset fees with original
+lot allocation receipts and restrictive links to yield evidence. `portfolioHistoryWriteService.js`
+serializes manual mutations against trade, custody, and adjustment tables. The separate
+`lib/portfolioReferenceUpload.js` and bounded `portfolioPerformanceXmlParser.js` accept optional
+secondary XML. `portfolioImportReferenceService.js` changes staging only, preserves primary broker
+facts, and creates explicit managed IBKR review clones/supplemental batches with effective scope
+metadata. Canonical commit remains a later reviewed operation.
+The shared `portfolioCustody.js` replay carries original acquisition lots and purchase FX into
+summaries and snapshots. Budgeting uploads retain their CSV boundary. See
+[[docs/features/portfolio-import]], [[docs/api/portfolio-imports]], and
+[[docs/adr/177-reviewed-history-reconciliation-and-custody-ledger]] for contracts and recovery.
+
+![[docs/diagrams/backend-api-layer.puml]]
+
+![[docs/diagrams/backend-service-layer.puml]]
+
+![[docs/diagrams/backend-repository-layer.puml]]
+
+![[docs/diagrams/backend-domain-model.puml]]
+
+![[docs/diagrams/backend-database-schema.puml]]
+
+![[docs/diagrams/system-architecture.puml]]
 
 ## Startup Sequence Ordering (Fixed 2026-04-25; Backend DB Polling 2026-04-27)
 

@@ -24,6 +24,12 @@ aliases: [ADRs, decisions, architecture decisions]
 [[docs/adr/176-built-in-agent-sandboxes|ADR-176]] retires the project agent container and uses
 built-in Claude Code and Codex sandboxes with the native development workflow.
 
+## Current portfolio history decision
+
+[[docs/adr/177-reviewed-history-reconciliation-and-custody-ledger|ADR-177]] adds reviewed adoption
+receipts, atomic statement sessions, and dated partial custody with original acquisition basis.
+It supersedes whole-lot re-tagging for dated custody history and records guarded schema recovery.
+
 ## All ADRs
 
 ```dataview

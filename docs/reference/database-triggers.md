@@ -2,8 +2,8 @@
 title: Database Triggers Reference
 type: reference
 status: active
-date: 2026-04-21
-updated: 2026-09-04
+date: 2026-10-04
+updated: 2026-10-04
 tags:
   [
     reference,
@@ -130,6 +130,24 @@ See [[docs/adr/112-retire-legacy-split-overpayment-trigger|ADR-112]].
 This does not affect the aggregate-maintenance trigger
 `trg_split_payment_outstanding_sync`, which continues to update `agg_split_outstanding` after
 payment inserts, updates, and deletes.
+
+## Portfolio history receipt, custody, and adjustment guards (0120–0123)
+
+| Trigger | Table / event | Contract |
+| ------- | ------------- | -------- |
+| `portfolio_import_reconciliation_immutable` | Reconciliation journal, BEFORE UPDATE/DELETE | Rejects changing or deleting adoption/restore receipts |
+| `portfolio_import_reconciliation_valid_receipt` | Reconciliation journal, BEFORE INSERT | Source belongs to batch; restoration references one matching adoption with swapped exact images |
+| `portfolio_duplicate_repair_receipt_guard` | Duplicate-repair journal, BEFORE INSERT/UPDATE/DELETE | Validates source and inverse receipt state; rejects receipt mutation/deletion |
+| `portfolio_asset_transfers_immutable` | Custody ledger, BEFORE UPDATE | Rejects editing canonical custody; application rollback can delete only after projected-history validation |
+| `portfolio_asset_adjustments_immutable` | Adjustment ledger, BEFORE UPDATE | Rejects editing canonical unit removals; application rollback validates remaining history before removal |
+| `portfolio_asset_adjustment_sources_immutable` | Adjustment source links, BEFORE UPDATE/DELETE | Rejects updates and direct deletes; permits deletion only by cascade after parent adjustment removal |
+
+The journal retains the financial ID without a financial foreign key. Its source batch/staging
+foreign keys restrict pruning. These guards preserve domain receipts; they do not make them part
+of the independently witnessed audit chain. See [[docs/reference/data-model]],
+[[docs/features/portfolio-import]], and
+[[docs/adr/177-reviewed-history-reconciliation-and-custody-ledger]] for application compare-and-set,
+source retention, and downgrade limits.
 
 ## Migration References
 

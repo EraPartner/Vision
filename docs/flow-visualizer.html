@@ -1580,7 +1580,7 @@
             "sub": "services/portfolioImportPipeline",
             "kind": "service",
             "path": "apps/node-backend/src/services/portfolioImportPipeline/",
-            "desc": "Parallel import pipeline for brokerage/exchange CSV trades (ADR-078). Phases: stage \u2192 validate \u2192 matchInvestments \u2192 commit. Exact source provenance and versioned occurrence fingerprints are owned by services/importIdentity.js and shared with budgeting imports (ADR-134). FX is resolved via fxResolve (ADR-074).",
+            "desc": "Portfolio CSV/Saxo XLSX pipeline stages, validates, and matches maintained sources. Reviewed reconciliation preserves original transaction IDs through immutable receipts and commits the selected scope atomically. Dated custody replay carries original acquisition lots and purchase FX; generic mapping keeps its existing behavior. Optional bounded XML reference enriches staging; primary broker execution facts retain precedence.",
             "x": 40,
             "y": 740
           },
@@ -1832,6 +1832,46 @@
             "y": 740,
             "path": "apps/node-backend/src/services/dbEditor.js",
             "desc": "JetBrains-style table browser/editor: schema discovery, paginated filtered reads (READ ONLY txn), batch insert/update/delete with xmin OCC; writes to db_editor_audit; debounces matview refresh for base tables (ADR-101)"
+          },
+          {
+            "id": "sv.portfolioreconciliation",
+            "label": "History reconciliation",
+            "sub": "reviewed plan + receipts",
+            "kind": "service",
+            "x": 40,
+            "y": 960,
+            "path": "apps/node-backend/src/services/portfolioImportReconciliationService.js",
+            "desc": "One-to-one existing trade adoption, explicit repair of a prior imported duplicate, policy-pinned plans, immutable restore images, and projected history validation. Adjustment actions consume eligible zero-yield or carried-basis lots."
+          },
+          {
+            "id": "sv.portfoliocustody",
+            "label": "Dated asset custody",
+            "sub": "carried original lots",
+            "kind": "service",
+            "x": 40,
+            "y": 1060,
+            "path": "apps/node-backend/src/services/portfolio/portfolioAssetTransferService.js",
+            "desc": "Canonical partial custody events carry original purchase lots and FX; asset fees consume source units and basis."
+          },
+          {
+            "id": "sv.portfolioadjustment",
+            "label": "Asset unit adjustments",
+            "sub": "zero yield / carried fee basis",
+            "kind": "service",
+            "x": 40,
+            "y": 1160,
+            "path": "apps/node-backend/src/services/portfolio/portfolioAssetAdjustmentService.js",
+            "desc": "Dated yield reversals consume only source-proven zero-basis yield lots. Asset fees consume original lots and purchase FX. Per-method allocations and restrictive source links retain evidence."
+          },
+          {
+            "id": "sv.portfolioreference",
+            "label": "XML history reference",
+            "sub": "staging evidence + managed scope",
+            "kind": "service",
+            "x": 40,
+            "y": 1260,
+            "path": "apps/node-backend/src/services/portfolioImportReferenceService.js",
+            "desc": "Bounded original Portfolio Performance XML enriches staging only with explicit zero-placeholder policy. Primary execution facts control; explicit terminal IBKR selection creates a managed review clone. Effective scope, metadata and blockers remain reviewable."
           }
         ],
         "baseEdges": [
@@ -1934,7 +1974,20 @@
           ["sv.airesearch", "sv.research"],
           ["sv.airesearch", "be.ollamaclient"],
           ["sv.airesearch", "ex.brave"],
-          ["sv.airesearch", "ex.openai"]
+          ["sv.airesearch", "ex.openai"],
+          ["sv.portfolioimport", "sv.portfolioreconciliation"],
+          ["sv.portfolioreconciliation", "be.repos"],
+          ["sv.portfolioreconciliation", "sv.portfoliocustody"],
+          ["sv.portfoliocustody", "pkg.shared-utils"],
+          ["sv.portfoliocustody", "be.repos"],
+          ["sv.snapshot", "sv.portfoliocustody"],
+          ["be.routes", "sv.portfolioreference"],
+          ["sv.portfolioreference", "be.repos"],
+          ["sv.portfolioreference", "sv.portfolioimport"],
+          ["sv.portfolioreconciliation", "sv.portfolioadjustment"],
+          ["sv.portfolioimport", "sv.portfolioadjustment"],
+          ["sv.portfolioadjustment", "be.repos"],
+          ["sv.portfolioadjustment", "pkg.shared-utils"]
         ],
         "flows": [
           {
@@ -3870,69 +3923,69 @@
           },
           {
             "id": "portfolio-csv-import",
-            "name": "Portfolio CSV import (brokerage trades)",
+            "name": "Reviewed portfolio history and custody import",
             "category": "Imports",
-            "summary": "User uploads a brokerage CSV; backend runs a stage\u2192validate\u2192matchInvestments pipeline and either auto-commits all rows or sends the batch to awaiting_review for instrument resolution.",
+            "summary": "A multi-statement session detects sources/accounts and stages CSV or detailed Saxo XLSX. Optional original XML and explicit zero-basis policy enrich staging and return an effective review scope. Fingerprint-pinned commit preserves existing trades and carries original lots through custody and unit adjustments atomically. Unknown context, basis, ambiguous matches and evidence gaps block commit.",
             "steps": [
               {
                 "from": "browser",
                 "to": "fe.pages",
-                "payload": "navigate to /portfolio/import; select or drop CSV file",
-                "annotation": "PortfolioImportPage (apps/frontend/src/pages/portfolio/PortfolioImportPage.tsx) renders immediately; FileHeadersPanel shows column-name chips and sample rows as soon as the file is chosen, independent of adapter selection."
+                "payload": "open /portfolio/import; select up to 100 maintained CSV / Saxo XLSX statements",
+                "annotation": "apps/frontend/src/pages/portfolio/PortfolioImportSession.tsx detects each statement using apps/frontend/src/pages/portfolio/portfolioImportDetection.ts. Complete files are bounded at 50 MiB; unique source/account matches select presets, ambiguous choices remain explicit. Only Saxo XLSX is supported."
               },
               {
                 "from": "fe.pages",
                 "to": "fe.features",
-                "payload": "file + PortfolioCsvColumnMapper config: date_column, symbol_column, default_asset_class, type_mapping, \u2026",
-                "annotation": "PortfolioCsvColumnMapper (apps/frontend/src/features/imports/PortfolioCsvColumnMapper.tsx) builds the flattened multipart form fields from the user's column mapping and optional saved portfolio parser (usePortfolioParserConfigs hook, cache key ['portfolio-parser-configs'])."
+                "payload": "per-statement broker and transfer counterpart; global/per-statement adoption policy",
+                "annotation": "apps/frontend/src/pages/portfolio/PortfolioImportSession.tsx owns source files and policy/scope state. apps/frontend/src/pages/portfolio/portfolioImportPresets.ts supplies maintained mappings. Custom single-file CSV mapping remains in apps/frontend/src/features/imports/PortfolioCsvColumnMapper.tsx."
               },
               {
                 "from": "fe.features",
                 "to": "fe.apiclient",
-                "payload": "portfolioImports.uploadPortfolioCsv(formData)  or  portfolioImports.uploadPortfolioCsvStream(formData)",
-                "annotation": "lib/api/portfolioImports.ts \u2014 one-shot (POST /api/portfolio/import/csv/custom) or SSE stream (POST /api/portfolio/import/csv/stream). SSE path opens an EventSource and relays progress/review_required/complete/error events to the UI."
+                "payload": "sequential POST /csv/stream; store staged batch IDs before loading previews",
+                "annotation": "apps/frontend/src/pages/portfolio/PortfolioImportSession.tsx calls apps/frontend/src/lib/api/portfolioImports.ts, verifies review-required staging results, and stores metadata in tab sessionStorage without file bytes. Stop waits for the current upload so its batch is retained."
               },
               {
                 "from": "fe.apiclient",
                 "to": "be.middleware",
-                "payload": "multipart/form-data  \u00b7  file + flattened config fields  \u00b7  importRateLimiter",
-                "annotation": "importRateLimiter (20 req/min) applied at route mount in main.js before portfolioImportRoutes; csvUpload multer middleware (lib/csvUpload.js) writes the temp file and enforces 50 MB limit."
+                "payload": "multipart file + config fields; importRateLimiter; portfolio-only CSV/XLSX upload",
+                "annotation": "apps/node-backend/src/routes/portfolioImportRoutes.js uses portfolioUpload from apps/node-backend/src/lib/portfolioUpload.js to enforce the 50 MiB file limit. Bank imports retain lib/csvUpload.js and CSV-only input."
               },
               {
                 "from": "be.middleware",
                 "to": "be.routes",
-                "payload": "req.file path + buildPortfolioConfig(req.body) customConfig",
-                "annotation": "portfolioImportRoutes.js (apps/node-backend/src/routes/portfolioImportRoutes.js) validates required fields (date_column, at least one of symbol_column/name_column, valid default_asset_class) via buildPortfolioConfig(), then delegates to the pipeline."
+                "payload": "validated multipart config + account + optional included_symbols; read-only workbook preflight before batch / SSE",
+                "annotation": "apps/node-backend/src/routes/portfolioImportRoutes.js builds the required mapping and validates an active broker account. apps/node-backend/src/lib/portfolioUpload.js rejects unsupported XLSX, bounds archive expansion, and preflights the detailed Saxo adapter before batch creation or SSE headers."
               },
               {
                 "from": "be.routes",
                 "to": "sv.portfolioimport",
                 "payload": "runPortfolioImportPipeline({ filePath, customConfig, onProgress })",
-                "annotation": "services/portfolioImportPipeline/index.js orchestrates stage\u2192validate\u2192matchInvestments. The onProgress callback either logs or writes SSE events (via createSseWriter from lib/sse.js) for the streaming path."
+                "annotation": "apps/node-backend/src/services/portfolioImportPipeline/index.js stages, validates, and matches records. The Saxo adapter joins Transacties, _Transacties, and Bookings by account and booking-record ID; inconsistent workbook detail rejects. onProgress reports the existing phase events."
               },
               {
                 "from": "sv.portfolioimport",
                 "to": "db.postgres",
                 "payload": "INSERT INTO portfolio_import_batches; INSERT INTO portfolio_import_staging_rows (migration 0040)",
-                "annotation": "stage.js stores exact logical CSV records. validate.js resolves types and calls services/importIdentity.js for provenance hashes plus versioned, account-aware occurrence fingerprints (ADR-134)."
+                "annotation": "apps/node-backend/src/services/portfolioImportPipeline/stage.js retains literal CSV records or typed Saxo workbook provenance with joined sheet rows and source-byte hash. Explicit included_symbols excludes unselected parsed assets and unrelated cash, records scope_excluded_rows, and retains parsing errors. validate.js uses apps/node-backend/src/services/importIdentity.js for provenance hashes and versioned account/currency/route-aware occurrence fingerprints."
               },
               {
                 "from": "sv.portfolioimport",
                 "to": "be.repos",
-                "payload": "SELECT FROM investments WHERE LOWER(symbol)=\u2026 OR LOWER(name)=\u2026 ",
-                "annotation": "matchInvestments.js (apps/node-backend/src/services/portfolioImportPipeline/matchInvestments.js) queries investments by symbol (exact, case-insensitive) then by name. Sets resolved_investment_id and match_source on staging rows. No ISIN, no fuzzy (ADR-078 \u00a7B)."
+                "payload": "resolve one active exact symbol, explicit provider alias, or exact name",
+                "annotation": "apps/node-backend/src/services/portfolioImportPipeline/matchInvestments.js keeps exact-symbol priority, then explicit Yahoo crypto / Kinesis provider asset aliases, then exact name. Ambiguous symbol or alias candidates block name fallback. Stored match_source is symbol, name_exact, or null; no ISIN or fuzzy matching."
               },
               {
                 "from": "sv.portfolioimport",
                 "to": "be.routes",
                 "payload": "{ batchId, requires_review, match_source_counts }  OR  { batchId, total, imported, duplicates, errors }",
-                "annotation": "If all rows matched (unresolved==0) and errors==0 \u2192 auto-commit path calls commitPortfolioImport() directly and returns 201. Otherwise batch status is set to awaiting_review and 202 is returned; SSE stream emits review_required event."
+                "annotation": "apps/node-backend/src/services/portfolioImportPipeline/index.js always sends maintained brokerage formats to awaiting_review. Only non-brokerage generic imports with no errors, unresolved rows, or name matches auto-commit; aliases use the symbol match source."
               },
               {
                 "from": "be.routes",
                 "to": "fe.pages",
-                "payload": "202 { batch_id, requires_review: true }  \u2192  navigate to /portfolio/import/review/:batchId",
-                "annotation": "Frontend receives review_required SSE event (or 202 response) and navigates to PortfolioImportReviewPage (apps/frontend/src/pages/portfolio/PortfolioImportReviewPage.tsx). GET /api/portfolio/import/batches/:id/preview returns groups by investment; unresolved groups listed first."
+                "payload": "202 review-required batch metadata; retain staged session",
+                "annotation": "apps/frontend/src/pages/portfolio/PortfolioImportSession.tsx retains every returned batch ID and loads preview data. apps/frontend/src/pages/portfolio/PortfolioImportReviewPage.tsx remains available for atomic investment-group resolution."
               },
               {
                 "from": "fe.pages",
@@ -3942,23 +3995,104 @@
               },
               {
                 "from": "fe.apiclient",
+                "to": "sv.portfolioreference",
+                "payload": "optional POST /reconciliation/reference: XML + explicit batch_ids + placeholder_basis_policy=zero",
+                "annotation": "apps/node-backend/src/routes/portfolioImportRoutes.js uses apps/node-backend/src/lib/portfolioReferenceUpload.js for a separate 10 MiB XML boundary. apps/node-backend/src/services/portfolioPerformanceXmlParser.js requires UTF-8, forbids DTD/entity declarations, and bounds depth/nodes/reference chains. Initial Kinesis staging uses the same explicitly selected zero policy."
+              },
+              {
+                "from": "sv.portfolioreference",
+                "to": "be.repos",
+                "payload": "literal primary precedence; staging corrections; selected terminal IBKR managed review clone",
+                "annotation": "apps/node-backend/src/services/portfolioImportReferenceService.js requires resolved asset, quantity, date, native currency/basis and wallet context. apps/node-backend/src/repositories/portfolioImportReferenceRepository.js changes staging/configuration only. Explicit terminal IBKR selection with complete retained source creates a review clone; original canonical rows remain unchanged."
+              },
+              {
+                "from": "sv.portfolioreference",
+                "to": "fe.pages",
+                "payload": "effective batch_ids + supplemental metadata + replacement relations + blockers + optional coverage",
+                "annotation": "apps/frontend/src/pages/portfolio/PortfolioImportSession.tsx validates and retains effective scope/reference metadata for resume. Scope/XML/policy changes restage uploaded primary sources and restore explicit original selection for a fresh clone. Same XML/scope/routing retries reuse the staged result; coverage is not proof of complete historical executions."
+              },
+              {
+                "from": "fe.apiclient",
+                "to": "sv.portfolioreconciliation",
+                "payload": "POST /reconciliation/preview {batch_ids, adopt_policy?, batch_policies?}",
+                "annotation": "apps/node-backend/src/services/portfolioImportReconciliationService.js compares source identity and one-to-one nearby history. Complete staging, original basis, known custody accounts, proven economics, and required Pro companion trades must resolve. Preview returns actions, blockers, counts, and planFingerprint."
+              },
+              {
+                "from": "sv.portfolioreconciliation",
+                "to": "be.repos",
+                "payload": "current history + canonical fingerprints; adopt / insert / duplicate / explicit repair_duplicate",
+                "annotation": "apps/node-backend/src/repositories/portfolioImportReconciliationRepository.js reads source and current history. Exact legacy matches retain IDs; corrections require policy. apps/node-backend/src/services/portfolioImportDuplicateRepairService.js removes an unchanged prior copy only with one manual candidate, complete old batch/pointer evidence, and explicit reviewed policy; both row images and source counters are retained."
+              },
+              {
+                "from": "sv.portfolioreconciliation",
+                "to": "sv.portfoliocustody",
+                "payload": "validate full proposed dated custody and account holdings before commit",
+                "annotation": "apps/node-backend/src/services/portfolio/portfolioAssetTransferService.js requires distinct active source/destination accounts, resolved original acquisition history, and consistent gross/fee units. Missing origin or basis and downstream oversell/custody conflicts block the complete plan."
+              },
+              {
+                "from": "sv.portfoliocustody",
+                "to": "pkg.shared-utils",
+                "payload": "projectAssetTransferPartitions: FIFO / LIFO / weighted-average original lots",
+                "annotation": "packages/shared-utils/src/portfolioCustody.js carries acquisition IDs/dates, native basis, and original purchase FX. Source loses gross units; destination receives gross minus asset fee units. No fictional sale, proceeds, income, or cash leg is created."
+              },
+              {
+                "from": "sv.portfolioreconciliation",
+                "to": "sv.portfolioadjustment",
+                "payload": "adjustment action + summary.adjustment; explicit eligible zero-yield or carried-basis removal",
+                "annotation": "apps/node-backend/src/services/portfolio/portfolioAssetAdjustmentService.js requires explicit zero-yield policy/source history for reversals and sufficient dated holdings for fees. Adjustment staging has route asset_adjustment and no financial type; source fingerprints remain canonical."
+              },
+              {
+                "from": "sv.portfolioadjustment",
+                "to": "pkg.shared-utils",
+                "payload": "all-method original lot allocations; native basis + original purchase FX; no sale/cash",
+                "annotation": "packages/shared-utils/src/portfolioCustody.js consumes only remaining eligible lots under FIFO/LIFO/weighted average. apps/node-backend/src/repositories/portfolioAssetAdjustmentRepository.js retains acquisition allocation receipts and restrictive links to original yield staging, including older batches."
+              },
+              {
+                "from": "fe.apiclient",
                 "to": "sv.portfolioimport",
-                "payload": "POST /api/portfolio/import/batches/:id/commit",
-                "annotation": "commitBatch() in services/portfolioImportPipeline/commit.js iterates resolved staging rows, calls portfolioTransactionService.create() per row (2-of-3 unit math, oversell check), calls fxResolve (services/portfolio/fxResolve.js) for non-EUR rows without an explicit rate, and records per-row errors without aborting."
+                "payload": "POST /reconciliation/commit with current expected_plan_fingerprint and unchanged policies",
+                "annotation": "apps/node-backend/src/services/portfolioImportCommitService.js locks batches/accounts and trade/custody writers, reloads the plan, and rejects stale fingerprints. Events across selected batches run by date, batch ID, and source row order. portfolio/portfolioCustodyImportScope.js binds approved custody signatures to this transaction, allocates from persisted history through each event date, then validates complete persisted custody history before commit. Runtime row failure or final replay failure rolls back the outer scope."
               },
               {
                 "from": "sv.portfolioimport",
                 "to": "db.postgres",
-                "payload": "INSERT INTO portfolio_transactions (via portfolioTransactionService.create)",
-                "annotation": "Commit keeps portfolio validation and oversell rules, checks exact versioned fingerprints, and relies on migration 0103's partial unique index as the concurrent-import race guard."
+                "payload": "atomic adoption/repair receipts + missing trades/cash + dated custody/adjustments + source links/counters",
+                "annotation": "apps/node-backend/src/services/portfolioImportReconciliationService.js preserves adopted transaction IDs. apps/node-backend/src/services/portfolioImportDuplicateRepairService.js stores manual/imported images and original staging/batch counters before removing a proven copy. apps/node-backend/src/services/portfolioImportPipeline/commit.js routes each new event once, including custody events with source identity and fee-basis allocations. New adjustment events count as imported; all writers lock trade, transfer and adjustment tables."
+              },
+              {
+                "from": "fe.hooks",
+                "to": "be.routes",
+                "payload": "GET /api/info/portfolio-summary?currency for canonical active holdings",
+                "annotation": "apps/frontend/src/hooks/usePortfolio.ts combines metadata and editable ordinary transactions with usePortfolioSummaryQuery. apps/frontend/src/hooks/portfolio/usePortfolioSummaries.ts uses server quantities, custody-aware gains and oversold state for active holdings; pending or failed canonical requests gate the display."
+              },
+              {
+                "from": "be.routes",
+                "to": "fe.pages",
+                "payload": "eight-decimal quantities plus target-currency gains and assignment state",
+                "annotation": "apps/node-backend/src/services/portfolio/portfolioSummaryService.js includes canonical transfers and adjustments. apps/frontend/src/pages/portfolio/CryptoPage.tsx shows eight-decimal units; useFxAwarePnl.ts respects canonical target-currency gains without a second ordinary-only replay."
+              },
+              {
+                "from": "sv.portfolioreconciliation",
+                "to": "db.postgres",
+                "payload": "guarded batch rollback: remove owned rows; compare-and-set restore original adopted history",
+                "annotation": "apps/node-backend/src/services/portfolioImportReconciliationService.js validates remaining custody/sale history and adopted after-images. apps/node-backend/src/services/portfolioImportDuplicateRepairService.js checks all repair images, then restores the removed copy ID/timestamps and original manual/source state with an inverse receipt. Changes block the entire rollback. Referenced new and original batches survive pruning. apps/node-backend/src/services/portfolio/portfolioAssetAdjustmentService.js removes owned adjustments only after history checks; source links delete only by parent cascade."
               }
             ],
             "docs": [
               {
                 "path": "features/portfolio-import.md",
-                "label": "Feature - Portfolio CSV Import"
+                "label": "Portfolio Import"
+              },
+              {
+                "path": "api/portfolio-imports.md",
+                "label": "Reconciliation API"
+              },
+              {
+                "path": "adr/177-reviewed-history-reconciliation-and-custody-ledger.md",
+                "label": "Receipts and custody decision"
               }
-            ]
+            ],
+            "takeaway": "Source fingerprints, reviewed adoption, and custody replay prevent different forms of double counting. Neither adapter support nor a ready structural plan proves that all historical executions were exported."
           },
           {
             "id": "macro-series-fetch",
@@ -5425,7 +5559,11 @@
             "id": "start",
             "name": "1. Start here",
             "description": "Learn request boundaries, dashboard data and desktop startup.",
-            "flows": ["api-request", "dashboard-summary", "native-startup"]
+            "flows": [
+              "api-request",
+              "dashboard-summary",
+              "native-startup"
+            ]
           },
           {
             "id": "money",

@@ -2,8 +2,8 @@
 title: Accounts
 type: feature
 status: active
-date: 2026-09-27
-updated: 2026-09-13
+date: 2026-10-04
+updated: 2026-10-04
 tags:
   [
     feature,
@@ -73,7 +73,7 @@ The budgeting accounts surface: every bank/cash/liability entity ([[docs/adr/088
 | Overview | Grouped accounts hub                                                      | `/accounts`     |
 | Ledger   | Per-account detail with running-balance ledger                            | `/accounts/:id` |
 
-All three render the **same balance definition**: the ADR-094 anchor+delta computed balance (most recent stamped statement balance + active entries after it; plain sum when unstamped). Numeric balances come from `accountBalanceSql.js`'s per-currency lateral helpers; `BALANCE_PROVENANCE_LATERAL` separately supplies the shared statement anchor and post-anchor row count (ADR-118).
+All three render the **same balance definition** for cash-bearing accounts: the ADR-094 anchor+delta computed balance (most recent stamped statement balance + active entries after it; plain sum when unstamped). Numeric balances come from `accountBalanceSql.js`'s per-currency lateral helpers; `BALANCE_PROVENANCE_LATERAL` separately supplies the shared statement anchor and post-anchor row count (ADR-118). Holdings-only `crypto_exchange` and `wallet` accounts retain imported ledger history but do not enter Dashboard cash cards, bank balance totals, or balance history. Their portfolio holdings remain visible in Accounts and Net Worth (ADR-108).
 
 The definition is also date-bounded ([[docs/adr/123-effective-date-current-balances|ADR-123]]).
 A future-dated transaction stays visible in the ledger, but it does not affect the current balance,

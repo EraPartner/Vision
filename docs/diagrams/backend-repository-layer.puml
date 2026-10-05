@@ -103,6 +103,47 @@ package "Repositories" {
     note bottom: Parameterized SQL only;\ntransaction policy lives in services/portfolio/.
   }
 
+  class PortfolioImportReconciliationRepository <<ADR-177>> {
+    +readReconciliationSources(batchIds)
+    +readReconciliationHistory(investmentIds)
+    +lockReconciliationAccountsAndHistory(accountIds)
+    +compareAndSetReconciledTransaction(id, before, after)
+    +insertReconciliationReceipt(receipt)
+    +getActiveAdoptionReceipts(batchId)
+  }
+
+  class PortfolioImportDuplicateRepairRepository <<ADR-177>> {
+    +readDuplicateRepairContext(history)
+    +readFullRepairTransaction(id)
+    +replaceRepairStaging(before, after)
+    +replaceRepairBatch(before, after)
+    +deleteExactImportedCopy(snapshot)
+    +restoreExactImportedCopy(snapshot)
+    +insertDuplicateRepairReceipt(receipt)
+  }
+
+  class PortfolioAssetTransferRepository <<ADR-177>> {
+    +findAssetTransferFingerprint(fingerprint, version)
+    +insertAssetTransfer(event)
+    +getAssetTransfersForBatch(batchId)
+    +deleteAssetTransfersForBatch(batchId)
+  }
+
+  class PortfolioAssetAdjustmentRepository <<ADR-177>> {
+    +getEligibleYieldSources(investmentId, accountId)
+    +retainAssetAdjustmentSources(adjustmentId, sources)
+    +findAssetAdjustmentFingerprint(fingerprint, version)
+    +insertAssetAdjustment(event)
+    +deleteAssetAdjustmentsForBatch(batchId)
+  }
+
+  class PortfolioImportReferenceRepository <<ADR-177>> {
+    +lockPortfolioReferenceScope(batchIds)
+    +lockPortfolioReferenceRows(batchIds)
+    +updatePortfolioReferenceRow(row, after)
+    +savePortfolioReferenceConfiguration(batchId, config)
+  }
+
   class WatchlistRepository {
     +getAll(opts): Promise<Watchlist[]>
     +getById(id): Promise<Watchlist | null>
@@ -342,6 +383,11 @@ DB <.. PlannedTransactionRepository
 DB <.. RecipientBankAccountRepository
 DB <.. InvestmentRepository
 DB <.. PortfolioTransactionRepository
+DB <.. PortfolioImportReconciliationRepository
+DB <.. PortfolioAssetTransferRepository
+DB <.. PortfolioAssetAdjustmentRepository
+DB <.. PortfolioImportReferenceRepository
+DB <.. PortfolioImportDuplicateRepairRepository
 DB <.. WatchlistRepository
 DB <.. SplitRepository
 DB <.. AuditChainRepository
@@ -360,6 +406,16 @@ DB <.. CashflowForecastMcRepository
 DB <.. CashflowForecastMcRollingRepository
 DB <.. CashflowForecastAccuracyRepository
 DB <.. CustomParserConfigRepository
+
+PortfolioImportReconciliationService --> PortfolioImportReconciliationRepository : snapshots + receipts
+PortfolioImportDuplicateRepairService --> PortfolioImportDuplicateRepairRepository : dual images + guarded copy restore
+PortfolioImportReconciliationService --> PortfolioImportDuplicateRepairService : explicit reviewed repair
+PortfolioAssetTransferService --> PortfolioAssetTransferRepository : canonical custody events
+PortfolioAssetAdjustmentService --> PortfolioAssetAdjustmentRepository : unit removals + pinned yield evidence
+PortfolioImportReferenceService --> PortfolioImportReferenceRepository : staging only; effective scope
+PortfolioImportReconciliationService --> PortfolioAssetAdjustmentService : projected adjustment validation
+PortfolioImportCommitService --> PortfolioImportReconciliationService : locked plan + adoption
+PortfolioImportReconciliationService --> PortfolioAssetTransferService : projected custody validation
 
 ' Import service dependencies
 ImportService --> BankAdapters

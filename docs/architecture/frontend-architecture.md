@@ -2,9 +2,9 @@
 title: Frontend Architecture
 type: architecture
 status: active
-description: React frontend architecture, design system, and diagrams with liquid-glass aesthetic, visx charts, Framer Motion, and Zustand store. May 2026 Tailwind v4 migration with unified CSS architecture. June 2026 Liquid Glass v2 — atmosphere layer, saturated blur tiers, CommandPalette, optimistic mutations, route preload. June 2026 Premium v3 — RollingNumber/Money/DeltaPill, chart scrub+sync, ChartSkeleton, PageTitleContext, palette v2, ShortcutsOverlay + go-to sequences, animated tabs, workspace aurora, ShaderAurora behind visual-effects tier model (ADR-075), per-widget dashboard hydration, optimistic create. 2026-06-24: --gain/--loss CSS semantic tokens unified app-wide (tokens.css baseline, skin-v2.css Okabe-Ito overrides); gain/loss Tailwind color utilities added; colorblindGainLoss default OFF/classic.
-date: 2026-09-27
-updated: 2026-09-11
+description: "React frontend architecture, design system, and diagrams with liquid-glass aesthetic, visx charts, Framer Motion, and Zustand store. May 2026 Tailwind v4 migration with unified CSS architecture. June 2026 Liquid Glass v2 — atmosphere layer, saturated blur tiers, CommandPalette, optimistic mutations, route preload. June 2026 Premium v3 — RollingNumber/Money/DeltaPill, chart scrub+sync, ChartSkeleton, PageTitleContext, palette v2, ShortcutsOverlay + go-to sequences, animated tabs, workspace aurora, ShaderAurora behind visual-effects tier model (ADR-075), per-widget dashboard hydration, optimistic create. 2026-06-24: --gain/--loss CSS semantic tokens unified app-wide (tokens.css baseline, skin-v2.css Okabe-Ito overrides); gain/loss Tailwind color utilities added; colorblindGainLoss default OFF/classic."
+date: 2026-10-04
+updated: 2026-10-04
 tags: [architecture, frontend, uml, plantuml, react, phase-4, phase-6, phase-9, liquid-glass, liquid-glass-v2, premium-v3, visx, framer-motion, statistics-refactoring, zustand, state-management, tailwind-v4, css-architecture, command-palette, optimistic-updates, route-preload, chart-scrub, chart-sync, shader-aurora, visual-effects-tiers, auto-adapt-display, fx-reduced, role-based-glass, glass-by-default, june-2026, gain-loss, css-tokens, skin-v2, tailwind-colors]
 aliases: [frontend architecture, react architecture, frontend design, design system]
 ---
@@ -28,6 +28,32 @@ publishes light/dark browser-chrome colors. This is install metadata only: Visio
 a service worker and does not claim offline web-app behavior.
 
 > **Note**: These diagrams are generated from the codebase and should be regenerated when significant changes are made.
+
+## Portfolio Import Selection
+
+`PortfolioImportPage` owns `PortfolioImportSession`, a multi-statement maintained-source workflow
+alongside the custom/saved-parser path. Complete-file signature detection selects an account only
+when its identity/broker has one active eligible match. Explicit account choices survive current
+file updates; stale detection cannot replace them. Each statement can configure a transfer
+counterpart and adoption-policy override. Sequential POST SSE staging persists tab-scoped batch
+metadata without file bytes. The session previews a combined before/source plan and commits only
+its current ready fingerprint. Scope/configuration changes invalidate the review; confirmed
+success invalidates portfolio queries. A separate optional original XML input and explicit zero
+placeholder policy enrich staging after primary uploads; the same choice selects Kinesis zero
+yield basis. Existing imports enter scope only through explicit selection. Managed clones and
+supplemental metadata replace the effective review IDs, with original selection and policy
+retained. Scope/XML/policy changes require restaging and a fresh reference review. Server staging
+and financial history remain authoritative.
+See [[docs/features/portfolio-import]], [[docs/adr/177-reviewed-history-reconciliation-and-custody-ledger]],
+and [[docs/architecture/index]] for the workflow and architecture catalogue.
+
+![[docs/diagrams/frontend-pages-routes.puml]]
+
+![[docs/diagrams/frontend-component-structure.puml]]
+
+![[docs/diagrams/frontend-state-management.puml]]
+
+![[docs/diagrams/frontend-data-flow.puml]]
 
 ## Feature Folder Organization (Phase 6 — migration complete)
 
@@ -494,7 +520,7 @@ Five saturated blur tiers (blur + `saturate(var(--glass-saturate))`):
 | `glass-regular`  | 20px | 180%/150% | Explicit stronger content material and non-Card glass panes                                                                                                                                                           |
 | `glass-chrome`   | 24px | 180%/150% | Sidebar, AppLayout topbar                                                                                                                                                                                             |
 | `glass-thick`    | 28px | 180%/150% | All floating overlays: Modal dialogs (Dialog, AlertDialog, Sheet), Sonner toasts, **and** the full popover family (Popover, DropdownMenu/SubContent, SelectContent, ContextMenu, MenuBar content, HoverCard, Tooltip) |
-| `glass-elevated` | 32px | 180%/150% | Explicit primary StatCards and Dashboard NetSummaryCard                                                                                                                                                                       |
+| `glass-elevated` | 32px | 180%/150% | Explicit primary StatCards and Dashboard NetSummaryCard                                                                                                                                                               |
 
 Saturate: 180% in light mode, 150% in dark (tokens `--glass-saturate`).
 
@@ -801,6 +827,12 @@ const queryClient = new QueryClient({
   },
 });
 ```
+
+Active portfolio summaries are server state. `usePortfolio` combines investment metadata and CRUD
+transactions with `usePortfolioSummaryQuery`; it gates active display on the canonical query's
+loading/error state. `usePortfolioSummaries` preserves ordinary transaction arrays for editing,
+while active holdings, custody-aware quantities and gains come from the server. Archived summaries
+retain local ordinary-history calculations. See [[docs/features/portfolio#Per-account breakdown in portfolio summary (ADR-108 partitioned P&L, 2026-08-10)|Portfolio summary ownership]].
 
 ### 3. API Client Pattern
 

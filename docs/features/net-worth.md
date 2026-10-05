@@ -2,8 +2,8 @@
 title: Net Worth Feature
 type: feature
 status: active
-date: 2026-09-30
-updated: 2026-09-30
+date: 2026-10-04
+updated: 2026-10-04
 tags:
   [
     feature,
@@ -101,6 +101,13 @@ The net worth is computed by `infoRepositoryNetWorth.getNetWorthFromSnapshots(ta
 
 - **Investments**: Pre-computed daily portfolio values from `portfolio_performance_snapshots` (includes unit-based assets: stocks, ETFs, crypto, metals, AND non-unit assets: real estate, savings, bonds). The snapshot builder mirrors `portfolioSummaryService` formulas exactly — see valuation formulas below. The **latest snapshot row's** `investments` value is then overlaid with the live summary total at read time (see "Live overlay" below).
 - **Liquid and liabilities**: Daily per-currency account balances derived with the shared statement-anchor-plus-delta rule, with a cumulative transaction-flow fallback when rows are unattributed
+
+Holdings-only `crypto_exchange` and `wallet` accounts contribute through investment valuations,
+not through imported fiat movement ledgers (ADR-108). Their cash rows are excluded consistently
+from current balances, the daily account walk, the transaction-flow fallback, and the cash history
+start-date probe. This keeps the headline and history aligned with the by-account breakdown.
+Ordinary brokerage cash, liabilities, and eligible unattributed ledger rows retain their existing
+behavior. Imported wallet history and account balance fields are preserved.
 
 Both the liquid history and current point apply the effective-date boundary from
 [[docs/adr/123-effective-date-current-balances|ADR-123]]. Future ledger rows neither leak backward

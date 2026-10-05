@@ -210,6 +210,74 @@ package "Investment & Portfolio" {
     +updated_at: timestamptz
   }
 
+  class PortfolioAssetTransfer <<ADR-177>> {
+    +id: bigint (shared trade sequence)
+    +investment_id: integer <<FK>>
+    +source_account_id: integer <<FK>>
+    +destination_account_id: integer <<FK>>
+    +date: date
+    +units: numeric(18,8) (gross)
+    +fee_units: numeric(18,8)
+    +fee_basis_allocations: jsonb
+    +import_batch_id: bigint <<FK>>
+    +staging_row_id: bigint <<FK, UQ>>
+    +source_record_hash: char(64)
+    +dedup_fingerprint: char(64)
+  }
+  class PortfolioAssetAdjustment <<ADR-177>> {
+    +id: bigint (shared trade sequence)
+    +investment_id / account_id: integer <<FK RESTRICT>>
+    +date: date
+    +units: numeric(18,8) (removed)
+    +adjustment_kind: yield_reversal | asset_fee
+    +basis_policy: zero_yield_only | carried
+    +eligible_source_record_hashes: text[]
+    +basis_allocations: jsonb (original lots / purchase FX)
+    +import_batch_id / staging_row_id: bigint <<FK RESTRICT>>
+    +source_record_hash / dedup_fingerprint: char(64)
+  }
+  class PortfolioAssetAdjustmentSource <<ADR-177>> {
+    +adjustment_id: bigint <<PK, FK CASCADE>>
+    +staging_row_id: bigint <<PK, FK RESTRICT>>
+    +source_record_hash: char(64)
+  }
+  class PortfolioImportReconciliationJournal <<ADR-177>> {
+    +id: bigint
+    +batch_id: bigint <<FK>>
+    +staging_row_id: bigint <<FK>>
+    +transaction_id: integer (retained ID)
+    +action: adopt | restore
+    +policy: exact | preserve_existing | prefer_source
+    +previous_entry_id: bigint <<FK, UQ>>
+    +before_data: jsonb
+    +after_data: jsonb
+  }
+  class PortfolioImportDuplicateRepairJournal <<ADR-177>> {
+    +id: bigint
+    +batch_id: bigint <<FK>>
+    +staging_row_id: bigint <<FK>>
+    +original_import_batch_id: bigint <<FK>>
+    +legacy_transaction_id: integer (retained)
+    +imported_transaction_id: integer (removed copy)
+    +action: repair | restore
+    +policy: preserve_existing | prefer_source
+    +before_data / after_data: jsonb (both rows + source state)
+    +previous_entry_id: bigint <<FK, UQ>>
+  }
+  class PortfolioImportBatch {
+    +id: bigint
+    +account_id: integer
+    +custom_config: jsonb
+    +status: text
+  }
+  class PortfolioImportStagingRow {
+    +id: bigint
+    +batch_id: bigint <<FK>>
+    +route: portfolio | cash | asset_transfer | account_internal
+    +asset_transfer_details: json
+    +status: text
+  }
+
   class Watchlist {
     +id: integer
     +name: varchar(200)
@@ -408,6 +476,23 @@ PlannedTransaction "1" o-- "*" PlannedTransactionLoanSchedule : has
 PlannedTransactionExecution "1" --> "0..1" Transaction : executes
 
 Investment "1" o-- "*" PortfolioTransaction : records
+Investment "1" -- "*" PortfolioAssetTransfer : dated custody
+Investment "1" -- "*" PortfolioAssetAdjustment : dated unit removal
+Account "1" -- "*" PortfolioAssetAdjustment : original lots
+PortfolioImportBatch "1" -- "*" PortfolioAssetAdjustment : retained source
+PortfolioImportStagingRow "1" -- "0..1" PortfolioAssetAdjustment : source event
+PortfolioAssetAdjustment "1" -- "*" PortfolioAssetAdjustmentSource : parent rollback cascade
+PortfolioImportStagingRow "1" -- "*" PortfolioAssetAdjustmentSource : original yield evidence RESTRICT
+Account "1" -- "*" PortfolioAssetTransfer : source / destination
+PortfolioImportBatch "1" -- "*" PortfolioImportStagingRow : source provenance
+PortfolioImportBatch "1" -- "*" PortfolioImportReconciliationJournal : retained receipt
+PortfolioImportStagingRow "1" -- "*" PortfolioImportReconciliationJournal : adoption / restore
+PortfolioImportStagingRow "1" -- "0..1" PortfolioAssetTransfer : source event
+PortfolioImportReconciliationJournal ..> PortfolioTransaction : retained ID + CAS images; no FK
+PortfolioImportReconciliationJournal --> PortfolioImportReconciliationJournal : previous adoption
+PortfolioImportBatch "1" -- "*" PortfolioImportDuplicateRepairJournal : new / original source
+PortfolioImportStagingRow "1" -- "*" PortfolioImportDuplicateRepairJournal : repair / restore
+PortfolioImportDuplicateRepairJournal ..> PortfolioTransaction : retained / removed IDs; no FKs
 
 Transaction "1" o-- "*" TransactionSplit : has
 TransactionSplit "1" --> "1" Recipient : owed to

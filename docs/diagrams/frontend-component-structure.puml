@@ -316,7 +316,21 @@ package "Feature Components - Tax" {
 
 package "Feature Components - Import" {
   class ImportPage
+  class PortfolioImportPage
+  class PortfolioImportSession <<ADR-177>> {
+    +source/account detection per statement
+    +global/per-batch policy and counterpart
+    +optional XML + zero policy + selected prior import
+    +effective managed/supplemental scope
+    +current ready review + atomic commit
+  }
+  class PortfolioImportDetection
+  class PortfolioImportsApi
 }
+PortfolioImportPage --> PortfolioImportSession
+PortfolioImportSession --> PortfolioImportDetection : read complete supported file
+PortfolioImportSession --> PortfolioImportsApi : stage / preview / commit
+
 
 package "Feature Components - Notifications" {
   class UpdateNotification

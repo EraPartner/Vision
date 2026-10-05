@@ -4,13 +4,13 @@ type: endpoint
 method: GET, POST, PUT, PATCH, DELETE
 path: /api/investments
 description: Investment portfolio management (stocks, crypto, real estate, savings)
-date: 2026-09-14
-last_modified: 2026-09-14
-updated: 2026-09-14
+date: 2026-10-04
+last_modified: 2026-10-04
+updated: 2026-10-04
 tags: [api, investments, portfolio, stocks, crypto, metals, phase-9, decimal, money, offline-fallback, per-account, adr-091, show-in-ticker, portfolio-ticker]
 status: active
 aliases: [investments-api, portfolio-api, holdings, stocks, crypto, real-estate, savings, bonds, metals]
-related_code: [[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/repositories/investmentRepository.js]]
+related_code: ["apps/node-backend/src/routes/investments.js", "apps/node-backend/src/repositories/investmentRepository.js"]
 ---
 
 # Investments API
@@ -390,7 +390,9 @@ account-close recovery remains possible.
 The source is a compare-and-set precondition. If any row is missing or no longer has exactly that
 source assignment, the endpoint returns `409 CONFLICT` without changing any row. Before the one
 set-based update, the service projects the complete affected investment histories and rejects a
-move that creates or worsens a broker-partition oversell.
+move that creates or worsens a broker-partition oversell or breaks dated custody/adjustment history.
+A re-tag is an assignment correction; imported dated partial transfers use the separate ADR-177
+custody ledger and retain original acquisition lots/FX.
 
 The UUID is durable idempotency state. Repeating the same semantic request returns the original
 receipt with `replayed: true`; reusing its UUID for another request returns `409`. Receipts retain
@@ -400,7 +402,8 @@ meaning. Migration 0100 adds `portfolio_retag_audit`, which is included in backu
 
 This route has a separate 30 requests/minute limiter in addition to the investments group limiter.
 The operation first locks the destination account row, matching account close and merge lock order,
-then briefly takes a `SHARE ROW EXCLUSIVE` lock on `portfolio_transactions`. This prevents a
+then briefly takes a `SHARE ROW EXCLUSIVE` lock on `portfolio_transactions`,
+`portfolio_asset_transfers`, and `portfolio_asset_adjustments`. This prevents a
 concurrent close from invalidating eligibility, avoids reversed-order deadlocks, and blocks insert
 phantoms while the full-history invariant and compare-and-set update run in one transaction.
 
@@ -530,11 +533,12 @@ Create-path compatibility:
 
 ### ~~POST /api/investments/:id/move~~ _(removed 2026-07-22 — WP-C1 / ADR-108)_
 
-> **Removed.** The in-specie move endpoint (ADR-091 FIFO/proportional lot surgery,
-> `moveHoldingService`) was deleted; under ADR-108 an in-specie transfer becomes a whole-lot
-> **re-tag** (`UPDATE … SET account_id`) with basis travelling with the lot — the bulk re-tag
-> endpoint is `PUT /api/investments/transactions/broker`. Reassigning a single lot is still possible via
-> `PATCH /api/investments/transactions/:txnId` with `account_id`.
+> **Removed.** The ADR-091 move endpoint and `moveHoldingService` remain deleted. Whole-lot
+> assignment correction uses `PUT /api/investments/transactions/broker`, or the transaction PATCH
+> for one row. ADR-177 introduces dated partial custody through reviewed statement imports and
+> `portfolio_asset_transfers`; it does not restore this deleted endpoint. Original acquisition
+> lots and FX carry across custody. See [[docs/features/portfolio-import]] and
+> [[docs/adr/177-reviewed-history-reconciliation-and-custody-ledger]].
 
 ### PATCH /api/investments/transactions/:txnId
 

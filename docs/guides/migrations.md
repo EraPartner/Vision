@@ -2,8 +2,8 @@
 title: Database Migration Guide
 type: guide
 status: active
-date: 2026-09-20
-updated: 2026-09-20
+date: 2026-10-04
+updated: 2026-10-04
 tags:
   [
     guide,
@@ -52,6 +52,17 @@ Vision uses [Alembic](https://alembic.sqlalchemy.org/) to manage PostgreSQL sche
 
 > [!warning] Don't invoke bare `alembic` for anything that writes the version table
 > Alembic auto-creates `alembic_version.version_num` as `VARCHAR(32)`, which is too narrow for this chain's revision ids — a fresh database dies on revision 3 with `value too long for type character varying(32)`. The `db:migrate`/`db:upgrade`/`db:downgrade`/`db:stamp`/`db:reset` scripts route through `apps/node-backend/scripts/db-migrate.js`, which runs the boot-path `VARCHAR(64)` preflight first. See [[docs/reference/scripts|Scripts Reference]].
+
+## Portfolio history recovery (0120–0123)
+
+[[docs/adr/177-reviewed-history-reconciliation-and-custody-ledger|ADR-177]] records the upgrade
+blast radius and guarded downgrade plan for adoption/duplicate-repair journals, dated custody,
+and unit adjustments with retained yield evidence. All four upgrades add empty tables and retain
+existing financial history. Restore active adoptions/repairs and roll back dependent adjustments
+and custody through the application before downgrading in reverse migration order. The guards
+refuse to discard live receipts or populated custody/adjustments; later edits, sales, or transfers
+may need to be resolved first. Adjustment source links are removed only by parent rollback cascade. Removing an empty/restored journal loses its historical receipts.
+A disposable database migration test is not approval to run against user data.
 
 ## How Migrations Work
 

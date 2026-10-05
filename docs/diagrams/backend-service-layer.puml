@@ -334,6 +334,56 @@ package "Thin Route Seams (ADR-067, June 2026)" {
   }
   class PortfolioImportPipelineService <<ADR-078>>
   class PortfolioImportBatchService <<ADR-078>>
+  class PortfolioImportCommitService {
+    +commitReviewedPortfolioImport(batchId, accountId?)
+    +commitReviewedPortfolioImports({batchIds, adoptPolicy?, batchPolicies?, expectedPlanFingerprint})
+  }
+  class PortfolioImportReadinessService {
+    +assertPortfolioImportReadiness(batchId, batch, accountId?)
+    +isMaintainedPortfolioImport(batch)
+  }
+  class PortfolioImportReconciliationService <<ADR-177>> {
+    +previewPortfolioImportReconciliation(scope)
+    +applyPortfolioImportReconciliation(scope)
+    +validatePortfolioImportAdoptionRollback(batchId, history)
+    +restorePortfolioImportAdoptions(receipts)
+  }
+  class PortfolioImportReferenceService <<ADR-177>> {
+    +applyPortfolioImportReference(scope, XML, zeroPolicy)
+    +primary execution precedence + literal evidence
+    +managed IBKR review clone + effective scope
+  }
+  class PortfolioPerformanceXmlParser {
+    +readPortfolioPerformanceXml(path)
+    +bounded object graph + consistent paired facts
+  }
+  class PortfolioAssetAdjustmentService <<ADR-177>> {
+    +previewPortfolioAssetAdjustment(row, batch)
+    +commitPortfolioAssetAdjustment(row, batch)
+    +rollbackPortfolioAssetAdjustmentsForBatch(batchId)
+  }
+  class PortfolioImportDuplicateRepairService <<ADR-177>> {
+    +applyDuplicatePortfolioRepair(input)
+    +validateDuplicatePortfolioRepairRollback(receipts)
+    +restoreDuplicatePortfolioRepairs(receipts)
+  }
+  class "portfolio/portfolioAssetTransferService" as PortfolioAssetTransferService <<ADR-177>> {
+    +previewPortfolioAssetTransfer(row)
+    +commitPortfolioAssetTransfer(row)
+    +validatePortfolioAssetTransferHistory(history)
+  }
+  class "portfolio/portfolioCustodyImportScope" as PortfolioCustodyImportScope {
+    +withPortfolioCustodyImportScope(input, work)
+    +portfolioCustodyWriteHistory(history, event, client)
+    +approved source/client binding + final full replay
+  }
+  class "shared-utils/portfolioCustody" as PortfolioCustody {
+    +projectAssetTransferPartitions(events, opts)
+    +original acquisition lots + purchase FX
+  }
+  class "portfolio/portfolioHistoryWriteService" as PortfolioHistoryWriteService {
+    +withPortfolioHistoryWrite(accountIds, work)
+  }
   class FxResolveService <<ADR-074, ADR-078>>
   class PortfolioSummaryService <<ADR-044, ADR-091, ADR-100>> {
     +getPortfolioSummary(currency, options?): Promise<Summary>
@@ -437,6 +487,34 @@ PortfolioTransactionService --> PortfolioTransactionRules
 PortfolioTransactionService --> PortfolioTransactionRepository
 PortfolioImportPipelineService --> PortfolioTransactionService
 PortfolioImportPipelineService --> ImportIdentity
+PortfolioImportCommitService --> PortfolioImportPipelineService : atomic chronological selected-row drain
+PortfolioImportCommitService --> PortfolioImportReadinessService : maintained source preflight
+PortfolioImportCommitService --> PortfolioCustodyImportScope : locked reviewed chronology
+PortfolioCustodyImportScope --> PortfolioAssetTransferService : final full-history validation
+PortfolioAssetTransferService --> PortfolioCustodyImportScope : approved dated prefix
+PortfolioAssetAdjustmentService --> PortfolioCustodyImportScope : approved dated prefix
+PortfolioImportCommitService --> PortfolioImportBatchRepository : batch lock + account
+PortfolioImportReadinessService --> PortfolioImportBatchRepository : complete staging
+PortfolioImportCommitService --> PortfolioImportReconciliationService : current reviewed plan
+PortfolioImportReferenceService --> PortfolioPerformanceXmlParser : bounded secondary source
+PortfolioImportReferenceService --> PortfolioImportReferenceRepository : staging/configuration only
+PortfolioImportReferenceService --> PortfolioImportBatchRepository : managed retained-source review
+PortfolioImportReferenceService --> PortfolioImportPipelineService : validate/match supplemental scope
+PortfolioImportReconciliationService --> PortfolioImportReconciliationRepository : CAS + immutable receipts
+PortfolioImportReconciliationService --> PortfolioImportDuplicateRepairService : explicit-policy repair of prior copy
+PortfolioImportDuplicateRepairService --> PortfolioImportDuplicateRepairRepository : all-image CAS + inverse receipt
+PortfolioImportReconciliationService --> PortfolioAssetTransferService : full projected history
+PortfolioImportPipelineService --> PortfolioAssetTransferService : transfer route
+PortfolioAssetTransferService --> PortfolioAssetTransferRepository : canonical event
+PortfolioAssetTransferService --> PortfolioCustody : FIFO / LIFO / weighted-average lots
+PortfolioImportReconciliationService --> PortfolioAssetAdjustmentService : source-proven removals
+PortfolioImportPipelineService --> PortfolioAssetAdjustmentService : adjustment route
+PortfolioAssetAdjustmentService --> PortfolioAssetAdjustmentRepository : ledger + restrictive evidence links
+PortfolioAssetAdjustmentService --> PortfolioCustody : eligible zero-yield / carried-basis lots
+PortfolioSummaryService --> PortfolioCustody : account partition replay
+PortfolioPerformanceSnapshotService --> PortfolioCustody : historical replay
+PortfolioTransactionService --> PortfolioHistoryWriteService : shared account/history locks
+PortfolioTransactionService --> PortfolioAssetTransferService : validate edits against custody
 PortfolioExposureService --> PortfolioSummaryService : current position values
 PortfolioExposureService --> PortfolioExposureRepository : explicit sources
 

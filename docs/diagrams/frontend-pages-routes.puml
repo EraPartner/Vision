@@ -124,10 +124,23 @@ package "Portfolio Pages" {
 
   class PortfolioImportPage <<ADR-078, ADR-091>> {
     +Column Mapper (PortfolioCsvColumnMapper)
-    +File Upload + Saved Parser Picker
+    +CSV / Saxo XLSX Upload + Saved Parser Picker
+    +Unique header-signature source detection
+    +Unique source-account / broker selection
+    +Multi-statement session (up to 100 files)
+    +Global/per-statement policy + custody counterpart
+    +Fingerprint-pinned reconciliation review
     +SSE Progress
-    +FileHeadersPanel preview
+    +FileHeadersPanel preview (generic CSV)
     +Brokerage Account Picker (account_id for committed lots)
+  }
+
+  class PortfolioImportSession <<ADR-177>> {
+    +Detected sources and unique account choices
+    +Sequential staging + resumable tab metadata
+    +Explicit XML zero policy + selected prior IBKR review clone
+    +Before/source actions + blockers
+    +Atomic session commit
   }
 
   class PortfolioImportReviewPage <<ADR-078>> {
@@ -308,6 +321,7 @@ PortfolioOverviewPage --> PerformancePage : "/portfolio/performance"
 PortfolioOverviewPage --> NetWorthPage : "/portfolio/net-worth"
 PortfolioOverviewPage --> PortfolioTaxPage : "/portfolio/tax"
 PortfolioOverviewPage --> PortfolioImportPage : "/portfolio/import"
+PortfolioImportPage --> PortfolioImportSession : owns multi-statement workflow
 PortfolioImportPage --> PortfolioImportReviewPage : "/portfolio/import/:batchId/review"
 
 AppLayout --> ResearchHomePage : "/research"

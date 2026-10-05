@@ -2,8 +2,8 @@
 title: Views & Pages
 type: feature
 status: active
-date: 2026-10-03
-updated: 2026-10-03
+date: 2026-10-04
+updated: 2026-10-04
 tags:
   [
     feature,
@@ -785,7 +785,7 @@ Workspace-agnostic observability hub (gated by Settings → App → Developer to
 - [[docs/features/index]] - Feature documentation
 - [[docs/api/index]] - API documentation
 - [[docs/components/index]] - UI Components
-- [Interactive flow visualizer](../flow-visualizer.html#api-request) — 78 components / 46 flows, with Journey and Architecture views and five learning paths
+- [Interactive flow visualizer](../flow-visualizer.html#api-request) — 82 components / 46 flows, with Journey and Architecture views and five learning paths
 - [[docs/guides/visual-learning|Understand Vision Visually]] — conceptual diagrams and a suggested reading order
 
 

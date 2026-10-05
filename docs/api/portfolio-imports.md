@@ -3,16 +3,17 @@ title: API - Portfolio Imports
 type: endpoint
 method: POST, GET, PATCH, DELETE
 path: /api/portfolio/import
-description: CSV import of brokerage/exchange trades with review, exact source provenance, versioned duplicate identity, and saved portfolio parser configs
-date: 2026-09-27
-updated: 2026-09-27
-last_modified: 2026-09-27
+description: Portfolio CSV/Saxo XLSX staging, optional bounded XML evidence, reviewed reconciliation, immutable receipts, and dated custody/unit adjustments with original basis
+date: 2026-10-04
+updated: 2026-10-04
+last_modified: 2026-10-04
 tags:
   [
     api,
     portfolio,
     import,
     csv,
+    xlsx,
     portfolio-import,
     portfolio-parser,
     brokerage,
@@ -36,12 +37,30 @@ related_code:
   - "apps/node-backend/src/services/portfolioImportPipeline/ibkrTransactionHistoryAdapter.js"
   - "apps/node-backend/src/services/portfolioImportPipeline/kinesisTransactionHistoryAdapter.js"
   - "apps/node-backend/src/services/portfolioImportPipeline/nexoTransactionHistoryAdapter.js"
+  - "apps/node-backend/src/services/portfolioImportPipeline/nexoProTransactionHistoryAdapter.js"
+  - "apps/node-backend/src/services/portfolioImportReconciliationService.js"
+  - "apps/node-backend/src/services/portfolioImportDuplicateRepairService.js"
+  - "apps/node-backend/src/repositories/portfolioImportDuplicateRepairRepository.js"
+  - "apps/node-backend/src/repositories/portfolioImportReconciliationRepository.js"
+  - "apps/node-backend/src/services/portfolio/portfolioAssetTransferService.js"
+  - "apps/node-backend/src/services/portfolio/portfolioAssetAdjustmentService.js"
+  - "apps/node-backend/src/repositories/portfolioAssetAdjustmentRepository.js"
+  - "apps/node-backend/src/services/portfolioImportReferenceService.js"
+  - "apps/node-backend/src/services/portfolioPerformanceXmlParser.js"
+  - "apps/node-backend/src/services/portfolioPerformanceReferenceEvidence.js"
+  - "apps/node-backend/src/repositories/portfolioImportReferenceRepository.js"
+  - "apps/node-backend/src/lib/portfolioReferenceUpload.js"
   - "apps/node-backend/src/services/portfolioImportPipeline/saxoTransactionHistoryAdapter.js"
   - "apps/node-backend/src/services/portfolioImportBatchService.js"
+  - "apps/node-backend/src/services/portfolioImportCommitService.js"
+  - "apps/node-backend/src/services/portfolioImportReadinessService.js"
+  - "apps/node-backend/src/repositories/portfolioImportBatchRepository.js"
   - "apps/node-backend/src/services/customParserConfigService.js"
-  - "apps/node-backend/src/lib/csvUpload.js"
+  - "apps/node-backend/src/lib/portfolioUpload.js"
   - "apps/node-backend/src/services/portfolio/fxResolve.js"
   - "apps/frontend/src/pages/portfolio/PortfolioImportPage.tsx"
+  - "apps/frontend/src/pages/portfolio/PortfolioImportSession.tsx"
+  - "apps/frontend/src/pages/portfolio/portfolioImportDetection.ts"
   - "apps/frontend/src/pages/portfolio/PortfolioImportReviewPage.tsx"
   - "apps/frontend/src/features/imports/PortfolioCsvColumnMapper.tsx"
   - "apps/frontend/src/lib/api/portfolioImports.ts"
@@ -52,23 +71,29 @@ related_code:
 
 ## Overview
 
-The Portfolio Imports API handles CSV import of brokerage and exchange trades into `portfolio_transactions`. It is a parallel pipeline to the budgeting import (`/api/import`) and mirrors its structure: stage → validate → matchInvestments → (review|autoCommit) → commit.
+The Portfolio Imports API accepts CSV history and detailed Saxo XLSX workbooks. It imports trades
+into `portfolio_transactions`, routes brokerage cash to `transactions`, and stores dated custody
+events in `portfolio_asset_transfers` and unit removals in `portfolio_asset_adjustments`. Reviewed
+adoption keeps the original transaction ID. Optional Portfolio Performance XML provides secondary
+staging evidence. The API is parallel to budgeting import (`/api/import`) and uses stage, validate,
+match, review, and commit phases.
 
 Exact source records remain internal staging provenance. Versioned occurrence fingerprints provide
 race-safe duplicate identity across generic and built-in adapters and are not exposed in API
 responses. See [[docs/adr/134-versioned-import-identity-and-exact-provenance|ADR-134]].
 
-The import path provides a generic user-configured mapper plus built-in IBKR, Kinesis Money, Nexo,
-and Saxo transaction-history formats. All four maintained presets are validated against sanitized
-real exports and regression fixtures.
+The import path provides a generic user-configured mapper plus built-in IBKR, Kinesis Money, Nexo
+wallet, Nexo Pro, and Saxo transaction-history formats with format-specific regression fixtures.
+Source support does not establish completeness of the supplied historical exports.
 Kinesis Money import is distinct from Vision's existing Kinesis market-price provider. Users may
 configure other broker mappings, but those formats are not maintained compatibility targets.
 
 All routes are mounted at `/api/portfolio/import` with `importRateLimiter`.
 
 > [!info] Auto-commit policy
-> Non-brokerage generic imports auto-commit (return 201) only when every row was matched by exact
-> symbol and there are zero errors or unresolved rows. Every maintained preset is a brokerage import
+> Non-brokerage generic imports auto-commit (return 201) only when there are zero errors, unresolved
+> rows, or name matches. Exact symbol and explicit provider-alias matches use `match_source='symbol'`.
+> Every maintained preset is a brokerage import
 > and always enters `awaiting_review` (return 202), even when every symbol matches exactly.
 
 ---
@@ -77,7 +102,8 @@ All routes are mounted at `/api/portfolio/import` with `importRateLimiter`.
 
 ### POST /api/portfolio/import/csv/custom
 
-One-shot portfolio CSV import. Runs the full pipeline synchronously. Returns 201 if all rows committed, 202 if review is required.
+One-shot portfolio history import. The existing endpoint path accepts CSV and supported Saxo XLSX.
+It runs the pipeline synchronously and returns 201 if committed or 202 if review is required.
 
 Every mapping, adapter, format, brokerage, and account option is accepted only as a multipart
 field. Query fields are ignored. This is a breaking request-contract change under
@@ -89,9 +115,9 @@ field. Query fields are ignored. This is a breaking request-contract change unde
 
 | Field                 | Type    | Required | Description                                                                                                                                                        |
 | --------------------- | ------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `file`                | File    | Yes      | CSV file (max 50 MB)                                                                                                                                               |
+| `file`                | File    | Yes      | CSV or detailed Saxo XLSX file (max 50 MiB); XLSX requires `portfolio_format=saxo_transaction_history`                                                             |
 | `adapter_name`        | string  | No       | Display label for the import source (written as `bank_account` on portfolio_transactions)                                                                          |
-| `portfolio_format`    | string  | No       | Specialized parser: `ibkr_transaction_history`, `kinesis_transaction_history`, `nexo_transaction_history`, or `saxo_transaction_history`. Omit for generic mapping |
+| `portfolio_format`    | string  | No       | Specialized parser: `ibkr_transaction_history`, `kinesis_transaction_history`, `nexo_transaction_history`, `nexo_pro_spot_history`, or `saxo_transaction_history`. Omit for generic mapping |
 | `date_format`         | string  | No       | Python strptime format; default `%Y-%m-%d`                                                                                                                         |
 | `separator`           | string  | No       | Single-character CSV delimiter; default `,`                                                                                                                        |
 | `encoding`            | string  | No       | File encoding; default `utf-8`                                                                                                                                     |
@@ -112,10 +138,17 @@ field. Query fields are ignored. This is a breaking request-contract change unde
 | `default_type`        | string  | No       | Fallback transaction type when no `type_column` is mapped (default `buy`): `buy` `sell` `dividend` `fee` `tax` `interest`                                          |
 | `type_mapping`        | string  | No       | JSON object mapping raw CSV type strings → canonical portfolio_txn_type values (e.g. `{"Koop":"buy","Verkoop":"sell"}`)                                            |
 | `is_brokerage`        | boolean | Format*  | Must be `true` for every maintained transaction-history format so portfolio and cash effects use brokerage routing                                                 |
+| `transfer_destination_account_id` | integer | No | Distinct active portfolio account receiving outgoing Nexo/Kinesis custody transfers; required to commit those rows |
+| `transfer_origin_account_id` | integer | No | Distinct active portfolio account providing original lots for incoming Nexo crypto top-ups |
+| `included_symbols` | string | No | Comma-separated exact adapter symbols for an explicit partial import; excluded rows are recorded separately in batch configuration, and parse errors remain errors |
+| `yield_basis_policy` | string | No | Literal `zero`; explicit Kinesis zero-yield basis interpretation, never selected by omission |
 | `account_id`          | integer | Format*  | Active broker account receiving every row; required with `is_brokerage` and for each maintained transaction-history format                                         |
 
 > [!warning] Symbol or name required
 > At least one of `symbol_column` or `name_column` must be provided. Both may be mapped simultaneously for best matching.
+
+Saved portfolio parser configurations accept optional `yieldBasisPolicy: "zero"`; invalid values
+reject, and absence retains the existing interpretation.
 
 Generic uploads accept optional `number_format`: `auto` (default), `decimal_dot`, or
 `decimal_comma`, independent of `separator`. Saved parser configurations retain
@@ -127,6 +160,21 @@ column without the numeric value. Maintained preset numeric rules remain unchang
 `skip_rows` counts physical lines before the header. Encoding choices include UTF-8
 (`utf-8`/`utf8`), Latin-1 (`latin1`/`latin-1`/`iso-8859-1`), and true `windows-1252` decoding.
 Unsupported encodings return 400. See [[docs/features/portfolio-import]].
+
+The upload filter accepts CSV and XLSX filename/MIME combinations. After temporary upload, byte
+inspection identifies ZIP workbooks independently of the temporary filename. XLSX requires the
+Saxo format and a valid detailed workbook before any batch is created. Legacy XLS rejects. Bank
+CSV upload endpoints are unchanged.
+
+Workbook parsing limits are 1,000 ZIP entries, 100 MiB expanded content, and 500,000 parsed cells.
+Archive validation rejects duplicate names, encrypted entries, unsupported layouts or compression,
+inconsistent expansion sizes, and archives without workbook XML. Files are not extracted; macros,
+formulas, and external links are not executed or followed. Invalid workbook structure, unsafe
+numeric identifiers, or inconsistent accounting details return 400 with structural diagnostics.
+
+Adding Saxo XLSX support is an additive request-contract change: endpoint paths, multipart field
+names, and response shapes remain unchanged. Saxo CSV net-only dividends now require the detailed
+workbook and stage review errors instead of being accepted as gross income.
 
 The IBKR preset supplies the compatibility mapping fields but parses the multi-section statement
 with format-specific rules. Each accepted `Transaction History,Data` record is retained literally
@@ -146,15 +194,20 @@ Direction comes from the exported starting and closing balances. Asset-denominat
 converted at `Trade_Price`; the trade gross amount remains derived from units and price, while the
 cash row uses the actual quote balance movement.
 
-Kinesis holder and velocity distributions emit two linked portfolio rows: dividend income at the
-exported `Trade_Value`, and gifted units with the same basis so the received metal is reflected in
-units without an immediate duplicate capital gain. `C1USD` valuation cells normalize to `USD`.
-Fiat deposits, withdrawals, and card payments have blank symbols and route to the cash ledger;
-asset deposits become zero-basis gifts because the export has no original cost basis. Positive
-distribution adjustments also become zero-basis gifts. Vision has no transfer-out transaction
-type, so asset withdrawals and negative unit adjustments are staged as explicit review errors;
-fabricating a sale would create false proceeds and tax history. Their source records remain visible
-and cannot be committed silently. When review creates an unresolved holding, KAU and KAG are
+Kinesis holder and velocity distributions emit linked dividend income at exported `Trade_Value`
+and gifted units. Their default basis is that value. Explicit `yield_basis_policy='zero'` instead
+marks yielded units as source-proven zero-basis acquisitions while retaining the income. The same
+policy resolves positive holder distribution adjustments as zero-basis yield units. Without it,
+positive adjustments and asset deposits retain unresolved original basis; an export valuation
+cannot establish purchase cost. `C1USD` valuation cells normalize to `USD`.
+
+Fiat deposits, withdrawals, and card payments have blank symbols and route to the cash ledger.
+Asset withdrawals validate gross units against received units plus same-asset fees and stage dated
+custody events requiring explicit `transfer_destination_account_id`. A negative holder adjustment
+requires explicit zero policy, a consistent literal amount/balance delta, and enough remaining
+eligible yielded units. It stages `asset_adjustment` with null financial type. Other negative
+adjustments remain review errors. Actual `source_columns` are retained in batch configuration for
+safe literal-record reparsing. Neither custody nor adjustment invents a sale. When review creates an unresolved holding, KAU and KAG are
 inferred as `metals`; other Kinesis asset codes use the preset's `crypto` fallback so a mixed export
 does not create BTC as a metal. Kinesis-created holdings use USD as their valuation currency even
 when the selected source row is an asset deposit with no quote currency.
@@ -162,28 +215,57 @@ when the selected source row is an asset deposit with no quote currency.
 Kinesis Transaction History requests have the same pre-staging brokerage-account requirement as
 IBKR. This is an additive, non-breaking API option; generic and IBKR requests are unchanged.
 
-The Nexo preset accepts the 11-column Transaction history export. It treats `Deposit To Exchange`
-and `Exchange To Withdraw` as conversion records. Wallet lifecycle and internal-transfer rows stay
-as explicit review errors until pairing is proven, so an unmatched row is never silently lost.
-Cash-like-to-asset conversions become buys; asset-to-cash-like
+The Nexo preset accepts the 11-column Transaction history export. Explicitly rejected records
+increase `skipped`. Approved same-fiat wrapper events pair `Deposit To Exchange` with `Exchange
+Deposited On`, or `Exchange To Withdraw` with `Withdraw Exchanged`. Pairing requires a unique
+match in both directions, compatible amounts and underlying fiat, the same UTC date, and no more
+than 30 minutes between records. A primary produces one instrument-less cash principal and an
+additional fee row when present; the paired companion is skipped and both literal records remain
+in provenance. Approved zero-output deposits use their positive input principal. Withdrawal input
+must equal output plus fee. Missing or ambiguous companions and inconsistent fees remain errors.
+
+Other cash-like-to-asset conversions become buys; asset-to-cash-like
 conversions become sells. Conversion values use `USD Equivalent` for a stable valuation currency.
 Conversions without one unambiguous cash-like side remain review errors. A non-zero fee outside USD
-also remains a review error because the adapter cannot value it safely. Interest produces a linked
-income row and gifted-unit row; crypto top-ups become gifts with the exported USD basis. Vision
-cannot represent an asset transfer-out without fabricating a sale, so withdrawals remain explicit
-review errors. Incomplete or zero-output conversions also remain explicit review errors instead of
-being skipped.
+also remains a review error because the adapter cannot value it safely. Asset-denominated interest
+produces linked income and gifted-unit rows. Approved fiat interest requires equal input/output
+principal in the same underlying fiat, positive principal, and zero fee. It produces one
+instrument-less `Interest` row in the original underlying fiat currency, with no acquired portfolio
+units or USD-equivalent conversion. Unresolved approval, principal, or fee evidence blocks review.
+Approved fee-free crypto top-ups use `transfer_origin_account_id` when supplied and carry original lots from that account. Without a
+known origin they have unresolved basis and require supported reconciliation with original history.
+Asset withdrawals use an explicit `transfer_destination_account_id` and consistent gross/received/
+fee units. Same-asset, equal-unit, fee-free Wallet/Pro movements stage account-internal annotations;
+review requires companion Pro trade history in the selected scope or an already complete Pro batch.
+That check does not prove every Pro execution is present. Other incomplete conversions remain errors.
 
-The Saxo preset accepts localized Transactions exports and normalizes ordinary and non-breaking
-whitespace in headers without changing literal row provenance. Dutch and English buy/sell labels
-are parsed from `Acties`; `ticker:venue` symbols are reduced to the ticker for exact matching. Units
-and price remain in `Instrumentvaluta`, while account-currency costs are converted with
-`Omrekeningskoers`. Cash dividends retain their instrument metadata. Deposits and withdrawals are
-instrument-less cash rows. Other corporate actions remain review errors.
+The Nexo Pro preset accepts the exact ordered 14 headers from spot order history. Literal records
+and `orderId` are retained; filled units, executed price, and explicit fees determine economics.
+Cancelled partial fills import; unfilled cancellations with zero execution fee skip. Fiat quotes
+are supported. Base-asset fees reduce buy units or increase sell units and are valued at the
+executed price; quote-asset fees remain separate. Crypto quotes, third-asset fees, non-final states,
+changed headers, missing/duplicate IDs, and invalid timestamps reject or remain unsupported.
+The calendar date comes from the literal exported timestamp prefix without a host timezone shift.
+It is an order-history aggregate, not verified individual-fill or execution-time evidence. Source
+timestamp semantics and history completeness must be established separately.
 
-Nexo and Saxo requests have the same pre-staging brokerage-account requirement as IBKR and
-Kinesis. Adding these two enum values is additive; generic and existing maintained formats are
-unchanged.
+The Saxo preset accepts localized Transactions CSV and detailed XLSX. It normalizes ordinary and
+non-breaking header spaces and reduces `ticker:venue` symbols to the ticker. `Bk Record Id` is
+preferred for source identity; zero placeholders are ignored. CSV trades retain quoted units and
+price in `Instrumentvaluta`, with account costs converted using `Omrekeningskoers`. CSV dividends
+contain only net bookings and therefore stage errors that direct the user to the detailed workbook.
+
+The XLSX adapter requires `Transacties`, `_Transacties`, and `Bookings` sheets and joins them by
+account and booking-record ID. It validates metadata, identifiers, execution quantities/prices,
+booking signs, and agreement between detailed bookings and the net amount within one cent.
+Workbook trades use account-currency booked principal, effective unit price, separate commission,
+and exchange tax. Dividends use gross booking income and aggregate withholding tax. Embedded FX
+conversion costs are not added again. Native quotes and joined booking records remain in internal
+typed provenance with sheet/row coordinates and a source-byte hash. Deposits and withdrawals are
+instrument-less cash rows. Unknown corporate actions or booking kinds remain review errors.
+
+Nexo wallet, Nexo Pro, and Saxo requests have the same pre-staging brokerage-account requirement as IBKR and
+Kinesis. These maintained format options are additive. Generic mapping remains available.
 
 **201 Response — committed:**
 
@@ -210,7 +292,7 @@ unchanged.
     "requires_review": true,
     "skipped": 15,
     "match_source_counts": {
-      "symbol_exact": 120,
+      "symbol": 120,
       "name_exact": 15,
       "unresolved": 10,
       "error": 5
@@ -223,7 +305,9 @@ unchanged.
 
 ### POST /api/portfolio/import/csv/stream
 
-SSE-streaming portfolio CSV import. Same request body as the custom endpoint. Useful for large files or when progress feedback is needed.
+SSE-streaming portfolio history import. Accepts the same CSV/Saxo XLSX request body as the custom
+endpoint. Workbook preflight happens before streaming, so invalid input returns an HTTP 400
+rather than creating a batch. Valid input uses the existing progress and terminal events.
 
 **Response:** `text/event-stream`
 
@@ -394,13 +478,29 @@ Get a single portfolio import batch with full status and row counts.
 
 ### DELETE /api/portfolio/import/batches/:id
 
-Rollback a batch. Deletes all `portfolio_transactions` committed by this batch and marks the batch status as `aborted`. Only settled or review-waiting batches can be rolled back; `awaiting_review` batches can be aborted without effect on portfolio transactions. The service rechecks the state while holding the same batch lock used by review resolution, so a concurrent group resolution cannot create a holding during rollback.
+Rollback a settled or review-waiting batch under its batch lock. The service removes batch-owned
+trade/cash/custody/adjustment rows and restores adopted transactions from immutable receipts.
+Adjustment removal cascades its evidence links; `deleted` counts canonical rows, not link rows. Adopted rows
+must still equal their journal after-images. The full projected remaining history must preserve
+custody/adjustment continuity and avoid a new or worsened partition oversell. A later sale,
+transfer, or yield reversal can
+therefore prevent removal of an earlier source acquisition. The original adopted ID and notes
+survive; restore receipts append rather than mutating adoption receipts. Duplicate-repair rollback
+also restores the removed imported ID/timestamps, original staging pointers/statuses, and counters.
+Every recorded after-image is checked first; changed provenance returns `duplicate_repair_changed`.
+Repair rollback adds integer `restored` and `restored_imported` counts to the usual `{ deleted }`
+response. Normal rollback retains its earlier response shape.
 
-| Status            | Meaning                                                                       |
-| ----------------- | ----------------------------------------------------------------------------- |
-| `200 OK`          | Rollback completed; body reports `{ deleted }`                                |
-| `400 Bad Request` | Malformed id, batch already aborted, or batch still in progress               |
-| `404 Not Found`   | Batch does not exist, including when it disappeared before the locked recheck |
+| Status | Meaning |
+| ------ | ------- |
+| `200 OK` | Rollback completed; body reports `{ deleted }` |
+| `400 Bad Request` | Malformed id, aborted batch, or batch still in progress |
+| `404 Not Found` | Batch disappeared or does not exist |
+| `409 Conflict` | Adopted/repair history changed or removal would break a later custody, adjustment, or sale dependency; nothing changes |
+
+Journal, custody, adjustment, and yield-source foreign keys retain referenced batches/staging rows.
+Guarded schema downgrade
+requires application rollback first; see [[docs/adr/177-reviewed-history-reconciliation-and-custody-ledger]].
 
 ---
 
@@ -512,7 +612,17 @@ When `created` is `true`, `data.investment` also contains the created holding.
 
 ### POST /api/portfolio/import/batches/:id/commit
 
-Commit a reviewed batch. Honours all investment overrides. Runs FX resolution for non-EUR rows without an explicit rate (ADR-074 semantics). Per-row errors (oversell, unresolved) are recorded without aborting the batch.
+Commit one reviewed batch, honoring investment overrides and resolving missing non-EUR FX under
+[[docs/adr/074-fx-attribution-historical-rates|ADR-074]]. Maintained formats use the same locked
+reconciliation planner as the multi-batch endpoint. Exact unique legacy matches can be adopted;
+financial differences needing an explicit policy return a review conflict. This legacy endpoint
+accepts only the optional account body below. Use the reconciliation endpoints to preview changes
+and submit global/per-batch policies with a reviewed fingerprint.
+
+Maintained commit requires complete staging and valid projected history. It writes trades, cash,
+custody events, adoption receipts, statuses, and counters atomically; any runtime row failure aborts
+the outer transaction. Generic imports retain partial-commit behavior. Rows run in ascending date
+and stable source-row order. Unknown intraday execution order is not invented.
 
 **Optional request body:**
 
@@ -521,7 +631,8 @@ Commit a reviewed batch. Honours all investment overrides. Runs FX resolution fo
 ```
 
 When `account_id` is provided, all committed `portfolio_transactions` inherit it — they belong to
-the specified brokerage account. Omit (or send `null`) to leave lots unassigned (legacy behaviour).
+the specified brokerage account. Omit (or send `null`) to keep the existing batch account; a
+generic batch that had no account remains unassigned.
 On a recommit, providing an account also resets cash rows whose exact stored error is
 `brokerage cash row requires a batch account` to `matched` and decrements `rows_error`; other cash
 errors are not cleared. The review page requires this account selection when it displays that
@@ -530,7 +641,7 @@ concurrent recommits cannot change the selected account between validation and i
 Because the whole batch inherits it, the value is validated with `validateId` before the account
 existence check rather than coerced: `"1e3"` used to arrive as the real account 1000, pass the
 existence check and stamp every committed lot with it. Malformed values now return **400**.
-Requires migration 0057 (`portfolio_import_batches.account_id`; authored, not yet applied).
+The account column was introduced by migration 0057 (`portfolio_import_batches.account_id`).
 
 Instrument-free dividend, interest, fee, and tax cash rows use the current
 `brokerage_cash_category_ids` Settings mapping. The commit resolves only configured active IDs,
@@ -538,8 +649,9 @@ once per drain. It creates no category and leaves a row uncategorized when its m
 missing, deleted, or inactive. Changing Settings affects rows committed after the change; already
 committed rows are not recategorized.
 
-> [!warning] Unresolved rows are skipped
-> Any row still unresolved at commit time is recorded as an error row and is not inserted into `portfolio_transactions`. The batch completes with non-zero `rows_error`.
+> [!warning] Generic partial commit limits
+> Generic imports may record unresolved or runtime row failures while other rows commit. Maintained
+> reviewed commits and multi-batch reconciliation commits reject the whole scope on such failures.
 
 **Response:**
 
@@ -559,19 +671,186 @@ committed rows are not recategorized.
 
 | Status         | Meaning                                               |
 | -------------- | ----------------------------------------------------- |
-| `200 OK`       | Commit completed (check `errors` field)               |
-| `409 Conflict` | Batch is not in `awaiting_review` or `matched` status |
+| `200 OK`       | Commit completed (check `errors` and remaining batch errors) |
+| `400 Bad Request` | Malformed identifiers/account or a batch outside reviewable states |
+| `409 Conflict` | Incomplete source, blocked reconciliation, or atomic runtime failure; no scope writes |
+
+---
+
+## Multi-batch reconciliation
+
+### POST /api/portfolio/import/reconciliation/reference
+
+Apply one optional original Portfolio Performance XML as secondary evidence to an explicitly
+selected import scope. This endpoint changes staging/configuration only and may create review-only
+supplemental or managed retained-history batches. It writes no canonical trades, receipts, custody,
+or adjustments. Primary broker execution facts keep precedence.
+
+**Content-Type:** multipart/form-data
+
+| Field | Required | Contract |
+| ----- | -------- | -------- |
+| `file` | Yes | One `.xml` file, at most 10 MiB, valid UTF-8 Portfolio Performance `client` document |
+| `batch_ids` | Yes | JSON array of 1–100 unique numeric safe-integer batch IDs, each in `1..9007199254740991` |
+| `placeholder_basis_policy` | Yes | Literal `zero`; explicit policy, never inferred |
+
+Only these fields are accepted. The separate XML boundary permits two fields and one file. Parsing
+rejects document type/entity declarations, malformed XML, unsupported encoding/entities, excessive
+reference chains, inconsistent paired trade cash/transfer facts, and unsupported portfolio events.
+The object graph is bounded at depth 64 and 300,000 nodes; text nodes have a 100,000-character limit.
+Temporary uploads are cleaned up after handling. These are separate limits from the 50 MiB primary
+CSV/Saxo XLSX upload.
+
+Literal reference facts must resolve asset, units, date, currency, and wallet/account context.
+Meaningful recorded native basis can fill a missing basis; a small placeholder value cannot become
+an acquisition valuation. Consistent literal FX can establish its original EUR rate; other
+conversions and account aliases are not guessed. Unknown/ambiguous anchors, unsupported basis or
+currency, and uncovered selected history remain blockers. `placeholder_basis_policy='zero'` also
+selects explicit Kinesis zero-yield interpretation using retained actual source columns.
+
+A reviewable selected batch can be enriched in place. An explicitly selected terminal IBKR batch
+(`complete` or `complete_with_errors`) requires complete retained literal source identity and is
+cloned into a fresh managed review batch. The returned scope replaces the original ID with that
+clone; original canonical history is unchanged. No existing import is included implicitly. A
+managed clone avoids requiring rollback of unrelated history in an old import.
+
+The envelope's `data` includes:
+
+| Field | Meaning |
+| ----- | ------- |
+| `batch_ids` | Full effective review scope, including managed replacements and supplemental batches |
+| `matched_reference_rows`, `source_corrections` | Nonnegative evidence-match and staged-correction counts |
+| `supplemental_batches` | Metadata for new review batches: `batch_id`, `account_id`, `adapter_name`, `source_filename`, `status`, `rows_total`; managed clones also carry `original_batch_id` |
+| `replacement_batches` | Array of `{original_batch_id, review_batch_id}` relations; empty when no original was cloned |
+| `blockers` | Evidence/context/readiness blockers retained for reconciliation |
+| `coverage` | Optional bounded diagnostic of selected XML/source/legacy coverage; not a complete-history certificate |
+
+Repeating the same XML bytes and original/effective scope with unchanged routing returns the same
+result without new batches. A changed XML or scope on an enriched primary batch returns
+`409 reference_requires_restaging`; restage primary uploads and select the original again for a
+fresh managed clone. Changed routing returns `409 reference_scope_changed`. Incomplete retained
+source returns `409 reference_retained_source_incomplete`. Invalid strict fields, unsupported
+scope, or invalid XML return 400. A successful staging/reference result returns 200, even when its
+blockers prevent a later commit. A new ready preview and its fingerprint are still required.
+
+See [[docs/features/portfolio-import#Optional Portfolio Performance reference|the evidence workflow]]
+and [[docs/adr/177-reviewed-history-reconciliation-and-custody-ledger|ADR-177]].
+
+### POST /api/portfolio/import/reconciliation/preview
+
+Preview source identity, adoption, custody continuity, and account-scoped history for a selected
+session. This is a read-only database transaction; it creates no canonical rows or journal receipts.
+
+```json
+{
+  "batch_ids": [42, 43],
+  "adopt_policy": "preserve_existing",
+  "batch_policies": [{ "batch_id": 43, "adopt_policy": "prefer_source" }]
+}
+```
+
+`batch_ids` contains 1–100 numeric safe-integer IDs in `1..9007199254740991`. The service deduplicates and sorts
+scope IDs. `adopt_policy` is optional and permits `preserve_existing` or `prefer_source`; absent
+policy permits automatic exact adoption only. Optional `batch_policies` contains at most 100
+unique selected batch IDs with the same policy enum and overrides the global choice. Objects are
+strict; unknown fields reject. The JSON scope uses the same safe-integer ceiling as existing
+BIGSERIAL batch path IDs.
+
+The envelope's `data` uses camelCase: `batchIds`, `adoptPolicy` (null for automatic exact matching),
+`batchPolicies`, `planFingerprint`, `ready`, `actions`, `blockers`, and `summary`. Actions identify
+batch/staging row, investment, source and existing values, candidate transaction IDs, corrections,
+applied policy, and transfer detail when applicable. Kinds include `insert`, `adopt`, `duplicate`,
+`repair_duplicate`, `duplicate_source`, `cash`, `transfer`, `adjustment`, `internal_annotation`, `settled`, `blocked`, and
+`policy_required`. Blockers identify `batchId`, `rowId`, one-based staging `rowOrdinal`, `reason`,
+and candidate IDs. A `repair_duplicate` action additionally includes `importedTransactionId`,
+`originalBatchId`, and `importedExisting`; `existingTransactionId` is the retained manual ID.
+An `adjustment` action carries `adjustment` detail with `date`, `units`, `kind`, `basisPolicy`, and
+`accountId`; `summary.adjustment` counts newly planned adjustment events. Their staging financial
+`type` is null, and their ledger owns source linkage. Staging ordinals include adapter-derived rows
+and are not CSV line numbers.
+
+The planner requires one-to-one legacy attribution, exact source identity, complete staging,
+proven economics for source corrections, known incoming basis, and usable custody counterpart
+accounts. It rejects ambiguous history, prior assigned/imported legacy candidates, unexplained
+currency corrections, source-policy conflicts, and missing Pro companions. Ordinary nearby legacy
+matching uses seven calendar days. Literal Nexo Pro proof can extend to 31 days only with exact
+executed price, exact units/base-fee explanation, and equivalent cash; raw evidence also binds
+staged date, explicit quote fee, and zero tax. Ambiguous matches still block. A ready plan also
+validates all projected custody events and new/worsened account oversells. See
+[[docs/features/portfolio-import#Reviewed reconciliation|the reconciliation rules]].
+
+### POST /api/portfolio/import/reconciliation/commit
+
+Submit the same scope and policies plus required `expected_plan_fingerprint`, a 64-character
+lowercase hexadecimal SHA-256 fingerprint from preview. The hash binds policies, source rows,
+current history, batch configuration/status, and companion-Pro evidence. Commit reloads that state
+under batch/account and portfolio-writer locks. An outdated plan cannot apply changed history.
+
+The selected batches must be reviewable (`awaiting_review`, `matching`, or
+`complete_with_errors`). Active eligible source/destination accounts are locked in ID order before
+the transaction/custody tables. New matched events run across batches by date, batch ID, and source
+row index. Adoption preserves transaction IDs and notes and adds source metadata/account assignment.
+An immutable before/after receipt owns restoration; the adopted row remains `import_batch_id=null`.
+`prefer_source` changes only supported, proven-equivalent financial values. It never changes the
+transaction type/notes or invents a currency conversion.
+
+When a source fingerprint identifies an unchanged imported copy and one unique nearby
+unassigned/unstamped manual candidate, an explicit reviewed policy can repair the duplicate.
+The original import must be complete and retain exactly one committed staging pointer matching the fingerprint. Changed
+imported economics, notes, or recurrence metadata block repair. The planner locks the referenced
+original batches with the selected scope, removes the exact copy, preserves/adopts the manual ID
+and notes, clears the old pointer, and moves its old imported count to duplicate. A separate 0122
+receipt stores both full row images and original batch/staging state for restoration. Automatic
+policy leaves this action blocked with `duplicate_repair_policy_required`.
+
+The outer transaction includes all canonical writes, receipts, staging changes, and counters.
+Custody and adjustment events preserve source ownership and original-lot allocations. New
+adjustments count in `imported` alongside other new canonical events. Runtime failure returns
+`409` and rolls them all back. Cache invalidation follows successful commit.
+
+```json
+{
+  "ok": true,
+  "data": {
+    "batches": [{ "batch_id": 42, "imported": 2, "duplicates": 1, "adopted": 1, "repaired": 0, "errors": 0 }],
+    "imported": 2,
+    "duplicates": 1,
+    "adopted": 1,
+    "repaired": 0,
+    "errors": 0
+  }
+}
+```
+
+Adopted and repaired rows are also counted as duplicates because they create no second financial
+transaction. Multi-batch results always include integer `repaired` in each batch and aggregate; the
+legacy single-batch commit response retains its existing counts.
+
+| Status | Meaning |
+| ------ | ------- |
+| `200 OK` | Preview produced a plan, including a blocked plan; or commit completed atomically |
+| `400 Bad Request` | Invalid strict request, IDs/policies/fingerprint, missing batch in preview scope, or non-reviewable scope |
+| `404 Not Found` | A selected batch disappeared before the locked commit recheck |
+| `409 Conflict` | `incomplete_source`, `stale_reconciliation_plan`, `reconciliation_required`, or `atomic_import_failed`; no commit writes |
+
+These endpoints and policy fields are additive. Maintained single-batch commit now adopts exact
+history and rejects incomplete/unsafe or runtime-failed scopes atomically, which tightens earlier
+partial behavior. API support does not prove real-source completeness or native-app acceptance.
 
 ---
 
 ## Rate Limits
 
-Upload endpoints (`/csv/custom` and `/csv/stream`) use `importRateLimiter` (same as budgeting import). Batch, review, and parser endpoints use the global default rate limit.
+The entire `/api/portfolio/import` router is mounted with `importRateLimiter`, in addition to the
+global API limiter. This covers uploads, batch/review operations, reconciliation, and saved parsers.
 
 ---
 
 ## Related
 
+- [[docs/adr/177-reviewed-history-reconciliation-and-custody-ledger|ADR-177]] — receipts, custody model, and guarded migration recovery
+
+- [[docs/api/index|API Index]]
 - [[docs/features/portfolio-import|Portfolio Import Feature]]
 - [[docs/api/imports|Imports API]] — budgeting CSV import (parallel pipeline)
 - [[docs/adr/078-portfolio-csv-import|ADR-078: Portfolio CSV Import Architecture]]

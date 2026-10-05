@@ -2,9 +2,9 @@
 title: Data Model Reference
 type: reference
 status: active
-date: 2026-09-20
-updated: 2026-09-20
-last_modified: 2026-09-20
+date: 2026-10-04
+updated: 2026-10-04
+last_modified: 2026-10-04
 tags:
   [
     reference,
@@ -31,6 +31,13 @@ tags:
     portfolio-import,
     portfolio-import-batches,
     portfolio-import-staging-rows,
+    migration-0120,
+    migration-0121,
+    migration-0122,
+    migration-0123,
+    custody,
+    reconciliation,
+    adr-177,
     kind-discriminator,
     migration-0040,
     migration-0041,
@@ -70,7 +77,7 @@ tags:
     migration-0088,
     adr-112,
   ]
-description: Complete reference for all data entities in Vision — core, portfolio, planning, supporting, and aggregation entities. Covers aggregation tables, attachments, transaction tags, custom parser configs, portfolio imports, provider configuration, forecast accuracy, and current materialized views. September 2026 migrations retire dormant import bank-account resolution state and the empty upgraded-install-only exchange-rate cache.
+description: Complete reference for all data entities in Vision — core, portfolio, planning, supporting, and aggregation entities. Covers aggregation tables, attachments, transaction tags, custom parser configs, portfolio imports, provider configuration, forecast accuracy, and current materialized views. September 2026 migrations retire dormant import bank-account resolution state and the empty upgraded-install-only exchange-rate cache. October 2026 adds immutable adoption/duplicate-repair receipts and dated partial custody events.
 aliases: [data model, entities, domain model, schema entities]
 related_code:
   [
@@ -594,7 +601,7 @@ renormalized by the exposure service.
 | `source_filename`   | TEXT        | NULLABLE                    | Original uploaded filename                                                                                                        |
 | `source_size_bytes` | BIGINT      | NULLABLE                    | File size in bytes                                                                                                                |
 | `custom_config`     | JSONB       | NULLABLE                    | Custom parser config snapshot at import time                                                                                      |
-| `status`            | TEXT        | NOT NULL, DEFAULT 'pending' | Pipeline status: `pending`, `staging`, `validating`, `matching`, `committing`, `complete`, `failed`, `aborted`, `awaiting_review` |
+| `status`            | TEXT        | NOT NULL, DEFAULT 'pending' | Pipeline status: `pending`, `staging`, `validating`, `matching`, `committing`, `complete`, `complete_with_errors`, `failed`, `aborted`, `awaiting_review` |
 | `rows_total`        | INTEGER     | NOT NULL, DEFAULT 0         | Total rows parsed                                                                                                                 |
 | `rows_imported`     | INTEGER     | NOT NULL, DEFAULT 0         | Rows committed to `transactions`                                                                                                  |
 | `rows_duplicate`    | INTEGER     | NOT NULL, DEFAULT 0         | Rows skipped as duplicates                                                                                                        |
@@ -1364,7 +1371,7 @@ All of them share these anchor columns; the remaining columns are the source's n
 
 ### PortfolioImportBatch (June 2026, ADR-078, migration 0040; account_id added migration 0057)
 
-**Purpose:** Tracks each portfolio CSV import run through the pipeline. Mirrors `import_batches` but with portfolio-specific columns for batch defaults and instrument resolution.
+**Purpose:** Tracks each portfolio CSV or detailed Saxo XLSX statement, managed retained-history review, or supplemental XML reference batch through the pipeline. Mirrors `import_batches` but with portfolio-specific columns for batch defaults and instrument resolution.
 
 | Field                 | Type        | Constraints                                | Description                                                                                                                                                                             |
 | --------------------- | ----------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1372,13 +1379,13 @@ All of them share these anchor columns; the remaining columns are the source's n
 | `adapter_name`        | TEXT        | NOT NULL                                   | Display name for the import source (written as identifier on portfolio_transactions)                                                                                                    |
 | `source_filename`     | TEXT        | NULLABLE                                   | Original uploaded filename                                                                                                                                                              |
 | `source_size_bytes`   | BIGINT      | NULLABLE                                   | File size in bytes                                                                                                                                                                      |
-| `custom_config`       | JSONB       | NULLABLE                                   | Column mapping config snapshot at import time                                                                                                                                           |
-| `account_id`          | INTEGER     | FK → accounts ON DELETE SET NULL, NULLABLE | **New (migration 0057 — authored, not applied).** Destination brokerage account; committed `portfolio_transactions` inherit this value (ADR-091 per-account lots). `null` = unassigned. |
+| `custom_config`       | JSONB       | NULLABLE                                   | Column mapping, actual source header order, explicit basis/custody policies, and reference scope/result snapshot                                                                                                                                           |
+| `account_id`          | INTEGER     | FK → accounts ON DELETE SET NULL, NULLABLE | Destination portfolio account; new trades inherit it and reviewed adoptions stamp it. Custody counterpart IDs are stored in `custom_config`. `null` = unassigned. |
 | `default_asset_class` | TEXT        | NOT NULL                                   | Batch-level fallback asset class for rows without explicit asset class                                                                                                                  |
 | `default_type`        | TEXT        | NOT NULL, DEFAULT `'buy'`                  | Batch-level fallback transaction type when no type column is mapped                                                                                                                     |
 | `status`              | TEXT        | NOT NULL, DEFAULT `'pending'`              | Pipeline status: `pending`, `staging`, `validating`, `matching`, `committing`, `complete`, `failed`, `aborted`, `awaiting_review`                                                       |
 | `rows_total`          | INTEGER     | NOT NULL, DEFAULT 0                        | Total rows parsed                                                                                                                                                                       |
-| `rows_imported`       | INTEGER     | NOT NULL, DEFAULT 0                        | Rows committed to `portfolio_transactions`                                                                                                                                              |
+| `rows_imported`       | INTEGER     | NOT NULL, DEFAULT 0                        | New canonical trade, cash, custody, or adjustment events committed                                                                                                                                              |
 | `rows_duplicate`      | INTEGER     | NOT NULL, DEFAULT 0                        | Rows skipped as duplicates                                                                                                                                                              |
 | `rows_error`          | INTEGER     | NOT NULL, DEFAULT 0                        | Rows that failed processing                                                                                                                                                             |
 | `error_summary`       | TEXT        | NULLABLE                                   | Human-readable error description                                                                                                                                                        |
@@ -1387,7 +1394,7 @@ All of them share these anchor columns; the remaining columns are the source's n
 
 **Backup:** Included in `BACKUP_COVERED_TABLES`.
 
-**Migrations:** [[alembic/versions/0040_add_portfolio_import_staging.py]] (base); `0057_portfolio_import_batches_account_id` (authored, not applied — adds `account_id`)
+**Migrations:** [[alembic/versions/0040_add_portfolio_import_staging.py]] (base); `0057_portfolio_import_batches_account_id` (adds `account_id`)
 
 **Related:** [[docs/features/portfolio-import|Portfolio Import Feature]], [[docs/api/portfolio-imports|Portfolio Imports API]], [[docs/adr/078-portfolio-csv-import|ADR-078]], [[docs/adr/091-per-account-positioning|ADR-091]]
 
@@ -1395,55 +1402,210 @@ All of them share these anchor columns; the remaining columns are the source's n
 
 ### PortfolioImportStagingRow (June 2026, ADR-078, migration 0040)
 
-**Purpose:** Holds one CSV row during the portfolio import pipeline (staging through commit). After commit, rows remain for audit; rolling back the batch deletes the committed `portfolio_transactions` but retains staging rows marked `aborted`.
+**Purpose:** Retains one adapter-produced row through staging and review. Raw source records and
+source identity remain available for duplicate detection and reconciliation. A source record can
+produce multiple staging rows, so `row_index` is not always a source-file line number.
 
-> [!info] How rollback finds the rows to delete
-> Trades are deleted in one `DELETE … WHERE import_batch_id = $1` against the lot table
-> (migration 0086). `committed_txn_id` remains load-bearing for two cases: brokerage **cash**
-> rows, whose `committed_txn_id` is a `transactions.id` (a different table with an independent
-> sequence — it must never be fed to the portfolio delete, see ADR-095), and lots committed
-> **before** 0086 applied, which carry `import_batch_id = NULL` and are still rolled back per id.
+| Field | Type | Constraints / meaning |
+| ----- | ---- | --------------------- |
+| `id`, `batch_id` | BIGINT | Row PK; parent batch FK with `ON DELETE CASCADE` |
+| `row_index` | INTEGER | Non-null zero-based staging ordinal |
+| `tx_date` | DATE | Parsed calendar date |
+| `type_raw`, `type` | TEXT, portfolio_txn_type | Source kind and canonical financial kind |
+| `symbol_raw`, `name_raw` | TEXT | Exported instrument identity |
+| `units`, `price_per_unit` | NUMERIC(18,8), NUMERIC(18,6) | Units and effective unit price |
+| `amount`, `fees`, `taxes` | NUMERIC(18,4) | Principal and separate costs |
+| `currency`, `fx_rate_to_eur` | TEXT, NUMERIC(20,10) | Financial currency and explicit/resolved EUR FX |
+| `note`, `raw_data` | TEXT | Note and exact CSV record or internal typed workbook provenance |
+| `source_transaction_id`, `source_account_identity` | TEXT | Provider identity when available |
+| `dedup_occurrence` | INTEGER | Positive fallback occurrence ordinal |
+| `source_record_hash`, `dedup_fingerprint` | CHAR(64) | Lowercase hexadecimal provenance hash and duplicate fingerprint |
+| `dedup_fingerprint_version` | SMALLINT | Positive version; present iff fingerprint is present |
+| `resolved_investment_id`, `user_override_investment_id` | INTEGER | Matched and user-selected investment IDs; override takes precedence |
+| `match_source`, `match_similarity` | TEXT, REAL | Source is `symbol`, `name_exact`, or null; no fuzzy matcher |
+| `route` | TEXT | Null, `cash`, `portfolio`, `asset_transfer`, `asset_adjustment`, or `account_internal` |
+| `asset_transfer_details` | JSON | Nullable direction, gross/fee units, and basis status (0121) |
+| `asset_adjustment_details` | JSON | Nullable adjustment kind, account, basis policy, and eligible source hashes (0123); financial `type` is null on adjustment routes |
+| `status` | TEXT | `pending`, `validated`, `matched`, `committed`, `duplicate`, or `error` |
+| `error_message` | TEXT | Row diagnostic |
+| `committed_txn_id` | INTEGER | Route-dependent canonical row pointer; not a financial-table FK |
+| `created_at`, `updated_at` | TIMESTAMPTZ | Creation and shared-trigger mutation timestamps |
 
-| Field                         | Type          | Constraints                                               | Description                                                                                                                                                          |
-| ----------------------------- | ------------- | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                          | BIGSERIAL     | PK                                                        | Unique row identifier                                                                                                                                                |
-| `batch_id`                    | BIGINT        | NOT NULL, FK → portfolio_import_batches ON DELETE CASCADE | Parent batch                                                                                                                                                         |
-| `row_index`                   | INTEGER       | NOT NULL                                                  | 0-based position in the source CSV                                                                                                                                   |
-| `raw_date`                    | TEXT          | NULLABLE                                                  | Raw date string as read from CSV                                                                                                                                     |
-| `type`                        | TEXT          | NULLABLE                                                  | Normalized portfolio_txn_type after type normalization                                                                                                               |
-| `symbol`                      | TEXT          | NULLABLE                                                  | Raw ticker symbol from CSV                                                                                                                                           |
-| `name`                        | TEXT          | NULLABLE                                                  | Raw instrument name from CSV                                                                                                                                         |
-| `units`                       | NUMERIC(20,8) | NULLABLE                                                  | Number of units traded                                                                                                                                               |
-| `price`                       | NUMERIC(20,8) | NULLABLE                                                  | Unit price                                                                                                                                                           |
-| `amount`                      | NUMERIC(15,4) | NULLABLE                                                  | Total trade amount                                                                                                                                                   |
-| `fees`                        | NUMERIC(15,4) | NULLABLE                                                  | Transaction fees                                                                                                                                                     |
-| `taxes`                       | NUMERIC(15,4) | NULLABLE                                                  | Taxes / withholding                                                                                                                                                  |
-| `currency`                    | VARCHAR(3)    | NULLABLE                                                  | Trade currency code                                                                                                                                                  |
-| `fx_rate`                     | NUMERIC(20,8) | NULLABLE                                                  | EUR FX rate (from CSV or auto-resolved via fxResolve)                                                                                                                |
-| `note`                        | TEXT          | NULLABLE                                                  | Free-text note from CSV                                                                                                                                              |
-| `raw_data`                    | TEXT          | NULLABLE                                                  | Exact logical CSV record, excluding only its terminal record delimiter                                                                                               |
-| `source_transaction_id`       | TEXT          | NULLABLE                                                  | Immutable provider transaction ID when available                                                                                                                     |
-| `source_account_identity`     | TEXT          | NULLABLE                                                  | Provider account identity; destination account UUID is the fallback                                                                                                  |
-| `dedup_occurrence`            | INTEGER       | NULLABLE, greater than zero                               | One-based ordinal within a fallback field identity                                                                                                                   |
-| `source_record_hash`          | CHAR(64)      | NULLABLE                                                  | Byte-sensitive, non-unique source-record provenance                                                                                                                  |
-| `dedup_fingerprint`           | CHAR(64)      | NULLABLE                                                  | Versioned duplicate identity                                                                                                                                         |
-| `dedup_fingerprint_version`   | SMALLINT      | NULLABLE, paired with fingerprint                         | Fingerprint algorithm version                                                                                                                                        |
-| `resolved_investment_id`      | INTEGER       | NULLABLE, FK → investments                                | Set by matchInvestments phase (symbol or name match)                                                                                                                 |
-| `user_override_investment_id` | INTEGER       | NULLABLE, FK → investments                                | Set by the single-row `POST .../rows/:rowId/investment-override` or atomic group `POST .../rows/investment-override`; takes precedence over `resolved_investment_id` |
-| `match_source`                | TEXT          | NULLABLE                                                  | `symbol_exact` \| `name_exact` \| `unresolved`                                                                                                                       |
-| `status`                      | TEXT          | NOT NULL, DEFAULT `'pending'`                             | Row status: `pending`, `valid`, `duplicate`, `error`, `committed`                                                                                                    |
-| `error_detail`                | TEXT          | NULLABLE                                                  | Validation or commit error message                                                                                                                                   |
-| `committed_txn_id`            | INTEGER       | NULLABLE, FK → portfolio_transactions                     | ID of the created portfolio_transaction after commit                                                                                                                 |
-| `created_at`                  | TIMESTAMPTZ   | NOT NULL, DEFAULT NOW()                                   | Staging creation timestamp                                                                                                                                           |
-| `updated_at`                  | TIMESTAMPTZ   | NOT NULL, DEFAULT NOW()                                   | Last matching, repair, or commit change; maintained by the shared trigger (migration 0092)                                                                           |
+Cash pointers address `transactions`; trade pointers address `portfolio_transactions`. Custody
+and adjustment records own `staging_row_id` and are removed through their ledger repositories.
+Their staging rows do not point at a fictional trade. XML enrichment retains literal primary source
+and secondary XML proof in an internal envelope; supplemental rows retain literal reference facts. Adopted transactions
+are restored through journal images, never deleted via a new batch's canonical pointer.
 
-**Indexes:** `idx_portfolio_staging_batch_id`, `idx_portfolio_staging_status` (partial, non-terminal only)
+Indexes cover `(batch_id,status)`, source fingerprint within a batch, and non-null resolved/override
+investment IDs. Included in `BACKUP_COVERED_TABLES`. Receipt and custody foreign keys restrict
+ordinary batch/staging pruning even though the staging-to-batch FK itself cascades.
 
-**Backup:** Included in `BACKUP_COVERED_TABLES`.
+**Related:** [[docs/features/portfolio-import]], [[docs/api/portfolio-imports]],
+[[docs/adr/177-reviewed-history-reconciliation-and-custody-ledger]],
+[[alembic/versions/0121_portfolio_asset_transfers.py]].
 
-**Migrations:** [[alembic/versions/0040_add_portfolio_import_staging.py]], [[alembic/versions/0092_updated_at_policy.py|0092 updated-at policy]], [[alembic/versions/0103_import_identity_provenance.py|0103 import identity]]
+### PortfolioImportReconciliationJournal (migration 0120)
 
-**Related:** [[docs/features/portfolio-import|Portfolio Import Feature]], [[docs/api/portfolio-imports|Portfolio Imports API]], [[docs/adr/078-portfolio-csv-import|ADR-078]]
+**Purpose:** Immutable before/after receipts for adopting existing real transactions and restoring
+them. Adoption preserves the financial transaction ID, notes, and unsupported metadata. The
+journal is domain evidence; it is not linked to the independently witnessed audit chain.
+
+| Field | Type | Constraints / meaning |
+| ----- | ---- | --------------------- |
+| `id` | BIGSERIAL | Receipt PK |
+| `batch_id`, `staging_row_id` | BIGINT | Non-null FKs to source batch/staging with `ON DELETE RESTRICT` |
+| `transaction_id` | INTEGER | Adopted financial ID, retained without a financial FK |
+| `action` | TEXT | `adopt` or `restore` |
+| `policy` | TEXT | `exact`, `preserve_existing`, or `prefer_source` |
+| `previous_entry_id` | BIGINT | Unique self FK, required only for restore; `ON DELETE RESTRICT` |
+| `before_data`, `after_data` | JSONB | Non-null object snapshots; numeric values retain DB decimal strings |
+| `created_at` | TIMESTAMPTZ | Non-null default `NOW()` |
+
+One adoption is allowed per staging row. Insertion validates that the staging row belongs to its
+batch. A restore must reference the matching adoption and swap its exact before/after images.
+Triggers reject receipt updates/deletes. Restoration compares the current financial row with the
+after-image before changing anything. Batch/action lookup and the partial unique adoption-source
+index support replay and rollback. Included in `BACKUP_COVERED_TABLES`.
+
+Upgrade creates an empty journal and changes no existing financial rows. Downgrade refuses active
+adoptions; restore them through the application first. Once all are restored, downgrade drops the
+journal and loses its receipts while leaving financial history intact.
+
+**Related:** [[docs/adr/177-reviewed-history-reconciliation-and-custody-ledger]],
+[[docs/guides/migrations]], [[alembic/versions/0120_portfolio_import_reconciliation.py]].
+
+### PortfolioAssetTransfer (migration 0121)
+
+**Purpose:** One dated canonical custody move, including partial units and same-asset withdrawal
+fees. It creates no fictional sale, proceeds, income, or cash transaction. Replay derives temporary
+legs carrying remaining original acquisition lots under FIFO, LIFO, and weighted average.
+
+| Field | Type | Constraints / meaning |
+| ----- | ---- | --------------------- |
+| `id` | BIGINT | PK using shared `portfolio_transactions_id_seq` for stable event order |
+| `investment_id` | INTEGER | Non-null investment FK, `ON DELETE RESTRICT` |
+| `source_account_id`, `destination_account_id` | INTEGER | Distinct non-null account FKs, `ON DELETE RESTRICT` |
+| `date` | DATE | Non-null custody calendar date |
+| `units` | NUMERIC(18,8) | Positive gross units debited from source |
+| `fee_units` | NUMERIC(18,8) | Nonnegative, less than gross units; default zero |
+| `fee_basis_allocations` | JSONB | Per-method original acquisition IDs/dates, units, native basis, EUR basis; default `{}` |
+| `import_batch_id`, `staging_row_id` | BIGINT | Non-null restrictive source FKs; staging row unique |
+| `source_record_hash`, `dedup_fingerprint` | CHAR(64) | Non-null lowercase hexadecimal source/fingerprint hashes |
+| `dedup_fingerprint_version` | SMALLINT | Positive version; unique with fingerprint |
+| `created_at` | TIMESTAMPTZ | Non-null default `NOW()` |
+
+The destination receives `units-fee_units`. Basis and FX come from original acquisition lots;
+transfer-date rates do not create a new purchase basis. Stored fee allocations explain cost consumed
+by removed fee units for each supported method; unresolved original FX is not invented. Updates
+are forbidden. Application rollback can delete events only after validating the projected remaining
+history. Replay index: `(investment_id,date,id)`; batch index: `import_batch_id`. Included in
+`BACKUP_COVERED_TABLES`.
+
+Upgrade adds an empty ledger, nullable staging JSON, and two route values without rewriting
+holdings. Downgrade refuses any populated ledger. Roll back dependent imports in safe order first;
+once empty, downgrade removes the ledger/metadata and marks retained transfer/internal staging
+rows as errors with null route. See the blast-radius and recovery plan in
+[[docs/adr/177-reviewed-history-reconciliation-and-custody-ledger]].
+
+**Related:** [[docs/features/portfolio-import#Dated custody and original basis]],
+[[docs/guides/migrations]], [[alembic/versions/0121_portfolio_asset_transfers.py]].
+
+---
+### PortfolioImportDuplicateRepairJournal (migration 0122)
+
+**Purpose:** Reversible explicit-policy repair of an imported copy that also overlaps one unique
+unstamped/unassigned manual trade. The retained manual ID/notes remain canonical; the removed copy
+can be restored exactly. This is separate from prospective adoption receipts.
+
+| Field | Type | Constraints / meaning |
+| ----- | ---- | --------------------- |
+| `id` | BIGSERIAL | Receipt PK |
+| `batch_id`, `staging_row_id` | BIGINT | New reviewed source FKs with `ON DELETE RESTRICT` |
+| `original_import_batch_id` | BIGINT | Old imported source batch FK with `ON DELETE RESTRICT` |
+| `legacy_transaction_id`, `imported_transaction_id` | INTEGER | Distinct retained/removed IDs; no financial FKs |
+| `action` | TEXT | `repair` or `restore` |
+| `policy` | TEXT | Explicit `preserve_existing` or `prefer_source` |
+| `before_data`, `after_data` | JSONB | Object images with `legacy`, `imported`, `originalBatch`, `originalStaging` |
+| `previous_entry_id` | BIGINT | Unique restrictive self FK, required only for restore |
+| `created_at` | TIMESTAMPTZ | Non-null default `NOW()` |
+
+Images retain both full financial rows including timestamps, original batch state/counters, and
+complete original staging snapshots. A repair has an imported object before and null after;
+restoration reverses that shape. The source must belong to its new batch. One repair is allowed
+per new staging row. An inverse receipt must match the referenced repair's IDs/policy and state;
+the inverse check excludes only automatic `updated_at` on the retained legacy row and old staging
+rows. Application rollback validates complete current after-images before restoring anything.
+Triggers reject receipt updates/deletes. Index: `(batch_id,action)`; partial unique repair source.
+
+Repair requires an unchanged same-account/same-investment fingerprinted imported copy, one unique
+unassigned/unstamped candidate, and a complete old batch with positive imported count and one
+committed pointer matching that fingerprint. Changed imported annotations or financial facts
+block repair. Commit clears the old staging pointer, marks it duplicate, removes the exact copy,
+adopts the manual row, and moves one old imported count to duplicate. Later changes to either row,
+staging, or counters make restoration conflict with `duplicate_repair_changed`.
+
+Included in `BACKUP_COVERED_TABLES`. Retention excludes both the new reviewed batch and its old
+original batch. Upgrade adds an empty receipt table without changing financial data. Downgrade
+refuses active repairs; application rollback must append restore receipts first. Removing the
+restored journal then loses receipts while leaving restored history intact.
+
+**Related:** [[docs/features/portfolio-import#Repair an already imported duplicate]],
+[[docs/api/portfolio-imports]], [[docs/guides/migrations]],
+[[docs/adr/177-reviewed-history-reconciliation-and-custody-ledger]],
+[[alembic/versions/0122_portfolio_import_duplicate_repair.py]].
+
+---
+
+### PortfolioAssetAdjustment (migration 0123)
+
+**Purpose:** Dated unit removal through a yield reversal or asset fee, without fictional sale or
+cash proceeds. Shared replay consumes remaining original lots under FIFO, LIFO, and weighted
+average. A zero-yield reversal can consume only source-proven zero-basis gifted units.
+
+| Field | Type | Constraints / meaning |
+| ----- | ---- | --------------------- |
+| `id` | BIGINT | PK from shared `portfolio_transactions_id_seq` |
+| `investment_id`, `account_id` | INTEGER | Non-null restrictive investment/account FKs |
+| `date`, `units` | DATE, NUMERIC(18,8) | Non-null calendar date and positive units removed |
+| `adjustment_kind` | TEXT | `yield_reversal` or `asset_fee` |
+| `basis_policy` | TEXT | `zero_yield_only` for reversal; `carried` for fee; checked pair |
+| `eligible_source_record_hashes` | TEXT[] | Non-null eligible zero-yield hashes; default empty array |
+| `basis_allocations` | JSONB | Per-method original acquisition ID/date/hash, units, currency/native basis, EUR basis; default `{}` |
+| `import_batch_id`, `staging_row_id` | BIGINT | Non-null restrictive source FKs; staging row unique |
+| `source_record_hash`, `dedup_fingerprint` | CHAR(64) | Non-null lowercase hexadecimal source/fingerprint hashes |
+| `dedup_fingerprint_version` | SMALLINT | Positive version; unique with fingerprint |
+| `created_at` | TIMESTAMPTZ | Non-null default `NOW()` |
+
+Updates are forbidden. Validated import rollback can remove an event after full remaining-history
+checks. Replay index: `(investment_id,date,id)`; batch index: `import_batch_id`. Cost allocations
+retain original purchase FX rather than rates at removal time; unknown EUR basis remains null.
+Included in `BACKUP_COVERED_TABLES`.
+
+### PortfolioAssetAdjustmentSource (migration 0123)
+
+**Purpose:** Retains the original staged yield evidence used by an adjustment, even when it came
+from a different batch. The source link prevents pruning evidence needed for replay/restoration.
+
+| Field | Type | Constraints / meaning |
+| ----- | ---- | --------------------- |
+| `adjustment_id` | BIGINT | PK part; adjustment FK with `ON DELETE CASCADE` |
+| `staging_row_id` | BIGINT | PK part; original source FK with `ON DELETE RESTRICT` |
+| `source_record_hash` | CHAR(64) | Non-null lowercase hexadecimal source hash |
+
+Updates and direct deletes are forbidden. A parent adjustment rollback can cascade removal once
+the parent event is gone. Included in `BACKUP_COVERED_TABLES`. Retention protects both adjustment
+batches and batches containing linked source rows.
+
+Upgrade adds these empty tables, nullable staging `asset_adjustment_details`, and the new route
+without changing holdings. Downgrade refuses a populated adjustment ledger. Roll back dependent
+imports first; once empty it drops both tables/metadata and marks retained adjustment staging rows
+as errors with null route.
+
+**Related:** [[docs/features/portfolio-import#Unit adjustments and consumed basis]],
+[[docs/reference/database-triggers]], [[docs/guides/migrations]],
+[[docs/adr/177-reviewed-history-reconciliation-and-custody-ledger]],
+[[alembic/versions/0123_portfolio_asset_adjustments.py]].
 
 ---
 
@@ -1570,6 +1732,8 @@ GROUP BY i.asset_class;
 ---
 
 ## Related
+
+- [[docs/adr/177-reviewed-history-reconciliation-and-custody-ledger|ADR-177]] — reconciled trade provenance and dated custody history
 
 - [[docs/adr/002-database-schema|Database Schema ADR]]
 - [[docs/adr/010-phase1-aggregation-strategy|ADR-010: Aggregation Strategy]]

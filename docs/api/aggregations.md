@@ -2,8 +2,8 @@
 title: Aggregations API
 type: endpoint
 status: active
-date: 2026-09-30
-updated: 2026-09-19
+date: 2026-10-04
+updated: 2026-10-04
 last_modified: 2026-09-19
 recipient_pivot_added: 2026-04-28
 tag_pivot_added: 2026-06-26
@@ -343,6 +343,11 @@ Each `accounts` row includes the canonical numeric `account_id`. Consumers shoul
 joining the aggregation to account entities. `bank_account` remains the account label and the key
 used by the `history` map for backward compatibility. This is an additive, non-breaking response
 change.
+
+The account list, current total, and daily history exclude holdings-only `crypto_exchange` and
+`wallet` accounts (ADR-108). Their imported fiat movement rows remain stored but are not a complete
+cash balance. Ordinary brokerage cash remains eligible. This corrects the population without
+changing the response shape.
 
 **Path:** `GET /api/aggregations/bank-balances`
 
@@ -1473,7 +1478,6 @@ Aggregate MAPE excludes these windows and is null if no eligible windows exist; 
 window counts are preserved. Existing stored history is not rewritten. See
 [[docs/features/cash-flow-forecast|Forecast benchmarks]] and
 [[docs/adr/174-single-instance-daily-job-catch-up|Daily cache scheduling]].
-
 
 ## Related
 

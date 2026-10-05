@@ -2,9 +2,9 @@
 title: Backup Coverage Audit
 type: feature
 status: active
-date: 2026-10-03
-updated: 2026-10-03
-last_modified: 2026-10-03
+date: 2026-10-04
+updated: 2026-10-04
+last_modified: 2026-10-04
 tags: [feature, backup, restore, database, filesystem, localStorage, bundle, encryption, schema-migration, phase-1, phase-2, phase-7, passphrase-modal, ux, aead, aes-256-gcm, rolling-cache, concurrent-backup-guard, pre-restore-confirmation, watchdog-pause, safe-storage, keychain, lazy-safeStorage, settings-dialog-fix, backup-path-revert-fix]
 description: "Authoritative audit of every persistence surface in Vision and its backup/restore coverage status. Phase 1+2 implements .visionbak bundle format with optional AES-256-CBC encryption (v1) or AES-256-GCM (v2, 2026-04-28), schema-safe restore, and localStorage hydration. Phase 7 (May 2026) hardens restore with user confirmation, concurrent-backup guard, and health watchdog pause. safeStorage is now accessed lazily to avoid macOS Keychain prompts for users without a stored passphrase. 2026-06-11: fixes \"backup path keeps reverting to default\" — settings dialog now loads backup settings on open; Electron IPC handlers correctly unwrap the response envelope."
 aliases: [backup audit, coverage audit, backup coverage, visionbak, bundle format]
@@ -98,6 +98,23 @@ backup from an uncontracted or divergent schema cannot be stamped into the new b
 | `analysis_monitors`              | Monitoring  | ✅ Included | Rule conditions, next due time, and dedup state      |
 | `analysis_monitor_observations`  | Monitoring  | ✅ Included | Complete local check history, including failures     |
 | `analysis_monitor_notifications` | Monitoring  | ✅ Included | Deduplicated in-app inbox and read state             |
+
+#### Portfolio import reconciliation and custody
+
+| Table | Backup | Notes |
+| ----- | ------ | ----- |
+| `portfolio_import_reconciliation_journal` | Included | Immutable adoption/restore images and retained source references (0120) |
+| `portfolio_import_duplicate_repair_journal` | Included | Full manual/imported images and original staging/batch counters for explicit repair restoration (0122) |
+| `portfolio_asset_transfers` | Included | Dated source/destination units, source identity, and method-specific fee-basis allocations (0121) |
+| `portfolio_asset_adjustments` | Included | Dated unit reversals/asset fees and per-method original-lot basis allocations (0123) |
+| `portfolio_asset_adjustment_sources` | Included | Restrictive original yield-source links, including evidence in older batches (0123) |
+
+These tables are registered in `BACKUP_COVERED_TABLES`. They retain original-trade restoration and
+custody replay state, including referenced batches/staging provenance. They are domain history and
+are not entries in the witnessed audit chain. The import session's tab-scoped `sessionStorage`
+metadata is not a backup surface; canonical staged batches and source records remain in PostgreSQL.
+See [[docs/reference/data-model]] and
+[[docs/adr/177-reviewed-history-reconciliation-and-custody-ledger]] for guarded migration recovery.
 
 #### Attachments & Reference
 

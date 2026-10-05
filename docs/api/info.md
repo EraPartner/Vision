@@ -2,8 +2,8 @@
 title: Info & Analytics API
 type: endpoint
 status: active
-date: 2026-09-13
-updated: 2026-09-13
+date: 2026-10-04
+updated: 2026-10-04
 tags: [api, analytics, statistics, dashboard, phase-g-deprecation, ing, bnp, supported-adapters]
 description: API endpoints for statistics, analytics, and dashboard data. Phase G removed 6 overlapping endpoints; see aggregations API for their replacements. May 2026: Added ING and BNP Paribas Fortis adapters (8 total banks supported).
 aliases: [info-api, analytics-api, statistics-api, dashboard-api]
@@ -387,6 +387,11 @@ The server resolves an outlier's current deviation; clients cannot supply that t
 
 Get net worth combining bank balances + portfolio value.
 
+Holdings-only `crypto_exchange` and `wallet` accounts enter through portfolio value. Their ledger
+cash is excluded from current liquid balances, history, fallback, and cash source-date discovery,
+matching the Accounts surface (ADR-108). Ordinary brokerage cash remains included. Response
+fields and pagination are unchanged.
+
 **Query Parameters:**
 
 | Parameter         | Type    | Description                                                          |
@@ -408,9 +413,9 @@ Notes:
 - Concurrent requests for the same currency are deduplicated in-flight and share the same repository promise.
 - Route uses a modest per-route rate limiter (`30 requests / 60s` per key prefix) to protect expensive net-worth computations.
 - Returns **daily** snapshots (not monthly) from the first available data date until today.
-- Seed date (`first_data_date`) is the minimum of: first `portfolio_transactions.date`, first active `investments.created_at`, and first active `transactions.date`.
-- If the active-only seed date is empty (legacy/partially-migrated data), backend automatically retries seed date discovery without active filters to avoid false all-zero responses.
-- Portfolio contribution uses cumulative portfolio transaction cashflow from that seed date onward.
+- Seed date (`first_data_date`) is the minimum of the first persisted portfolio snapshot in the requested currency and the first effective active cash transaction that the answering account walk or fallback can value. Tracking-only and holdings-only wallet rows cannot extend the cash history span.
+- If neither source supplies a date, the endpoint returns an empty history with zero current totals.
+- Portfolio history comes from persisted daily valuation snapshots; the current investment value is overlaid from the live portfolio summary.
 - Bank balance and portfolio series both start at `first_data_date`, so timelines include transaction-only workspaces (no investments).
 - Historical conversion is date-aware for both bank history and portfolio history using each snapshot `day`.
 - FX changes are reflected over time in historical snapshots (instead of applying only latest rates).

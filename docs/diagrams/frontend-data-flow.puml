@@ -8,6 +8,12 @@ skinparam ranksep 60
 
 package "Frontend" {
   class Pages <<React Component>>
+  class PortfolioImportSession <<ADR-177>>
+  class PortfolioSummaries
+  class PortfolioSummaryQuery
+  class PortfolioImportDetection
+  class PortfolioImportsApi
+  class "tab sessionStorage" as ImportSessionStorage
   
   class Hooks {
     useTransactions
@@ -89,6 +95,15 @@ package "External Services" {
 }
 
 ' Relationships
+Pages --> PortfolioImportSession
+PortfolioImportSession --> PortfolioImportDetection : complete CSV / Saxo XLSX detection
+PortfolioImportSession --> PortfolioImportsApi : sequential SSE; optional asset scope / XML / explicit zero; effective scope; preview/commit hash
+PortfolioImportSession --> ImportSessionStorage : staged batch metadata only
+PortfolioImportsApi --> ApiClient : strict JSON reconciliation / multipart upload
+PortfolioImportSession --> QueryClient : invalidate confirmed committed scope
+Hooks --> PortfolioSummaries : metadata + CRUD transactions
+PortfolioSummaries --> PortfolioSummaryQuery : active holdings / loading / errors
+PortfolioSummaryQuery --> ApiClient : GET /api/info/portfolio-summary?currency
 Hooks --> ApiClient
 ApiClient --> RESTEndpoints
 

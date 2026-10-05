@@ -2,9 +2,9 @@
 title: Feature - Portfolio & Investments
 type: feature
 status: active
-date: 2026-10-03
-last_modified: 2026-10-03
-updated: 2026-10-03
+date: 2026-10-04
+last_modified: 2026-10-04
+updated: 2026-10-04
 tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding, fx-attribution, asset-gain, fx-gain, purchase-date-rates, value-fx-neutral, adr-074, adr-091, adr-100, per-account, move-holding, close-account, brokerage-fanout, rebalancing, saved-plans, cash-aware, cross-workspace, adr-098, portfolio-ticker, marquee, live-quotes, ticker-manager, show-in-ticker, migration-0061, fx-aware-pnl, unified-detail-dialog, useFxAwarePnl]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: "Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections. 2026-05-29 adds historical FX in snapshots and loading/error states on all asset pages. June 2026 adds snapshotBuilder split/return_of_capital events, APP_TIMEZONE day-boundary fix, shared portfolioUnitMath.ts, and FX attribution UI (ADR-074): asset gain / FX effect decomposition on overview, performance, asset pages, and investment detail."
@@ -844,7 +844,8 @@ Code links: [[apps/frontend/src/features/portfolio/PortfolioTicker.tsx]], [[apps
 
 ### Per-account breakdown in portfolio summary (ADR-108 partitioned P&L, 2026-08-10)
 
-`getPortfolioSummary`'s top-level `byAccount` array now carries full per-broker P&L, computed by the ADR-108 partitioned engine — the existing lot engine run per (investment, account) partition with the user's configured cost-basis method: buys/gifts create lots in their row's account, sells consume **same-account** lots, corporate actions (split, return of capital) apply investment-wide across partitions, and a re-tag (`UPDATE … SET account_id`) moves the whole lot with its basis. Each element is:
+`getPortfolioSummary`'s top-level `byAccount` array now carries full per-broker P&L, computed by the ADR-108 partitioned engine — the existing lot engine run per (investment, account) partition with the user's configured cost-basis method: buys/gifts create lots in their row's account, sells consume **same-account** lots, corporate actions (split, return of capital) apply investment-wide across partitions, and a re-tag (`UPDATE … SET account_id`) corrects whole-lot assignment. Dated partial custody
+now replays canonical transfer events with original lots under ADR-177. Each element is:
 
 ```typescript
 {
@@ -875,7 +876,19 @@ directly from the server partitions. Units and global income labels are hidden i
 because the current response does not claim per-broker units or a separate income subtotal. While
 the summary is loading or unavailable, the filter is disabled and no zero subtotal is presented.
 
-The frontend fallback summaries (`usePortfolioSummaries.ts`) use the same partitioned shared core as the API, so holding-level values do not drift while the API query is loading. The portfolio table, overview, and `InvestmentDetailDialog` all render the shared oversold warning. Historical snapshot replay likewise tracks units and foreign-exchange-neutral basis per partition, so an account-local sell does not reduce an unrelated broker's holding.
+Active holdings in [[apps/frontend/src/hooks/usePortfolio.ts]] and
+[[apps/frontend/src/hooks/portfolio/usePortfolioSummaries.ts]] use the canonical server summary.
+It includes dated custody transfers and unit adjustments that ordinary transaction lists omit.
+The hook retains investment metadata and ordinary transactions for editing, while the server owns
+active units, gains, assignment and oversold state. Pending or failed canonical queries surface
+loading or errors instead of displaying an incomplete active replay. Archived summaries retain the
+ordinary transaction calculation. The FX profit/loss helper uses canonical target-currency gains
+directly; it does not replay those transactions or convert them again. Crypto units display eight
+decimal places, matching the summary quantity precision.
+
+The portfolio table, overview, and `InvestmentDetailDialog` render the shared oversold warning.
+Historical snapshot replay tracks units and foreign-exchange-neutral basis per partition, so an
+account-local sell does not reduce an unrelated broker's holding.
 
 ### Unassigned-lot nudge
 
@@ -907,9 +920,10 @@ account, or `null` to unassign it). No other transaction fields are required alo
 ### Account reassignment and closing after ADR-108
 
 `EditPortfolioTxnDialog` can reassign a complete transaction row by updating its `account_id`, or
-clear the assignment with `null`. ADR-108 deleted partial lot moves, the move endpoint,
-`MoveHoldingDialog`, and `moveHoldingService`; account reassignment no longer performs cost-basis
-surgery.
+clear the assignment with `null`. ADR-108 deleted the old move endpoint, `MoveHoldingDialog`, and `moveHoldingService`.
+Assignment correction does not manufacture custody history. ADR-177 adds a separate dated partial
+custody ledger for imported transfers, carrying original acquisition basis and purchase FX.
+Manual changes and re-tags validate complete custody history alongside partition oversells.
 
 `CloseAccountDialog` first loads an exact server-side count of assigned `buy`, `gift`, and `sell`
 rows. The user can keep them on the closed account, move the complete set to another active
@@ -925,6 +939,27 @@ re-tag, and then shows the immutable receipt ID and changed-row count. The opera
 `account_id`; the same transactional economics guard rejects unsafe broker-history merges.
 
 Code links: [[apps/frontend/src/features/accounts/CloseAccountDialog.tsx]], [[apps/frontend/src/features/portfolio/BrokerTransferDialog.tsx]], [[apps/frontend/src/features/portfolio/PortfolioLotRetagChoice.tsx]], [[apps/frontend/src/features/portfolio/EditPortfolioTxnDialog.tsx]]
+
+### Dated custody and reviewed imported history (ADR-177)
+
+`portfolio_asset_transfers` stores dated full or partial moves between portfolio accounts. Shared
+FIFO, LIFO, and weighted-average replay carries remaining original purchase lots, dates, native
+basis, and acquisition FX. Same-asset fees remove units and their allocated purchase basis;
+transfers create no fictional sale or cash proceeds. Live account summaries and historical
+snapshots consume that event history. Assignment corrections remain guarded by complete projected
+custody and partition validation.
+
+A multi-statement import can adopt a unique source-equivalent manual trade without adding units.
+The original ID and notes survive; immutable before/after receipts support guarded restoration.
+Unknown origins, original basis, ambiguous trade matches, and incomplete staging block commit.
+See [[docs/features/portfolio-import]], [[docs/reference/data-model]], and
+[[docs/adr/177-reviewed-history-reconciliation-and-custody-ledger]].
+
+Unit adjustment events also replay at their recorded date. Zero-yield reversals consume only
+remaining source-proven zero-basis gifted lots; asset fees consume original lot basis. All three
+cost-basis methods retain acquisition dates/IDs and purchase FX in allocation receipts. These
+events create no sale or cash proceeds. See
+[[docs/features/portfolio-import#Unit adjustments and consumed basis|the import adjustment contract]].
 
 ### Brokerage batch routing after ADR-108
 

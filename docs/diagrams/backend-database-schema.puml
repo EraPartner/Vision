@@ -735,6 +735,7 @@ entity "portfolio_import_batches" as portfolio_import_batches {
   source_filename : text
   source_size_bytes : bigint
   custom_config : jsonb
+  account_id : integer <<FK>>
   default_asset_class : text
   default_type : text DEFAULT 'buy'
   * status : text DEFAULT 'pending'
@@ -751,17 +752,18 @@ entity "portfolio_import_staging_rows" as portfolio_import_staging_rows {
   * id : bigserial <<PK>>
   * batch_id : bigint <<FK>>
   * row_index : integer
-  raw_date : text
+  tx_date : date
+  type_raw : text
   type : text
-  symbol : text
-  name : text
+  symbol_raw : text
+  name_raw : text
   units : numeric
-  price : numeric
+  price_per_unit : numeric(18,6)
   amount : numeric
   fees : numeric
   taxes : numeric
   currency : varchar(3)
-  fx_rate : numeric
+  fx_rate_to_eur : numeric(20,10)
   note : text
   raw_data : text
   source_transaction_id : text
@@ -774,9 +776,101 @@ entity "portfolio_import_staging_rows" as portfolio_import_staging_rows {
   user_override_investment_id : integer <<FK>>
   match_source : text
   * status : text DEFAULT 'pending'
-  error_detail : text
-  committed_txn_id : integer <<FK>>
+  error_message : text
+  committed_txn_id : integer
+  route : text
+  asset_transfer_details : json
+  asset_adjustment_details : json
 }
+
+entity "portfolio_import_reconciliation_journal" as portfolio_import_reconciliation_journal {
+  * id : bigserial <<PK>>
+  * batch_id : bigint <<FK RESTRICT>>
+  * staging_row_id : bigint <<FK RESTRICT>>
+  * transaction_id : integer
+  * action : text (adopt / restore)
+  * policy : text (exact / preserve_existing / prefer_source)
+  previous_entry_id : bigint <<FK UQ>>
+  * before_data : jsonb
+  * after_data : jsonb
+  * created_at : timestamptz
+}
+
+entity "portfolio_import_duplicate_repair_journal" as portfolio_import_duplicate_repair_journal {
+  * id : bigserial <<PK>>
+  * batch_id : bigint <<FK RESTRICT>>
+  * staging_row_id : bigint <<FK RESTRICT>>
+  * original_import_batch_id : bigint <<FK RESTRICT>>
+  * legacy_transaction_id : integer
+  * imported_transaction_id : integer
+  * action : text (repair / restore)
+  * policy : text (preserve_existing / prefer_source)
+  * before_data : jsonb
+  * after_data : jsonb
+  previous_entry_id : bigint <<FK UQ>>
+  * created_at : timestamptz
+}
+
+note bottom of portfolio_import_duplicate_repair_journal
+  0122: explicit-policy dual-row repair with staging/batch counter images.
+  Immutable receipts; guarded inverse restoration; retain both source batches.
+  Financial IDs retained without FKs; restore validates all current images.
+end note
+
+entity "portfolio_asset_transfers" as portfolio_asset_transfers {
+  * id : bigint <<PK shared trade sequence>>
+  * investment_id : integer <<FK RESTRICT>>
+  * source_account_id : integer <<FK RESTRICT>>
+  * destination_account_id : integer <<FK RESTRICT>>
+  * date : date
+  * units : numeric(18,8) (gross)
+  * fee_units : numeric(18,8)
+  * fee_basis_allocations : jsonb
+  * import_batch_id : bigint <<FK RESTRICT>>
+  * staging_row_id : bigint <<FK RESTRICT UQ>>
+  * source_record_hash : char(64)
+  * dedup_fingerprint : char(64)
+  * dedup_fingerprint_version : smallint
+  * created_at : timestamptz
+}
+
+entity "portfolio_asset_adjustments" as portfolio_asset_adjustments {
+  * id : bigint <<PK shared trade sequence>>
+  * investment_id : integer <<FK RESTRICT>>
+  * account_id : integer <<FK RESTRICT>>
+  * date : date
+  * units : numeric(18,8) (removed)
+  * adjustment_kind : text (yield_reversal / asset_fee)
+  * basis_policy : text (zero_yield_only / carried)
+  * eligible_source_record_hashes : text[]
+  * basis_allocations : jsonb
+  * import_batch_id : bigint <<FK RESTRICT>>
+  * staging_row_id : bigint <<FK RESTRICT UQ>>
+  * source_record_hash : char(64)
+  * dedup_fingerprint : char(64)
+  * dedup_fingerprint_version : smallint
+  * created_at : timestamptz
+}
+entity "portfolio_asset_adjustment_sources" as portfolio_asset_adjustment_sources {
+  * adjustment_id : bigint <<PK FK CASCADE>>
+  * staging_row_id : bigint <<PK FK RESTRICT>>
+  * source_record_hash : char(64)
+}
+note bottom of portfolio_asset_adjustments
+  0123: explicit zero-yield reversal or carried-basis asset fee.
+  Original lot/FX allocations for FIFO/LIFO/WAVG; no sale/cash.
+  UPDATE forbidden; validated parent rollback can remove evidence by cascade.
+end note
+
+note bottom of portfolio_import_reconciliation_journal
+  0120: immutable adoption/restore images; retained financial ID has no FK.
+  One adoption per staging source; restore swaps exact images.
+end note
+note bottom of portfolio_asset_transfers
+  0121: distinct accounts; positive gross units; 0 <= fee < gross.
+  Unique version/fingerprint; UPDATE forbidden; validated rollback can delete.
+  Original acquisition lots/FX carry through shared FIFO/LIFO/WAVG replay.
+end note
 
 entity "cashflow_forecast_mc" as cashflow_forecast_mc {
   * id : uuid <<PK>>
@@ -906,7 +1000,7 @@ note bottom of custom_parser_configs
 end note
 
 note bottom of portfolio_import_batches
-  Portfolio CSV import batches (ADR-078, migration 0040).
+  Portfolio CSV/Saxo XLSX statement batches (ADR-078, ADR-177).
   Mirrors import_batches but portfolio-shaped.
   Included in BACKUP_COVERED_TABLES.
 end note
@@ -938,6 +1032,22 @@ import_staging_rows }o--|| import_batches
 import_staging_rows }o--o| recipients : resolved_recipient_id
 import_staging_rows }o--o| recipients : user_override_recipient_id
 portfolio_import_staging_rows }o--|| portfolio_import_batches
+portfolio_import_reconciliation_journal }o--|| portfolio_import_batches : batch_id RESTRICT
+portfolio_import_reconciliation_journal }o--|| portfolio_import_staging_rows : staging_row_id RESTRICT
+portfolio_import_reconciliation_journal |o--o| portfolio_import_reconciliation_journal : previous_entry_id
+portfolio_import_duplicate_repair_journal }o--|| portfolio_import_batches : new / original source RESTRICT
+portfolio_import_duplicate_repair_journal }o--|| portfolio_import_staging_rows : new staging source RESTRICT
+portfolio_import_duplicate_repair_journal |o--o| portfolio_import_duplicate_repair_journal : previous_entry_id
+portfolio_asset_adjustments }o--|| investments : investment_id RESTRICT
+portfolio_asset_adjustments }o--|| accounts : account_id RESTRICT
+portfolio_asset_adjustments }o--|| portfolio_import_batches : import_batch_id RESTRICT
+portfolio_asset_adjustments |o--|| portfolio_import_staging_rows : staging_row_id RESTRICT
+portfolio_asset_adjustment_sources }o--|| portfolio_asset_adjustments : adjustment_id CASCADE
+portfolio_asset_adjustment_sources }o--|| portfolio_import_staging_rows : yield source RESTRICT
+portfolio_asset_transfers }o--|| investments : investment_id
+portfolio_asset_transfers }o--|| accounts : source / destination
+portfolio_asset_transfers }o--|| portfolio_import_batches : import_batch_id RESTRICT
+portfolio_asset_transfers |o--|| portfolio_import_staging_rows : staging_row_id RESTRICT
 portfolio_import_staging_rows }o--o| investments : resolved_investment_id
 portfolio_import_staging_rows }o--o| investments : user_override_investment_id
 cashflow_forecast_accuracy }o--|| cashflow_forecast_mc
