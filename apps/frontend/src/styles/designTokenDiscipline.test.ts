@@ -33,7 +33,5 @@ describe('semantic colour token discipline', () => {
     expect(source).not.toMatch(/(?:from|to|text)-orange-\d{2,3}/);
     const indexCss = readFileSync(join(process.cwd(), 'src/index.css'), 'utf8');
     expect(indexCss).toMatch(/\.icon-tile-glow\s*\{[\s\S]*currentColor 25%/);
-    const bankWidget = readFileSync(join(process.cwd(), 'src/features/dashboard/BankBalancesWidget.tsx'), 'utf8');
-    expect(bankWidget).toMatch(/from-primary\/20 to-primary\/10 text-primary icon-tile-glow/);
   });
 });

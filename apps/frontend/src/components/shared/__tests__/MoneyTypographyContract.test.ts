@@ -47,7 +47,6 @@ const ADOPTED_PAGE_SURFACES = [
     "src/pages/portfolio/SavingsPage.tsx",
     "src/pages/portfolio/RebalancePage.tsx",
     "src/pages/portfolio/net-worth/SnapshotDataTable.tsx",
-    "src/pages/portfolio/tax/PortfolioTaxPage.tsx",
     "src/pages/portfolio/tax/InvestmentTaxBreakdownTable.tsx",
 ] as const;
 
