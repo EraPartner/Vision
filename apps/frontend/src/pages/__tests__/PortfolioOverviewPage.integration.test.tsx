@@ -214,7 +214,7 @@ describe("PortfolioOverviewPage (integration)", () => {
         expect(matches.length).toBeGreaterThan(0);
     });
 
-    it("renders empty state without crashing when investments API fails", async () => {
+    it("shows the page error instead of an empty portfolio when the investments API fails", async () => {
         server.use(
             http.get(`${API_BASE}/api/investments`, () =>
                 err(500, "Server error"),
@@ -224,9 +224,10 @@ describe("PortfolioOverviewPage (integration)", () => {
         expect(
             await screen.findByRole("heading", { name: /portfolio overview/i }),
         ).toBeInTheDocument();
+        expect(await screen.findByText("Server error")).toBeVisible();
         expect(
-            await screen.findByRole("heading", { name: /no investments yet/i }),
-        ).toBeInTheDocument();
+            screen.queryByRole("heading", { name: /no investments yet/i }),
+        ).not.toBeInTheDocument();
     });
 
     it("shows a canonical summary error without invented holdings when the API fails", async () => {
