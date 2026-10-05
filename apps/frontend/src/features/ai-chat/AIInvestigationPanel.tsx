@@ -11,7 +11,7 @@ import type {
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { Button } from "@/components/ui/button";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { resolveOpenAiModel } from "@/features/ai-chat/openAiModelSelection";
 import { useAiResearchStatus } from "@/hooks/useAiResearchStatus";
 import { resolveAnalysisPreferences } from "@/lib/analysisPreferences";
