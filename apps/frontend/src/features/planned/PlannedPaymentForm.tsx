@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { parseDecimal } from "@/lib/decimal";
-import { formatEditableNumber } from "@/utils/currency";
+import {
+    formatEditableNumber,
+    formatNumberPlaceholder,
+} from "@/utils/currency";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -418,7 +421,9 @@ export default function PlannedPaymentForm({
                                     id="pp-amount"
                                     type="text"
                                     inputMode="decimal"
-                                    placeholder="0.00"
+                                    placeholder={formatNumberPlaceholder(
+                                        appSettings.numberFormat,
+                                    )}
                                     value={amount}
                                     onChange={(e) => setAmount(e.target.value)}
                                     {...fieldErrorProps(

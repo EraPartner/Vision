@@ -1529,7 +1529,6 @@ const nl: Record<string, string> = {
   'form.addRecipient.name': 'Naam',
   'form.addRecipient.title': 'Ontvanger toevoegen',
   'form.addTransaction.amount': 'Bedrag',
-  'form.addTransaction.amountPlaceholder': '0,00',
   'form.addTransaction.date': 'Datum',
   'form.addTransaction.recipient': 'Ontvanger',
   'form.addTransaction.title': 'Transactie toevoegen',

@@ -1529,7 +1529,6 @@ const en: Record<string, string> = {
   'form.addRecipient.name': 'Name',
   'form.addRecipient.title': 'Add recipient',
   'form.addTransaction.amount': 'Amount',
-  'form.addTransaction.amountPlaceholder': '0.00',
   'form.addTransaction.date': 'Date',
   'form.addTransaction.recipient': 'Recipient',
   'form.addTransaction.title': 'Add transaction',

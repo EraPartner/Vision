@@ -35,7 +35,10 @@ import {
 import type { RecurrenceInterval } from "@/types/portfolio";
 import type { DividendAmountConvention } from "@/types/api";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
-import { formatEditableNumber } from "@/utils/currency";
+import {
+    formatEditableNumber,
+    formatNumberPlaceholder,
+} from "@/utils/currency";
 
 type TranslateFn = (
     key: string,
@@ -127,15 +130,16 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
     const { appSettings } = useAppSettings();
     const recurrenceLabels = buildRecurrenceLabels(t);
     const lockAmount = isGift && lockAmountWhenGift;
+    const zeroPlaceholder = formatNumberPlaceholder(appSettings.numberFormat);
     const amountPlaceholder = withPlaceholders
         ? lockAmount
-            ? "0.00"
+            ? zeroPlaceholder
             : derivedAmount !== undefined
               ? formatEditableNumber(
                     Number(derivedAmount.toFixed(4)),
                     appSettings.numberFormat,
                 )
-              : "0.00"
+              : zeroPlaceholder
         : undefined;
     const dateId = `${idPrefix}-date`;
     const unitsId = `${idPrefix}-units`;
@@ -311,7 +315,9 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
                                 type="text"
                                 inputMode="decimal"
                                 placeholder={
-                                    withPlaceholders ? "0.00" : undefined
+                                    withPlaceholders
+                                        ? zeroPlaceholder
+                                        : undefined
                                 }
                                 value={form.fees}
                                 onChange={(e) =>
@@ -336,7 +342,9 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
                                 type="text"
                                 inputMode="decimal"
                                 placeholder={
-                                    withPlaceholders ? "0.00" : undefined
+                                    withPlaceholders
+                                        ? zeroPlaceholder
+                                        : undefined
                                 }
                                 value={form.taxes}
                                 onChange={(e) =>
