@@ -34,7 +34,7 @@ class WorkflowSupplyChainTests(unittest.TestCase):
         workflow = (
             "steps:\n  - uses: actions/checkout@"
             + "a" * 40
-            + "\n    with:\n      repository: EraPartner/Lockbox\n"
+            + "\n    with:\n      repository: example/shared-tooling\n"
             + "      ref: main\n      persist-credentials: false\n"
         )
         self.assertIn("full SHA ref", " ".join(POLICY.check_workflow(workflow, "x")))

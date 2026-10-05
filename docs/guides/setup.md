@@ -2,7 +2,7 @@
 title: Setup Guide
 type: guide
 status: active
-date: 2026-09-27
+date: 2026-10-04
 tags:
   [
     guide,
@@ -22,9 +22,8 @@ related_code: [[package.json]]
 # Setup Guide
 
 Vision development uses native processes and PostgreSQL 18. The macOS desktop package carries its
-own PostgreSQL, Bun, migration, and report-browser payloads. The hardened agent sandbox described
-in [[docs/guides/devcontainer|Devcontainer Guide]] is separate: it runs with Apple `container` and
-is not a product deployment option.
+own PostgreSQL, Bun, migration, and report-browser payloads. Agents use their provider's built-in
+sandbox; see [[docs/guides/devcontainer|Agent Sandbox Guide]].
 
 ## Prerequisites
 
@@ -65,9 +64,8 @@ guarded migration runner, and waits for detailed readiness.
 
 The Vite development proxy listens on `127.0.0.1` by default because it exposes the local data
 API. `VISION_VITE_BIND_HOST` is a process environment override for the Vite config, not a
-browser setting. Wildcard values require an explicit outer network boundary. The devcontainer
-image sets `0.0.0.0` internally and publishes its ports only to host loopback; host development
-does not inherit that override. Keep Vite hostname validation enabled.
+browser setting. Wildcard values require an explicit outer network boundary. Keep the default
+loopback bind and Vite hostname validation enabled for local development.
 
 For focused frontend work, point `DATABASE_URL` at a disposable PostgreSQL 18 database and run the
 workspace scripts directly. `bun run test:db` creates, migrates, and removes a private temporary

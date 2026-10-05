@@ -2,8 +2,8 @@
 title: Guides Index
 type: guides-index
 status: active
-date: 2026-10-03
-updated: 2026-10-03
+date: 2026-10-04
+updated: 2026-10-04
 tags: [guides, index, how-to]
 description: Setup, development, deployment, and contribution guides for the Vision project
 aliases: [guides, how-to, getting started]
@@ -31,7 +31,7 @@ SORT title ASC
 
 - [[docs/guides/setup\|Setup Guide]] - Local development environment setup
 - [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]] - Bundled PostgreSQL 18, Electron lifecycle, diagnostics, backup, and restore
-- [[docs/guides/devcontainer\|Devcontainer Guide]] - Isolated dev environment for Claude Code `--dangerously-skip-permissions`
+- [[docs/guides/devcontainer\|Agent Sandbox Guide]] - Built-in Claude Code and Codex sandbox workflow
 - [[docs/guides/backend-configuration\|Backend Configuration]] - Config, logging, and database utilities
 
 ### Development

@@ -2,9 +2,9 @@
 title: Vision Project Knowledge Base
 type: index
 status: active
-date: 2026-10-03
-updated: 2026-10-03
-last_modified: 2026-10-03
+date: 2026-10-04
+updated: 2026-10-04
+last_modified: 2026-10-04
 tags:
   [
     knowledge-base,
@@ -108,7 +108,7 @@ SORT title ASC
 LIMIT 5
 ```
 
-**Start here:** [[docs/guides/setup|Setup Guide]] → [[docs/guides/devcontainer|Devcontainer Guide]] → [[docs/guides/contributing|Contributing Guide]]
+**Start here:** [[docs/guides/setup|Setup Guide]] → [[docs/guides/devcontainer|Agent Sandbox Guide]] → [[docs/guides/contributing|Contributing Guide]]
 
 ### 🤖 For AI Agents
 
@@ -286,23 +286,12 @@ See [[docs/adr/071-premium-v3-effects-toggle|ADR-071]], [[docs/adr/075-visual-ef
 
 See [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070]], [[docs/architecture/frontend-architecture|Frontend Architecture]], [[docs/reference/code-patterns#surface-shell-pattern-phase-9|Surface Shell Pattern]], [[docs/components/layout|Layout Components]]
 
-### 2026-05-19 Devcontainer: Isolated Dev Environment for Claude Code
+### 2026-10-04 Built-in Agent Sandboxes
 
-**New optional development environment** (`.devcontainer/`) enabling safe use of `claude --dangerously-skip-permissions` by isolating the agent in a network-restricted container. Solves the Vision-specific Docker-in-Docker problem by running Postgres, backend, and frontend natively in a single Debian 12 container.
-
-**What's included:**
-
-- **`Dockerfile`** — Debian 12 base; PostgreSQL 18 (native apt, matching `docker-compose.yml`); bun (latest); `libpq-dev`; `iptables`/`ipset`/`dnsutils` for firewall. Sudoers grants `vscode` narrowly scoped root access (no blanket NOPASSWD ALL).
-- **`devcontainer.json`** — Node LTS + Python 3.12 + Claude Code devcontainer features; `NET_ADMIN`/`NET_RAW` caps; persistent volumes for `~/.claude`, `/var/lib/postgresql`, and the bun cache; `containerEnv` sets `DATABASE_URL`, `ALEMBIC_BIN`, and all other required vars; ports 8080 and 3002 forwarded.
-- **`init-firewall.sh`** — Default-deny iptables egress; allowlist of 26 domains (Anthropic, npm/bun, GitHub, PyPI, Yahoo Finance, Debian/PGDG apt, VS Code marketplace). DNS restricted to the container resolver. Applied on every container start.
-- **`post-create.sh`** — One-time init: pg cluster create, `ftm_user` role + `financial_transactions` DB, Python venv rebuild, `bun install`. Migrations deliberately excluded — backend handles them on first `bun run dev` to preserve the `VARCHAR(64)` alembic_version preflight.
-- **`post-start.sh`** — Ensures Postgres is running; applies firewall.
-
-**Security model:** The firewall limits host exposure to Claude Code, not the reverse. Claude can still reach anything inside the container. Only enable `--dangerously-skip-permissions` for trusted repositories.
-
-**Tested:** `bun run dev` boots cleanly; all 36 Alembic migrations run; `/health` and `/api/info` return 200; firewall blocks `example.com` and permits `api.anthropic.com`.
-
-See [[docs/guides/devcontainer|Devcontainer Guide]]
+Claude Code and Codex use their built-in sandboxes. The project agent container, launchers,
+and container drift checks have been removed. Source development continues through the native
+runtime. See [[docs/guides/devcontainer|Agent Sandbox Guide]] and
+[[docs/adr/176-built-in-agent-sandboxes|ADR-176]].
 
 ### 2026-05-12 Dev-Only Observability Layer: Real-Time API Tracking & Inspector Panel
 

@@ -72,17 +72,6 @@ jobs:
         run: |
           python3 scripts/check-workflow-supply-chain.py
           python3 scripts/tests/workflow-supply-chain.test.py
-      - name: Check LockBox vendored files against reviewed revision
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
-        with:
-          repository: EraPartner/Lockbox
-          ref: 33f65aec8761f94089bd47fe8d476e0c501a7136
-          path: .lockbox-canonical
-          persist-credentials: false
-      - name: Reject LockBox fleet drift
-        run: |
-          CODE_ROOT="${GITHUB_WORKSPACE%/*}" \
-            .lockbox-canonical/sync.sh --check --target="$GITHUB_WORKSPACE/.devcontainer"
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Secrets scan — gitleaks on push/PR diff range

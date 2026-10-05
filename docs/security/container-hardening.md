@@ -2,7 +2,7 @@
 title: Retired Product Container Hardening
 type: security
 status: retired
-date: 2026-09-08
+date: 2026-10-04
 tags: [security, historical, retired-runtime, supply-chain]
 description: Historical record of the retired Docker product hardening boundary and the controls that replaced it.
 aliases: [retired container security, historical Docker hardening]
@@ -12,8 +12,8 @@ aliases: [retired container security, historical Docker hardening]
 
 > [!history]
 > Vision no longer builds, ships, or supports a Docker or Compose product deployment. ADR-133
-> supersedes ADR-039. The separate development sandbox uses Apple `container`; see
-> [[docs/guides/devcontainer|Devcontainer Guide]].
+> supersedes ADR-039. Agents use their provider's built-in sandbox; see
+> [[docs/guides/devcontainer|Agent Sandbox Guide]].
 
 The former product image used a non-root user, dropped Linux capabilities, a read-only root
 filesystem, resource ceilings, loopback port binding, a health check, and Trivy image scanning.

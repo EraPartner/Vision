@@ -2,8 +2,8 @@
 title: Environment Variables Reference
 type: reference
 status: active
-date: 2026-10-03
-updated: 2026-09-27
+date: 2026-10-04
+updated: 2026-10-04
 tags:
   [
     reference,
@@ -215,7 +215,7 @@ See [[docs/adr/159-experimental-isolated-codex-route|ADR-159]].
 
 | Variable              | Default                      | Required | Validation                                                                             | Description                                                                                                                                                                          | Code                                     |
 | --------------------- | ---------------------------- | -------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------- |
-| `VISION_VITE_BIND_HOST` | `127.0.0.1` (host), `0.0.0.0` (devcontainer image) | No | Vite process environment only; keep an outer loopback publication boundary for wildcard binds | Development API proxy bind; no browser exposure or backend permission | [[apps/frontend/vite.config.ts\|Vite config]], [[docs/guides/devcontainer\|Devcontainer]] |
+| `VISION_VITE_BIND_HOST` | `127.0.0.1` | No | Vite process environment only; keep an outer loopback publication boundary for wildcard binds | Development API proxy bind; no browser exposure or backend permission | [[apps/frontend/vite.config.ts\|Vite config]], [[docs/guides/devcontainer\|Agent Sandbox Guide]] |
 | `VITE_API_URL`        | `http://localhost:3002`      | No       | Valid URL string or empty; validated by Zod on boot                                    | Backend API URL                                                                                                                                                                      | [[apps/frontend/src/lib/env.ts\|env.ts]] |
 | `VITE_LOG_LEVEL`      | `debug` (dev), `warn` (prod) | No       | One of `debug`, `info`, `warn`, `error`, `silent` or empty; validated by Zod on boot   | Frontend log level                                                                                                                                                                   | [[apps/frontend/src/lib/env.ts\|env.ts]] |
 | `VITE_ENABLE_LOGGING` | `true`                       | No       | String coerced to boolean (`'true'` → true, empty → default); validated by Zod on boot | Enable frontend logging                                                                                                                                                              | [[apps/frontend/src/lib/env.ts\|env.ts]] |

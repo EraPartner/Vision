@@ -2,7 +2,7 @@
 title: Deployment Guide
 type: guide
 status: active
-date: 2026-09-27
+date: 2026-10-04
 tags:
   [
     guide,
@@ -29,8 +29,8 @@ Vision supports two deployment shapes:
 | Native Electron   | Normal macOS desktop installation   | Vision owns a private bundled PostgreSQL 18 cluster         |
 | Source deployment | Custom server or browser deployment | The operator supplies PostgreSQL 18 and process supervision |
 
-The project does not publish or support a product container image. The Apple `container`-based
-development sandbox is documented separately in [[docs/guides/devcontainer|Devcontainer Guide]].
+The project does not publish or support a product container image. Agent execution uses the
+provider's built-in sandbox; see [[docs/guides/devcontainer|Agent Sandbox Guide]].
 
 ## Native macOS application
 

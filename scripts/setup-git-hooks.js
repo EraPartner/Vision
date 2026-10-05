@@ -9,7 +9,7 @@
  * installs), so it is safe to leave wired into `prepare`.
  *
  * Uses a relative path (".githooks") so it resolves correctly both on the host
- * and inside the devcontainer (where the repo is mounted at /workspaces/repo).
+ * and in workspaces mounted at /workspaces/repo.
  */
 const { execFileSync } = require("node:child_process");
 const fs = require("node:fs");

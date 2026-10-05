@@ -2,7 +2,7 @@
 title: CI/CD Pipelines
 type: guide
 status: active
-date: 2026-09-25
+date: 2026-10-04
 tags:
   [
     guide,
@@ -74,8 +74,8 @@ format, so this check must not be treated as review of transitive Bun lockfile c
 advisories. The package boundary check verifies their sources and integrity fields.
 `scripts/check-workflow-supply-chain.py` requires full commit SHA pins for external Actions,
 full commit SHA refs for external repository checkouts, `persist-credentials: false` on every
-checkout, and the frozen script-disabled shared install. The LockBox drift check executes its
-reviewed pinned revision; updating that revision requires an explicit workflow diff.
+checkout, and the frozen script-disabled shared install. Agent tooling checks use only the
+checked-in project scripts; no external agent-container repository is fetched.
 Both checks run in CI and release verification; their adversarial tests run in CI.
 
 Dependabot delays routine version updates by seven days across the configured ecosystems. Security
