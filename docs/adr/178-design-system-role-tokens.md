@@ -63,21 +63,28 @@ retuned in this change, so the rendered app is unchanged until call sites adopt 
 | Labels    | `--label-{primary,secondary,tertiary,quaternary}-alpha` over `--foreground`                       | `text-label-*` (any colour utility)                                                                                                     |
 | Corners   | `--radius-chip` 6px, `--radius-control` = `--radius`, `--radius-card` 14px, `--radius-sheet` 22px | `rounded-chip/control/card/sheet`, `corner-continuous`                                                                                  |
 | Elevation | `--elevation-1..4`, light and dark                                                                | `shadow-elevation-1..4`                                                                                                                 |
-| Focus     | `--ring`                                                                                          | `focus-ring`                                                                                                                            |
+| Focus     | `--ring`, `--focus-ring-alpha`                                                                    | `focus-ring`                                                                                                                            |
 | Springs   | `--spring-{snappy,smooth,bouncy}` (`linear()`), `--spring-*-duration`                             | `ease-spring-*`, `duration-spring-*`                                                                                                    |
 
 Rules:
 
 - Type utilities are prefixed `type-`, not `text-`, so tailwind-merge never treats a role as a
   text colour. Tracking tightens as size grows.
-- Label levels derive from `--foreground`, so theme variants inherit them. Secondary matches the
-  current `muted-foreground` contrast and must stay at 4.5:1 or more; tertiary at 3:1 or more;
-  quaternary is for placeholders and disabled text only.
+- Label levels are alphas over `--foreground`. Each theme variant declares its own three alphas in
+  `styles/themes.ts` (the default palette's live in `tokens.css`), because one alpha over a
+  lower-contrast foreground falls under the floors: at the default values Nord light tertiary
+  reads 2.7:1 and Solarized light secondary 2.9:1. Secondary stays at 4.5:1 or more on
+  background, card and muted (Solarized light cannot reach it at any alpha, since its full
+  foreground reads 4.4:1 on its card, and is held to 4:1); tertiary at 3:1 or more and is the
+  placeholder level; quaternary is for disabled text only.
 - Corners nest concentrically: inner radius equals outer radius minus the padding between them.
   `corner-continuous` applies `corner-shape: squircle` only where supported.
 - Elevation levels read `--glass-shadow` and `--glass-highlight`; glass materials are unchanged.
 - `focus-ring` is a translucent 3px outline that follows the element's radius and leaves its
-  box-shadow untouched; high-contrast mode uses the full ring colour.
+  box-shadow untouched; high-contrast mode uses the full ring colour. Its alpha is
+  `--focus-ring-alpha`, declared per palette in `styles/themes.ts` (default 0.76 light, 0.5
+  dark; Nord dark needs 0.92) so the ring reads at 3:1 or more against the canvas, card and
+  muted surfaces (WCAG 1.4.11); a fixed 0.45 read at 1.95:1 in the default light palette.
 - Every spring in `lib/motion.ts` has a sampled CSS twin. Use each easing with its duration.
 
 ## Consequences
@@ -85,9 +92,9 @@ Rules:
 **Positive**
 
 - Call sites can choose a role instead of a size, opacity or shadow stack.
-- Contract tests hold the label contrast floors and Tailwind exposure
-  (`styles/designSystemTokens.contract.test.ts`) and re-simulate every spring
-  (`lib/__tests__/springTokenParity.test.ts`).
+- Contract tests hold the label and focus-ring contrast floors in every theme variant and mode,
+  plus the Tailwind exposure (`styles/designSystemTokens.contract.test.ts`), and re-simulate
+  every spring (`lib/__tests__/springTokenParity.test.ts`).
 
 **Negative**
 

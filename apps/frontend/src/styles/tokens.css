@@ -153,16 +153,27 @@
         --font-mono: "SF Mono", "JetBrains Mono", "Menlo", "Consolas", monospace;
 
         /* -------- Label hierarchy (ADR-178) --------
-           Four text-emphasis levels derived from --foreground, so every theme
-           variant inherits them. Pick by role: primary = content, secondary =
-           supporting text (matches muted-foreground contrast), tertiary =
-           non-essential metadata (>= 3:1), quaternary = placeholder/disabled
-           only. styles/designSystemTokens.contract.test.ts holds the contrast
-           floors for the base palettes. */
+           Four text-emphasis levels as alphas over --foreground. Pick by role:
+           primary = content, secondary = supporting text (>= 4.5:1, the
+           muted-foreground role), tertiary = non-essential metadata and
+           placeholders (>= 3:1), quaternary = disabled text only. The values
+           here are the default palette's; styles/themes.ts carries one set per
+           theme variant, because the same alpha over a lower-contrast
+           foreground (Nord, Solarized) falls under the floors.
+           styles/designSystemTokens.contract.test.ts checks every palette. */
         --label-primary-alpha: 1;
         --label-secondary-alpha: 0.72;
         --label-tertiary-alpha: 0.5;
         --label-quaternary-alpha: 0.3;
+
+        /* -------- Focus ring (ADR-178) --------
+           Alpha of the translucent `focus-ring` outline. 0.45 reads at 1.95:1
+           on the light canvas; WCAG 1.4.11 asks 3:1 for a focus indicator, so
+           the default palette needs 0.76 in light and 0.5 in dark. The old 70%
+           base outline sat at 2.99:1. Theme variants with softer ring colours
+           (Nord, Solarized) carry their own value in styles/themes.ts; the
+           contract test checks every palette. */
+        --focus-ring-alpha: 0.76;
 
         /* -------- Corner scale (ADR-178) --------
            Nest concentrically: inner radius = outer radius - padding between. */
@@ -300,6 +311,7 @@
         --label-secondary-alpha: 0.68;
         --label-tertiary-alpha: 0.42;
         --label-quaternary-alpha: 0.26;
+        --focus-ring-alpha: 0.5;
 
         /* -------- Elevation (dark: dimmer highlight, deeper shadow) -------- */
         --elevation-1:
