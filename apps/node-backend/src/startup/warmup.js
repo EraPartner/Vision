@@ -73,14 +73,25 @@ const IMPORT_RETENTION_DAYS = 30;
  * NOT NULL; completed_at can be null for aborted/failed batches). Failures are
  * logged and swallowed so warmup is never blocked.
  */
-async function pruneOldImportBatches() {
+export async function pruneOldImportBatches() {
   const tables = ["import_batches", "portfolio_import_batches"];
   for (const table of tables) {
     try {
+      // Adoption receipts retain source provenance and rollback snapshots.
+      const preserveReconciliation =
+        table === "portfolio_import_batches"
+          ? `AND NOT EXISTS (SELECT 1 FROM portfolio_import_reconciliation_journal journal WHERE journal.batch_id = ${table}.id)
+             AND NOT EXISTS (SELECT 1 FROM portfolio_import_duplicate_repair_journal repair WHERE repair.batch_id = ${table}.id OR repair.original_import_batch_id = ${table}.id)
+             AND NOT EXISTS (SELECT 1 FROM portfolio_asset_transfers transfer WHERE transfer.import_batch_id = ${table}.id)
+             AND NOT EXISTS (SELECT 1 FROM portfolio_asset_adjustments adjustment WHERE adjustment.import_batch_id = ${table}.id)
+             AND NOT EXISTS (SELECT 1 FROM portfolio_asset_adjustment_sources evidence JOIN portfolio_import_staging_rows source ON source.id=evidence.staging_row_id WHERE source.batch_id=${table}.id)
+             AND NOT EXISTS (SELECT 1 FROM portfolio_import_staging_rows annotation WHERE annotation.batch_id = ${table}.id AND annotation.route = 'account_internal')`
+          : "";
       const result = await query(
         `DELETE FROM ${table}
           WHERE status IN ('complete', 'complete_with_errors', 'failed', 'aborted')
-            AND started_at < now() - ($1 || ' days')::interval`,
+            AND started_at < now() - ($1 || ' days')::interval
+            ${preserveReconciliation}`,
         [String(IMPORT_RETENTION_DAYS)],
       );
       if (result.rowCount > 0) {

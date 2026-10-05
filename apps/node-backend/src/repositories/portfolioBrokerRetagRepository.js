@@ -6,9 +6,12 @@
  */
 
 import { query } from "../database/connection.js";
+import { getUnitEventsForInvestment } from "./portfolioTxRepo.reads.js";
 
 export async function lockPortfolioTransactionWrites() {
-  await query("LOCK TABLE portfolio_transactions IN SHARE ROW EXCLUSIVE MODE");
+  await query(
+    "LOCK TABLE portfolio_transactions, portfolio_asset_transfers, portfolio_asset_adjustments IN SHARE ROW EXCLUSIVE MODE",
+  );
 }
 
 /** @param {string} idempotencyKey */
@@ -85,7 +88,18 @@ export async function getUnitEventsForInvestments(investmentIds) {
       ORDER BY pt.investment_id ASC, pt.date ASC, pt.id ASC`,
     [investmentIds],
   );
-  return result.rows;
+  const transfers = [];
+  for (const investmentId of investmentIds) {
+    const events = await getUnitEventsForInvestment(investmentId);
+    const exemplar = result.rows.find(
+      (row) => Number(row.investment_id) === Number(investmentId),
+    );
+    for (const event of events.filter((row) =>
+      ["asset_transfer", "asset_adjustment"].includes(row.type),
+    ))
+      transfers.push({ ...exemplar, ...event, investment_id: investmentId });
+  }
+  return [...result.rows, ...transfers];
 }
 
 export async function getHistoricalRates() {

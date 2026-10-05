@@ -31,7 +31,7 @@ describe("Saxo transaction history portfolio adapter", () => {
       currency: "USD",
       fxRateToEur: 0.9,
       sourceAccountIdentity: "ACC-1",
-      sourceId: "TX-1",
+      sourceId: "101",
     });
     expect(rows[1]).toMatchObject({
       typeRaw: "Sell",
@@ -44,7 +44,7 @@ describe("Saxo transaction history portfolio adapter", () => {
     const rows = await parseSaxoTransactionHistory(fixture);
 
     expect(rows[2]).toMatchObject({
-      typeRaw: "Dividend",
+      typeRaw: "Unsupported Saxo event: Cashdividend",
       symbolRaw: "EXM",
       amount: 4.5,
       currency: "EUR",
@@ -88,6 +88,6 @@ describe("Saxo transaction history portfolio adapter", () => {
   it("normalizes exporter whitespace in column names", async () => {
     const rows = await parseSaxoTransactionHistory(fixture);
 
-    expect(rows[0].sourceId).toBe("TX-1");
+    expect(rows[0].sourceId).toBe("101");
   });
 });

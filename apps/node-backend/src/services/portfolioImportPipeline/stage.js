@@ -86,7 +86,24 @@ export async function stageBatch({
         `UPDATE portfolio_import_batches SET status = 'staging' WHERE id = $1`,
         [batchId],
       ),
-    parseRows: () => parseWithConfig(filePath, customConfig),
+    parseRows: async () => {
+      const parsed = await parseWithConfig(filePath, customConfig);
+      const rows = applyPortfolioAssetScope(
+        parsed,
+        customConfig.included_symbols,
+      );
+      if (customConfig.included_symbols)
+        await query(
+          "UPDATE portfolio_import_batches SET custom_config=COALESCE(custom_config,'{}'::jsonb)||jsonb_build_object('scope_excluded_rows',$2::int) WHERE id=$1",
+          [batchId, parsed.length - rows.length],
+        );
+      if (rows.sourceColumns)
+        await query(
+          "UPDATE portfolio_import_batches SET custom_config=COALESCE(custom_config,'{}'::jsonb)||jsonb_build_object('source_columns',$2::text[]) WHERE id=$1",
+          [batchId, rows.sourceColumns],
+        );
+      return rows;
+    },
     persistTotal: (total) =>
       query(
         `UPDATE portfolio_import_batches SET rows_total = $1 WHERE id = $2`,
@@ -101,6 +118,38 @@ export async function stageBatch({
       }),
     onProgress,
   });
+}
+
+/** Select complete parsed asset rows without changing literal source records or parse errors.
+ * @param {import('./portfolioGenericAdapter.js').ParsedPortfolioRows} rows
+ * @param {string[]|undefined} symbols
+ * @returns {import('./portfolioGenericAdapter.js').ParsedPortfolioRows}
+ */
+export function applyPortfolioAssetScope(rows, symbols) {
+  if (!symbols?.length) return rows;
+  const selected = new Set(symbols);
+  const found = new Set(
+    rows.map((row) => row.symbolRaw?.toUpperCase()).filter(Boolean),
+  );
+  for (const symbol of selected)
+    if (!found.has(symbol))
+      throw new Error(`Selected asset ${symbol} is absent from the statement`);
+  const scoped = rows.filter((row) =>
+    selected.has(row.symbolRaw?.toUpperCase()),
+  );
+  // Cash legs belong to the same literal record as a selected asset leg.
+  const records = new Set(scoped.map((row) => row.rawData));
+  const result =
+    /** @type {import('./portfolioGenericAdapter.js').ParsedPortfolioRows} */ (
+      rows.filter(
+        (row) =>
+          selected.has(row.symbolRaw?.toUpperCase()) ||
+          (!row.symbolRaw && records.has(row.rawData)),
+      )
+    );
+  result.skipped = rows.skipped;
+  result.sourceColumns = rows.sourceColumns;
+  return result;
 }
 
 /**
@@ -124,7 +173,7 @@ async function insertStagingChunk(batchId, rows, startIndex) {
       const dateStr = parsedDateToYmd(r.date) ?? null;
 
       const base = values.length;
-      const ph = Array.from({ length: 17 }, (_, k) => `$${base + k + 1}`);
+      const ph = Array.from({ length: 19 }, (_, k) => `$${base + k + 1}`);
       // status defaults to 'pending' via the column default.
       placeholders.push(`(${ph.join(",")})`);
       values.push(
@@ -145,13 +194,15 @@ async function insertStagingChunk(batchId, rows, startIndex) {
         r.rawData || null,
         r.sourceId || null,
         r.sourceAccountIdentity || null,
+        r.assetTransfer ? JSON.stringify(r.assetTransfer) : null,
+        r.assetAdjustment ? JSON.stringify(r.assetAdjustment) : null,
       );
     });
 
     const sql = `INSERT INTO portfolio_import_staging_rows
       (batch_id, row_index, tx_date, type_raw, symbol_raw, name_raw,
        units, price_per_unit, amount, fees, taxes, currency, fx_rate_to_eur, note, raw_data,
-       source_transaction_id, source_account_identity)
+       source_transaction_id, source_account_identity, asset_transfer_details, asset_adjustment_details)
       VALUES ${placeholders.join(",")}`;
     await client.query(sql, values);
   });

@@ -6,7 +6,10 @@ import { mockLogger } from "./helpers/mockLogger.js";
 
 vi.mock("../src/config/logger.js", () => ({ logger: mockLogger() }));
 
-import { parseKinesisTransactionHistory } from "../src/services/portfolioImportPipeline/kinesisTransactionHistoryAdapter.js";
+import {
+  parseKinesisTransactionHistory,
+  parseKinesisSourceRecordForBasisPolicy,
+} from "../src/services/portfolioImportPipeline/kinesisTransactionHistoryAdapter.js";
 import { parseWithConfig } from "../src/services/portfolioImportPipeline/portfolioGenericAdapter.js";
 
 const fixture = path.join(
@@ -90,18 +93,26 @@ describe("Kinesis Transaction History portfolio adapter", () => {
       symbolRaw: "BTC",
       units: 0.00784739,
       amount: 0,
+      assetTransfer: { direction: "in", basisStatus: "unresolved" },
+    });
+    expect(rows.find((row) => row.sourceId === "TX-ADJUST-IN")).toMatchObject({
+      typeRaw: "Gift",
+      symbolRaw: "KAU",
+      units: 0.01103,
+      amount: 0,
+      assetTransfer: { direction: "in", basisStatus: "unresolved" },
     });
     expect(rows.find((row) => row.sourceId === "TX-ASSET-OUT")).toMatchObject({
       typeRaw: "Unsupported Kinesis event: Withdrawal",
       symbolRaw: "BTC",
       units: 0.0008,
-      note: expect.stringContaining("manual transfer-out reconciliation"),
+      note: expect.stringContaining("unresolved units or fee currency"),
     });
     expect(rows.find((row) => row.sourceId === "TX-ADJUST-OUT")).toMatchObject({
       typeRaw: "Unsupported Kinesis event: Holder's_Distribution_Adjustment",
       symbolRaw: "KAU",
       units: 0.07652,
-      note: expect.stringContaining("manual reconciliation"),
+      note: expect.stringContaining("explicit known-zero yield basis policy"),
     });
     expect(
       rows.every((row) => row.symbolRaw !== "EUR" && row.symbolRaw !== "USD"),
@@ -125,5 +136,42 @@ describe("Kinesis Transaction History portfolio adapter", () => {
         new URL("fixtures/portfolio/not-ibkr.csv", import.meta.url),
       ),
     ).rejects.toThrow(/missing columns/);
+  });
+  it("recognizes reversals only under explicit zero policy and retains acquisition evidence", async () => {
+    const rows = await parseKinesisTransactionHistory(fixture, {
+      yield_basis_policy: "zero",
+    });
+    expect(rows.find((r) => r.sourceId === "TX-ADJUST-OUT")).toMatchObject({
+      typeRaw: "AssetAdjustment",
+      amount: 0,
+      assetAdjustment: {
+        kind: "yield_reversal",
+        basisPolicy: "zero_yield_only",
+      },
+    });
+    for (const sourceId of ["TX-YIELD:units", "TX-ADJUST-IN"])
+      expect(rows.find((r) => r.sourceId === sourceId)).toMatchObject({
+        typeRaw: "Gift",
+        amount: 0,
+        assetAdjustment: { kind: "yield_acquisition", basisPolicy: "zero" },
+      });
+    const raw = rows.find((r) => r.sourceId === "TX-ADJUST-OUT").rawData;
+    expect(
+      parseKinesisSourceRecordForBasisPolicy(raw, {
+        yield_basis_policy: "zero",
+      }),
+    ).toBeUndefined();
+    expect(
+      parseKinesisSourceRecordForBasisPolicy(raw, {
+        yield_basis_policy: "zero",
+        sourceColumns: rows.sourceColumns,
+      })[0].typeRaw,
+    ).toBe("AssetAdjustment");
+    expect(
+      parseKinesisSourceRecordForBasisPolicy(`${raw}\n${raw}`, {
+        yield_basis_policy: "zero",
+        sourceColumns: rows.sourceColumns,
+      }),
+    ).toBeUndefined();
   });
 });

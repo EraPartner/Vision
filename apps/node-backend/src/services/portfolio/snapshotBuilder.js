@@ -119,6 +119,9 @@ import { areLotsFullyAssigned } from "@vision/shared-utils/portfolio";
  * @property {number} amount
  * @property {number} units
  * @property {number|null} accountId
+ * @property {number|undefined} [sourceAccountId]
+ * @property {number|undefined} [destinationAccountId]
+ * @property {number} [feeUnits]
  * @property {string} currency
  * @property {number|undefined} fxRateToEur
  */
@@ -394,6 +397,15 @@ export async function computeDailySnapshots(targetCurrency = "EUR") {
       amount: Number(row.amount) || 0,
       units: Number(row.units) || 0,
       accountId: row.account_id == null ? null : Number(row.account_id),
+      sourceAccountId:
+        row.source_account_id == null
+          ? undefined
+          : Number(row.source_account_id),
+      destinationAccountId:
+        row.destination_account_id == null
+          ? undefined
+          : Number(row.destination_account_id),
+      feeUnits: Number(row.fee_units) || 0,
       currency: row.currency,
       fxRateToEur:
         row.fx_rate_to_eur != null ? Number(row.fx_rate_to_eur) : undefined,
@@ -681,6 +693,50 @@ export async function computeDailySnapshots(targetCurrency = "EUR") {
           if (tx.type === "buy" && !nonUnitS.firstBuyDate)
             nonUnitS.firstBuyDate = day;
         }
+      } else if (tx.type === "asset_transfer") {
+        if (!fullyAssignedUnitInvestments.has(tx.investmentId))
+          throw new Error(
+            "Asset transfer snapshot history is not fully assigned",
+          );
+        const states = partitionUnits(tx.investmentId);
+        const sourceUnits = states.get(tx.sourceAccountId) || 0;
+        if (tx.units > sourceUnits)
+          throw new Error(
+            "Asset transfer exceeds source holdings during snapshot replay",
+          );
+        const received = toDecimal(tx.units).minus(tx.feeUnits);
+        states.set(
+          tx.sourceAccountId,
+          toDecimal(sourceUnits).minus(tx.units).toNumber(),
+        );
+        states.set(
+          tx.destinationAccountId,
+          toDecimal(states.get(tx.destinationAccountId) || 0)
+            .plus(received)
+            .toNumber(),
+        );
+        const neutral = neutralPartitions(tx.investmentId);
+        const source = neutral.get(tx.sourceAccountId);
+        if (source && sourceUnits > 0) {
+          const grossRatio = toDecimal(tx.units).div(sourceUnits);
+          const netRatio = received.div(tx.units);
+          const movedWeight = source.weight.times(grossRatio);
+          const movedRate = source.weightedRate.times(grossRatio);
+          source.weight = source.weight.minus(movedWeight);
+          source.weightedRate = source.weightedRate.minus(movedRate);
+          const destination = neutral.get(tx.destinationAccountId) ?? {
+            weight: toDecimal(0),
+            weightedRate: toDecimal(0),
+          };
+          destination.weight = destination.weight.plus(
+            movedWeight.times(netRatio),
+          );
+          destination.weightedRate = destination.weightedRate.plus(
+            movedRate.times(netRatio),
+          );
+          neutral.set(tx.destinationAccountId, destination);
+        }
+        refreshTotalUnits(tx.investmentId);
       } else if (tx.type === "sell") {
         // Clamp oversells to held units (mirrors calculateCostBasis's
         // min(units, totalUnits)) so a later buy isn't offset by a negative.

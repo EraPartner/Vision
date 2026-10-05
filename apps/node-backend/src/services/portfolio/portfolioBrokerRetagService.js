@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { withTransaction } from "../../database/connection.js";
+import { validatePortfolioAssetTransferHistory } from "./portfolioAssetTransferService.js";
 import repository from "../../repositories/portfolioBrokerRetagRepository.js";
 import { appendAuditEvent } from "../../repositories/auditChainRepository.js";
 import {
@@ -60,11 +61,7 @@ function fingerprintRetagRequest(value) {
  * @param {Set<number>} selectedIds
  * @param {number|null} toAccountId
  */
-function assertRetagPreservesPartitionUnits(
-  rows,
-  selectedIds,
-  toAccountId,
-) {
+function assertRetagPreservesPartitionUnits(rows, selectedIds, toAccountId) {
   const byInvestment = new Map();
   for (const row of rows) {
     const investmentId = Number(row.investment_id);
@@ -80,6 +77,7 @@ function assertRetagPreservesPartitionUnits(
         : row,
     );
     const before = partitionOversellDeficits(beforeRows);
+    validatePortfolioAssetTransferHistory(afterRows);
     const after = partitionOversellDeficits(afterRows);
     for (const [accountId, deficit] of after) {
       if (deficit - (before.get(accountId) ?? 0) > EPSILON) {

@@ -27,6 +27,24 @@ vi.mock("../src/services/portfolio/portfolioTransactionService.js", () => ({
   },
 }));
 
+vi.mock("../src/services/portfolio/portfolioAssetTransferService.js", () => ({
+  rollbackPortfolioAssetTransfersForBatch: vi.fn().mockResolvedValue(0),
+  previewPortfolioAssetTransfer: vi.fn(),
+  validatePortfolioAssetTransferHistory: vi.fn(),
+}));
+vi.mock("../src/services/portfolio/portfolioAssetAdjustmentService.js", () => ({
+  rollbackPortfolioAssetAdjustmentsForBatch: vi.fn().mockResolvedValue(0),
+  previewPortfolioAssetAdjustment: vi.fn(),
+}));
+vi.mock(
+  "../src/services/portfolioImportDuplicateRepairService.js",
+  async (importOriginal) => ({
+    ...(await importOriginal()),
+    getActiveDuplicateRepairReceipts: vi.fn().mockResolvedValue([]),
+    restoreDuplicatePortfolioRepairs: vi.fn().mockResolvedValue(undefined),
+  }),
+);
+
 vi.mock("../src/repositories/investmentRepository.js", () => ({
   default: {
     create: vi.fn(),
@@ -52,6 +70,7 @@ vi.mock("../src/repositories/portfolioImportBatchRepository.js", () => ({
 import { query, withTransaction } from "../src/database/connection.js";
 import portfolioTransactionRepository from "../src/repositories/portfolioTransactionRepository.js";
 import investmentRepository from "../src/repositories/investmentRepository.js";
+import { getActiveDuplicateRepairReceipts } from "../src/services/portfolioImportDuplicateRepairService.js";
 import {
   getRowForInvestmentCreation,
   lockBatchForUpdate,
@@ -86,6 +105,7 @@ function mockQueries(isBrokerage) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  getActiveDuplicateRepairReceipts.mockReset().mockResolvedValue([]);
   mockQueries(true);
   portfolioTransactionRepository.hardDelete.mockResolvedValue(true);
   // Default: nothing carries the 0086 stamp, i.e. the pre-migration world. Each
@@ -212,6 +232,24 @@ describe("getPortfolioImportBatchPreview", () => {
 });
 
 describe("rollbackBatch — route-aware deletion (ADR-095)", () => {
+  it("rejects a concurrently added repair before taking history locks or deleting records", async () => {
+    getActiveDuplicateRepairReceipts
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ original_import_batch_id: 3 }]);
+    await expect(rollbackBatch(5)).rejects.toMatchObject({
+      status: 409,
+      details: { reason: "stale_reconciliation_plan" },
+    });
+    expect(lockBatchForUpdate.mock.calls.map(([id]) => id)).toEqual([5]);
+    expect(query).not.toHaveBeenCalled();
+    expect(getCommittedRows).not.toHaveBeenCalled();
+    expect(portfolioTransactionRepository.hardDelete).not.toHaveBeenCalled();
+    expect(
+      portfolioTransactionRepository.hardDeleteByImportBatch,
+    ).not.toHaveBeenCalled();
+    expect(markBatchAborted).not.toHaveBeenCalled();
+  });
+
   it("deletes a cash row from transactions, never through the portfolio repo", async () => {
     // The critical cross-table id bug: transactions.id 812 fed to the
     // portfolio hard-delete removed UNRELATED portfolio trade 812.

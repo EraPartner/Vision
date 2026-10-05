@@ -3,8 +3,10 @@ import Decimal from "decimal.js";
 export type CostBasisMethod = "weighted_avg" | "fifo" | "lifo";
 
 export interface PortfolioTxnLike {
+  id?: number | string;
   type: string;
   date: string;
+  fxMultiplier?: number | string;
   units?: number | string | null;
   amount?: number | string | null;
   fees?: number | string | null;
@@ -107,6 +109,29 @@ export function buildInvestmentSummaryCore(
 
 export interface PartitionedTxnLike extends PortfolioTxnLike {
   account_id?: number | string | null;
+  source_account_id?: number | string;
+  destination_account_id?: number | string;
+  fee_units?: number | string;
+  adjustment_kind?: "yield_reversal" | "asset_fee";
+  basis_policy?: "zero_yield_only" | "carried";
+  eligible_source_record_hashes?: string[];
+  source_record_hash?: string;
+}
+export interface CustodyLot {
+  acquisitionType?: string;
+  sourceRecordHash?: string;
+  units: Decimal;
+  costBasis: Decimal;
+  costBasisConv: Decimal;
+  acquiredDate: string;
+  acquisitionId: number | string;
+  currency?: string;
+  fxResolved: boolean;
+}
+export interface ProjectedCustodyTxn extends PartitionedTxnLike {
+  consumedLots?: CustodyLot[];
+  staging_row_id?: number;
+  assetFeeLots?: CustodyLot[];
 }
 
 export interface InvestmentSummaryPartition {
@@ -125,7 +150,14 @@ export const LOT_TXN_TYPES: Set<string>;
 export function areLotsFullyAssigned(txns: PartitionedTxnLike[]): boolean;
 export function partitionTxnsByAccount(
   txns: PartitionedTxnLike[],
+  method?: CostBasisMethod,
+  opts?: { defaultFxMultiplier?: number | string },
 ): Map<number | null, PartitionedTxnLike[]>;
+export function projectAssetTransferPartitions(
+  txns: PartitionedTxnLike[],
+  method?: CostBasisMethod,
+  opts?: { defaultFxMultiplier?: number | string },
+): Map<number | null, ProjectedCustodyTxn[]>;
 export function partitionOversellDeficits(
   txns: PartitionedTxnLike[],
 ): Map<number, number>;

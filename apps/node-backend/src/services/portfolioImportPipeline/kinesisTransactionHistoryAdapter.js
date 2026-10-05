@@ -9,10 +9,17 @@
  */
 
 import { logger } from "../../config/logger.js";
-import { divide, multiply, subtract, toNumber } from "../../lib/money.js";
+import {
+  divide,
+  multiply,
+  subtract,
+  toNumber,
+  toDecimal,
+} from "../../lib/money.js";
 import {
   parseAmountField,
   parseCsvFile,
+  parseCsvText,
   parseDateWithFormat,
   rawDataForCsvRecord,
 } from "../importPipeline/adapters/_shared.js";
@@ -204,7 +211,7 @@ function parseTrade(records) {
   ];
 }
 
-function parseDistribution(record) {
+function parseDistribution(record, config) {
   const symbol = cleanCell(record.Currency_Code).toUpperCase();
   const units = magnitude(record.Amount);
   const value = magnitude(record.Trade_Value);
@@ -219,9 +226,8 @@ function parseDistribution(record) {
     return null;
   }
 
-  // A Kinesis yield is paid in metal. Record both the income and the acquired
-  // units. Giving the unit receipt the same basis avoids counting its initial
-  // value again as an immediate capital gain.
+  // Statement income is retained separately from the received units. A reviewed
+  // zero-basis interpretation changes only the unit receipt, never income facts.
   return [
     baseRow(record, {
       typeRaw: "Dividend",
@@ -235,23 +241,31 @@ function parseDistribution(record) {
       typeRaw: "Gift",
       symbolRaw: symbol,
       units,
-      pricePerUnit: toNumber(divide(value, units)),
-      amount: value,
+      pricePerUnit:
+        config.yield_basis_policy === "zero"
+          ? 0
+          : toNumber(divide(value, units)),
+      amount: config.yield_basis_policy === "zero" ? 0 : value,
       currency: valueCurrency,
       note: `${cleanCell(record.Transaction_Type).replaceAll("_", " ")} units`,
       sourceId: sourceId(record, ":units"),
+      ...(config.yield_basis_policy === "zero"
+        ? {
+            assetAdjustment: { kind: "yield_acquisition", basisPolicy: "zero" },
+          }
+        : {}),
     }),
   ];
 }
 
-function parseNonTrade(record) {
+function parseNonTrade(record, config) {
   const type = cleanCell(record.Transaction_Type);
   const code = cleanCell(record.Currency_Code).toUpperCase();
   const isFiat = FIAT_CURRENCIES.has(code);
   const delta = balanceDelta(record);
   const amount = magnitude(delta) ?? magnitude(record.Amount);
 
-  if (DISTRIBUTION_TYPES.has(type)) return parseDistribution(record);
+  if (DISTRIBUTION_TYPES.has(type)) return parseDistribution(record, config);
 
   if (type === "Holder's_Distribution_Adjustment") {
     if (!isFiat && delta != null && delta > 0 && amount) {
@@ -261,14 +275,48 @@ function parseNonTrade(record) {
           symbolRaw: code,
           units: amount,
           amount: 0,
-          note: "Kinesis holder distribution adjustment",
+          pricePerUnit: config.yield_basis_policy === "zero" ? 0 : null,
+          note: "Kinesis holder distribution adjustment; original cost basis policy retained",
+          ...(config.yield_basis_policy === "zero"
+            ? {
+                assetAdjustment: {
+                  kind: "yield_acquisition",
+                  basisPolicy: "zero",
+                },
+              }
+            : {
+                assetTransfer: { direction: "in", basisStatus: "unresolved" },
+              }),
         }),
       ];
     }
+    if (
+      !isFiat &&
+      delta != null &&
+      delta < 0 &&
+      amount &&
+      config.yield_basis_policy === "zero" &&
+      toDecimal(number(record.Amount) || 0).eq(delta)
+    )
+      return [
+        baseRow(record, {
+          typeRaw: "AssetAdjustment",
+          symbolRaw: code,
+          units: amount,
+          amount: 0,
+          fees: 0,
+          taxes: 0,
+          note: "Kinesis holder distribution reversal; only source-proven zero-basis yield units are eligible",
+          assetAdjustment: {
+            kind: "yield_reversal",
+            basisPolicy: "zero_yield_only",
+          },
+        }),
+      ];
     return [
       unsupportedRow(
         record,
-        "Kinesis negative holder distribution adjustment requires manual reconciliation",
+        "Kinesis negative holder distribution adjustment requires an explicit known-zero yield basis policy and eligible source history",
       ),
     ];
   }
@@ -291,22 +339,50 @@ function parseNonTrade(record) {
               units: amount,
               amount: 0,
               note: "Kinesis asset transfer in; original cost basis unavailable",
+              assetTransfer: { direction: "in", basisStatus: "unresolved" },
             },
       ),
     ];
   }
 
   if (type === "Withdrawal" || type === "Withdrawal(Card Payment)") {
-    // Vision has no unit-transfer-out transaction. Fiat withdrawals are real
-    // sleeve cash movements. Asset withdrawals remain visible as review errors
-    // rather than being dropped or fabricated as zero-proceeds sales.
     if (!amount) return null;
     if (!isFiat) {
+      const received = magnitude(record.Amount);
+      const fee = number(record.Fee);
+      const feeCode = cleanCell(record.Fee_Currency).toUpperCase();
+      if (
+        delta == null ||
+        delta >= 0 ||
+        !received ||
+        fee == null ||
+        fee < 0 ||
+        (fee > 0 && feeCode !== code) ||
+        !toDecimal(amount).eq(toDecimal(received).plus(fee))
+      ) {
+        return [
+          unsupportedRow(
+            record,
+            "Kinesis asset withdrawal has unresolved units or fee currency",
+          ),
+        ];
+      }
       return [
-        unsupportedRow(
-          record,
-          "Kinesis asset withdrawal requires manual transfer-out reconciliation",
-        ),
+        baseRow(record, {
+          typeRaw: "AssetTransfer",
+          symbolRaw: code,
+          units: amount,
+          amount: 0,
+          fees: 0,
+          taxes: 0,
+          note: "Kinesis internal asset transfer",
+          assetTransfer: {
+            direction: "out",
+            basisStatus: "carried",
+            feeUnits: String(fee),
+            receivedUnits: String(received),
+          },
+        }),
       ];
     }
     return [
@@ -327,8 +403,42 @@ function parseNonTrade(record) {
 }
 
 /**
+ * Reparse retained literal yield rows only with their actual source header.
+ * @param {string} rawData
+ * @param {{ sourceColumns?: string[], yield_basis_policy?: 'zero' }} config
+ * @returns {import('./portfolioGenericAdapter.js').ParsedPortfolioRow[]|undefined}
+ */
+export function parseKinesisSourceRecordForBasisPolicy(rawData, config) {
+  const columns = config.sourceColumns;
+  if (
+    !Array.isArray(columns) ||
+    columns.length !== REQUIRED_COLUMNS.length ||
+    new Set(columns).size !== columns.length ||
+    !REQUIRED_COLUMNS.every((column) => columns.includes(column))
+  )
+    return undefined;
+  try {
+    const records = parseCsvText(rawData, {
+      columns,
+      skip_empty_lines: true,
+      relax_column_count: false,
+    });
+    if (
+      records.length !== 1 ||
+      ![...DISTRIBUTION_TYPES, "Holder's_Distribution_Adjustment"].includes(
+        cleanCell(records[0].Transaction_Type),
+      )
+    )
+      return undefined;
+    return parseNonTrade(records[0], config);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * @param {string} filePath
- * @param {{ encoding?: string }} [config]
+ * @param {{ encoding?: string, yield_basis_policy?: 'zero' }} [config]
  * @returns {Promise<import('./portfolioGenericAdapter.js').ParsedPortfolioRows>}
  */
 export async function parseKinesisTransactionHistory(filePath, config = {}) {
@@ -385,7 +495,7 @@ export async function parseKinesisTransactionHistory(filePath, config = {}) {
         );
       }
     } else {
-      parsed = parseNonTrade(record);
+      parsed = parseNonTrade(record, config);
       if (!parsed) skipped++;
     }
 
@@ -394,6 +504,7 @@ export async function parseKinesisTransactionHistory(filePath, config = {}) {
   }
 
   rows.skipped = skipped;
+  rows.sourceColumns = Object.keys(records[0]);
   logger.info(
     `Kinesis Transaction Statement parsed: ${rows.length} rows, ${skipped} source rows skipped`,
   );

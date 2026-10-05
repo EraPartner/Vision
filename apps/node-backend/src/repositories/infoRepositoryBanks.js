@@ -18,6 +18,10 @@ import {
 } from "./accountBalanceSql.js";
 import { batchConvertGroupsWithHistoricalRateFallback } from "./infoRepositoryHelpers.js";
 
+// Wallets and crypto exchanges expose holdings only (ADR-108), even when their
+// imported movement history contains ledger rows.
+const HOLDINGS_ONLY_ACCOUNT_TYPES_SQL = "'crypto_exchange', 'wallet'";
+
 export const banksRepository = {
   /**
    * Get current balance per account and daily historical balances over
@@ -124,6 +128,7 @@ export const banksRepository = {
           WHERE t.account_id = a.id AND t.is_active = true
         ) tx ON true
         WHERE a.type <> 'liability'
+          AND a.type NOT IN (${HOLDINGS_ONLY_ACCOUNT_TYPES_SQL})
           -- §1 F3: in_net_worth governs aggregates (is_active governs UI
           -- listing) — closing an account sets in_net_worth=false, so it
           -- leaves this widget the moment it is closed, matching net worth.
@@ -148,6 +153,7 @@ export const banksRepository = {
           -- Same population rule as the current-balance query above (§1 F3):
           -- aggregates include only in_net_worth accounts.
           WHERE a.type <> 'liability'
+            AND a.type NOT IN (${HOLDINGS_ONLY_ACCOUNT_TYPES_SQL})
             AND a.in_net_worth = true
             AND a.id IN (
               SELECT t.account_id FROM transactions t

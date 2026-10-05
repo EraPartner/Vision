@@ -8,6 +8,7 @@
  */
 
 import { query } from "../../database/connection.js";
+import { toDecimal } from "../../lib/money.js";
 import { logger } from "../../config/logger.js";
 import { toYmd } from "../calculations/portfolioMath.js";
 import { todayAppDateString } from "../../lib/timezone.js";
@@ -33,7 +34,7 @@ import {
  * @typedef {Pick<PortfolioImportStagingRow,
  *   'id'|'row_index'|'tx_date'|'type_raw'|'symbol_raw'|'name_raw'|'units'|'price_per_unit'|'amount'|'raw_data'>
  *   & { fees?: string|null, taxes?: string|null, currency?: string|null, note?: string|null,
- *       source_transaction_id?: string|null, source_account_identity?: string|null }} PendingPortfolioStagingRow
+ *       source_transaction_id?: string|null, source_account_identity?: string|null, asset_transfer_details?: any, asset_adjustment_details?: any }} PendingPortfolioStagingRow
  */
 
 const VALIDATE_CHUNK = 500;
@@ -75,7 +76,7 @@ export async function validateBatch({ batchId, onProgress }) {
   const { rows: allRows } = await query(
     `SELECT id, row_index, status, tx_date, type_raw, symbol_raw, name_raw, units,
             price_per_unit, amount, fees, taxes, currency, note, raw_data,
-            source_transaction_id, source_account_identity
+            source_transaction_id, source_account_identity, asset_transfer_details, asset_adjustment_details
        FROM portfolio_import_staging_rows
       WHERE batch_id = $1
       ORDER BY row_index ASC`,
@@ -239,6 +240,33 @@ function resolveAndCheck(
     const rowYmd = toYmd(row.tx_date);
     if (rowYmd && rowYmd > today)
       return { error: "transaction date is in the future" };
+  }
+
+  if (
+    row.type_raw === "AssetAdjustment" &&
+    ["yield_reversal", "asset_fee"].includes(row.asset_adjustment_details?.kind)
+  ) {
+    if (!row.symbol_raw || !toDecimal(row.units || 0).gt(0))
+      return {
+        error: "asset adjustment requires an instrument and positive units",
+      };
+    return { type: undefined, route: "asset_adjustment" };
+  }
+  if (
+    row.type_raw === "AssetTransfer" &&
+    ["in", "out"].includes(row.asset_transfer_details?.direction)
+  ) {
+    if (!row.symbol_raw || !toDecimal(row.units || 0).gt(0))
+      return {
+        error: "asset transfer requires an instrument and positive units",
+      };
+    return { type: undefined, route: "asset_transfer" };
+  }
+  if (
+    row.type_raw === "InternalMovement" &&
+    row.asset_transfer_details?.direction === "internal"
+  ) {
+    return { type: undefined, route: "account_internal" };
   }
 
   // Try the portfolio type first (handles aliases + the user's type_mapping).

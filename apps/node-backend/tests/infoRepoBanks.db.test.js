@@ -159,6 +159,48 @@ describe.skipIf(!hasTestDatabase())(
     // Current balances — anchor+delta lateral and the population gates
     // ───────────────────────────────────────────────────────────────────────────
     describe("current balances", () => {
+      it("excludes holdings-only wallet cash from the headline and history while retaining brokerage cash", async () => {
+        await seedRecipient();
+        await addAccount("CHECKING");
+        await addAccount("BROKER", { type: "brokerage" });
+        await addAccount("EXCHANGE", { type: "crypto_exchange" });
+        await addAccount("HARDWARE WALLET", { type: "wallet" });
+        await getTestPool().query(
+          `UPDATE accounts SET has_cash_sleeve = true WHERE name = 'EXCHANGE'`,
+        );
+        const yesterday = "CURRENT_DATE - interval '1 day'";
+        await insertRate("USD", yesterday, "0.5", false);
+        await insertRate("USD", "CURRENT_DATE", "0.5");
+        for (const [bank, amount, currency] of [
+          ["CHECKING", "100.00", "EUR"],
+          ["BROKER", "50.00", "EUR"],
+          ["BROKER", "200.00", "USD"],
+          ["EXCHANGE", "-300.00", "EUR"],
+          ["EXCHANGE", "100.00", "USD"],
+          ["HARDWARE WALLET", "400.00", "EUR"],
+          ["HARDWARE WALLET", "-500.00", "USD"],
+        ]) {
+          await insertTxn({ dateExpr: yesterday, bank, amount, currency });
+        }
+
+        const result = await banksRepository.getBankBalances();
+        expect(result.accounts.map((account) => account.bank_account)).toEqual([
+          "BROKER",
+          "CHECKING",
+        ]);
+        expect(result.accounts.map((account) => account.balance)).toEqual([
+          150, 100,
+        ]);
+        expect(result.total_net_position).toBe(250);
+        expect(Object.keys(result.history).sort()).toEqual([
+          "BROKER",
+          "CHECKING",
+        ]);
+        expect(
+          result.total_history.slice(-2).map((point) => point.balance),
+        ).toEqual([250, 250]);
+      });
+
       it("computes anchor+delta for stamped accounts and Σ(amount) for manual-only ones", async () => {
         await seedRecipient();
         const manualAccountId = await addAccount("AAA MANUAL");

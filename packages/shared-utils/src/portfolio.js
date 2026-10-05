@@ -13,6 +13,8 @@
  */
 
 import Decimal from "decimal.js";
+import { projectAssetTransferPartitions } from "./portfolioCustody.js";
+export { projectAssetTransferPartitions } from "./portfolioCustody.js";
 import {
   UNIT_BASED_ASSET_CLASSES,
   FIXED_INCOME_ASSET_CLASSES,
@@ -159,6 +161,18 @@ export function calculateCostBasis(txns, opts = {}) {
       totalCostConv = totalCostConv.plus(buyCost.times(fx));
       totalBuyCost = totalBuyCost.plus(buyCost);
       totalBuyCostConv = totalBuyCostConv.plus(buyCost.times(fx));
+    } else if (txn.type === "transfer_in") {
+      totalUnits = totalUnits.plus(units);
+      totalCost = totalCost.plus(txn.transferredBasis);
+      totalCostConv = totalCostConv.plus(txn.transferredBasisConv);
+    } else if (
+      ["transfer_out", "asset_fee", "unit_reversal"].includes(txn.type)
+    ) {
+      totalUnits = totalUnits.minus(units);
+      totalCost = totalCost.minus(txn.transferredBasis);
+      totalCostConv = totalCostConv.minus(txn.transferredBasisConv);
+      realizedGain = realizedGain.minus(txn.assetFeeBasis || 0);
+      realizedGainConv = realizedGainConv.minus(txn.assetFeeBasisConv || 0);
     } else if (txn.type === "sell") {
       if (units.gt(totalUnits)) oversold = true;
       if (totalUnits.gt(0) && units.gt(0)) {
@@ -273,11 +287,53 @@ function calculateCostBasisLotBased(txns, opts = {}, { fromEnd = false } = {}) {
         units,
         costBasis: buyCost,
         costBasisConv: buyCost.times(fx),
+        acquiredDate: txn.date,
+        acquisitionId: txn.id ?? 0,
+        acquisitionType: txn.type,
       });
       totalUnits = totalUnits.plus(units);
       totalBuyCost = totalBuyCost.plus(buyCost);
       totalBuyCostConv = totalBuyCostConv.plus(buyCost.times(fx));
-    } else if (txn.type === "sell" && units.gt(0)) {
+    } else if (txn.type === "transfer_in") {
+      lots = lots.slice(head);
+      head = 0;
+      lots.push(...txn.transferredLots.map((lot) => ({ ...lot })));
+      lots.sort(
+        (a, b) =>
+          a.acquiredDate.localeCompare(b.acquiredDate) ||
+          Number(a.acquisitionId) - Number(b.acquisitionId),
+      );
+      totalUnits = totalUnits.plus(units);
+    } else if (txn.type === "unit_reversal") {
+      lots = lots.slice(head);
+      head = 0;
+      for (const consumed of txn.consumedLots) {
+        let remaining = toDecimal(consumed.units);
+        for (const lot of lots) {
+          if (remaining.lte(0)) break;
+          if (
+            lot.acquisitionId !== consumed.acquisitionId ||
+            lot.acquiredDate !== consumed.acquiredDate ||
+            lot.acquisitionType !== "gift" ||
+            !lot.costBasis.eq(0)
+          )
+            continue;
+          const removed = Decimal.min(remaining, lot.units);
+          lot.units = lot.units.minus(removed);
+          remaining = remaining.minus(removed);
+        }
+        if (remaining.gt(0))
+          throw new Error(
+            "Yield reversal allocation no longer matches its original lots",
+          );
+      }
+      lots = lots.filter((lot) => lot.units.gt(0));
+      totalUnits = totalUnits.minus(units);
+    } else if (
+      txn.type === "transfer_out" ||
+      txn.type === "asset_fee" ||
+      (txn.type === "sell" && units.gt(0))
+    ) {
       if (units.gt(totalUnits)) oversold = true;
       const sellUnits = Decimal.min(units, totalUnits);
       const sellRatio = units.gt(0) ? sellUnits.dividedBy(units) : ZERO;
@@ -302,6 +358,7 @@ function calculateCostBasisLotBased(txns, opts = {}, { fromEnd = false } = {}) {
           costOfSold = costOfSold.plus(lotCostUsed);
           costOfSoldConv = costOfSoldConv.plus(lotCostUsedConv);
           lots[idx] = {
+            ...lot,
             units: lot.units.minus(unitsToSell),
             costBasis: lot.costBasis.minus(lotCostUsed),
             costBasisConv: lot.costBasisConv.minus(lotCostUsedConv),
@@ -311,6 +368,11 @@ function calculateCostBasisLotBased(txns, opts = {}, { fromEnd = false } = {}) {
       }
 
       totalUnits = totalUnits.minus(sellUnits);
+      if (txn.type === "transfer_out" || txn.type === "asset_fee") {
+        realizedGain = realizedGain.minus(txn.assetFeeBasis || 0);
+        realizedGainConv = realizedGainConv.minus(txn.assetFeeBasisConv || 0);
+        continue;
+      }
       realizedGain = realizedGain.plus(netProceeds.minus(costOfSold));
       realizedGainConv = realizedGainConv.plus(
         netProceeds.times(fx).minus(costOfSoldConv),
@@ -782,7 +844,15 @@ export function buildInvestmentSummaryCore(
 // ── ADR-108: partitioned per-broker positions & P&L ─────────────────────────
 
 /** Transaction types that create or consume lots (whole-lot broker tagging). */
-export const LOT_TXN_TYPES = new Set(["buy", "gift", "sell"]);
+export const LOT_TXN_TYPES = new Set([
+  "buy",
+  "gift",
+  "sell",
+  "transfer_in",
+  "transfer_out",
+  "asset_fee",
+  "unit_reversal",
+]);
 
 /**
  * @param {Array<{ type: string }>} rows
@@ -843,7 +913,17 @@ const partitionKeyOf = (txn) =>
  * @param {Array<Record<string, any>>} txns one investment's transactions
  * @returns {Map<number|null, Array<Record<string, any>>>} partition key (account id or null) → rows
  */
-export function partitionTxnsByAccount(txns) {
+export function partitionTxnsByAccount(
+  txns,
+  method = "weighted_avg",
+  opts = {},
+) {
+  if (
+    txns.some((row) =>
+      ["asset_transfer", "asset_adjustment"].includes(row.type),
+    )
+  )
+    return projectAssetTransferPartitions(txns, method, opts);
   const ZERO = toDecimal(0);
   const sorted = [...txns].sort((a, b) => {
     const byDate = a.date.localeCompare(b.date);
@@ -1028,7 +1108,16 @@ export function partitionOversellDeficits(txns) {
     let deficit = toDecimal(0);
     for (const row of rows) {
       const units = toDecimal(row.units || 0);
-      if (row.type === "buy" || row.type === "gift") held = held.plus(units);
+      if (
+        row.type === "buy" ||
+        row.type === "gift" ||
+        row.type === "transfer_in"
+      )
+        held = held.plus(units);
+      else if (
+        ["transfer_out", "asset_fee", "unit_reversal"].includes(row.type)
+      )
+        held = Decimal.max(0, held.minus(units));
       else if (row.type === "sell") {
         if (units.gt(held)) deficit = deficit.plus(units.minus(held));
         held = Decimal.max(0, held.minus(units));
@@ -1093,6 +1182,12 @@ export function buildInvestmentSummaryCorePartitioned(inv, txns, opts) {
 
   const fullyAssigned = areLotsFullyAssigned(txns);
   if (!fullyAssigned) {
+    if (
+      txns.some((row) =>
+        ["asset_transfer", "asset_adjustment"].includes(row.type),
+      )
+    )
+      throw new Error("Asset custody acquisitions are not fully assigned");
     const core = buildInvestmentSummaryCore(inv, txns, opts);
     return {
       core,
@@ -1104,9 +1199,15 @@ export function buildInvestmentSummaryCorePartitioned(inv, txns, opts) {
     };
   }
 
-  const streams = partitionTxnsByAccount(txns);
+  const streams = partitionTxnsByAccount(txns, opts.costBasisMethod, {
+    defaultFxMultiplier: opts.fxMultiplierNow,
+  });
   if (streams.size <= 1) {
-    const core = buildInvestmentSummaryCore(inv, txns, opts);
+    const projectedRows =
+      streams.size === 1 && txns.some((row) => row.type === "asset_adjustment")
+        ? streams.values().next().value
+        : txns;
+    const core = buildInvestmentSummaryCore(inv, projectedRows, opts);
     const accountId = streams.size === 1 ? [...streams.keys()][0] : null;
     return {
       core,

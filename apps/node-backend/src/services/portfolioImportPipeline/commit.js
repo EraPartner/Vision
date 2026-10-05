@@ -22,6 +22,8 @@ import settingsRepository from "../../repositories/settingsRepository.js";
 import { normalizeTransactionPayload } from "../portfolio/portfolioTransactionRules.js";
 import { autoResolveFxRateToEur } from "../portfolio/fxResolve.js";
 import { classifyBrokerageRow } from "../importPipeline/brokerageRouting.js";
+import { commitPortfolioAssetTransfer } from "../portfolio/portfolioAssetTransferService.js";
+import { commitPortfolioAssetAdjustment } from "../portfolio/portfolioAssetAdjustmentService.js";
 
 // Rows are drained in chunked BEGIN/COMMIT (mirrors importPipeline/commit.js):
 // one transaction per chunk instead of one autocommit per statement collapses a
@@ -43,6 +45,8 @@ import { classifyBrokerageRow } from "../importPipeline/brokerageRouting.js";
  * @typedef {Pick<PortfolioImportStagingRow,
  *   'id'|'status'|'type'|'route'|'type_raw'|'units'|'price_per_unit'|'amount'|'fees'|'taxes'|'currency'|'fx_rate_to_eur'|'note'|'source_record_hash'|'dedup_fingerprint'|'dedup_fingerprint_version'|'dedup_occurrence'>
  *   & {
+ *     asset_transfer_details?: object|null,
+ *     asset_adjustment_details?: object|null,
  *     tx_date: string|null,
  *     investment_id: number|null,
  *     asset_class: string|null,
@@ -83,10 +87,10 @@ const CASH_CATEGORY_KINDS = ["dividend", "interest", "fee", "tax"];
  * `portfolio_transactions` (and, for brokerage cash rows, `transactions`), with
  * occurrence-based field dedup and a per-row SAVEPOINT.
  *
- * @param {{ batchId: PortfolioImportBatchId, onProgress?: PortfolioImportProgressCallback }} args
+ * @param {{ batchId: PortfolioImportBatchId, onProgress?: PortfolioImportProgressCallback, rowIds?: number[] }} args
  * @returns {Promise<{ imported: number, duplicates: number, errors: number }>}
  */
-export async function commitBatch({ batchId, onProgress }) {
+export async function commitBatch({ batchId, onProgress, rowIds }) {
   await query(
     `UPDATE portfolio_import_batches SET status = 'committing' WHERE id = $1`,
     [batchId],
@@ -98,7 +102,7 @@ export async function commitBatch({ batchId, onProgress }) {
   // The account's institution/name ride along as the broker label for the cash
   // rows' recipient (see cashRecipientId below).
   const { rows: batchRows } = await query(
-    `SELECT b.account_id, b.is_brokerage,
+    `SELECT b.account_id, b.is_brokerage, b.id, b.custom_config,
             a.institution AS account_institution,
             a.name AS account_name
        FROM portfolio_import_batches b
@@ -109,6 +113,9 @@ export async function commitBatch({ batchId, onProgress }) {
   const batchAccountId = batchRows[0]?.account_id ?? undefined;
   const isBrokerage = batchRows[0]?.is_brokerage === true;
 
+  // Exports can list newest trades first. Commit older dates first so a sale
+  // sees its funding buys; retain source order within a date because staging
+  // does not provide an intraday timestamp. Provenance and identity stay intact.
   const { rows: relevantRows } = await query(
     `SELECT isr.id,
             isr.status,
@@ -128,6 +135,8 @@ export async function commitBatch({ batchId, onProgress }) {
             isr.dedup_fingerprint,
             isr.dedup_fingerprint_version,
             isr.dedup_occurrence,
+            isr.asset_transfer_details,
+            isr.asset_adjustment_details,
             COALESCE(isr.user_override_investment_id, isr.resolved_investment_id) AS investment_id,
             inv.asset_class,
             inv.currency AS investment_currency
@@ -136,10 +145,16 @@ export async function commitBatch({ batchId, onProgress }) {
          ON inv.id = COALESCE(isr.user_override_investment_id, isr.resolved_investment_id)
       WHERE isr.batch_id = $1
         AND isr.status IN ('matched', 'committed', 'duplicate')
-      ORDER BY isr.row_index ASC`,
+      ORDER BY isr.tx_date ASC, isr.row_index ASC`,
     [batchId],
   );
-  const matched = relevantRows.filter((row) => row.status === "matched");
+  const selectedRowIds =
+    rowIds === undefined ? undefined : new Set(rowIds.map(Number));
+  const matched = relevantRows.filter(
+    (row) =>
+      row.status === "matched" &&
+      (selectedRowIds === undefined || selectedRowIds.has(Number(row.id))),
+  );
 
   const total = matched.length;
   let imported = 0;
@@ -170,6 +185,7 @@ export async function commitBatch({ batchId, onProgress }) {
   // incorrectly drops the first still-matched repeated fill.
   for (const row of relevantRows) {
     if (row.status === "matched") continue;
+    if (["asset_transfer", "asset_adjustment"].includes(row.route)) continue;
     if (isBrokerage && row.route === "cash") {
       const identity = cashIdentityKey(row);
       cashSeenByIdentity.set(
@@ -291,6 +307,49 @@ export async function commitBatch({ batchId, onProgress }) {
       chunkErrors = 0;
       for (let j = 0; j < chunk.length; j++) {
         const row = chunk[j];
+
+        if (row.route === "account_internal") {
+          // Wallet-to-Pro movement is retained as a source annotation within
+          // one account. Pro trade history supplies its actual economic events.
+          await markRow(row.id, "duplicate");
+          chunkDuplicates++;
+          continue;
+        }
+
+        if (["asset_transfer", "asset_adjustment"].includes(row.route)) {
+          const sp = savepointFor(row.id);
+          if (!sp) {
+            chunkErrors++;
+            continue;
+          }
+          await client.query(`SAVEPOINT ${sp}`);
+          try {
+            const commit =
+              row.route === "asset_transfer"
+                ? commitPortfolioAssetTransfer
+                : commitPortfolioAssetAdjustment;
+            const result = await commit({
+              row: { ...row, batch_id: batchId },
+              batch: batchRows[0],
+            });
+            // Custody events are owned by their canonical transfer table. A
+            // portfolio committed_txn_id would cause rollback to delete a trade.
+            await markRow(row.id, result.duplicate ? "duplicate" : "committed");
+            await client.query(`RELEASE SAVEPOINT ${sp}`);
+            if (result.duplicate) chunkDuplicates++;
+            else chunkImported++;
+          } catch (err) {
+            await client.query(`ROLLBACK TO SAVEPOINT ${sp}`);
+            await client.query(`RELEASE SAVEPOINT ${sp}`);
+            chunkErrors++;
+            await markRow(
+              row.id,
+              "error",
+              err?.message?.slice(0, 500) || "asset transfer failed",
+            );
+          }
+          continue;
+        }
 
         // ── Brokerage cash row (ADR-095): an external deposit/withdrawal, or a
         // D6 instrument-less dividend/interest/fee/tax row → one signed plain
@@ -747,7 +806,7 @@ async function countTradeFieldMatches(
         AND date = $2::date
         AND type = $3::portfolio_txn_type
         AND amount = $4
-        AND COALESCE(units, 0) = COALESCE($5, 0)
+        AND COALESCE(units, 0) = COALESCE($5::numeric, 0::numeric)
         AND account_id IS NOT DISTINCT FROM $6
         AND COALESCE(currency, 'EUR') = $7
         ${legacyOnly ? "AND dedup_fingerprint IS NULL" : ""}`,

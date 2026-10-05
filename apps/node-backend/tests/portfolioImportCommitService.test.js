@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   setBatchAccount: vi.fn(),
   getAccount: vi.fn(),
   commitPortfolioImport: vi.fn(),
+  assertPortfolioImportReadiness: vi.fn(),
 }));
 
 vi.mock("../src/database/connection.js", () =>
@@ -23,6 +24,10 @@ vi.mock("../src/services/accountService.js", () => ({
 }));
 vi.mock("../src/services/portfolioImportPipeline/index.js", () => ({
   commitPortfolioImport: mocks.commitPortfolioImport,
+}));
+vi.mock("../src/services/portfolioImportReadinessService.js", () => ({
+  assertPortfolioImportReadiness: mocks.assertPortfolioImportReadiness,
+  isMaintainedPortfolioImport: () => false,
 }));
 
 import { commitReviewedPortfolioImport } from "../src/services/portfolioImportCommitService.js";
@@ -42,6 +47,7 @@ beforeEach(() => {
     duplicates: 0,
     errors: 0,
   });
+  mocks.assertPortfolioImportReadiness.mockResolvedValue(undefined);
 });
 
 describe("commitReviewedPortfolioImport", () => {
@@ -53,12 +59,31 @@ describe("commitReviewedPortfolioImport", () => {
     expect(mocks.getAccount).toHaveBeenCalledWith(77);
     expect(mocks.setBatchAccount).toHaveBeenCalledWith(5, 77);
     expect(mocks.commitPortfolioImport).toHaveBeenCalledWith({ batchId: 5 });
+    expect(mocks.assertPortfolioImportReadiness).toHaveBeenCalledWith({
+      batchId: 5,
+      batch: { status: "complete_with_errors" },
+      accountId: 77,
+    });
     expect(mocks.lockBatchForUpdate.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.setBatchAccount.mock.invocationCallOrder[0],
     );
     expect(mocks.setBatchAccount.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.commitPortfolioImport.mock.invocationCallOrder[0],
+      mocks.assertPortfolioImportReadiness.mock.invocationCallOrder[0],
     );
+    expect(
+      mocks.assertPortfolioImportReadiness.mock.invocationCallOrder[0],
+    ).toBeLessThan(mocks.commitPortfolioImport.mock.invocationCallOrder[0]);
+  });
+
+  it("stops before canonical commit when readiness fails", async () => {
+    mocks.assertPortfolioImportReadiness.mockRejectedValueOnce(
+      new Error("Import needs reconciliation"),
+    );
+
+    await expect(commitReviewedPortfolioImport({ batchId: 5 })).rejects.toThrow(
+      "Import needs reconciliation",
+    );
+    expect(mocks.commitPortfolioImport).not.toHaveBeenCalled();
   });
 
   it("does not rewrite the stored account when no account is supplied", async () => {

@@ -24,10 +24,24 @@ export async function getAssetClassByInvestmentId(investmentId) {
 /** @param {number} investmentId */
 export async function getUnitEventsForInvestment(investmentId) {
   const sql = `
-    SELECT id, type, to_char(date, 'YYYY-MM-DD') AS date,
-           COALESCE(units, 0) AS units, account_id
-    FROM portfolio_transactions
-    WHERE investment_id = $1
+    SELECT id, type::text AS type, to_char(date, 'YYYY-MM-DD') AS date,
+           COALESCE(units, 0) AS units, account_id, amount, fees, taxes,
+           CASE WHEN COALESCE(currency,'EUR')='EUR' THEN 1 ELSE COALESCE(fx_rate_to_eur,
+             (SELECT er.rate_to_eur FROM exchange_rates er WHERE er.currency_code=portfolio_transactions.currency AND er.rate_date<=portfolio_transactions.date ORDER BY er.rate_date DESC LIMIT 1)) END AS "fxMultiplier", NULL::int AS source_account_id,
+           NULL::int AS destination_account_id, 0 AS fee_units, NULL::bigint AS transfer_id, currency,
+           source_record_hash, NULL::text AS adjustment_kind, NULL::text AS basis_policy,
+           NULL::text[] AS eligible_source_record_hashes, NULL::bigint AS adjustment_id
+    FROM portfolio_transactions WHERE investment_id = $1
+    UNION ALL
+    SELECT id, 'asset_transfer', to_char(date,'YYYY-MM-DD'), units, NULL::int,
+           0,0,0,NULL::numeric,source_account_id,destination_account_id,fee_units,id,NULL::text,
+           source_record_hash,NULL::text,NULL::text,NULL::text[],NULL::bigint
+    FROM portfolio_asset_transfers WHERE investment_id = $1
+    UNION ALL
+    SELECT id,'asset_adjustment',to_char(date,'YYYY-MM-DD'),units,account_id,
+           0,0,0,NULL::numeric,NULL::int,NULL::int,0,NULL::bigint,NULL::text,
+           source_record_hash,adjustment_kind,basis_policy,eligible_source_record_hashes,id
+    FROM portfolio_asset_adjustments WHERE investment_id=$1
     ORDER BY date ASC, id ASC
   `;
   return (await query(sql, [investmentId])).rows;
@@ -351,12 +365,13 @@ export async function getRowsForPortfolioMath({
   const where =
     conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
   const orderBy = sellsLastWithinDay
-    ? `ORDER BY pt.date::date, CASE WHEN pt.type = 'sell' THEN 1 ELSE 0 END, pt.id`
-    : "ORDER BY pt.date::date, pt.id";
+    ? `ORDER BY events.date, CASE WHEN events.type = 'sell' THEN 1 ELSE 0 END, events.id`
+    : "ORDER BY events.date, events.id";
 
   const result = await query(
     `
-    SELECT pt.id, pt.investment_id, pt.type,
+    SELECT * FROM (
+    SELECT pt.id, pt.investment_id, pt.type::text AS type,
            COALESCE(pt.amount, 0) AS amount,
            COALESCE(pt.units, 0) AS units,
            COALESCE(pt.fees, 0) AS fees,
@@ -365,12 +380,30 @@ export async function getRowsForPortfolioMath({
            to_char(pt.date::date, 'YYYY-MM-DD') AS day,
            COALESCE(pt.currency, i.currency, 'EUR') AS currency,
            pt.fx_rate_to_eur,
-           pt.account_id
+           pt.account_id, NULL::int AS source_account_id,
+           NULL::int AS destination_account_id, 0 AS fee_units,
+           pt.source_record_hash, NULL::text AS adjustment_kind, NULL::text AS basis_policy,
+           NULL::text[] AS eligible_source_record_hashes
     FROM portfolio_transactions pt
     JOIN investments i ON i.id = pt.investment_id
     ${where}
-    ${orderBy}
-  `,
+    UNION ALL
+    SELECT at.id, at.investment_id, 'asset_transfer' AS type, 0 AS amount,
+            at.units, 0 AS fees, 0 AS taxes, to_char(at.date,'YYYY-MM-DD') AS date,
+            to_char(at.date,'YYYY-MM-DD') AS day, COALESCE(i.currency,'EUR') AS currency,
+            NULL::numeric AS fx_rate_to_eur, NULL::int AS account_id,
+            at.source_account_id, at.destination_account_id, at.fee_units,
+            at.source_record_hash,NULL::text,NULL::text,NULL::text[]
+       FROM portfolio_asset_transfers at JOIN investments i ON i.id=at.investment_id
+       ${where.replace(/pt\.date/g, "at.date")}
+    UNION ALL
+    SELECT aa.id,aa.investment_id,'asset_adjustment',0,aa.units,0,0,
+           to_char(aa.date,'YYYY-MM-DD'),to_char(aa.date,'YYYY-MM-DD'),COALESCE(i.currency,'EUR'),
+           NULL::numeric,aa.account_id,NULL::int,NULL::int,0,aa.source_record_hash,
+           aa.adjustment_kind,aa.basis_policy,aa.eligible_source_record_hashes
+      FROM portfolio_asset_adjustments aa JOIN investments i ON i.id=aa.investment_id
+      ${where.replace(/pt\.date/g, "aa.date")}
+    ) events ${orderBy}`,
     params,
   );
   return result.rows;

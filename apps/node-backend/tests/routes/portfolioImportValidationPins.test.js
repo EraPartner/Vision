@@ -31,6 +31,11 @@ vi.mock("multer", () => {
   return { default: multer };
 });
 
+vi.mock("../../src/lib/portfolioUpload.js", async (importOriginal) => ({
+  ...(await importOriginal()),
+  assertPortfolioUploadSupported: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("fs", () => {
   const unlink = vi.fn().mockResolvedValue(undefined);
   return {
@@ -462,6 +467,7 @@ describe("buildPortfolioConfig pins (POST /csv/custom)", () => {
           date_format: "%d-%m-%Y",
           separator: ";",
           encoding: "latin1",
+          number_format: "auto",
           skip_rows: 2,
           default_asset_class: "stock",
           default_type: "sell",
@@ -581,7 +587,10 @@ describe("normalizePortfolioParserConfig pins (POST /parsers)", () => {
     };
     await create(config).expect(201);
     expect(customParserConfigRepository.create).toHaveBeenCalledWith(
-      expect.objectContaining({ config, kind: "portfolio" }),
+      expect.objectContaining({
+        config: { ...config, number_format: "auto" },
+        kind: "portfolio",
+      }),
     );
   });
 

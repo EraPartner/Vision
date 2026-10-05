@@ -10,7 +10,23 @@
 import portfolioTransactionService from "./portfolio/portfolioTransactionService.js";
 import portfolioTransactionRepository from "../repositories/portfolioTransactionRepository.js";
 import investmentRepository from "../repositories/investmentRepository.js";
+import { rollbackPortfolioAssetTransfersForBatch } from "./portfolio/portfolioAssetTransferService.js";
+import { rollbackPortfolioAssetAdjustmentsForBatch } from "./portfolio/portfolioAssetAdjustmentService.js";
+import {
+  getActiveDuplicateRepairReceipts,
+  restoreDuplicatePortfolioRepairs,
+} from "./portfolioImportDuplicateRepairService.js";
 import { query, withTransaction } from "../database/connection.js";
+import { ConflictError } from "../middleware/errorHandler.js";
+import {
+  restorePortfolioImportAdoptions,
+  validatePortfolioImportAdoptionRollback,
+} from "./portfolioImportReconciliationService.js";
+import {
+  getActiveAdoptionReceipts,
+  lockReconciliationAccountsAndHistory,
+  readReconciliationSources,
+} from "../repositories/portfolioImportReconciliationRepository.js";
 import {
   getRowForInvestmentCreation,
   getPreviewRows,
@@ -393,11 +409,24 @@ export async function resolveInvestmentRows({
  *          semantics: already-gone rows are not counted)
  */
 export async function rollbackBatch(batchId) {
+  const repairScope = await getActiveDuplicateRepairReceipts(batchId);
   return withTransaction(async () => {
     // Share the batch-first lock order with review resolution. This closes the
     // route pre-check race and prevents resolution from creating a holding while
     // rollback already owns staging rows (the opposite order could deadlock).
-    const lockedBatch = await lockBatchForUpdate(batchId);
+    const lockIds = [
+      ...new Set([
+        batchId,
+        ...repairScope.map((receipt) =>
+          Number(receipt.original_import_batch_id),
+        ),
+      ]),
+    ].sort((a, b) => a - b);
+    let lockedBatch;
+    for (const id of lockIds) {
+      const locked = await lockBatchForUpdate(id);
+      if (id === batchId) lockedBatch = locked;
+    }
     if (!lockedBatch) {
       const err = /** @type {Error & { code?: string }} */ (
         new Error(`Batch ${batchId} not found`)
@@ -420,7 +449,47 @@ export async function rollbackBatch(batchId) {
       throw err;
     }
 
+    const activeRepairs = await getActiveDuplicateRepairReceipts(batchId);
+    if (
+      activeRepairs.some(
+        (receipt) =>
+          !lockIds.includes(Number(receipt.original_import_batch_id)),
+      )
+    )
+      throw new ConflictError(
+        "Duplicate repair provenance changed. Refresh the import before undoing it.",
+        { details: { reason: "stale_reconciliation_plan" } },
+      );
     const rows = await getCommittedRows(batchId);
+    const activeAdoptions = await getActiveAdoptionReceipts(batchId);
+    const custodySourceRows = await readReconciliationSources([batchId]);
+    if (lockedBatch)
+      await lockReconciliationAccountsAndHistory(
+        [
+          ...new Set(
+            [
+              ...custodySourceRows.map(
+                (row) => row.asset_adjustment_details?.accountId,
+              ),
+              ...activeAdoptions.flatMap((receipt) => [
+                receipt.before_data.account_id,
+                receipt.after_data.account_id,
+              ]),
+              ...activeRepairs.flatMap((receipt) => [
+                receipt.before_data.legacy.account_id,
+                receipt.after_data.legacy.account_id,
+                receipt.before_data.imported.account_id,
+              ]),
+            ]
+              .concat(
+                lockedBatch.account_id,
+                lockedBatch.custom_config?.transfer_destination_account_id,
+                lockedBatch.custom_config?.transfer_origin_account_id,
+              )
+              .filter((id) => id != null),
+          ),
+        ].sort((a, b) => a - b),
+      );
 
     // Brokerage flag for the route guard (see docstring). Committed cash rows
     // can only exist on a brokerage batch (resolveAndCheck writes route='cash'
@@ -434,15 +503,36 @@ export async function rollbackBatch(batchId) {
     // Approve the complete stamped + legacy removal set before deleting any
     // row. Per-row validation would reject a batch's buy before its dependent
     // sell even though removing both restores the pre-import history.
-    await portfolioTransactionService.validateImportBatchRemoval(
+    const adoptionReceipts = await validatePortfolioImportAdoptionRollback(
       batchId,
       portfolioRows,
     );
+    // Removing dated custody events and acquisitions is one projection. The
+    // transfer helper can use the restoration already validated above.
+    const deletedTransfers = await rollbackPortfolioAssetTransfersForBatch(
+      batchId,
+      {
+        omitTransactionIds: portfolioRows.map((row) => Number(row.id)),
+        skipHistoryValidation: true,
+      },
+    );
+    const deletedAdjustments = await rollbackPortfolioAssetAdjustmentsForBatch(
+      batchId,
+      {
+        omitTransactionIds: portfolioRows.map((row) => Number(row.id)),
+        skipHistoryValidation: true,
+      },
+    );
+    if (adoptionReceipts.length === 0 && activeRepairs.length === 0)
+      await portfolioTransactionService.validateImportBatchRemoval(
+        batchId,
+        portfolioRows,
+      );
 
     // 1. Trades stamped with this batch — one statement.
     const bulkDeletedIds =
       await portfolioTransactionRepository.hardDeleteByImportBatch(batchId);
-    let deleted = bulkDeletedIds.length;
+    let deleted = bulkDeletedIds.length + deletedTransfers + deletedAdjustments;
     // committed_txn_id is INTEGER while portfolio ids can arrive as BIGINT strings
     // from pg; compare as strings so the "already covered" test can't miss.
     const bulkDeleted = new Set(bulkDeletedIds.map(String));
@@ -474,8 +564,18 @@ export async function rollbackBatch(batchId) {
       if (ok) deleted++;
     }
 
+    await restorePortfolioImportAdoptions(adoptionReceipts);
+    await restoreDuplicatePortfolioRepairs(activeRepairs);
     await resetCommittedRowsToMatched(batchId);
     await markBatchAborted(batchId);
-    return { deleted };
+    return {
+      deleted,
+      ...(activeRepairs.length > 0
+        ? {
+            restored: activeRepairs.length,
+            restored_imported: activeRepairs.length,
+          }
+        : {}),
+    };
   });
 }

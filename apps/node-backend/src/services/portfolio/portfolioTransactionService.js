@@ -1,4 +1,5 @@
 /** Portfolio-transaction write orchestration and domain policy. */
+import { withPortfolioHistoryWrite } from "./portfolioHistoryWriteService.js";
 
 import {
   getAssetClassByInvestmentId,
@@ -20,7 +21,7 @@ import {
 /**
  * @param {import('./portfolioTransactionRules.js').PortfolioTransactionInput} input
  */
-export async function create(input) {
+async function createUnlocked(input) {
   let assetClass = input.preloaded_asset_class;
   if (!assetClass) {
     assetClass = await getAssetClassByInvestmentId(input.investment_id);
@@ -48,13 +49,14 @@ export async function create(input) {
     date: payload.date,
     units: payload.units,
     accountId: payload.account_id,
+    candidate: payload,
     checkProjectedHistory: payload.type === "split",
   });
   return insert(payload);
 }
 
 /** @param {number} id @param {Record<string, any>} fields */
-async function update(id, fields) {
+async function updateUnlocked(id, fields) {
   const existing = await getById(id);
   if (!existing) return null;
   if (
@@ -140,9 +142,17 @@ async function update(id, fields) {
   }
 
   const touchesPartitionHistory =
-    ["account_id", "date", "units"].some((field) =>
-      Object.prototype.hasOwnProperty.call(fields, field),
-    ) && ["buy", "gift", "sell", "split"].includes(normalized.type);
+    [
+      "account_id",
+      "date",
+      "units",
+      "amount",
+      "fees",
+      "taxes",
+      "currency",
+      "fx_rate_to_eur",
+    ].some((field) => Object.prototype.hasOwnProperty.call(fields, field)) &&
+    ["buy", "gift", "sell", "split"].includes(normalized.type);
   await validatePortfolioUnitMutation({
     investmentId: existing.investment_id,
     assetClass,
@@ -150,6 +160,7 @@ async function update(id, fields) {
     date: normalized.date,
     units: normalized.units,
     accountId: normalized.account_id,
+    candidate: { ...existing, ...normalized },
     excludeTransactionId: id,
     checkProjectedHistory: touchesPartitionHistory,
   });
@@ -157,7 +168,7 @@ async function update(id, fields) {
 }
 
 /** Delete one row without allowing the remaining history to become more oversold. */
-export async function remove(id) {
+async function removeUnlocked(id) {
   const existing = await getById(id);
   if (!existing) return false;
   const assetClass =
@@ -198,8 +209,22 @@ export async function validateImportBatchRemoval(batchId, legacyRows = []) {
   }
 }
 
+export async function create(input) {
+  return withPortfolioHistoryWrite([input.account_id], () =>
+    createUnlocked(input),
+  );
+}
+
+async function update(id, fields) {
+  return withPortfolioHistoryWrite([fields.account_id], () =>
+    updateUnlocked(id, fields),
+  );
+}
+
+export async function remove(id) {
+  return withPortfolioHistoryWrite([], () => removeUnlocked(id));
+}
+
 export default { create, update, remove, validateImportBatchRemoval };
 
-export {
-  update as __update,
-};
+export { update as __update };

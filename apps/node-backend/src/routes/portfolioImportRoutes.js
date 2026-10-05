@@ -21,11 +21,12 @@ import {
 } from "../lib/importBatchIds.js";
 import { validateId } from "../middleware/validation.js";
 import { ValidationError, NotFoundError } from "../middleware/errorHandler.js";
+import { cleanup } from "../lib/csvUpload.js";
 import {
-  csvUpload,
-  cleanup,
-  csvUploadErrorTranslator,
-} from "../lib/csvUpload.js";
+  portfolioUpload,
+  portfolioUploadErrorTranslator,
+  assertPortfolioUploadSupported,
+} from "../lib/portfolioUpload.js";
 import { streamImport } from "../lib/importProgress.js";
 import { runPortfolioImportPipeline } from "../services/portfolioImportPipeline/index.js";
 import { VALID_PORTFOLIO_TXN_TYPES } from "../lib/portfolioTxnTypes.js";
@@ -38,7 +39,16 @@ import {
   resolveInvestmentRows,
   rollbackBatch,
 } from "../services/portfolioImportBatchService.js";
-import { commitReviewedPortfolioImport } from "../services/portfolioImportCommitService.js";
+import {
+  commitReviewedPortfolioImport,
+  commitReviewedPortfolioImports,
+} from "../services/portfolioImportCommitService.js";
+import { previewPortfolioImportReconciliation } from "../services/portfolioImportReconciliationService.js";
+import { applyPortfolioImportReference } from "../services/portfolioImportReferenceService.js";
+import {
+  portfolioReferenceUpload,
+  portfolioReferenceUploadErrorTranslator,
+} from "../lib/portfolioReferenceUpload.js";
 import { VALID_ASSET_CLASSES } from "../lib/assetClasses.js";
 import {
   CSV_NUMBER_FORMATS,
@@ -153,6 +163,7 @@ function assertPortfolioFormatBrokerage(customConfig, brokerage) {
     ibkr_transaction_history: "IBKR",
     kinesis_transaction_history: "Kinesis",
     nexo_transaction_history: "Nexo",
+    nexo_pro_spot_history: "Nexo Pro Spot",
     saxo_transaction_history: "Saxo",
   };
   if (
@@ -178,6 +189,39 @@ const defaultedTextField = (fallback) =>
     .unknown()
     .optional()
     .transform((value) => (value && String(value).trim()) || fallback);
+
+/** @param {string} field */
+const optionalPortfolioAccountId = (field) =>
+  z
+    .unknown()
+    .optional()
+    .transform((value, ctx) => {
+      if (value == null || value === "") return undefined;
+      const parsed = validateId(value, field);
+      if (!parsed.valid) {
+        ctx.addIssue({
+          code: "custom",
+          message: `${field} must be a positive integer`,
+        });
+        return z.NEVER;
+      }
+      return parsed.value;
+    });
+
+/** @param {{transfer_destination_account_id?: number, transfer_origin_account_id?: number}} config @param {{accountId?: number}} brokerage */
+async function assertTransferDestination(config, brokerage) {
+  for (const accountId of [
+    config.transfer_destination_account_id,
+    config.transfer_origin_account_id,
+  ]) {
+    if (accountId === undefined) continue;
+    if (accountId === brokerage.accountId)
+      throw new ValidationError(
+        "Transfer source and destination accounts must differ",
+      );
+    await assertPortfolioImportAccount(accountId);
+  }
+}
 
 // Flattened request fields → { customConfig, defaultAssetClass, defaultType,
 // adapterName }, the shape both /csv/custom and /csv/stream hand to the
@@ -257,12 +301,42 @@ const portfolioImportConfigSchema = z
       }),
     type_mapping: z.unknown().optional().transform(parseTypeMapping),
     adapter_name: defaultedTextField("portfolio_generic"),
+    transfer_destination_account_id: optionalPortfolioAccountId(
+      "transfer_destination_account_id",
+    ),
+    transfer_origin_account_id: optionalPortfolioAccountId(
+      "transfer_origin_account_id",
+    ),
+    included_symbols: z
+      .string()
+      .trim()
+      .min(1)
+      .max(500)
+      .optional()
+      .transform((value) =>
+        value === undefined
+          ? undefined
+          : [
+              ...new Set(
+                value.split(",").map((symbol) => symbol.trim().toUpperCase()),
+              ),
+            ],
+      )
+      .pipe(
+        z
+          .array(z.string().regex(/^[A-Z0-9][A-Z0-9._-]{0,29}$/))
+          .min(1)
+          .max(30)
+          .optional(),
+      ),
+    yield_basis_policy: z.literal("zero").optional(),
     portfolio_format: z
       .enum(
         [
           "ibkr_transaction_history",
           "kinesis_transaction_history",
           "nexo_transaction_history",
+          "nexo_pro_spot_history",
           "saxo_transaction_history",
         ],
         { error: "portfolio_format must be a supported portfolio format" },
@@ -287,6 +361,21 @@ const portfolioImportConfigSchema = z
       default_asset_class: data.default_asset_class,
       default_type: data.default_type || "buy",
       type_mapping: data.type_mapping,
+      ...(data.transfer_destination_account_id !== undefined
+        ? {
+            transfer_destination_account_id:
+              data.transfer_destination_account_id,
+          }
+        : {}),
+      ...(data.transfer_origin_account_id !== undefined
+        ? { transfer_origin_account_id: data.transfer_origin_account_id }
+        : {}),
+      ...(data.included_symbols !== undefined
+        ? { included_symbols: data.included_symbols }
+        : {}),
+      ...(data.yield_basis_policy !== undefined
+        ? { yield_basis_policy: data.yield_basis_policy }
+        : {}),
       ...(data.portfolio_format ? { format: data.portfolio_format } : {}),
       column_mapping: {
         date: data.date_column,
@@ -325,7 +414,7 @@ export {
 // POST /api/portfolio/import/csv/custom — one-shot (202 if review needed)
 router.post(
   "/csv/custom",
-  csvUpload.single("file"),
+  portfolioUpload.single("file"),
   /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
     req,
     res,
@@ -344,6 +433,8 @@ router.post(
       brokerage = parseBrokerageParams(req.body);
       assertPortfolioFormatBrokerage(built.customConfig, brokerage);
       await assertPortfolioImportAccount(brokerage.accountId);
+      await assertTransferDestination(built.customConfig, brokerage);
+      await assertPortfolioUploadSupported(req.file.path, built.customConfig);
     } catch (err) {
       cleanup(req.file.path);
       throw err;
@@ -390,7 +481,7 @@ router.post(
 // POST /api/portfolio/import/csv/stream — SSE progress
 router.post(
   "/csv/stream",
-  csvUpload.single("file"),
+  portfolioUpload.single("file"),
   /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
     req,
     res,
@@ -413,6 +504,8 @@ router.post(
       brokerage = parseBrokerageParams(req.body);
       assertPortfolioFormatBrokerage(built.customConfig, brokerage);
       await assertPortfolioImportAccount(brokerage.accountId);
+      await assertTransferDestination(built.customConfig, brokerage);
+      await assertPortfolioUploadSupported(req.file.path, built.customConfig);
     } catch (err) {
       cleanup(req.file.path);
       throw err;
@@ -477,6 +570,13 @@ const portfolioParserConfigSchema = z
     defaultAssetClass: z.enum([...VALID_ASSET_CLASSES], {
       error: "config.defaultAssetClass must be a valid asset class",
     }),
+    transferDestinationAccountId: optionalPortfolioAccountId(
+      "config.transferDestinationAccountId",
+    ),
+    transferOriginAccountId: optionalPortfolioAccountId(
+      "config.transferOriginAccountId",
+    ),
+    yieldBasisPolicy: z.literal("zero").optional(),
     accountId: z
       .unknown()
       .optional()
@@ -715,6 +815,114 @@ router.post(
   },
 );
 
+const reconciliationScopeSchema = z.strictObject({
+  batch_ids: z
+    .array(z.number().int().positive().max(Number.MAX_SAFE_INTEGER))
+    .min(1)
+    .max(100),
+  adopt_policy: z.enum(["preserve_existing", "prefer_source"]).optional(),
+  batch_policies: z
+    .array(
+      z.strictObject({
+        batch_id: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+        adopt_policy: z.enum(["preserve_existing", "prefer_source"]),
+      }),
+    )
+    .max(100)
+    .optional(),
+});
+const reconciliationCommitSchema = reconciliationScopeSchema.extend({
+  expected_plan_fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+});
+
+const reconciliationReferenceSchema = z.strictObject({
+  batch_ids: z
+    .string()
+    .transform((value, context) => {
+      try {
+        return JSON.parse(value);
+      } catch {
+        context.addIssue({
+          code: "custom",
+          message: "batch_ids must be a JSON array",
+        });
+        return z.NEVER;
+      }
+    })
+    .pipe(reconciliationScopeSchema.shape.batch_ids),
+  placeholder_basis_policy: z.literal("zero"),
+});
+
+router.post(
+  "/reconciliation/reference",
+  portfolioReferenceUpload.single("file"),
+  portfolioReferenceUploadErrorTranslator,
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
+    req,
+    res,
+  ) => {
+    if (!req.file) throw new ValidationError("No reference file uploaded.");
+    try {
+      const input = parseImportInput(reconciliationReferenceSchema, req.body);
+      res.ok(
+        await applyPortfolioImportReference({
+          batchIds: input.batch_ids,
+          referencePath: req.file.path,
+          placeholderBasisPolicy: input.placeholder_basis_policy,
+        }),
+      );
+    } finally {
+      cleanup(req.file.path);
+    }
+  },
+);
+
+router.post(
+  "/reconciliation/preview",
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
+    req,
+    res,
+  ) => {
+    const input = parseImportInput(reconciliationScopeSchema, req.body);
+    res.ok(
+      await previewPortfolioImportReconciliation({
+        batchIds: input.batch_ids,
+        adoptPolicy: input.adopt_policy,
+        batchPolicies: input.batch_policies?.map((policy) => ({
+          batchId: policy.batch_id,
+          adoptPolicy: policy.adopt_policy,
+        })),
+      }),
+    );
+  },
+);
+
+router.post(
+  "/reconciliation/commit",
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
+    req,
+    res,
+  ) => {
+    const input = parseImportInput(reconciliationCommitSchema, req.body);
+    const result = await commitReviewedPortfolioImports({
+      batchIds: input.batch_ids,
+      adoptPolicy: input.adopt_policy,
+      batchPolicies: input.batch_policies?.map((policy) => ({
+        batchId: policy.batch_id,
+        adoptPolicy: policy.adopt_policy,
+      })),
+      expectedPlanFingerprint: input.expected_plan_fingerprint,
+    });
+    logger.info("[portfolio-import] reviewed scope committed", {
+      batchCount: result.batches.length,
+      imported: result.imported,
+      adopted: result.adopted,
+      duplicates: result.duplicates,
+    });
+    res.ok(result);
+  },
+);
+
 // POST /api/portfolio/import/batches/:id/commit
 router.post(
   "/batches/:id/commit",
@@ -759,7 +967,7 @@ router.post(
   },
 );
 
-router.use(csvUploadErrorTranslator);
+router.use(portfolioUploadErrorTranslator);
 
 export { normalizePortfolioParserConfig as __normalizePortfolioParserConfig };
 

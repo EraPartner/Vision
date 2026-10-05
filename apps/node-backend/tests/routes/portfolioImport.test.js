@@ -57,6 +57,13 @@ vi.mock("../../src/services/portfolioImportPipeline/index.js", () => ({
 
 vi.mock("../../src/services/portfolioImportCommitService.js", () => ({
   commitReviewedPortfolioImport: vi.fn(),
+  commitReviewedPortfolioImports: vi.fn(),
+}));
+vi.mock("../../src/services/portfolioImportReconciliationService.js", () => ({
+  previewPortfolioImportReconciliation: vi.fn(),
+}));
+vi.mock("../../src/services/portfolioImportReferenceService.js", () => ({
+  applyPortfolioImportReference: vi.fn(),
 }));
 
 vi.mock("../../src/services/portfolioImportBatchService.js", () => ({
@@ -99,12 +106,149 @@ import {
   resolveInvestmentRows,
   rollbackBatch,
 } from "../../src/services/portfolioImportBatchService.js";
+import { commitReviewedPortfolioImports } from "../../src/services/portfolioImportCommitService.js";
+import { previewPortfolioImportReconciliation } from "../../src/services/portfolioImportReconciliationService.js";
+import { ConflictError } from "../../src/middleware/errorHandler.js";
 
 const { default: portfolioImportRouter } =
   await import("../../src/routes/portfolioImportRoutes.js");
 
 const BASE = "/api/portfolio/import";
 const api = routeAgent(portfolioImportRouter, { mountPath: BASE });
+
+describe("Portfolio import reconciliation HTTP contract", () => {
+  beforeEach(() => vi.clearAllMocks());
+  it("accepts safe bigserial batch IDs above the account-ID range", async () => {
+    previewPortfolioImportReconciliation.mockResolvedValue({
+      ready: false,
+      blockers: [],
+    });
+    await api
+      .post(`${BASE}/reconciliation/preview`)
+      .send({ batch_ids: [2147483648, Number.MAX_SAFE_INTEGER] })
+      .expect(200);
+    expect(previewPortfolioImportReconciliation).toHaveBeenCalledWith({
+      batchIds: [2147483648, Number.MAX_SAFE_INTEGER],
+      adoptPolicy: undefined,
+      batchPolicies: undefined,
+    });
+  });
+  it("previews the requested complete scope and policy without committing", async () => {
+    previewPortfolioImportReconciliation.mockResolvedValue({
+      ready: false,
+      blockers: [],
+    });
+    await api
+      .post(`${BASE}/reconciliation/preview`)
+      .send({ batch_ids: [4, 7], adopt_policy: "preserve_existing" })
+      .expect(200);
+    expect(previewPortfolioImportReconciliation).toHaveBeenCalledWith({
+      batchIds: [4, 7],
+      adoptPolicy: "preserve_existing",
+      batchPolicies: undefined,
+    });
+    expect(commitReviewedPortfolioImports).not.toHaveBeenCalled();
+  });
+  it("passes explicit per-batch policies with the reviewed scope", async () => {
+    previewPortfolioImportReconciliation.mockResolvedValue({
+      ready: false,
+      blockers: [],
+    });
+    await api
+      .post(`${BASE}/reconciliation/preview`)
+      .send({
+        batch_ids: [4, 7],
+        adopt_policy: "preserve_existing",
+        batch_policies: [{ batch_id: 7, adopt_policy: "prefer_source" }],
+      })
+      .expect(200);
+    expect(previewPortfolioImportReconciliation).toHaveBeenCalledWith({
+      batchIds: [4, 7],
+      adoptPolicy: "preserve_existing",
+      batchPolicies: [{ batchId: 7, adoptPolicy: "prefer_source" }],
+    });
+    commitReviewedPortfolioImports.mockResolvedValue({
+      batches: [],
+      imported: 0,
+      adopted: 0,
+      duplicates: 0,
+    });
+    const hash = "b".repeat(64);
+    await api
+      .post(`${BASE}/reconciliation/commit`)
+      .send({
+        batch_ids: [4, 7],
+        batch_policies: [{ batch_id: 7, adopt_policy: "prefer_source" }],
+        expected_plan_fingerprint: hash,
+      })
+      .expect(200);
+    expect(commitReviewedPortfolioImports).toHaveBeenCalledWith({
+      batchIds: [4, 7],
+      adoptPolicy: undefined,
+      batchPolicies: [{ batchId: 7, adoptPolicy: "prefer_source" }],
+      expectedPlanFingerprint: hash,
+    });
+  });
+  it.each([
+    { batch_ids: [] },
+    { batch_ids: ["7"] },
+    { batch_ids: [0] },
+    { batch_ids: [1.5] },
+    { batch_ids: [9007199254740992] },
+    { batch_ids: Array.from({ length: 101 }, (_, i) => i + 1) },
+    { batch_ids: [7], adopt_policy: "guess" },
+    { batch_ids: [7], unknown_account: 8 },
+    {
+      batch_ids: [7],
+      batch_policies: [{ batch_id: "7", adopt_policy: "prefer_source" }],
+    },
+    {
+      batch_ids: [7],
+      batch_policies: [{ batch_id: 7, adopt_policy: "guess" }],
+    },
+    {
+      batch_ids: [7],
+      batch_policies: [
+        { batch_id: 7, adopt_policy: "prefer_source", unexpected: true },
+      ],
+    },
+  ])("rejects malformed or ambiguous preview scope %j", async (body) => {
+    await api.post(`${BASE}/reconciliation/preview`).send(body).expect(400);
+    expect(previewPortfolioImportReconciliation).not.toHaveBeenCalled();
+  });
+  it("requires the reviewed fingerprint before commit", async () => {
+    await api
+      .post(`${BASE}/reconciliation/commit`)
+      .send({ batch_ids: [7] })
+      .expect(400);
+    await api
+      .post(`${BASE}/reconciliation/commit`)
+      .send({ batch_ids: [7], expected_plan_fingerprint: "unreviewed" })
+      .expect(400);
+    expect(commitReviewedPortfolioImports).not.toHaveBeenCalled();
+  });
+  it("passes the fingerprint and returns a stale-plan conflict", async () => {
+    commitReviewedPortfolioImports.mockRejectedValue(
+      new ConflictError("Reconciliation preview changed"),
+    );
+    const hash = "a".repeat(64);
+    const response = await api
+      .post(`${BASE}/reconciliation/commit`)
+      .send({
+        batch_ids: [4, 7],
+        adopt_policy: "prefer_source",
+        expected_plan_fingerprint: hash,
+      })
+      .expect(409);
+    expect(response.body.error.code).toBe("CONFLICT");
+    expect(commitReviewedPortfolioImports).toHaveBeenCalledWith({
+      batchIds: [4, 7],
+      adoptPolicy: "prefer_source",
+      batchPolicies: undefined,
+      expectedPlanFingerprint: hash,
+    });
+  });
+});
 
 function routeHandler(method, path) {
   const layer = portfolioImportRouter.stack.find(

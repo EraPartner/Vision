@@ -2,6 +2,19 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 import { mockConnection } from "./helpers/repoMocks.js";
 vi.mock("../src/database/connection.js", () => mockConnection());
+// Domain tests isolate the writer boundary; disposable PG tests verify locks.
+vi.mock("../src/services/portfolio/portfolioHistoryWriteService.js", () => ({
+  withPortfolioHistoryWrite: (_accounts, work) => work(),
+}));
+vi.mock(
+  "../src/repositories/portfolioAssetTransferRepository.js",
+  async () => ({
+    ...(await vi.importActual(
+      "../src/repositories/portfolioAssetTransferRepository.js",
+    )),
+    hasAssetTransfersForInvestment: () => false,
+  }),
+);
 
 import { query } from "../src/database/connection.js";
 import portfolioTransactionReadRepository, {

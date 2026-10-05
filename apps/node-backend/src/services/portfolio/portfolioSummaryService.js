@@ -35,7 +35,7 @@ import {
 /** @param {DecimalInput} value */
 const round2 = (value) => roundMoney(value, 2);
 /** @param {DecimalInput} value */
-const round6 = (value) => roundMoney(value, 6);
+const round8 = (value) => roundMoney(value, 8);
 
 const COST_BASIS_METHODS = new Set(["weighted_avg", "fifo", "lifo"]);
 
@@ -475,7 +475,7 @@ function buildInvestmentSummary(
     originalCurrency: invCurrency,
 
     // Computed numerics — pre-converted to targetCurrency
-    totalUnits: round6(totalUnits),
+    totalUnits: round8(totalUnits),
     currentPrice: round2(convertedCurrentPrice),
     current_price: round2(convertedCurrentPrice),
     interestRate: Number(inv.interest_rate) || 0,

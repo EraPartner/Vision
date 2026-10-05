@@ -588,6 +588,9 @@
  * @property {string} currency `COALESCE(pt.currency, i.currency, 'EUR')`.
  * @property {string|null} fx_rate_to_eur NUMERIC(20,10), not coalesced — null when unset.
  * @property {number|null} account_id
+ * @property {number} [source_account_id] Canonical custody event origin.
+ * @property {number} [destination_account_id] Canonical custody event destination.
+ * @property {string} [fee_units] Verified asset units spent on custody fees.
  */
 
 /**

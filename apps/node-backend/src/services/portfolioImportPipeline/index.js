@@ -81,6 +81,20 @@ async function prepareImport({ batchId, filePath, customConfig, onProgress }) {
   // row: the adapter skips them all and the batch would sail through to a
   // "0 imported" success. Fail loudly instead — the user needs to fix the mapping.
   if (rowsTotal === 0) {
+    if (customConfig.format === "nexo_pro_spot_history" && rowsSkipped === 0) {
+      await query(
+        `UPDATE portfolio_import_batches SET status = 'awaiting_review' WHERE id = $1`,
+        [batchId],
+      );
+      return {
+        batchId,
+        rowsTotal: 0,
+        rowsSkipped: 0,
+        requiresReview: true,
+        matchSourceCounts: {},
+        validateErrors: 0,
+      };
+    }
     throw new ValidationError(
       rowsSkipped > 0
         ? `No importable rows: all ${rowsSkipped} data rows failed to parse. Check the column mapping and date format.`
@@ -139,13 +153,14 @@ async function prepareImport({ batchId, filePath, customConfig, onProgress }) {
 /**
  * Commit a prepared (or reviewed) batch and settle its final status.
  *
- * @param {{ batchId: PortfolioImportBatchId, onProgress?: PortfolioImportProgressCallback }} args
+ * @param {{ batchId: PortfolioImportBatchId, onProgress?: PortfolioImportProgressCallback, rowIds?: number[] }} args
  * @returns {Promise<{ imported: number, duplicates: number, errors: number }>}
  */
-export async function commitPortfolioImport({ batchId, onProgress }) {
+export async function commitPortfolioImport({ batchId, onProgress, rowIds }) {
   const { imported, duplicates, errors } = await commitBatch({
     batchId,
     onProgress,
+    rowIds,
   });
 
   // A batch that still has any 'error' staging row is not truly done — it lands

@@ -22,6 +22,8 @@ import {
   convertRowsWithHistoricalRateFallback,
 } from "./infoRepositoryHelpers.js";
 
+const HOLDINGS_ONLY_ACCOUNT_TYPES_SQL = "'crypto_exchange', 'wallet'";
+
 // ── Shared row-level resolution ────────────────────────────────────────────
 // Both of these read `transactions.account_id` and nothing else, exactly like
 // the history walk's `account_list` below. They are module-level constants
@@ -29,7 +31,7 @@ import {
 // places is precisely how the walk, the date probe and the fallback drift apart.
 
 /**
- * Excludes rows POSITIVELY attributed to an `in_net_worth = false` (tracking-only)
+ * Excludes rows POSITIVELY attributed to a tracking-only or holdings-only
  * account, mirroring the walk's `account_list` resolution. Requires the
  * transactions alias to be `t`; splices onto an existing WHERE.
  *
@@ -41,12 +43,14 @@ import {
  * explicit-update cases: a pre-0050 row without a label later relabelled to an
  * unknown account (UPDATE is lookup-only), or an UPDATE that blanks a label and
  * detaches account_id. They stay counted because nothing attributes them to a
- * tracking-only account.
+ * excluded account.
  */
 const NOT_TRACKING_ONLY = `
             AND NOT EXISTS (
               SELECT 1 FROM accounts a
-              WHERE a.id = t.account_id AND a.in_net_worth = false
+              WHERE a.id = t.account_id
+                AND (a.in_net_worth = false
+                     OR a.type IN (${HOLDINGS_ONLY_ACCOUNT_TYPES_SQL}))
             )`;
 
 /**
@@ -80,7 +84,7 @@ const IS_LIABILITY_BY_ACCOUNT = `
  * exact rather than approximate:
  *
  *   walk row ⇐ an active transaction with a non-NULL `account_id` whose account
- *   is `in_net_worth = true`, dated on or before the end bound.
+ *   is `in_net_worth = true` and supports cash, dated on or before the end bound.
  *
  * Each conjunct is load-bearing. `in_net_worth = true` + non-NULL `account_id`
  * is exactly `account_list`'s membership test. `date <= end bound` is what makes
@@ -100,6 +104,7 @@ const WALK_ANSWERS_CTE = `
           JOIN accounts a ON a.id = t.account_id
           WHERE t.is_active = true
             AND a.in_net_worth = true
+            AND a.type NOT IN (${HOLDINGS_ONLY_ACCOUNT_TYPES_SQL})
             AND t.date <= $2::date
         ) AS answers
       )`;
@@ -254,6 +259,7 @@ export const netWorthRepository = {
                a.currency AS account_currency
         FROM accounts a
         WHERE a.in_net_worth = true
+          AND a.type NOT IN (${HOLDINGS_ONLY_ACCOUNT_TYPES_SQL})
           AND a.id IN (
             SELECT t.account_id FROM transactions t
              WHERE t.is_active = true AND t.account_id IS NOT NULL
@@ -312,6 +318,7 @@ export const netWorthRepository = {
       FROM accounts a
       ${computedBalanceByCurrencyAggLateral({ account: "a.id", asOfDate: "$1::date" })}
       WHERE a.in_net_worth = true
+        AND a.type NOT IN (${HOLDINGS_ONLY_ACCOUNT_TYPES_SQL})
     `,
         [todayYmd],
       ),

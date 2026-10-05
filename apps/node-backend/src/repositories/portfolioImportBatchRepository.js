@@ -116,17 +116,115 @@ export async function getBatch(id) {
  * Lock one batch for a lifecycle-sensitive transaction.
  *
  * @param {number} batchId
- * @returns {Promise<{ status: string, is_brokerage: boolean }|undefined>}
+ * @returns {Promise<{ status: string, is_brokerage: boolean, adapter_name: string, custom_config: object|string|null, account_id: number|null }|undefined>}
  */
 export async function lockBatchForUpdate(batchId) {
   const { rows } = await query(
-    `SELECT status, is_brokerage
+    `SELECT status, is_brokerage, adapter_name, custom_config, account_id
        FROM portfolio_import_batches
       WHERE id = $1
       FOR UPDATE`,
     [batchId],
   );
   return rows[0];
+}
+
+/**
+ * Readiness is checked after review account repair, before any canonical write.
+ * Returned ordinals deliberately omit source values and investment identities.
+ *
+ * @param {number} batchId
+ * @param {number|null|undefined} accountId
+ * @returns {Promise<Array<{row_index: number}>>}
+ */
+export async function getImportReadinessProblems(batchId, accountId) {
+  const { rows } = await query(
+    `SELECT row_index
+       FROM portfolio_import_staging_rows
+      WHERE batch_id = $1
+        AND (
+          status NOT IN ('matched', 'committed', 'duplicate')
+          OR (status = 'matched' AND (
+            tx_date IS NULL
+            OR (route = 'cash' AND ($2::integer IS NULL OR amount IS NULL))
+            OR (route IS DISTINCT FROM 'cash' AND route IS DISTINCT FROM 'account_internal' AND (
+              (type IS NULL AND route IS DISTINCT FROM 'asset_transfer' AND route IS DISTINCT FROM 'asset_adjustment')
+              OR COALESCE(user_override_investment_id, resolved_investment_id) IS NULL
+            ))
+          ))
+        )
+      ORDER BY row_index`,
+    [batchId, accountId ?? null],
+  );
+  return rows;
+}
+
+/**
+ * Manual writes do not share an investment advisory lock. Use the existing
+ * broker-retag table-lock convention so the overlap read is stable until the
+ * enclosing reviewed import transaction finishes. Account rows come first,
+ * matching account lifecycle and broker-retag lock order.
+ *
+ * @param {number|null|undefined} accountId
+ * @returns {Promise<void>}
+ */
+export async function lockImportReadinessHistory(accountId) {
+  if (accountId != null) {
+    await query(`SELECT id FROM accounts WHERE id = $1 FOR UPDATE`, [
+      accountId,
+    ]);
+  }
+  await query("LOCK TABLE portfolio_transactions IN SHARE ROW EXCLUSIVE MODE");
+}
+
+/**
+ * Find possible historical overlaps, including unassigned rows and manual rows
+ * already on the chosen broker. Fees, principal, tax, and FX differences do not
+ * prove that two records are distinct events. This blocks for reconciliation;
+ * it never adopts, rewrites, or stamps the existing record.
+ *
+ * An exact canonical source fingerprint at the requested investment/account is
+ * a known no-op and may pass even when nearby manual history also exists.
+ *
+ * @param {number} batchId
+ * @param {number|null|undefined} accountId
+ * @returns {Promise<Array<{row_index: number}>>}
+ */
+export async function getManualPortfolioOverlaps(batchId, accountId) {
+  const { rows } = await query(
+    `SELECT DISTINCT isr.row_index
+       FROM portfolio_import_staging_rows isr
+       JOIN portfolio_transactions pt
+         ON pt.investment_id = COALESCE(
+              isr.user_override_investment_id, isr.resolved_investment_id)
+        AND pt.type = isr.type
+        AND ABS(pt.date - isr.tx_date) <= 7
+      WHERE isr.batch_id = $1
+        AND isr.status = 'matched'
+        AND isr.route IS DISTINCT FROM 'cash'
+        AND pt.dedup_fingerprint IS NULL
+        AND (
+          (isr.type IN ('buy', 'sell', 'gift', 'split')
+            AND isr.units IS NOT NULL AND pt.units IS NOT NULL
+            AND ABS(pt.units - isr.units) <= GREATEST(
+              0.00000001::numeric,
+              ABS(isr.units) * 0.00000001::numeric))
+          OR isr.type NOT IN ('buy', 'sell', 'gift', 'split')
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM portfolio_transactions canonical
+           WHERE NULLIF(isr.dedup_fingerprint, '') IS NOT NULL
+             AND canonical.dedup_fingerprint = isr.dedup_fingerprint
+             AND canonical.dedup_fingerprint_version = isr.dedup_fingerprint_version
+             AND canonical.investment_id = COALESCE(
+                  isr.user_override_investment_id, isr.resolved_investment_id)
+             AND canonical.account_id IS NOT DISTINCT FROM $2::integer
+             AND canonical.type = isr.type
+        )
+      ORDER BY isr.row_index`,
+    [batchId, accountId ?? null],
+  );
+  return rows;
 }
 
 /**

@@ -22,6 +22,7 @@ import {
 import { parseIbkrTransactionHistory } from "./ibkrTransactionHistoryAdapter.js";
 import { parseKinesisTransactionHistory } from "./kinesisTransactionHistoryAdapter.js";
 import { parseNexoTransactionHistory } from "./nexoTransactionHistoryAdapter.js";
+import { parseNexoProSpotHistory } from "./nexoProTransactionHistoryAdapter.js";
 import { parseSaxoTransactionHistory } from "./saxoTransactionHistoryAdapter.js";
 
 /**
@@ -45,6 +46,8 @@ import { parseSaxoTransactionHistory } from "./saxoTransactionHistoryAdapter.js"
  * @property {string} rawData source record, kept for dedup + provenance.
  * @property {string|null} [sourceAccountIdentity]
  * @property {string|null} [sourceId]
+ * @property {{ direction: 'in'|'out'|'internal', basisStatus: 'carried'|'unresolved'|'not_applicable', feeUnits?: string, receivedUnits?: string }} [assetTransfer]
+ * @property {{ kind: 'yield_acquisition'|'yield_reversal'|'asset_fee', basisPolicy: 'zero'|'zero_yield_only'|'carried', accountId?: number, eligibleSourceRecordHashes?: string[] }} [assetAdjustment]
  */
 
 /**
@@ -52,7 +55,7 @@ import { parseSaxoTransactionHistory } from "./saxoTransactionHistoryAdapter.js"
  * interpret (the counter rides on the array, matching the transaction
  * adapters' contract).
  *
- * @typedef {ParsedPortfolioRow[] & { skipped?: number }} ParsedPortfolioRows
+ * @typedef {ParsedPortfolioRow[] & { skipped?: number, sourceColumns?: string[] }} ParsedPortfolioRows
  */
 
 /**
@@ -68,7 +71,11 @@ import { parseSaxoTransactionHistory } from "./saxoTransactionHistoryAdapter.js"
  * @property {string} [encoding] defaults to 'utf-8'; validated by the shared CSV decoder
  * @property {'auto'|'decimal_dot'|'decimal_comma'} [number_format] defaults to auto; ambiguous auto cells reject the import
  * @property {Record<string, string>} [type_mapping] raw type label → canonical portfolio_txn_type (read by validate.js)
- * @property {'ibkr_transaction_history'|'kinesis_transaction_history'|'nexo_transaction_history'|'saxo_transaction_history'} [format] specialized statement format
+ * @property {'ibkr_transaction_history'|'kinesis_transaction_history'|'nexo_transaction_history'|'nexo_pro_spot_history'|'saxo_transaction_history'} [format] specialized statement format
+ * @property {number} [transfer_destination_account_id] destination resolved from import custody intent
+ * @property {number} [transfer_origin_account_id] origin resolved from import custody intent
+ * @property {string[]} [included_symbols] explicit asset scope; unselected source records remain outside this batch
+ * @property {'zero'} [yield_basis_policy] explicit known-zero yield basis interpretation
  * @property {{ date?: string, type?: string, symbol?: string, name?: string, units?: string, price?: string, amount?: string, fees?: string, taxes?: string, currency?: string, fx_rate?: string, note?: string, source_account?: string, source_id?: string }} [column_mapping] source column NAMES, not indices
  */
 
@@ -157,6 +164,9 @@ export async function parseWithConfig(filePath, config) {
   }
   if (config.format === "nexo_transaction_history") {
     return parseNexoTransactionHistory(filePath, config);
+  }
+  if (config.format === "nexo_pro_spot_history") {
+    return parseNexoProSpotHistory(filePath, config);
   }
   if (config.format === "saxo_transaction_history") {
     return parseSaxoTransactionHistory(filePath, config);

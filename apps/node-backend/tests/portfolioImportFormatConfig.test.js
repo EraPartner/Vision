@@ -12,6 +12,37 @@ const minimal = {
 };
 
 describe("portfolio import format contract", () => {
+  it("retains only an explicit known-zero yield basis policy", () => {
+    expect(__buildPortfolioConfig(minimal).customConfig).not.toHaveProperty(
+      "yield_basis_policy",
+    );
+    expect(
+      __buildPortfolioConfig({ ...minimal, yield_basis_policy: "zero" })
+        .customConfig.yield_basis_policy,
+    ).toBe("zero");
+    for (const policy of ["estimate", "market", true, 0, ""]) {
+      expect(() =>
+        __buildPortfolioConfig({ ...minimal, yield_basis_policy: policy }),
+      ).toThrow();
+    }
+  });
+  it("retains explicit custody origin and destination as validated IDs", () => {
+    const parsed = __buildPortfolioConfig({
+      ...minimal,
+      transfer_origin_account_id: "7",
+      transfer_destination_account_id: "8",
+    });
+    expect(parsed.customConfig.transfer_origin_account_id).toBe(7);
+    expect(parsed.customConfig.transfer_destination_account_id).toBe(8);
+    for (const value of ["7tail", -1, "1.5"]) {
+      expect(() =>
+        __buildPortfolioConfig({
+          ...minimal,
+          transfer_origin_account_id: value,
+        }),
+      ).toThrow();
+    }
+  });
   it("passes the supported IBKR format into the parser config", () => {
     const parsed = __buildPortfolioConfig({
       ...minimal,
@@ -31,17 +62,18 @@ describe("portfolio import format contract", () => {
     expect(parsed.customConfig.format).toBe("kinesis_transaction_history");
   });
 
-  it.each(["nexo_transaction_history", "saxo_transaction_history"])(
-    "passes the supported %s format into the parser config",
-    (format) => {
-      const parsed = __buildPortfolioConfig({
-        ...minimal,
-        portfolio_format: format,
-      });
+  it.each([
+    "nexo_transaction_history",
+    "nexo_pro_spot_history",
+    "saxo_transaction_history",
+  ])("passes the supported %s format into the parser config", (format) => {
+    const parsed = __buildPortfolioConfig({
+      ...minimal,
+      portfolio_format: format,
+    });
 
-      expect(parsed.customConfig.format).toBe(format);
-    },
-  );
+    expect(parsed.customConfig.format).toBe(format);
+  });
 
   it("rejects an unknown specialized format", () => {
     expect(() =>
@@ -85,6 +117,7 @@ describe("portfolio import format contract", () => {
 
   it.each([
     ["nexo_transaction_history", "Nexo"],
+    ["nexo_pro_spot_history", "Nexo Pro Spot"],
     ["saxo_transaction_history", "Saxo"],
   ])("requires an explicit brokerage account for %s", (format, label) => {
     const config = { format };

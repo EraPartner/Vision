@@ -152,6 +152,29 @@ async function insertSnapshot(date, value, currency = "EUR") {
   );
 }
 
+async function seedHoldingsOnlyCash(today) {
+  await addAccount("CRYPTO EXCHANGE", { type: "crypto_exchange" });
+  await addAccount("HARDWARE WALLET", { type: "wallet" });
+  await getTestPool().query(
+    `UPDATE accounts SET has_cash_sleeve = true WHERE name = 'CRYPTO EXCHANGE'`,
+  );
+  for (const [bank, amount, currency, balance] of [
+    ["CRYPTO EXCHANGE", "2000.00", "EUR", "2000.00"],
+    ["CRYPTO EXCHANGE", "-3000.00", "USD", "-3000.00"],
+    ["HARDWARE WALLET", "-4000.00", "EUR", "-4000.00"],
+    ["HARDWARE WALLET", "5000.00", "USD", "5000.00"],
+  ]) {
+    await insertTxn({
+      date: addDaysYmd(today, -400),
+      bank,
+      amount,
+      currency,
+      balance,
+    });
+    await insertTxn({ date: today, bank, amount, currency });
+  }
+}
+
 async function insertPlanned({
   date,
   amount,
@@ -262,6 +285,90 @@ describe.skipIf(!hasTestDatabase())(
     // getNetWorthFromSnapshots
     // ───────────────────────────────────────────────────────────────────────────
     describe("getNetWorthFromSnapshots", () => {
+      it("excludes holdings-only cash from current balances, history and date span while retaining brokerage cash and liabilities", async () => {
+        await seedBase();
+        const today = TODAY();
+        const firstCashDate = addDaysYmd(today, -3);
+        await seedHoldingsOnlyCash(today);
+        await addAccount("CHECKING");
+        await addAccount("BROKER", { type: "brokerage" });
+        await addAccount("LIABILITY", { type: "liability" });
+        for (const [date, isLatest] of [
+          [firstCashDate, false],
+          [today, true],
+        ]) {
+          await getTestPool().query(
+            `INSERT INTO exchange_rates (currency_code, rate_date, rate_to_eur, is_latest)
+             VALUES ('USD', $1::date, '0.5', $2)`,
+            [date, isLatest],
+          );
+        }
+        for (const [bank, amount, currency] of [
+          ["CHECKING", "100.00", "EUR"],
+          ["BROKER", "50.00", "EUR"],
+          ["BROKER", "200.00", "USD"],
+          ["LIABILITY", "-70.00", "EUR"],
+        ]) {
+          await insertTxn({ date: firstCashDate, bank, amount, currency });
+        }
+
+        const result = await infoRepository.getNetWorthFromSnapshots();
+        expect(result.current).toEqual({
+          liquid: 250,
+          liabilities: -70,
+          investments: 0,
+          netWorth: 180,
+        });
+        expect(result.snapshots).toHaveLength(4);
+        expect(result.snapshots[0].date).toBe(firstCashDate);
+        expect(
+          result.snapshots.every(
+            (point) =>
+              point.liquid === 250 &&
+              point.liabilities === -70 &&
+              point.netWorth === 180,
+          ),
+        ).toBe(true);
+      });
+
+      it("retains the unattributed cash fallback when the only attributed activity belongs to holdings-only wallets", async () => {
+        await seedBase();
+        const today = TODAY();
+        const firstCashDate = addDaysYmd(today, -2);
+        await seedHoldingsOnlyCash(today);
+        await insertTxn({ date: firstCashDate, amount: "30.00", bank: null });
+        await insertTxn({ date: today, amount: "-5.00", bank: null });
+
+        const result = await infoRepository.getNetWorthFromSnapshots();
+        expect(result.current).toEqual({
+          liquid: 25,
+          liabilities: 0,
+          investments: 0,
+          netWorth: 25,
+        });
+        expect(
+          result.snapshots.map((point) => [point.date, point.liquid]),
+        ).toEqual([
+          [firstCashDate, 30],
+          [addDaysYmd(today, -1), 30],
+          [today, 25],
+        ]);
+      });
+
+      it("does not create cash value or a date span from holdings-only wallet activity", async () => {
+        await seedBase();
+        await seedHoldingsOnlyCash(TODAY());
+
+        const result = await infoRepository.getNetWorthFromSnapshots();
+        expect(result.current).toEqual({
+          liquid: 0,
+          liabilities: 0,
+          investments: 0,
+          netWorth: 0,
+        });
+        expect(result.snapshots).toEqual([]);
+      });
+
       it("returns the empty shape when there is no source record at all", async () => {
         expect(await infoRepository.getNetWorthFromSnapshots()).toEqual({
           current: { liquid: 0, liabilities: 0, investments: 0, netWorth: 0 },

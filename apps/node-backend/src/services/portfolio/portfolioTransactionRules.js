@@ -12,6 +12,7 @@ import {
   getAccountLabel as loadAccountLabel,
   getUnitEventsForInvestment,
 } from "../../repositories/portfolioTxRepo.reads.js";
+import { hasAssetTransfersForInvestment } from "../../repositories/portfolioAssetTransferRepository.js";
 import {
   areLotsFullyAssigned,
   partitionOversellDeficits,
@@ -285,7 +286,10 @@ function replayUnits(rows) {
   let net = toDecimal(0);
   for (const row of rows) {
     const units = toDecimal(row.units || 0);
-    if (row.type === "buy" || row.type === "gift") net = net.plus(units);
+    if (row.type === "buy" || row.type === "gift" || row.type === "transfer_in")
+      net = net.plus(units);
+    else if (["transfer_out", "asset_fee", "unit_reversal"].includes(row.type))
+      net = net.minus(units);
     else if (row.type === "sell")
       net = toDecimal(Math.max(0, toNumber(net.minus(units))));
     else if (row.type === "split" && units.gt(0) && net.gt(0)) net = units; // absolute new total
@@ -319,7 +323,7 @@ async function getAccountLabel(accountId) {
  *  - investment-global otherwise (unassigned sell, or transition rule: the
  *    instrument still has unassigned lots).
  *
- * @param {{ investmentId: any, assetClass: any, type?: any, date?: any, units?: any, accountId?: any, excludeTransactionId?: any, excludeTransactionIds?: any[], omitCandidate?: boolean, checkProjectedHistory?: boolean }} params
+ * @param {{ investmentId: any, assetClass: any, type?: any, date?: any, units?: any, accountId?: any, candidate?: Record<string,any>, excludeTransactionId?: any, excludeTransactionIds?: any[], omitCandidate?: boolean, checkProjectedHistory?: boolean }} params
  */
 export async function validatePortfolioUnitMutation({
   investmentId,
@@ -328,12 +332,24 @@ export async function validatePortfolioUnitMutation({
   date,
   units,
   accountId,
+  candidate = {},
   excludeTransactionId,
   excludeTransactionIds = [],
   omitCandidate = false,
   checkProjectedHistory = false,
 }) {
   if (!UNIT_BASED_ASSET_CLASSES.has(assetClass)) return;
+  if (
+    ["buy", "gift"].includes(type) &&
+    accountId == null &&
+    !omitCandidate &&
+    !checkProjectedHistory &&
+    investmentId &&
+    (await hasAssetTransfersForInvestment(investmentId))
+  )
+    throw makeValidationError(
+      "Acquisitions must name their custody account when asset transfer history exists",
+    );
   if (type !== "sell" && !checkProjectedHistory) return;
   if (!investmentId || (!omitCandidate && !date)) return;
 
@@ -351,6 +367,7 @@ export async function validatePortfolioUnitMutation({
     : [
         ...retainedRows,
         {
+          ...candidate,
           id: excludedIds.has(numericExcludedId)
             ? numericExcludedId
             : Number.MAX_SAFE_INTEGER,
@@ -360,6 +377,16 @@ export async function validatePortfolioUnitMutation({
           account_id: accountId == null ? null : Number(accountId),
         },
       ];
+
+  if (
+    projectedRows.some((row) =>
+      ["asset_transfer", "asset_adjustment"].includes(row.type),
+    ) &&
+    !areLotsFullyAssigned(projectedRows)
+  )
+    throw makeValidationError(
+      "Acquisitions and sales must name their custody account when asset transfer history exists",
+    );
 
   const sellUnits = Number(units) || 0;
   const numericAccountId = accountId == null ? undefined : Number(accountId);

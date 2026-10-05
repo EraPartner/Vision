@@ -843,6 +843,9 @@ components:
       additionalProperties: true
       properties:
         id: { type: integer, format: int32 }
+        totalUnits:
+          type: number
+          description: Current units including custody fees and unit adjustments, rounded to eight decimal places.
         fullyAssigned:
           type: boolean
           description: False while any unit transaction remains unassigned to a broker account.
@@ -3790,6 +3793,116 @@ components:
           type: boolean
 
     # ─── Portfolio Import ─────────────────────────────────────────────────────
+    PortfolioImportReferenceResult:
+      type: object
+      required:
+        [
+          batch_ids,
+          matched_reference_rows,
+          source_corrections,
+          supplemental_batches,
+          replacement_batches,
+          blockers,
+        ]
+      properties:
+        batch_ids:
+          type: array
+          description: Effective complete review scope. Managed review batches replace explicitly selected terminal source batches when a separate rollback owner is required.
+          items:
+            {
+              type: integer,
+              format: int64,
+              minimum: 1,
+              maximum: 9007199254740991,
+            }
+        matched_reference_rows: { type: integer, minimum: 0 }
+        source_corrections: { type: integer, minimum: 0 }
+        coverage:
+          type: object
+          description: Secondary-reference coverage only; primary source completeness and projected holdings are validated separately before commit.
+          required:
+            [
+              referenceEvents,
+              matchedReferenceEvents,
+              unmatchedMappedReferenceEvents,
+              outsideSelectedReferenceEvents,
+              unmatchedPrimaryRows,
+              unmatchedLegacyRows,
+            ]
+          properties:
+            referenceEvents: { type: integer, minimum: 0 }
+            matchedReferenceEvents: { type: integer, minimum: 0 }
+            unmatchedMappedReferenceEvents: { type: integer, minimum: 0 }
+            outsideSelectedReferenceEvents: { type: integer, minimum: 0 }
+            unmatchedPrimaryRows: { type: integer, minimum: 0 }
+            unmatchedLegacyRows: { type: integer, minimum: 0 }
+        supplemental_batches:
+          type: array
+          items:
+            type: object
+            required:
+              [
+                batch_id,
+                account_id,
+                adapter_name,
+                source_filename,
+                status,
+                rows_total,
+              ]
+            properties:
+              batch_id: { type: integer, format: int64 }
+              account_id: { type: integer }
+              adapter_name: { type: string }
+              source_filename: { type: string }
+              status: { type: string }
+              rows_total: { type: integer, minimum: 0 }
+        replacement_batches:
+          type: array
+          description: Explicit original history to managed review batch relation; empty when no replacement is needed.
+          items:
+            type: object
+            required: [original_batch_id, review_batch_id]
+            properties:
+              original_batch_id: { type: integer, format: int64 }
+              review_batch_id: { type: integer, format: int64 }
+        blockers:
+          type: array
+          items:
+            type: object
+            required: [reason]
+            properties:
+              reason: { type: string }
+              rowOrdinal: { type: integer, minimum: 1 }
+              referenceTransactionId: { type: string }
+              accountId: { type: integer }
+              batchId: { type: integer, format: int64 }
+
+    PortfolioImportReconciliationCounts:
+      type: object
+      required: [imported, duplicates, adopted, repaired, errors]
+      properties:
+        imported: { type: integer, minimum: 0 }
+        duplicates: { type: integer, minimum: 0 }
+        adopted: { type: integer, minimum: 0 }
+        repaired: { type: integer, minimum: 0 }
+        errors: { type: integer, minimum: 0 }
+
+    PortfolioImportReconciliationCommitResult:
+      allOf:
+        - $ref: "#/components/schemas/PortfolioImportReconciliationCounts"
+        - type: object
+          required: [batches]
+          properties:
+            batches:
+              type: array
+              items:
+                allOf:
+                  - $ref: "#/components/schemas/PortfolioImportReconciliationCounts"
+                  - type: object
+                    required: [batch_id]
+                    properties:
+                      batch_id: { type: integer, format: int64 }
+
     PortfolioImportBatch:
       type: object
       required:
@@ -3851,21 +3964,50 @@ components:
         file:
           type: string
           format: binary
+          description: >-
+            CSV history or detailed Saxo XLSX workbook, maximum 50 MiB. XLSX
+            requires portfolio_format=saxo_transaction_history and the
+            Transacties, _Transacties, and Bookings sheets. Workbook archive,
+            identifier, and accounting detail validation runs before staging;
+            legacy XLS and unsupported workbooks reject with 400.
         adapter_name:
           type: string
           description: Display label for the import source
+        transfer_destination_account_id:
+          type: integer
+          minimum: 1
+          description: Optional active portfolio account receiving asset withdrawals. Must differ from the source account. Unresolved withdrawal destinations block reconciliation; no account is guessed.
+        transfer_origin_account_id:
+          type: integer
+          minimum: 1
+          description: Optional active portfolio account supplying incoming asset returns. Must differ from the statement account. Original acquisition lots and costs are carried; transfer-time market valuations are not purchase costs.
+        included_symbols:
+          type: string
+          maxLength: 500
+          description: Optional comma-separated exact adapter asset symbols. Omit for the full statement. Unselected parsed rows remain outside this batch and are counted in custom_config.scope_excluded_rows. Parse errors still block review. Literal source records and source identity are preserved.
+        yield_basis_policy:
+          type: string
+          enum: [zero]
+          description: Explicit known-zero cost for Kinesis distribution units and reversals. Income valuations remain recorded; unrelated original gifts and purchases retain their basis.
         portfolio_format:
           type: string
           enum:
             - ibkr_transaction_history
             - kinesis_transaction_history
             - nexo_transaction_history
+            - nexo_pro_spot_history
             - saxo_transaction_history
           description: >-
             Specialized portfolio statement parser; omit for generic column
-            mapping. Maintained IBKR, Kinesis, Nexo, and Saxo formats require
+            mapping. Maintained IBKR, Kinesis, Nexo, Nexo Pro, and Saxo formats require
             is_brokerage=true and account_id because their transaction histories
-            include or affect sleeve cash movements.
+            include or affect sleeve cash movements. Automatic source selection
+            is a frontend convenience; API callers provide this field. Saxo
+            accepts CSV and detailed XLSX; net-only CSV dividends remain review
+            errors because gross income and withholding taxes are unavailable.
+            Nexo Pro Spot uses filled quantities, execution prices and literal
+            fee currency. Its timestamp retains the exported calendar date;
+            the adapter does not establish that it is an execution timestamp.
         date_format:
           type: string
           description: "Python strptime format, default: %Y-%m-%d"
@@ -3933,6 +4075,18 @@ components:
               type: integer
               minimum: 1
               description: Optional active portfolio account used as the file-level broker destination.
+            transferDestinationAccountId:
+              type: integer
+              minimum: 1
+              description: Optional custody account receiving asset withdrawals.
+            transferOriginAccountId:
+              type: integer
+              minimum: 1
+              description: Optional custody account supplying incoming asset returns.
+            yieldBasisPolicy:
+              type: string
+              enum: [zero]
+              description: Optional explicit known-zero basis policy for Kinesis yield unit receipts and reversals.
         created_at:
           type: string
           format: date-time
@@ -4321,9 +4475,20 @@ paths:
                   required: [rows, columns, values]
                   properties:
                     rows: { type: array, maxItems: 3, items: { type: string } }
-                    columns: { type: array, maxItems: 3, items: { type: string } }
-                    values: { type: array, minItems: 1, maxItems: 8, items: { type: string } }
-                    filters: { type: array, items: { type: object, additionalProperties: true } }
+                    columns:
+                      { type: array, maxItems: 3, items: { type: string } }
+                    values:
+                      {
+                        type: array,
+                        minItems: 1,
+                        maxItems: 8,
+                        items: { type: string },
+                      }
+                    filters:
+                      {
+                        type: array,
+                        items: { type: object, additionalProperties: true },
+                      }
                 requestId: { type: string, minLength: 8, maxLength: 110 }
       responses:
         "200":
@@ -4346,9 +4511,23 @@ paths:
               type: object
               required: [operation, rows]
               properties:
-                operation: { type: string, enum: [prepare, time, scenarios, sensitivity, goal, formulas] }
-                rows: { type: array, maxItems: 1000, items: { type: object, additionalProperties: true } }
-                columns: { type: array, items: { type: object, additionalProperties: true } }
+                operation:
+                  {
+                    type: string,
+                    enum:
+                      [prepare, time, scenarios, sensitivity, goal, formulas],
+                  }
+                rows:
+                  {
+                    type: array,
+                    maxItems: 1000,
+                    items: { type: object, additionalProperties: true },
+                  }
+                columns:
+                  {
+                    type: array,
+                    items: { type: object, additionalProperties: true },
+                  }
                 complete: { type: boolean }
               additionalProperties: true
       responses:
@@ -4357,7 +4536,11 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Envelope" }
-        "400": { description: Invalid operation, partial population or resource limit exceeded }
+        "400":
+          {
+            description: Invalid operation,
+            partial population or resource limit exceeded,
+          }
 
   /api/analysis/cancel/{requestId}:
     parameters:
@@ -6776,6 +6959,7 @@ paths:
   /api/info/net-worth:
     get:
       summary: Get net worth summary
+      description: Holdings-only crypto_exchange and wallet accounts contribute portfolio value but no ledger cash to current totals, history, or the transaction-flow fallback. Ordinary brokerage cash remains eligible.
       operationId: getNetWorth
       tags: [Info]
       parameters:
@@ -8514,7 +8698,7 @@ paths:
   /api/aggregations/bank-balances:
     get:
       summary: Current balance per bank account
-      description: Account rows include the canonical numeric account_id for stable joins to account entities; bank_account remains the label and history-map key.
+      description: Account rows include the canonical numeric account_id for stable joins to account entities; bank_account remains the label and history-map key. Holdings-only crypto_exchange and wallet accounts are excluded from accounts, totals, and history; ordinary brokerage cash remains eligible.
       operationId: getBankBalances
       tags: [Aggregations]
       responses:
@@ -11070,8 +11254,12 @@ paths:
   # ─── Portfolio Import ─────────────────────────────────────────────────────────
   /api/portfolio/import/csv/custom:
     post:
-      summary: One-shot portfolio CSV import with custom mapping or a supported format
-      description: Mapping and brokerage fields are accepted in the multipart body.
+      summary: One-shot portfolio history import with custom mapping or a supported format
+      description: >-
+        Accepts CSV and detailed Saxo XLSX through the existing endpoint path.
+        Mapping and brokerage fields are accepted in the multipart body.
+        Workbook preflight rejects unsupported or inconsistent input before
+        creating a batch. Maintained formats always require staged review.
       operationId: portfolioImportCsvCustom
       tags: [PortfolioImport]
       requestBody:
@@ -11104,7 +11292,7 @@ paths:
                           errors:
                             type: integer
         "202":
-          description: Some rows unresolved — batch left in awaiting_review; client must use review endpoints then POST commit
+          description: Brokerage format, name matches, unresolved rows, or errors require review; batch left in awaiting_review before POST commit
           content:
             application/json:
               schema:
@@ -11128,8 +11316,13 @@ paths:
 
   /api/portfolio/import/csv/stream:
     post:
-      summary: SSE-streaming portfolio CSV import
-      description: Mapping and brokerage fields are accepted in the multipart body.
+      summary: SSE-streaming portfolio history import
+      description: >-
+        Accepts the same CSV or detailed Saxo XLSX multipart body as the one-shot
+        endpoint. Mapping and brokerage fields are accepted in the multipart
+        body. Workbook preflight runs before SSE headers or batch creation, so
+        unsupported or inconsistent input returns HTTP 400. Maintained formats
+        always require staged review.
       operationId: portfolioImportCsvStream
       tags: [PortfolioImport]
       requestBody:
@@ -11473,6 +11666,211 @@ paths:
         "404":
           description: Investment or requested row not found, belongs to another batch, is a cash row, or is no longer reviewable; no rows are changed
 
+  /api/portfolio/import/reconciliation/reference:
+    post:
+      summary: Stage Portfolio Performance reference facts for a selected import scope
+      operationId: applyPortfolioImportReference
+      tags: [PortfolioImport]
+      description: >-
+        Accepts one Portfolio Performance XML export, maximum 10 MiB. Resolves
+        literal securities, accounts, paired transfers and recorded basis without
+        following external XML entities. Primary broker executions and fees remain
+        authoritative. An explicit zero policy identifies nominal yield values as
+        placeholders. Proven missing events are staged in account-scoped batches.
+        Selected terminal prior imports can produce separate managed review batches
+        from persisted source provenance so repair rollback does not undo their
+        unrelated imported history. The returned batch_ids is the effective scope
+        for a new preview. This operation never commits portfolio history. Repeating
+        the same reference and original scope is idempotent; a changed XML requires
+        restaging. Blockers can accompany staged results and must be resolved before
+        commit.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [file, batch_ids, placeholder_basis_policy]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Portfolio Performance XML export; original portfolio files and CSVs are not supported here.
+                batch_ids:
+                  type: string
+                  description: JSON-encoded array of 1 to 100 positive safe-integer batch IDs explicitly selected for this import session.
+                placeholder_basis_policy:
+                  type: string
+                  enum: [zero]
+      responses:
+        "200":
+          description: Effective staged scope, source proof counts, supplemental metadata, prior-batch replacement relations and blockers.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        {
+                          $ref: "#/components/schemas/PortfolioImportReferenceResult",
+                        }
+        "400":
+          description: Malformed scope or XML, missing explicit basis policy, unsupported file, or safe size/depth/node limits exceeded.
+        "404":
+          description: A selected batch or account no longer exists.
+        "409":
+          description: Source scope changed, different reference already applied, or a selected source cannot be safely restaged; no partial staging retained.
+
+  /api/portfolio/import/reconciliation/preview:
+    post:
+      summary: Preview reconciliation across a complete portfolio statement scope
+      operationId: previewPortfolioImportReconciliation
+      tags: [PortfolioImport]
+      description: >-
+        Read-only plan across up to 100 staged batches. Detects source duplicates,
+        unique existing transactions, corrections, duplicate repairs, dated
+        transfers, asset fees, zero-basis yield reversals and blockers.
+        Omitted policy allows only exact adoption. Explicit policies require a
+        subsequent commit bound to this plan's fingerprint. No history is changed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [batch_ids]
+              properties:
+                batch_ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    {
+                      type: integer,
+                      format: int64,
+                      minimum: 1,
+                      maximum: 9007199254740991,
+                    }
+                adopt_policy:
+                  type: string
+                  enum: [preserve_existing, prefer_source]
+                  description: Preserve recorded facts, or use proven source facts while preserving known original transfer basis.
+                batch_policies:
+                  type: array
+                  maxItems: 100
+                  description: Explicit per-batch overrides of adopt_policy. Each selected batch may occur at most once; IDs outside batch_ids reject. The reviewed fingerprint binds the sorted overrides.
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [batch_id, adopt_policy]
+                    properties:
+                      batch_id:
+                        {
+                          type: integer,
+                          format: int64,
+                          minimum: 1,
+                          maximum: 9007199254740991,
+                        }
+                      adopt_policy:
+                        {
+                          type: string,
+                          enum: [preserve_existing, prefer_source],
+                        }
+      responses:
+        "200":
+          description: Review plan with batchIds, adoptPolicy, batchPolicies, planFingerprint, ready, actions, blockers and summary. Blocked plans still return 200.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "400":
+          description: Malformed scope or policy, missing batch, or non-reviewable scope
+
+  /api/portfolio/import/reconciliation/commit:
+    post:
+      summary: Atomically commit a reviewed portfolio statement scope
+      operationId: commitReviewedPortfolioImports
+      tags: [PortfolioImport]
+      description: >-
+        Locks and rechecks the complete source scope and projected history against
+        the reviewed fingerprint. Adopts existing records with permanent before
+        and after receipts, inserts missing events in global chronological order,
+        and records dated custody transfers and asset adjustments. Proven imported
+        copies of manual transactions are repaired with permanent dual-row receipts.
+        Any blocker or row failure rolls back the whole operation. Adopted records
+        retain their identity and notes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [batch_ids, expected_plan_fingerprint]
+              properties:
+                batch_ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    {
+                      type: integer,
+                      format: int64,
+                      minimum: 1,
+                      maximum: 9007199254740991,
+                    }
+                adopt_policy:
+                  type: string
+                  enum: [preserve_existing, prefer_source]
+                batch_policies:
+                  type: array
+                  maxItems: 100
+                  description: Exact selected per-batch overrides used by the reviewed preview.
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [batch_id, adopt_policy]
+                    properties:
+                      batch_id:
+                        {
+                          type: integer,
+                          format: int64,
+                          minimum: 1,
+                          maximum: 9007199254740991,
+                        }
+                      adopt_policy:
+                        {
+                          type: string,
+                          enum: [preserve_existing, prefer_source],
+                        }
+                expected_plan_fingerprint:
+                  type: string
+                  pattern: "^[a-f0-9]{64}$"
+                  description: Exact fingerprint returned by preview for this scope, global policy and per-batch overrides.
+      responses:
+        "200":
+          description: Aggregate and per-batch imported, duplicates, adopted, repaired and errors counts; errors is zero on success and repaired is always emitted including zero.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        {
+                          $ref: "#/components/schemas/PortfolioImportReconciliationCommitResult",
+                        }
+        "400":
+          description: Malformed request or non-reviewable scope
+        "404":
+          description: A requested batch or account no longer exists
+        "409":
+          description: Stale preview, ambiguous existing history, unresolved source facts, invalid projected history or atomic row failure; no changes retained
+
   /api/portfolio/import/batches/{id}/commit:
     parameters:
       - in: path
@@ -11484,7 +11882,12 @@ paths:
           minimum: 1
           maximum: 9007199254740991
     post:
-      summary: Commit a reviewed portfolio import batch — writes portfolio_transactions to DB
+      summary: Commit a reviewed portfolio import batch
+      description: >-
+        Maintained IBKR, Kinesis, Nexo, Nexo Pro and Saxo adapters preflight source
+        completeness and reconcile exact existing records atomically. Corrections
+        and multi-file review use the reconciliation preview and commit endpoints.
+        Generic partial imports retain their existing behavior.
       operationId: commitPortfolioImportBatch
       tags: [PortfolioImport]
       requestBody:
@@ -11502,7 +11905,7 @@ paths:
                   description: >-
                     Brokerage sleeve account (ADR-095) stamped on the batch, so
                     every lot it commits inherits it. `null` — or an absent
-                    field — leaves the batch without one. A present value must
+                    field — preserves the existing batch account. A present value must
                     be a positive integer naming an existing account; a
                     malformed one is rejected rather than coerced, since a
                     coerced id names a different account and passes the
@@ -11521,7 +11924,44 @@ paths:
         "404":
           description: Batch not found, or account_id names no account
         "409":
-          description: Batch is not in awaiting_review or matched status
+          description: >-
+            Maintained staging is incomplete, needs an explicit reconciliation
+            policy, overlaps ambiguous history, lacks proven basis or has invalid
+            projected holdings. No canonical changes are retained. Readiness
+            conflicts report a reason, count and one-based staging ordinals;
+            reconciliation conflicts report blockers and the reviewed plan state.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    required: [error]
+                    properties:
+                      error:
+                        type: object
+                        required: [code, message, details]
+                        properties:
+                          code: { type: string, enum: [CONFLICT] }
+                          message: { type: string }
+                          details:
+                            type: object
+                            required: [reason]
+                            properties:
+                              reason:
+                                type: string
+                              count: { type: integer, minimum: 0 }
+                              row_ordinals:
+                                type: array
+                                description: One-based staging row ordinals, including adapter-derived rows; not source-file line numbers.
+                                items: { type: integer, minimum: 1 }
+                              blockers:
+                                type: array
+                                items:
+                                  { type: object, additionalProperties: true }
+                              planFingerprint:
+                                type: string
+                                pattern: "^[a-f0-9]{64}$"
 
   # ─── Private Electron audit bridge ────────────────────────────────────────────
   /api/internal/audit/verify:

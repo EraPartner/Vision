@@ -104,7 +104,7 @@ function mockSnapshotQueries({
     }
     if (
       sql.includes("FROM portfolio_transactions pt") &&
-      sql.includes("ORDER BY pt.date::date")
+      sql.includes("ORDER BY events.date")
     ) {
       return { rows: transactions };
     }
@@ -158,6 +158,71 @@ describe("portfolioPerformanceSnapshotService", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+  it("carries custody and original FX across asset transfers without capital contribution", async () => {
+    mockSnapshotQueries({
+      investments: [
+        { id: 1, currency: "USD", current_price: 10, asset_class: "crypto" },
+      ],
+      transactions: [
+        {
+          id: 1,
+          investment_id: 1,
+          day: "2026-01-01",
+          type: "buy",
+          amount: 100,
+          units: 10,
+          currency: "USD",
+          fx_rate_to_eur: 0.5,
+          account_id: 1,
+        },
+        {
+          id: 2,
+          investment_id: 1,
+          day: "2026-01-01",
+          type: "buy",
+          amount: 100,
+          units: 10,
+          currency: "USD",
+          fx_rate_to_eur: 1,
+          account_id: 2,
+        },
+        {
+          id: 3,
+          investment_id: 1,
+          day: "2026-01-02",
+          type: "asset_transfer",
+          amount: 0,
+          units: 5,
+          fee_units: 1,
+          currency: "USD",
+          source_account_id: 1,
+          destination_account_id: 2,
+        },
+        {
+          id: 4,
+          investment_id: 1,
+          day: "2026-01-03",
+          type: "sell",
+          amount: 100,
+          units: 10,
+          currency: "USD",
+          fx_rate_to_eur: 1,
+          account_id: 2,
+        },
+      ],
+      prices: [
+        { investment_id: 1, day: "2026-01-01", close_price: 10 },
+        { investment_id: 1, day: "2026-01-02", close_price: 10 },
+      ],
+      fxRates: [{ currency_code: "USD", rate_to_eur: 1 }],
+      fxHistory: [{ currency_code: "USD", day: "2026-01-01", rate_to_eur: 1 }],
+    });
+    const snapshots = await computeAndStoreSnapshots("EUR");
+    expect(snapshots.map((row) => row.invested)).toEqual([150, 150, 50]);
+    expect(snapshots.map((row) => row.value)).toEqual([200, 190, 90]);
+    expect(snapshots[1].value_fx_neutral).toBe(145);
+    expect(snapshots[2].value_fx_neutral).toBeCloseTo(59.29, 2);
   });
 
   it("returns empty snapshot list when no first data date exists", async () => {
@@ -343,7 +408,7 @@ describe("portfolioPerformanceSnapshotService", () => {
         String(sql).includes("ORDER BY"),
     );
     expect(String(txCall[0])).toContain(
-      "CASE WHEN pt.type = 'sell' THEN 1 ELSE 0 END",
+      "CASE WHEN events.type = 'sell' THEN 1 ELSE 0 END",
     );
   });
 
