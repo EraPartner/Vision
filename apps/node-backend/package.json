@@ -39,6 +39,8 @@
     "multer": "^2.2.0",
     "pg": "^8.21.0",
     "puppeteer": "^25.3.0",
+    "read-excel-file": "9.3.10",
+    "saxes": "6.0.0",
     "yahoo-finance2": "^4.0.0",
     "zod": "^4.4.3"
   }
