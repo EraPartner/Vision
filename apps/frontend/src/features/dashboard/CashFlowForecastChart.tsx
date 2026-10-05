@@ -293,7 +293,7 @@ export function CashFlowForecastChart({
                                 variant="destructive"
                                 className="text-2xs px-1 py-0 h-4"
                             >
-                                err
+                                {t("cashflow.methodError")}
                             </Badge>
                         )}
                     </button>

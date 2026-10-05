@@ -305,10 +305,7 @@ export function LinkTransactionDialog({
                                 </Label>
                                 <Input
                                     id="tx-bank-account"
-                                    placeholder={
-                                        t("importPage.bankAccount") ||
-                                        "e.g., Main Account"
-                                    }
+                                    placeholder={t("importPage.bankAccount")}
                                     value={txFilters.bank_account}
                                     onChange={(e) =>
                                         setTxFilters({
@@ -324,10 +321,7 @@ export function LinkTransactionDialog({
                                 </Label>
                                 <Input
                                     id="tx-recipient"
-                                    placeholder={
-                                        t("recipientsPage.search") ||
-                                        "Partial recipient name"
-                                    }
+                                    placeholder={t("recipientsPage.search")}
                                     value={txFilters.recipient_name}
                                     onChange={(e) =>
                                         setTxFilters({

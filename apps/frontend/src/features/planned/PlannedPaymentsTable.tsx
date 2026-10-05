@@ -79,7 +79,7 @@ export function PlannedPaymentsTable({
     onToggleActive,
     onDelete,
 }: PlannedPaymentsTableProps) {
-    const { t } = useLanguage();
+    const { t, tc } = useLanguage();
     const rows = useMemo<PlannedPaymentRow[]>(
         () => payments.map((payment, index) => ({ ...payment, _idx: index })),
         [payments],
@@ -256,7 +256,12 @@ export function PlannedPaymentsTable({
                             <div className="flex flex-col gap-0.5">
                                 <div className="flex items-center gap-1.5">
                                     <Repeat className="h-3.5 w-3.5 text-primary" />
-                                    <span className="text-sm">{`loan(${row.loan_term_months} months)`}</span>
+                                    <span className="text-sm">
+                                        {tc(
+                                            "plannedPage.loanTerm",
+                                            row.loan_term_months,
+                                        )}
+                                    </span>
                                 </div>
                                 {(row.execution_count ?? 0) > 0 && (
                                     <span className="text-xs text-muted-foreground">
@@ -409,6 +414,7 @@ export function PlannedPaymentsTable({
             onRequestExecution,
             onToggleActive,
             t,
+            tc,
         ],
     );
 

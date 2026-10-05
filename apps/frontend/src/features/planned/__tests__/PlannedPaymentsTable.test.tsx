@@ -17,24 +17,38 @@ const translations = vi.hoisted<Record<string, string>>(() => ({
     "plannedPage.execute.linked": "Executed (linked to transaction #{n})",
     "plannedPage.freq.monthly": "Monthly",
     "plannedPage.loanBadge": "Loan",
+    "plannedPage.loanTerm.one": "Loan ({count} month)",
+    "plannedPage.loanTerm.other": "Loan ({count} months)",
     "plannedPage.oneTime": "One-time",
     "plannedPage.openLink": "Open related link",
     "plannedPage.statusActive": "Active",
     "plannedPage.statusPaused": "Paused",
 }));
 
-vi.mock("@/stores/hydration/LanguageHydration", () => ({
-    useLanguage: () => ({
-        t: (key: string, params?: Record<string, string | number>) => {
-            const template = translations[key] ?? key;
-            return Object.entries(params ?? {}).reduce(
-                (value, [name, replacement]) =>
-                    value.replace(`{${name}}`, String(replacement)),
-                template,
-            );
-        },
-    }),
-}));
+vi.mock("@/stores/hydration/LanguageHydration", () => {
+    const t = (key: string, params?: Record<string, string | number>) => {
+        const template = translations[key] ?? key;
+        return Object.entries(params ?? {}).reduce(
+            (value, [name, replacement]) =>
+                value.replace(`{${name}}`, String(replacement)),
+            template,
+        );
+    };
+    return {
+        useLanguage: () => ({
+            t,
+            tc: (
+                key: string,
+                count: number,
+                params?: Record<string, string | number>,
+            ) =>
+                t(`${key}.${count === 1 ? "one" : "other"}`, {
+                    count,
+                    ...params,
+                }),
+        }),
+    };
+});
 
 vi.mock("@/components/shared/Money", () => ({
     Money: ({ amount, currency }: { amount: number; currency?: string }) => (
@@ -239,7 +253,7 @@ describe("PlannedPaymentsTable", () => {
         expect(screen.getAllByRole("link")).toHaveLength(1);
         expect(screen.getByText("Every 9d")).toBeInTheDocument();
         expect(screen.getByText("One-time")).toBeInTheDocument();
-        expect(screen.getByText("loan(24 months)")).toBeInTheDocument();
+        expect(screen.getByText("Loan (24 months)")).toBeInTheDocument();
         expect(screen.getAllByText("Loan")).toHaveLength(2);
     });
 });

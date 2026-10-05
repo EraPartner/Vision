@@ -1412,7 +1412,16 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                                 <PopoverTrigger asChild>
                                                     <button
                                                         type="button"
-                                                        aria-label={`Filter ${col.header}`}
+                                                        aria-label={t(
+                                                            "aria.filterColumn",
+                                                            {
+                                                                header:
+                                                                    typeof col.header ===
+                                                                    "string"
+                                                                        ? col.header
+                                                                        : "",
+                                                            },
+                                                        )}
                                                         className={cn(
                                                             "icon-touch-target rounded transition-colors",
                                                             hasFilter

@@ -25,21 +25,21 @@ const PALETTE: string[] = [
     'hsl(322, 54%, 54%)', // magenta
 ];
 
-// Human-readable names for each palette swatch, keyed by its hsl() string, so
-// swatch buttons get a meaningful aria-label instead of raw CSS colour syntax.
-const PALETTE_NAMES: Record<string, string> = {
-    'hsl(355, 60%, 52%)': 'crimson',
-    'hsl(20, 68%, 52%)': 'coral',
-    'hsl(40, 64%, 50%)': 'amber',
-    'hsl(52, 62%, 46%)': 'gold',
-    'hsl(96, 42%, 42%)': 'moss',
-    'hsl(150, 50%, 38%)': 'emerald',
-    'hsl(174, 50%, 40%)': 'teal',
-    'hsl(192, 58%, 44%)': 'cyan',
-    'hsl(210, 62%, 50%)': 'azure',
-    'hsl(244, 46%, 58%)': 'indigo',
-    'hsl(280, 46%, 56%)': 'violet',
-    'hsl(322, 54%, 54%)': 'magenta',
+// Translation keys for each palette swatch's name, keyed by its hsl() string,
+// so swatch buttons get a meaningful aria-label instead of raw CSS colour syntax.
+const PALETTE_NAME_KEYS: Record<string, string> = {
+    'hsl(355, 60%, 52%)': 'tags.color.crimson',
+    'hsl(20, 68%, 52%)': 'tags.color.coral',
+    'hsl(40, 64%, 50%)': 'tags.color.amber',
+    'hsl(52, 62%, 46%)': 'tags.color.gold',
+    'hsl(96, 42%, 42%)': 'tags.color.moss',
+    'hsl(150, 50%, 38%)': 'tags.color.emerald',
+    'hsl(174, 50%, 40%)': 'tags.color.teal',
+    'hsl(192, 58%, 44%)': 'tags.color.cyan',
+    'hsl(210, 62%, 50%)': 'tags.color.azure',
+    'hsl(244, 46%, 58%)': 'tags.color.indigo',
+    'hsl(280, 46%, 56%)': 'tags.color.violet',
+    'hsl(322, 54%, 54%)': 'tags.color.magenta',
 };
 
 // Pick a random palette colour so new tags aren't all the first (green) swatch.
@@ -65,6 +65,7 @@ export interface TagChipProps {
 }
 
 export function TagChip({ tag, onRemove, inactive }: TagChipProps) {
+    const { t } = useLanguage();
     const style = tagChipStyle(tag.color);
     return (
         <Badge
@@ -81,7 +82,7 @@ export function TagChip({ tag, onRemove, inactive }: TagChipProps) {
                     // :focus-visible ring in index.css even on keyboard focus —
                     // restore a ring of our own rather than dropping it.
                     className="ml-0.5 -m-3.5 rounded-sm p-3.5 hover:opacity-70 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    aria-label={`Remove tag ${tag.slug}`}
+                    aria-label={t('aria.removeTag', { tag: tag.slug })}
                 >
                     <X className="h-3 w-3" />
                 </button>
@@ -260,7 +261,7 @@ export function TagInput({ 'aria-labelledby': ariaLabelledBy, value, onChange, d
                                                     )}
                                                     style={{ backgroundColor: color }}
                                                     onClick={(e) => { e.stopPropagation(); setPendingColor(color); }}
-                                                    aria-label={PALETTE_NAMES[color] ?? 'tag color'}
+                                                    aria-label={t(PALETTE_NAME_KEYS[color] ?? 'tags.color.generic')}
                                                 />
                                             ))}
                                         </div>

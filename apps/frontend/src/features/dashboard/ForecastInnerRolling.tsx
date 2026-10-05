@@ -74,7 +74,7 @@ function ForecastInnerRollingImpl({
                 x: parseLocalDateFromYmd(data.today),
                 color: "hsl(var(--muted-foreground))",
                 dashed: true,
-                label: t("cashflow.today") ?? "Today",
+                label: t("cashflow.today"),
             },
         ],
         [data.today, t],
