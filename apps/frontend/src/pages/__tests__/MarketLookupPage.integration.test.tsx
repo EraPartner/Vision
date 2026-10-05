@@ -264,6 +264,25 @@ describe("MarketLookupPage (integration)", () => {
                     links: [],
                 }),
             ),
+            // usePortfolio lists active holdings from the canonical summary,
+            // which the backend computes for every active investment.
+            http.get(`${API_BASE}/api/info/portfolio-summary`, () =>
+                ok({
+                    currency: "EUR",
+                    totals: {},
+                    byAccount: [],
+                    summaries: [
+                        {
+                            ...providerInvestment,
+                            assetClass: "crypto",
+                            originalCurrency: "EUR",
+                            currentPrice: 100,
+                            totalUnits: 0,
+                            currentValue: 0,
+                        },
+                    ],
+                }),
+            ),
             http.get(
                 `${API_BASE}/api/investments/:id/price-history`,
                 ({ request }) => {

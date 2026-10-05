@@ -4,7 +4,7 @@ import { screen } from "@testing-library/react";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { NetSummaryCard } from "@/features/dashboard/NetSummaryCard";
-import { ok } from "@/test/msw/handlers";
+import { ok, settingsWithBaselines } from "@/test/msw/handlers";
 import { server } from "@/test/msw/server";
 
 const API_BASE = "http://localhost:3002";
@@ -27,7 +27,7 @@ describe("NetSummaryCard income-versus-spending bar", () => {
   it("uses the active Dutch labels", async () => {
     server.use(
       http.get(`${API_BASE}/api/settings`, () =>
-        ok({ app_settings: { language: "nl" } }),
+        ok(settingsWithBaselines({ app_settings: { language: "nl" } })),
       ),
     );
 

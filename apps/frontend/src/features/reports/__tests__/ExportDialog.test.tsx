@@ -6,7 +6,7 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { ExportDialog } from "@/features/reports/ExportDialog";
 import { http } from "msw";
 import { server } from "@/test/msw/server";
-import { ok } from "@/test/msw/handlers";
+import { ok, settingsWithBaselines } from "@/test/msw/handlers";
 import * as reportsApi from "@/lib/api/reports";
 
 // jsdom does not implement these blob URL APIs
@@ -242,13 +242,15 @@ describe("ExportDialog", () => {
         async (type) => {
             server.use(
                 http.get("http://localhost:3002/api/settings", () =>
-                    ok({
-                        dashboard_settings: {
-                            exclusionScope: "statistics",
-                            excludedCategoryIds: [11, 12],
-                            excludedRecipientIds: [21],
-                        },
-                    }),
+                    ok(
+                        settingsWithBaselines({
+                            dashboard_settings: {
+                                exclusionScope: "statistics",
+                                excludedCategoryIds: [11, 12],
+                                excludedRecipientIds: [21],
+                            },
+                        }),
+                    ),
                 ),
             );
             const user = await openDialog();

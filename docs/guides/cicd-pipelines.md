@@ -2,7 +2,7 @@
 title: CI/CD Pipelines
 type: guide
 status: active
-date: 2026-10-04
+date: 2026-10-05
 tags:
   [
     guide,
@@ -50,7 +50,9 @@ and assets to catch new eager imports and total bundle growth.
 
 The backend runs the base JSDoc type check and a `noImplicitAny` check over every `src/` file.
 The latter compares diagnostics with `scripts/checkjs-ratchet-baseline.json`, which records the
-1,254 existing diagnostics measured on 2026-09-24 by file, code, message, and source line. A
+2,155 existing diagnostics measured on 2026-10-05 by file, code, message, and source line. That
+rebaseline accepted 912 diagnostics added since 2026-09-24, mostly in the portfolio import
+reconciliation and analysis workbench services, and removed 10 entries that no longer occur. A
 new diagnostic fails CI, including one in a newly added file. A corrected diagnostic also
 requires removal of its baseline entry, so the same error cannot silently return later.
 

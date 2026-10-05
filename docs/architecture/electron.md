@@ -2,8 +2,8 @@
 title: Electron Desktop Architecture
 type: architecture-doc
 status: active
-date: 2026-09-30
-updated: 2026-09-26
+date: 2026-10-05
+updated: 2026-10-05
 tags:
   [
     architecture,
@@ -1106,14 +1106,14 @@ The boot splash (`setSplashStatus()`) is now:
 - **First-frame prioritized** — after localization, the shell creates the window and starts loading the splash before it builds the native application menu, dock menu, and accent subscription. Those integrations remain ready before runtime startup but no longer block the first app-controlled frame.
 - **Theme-aware** — persists the resolved mode, surface, text, and primary colors. Dark mode derives its near-black tinted surface; light mode uses the real light surface and text instead of showing a dark splash before a light first frame. First launch uses the canonical emerald dark fallback.
 - **Branded** — the Vision mark appears above the spinner. The backend recovery page uses the same validated palette variables plus the champagne accent, so startup and failure states share one identity without weakening the error page Content Security Policy.
-- **Phase-narrating** — calls `setSplashStatus(text)` at four boot checkpoints:
-  - `splash.downloading` — packaged component or application-update phase
+- **Phase-narrating** — the splash opens on `splash.starting`, then `setSplashStatus(key)` narrates
+  two boot checkpoints:
   - `splash.startingServices` — native PostgreSQL and backend startup
   - `splash.waitingApp` — backend health-poll underway
 
-**i18n keys (en/nl):** `splash.downloading`, `splash.starting`, `splash.startingServices`, and
-`splash.waitingApp`. Keys flow through `i18n/source/*.json` to generated frontend and Electron
-locales via `generate-locales`.
+**i18n keys (en/nl):** `splash.starting`, `splash.startingServices`, and `splash.waitingApp`. Keys
+flow through `i18n/source/*.json` to generated frontend and Electron locales via
+`generate-locales`.
 
 ### Graceful Shutdown — Idle Keep-Alive Sockets (June 2026 — P4 fix)
 

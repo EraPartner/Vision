@@ -278,7 +278,7 @@ async function prepareSourceUpdateFixture({
   failInstall = false,
   failBunInstall = false,
   failElectronBinaryInstall = false,
-  bunVersion = "1.3.14",
+  bunVersion = "1.4.2",
 } = {}) {
   const temp = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision-source-updater-behavior-"),
@@ -581,7 +581,7 @@ test("source updater rejects an unexpected Bun version before changing files", a
       encoding: "utf8",
     });
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /require installed Bun 1\.3\.14/);
+    assert.match(result.stderr, /require installed Bun 1\.4\.2/);
     assert.equal(
       await fs.promises.readFile(
         path.join(fixture.destination, "tracked.txt"),

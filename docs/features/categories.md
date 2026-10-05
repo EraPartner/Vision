@@ -2,7 +2,7 @@
 title: Categories
 type: feature
 status: active
-date: 2026-09-27
+date: 2026-10-05
 tags: [feature, categories, transactions, organization, hierarchy]
 description: Parent-linked transaction categories with stable IDs, ordered paths, and legacy GENERAL:DETAIL compatibility
 aliases:
@@ -35,7 +35,7 @@ Each transaction can be assigned a category to support spending analysis, budget
 
 Status buttons identify the full category path and expose whether the category is active.
 Closing the edit, merge, or delete-confirmation dialog returns focus to the button that opened
-it. If that button has left the tree, focus returns to the Active Only / Showing All filter control.
+it. If that button has left the tree, focus returns to the Include inactive filter switch.
 
 ## Category Model
 

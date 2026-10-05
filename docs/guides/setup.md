@@ -2,7 +2,7 @@
 title: Setup Guide
 type: guide
 status: active
-date: 2026-10-04
+date: 2026-10-05
 tags:
   [
     guide,
@@ -29,7 +29,7 @@ sandbox; see [[docs/guides/devcontainer|Agent Sandbox Guide]].
 
 | Tool       | Version | Purpose                                                  |
 | ---------- | ------- | -------------------------------------------------------- |
-| Bun        | 1.3.14  | Workspaces, development, checks, and backend compilation |
+| Bun        | 1.4.2   | Workspaces, development, checks, and backend compilation |
 | Node.js    | 20+     | Electron packaging tools                                 |
 | Python     | 3.12    | Alembic and the packaged migration executable            |
 | PostgreSQL | 18.6    | Native development payload or disposable database checks |

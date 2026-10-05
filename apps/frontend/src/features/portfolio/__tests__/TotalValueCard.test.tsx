@@ -90,7 +90,7 @@ describe("TotalValueCard", () => {
         expect(source).toContain('from "@/features/portfolio/TotalValueCard"');
     });
 
-    it("keeps the Net Worth hero intrinsic instead of matching the breakdown height", () => {
+    it("keeps the Net Worth total centered beside its breakdown on one surface", () => {
         const source = readFileSync(
             join(
                 process.cwd(),
@@ -101,7 +101,10 @@ describe("TotalValueCard", () => {
         expect(source).not.toContain("[&>*]:h-full");
         expect(source).not.toMatch(/lg:row-span-[23]/);
         expect(source).toContain(
-            'className="grid items-start gap-4 lg:grid-cols-2 animate-stagger"',
+            '<CardContent variant="flush" className="grid lg:grid-cols-2">',
+        );
+        expect(source).toContain(
+            'className="flex min-w-0 flex-col justify-center gap-3 p-5 sm:p-6"',
         );
     });
 });

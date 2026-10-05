@@ -54,7 +54,7 @@ describe("BulkTagDialog", () => {
         await screen.findByRole("dialog");
         await pickFirstAddTag(user);
         await waitFor(() =>
-            expect(screen.getAllByText(/1 tags/i).length).toBeGreaterThan(0),
+            expect(screen.getAllByText(/1 selected/i).length).toBeGreaterThan(0),
         );
         rerender(
             <BulkTagDialog
@@ -75,7 +75,7 @@ describe("BulkTagDialog", () => {
 
         // Assert — still selected, and Apply is still enabled
         await screen.findByRole("dialog");
-        expect(screen.getAllByText(/1 tags/i).length).toBeGreaterThan(0);
+        expect(screen.getAllByText(/1 selected/i).length).toBeGreaterThan(0);
         expect(screen.getByRole("button", { name: /apply/i })).toBeEnabled();
     });
 
@@ -97,7 +97,7 @@ describe("BulkTagDialog", () => {
         await screen.findByRole("dialog");
         await pickFirstAddTag(user);
         await waitFor(() =>
-            expect(screen.getAllByText(/1 tags/i).length).toBeGreaterThan(0),
+            expect(screen.getAllByText(/1 selected/i).length).toBeGreaterThan(0),
         );
         await user.click(screen.getByRole("button", { name: /cancel/i }));
         expect(onOpenChange).toHaveBeenCalledWith(false);
@@ -120,7 +120,7 @@ describe("BulkTagDialog", () => {
 
         // Assert — nothing chosen, so Apply is disabled again
         await screen.findByRole("dialog");
-        expect(screen.queryByText(/1 tags/i)).not.toBeInTheDocument();
+        expect(screen.queryByText(/1 selected/i)).not.toBeInTheDocument();
         expect(screen.getByRole("button", { name: /apply/i })).toBeDisabled();
     });
 
@@ -208,7 +208,7 @@ describe("BulkTagDialog — form submit and combobox interference", () => {
 
         // The item got selected (trigger label flips to the count)…
         await waitFor(() =>
-            expect(screen.getAllByText(/1 tags/i).length).toBeGreaterThan(0),
+            expect(screen.getAllByText(/1 selected/i).length).toBeGreaterThan(0),
         );
         // …but cmdk's Enter never reached the form.
         expect(onApply).not.toHaveBeenCalled();

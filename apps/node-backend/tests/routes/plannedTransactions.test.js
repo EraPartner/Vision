@@ -1053,8 +1053,10 @@ describe("Planned Transaction Routes", () => {
           id: 1,
           is_recurring: true,
           recurrence_pattern: "monthly",
-          planned_date: new Date("2026-02-27T23:00:00Z"),
-          is_executed: false, // Brussels 2026-02-28
+          // pg reads a DATE as local midnight on any host; on the Brussels
+          // dev host this is the same instant as 2026-02-27T23:00:00Z.
+          planned_date: new Date(2026, 1, 28),
+          is_executed: false,
         })
         .mockResolvedValueOnce({ id: 1 });
       plannedTransactionRepository.executeAndAdvance.mockResolvedValue({
