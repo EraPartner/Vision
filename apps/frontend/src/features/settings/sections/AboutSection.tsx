@@ -20,6 +20,7 @@ import { useOnboarding } from "@/features/onboarding/useOnboarding";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useSettings } from "@/stores/hydration/SettingsHydration";
 import { apiClient } from "@/lib/api";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { cn } from "@/lib/utils";
 import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import {
@@ -53,6 +54,7 @@ export const AboutSection = memo(function AboutSection({
         useAppSettings();
     const { resetSettings } = useSettings();
     const queryClient = useQueryClient();
+    const { confirm, ConfirmDialog } = useConfirmDialog();
 
     const [updateStatus, setUpdateStatus] = useState<UpdateCheckStatus | null>(
         null,
@@ -147,7 +149,14 @@ export const AboutSection = memo(function AboutSection({
         }
     };
 
-    const handleResetAll = () => {
+    const handleResetAll = async () => {
+        const confirmed = await confirm({
+            title: t("settings.app.resetAllConfirm.title"),
+            description: t("settings.app.resetAllConfirm.desc"),
+            confirmLabel: t("settings.app.resetAllConfirm.action"),
+            variant: "destructive",
+        });
+        if (!confirmed) return;
         resetSettings();
         resetAppSettings(); // also clears the session tier override
         apiClient
@@ -405,13 +414,14 @@ export const AboutSection = memo(function AboutSection({
                     <Button
                         variant="outline"
                         size="sm"
-                        onClick={handleResetAll}
+                        onClick={() => void handleResetAll()}
                         className="text-destructive hover:text-destructive"
                     >
                         {t("settings.app.reset")}
                     </Button>
                 </SettingRow>
             </SettingsGroup>
+            <ConfirmDialog />
         </SettingsSection>
     );
 });
