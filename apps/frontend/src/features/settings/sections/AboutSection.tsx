@@ -300,6 +300,7 @@ export const AboutSection = memo(function AboutSection({
                                     rel="noopener noreferrer"
                                     className="shrink-0 opacity-70 transition-opacity hover:opacity-100"
                                     title={t("update.releaseNotes")}
+                                    aria-label={t("aria.openReleaseNotes")}
                                 >
                                     <ExternalLink className="h-3.5 w-3.5" />
                                 </a>
