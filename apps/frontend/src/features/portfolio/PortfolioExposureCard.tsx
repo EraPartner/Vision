@@ -68,7 +68,7 @@ export function PortfolioExposureCard({ currency }: { currency: string }) {
                       key: "cash",
                       amount: query.data.coveredCashValue,
                       percent: query.data.coveredCashWeightPercent,
-                      color: "bg-sky-500",
+                      color: "bg-info",
                   },
               ]
             : [];

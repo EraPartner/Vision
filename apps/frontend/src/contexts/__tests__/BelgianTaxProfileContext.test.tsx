@@ -4,7 +4,7 @@ import { type ReactNode } from "react";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { http } from "msw";
 import { server } from "@/test/msw/server";
-import { ok } from "@/test/msw/handlers";
+import { ok, settingsWithBaselines } from "@/test/msw/handlers";
 import { apiClient } from "@/lib/api";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { SettingsPreloadProvider } from "@/contexts/SettingsPreloadContext";
@@ -29,7 +29,11 @@ function makeWrapper() {
 
 describe("BelgianTaxProfileContext", () => {
     beforeEach(() => {
-        server.use(http.get(`${API_BASE}/api/settings`, () => ok({})));
+        server.use(
+            http.get(`${API_BASE}/api/settings`, () =>
+                ok(settingsWithBaselines({})),
+            ),
+        );
         vi.spyOn(apiClient, "saveSetting").mockResolvedValue(
             undefined as never,
         );
@@ -101,12 +105,14 @@ describe("BelgianTaxProfileContext", () => {
     it("merges preloaded profile data with defaults", async () => {
         server.use(
             http.get(`${API_BASE}/api/settings`, () =>
-                ok({
-                    belgian_tax_profile: {
-                        grossAnnualIncome: 60000,
-                        region: "brussels",
-                    },
-                }),
+                ok(
+                    settingsWithBaselines({
+                        belgian_tax_profile: {
+                            grossAnnualIncome: 60000,
+                            region: "brussels",
+                        },
+                    }),
+                ),
             ),
         );
         const { result } = renderHook(() => useBelgianTaxProfile(), {
@@ -235,21 +241,23 @@ describe("BelgianTaxProfileContext", () => {
         it("profileForYear returns the snapshot when present", async () => {
             server.use(
                 http.get(`${API_BASE}/api/settings`, () =>
-                    ok({
-                        belgian_tax_profile: {
-                            taxYear: 2026,
-                            grossAnnualIncome: 60000,
-                        },
-                        belgian_tax_profile_snapshots_v1: {
-                            2024: {
-                                ...{
-                                    taxYear: 2024,
-                                    grossAnnualIncome: 45000,
-                                    region: "wallonia",
+                    ok(
+                        settingsWithBaselines({
+                            belgian_tax_profile: {
+                                taxYear: 2026,
+                                grossAnnualIncome: 60000,
+                            },
+                            belgian_tax_profile_snapshots_v1: {
+                                2024: {
+                                    ...{
+                                        taxYear: 2024,
+                                        grossAnnualIncome: 45000,
+                                        region: "wallonia",
+                                    },
                                 },
                             },
-                        },
-                    }),
+                        }),
+                    ),
                 ),
             );
             const { result } = renderHook(() => useBelgianTaxProfile(), {

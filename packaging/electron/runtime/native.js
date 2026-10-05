@@ -1040,6 +1040,7 @@ function createNativeRuntime(options) {
               executable: options.auditKeychainHelper,
               runtimeId,
             }),
+          platform: options.auditPlatform,
         })
       : undefined;
   const sendAuditRequest = options.auditRequest || auditRequest;

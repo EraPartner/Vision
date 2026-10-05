@@ -8,7 +8,7 @@ Apple binaries.
 Contents
 
 - `launch.command` — double-clickable launcher that:
-  - requires the tested Bun 1.3.14 toolchain to be installed already
+  - requires the tested Bun 1.4.2 toolchain to be installed already
   - installs locked JavaScript dependencies without general lifecycle scripts
   - runs the known Electron binary installer explicitly when needed
   - prepares bundled PostgreSQL 18, the standalone migration runner, and the
@@ -26,7 +26,7 @@ How to use
 Requirements
 
 - macOS (Apple Silicon)
-- Bun 1.3.14 on `PATH` or at `~/.bun/bin/bun`. The launcher stops with a clear
+- Bun 1.4.2 on `PATH` or at `~/.bun/bin/bun`. The launcher stops with a clear
   message if it is missing or a different version; it never downloads and runs
   a shell installer.
 - PostgreSQL 18.6 build files from Postgres.app or Homebrew; the service does

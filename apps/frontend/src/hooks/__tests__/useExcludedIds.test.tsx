@@ -16,7 +16,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { delay, http } from "msw";
 
 import { server } from "@/test/msw/server";
-import { ok } from "@/test/msw/handlers";
+import { ok, settingsWithBaselines } from "@/test/msw/handlers";
 import { SettingsPreloadProvider } from "@/contexts/SettingsPreloadContext";
 import { SettingsProvider } from "@/stores/hydration/SettingsHydration";
 import { useSettingsStore, DEFAULT_DASHBOARD_SETTINGS } from "@/stores/settingsStore";
@@ -156,9 +156,11 @@ describe("useExcludedIds boot path", () => {
         server.use(
             http.get(`${API_BASE}/api/settings`, async () => {
                 await delay(120);
-                return ok([
-                    { key: "dashboard_settings", value: { excludedCategoryIds: [9] } },
-                ]);
+                return ok(
+                    settingsWithBaselines({
+                        dashboard_settings: { excludedCategoryIds: [9] },
+                    }),
+                );
             }),
         );
 

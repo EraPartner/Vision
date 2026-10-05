@@ -312,6 +312,7 @@ test("managed PostgreSQL initializes a private loopback-only cluster with argume
         decryptString: (value) => value.toString(),
       },
       auditWitness: fakeWitness(path.join(temp, "user-data")),
+      auditPlatform: "darwin",
       auditRequest: async (endpoint, payload) => {
         auditCalls.push({ endpoint, payload });
         return endpoint === "verify"
@@ -976,6 +977,9 @@ test("native seed SQL is applied transactionally with an argument array", async 
       repoRoot: path.resolve(__dirname, "..", "..", ".."),
       runtimeId,
       postgresBinDir: binDir,
+      bunPath: "/bin/echo",
+      alembicPath: "/bin/echo",
+      chromePath: "/bin/echo",
       runFile: async (executable, args) => {
         calls.push({ executable: path.basename(executable), args: [...args] });
         if (args[0] === "--version") {
@@ -1076,6 +1080,9 @@ test("native PostgreSQL readiness pins every probe to one loopback TCP port", as
       runtimeId: "vision_port_test",
       postgresBinDir: binDir,
       postgresPort: 55_432,
+      bunPath: "/bin/echo",
+      alembicPath: "/bin/echo",
+      chromePath: "/bin/echo",
       runFile: async (executable, args) => {
         calls.push({ executable: path.basename(executable), args });
         if (args[0] === "--version") {
@@ -1400,6 +1407,7 @@ test("native audit verification rejects a changed legacy cutover even with the s
     auditBridgeToken: "a".repeat(64),
     auditSafeStorage: safeStorage,
     auditWitness: fakeWitness(userDataDir),
+    auditPlatform: "darwin",
     auditRequest: async (endpoint) => {
       assert.equal(endpoint, "verify");
       return {
@@ -1444,6 +1452,7 @@ test("native audit read supplies the external receipt and rejects mismatched cut
     auditBridgeToken: "a".repeat(64),
     auditSafeStorage: safeStorage,
     auditWitness: fakeWitness(userDataDir),
+    auditPlatform: "darwin",
     auditRequest: async (endpoint, payload) => {
       assert.equal(endpoint, "read");
       assert.deepEqual(payload.trustedCheckpoint, {
@@ -1528,6 +1537,7 @@ test("explicit enrollment of an existing chain records a forward-looking baselin
     auditBridgeToken: "a".repeat(64),
     auditSafeStorage: safeStorage,
     auditWitness: witness,
+    auditPlatform: "darwin",
     auditRequest: async (endpoint, payload) => {
       if (endpoint === "checkpoint") {
         recorded.push(payload);
@@ -1590,6 +1600,7 @@ test("native startup leaves a verified but unanchored tail unpromoted", async (t
     auditBridgeToken: "a".repeat(64),
     auditSafeStorage: safeStorage,
     auditWitness: fakeWitness(userDataDir),
+    auditPlatform: "darwin",
     auditRequest: async () => ({
       status: "partially_verified",
       sequence: 1,
@@ -1633,6 +1644,7 @@ test("verified live session closes an honest write before same-device restore", 
     auditBridgeToken: "a".repeat(64),
     auditSafeStorage: safeStorage,
     auditWitness: fakeWitness(userDataDir),
+    auditPlatform: "darwin",
     auditRequest: async (endpoint, payload) => {
       if (endpoint === "checkpoint") {
         recorded.push(payload);
@@ -1696,6 +1708,7 @@ test("transient first audit request can retry and establish the live session", a
     auditBridgeToken: "a".repeat(64),
     auditSafeStorage: safeStorage,
     auditWitness: fakeWitness(userDataDir),
+    auditPlatform: "darwin",
     auditRequest: async () => {
       attempts += 1;
       if (attempts === 1) throw new Error("temporary bridge failure");
@@ -1895,6 +1908,7 @@ test("explicit restore recovery accepts a checked older or inter-tick chain with
     auditBridgeToken: "a".repeat(64),
     auditSafeStorage: safeStorage,
     auditWitness: fakeWitness(userDataDir),
+    auditPlatform: "darwin",
     auditRequest: async (endpoint, payload) => {
       assert.equal(endpoint, "verify");
       if (payload.trustedCheckpoint) {
@@ -2155,6 +2169,9 @@ test("native custom dump validation rejects corrupt or truncated input", async (
       repoRoot: path.resolve(__dirname, "..", "..", ".."),
       runtimeId: "vision_corrupt_dump",
       postgresBinDir: binDir,
+      bunPath: "/bin/echo",
+      alembicPath: "/bin/echo",
+      chromePath: "/bin/echo",
       runFile: async (executable, args) => {
         if (args[0] === "--version") {
           return {

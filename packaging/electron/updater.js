@@ -275,7 +275,7 @@ function writeInstallerScript({
     `HOST_PID=${hostPid}`,
     'BAK_DIR="$(dirname "$DEST_ROOT")/.vision_update_bak_$$"',
     'PROTECT_FILE="${BAK_DIR}.protect"',
-    'BUN_VERSION="1.3.14"',
+    'BUN_VERSION="1.4.2"',
     'DEPENDENCY_DIRS=("node_modules" "apps/frontend/node_modules" "apps/node-backend/node_modules" "packages/shared-utils/node_modules" "packages/types/node_modules" "packaging/electron/node_modules")',
     "INSTALL_STARTED=0",
     "",

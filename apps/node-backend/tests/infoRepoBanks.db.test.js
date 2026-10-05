@@ -11,9 +11,12 @@
  * `accounts` population gates (type/in_net_worth/transaction_count), the 12-month
  * daily history LATERAL, and FX conversion off seeded `exchange_rates` rows.
  *
- * Determinism: both statements are anchored on `CURRENT_DATE`, so fixtures are
- * dated by SQL expressions relative to it (never by a literal calendar date) and
- * the expectations are computed from the same anchors the queries use.
+ * Determinism: both statements are anchored on today's APP_TIMEZONE date
+ * (`todayAppDateString()`), so fixtures are dated by SQL expressions relative to
+ * it (never by a literal calendar date) and the expectations are computed from
+ * the same anchor. Fixture SQL spells the anchor `CURRENT_DATE`; `appDated`
+ * swaps in the app date, because the session's CURRENT_DATE follows the
+ * cluster time zone and is a different day for part of every night.
  *
  * The materialized views are not involved here (this repository has no MV fast
  * path); the currency memory cache is cleared around every test so no test sees
@@ -32,14 +35,20 @@ import { banksRepository } from "../src/repositories/infoRepositoryBanks.js";
 import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.js";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.js";
 import { closePool } from "../src/database/connection.js";
+import { todayAppDateString } from "../src/lib/timezone.js";
 
 const rec = {};
+
+/** Replace `CURRENT_DATE` in fixture SQL with the repository's "today". */
+function appDated(sql) {
+  return sql.replaceAll("CURRENT_DATE", `'${todayAppDateString()}'::date`);
+}
 
 /** 'YYYY-MM-DD' for `CURRENT_DATE + <sqlInterval>` (empty string = today). */
 async function ymdFromToday(sqlInterval = "") {
   const expr = sqlInterval ? `CURRENT_DATE ${sqlInterval}` : "CURRENT_DATE";
   const { rows } = await getTestPool().query(
-    `SELECT to_char((${expr})::date, 'YYYY-MM-DD') AS d`,
+    `SELECT to_char((${appDated(expr)})::date, 'YYYY-MM-DD') AS d`,
   );
   return rows[0].d;
 }
@@ -86,8 +95,8 @@ async function addAccount(
 
 /**
  * Insert one transaction via plain SQL. `date` is a SQL expression evaluated
- * server-side so fixtures stay anchored to the same CURRENT_DATE the queries
- * under test use. `balance` NULL means "not stamped by a bank import" — the
+ * server-side, with `CURRENT_DATE` meaning the same app date the queries under
+ * test use. `balance` NULL means "not stamped by a bank import" — the
  * distinction the anchor+delta lateral exists for.
  */
 async function insertTxn({
@@ -100,7 +109,7 @@ async function insertTxn({
 }) {
   const { rows } = await getTestPool().query(
     `INSERT INTO transactions (date, amount, currency, recipient_id, account_id, balance, is_active)
-     VALUES ((${dateExpr})::date, $1, $2, $3,
+     VALUES ((${appDated(dateExpr)})::date, $1, $2, $3,
              (SELECT id FROM accounts WHERE lower(btrim(name)) = lower(btrim($4))),
              $5, $6) RETURNING id`,
     [amount, currency, rec.misc, bank, balance, isActive],
@@ -112,7 +121,7 @@ async function insertTxn({
 async function insertRate(code, dateExpr, rate, isLatest = true) {
   await getTestPool().query(
     `INSERT INTO exchange_rates (currency_code, rate_date, rate_to_eur, is_latest)
-     VALUES ($1, (${dateExpr})::date, $2, $3)`,
+     VALUES ($1, (${appDated(dateExpr)})::date, $2, $3)`,
     [code, rate, isLatest],
   );
 }
@@ -410,7 +419,9 @@ describe.skipIf(!hasTestDatabase())(
         const points = r.history["OLD STAMP"];
         // generate_series(CURRENT_DATE - 12 months, CURRENT_DATE, 1 day) inclusive.
         const { rows } = await getTestPool().query(
-          `SELECT (CURRENT_DATE - (CURRENT_DATE - interval '12 months')::date + 1) AS n`,
+          appDated(
+            `SELECT (CURRENT_DATE - (CURRENT_DATE - interval '12 months')::date + 1) AS n`,
+          ),
         );
         expect(points).toHaveLength(Number(rows[0].n));
         expect(points[0].date).toBe(

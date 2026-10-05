@@ -6,7 +6,7 @@ import { http, HttpResponse } from "msw";
 import { toast } from "sonner";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { err, ok } from "@/test/msw/handlers";
+import { err, ok, settingsWithBaselines } from "@/test/msw/handlers";
 import ImportPage from "@/pages/ImportPage";
 
 const API_BASE = "http://localhost:3002";
@@ -98,7 +98,11 @@ describe("ImportPage (integration)", () => {
         async (count, importedCopy, detailsCopy) => {
             server.use(
                 http.get(`${API_BASE}/api/settings`, () =>
-                    ok({ app_settings: { language: "nl" } }),
+                    ok(
+                        settingsWithBaselines({
+                            app_settings: { language: "nl" },
+                        }),
+                    ),
                 ),
             );
             renderWithApp(<ImportPage />, {

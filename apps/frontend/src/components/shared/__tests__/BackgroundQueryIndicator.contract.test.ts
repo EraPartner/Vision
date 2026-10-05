@@ -19,6 +19,9 @@ describe("background query cue adoption", () => {
         const srcRoot = join(process.cwd(), "src");
         const violations = sourceFiles(srcRoot).flatMap((path) => {
             const source = readFileSync(path, "utf8");
+            // Only a file that mentions placeholderData can fail; parsing all of
+            // src under coverage takes longer than the default test timeout.
+            if (!source.includes("placeholderData")) return [];
             const sourceFile = ts.createSourceFile(
                 path,
                 source,
