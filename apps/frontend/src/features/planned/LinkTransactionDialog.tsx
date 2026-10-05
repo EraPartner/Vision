@@ -163,6 +163,9 @@ export function LinkTransactionDialog({
         setActionLoading(true);
         try {
             await onExecute(payment.id, selectedTxId, execDate);
+            toast.success(
+                t("plannedPage.toast.executed", { name: payment.name }),
+            );
             handleClose();
         } catch (err) {
             logger.error("Failed to link/execute planned payment:", err);
