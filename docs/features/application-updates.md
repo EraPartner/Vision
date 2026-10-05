@@ -2,7 +2,7 @@
 title: Application Updates
 type: feature
 status: active
-date: 2026-09-24
+date: 2026-10-05
 tags: [feature, updates, electron, native-runtime, backup, checksum, release]
 description: Native packaged and source-launcher update paths with backup, checksum verification, and rollback boundaries.
 aliases: [update system, application updater]
@@ -58,10 +58,10 @@ launcher validates the target checkout and performs the repository-specific upda
 running Electron process. Development mode reports update availability without treating a working
 tree as a packaged application.
 
-The source installer looks for Bun 1.3.14 on `PATH` or in `~/.bun/bin` before changing the
+The source installer looks for Bun 1.4.2 on `PATH` or in `~/.bun/bin` before changing the
 checkout. It keeps a source and dependency backup until the frozen, script-disabled root and
 Electron dependency installs succeed and the pinned Electron binary is present. It restores the
-source and dependencies if a copy or install fails. The launcher also requires Bun 1.3.14,
+source and dependencies if a copy or install fails. The launcher also requires Bun 1.4.2,
 installs from committed lockfiles with general lifecycle scripts disabled, and runs the known
 Electron binary installer explicitly when needed. It does not run a fetched shell installer.
 

@@ -41,7 +41,7 @@ fi
 
 # Bun version this project is built and tested against. Keep in step with
 # .github/actions/setup/action.yml's bun-version default.
-BUN_VERSION="1.3.14"
+BUN_VERSION="1.4.2"
 if ! command -v bun >/dev/null 2>&1 && [ -x "$HOME/.bun/bin/bun" ]; then
   export PATH="$HOME/.bun/bin:$PATH"
 fi
