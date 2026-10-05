@@ -92,6 +92,24 @@ describe("Portfolio pages (integration)", () => {
                     links: [],
                 }),
             ),
+            http.get(`${API_BASE}/api/info/portfolio-summary`, () =>
+                ok({
+                    currency: "EUR",
+                    computed_at: "2025-01-15T10:00:00Z",
+                    totals: {},
+                    byAccount: [],
+                    summaries: [
+                        {
+                            ...PORTFOLIO_INVESTMENT,
+                            ...INVESTMENT_STUB,
+                            originalCurrency: "EUR",
+                            fullyAssigned: true,
+                            oversold: false,
+                            byAccount: [],
+                        },
+                    ],
+                }),
+            ),
         );
 
         renderWithApp(<StocksPage />);

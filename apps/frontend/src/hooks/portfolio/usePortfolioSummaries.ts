@@ -2,16 +2,15 @@
  * Composes investment queries + shared calculations into InvestmentSummary[].
  * Provides totals and byAssetClass() filtered view.
  *
- * The per-investment math is @vision/shared-utils/portfolio's
- * buildInvestmentSummaryCorePartitioned — the same implementation the backend summary
- * service runs — so the two sides cannot drift. This hook only adds FX
- * conversion to the app's display currency, rounding via toNumber, and the
- * InvestmentSummary shape.
+ * Active production holdings use canonical backend summaries, which include
+ * custody and asset adjustments. Ordinary CRUD transactions stay attached for
+ * dialogs. Archived holdings retain their existing local history calculation.
  */
 
 import { useCallback, useMemo } from "react";
 import type { AssetClass, Investment, PortfolioTransaction } from "@/types/api";
 import type { InvestmentSummary } from "@/types/portfolio";
+import type { PortfolioSummaryItem } from "@/lib/api/info";
 import {
     buildInvestmentSummaryCorePartitioned,
     type CostBasisMethod,
@@ -80,6 +79,7 @@ function buildSummary(
         totalSellProceeds: conv(core.totalSellProceeds),
         fullyAssigned,
         oversold: core.oversold,
+        summarySource: "local",
         transactions: txns,
     } as InvestmentSummary;
 }
@@ -87,6 +87,9 @@ function buildSummary(
 interface UsePortfolioSummariesInput {
     investments: Investment[];
     transactions: PortfolioTransaction[];
+    canonicalSummaries?: PortfolioSummaryItem[];
+    /** Hide active ordinary-only calculations while canonical data is unavailable. */
+    requireCanonical?: boolean;
 }
 
 // Stable empty result so a single-class lookup with no matches keeps its
@@ -96,6 +99,8 @@ const EMPTY_SUMMARIES: InvestmentSummary[] = [];
 export function usePortfolioSummaries({
     investments,
     transactions,
+    canonicalSummaries,
+    requireCanonical = false,
 }: UsePortfolioSummariesInput) {
     const { appSettings } = useAppSettings();
     const { multiplierFor } = useExchangeRates();
@@ -112,23 +117,47 @@ export function usePortfolioSummaries({
         }
 
         const today = todayYmd();
-        return investments.map((inv) =>
-            buildSummary(inv, txnsByInvestment.get(inv.id) ?? [], {
-                costBasisMethod,
-                targetCurrency,
-                multiplier: multiplierFor(
-                    inv.currency || "EUR",
-                    targetCurrency,
-                ),
-                today,
-            }),
+        const canonicalById = new Map(
+            (canonicalSummaries ?? []).map((summary) => [summary.id, summary]),
         );
+        return investments.flatMap((inv) => {
+            const txns = txnsByInvestment.get(inv.id) ?? [];
+            if (inv.is_active && (requireCanonical || canonicalSummaries)) {
+                const canonical = canonicalById.get(inv.id);
+                if (!canonical) return [];
+                return [
+                    {
+                        ...inv,
+                        ...canonical,
+                        assetClass: inv.asset_class,
+                        asset_class: inv.asset_class,
+                        price_provider: inv.price_provider,
+                        current_price: inv.current_price,
+                        summarySource: "canonical" as const,
+                        transactions: txns,
+                    },
+                ];
+            }
+            return [
+                buildSummary(inv, txns, {
+                    costBasisMethod,
+                    targetCurrency,
+                    multiplier: multiplierFor(
+                        inv.currency || "EUR",
+                        targetCurrency,
+                    ),
+                    today,
+                }),
+            ];
+        });
     }, [
         investments,
         transactions,
         costBasisMethod,
         targetCurrency,
         multiplierFor,
+        canonicalSummaries,
+        requireCanonical,
     ]);
 
     const summaries = useMemo(

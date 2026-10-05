@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
-import { screen, act, within } from "@testing-library/react";
+import { screen, act, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
@@ -9,6 +9,37 @@ import { ok, err, INVESTMENT_STUB } from "@/test/msw/handlers";
 import PortfolioOverviewPage from "@/pages/portfolio/PortfolioOverviewPage";
 
 const API_BASE = "http://localhost:3002";
+const CANONICAL_INVESTMENT = {
+    ...INVESTMENT_STUB,
+    assetClass: "etf",
+    originalCurrency: "EUR",
+    totalUnits: 0,
+    totalInvested: 0,
+    totalBuyCost: 0,
+    totalSellProceeds: 0,
+    currentPrice: 95.5,
+    currentValue: 0,
+    totalFees: 0,
+    totalTaxes: 0,
+    totalDividends: 0,
+    totalIncome: 0,
+    avgCostBasis: 0,
+    realizedGain: 0,
+    unrealizedGain: 0,
+    totalGain: 0,
+    gainLoss: 0,
+    gainLossPercent: 0,
+    assetGain: 0,
+    fxGain: 0,
+    nativeCurrentValue: 0,
+    usedFallbackRate: false,
+    accruedInterest: 0,
+    projectedAnnualInterest: 0,
+    totalAppreciation: 0,
+    fullyAssigned: true,
+    oversold: false,
+    byAccount: [],
+};
 
 describe("PortfolioOverviewPage (integration)", () => {
     it("renders page heading", async () => {
@@ -198,7 +229,7 @@ describe("PortfolioOverviewPage (integration)", () => {
         ).toBeInTheDocument();
     });
 
-    it("still shows investment list when portfolio summary API fails", async () => {
+    it("shows a canonical summary error without invented holdings when the API fails", async () => {
         server.use(
             http.get(`${API_BASE}/api/investments`, () =>
                 ok({
@@ -217,28 +248,19 @@ describe("PortfolioOverviewPage (integration)", () => {
             ),
         );
         renderWithApp(<PortfolioOverviewPage />);
-        expect(await screen.findByText(/msci world etf/i)).toBeInTheDocument();
+        expect(await screen.findByText("Server error")).toBeVisible();
+        expect(screen.queryByText(/msci world etf/i)).not.toBeInTheDocument();
         expect(
-            screen.getByRole("combobox", {
-                name: "Filter investments by broker",
-            }),
-        ).toBeDisabled();
-        expect(
-            await screen.findByText("Broker subtotals are unavailable."),
-        ).toBeVisible();
-        const investmentsCard = screen
-            .getByRole("heading", { name: "All Investments" })
-            .closest(".glass-thin") as HTMLElement;
-        expect(
-            within(investmentsCard).queryByText("Holdings"),
+            screen.queryByRole("heading", { name: /no investments yet/i }),
         ).not.toBeInTheDocument();
     });
 
-    it("keeps the broker filter disabled while the summary is pending", async () => {
+    it("shows loading instead of a false empty portfolio while the summary is pending", async () => {
         let releaseSummary!: () => void;
         const pending = new Promise<void>((resolve) => {
             releaseSummary = resolve;
         });
+        let requested = false;
         server.use(
             http.get(`${API_BASE}/api/investments`, () =>
                 ok({
@@ -250,22 +272,25 @@ describe("PortfolioOverviewPage (integration)", () => {
                 }),
             ),
             http.get(`${API_BASE}/api/info/portfolio-summary`, async () => {
+                requested = true;
                 await pending;
                 return err(500, "Server error");
             }),
         );
 
         renderWithApp(<PortfolioOverviewPage />);
-        const filter = await screen.findByRole("combobox", {
-            name: "Filter investments by broker",
-        });
-        expect(filter).toBeDisabled();
-        expect(screen.getByText("Calculating broker subtotals…")).toBeVisible();
+        await waitFor(() => expect(requested).toBe(true));
+        expect(
+            screen.queryByRole("combobox", {
+                name: "Filter investments by broker",
+            }),
+        ).not.toBeInTheDocument();
+        expect(
+            screen.queryByRole("heading", { name: /no investments yet/i }),
+        ).not.toBeInTheDocument();
 
         releaseSummary();
-        expect(
-            await screen.findByText("Broker subtotals are unavailable."),
-        ).toBeVisible();
+        expect(await screen.findByText("Server error")).toBeVisible();
     });
 
     it("shows the live-price as-of caption with the portfolio total", async () => {
@@ -279,6 +304,15 @@ describe("PortfolioOverviewPage (integration)", () => {
                     links: [],
                 }),
             ),
+            http.get(`${API_BASE}/api/info/portfolio-summary`, () =>
+                ok({
+                    currency: "EUR",
+                    computed_at: "2025-01-15T10:00:00Z",
+                    totals: {},
+                    byAccount: [],
+                    summaries: [CANONICAL_INVESTMENT],
+                }),
+            ),
         );
 
         renderWithApp(<PortfolioOverviewPage />);
@@ -289,6 +323,9 @@ describe("PortfolioOverviewPage (integration)", () => {
     it("filters instruments by exact server broker partitions and shows matching subtotals", async () => {
         const user = userEvent.setup();
         server.use(
+            http.get(`${API_BASE}/api/investments/exposure`, () =>
+                err(503, "Exposure unavailable"),
+            ),
             http.get(`${API_BASE}/api/investments`, () =>
                 ok({
                     items: [
@@ -340,6 +377,7 @@ describe("PortfolioOverviewPage (integration)", () => {
                     },
                     summaries: [
                         {
+                            ...CANONICAL_INVESTMENT,
                             id: 1,
                             name: "Fund A",
                             currency: "EUR",
@@ -376,6 +414,7 @@ describe("PortfolioOverviewPage (integration)", () => {
                             ],
                         },
                         {
+                            ...CANONICAL_INVESTMENT,
                             id: 2,
                             name: "Fund B",
                             currency: "EUR",
@@ -429,8 +468,12 @@ describe("PortfolioOverviewPage (integration)", () => {
         );
         renderWithApp(<PortfolioOverviewPage />);
 
-        expect(await screen.findByText("Fund A")).toBeInTheDocument();
-        expect(screen.getByText("Fund B")).toBeInTheDocument();
+        const investmentsCard = (
+            await screen.findByRole("heading", { name: "All Investments" })
+        ).closest(".glass-thin") as HTMLElement;
+        const listed = within(investmentsCard);
+        expect(listed.getByText("Fund A")).toBeInTheDocument();
+        expect(listed.getByText("Fund B")).toBeInTheDocument();
         expect(screen.getByText("Oversold broker")).toBeInTheDocument();
         await user.click(
             screen.getByRole("combobox", {
@@ -441,12 +484,9 @@ describe("PortfolioOverviewPage (integration)", () => {
             await screen.findByRole("option", { name: "Broker A" }),
         );
 
-        expect(screen.getByText("Fund A")).toBeInTheDocument();
-        expect(screen.queryByText("Fund B")).not.toBeInTheDocument();
+        expect(listed.getByText("Fund A")).toBeInTheDocument();
+        expect(listed.queryByText("Fund B")).not.toBeInTheDocument();
         expect(screen.queryByText("Oversold broker")).not.toBeInTheDocument();
-        const investmentsCard = screen
-            .getByRole("heading", { name: "All Investments" })
-            .closest(".glass-thin") as HTMLElement;
         expect(
             within(investmentsCard).getByText(/Holdings/).parentElement,
         ).toHaveTextContent(/700,00/);
@@ -462,8 +502,8 @@ describe("PortfolioOverviewPage (integration)", () => {
         await user.click(
             await screen.findByRole("option", { name: "Unassigned" }),
         );
-        expect(screen.queryByText("Fund A")).not.toBeInTheDocument();
-        expect(screen.getByText("Fund B")).toBeInTheDocument();
+        expect(listed.queryByText("Fund A")).not.toBeInTheDocument();
+        expect(listed.getByText("Fund B")).toBeInTheDocument();
         expect(
             within(investmentsCard).getByText(/Holdings/).parentElement,
         ).toHaveTextContent(/50,00/);
@@ -477,7 +517,7 @@ describe("PortfolioOverviewPage (integration)", () => {
             }),
         );
         await user.click(await screen.findByRole("option", { name: "#30" }));
-        expect(screen.getByText("Fund B")).toBeInTheDocument();
+        expect(listed.getByText("Fund B")).toBeInTheDocument();
         expect(
             within(investmentsCard).getByText(/Holdings/).parentElement,
         ).toHaveTextContent(/25,00/);

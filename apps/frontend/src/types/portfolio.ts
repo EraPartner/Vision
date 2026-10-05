@@ -140,6 +140,8 @@ export interface InvestmentSummary {
     fullyAssigned?: boolean;
     /** Existing invalid partition data is clamped but surfaced for repair. */
     oversold?: boolean;
+    /** Canonical summaries include custody; local summaries contain CRUD history only. */
+    summarySource?: "canonical" | "local";
 
     transactions: PortfolioTransaction[];
     // ── Belgian tax classification (optional overrides used by the PortfolioTaxPage) ──

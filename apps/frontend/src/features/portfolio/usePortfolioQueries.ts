@@ -3,6 +3,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
 import type { ChartPeriod } from "@/components/charts";
 import { apiClient } from "@/lib/api";
+import { listPortfolioImportBatches } from "@/lib/api/portfolioImports";
 import { getMarketQuotes, searchMarket } from "@/lib/api/market";
 import { netWorthKeys, portfolioKeys } from "@/lib/queryKeys";
 import { useBackgroundQueryCue } from "@/components/shared/BackgroundQueryIndicator";
@@ -160,6 +161,16 @@ export function useRebalanceInputs(currency: string) {
 
 export const portfolioImportPreviewKey = (batchId: number) =>
     ["portfolio-import-preview", batchId] as const;
+export const portfolioImportHistoryKey = ["portfolio-import-history"] as const;
+export const portfolioImportHistoryPageSize = 10;
+export function usePortfolioImportHistory(offset: number, enabled: boolean) {
+    return useQuery({
+        queryKey: [...portfolioImportHistoryKey, offset],
+        queryFn: () =>
+            listPortfolioImportBatches(portfolioImportHistoryPageSize, offset),
+        enabled,
+    });
+}
 
 export function usePortfolioImportPreview(batchId: number) {
     return useQuery({

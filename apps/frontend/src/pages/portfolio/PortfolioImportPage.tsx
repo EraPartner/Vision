@@ -1,11 +1,11 @@
 /**
  * PortfolioImportPage — import brokerage/exchange CSVs into the portfolio.
- * Always custom-config driven (no pre-built adapters); mirrors the structure of
- * the budgeting TransactionImportCard. On a batch that needs review it routes
+ * Maintained formats are detected from their headers, with custom mapping for
+ * other CSVs. On a batch that needs review it routes
  * to PortfolioImportReviewPage.
  */
 
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
@@ -70,6 +70,12 @@ import {
     portfolioImportPresetConfig,
     portfolioImportSpecializedHintKey,
 } from "./portfolioImportPresets";
+import {
+    detectPortfolioImportFile,
+    resolveDetectedPortfolioAccount,
+    type DetectedPortfolioImport,
+} from "./portfolioImportDetection";
+import { PortfolioImportSession } from "./PortfolioImportSession";
 
 const PortfolioImportIcon = PAGE_ICONS["/portfolio/import"];
 
@@ -77,7 +83,13 @@ export function PortfolioImportPage() {
     const { t } = useLanguage();
     const navigate = useNavigate();
     const [file, setFile] = useState<File | null>(null);
-    const [source, setSource] = useState("custom");
+    const [source, setSource] = useState("auto");
+    const [detecting, setDetecting] = useState(false);
+    const [detected, setDetected] = useState<{
+        file: File;
+        result: DetectedPortfolioImport;
+    }>();
+    const [detectionFailed, setDetectionFailed] = useState(false);
     const [parserName, setParserName] = useState("");
     const [config, setConfig] = useState<PortfolioCustomConfig>(
         DEFAULT_PORTFOLIO_IMPORT_CONFIG,
@@ -88,10 +100,15 @@ export function PortfolioImportPage() {
         JSON.stringify({ name: "", config: DEFAULT_PORTFOLIO_IMPORT_CONFIG }),
     );
     const abortRef = useRef<(() => void) | null>(null);
+    const detectionGeneration = useRef(0);
+    const accountChosenManually = useRef(false);
 
     const { data: savedParsers } = usePortfolioParserConfigs();
     const { data: accountsData } = useAccounts({ active: "true" });
-    const brokerAccounts = activeBrokerAccounts(accountsData?.items ?? []);
+    const brokerAccounts = useMemo(
+        () => activeBrokerAccounts(accountsData?.items ?? []),
+        [accountsData?.items],
+    );
     const createParser = useCreatePortfolioParserConfig();
     const updateParser = useUpdatePortfolioParserConfig();
     const deleteParser = useDeletePortfolioParserConfig();
@@ -115,9 +132,84 @@ export function PortfolioImportPage() {
         config.defaultAssetClass,
     );
 
-    const handleSourceChange = (val: string) => {
-        setSource(val);
+    useEffect(() => {
+        if (source !== "auto") return;
+        let cancelled = false;
+        const generation = ++detectionGeneration.current;
+        const isCurrent = () =>
+            !cancelled && generation === detectionGeneration.current;
+        setDetected(undefined);
+        setDetectionFailed(false);
+        if (!file) {
+            setDetecting(false);
+            return;
+        }
+        setDetecting(true);
+        void detectPortfolioImportFile(file)
+            .then((result) => {
+                if (!isCurrent()) return;
+                setDetected(result ? { file, result } : undefined);
+                if (result)
+                    setConfig((previous) => ({
+                        ...portfolioImportPresetConfig(result.source)!,
+                        ...(accountChosenManually.current
+                            ? { accountId: previous.accountId }
+                            : {}),
+                    }));
+                else if (file.name.toLowerCase().endsWith(".xlsx"))
+                    setDetectionFailed(true);
+            })
+            .catch(() => {
+                if (isCurrent()) setDetectionFailed(true);
+            })
+            .finally(() => {
+                if (isCurrent()) setDetecting(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [file, source]);
+
+    useEffect(() => {
+        if (
+            source !== "auto" ||
+            !detected ||
+            detected.file !== file ||
+            accountChosenManually.current
+        )
+            return;
+        const accountId = resolveDetectedPortfolioAccount(
+            detected.result,
+            brokerAccounts,
+        );
+        setConfig((previous) =>
+            previous.accountId === accountId
+                ? previous
+                : { ...previous, accountId },
+        );
+    }, [brokerAccounts, detected, file, source]);
+
+    const handleFileSelect = (nextFile: File | null) => {
+        detectionGeneration.current++;
+        accountChosenManually.current = false;
+        setFile(nextFile);
         setProgress(null);
+        setDetected(undefined);
+        setDetectionFailed(false);
+        if (source === "auto") {
+            setConfig(DEFAULT_PORTFOLIO_IMPORT_CONFIG);
+            setDetecting(nextFile !== null);
+        }
+    };
+
+    const handleSourceChange = (val: string) => {
+        detectionGeneration.current++;
+        accountChosenManually.current = false;
+        setSource(val);
+        setDetected(undefined);
+        setProgress(null);
+        setDetecting(false);
+        setDetectionFailed(false);
         if (val.startsWith("saved:")) {
             const parser = savedParsers?.find(
                 (p) => p.id === Number(val.slice(6)),
@@ -185,6 +277,7 @@ export function PortfolioImportPage() {
     };
 
     const handleImport = async () => {
+        if (detecting || detectionFailed) return;
         if (!file) {
             toast.error(t("importPage.toast.noFileSel"));
             return;
@@ -283,329 +376,378 @@ export function PortfolioImportPage() {
     };
 
     return (
-        <PageShell className="mx-auto max-w-3xl p-4">
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <PortfolioImportIcon className="h-5 w-5 text-primary" />
-                        {t("portfolioImport.title")}
-                    </CardTitle>
-                    <CardDescription>
-                        {t("portfolioImport.desc")}
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                    {/* Dropzone */}
-                    <CsvDropzone
-                        file={file}
-                        onFileSelect={setFile}
-                        label={t("importPage.csvFile")}
-                    />
-
-                    {/* Detected columns of the selected file */}
-                    {!isSpecializedFormat && (
-                        <FileHeadersPanel
+        <PageShell className="mx-auto max-w-3xl space-y-6 p-4">
+            <PortfolioImportSession accounts={brokerAccounts} />
+            <details className="rounded-lg border">
+                <summary className="cursor-pointer p-4 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                    {t("portfolioImport.session.advanced")}
+                </summary>
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <PortfolioImportIcon className="h-5 w-5 text-primary" />
+                            {t("portfolioImport.title")}
+                        </CardTitle>
+                        <CardDescription>
+                            {t("portfolioImport.desc")}
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                        {/* Dropzone */}
+                        <CsvDropzone
                             file={file}
-                            separator={config.separator}
-                            encoding={config.encoding}
-                            skipRows={config.skipRows}
-                            highlightedHeaders={portfolioMappedColumns(config)}
-                            defaultCollapsed
+                            onFileSelect={handleFileSelect}
+                            label={t("portfolioImport.fileLabel")}
+                            allowWorkbook
                         />
-                    )}
 
-                    {/* Parser source */}
-                    <div className="space-y-2">
-                        <Label htmlFor="pf-source" className="font-semibold">
-                            {t("portfolioImport.parserSource")}
-                        </Label>
-                        <Select
-                            value={source}
-                            onValueChange={handleSourceChange}
-                        >
-                            <SelectTrigger id="pf-source">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="custom">
-                                    <span className="inline-flex items-center gap-2">
-                                        <PencilLine className="h-3.5 w-3.5 text-muted-foreground" />
-                                        {t("portfolioImport.newCustom")}
-                                    </span>
-                                </SelectItem>
-                                <SelectItem value="ibkr">
-                                    <span className="inline-flex items-center gap-2">
-                                        <Bookmark className="h-3.5 w-3.5 text-primary" />
-                                        {t("portfolioImport.ibkrParser")}
-                                    </span>
-                                </SelectItem>
-                                <SelectItem value="kinesis">
-                                    <span className="inline-flex items-center gap-2">
-                                        <Bookmark className="h-3.5 w-3.5 text-primary" />
-                                        {t("portfolioImport.kinesisParser")}
-                                    </span>
-                                </SelectItem>
-                                <SelectItem value="nexo">
-                                    <span className="inline-flex items-center gap-2">
-                                        <Bookmark className="h-3.5 w-3.5 text-primary" />
-                                        {t("portfolioImport.nexoParser")}
-                                    </span>
-                                </SelectItem>
-                                <SelectItem value="saxo">
-                                    <span className="inline-flex items-center gap-2">
-                                        <Bookmark className="h-3.5 w-3.5 text-primary" />
-                                        {t("portfolioImport.saxoParser")}
-                                    </span>
-                                </SelectItem>
-                                {savedParsers?.map((parser) => (
-                                    <SelectItem
-                                        key={parser.id}
-                                        value={`saved:${parser.id}`}
-                                    >
+                        {/* Detected columns of the selected file */}
+                        {!isSpecializedFormat && (
+                            <FileHeadersPanel
+                                file={file}
+                                separator={config.separator}
+                                encoding={config.encoding}
+                                skipRows={config.skipRows}
+                                highlightedHeaders={portfolioMappedColumns(
+                                    config,
+                                )}
+                                defaultCollapsed
+                            />
+                        )}
+
+                        {/* Parser source */}
+                        <div className="space-y-2">
+                            <Label
+                                htmlFor="pf-source"
+                                className="font-semibold"
+                            >
+                                {t("portfolioImport.parserSource")}
+                            </Label>
+                            <Select
+                                value={source}
+                                onValueChange={handleSourceChange}
+                            >
+                                <SelectTrigger id="pf-source">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="auto">
+                                        {t("portfolioImport.autoDetect")}
+                                    </SelectItem>
+                                    <SelectItem value="custom">
                                         <span className="inline-flex items-center gap-2">
-                                            <Bookmark className="h-3.5 w-3.5 text-primary" />
-                                            {parser.name}
+                                            <PencilLine className="h-3.5 w-3.5 text-muted-foreground" />
+                                            {t("portfolioImport.newCustom")}
                                         </span>
                                     </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
+                                    <SelectItem value="ibkr">
+                                        <span className="inline-flex items-center gap-2">
+                                            <Bookmark className="h-3.5 w-3.5 text-primary" />
+                                            {t("portfolioImport.ibkrParser")}
+                                        </span>
+                                    </SelectItem>
+                                    <SelectItem value="kinesis">
+                                        <span className="inline-flex items-center gap-2">
+                                            <Bookmark className="h-3.5 w-3.5 text-primary" />
+                                            {t("portfolioImport.kinesisParser")}
+                                        </span>
+                                    </SelectItem>
+                                    <SelectItem value="nexo">
+                                        <span className="inline-flex items-center gap-2">
+                                            <Bookmark className="h-3.5 w-3.5 text-primary" />
+                                            {t("portfolioImport.nexoParser")}
+                                        </span>
+                                    </SelectItem>
+                                    <SelectItem value="nexo_pro">
+                                        <span className="inline-flex items-center gap-2">
+                                            <Bookmark className="h-3.5 w-3.5 text-primary" />
+                                            {t("portfolioImport.nexoProParser")}
+                                        </span>
+                                    </SelectItem>
+                                    <SelectItem value="saxo">
+                                        <span className="inline-flex items-center gap-2">
+                                            <Bookmark className="h-3.5 w-3.5 text-primary" />
+                                            {t("portfolioImport.saxoParser")}
+                                        </span>
+                                    </SelectItem>
+                                    {savedParsers?.map((parser) => (
+                                        <SelectItem
+                                            key={parser.id}
+                                            value={`saved:${parser.id}`}
+                                        >
+                                            <span className="inline-flex items-center gap-2">
+                                                <Bookmark className="h-3.5 w-3.5 text-primary" />
+                                                {parser.name}
+                                            </span>
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
 
-                    {isSpecializedFormat ? (
-                        <p className="rounded-md border bg-muted/20 p-3 text-sm text-muted-foreground">
-                            {t(specializedHintKey!)}
-                        </p>
-                    ) : (
-                        <>
-                            <details className="rounded-lg border p-3">
-                                <summary className="cursor-pointer text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                                    {t("portfolioImport.formatOptions")}
-                                </summary>
-                                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <SeparatorSelect
-                                        id="pf-separator"
-                                        value={config.separator}
-                                        onChange={(v) =>
-                                            setConfig({
-                                                ...config,
-                                                separator: v,
-                                            })
-                                        }
-                                    />
-                                    <DateFormatSelect
-                                        id="pf-date-format"
-                                        value={config.dateFormat}
-                                        onChange={(v) =>
-                                            setConfig({
-                                                ...config,
-                                                dateFormat: v,
-                                            })
-                                        }
-                                    />
-                                    <EncodingSelect
-                                        id="pf-encoding"
-                                        value={config.encoding}
-                                        onChange={(v) =>
-                                            setConfig({
-                                                ...config,
-                                                encoding: v,
-                                            })
-                                        }
-                                    />
-                                    <NumberFormatSelect
-                                        id="pf-number-format"
-                                        value={config.number_format ?? "auto"}
-                                        onChange={(value) =>
-                                            setConfig({
-                                                ...config,
-                                                number_format: value,
-                                            })
-                                        }
-                                    />
-                                    <div className="space-y-2">
-                                        <Label htmlFor="pf-skip-rows">
-                                            {t("importPage.skipRows")}
-                                        </Label>
-                                        <Input
-                                            id="pf-skip-rows"
-                                            type="number"
-                                            min="0"
-                                            value={config.skipRows}
-                                            onChange={(e) =>
+                        {detecting && (
+                            <p
+                                role="status"
+                                className="text-sm text-muted-foreground"
+                            >
+                                {t("portfolioImport.detecting")}
+                            </p>
+                        )}
+                        {detectionFailed && (
+                            <p
+                                role="alert"
+                                className="text-sm text-destructive"
+                            >
+                                {t("portfolioImport.detectionFailed")}
+                            </p>
+                        )}
+
+                        {isSpecializedFormat ? (
+                            <p className="rounded-md border bg-muted/20 p-3 text-sm text-muted-foreground">
+                                {t(specializedHintKey!)}
+                            </p>
+                        ) : (
+                            <>
+                                <details className="rounded-lg border p-3">
+                                    <summary className="cursor-pointer text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                                        {t("portfolioImport.formatOptions")}
+                                    </summary>
+                                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <SeparatorSelect
+                                            id="pf-separator"
+                                            value={config.separator}
+                                            onChange={(v) =>
                                                 setConfig({
                                                     ...config,
-                                                    skipRows: Math.max(
-                                                        0,
-                                                        parseInt(
-                                                            e.target.value,
-                                                        ) || 0,
-                                                    ),
+                                                    separator: v,
                                                 })
                                             }
                                         />
+                                        <DateFormatSelect
+                                            id="pf-date-format"
+                                            value={config.dateFormat}
+                                            onChange={(v) =>
+                                                setConfig({
+                                                    ...config,
+                                                    dateFormat: v,
+                                                })
+                                            }
+                                        />
+                                        <EncodingSelect
+                                            id="pf-encoding"
+                                            value={config.encoding}
+                                            onChange={(v) =>
+                                                setConfig({
+                                                    ...config,
+                                                    encoding: v,
+                                                })
+                                            }
+                                        />
+                                        <NumberFormatSelect
+                                            id="pf-number-format"
+                                            value={
+                                                config.number_format ?? "auto"
+                                            }
+                                            onChange={(value) =>
+                                                setConfig({
+                                                    ...config,
+                                                    number_format: value,
+                                                })
+                                            }
+                                        />
+                                        <div className="space-y-2">
+                                            <Label htmlFor="pf-skip-rows">
+                                                {t("importPage.skipRows")}
+                                            </Label>
+                                            <Input
+                                                id="pf-skip-rows"
+                                                type="number"
+                                                min="0"
+                                                value={config.skipRows}
+                                                onChange={(e) =>
+                                                    setConfig({
+                                                        ...config,
+                                                        skipRows: Math.max(
+                                                            0,
+                                                            parseInt(
+                                                                e.target.value,
+                                                            ) || 0,
+                                                        ),
+                                                    })
+                                                }
+                                            />
+                                        </div>
                                     </div>
+                                </details>
+
+                                {/* Column mapping */}
+                                {file ? (
+                                    <PortfolioCsvColumnMapper
+                                        file={file}
+                                        separator={config.separator}
+                                        config={config}
+                                        onChange={setConfig}
+                                    />
+                                ) : (
+                                    <p className="text-sm text-muted-foreground">
+                                        {t("portfolioImport.chooseFileFirst")}
+                                    </p>
+                                )}
+                            </>
+                        )}
+
+                        <PortfolioBrokerField
+                            id="pf-broker-account"
+                            accounts={brokerAccounts}
+                            value={
+                                config.accountId == null
+                                    ? undefined
+                                    : String(config.accountId)
+                            }
+                            onChange={(value) => {
+                                accountChosenManually.current = true;
+                                setConfig({
+                                    ...config,
+                                    accountId: value
+                                        ? Number(value)
+                                        : undefined,
+                                });
+                            }}
+                            t={t}
+                        />
+
+                        {/* Save parser */}
+                        <details className="rounded-lg border p-3">
+                            <summary className="cursor-pointer text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                                {t("portfolioImport.saveParserOptions")}
+                            </summary>
+                            <div className="mt-4 flex flex-wrap items-end gap-2">
+                                <div className="flex-1 space-y-2 min-w-[160px]">
+                                    <Label htmlFor="pf-parser-name">
+                                        {t("importPage.customParser.name")}
+                                    </Label>
+                                    <Input
+                                        id="pf-parser-name"
+                                        placeholder={t(
+                                            "portfolioImport.parserNamePlaceholder",
+                                        )}
+                                        value={parserName}
+                                        onChange={(e) =>
+                                            setParserName(e.target.value)
+                                        }
+                                    />
                                 </div>
-                            </details>
-
-                            {/* Column mapping */}
-                            {file ? (
-                                <PortfolioCsvColumnMapper
-                                    file={file}
-                                    separator={config.separator}
-                                    config={config}
-                                    onChange={setConfig}
-                                />
-                            ) : (
-                                <p className="text-sm text-muted-foreground">
-                                    {t("portfolioImport.chooseFileFirst")}
-                                </p>
-                            )}
-                        </>
-                    )}
-
-                    <PortfolioBrokerField
-                        id="pf-broker-account"
-                        accounts={brokerAccounts}
-                        value={
-                            config.accountId == null
-                                ? undefined
-                                : String(config.accountId)
-                        }
-                        onChange={(value) =>
-                            setConfig({
-                                ...config,
-                                accountId: value ? Number(value) : undefined,
-                            })
-                        }
-                        t={t}
-                    />
-
-                    {/* Save parser */}
-                    <details className="rounded-lg border p-3">
-                        <summary className="cursor-pointer text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                            {t("portfolioImport.saveParserOptions")}
-                        </summary>
-                        <div className="mt-4 flex flex-wrap items-end gap-2">
-                            <div className="flex-1 space-y-2 min-w-[160px]">
-                                <Label htmlFor="pf-parser-name">
-                                    {t("importPage.customParser.name")}
-                                </Label>
-                                <Input
-                                    id="pf-parser-name"
-                                    placeholder={t(
-                                        "portfolioImport.parserNamePlaceholder",
-                                    )}
-                                    value={parserName}
-                                    onChange={(e) =>
-                                        setParserName(e.target.value)
+                                <Button
+                                    size="sm"
+                                    onClick={handleSaveParser}
+                                    disabled={
+                                        createParser.isPending ||
+                                        updateParser.isPending ||
+                                        !hasRequiredMapping ||
+                                        !parserName.trim()
                                     }
+                                >
+                                    <Save className="h-4 w-4 mr-1" />
+                                    {isSaved
+                                        ? t(
+                                              "importPage.customParser.saveChanges",
+                                          )
+                                        : t("importPage.customParser.save")}
+                                </Button>
+                                {isSaved && (
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="text-destructive hover:text-destructive"
+                                        onClick={handleDeleteParser}
+                                        disabled={deleteParser.isPending}
+                                    >
+                                        <Trash2 className="h-4 w-4 mr-1" />{" "}
+                                        {t("importPage.customParser.delete")}
+                                    </Button>
+                                )}
+                            </div>
+                        </details>
+
+                        {/* Progress */}
+                        {progress && loading && (
+                            <div className="space-y-3 p-4 rounded-lg border bg-muted/30">
+                                <div className="flex items-center justify-between text-sm">
+                                    <span className="text-muted-foreground font-medium capitalize">
+                                        {progress.phase}
+                                    </span>
+                                    <span className="text-foreground font-semibold">
+                                        {progress.percent}%
+                                    </span>
+                                </div>
+                                <Progress
+                                    value={progress.percent}
+                                    className="h-2"
                                 />
                             </div>
+                        )}
+
+                        {progress &&
+                            !loading &&
+                            progress.phase === "complete" && (
+                                <div className="flex items-center gap-3 p-4 rounded-lg border border-success/30 bg-success/10">
+                                    <CheckCircle2 className="h-5 w-5 text-success shrink-0" />
+                                    <p className="text-sm font-medium text-success">
+                                        {t("importPage.complete")}
+                                    </p>
+                                </div>
+                            )}
+                        {progress && !loading && progress.phase === "error" && (
+                            <div className="flex items-center gap-3 p-4 rounded-lg border border-destructive/30 bg-destructive/5">
+                                <XCircle className="h-5 w-5 text-destructive shrink-0" />
+                                <p className="text-sm font-medium text-destructive">
+                                    {t("importPage.failed")}
+                                </p>
+                            </div>
+                        )}
+
+                        {/* Actions */}
+                        <div className="flex gap-2">
                             <Button
-                                size="sm"
-                                onClick={handleSaveParser}
+                                onClick={handleImport}
                                 disabled={
-                                    createParser.isPending ||
-                                    updateParser.isPending ||
-                                    !hasRequiredMapping ||
-                                    !parserName.trim()
+                                    !file ||
+                                    loading ||
+                                    detecting ||
+                                    detectionFailed ||
+                                    (isSpecializedFormat &&
+                                        config.accountId == null)
                                 }
+                                className="flex-1 h-11"
+                                size="lg"
                             >
-                                <Save className="h-4 w-4 mr-1" />
-                                {isSaved
-                                    ? t("importPage.customParser.saveChanges")
-                                    : t("importPage.customParser.save")}
+                                {loading ? (
+                                    <>
+                                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />{" "}
+                                        {t("importPage.importingBtn")}
+                                    </>
+                                ) : (
+                                    <>
+                                        <Upload className="h-4 w-4 mr-2" />{" "}
+                                        {t("importPage.importBtn")}
+                                    </>
+                                )}
                             </Button>
-                            {isSaved && (
+                            {loading && (
                                 <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="text-destructive hover:text-destructive"
-                                    onClick={handleDeleteParser}
-                                    disabled={deleteParser.isPending}
+                                    variant="outline"
+                                    size="lg"
+                                    className="h-11"
+                                    onClick={handleCancel}
                                 >
-                                    <Trash2 className="h-4 w-4 mr-1" />{" "}
-                                    {t("importPage.customParser.delete")}
+                                    {t("importPage.cancelBtn")}
                                 </Button>
                             )}
                         </div>
-                    </details>
-
-                    {/* Progress */}
-                    {progress && loading && (
-                        <div className="space-y-3 p-4 rounded-lg border bg-muted/30">
-                            <div className="flex items-center justify-between text-sm">
-                                <span className="text-muted-foreground font-medium capitalize">
-                                    {progress.phase}
-                                </span>
-                                <span className="text-foreground font-semibold">
-                                    {progress.percent}%
-                                </span>
-                            </div>
-                            <Progress
-                                value={progress.percent}
-                                className="h-2"
-                            />
-                        </div>
-                    )}
-
-                    {progress && !loading && progress.phase === "complete" && (
-                        <div className="flex items-center gap-3 p-4 rounded-lg border border-success/30 bg-success/10">
-                            <CheckCircle2 className="h-5 w-5 text-success shrink-0" />
-                            <p className="text-sm font-medium text-success">
-                                {t("importPage.complete")}
-                            </p>
-                        </div>
-                    )}
-                    {progress && !loading && progress.phase === "error" && (
-                        <div className="flex items-center gap-3 p-4 rounded-lg border border-destructive/30 bg-destructive/5">
-                            <XCircle className="h-5 w-5 text-destructive shrink-0" />
-                            <p className="text-sm font-medium text-destructive">
-                                {t("importPage.failed")}
-                            </p>
-                        </div>
-                    )}
-
-                    {/* Actions */}
-                    <div className="flex gap-2">
-                        <Button
-                            onClick={handleImport}
-                            disabled={
-                                !file ||
-                                loading ||
-                                (isSpecializedFormat &&
-                                    config.accountId == null)
-                            }
-                            className="flex-1 h-11"
-                            size="lg"
-                        >
-                            {loading ? (
-                                <>
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />{" "}
-                                    {t("importPage.importingBtn")}
-                                </>
-                            ) : (
-                                <>
-                                    <Upload className="h-4 w-4 mr-2" />{" "}
-                                    {t("importPage.importBtn")}
-                                </>
-                            )}
-                        </Button>
-                        {loading && (
-                            <Button
-                                variant="outline"
-                                size="lg"
-                                className="h-11"
-                                onClick={handleCancel}
-                            >
-                                {t("importPage.cancelBtn")}
-                            </Button>
-                        )}
-                    </div>
-                    <ConfirmDialog />
-                </CardContent>
-            </Card>
+                        <ConfirmDialog />
+                    </CardContent>
+                </Card>
+            </details>
         </PageShell>
     );
 }

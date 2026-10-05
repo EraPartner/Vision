@@ -1279,7 +1279,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get net worth summary */
+        /**
+         * Get net worth summary
+         * @description Holdings-only crypto_exchange and wallet accounts contribute portfolio value but no ledger cash to current totals, history, or the transaction-flow fallback. Ordinary brokerage cash remains eligible.
+         */
         get: operations["getNetWorth"];
         put?: never;
         post?: never;
@@ -2155,7 +2158,7 @@ export interface paths {
         };
         /**
          * Current balance per bank account
-         * @description Account rows include the canonical numeric account_id for stable joins to account entities; bank_account remains the label and history-map key.
+         * @description Account rows include the canonical numeric account_id for stable joins to account entities; bank_account remains the label and history-map key. Holdings-only crypto_exchange and wallet accounts are excluded from accounts, totals, and history; ordinary brokerage cash remains eligible.
          */
         get: operations["getBankBalances"];
         put?: never;
@@ -3312,8 +3315,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * One-shot portfolio CSV import with custom mapping or a supported format
-         * @description Mapping and brokerage fields are accepted in the multipart body.
+         * One-shot portfolio history import with custom mapping or a supported format
+         * @description Accepts CSV and detailed Saxo XLSX through the existing endpoint path. Mapping and brokerage fields are accepted in the multipart body. Workbook preflight rejects unsupported or inconsistent input before creating a batch. Maintained formats always require staged review.
          */
         post: operations["portfolioImportCsvCustom"];
         delete?: never;
@@ -3332,8 +3335,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * SSE-streaming portfolio CSV import
-         * @description Mapping and brokerage fields are accepted in the multipart body.
+         * SSE-streaming portfolio history import
+         * @description Accepts the same CSV or detailed Saxo XLSX multipart body as the one-shot endpoint. Mapping and brokerage fields are accepted in the multipart body. Workbook preflight runs before SSE headers or batch creation, so unsupported or inconsistent input returns HTTP 400. Maintained formats always require staged review.
          */
         post: operations["portfolioImportCsvStream"];
         delete?: never;
@@ -3475,6 +3478,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/portfolio/import/reconciliation/reference": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stage Portfolio Performance reference facts for a selected import scope
+         * @description Accepts one Portfolio Performance XML export, maximum 10 MiB. Resolves literal securities, accounts, paired transfers and recorded basis without following external XML entities. Primary broker executions and fees remain authoritative. An explicit zero policy identifies nominal yield values as placeholders. Proven missing events are staged in account-scoped batches. Selected terminal prior imports can produce separate managed review batches from persisted source provenance so repair rollback does not undo their unrelated imported history. The returned batch_ids is the effective scope for a new preview. This operation never commits portfolio history. Repeating the same reference and original scope is idempotent; a changed XML requires restaging. Blockers can accompany staged results and must be resolved before commit.
+         */
+        post: operations["applyPortfolioImportReference"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/portfolio/import/reconciliation/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview reconciliation across a complete portfolio statement scope
+         * @description Read-only plan across up to 100 staged batches. Detects source duplicates, unique existing transactions, corrections, duplicate repairs, dated transfers, asset fees, zero-basis yield reversals and blockers. Omitted policy allows only exact adoption. Explicit policies require a subsequent commit bound to this plan's fingerprint. No history is changed.
+         */
+        post: operations["previewPortfolioImportReconciliation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/portfolio/import/reconciliation/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Atomically commit a reviewed portfolio statement scope
+         * @description Locks and rechecks the complete source scope and projected history against the reviewed fingerprint. Adopts existing records with permanent before and after receipts, inserts missing events in global chronological order, and records dated custody transfers and asset adjustments. Proven imported copies of manual transactions are repaired with permanent dual-row receipts. Any blocker or row failure rolls back the whole operation. Adopted records retain their identity and notes.
+         */
+        post: operations["commitReviewedPortfolioImports"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/portfolio/import/batches/{id}/commit": {
         parameters: {
             query?: never;
@@ -3486,7 +3549,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Commit a reviewed portfolio import batch — writes portfolio_transactions to DB */
+        /**
+         * Commit a reviewed portfolio import batch
+         * @description Maintained IBKR, Kinesis, Nexo, Nexo Pro and Saxo adapters preflight source completeness and reconcile exact existing records atomically. Corrections and multi-file review use the reconciliation preview and commit endpoints. Generic partial imports retain their existing behavior.
+         */
         post: operations["commitPortfolioImportBatch"];
         delete?: never;
         options?: never;
@@ -4786,6 +4852,8 @@ export interface components {
         PortfolioSummaryItem: {
             /** Format: int32 */
             id: number;
+            /** @description Current units including custody fees and unit adjustments, rounded to eight decimal places. */
+            totalUnits?: number;
             /** @description False while any unit transaction remains unassigned to a broker account. */
             fullyAssigned: boolean;
             /** @description True when at least one assigned broker partition sold more units than its lots provide. */
@@ -6161,6 +6229,58 @@ export interface components {
             defaultModel: string;
             enabled: boolean;
         };
+        PortfolioImportReferenceResult: {
+            /** @description Effective complete review scope. Managed review batches replace explicitly selected terminal source batches when a separate rollback owner is required. */
+            batch_ids: number[];
+            matched_reference_rows: number;
+            source_corrections: number;
+            /** @description Secondary-reference coverage only; primary source completeness and projected holdings are validated separately before commit. */
+            coverage?: {
+                referenceEvents: number;
+                matchedReferenceEvents: number;
+                unmatchedMappedReferenceEvents: number;
+                outsideSelectedReferenceEvents: number;
+                unmatchedPrimaryRows: number;
+                unmatchedLegacyRows: number;
+            };
+            supplemental_batches: {
+                /** Format: int64 */
+                batch_id: number;
+                account_id: number;
+                adapter_name: string;
+                source_filename: string;
+                status: string;
+                rows_total: number;
+            }[];
+            /** @description Explicit original history to managed review batch relation; empty when no replacement is needed. */
+            replacement_batches: {
+                /** Format: int64 */
+                original_batch_id: number;
+                /** Format: int64 */
+                review_batch_id: number;
+            }[];
+            blockers: {
+                reason: string;
+                rowOrdinal?: number;
+                referenceTransactionId?: string;
+                accountId?: number;
+                /** Format: int64 */
+                batchId?: number;
+            }[];
+        };
+        PortfolioImportReconciliationCounts: {
+            imported: number;
+            duplicates: number;
+            adopted: number;
+            repaired: number;
+            errors: number;
+        };
+        PortfolioImportReconciliationCommitResult: components["schemas"]["PortfolioImportReconciliationCounts"] & {
+            batches: (components["schemas"]["PortfolioImportReconciliationCounts"] & {
+                /** Format: int64 */
+                batch_id: number;
+            })[];
+        };
         PortfolioImportBatch: {
             id: string;
             adapter_name: string;
@@ -6179,15 +6299,29 @@ export interface components {
             completed_at?: string;
         };
         PortfolioImportUpload: {
-            /** Format: binary */
+            /**
+             * Format: binary
+             * @description CSV history or detailed Saxo XLSX workbook, maximum 50 MiB. XLSX requires portfolio_format=saxo_transaction_history and the Transacties, _Transacties, and Bookings sheets. Workbook archive, identifier, and accounting detail validation runs before staging; legacy XLS and unsupported workbooks reject with 400.
+             */
             file: string;
             /** @description Display label for the import source */
             adapter_name?: string;
+            /** @description Optional active portfolio account receiving asset withdrawals. Must differ from the source account. Unresolved withdrawal destinations block reconciliation; no account is guessed. */
+            transfer_destination_account_id?: number;
+            /** @description Optional active portfolio account supplying incoming asset returns. Must differ from the statement account. Original acquisition lots and costs are carried; transfer-time market valuations are not purchase costs. */
+            transfer_origin_account_id?: number;
+            /** @description Optional comma-separated exact adapter asset symbols. Omit for the full statement. Unselected parsed rows remain outside this batch and are counted in custom_config.scope_excluded_rows. Parse errors still block review. Literal source records and source identity are preserved. */
+            included_symbols?: string;
             /**
-             * @description Specialized portfolio statement parser; omit for generic column mapping. Maintained IBKR, Kinesis, Nexo, and Saxo formats require is_brokerage=true and account_id because their transaction histories include or affect sleeve cash movements.
+             * @description Explicit known-zero cost for Kinesis distribution units and reversals. Income valuations remain recorded; unrelated original gifts and purchases retain their basis.
              * @enum {string}
              */
-            portfolio_format?: "ibkr_transaction_history" | "kinesis_transaction_history" | "nexo_transaction_history" | "saxo_transaction_history";
+            yield_basis_policy?: "zero";
+            /**
+             * @description Specialized portfolio statement parser; omit for generic column mapping. Maintained IBKR, Kinesis, Nexo, Nexo Pro, and Saxo formats require is_brokerage=true and account_id because their transaction histories include or affect sleeve cash movements. Automatic source selection is a frontend convenience; API callers provide this field. Saxo accepts CSV and detailed XLSX; net-only CSV dividends remain review errors because gross income and withholding taxes are unavailable. Nexo Pro Spot uses filled quantities, execution prices and literal fee currency. Its timestamp retains the exported calendar date; the adapter does not establish that it is an execution timestamp.
+             * @enum {string}
+             */
+            portfolio_format?: "ibkr_transaction_history" | "kinesis_transaction_history" | "nexo_transaction_history" | "nexo_pro_spot_history" | "saxo_transaction_history";
             /** @description Python strptime format, default: %Y-%m-%d */
             date_format?: string;
             /** @description Single-character CSV delimiter, default ',' */
@@ -6235,6 +6369,15 @@ export interface components {
             config: {
                 /** @description Optional active portfolio account used as the file-level broker destination. */
                 accountId?: number;
+                /** @description Optional custody account receiving asset withdrawals. */
+                transferDestinationAccountId?: number;
+                /** @description Optional custody account supplying incoming asset returns. */
+                transferOriginAccountId?: number;
+                /**
+                 * @description Optional explicit known-zero basis policy for Kinesis yield unit receipts and reversals.
+                 * @enum {string}
+                 */
+                yieldBasisPolicy?: "zero";
             } & {
                 [key: string]: unknown;
             };
@@ -13906,7 +14049,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description Some rows unresolved — batch left in awaiting_review; client must use review endpoints then POST commit */
+            /** @description Brokerage format, name matches, unresolved rows, or errors require review; batch left in awaiting_review before POST commit */
             202: {
                 headers: {
                     [name: string]: unknown;
@@ -14302,6 +14445,168 @@ export interface operations {
             };
         };
     };
+    applyPortfolioImportReference: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description Portfolio Performance XML export; original portfolio files and CSVs are not supported here.
+                     */
+                    file: string;
+                    /** @description JSON-encoded array of 1 to 100 positive safe-integer batch IDs explicitly selected for this import session. */
+                    batch_ids: string;
+                    /** @enum {string} */
+                    placeholder_basis_policy: "zero";
+                };
+            };
+        };
+        responses: {
+            /** @description Effective staged scope, source proof counts, supplemental metadata, prior-batch replacement relations and blockers. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["PortfolioImportReferenceResult"];
+                    };
+                };
+            };
+            /** @description Malformed scope or XML, missing explicit basis policy, unsupported file, or safe size/depth/node limits exceeded. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A selected batch or account no longer exists. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Source scope changed, different reference already applied, or a selected source cannot be safely restaged; no partial staging retained. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    previewPortfolioImportReconciliation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    batch_ids: number[];
+                    /**
+                     * @description Preserve recorded facts, or use proven source facts while preserving known original transfer basis.
+                     * @enum {string}
+                     */
+                    adopt_policy?: "preserve_existing" | "prefer_source";
+                    /** @description Explicit per-batch overrides of adopt_policy. Each selected batch may occur at most once; IDs outside batch_ids reject. The reviewed fingerprint binds the sorted overrides. */
+                    batch_policies?: {
+                        /** Format: int64 */
+                        batch_id: number;
+                        /** @enum {string} */
+                        adopt_policy: "preserve_existing" | "prefer_source";
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description Review plan with batchIds, adoptPolicy, batchPolicies, planFingerprint, ready, actions, blockers and summary. Blocked plans still return 200. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description Malformed scope or policy, missing batch, or non-reviewable scope */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    commitReviewedPortfolioImports: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    batch_ids: number[];
+                    /** @enum {string} */
+                    adopt_policy?: "preserve_existing" | "prefer_source";
+                    /** @description Exact selected per-batch overrides used by the reviewed preview. */
+                    batch_policies?: {
+                        /** Format: int64 */
+                        batch_id: number;
+                        /** @enum {string} */
+                        adopt_policy: "preserve_existing" | "prefer_source";
+                    }[];
+                    /** @description Exact fingerprint returned by preview for this scope, global policy and per-batch overrides. */
+                    expected_plan_fingerprint: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Aggregate and per-batch imported, duplicates, adopted, repaired and errors counts; errors is zero on success and repaired is always emitted including zero. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["PortfolioImportReconciliationCommitResult"];
+                    };
+                };
+            };
+            /** @description Malformed request or non-reviewable scope */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A requested batch or account no longer exists */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale preview, ambiguous existing history, unresolved source facts, invalid projected history or atomic row failure; no changes retained */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     commitPortfolioImportBatch: {
         parameters: {
             query?: never;
@@ -14316,7 +14621,7 @@ export interface operations {
                 "application/json": {
                     /**
                      * Format: int32
-                     * @description Brokerage sleeve account (ADR-095) stamped on the batch, so every lot it commits inherits it. `null` — or an absent field — leaves the batch without one. A present value must be a positive integer naming an existing account; a malformed one is rejected rather than coerced, since a coerced id names a different account and passes the existence check. On recommit, a present account also resets cash rows that failed solely because the batch account was missing.
+                     * @description Brokerage sleeve account (ADR-095) stamped on the batch, so every lot it commits inherits it. `null` — or an absent field — preserves the existing batch account. A present value must be a positive integer naming an existing account; a malformed one is rejected rather than coerced, since a coerced id names a different account and passes the existence check. On recommit, a present account also resets cash rows that failed solely because the batch account was missing.
                      */
                     account_id?: number | null;
                 };
@@ -14346,12 +14651,30 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Batch is not in awaiting_review or matched status */
+            /** @description Maintained staging is incomplete, needs an explicit reconciliation policy, overlaps ambiguous history, lacks proven basis or has invalid projected holdings. No canonical changes are retained. Readiness conflicts report a reason, count and one-based staging ordinals; reconciliation conflicts report blockers and the reviewed plan state. */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        error: {
+                            /** @enum {string} */
+                            code: "CONFLICT";
+                            message: string;
+                            details: {
+                                reason: string;
+                                count?: number;
+                                /** @description One-based staging row ordinals, including adapter-derived rows; not source-file line numbers. */
+                                row_ordinals?: number[];
+                                blockers?: {
+                                    [key: string]: unknown;
+                                }[];
+                                planFingerprint?: string;
+                            };
+                        };
+                    };
+                };
             };
         };
     };

@@ -116,6 +116,93 @@ function mockWidgetApi({
 }
 
 describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
+    it("excludes wallet and exchange fiat ledgers from cash cards while retaining brokerage cash", async () => {
+        const broker = {
+            ...ACCOUNT_STUB,
+            id: 4,
+            name: "Ordinary broker",
+            display_name: "Ordinary broker",
+            type: "brokerage",
+            computed_balance: 200,
+        };
+        const wallet = {
+            ...ACCOUNT_STUB,
+            id: 5,
+            name: "Hardware wallet",
+            display_name: "Hardware wallet",
+            type: "wallet",
+            computed_balance: 9999,
+            has_transactions: true,
+        };
+        const exchange = {
+            ...ACCOUNT_STUB,
+            id: 6,
+            name: "Crypto exchange",
+            display_name: "Crypto exchange",
+            type: "crypto_exchange",
+            computed_balance: -432.1,
+            has_transactions: true,
+        };
+        // The cash aggregation excludes holdings-only types from its totals and
+        // history; its entity query still returns their real partial fiat rows.
+        mockWidgetApi({
+            payloadAccounts: [
+                PAYLOAD_ACCOUNTS[0],
+                {
+                    account_id: 4,
+                    bank_account: broker.name,
+                    display_name: broker.name,
+                    balance: 200,
+                    transaction_count: 10,
+                },
+            ],
+            total: 2650.75,
+            entityAccounts: [ENTITY_ACCOUNTS[0], broker, wallet, exchange],
+            history: {
+                "KBC Checking": [
+                    { date: "2026-08-20", balance: 2450 },
+                    { date: "2026-08-21", balance: 2450.75 },
+                ],
+                "Ordinary broker": [
+                    { date: "2026-08-20", balance: 100 },
+                    { date: "2026-08-21", balance: 200 },
+                ],
+            },
+            totalHistory: [
+                { date: "2026-08-20", balance: 2550 },
+                { date: "2026-08-21", balance: 2650.75 },
+            ],
+        });
+        renderWithApp(<BankBalancesWidget />);
+        expect(
+            await screen.findByRole("link", { name: "Ordinary broker" }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("link", { name: "KBC Checking" }),
+        ).toBeInTheDocument();
+        expect(screen.queryByText("Hardware wallet")).not.toBeInTheDocument();
+        expect(screen.queryByText("Crypto exchange")).not.toBeInTheDocument();
+        const totalCard = screen
+            .getByText("Total Net Liquid Position")
+            .closest(".glass-thin") as HTMLElement;
+        expect(within(totalCard).getByText(/2\.650,75/)).toBeInTheDocument();
+        expect(
+            within(totalCard).getByText("Across 2 account(s)"),
+        ).toBeInTheDocument();
+        const historyCard = screen
+            .getByText("Balance History")
+            .closest(".glass-thin") as HTMLElement;
+        expect(
+            within(historyCard).getByText("Ordinary broker"),
+        ).toBeInTheDocument();
+        expect(
+            within(historyCard).queryByText("Hardware wallet"),
+        ).not.toBeInTheDocument();
+        expect(
+            within(historyCard).queryByText("Crypto exchange"),
+        ).not.toBeInTheDocument();
+    });
+
     it("counts the population actually summed into the total beside it, not the card list", async () => {
         mockWidgetApi();
         renderWithApp(<BankBalancesWidget />);

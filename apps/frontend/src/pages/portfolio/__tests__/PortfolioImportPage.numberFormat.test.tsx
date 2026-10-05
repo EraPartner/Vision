@@ -56,6 +56,9 @@ it("saves, reloads, and submits the selected portfolio number format", async () 
     const user = userEvent.setup();
     async function pickSavedParser() {
         await user.click(
+            await screen.findByText("Advanced single-file import"),
+        );
+        await user.click(
             await screen.findByRole("combobox", { name: "Parser" }),
         );
         await user.click(
@@ -81,14 +84,16 @@ it("saves, reloads, and submits the selected portfolio number format", async () 
     );
     first.unmount();
 
-    const second = renderWithApp(<PortfolioImportPage />);
+    renderWithApp(<PortfolioImportPage />);
     await pickSavedParser();
     await user.click(screen.getByText("CSV format options"));
     expect(
         screen.getByRole("combobox", { name: "Number format" }),
     ).toHaveTextContent("Decimal point");
-    const input =
-        second.container.querySelector<HTMLInputElement>('input[type="file"]')!;
+    const input = screen
+        .getByText("Advanced single-file import")
+        .closest("details")!
+        .querySelector<HTMLInputElement>('input[type="file"]')!;
     await user.upload(
         input,
         new File(

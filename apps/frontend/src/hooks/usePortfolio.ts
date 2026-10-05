@@ -14,6 +14,8 @@ import {
     useInvestmentMutations,
 } from "./portfolio/useInvestments";
 import { usePortfolioSummaries } from "./portfolio/usePortfolioSummaries";
+import { usePortfolioSummaryQuery } from "./portfolio/usePortfolioSummary";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 
 export {
     calculateCostBasis,
@@ -32,6 +34,10 @@ const EMPTY_INVESTMENTS: never[] = [];
 const EMPTY_TRANSACTIONS: never[] = [];
 
 export function usePortfolio() {
+    const { appSettings } = useAppSettings();
+    const canonicalQuery = usePortfolioSummaryQuery(
+        appSettings.defaultCurrency || "EUR",
+    );
     const investmentsQuery = useInvestmentsQuery();
     const allInvestments = investmentsQuery.data?.items ?? EMPTY_INVESTMENTS;
     const investments = useMemo(
@@ -61,6 +67,8 @@ export function usePortfolio() {
         usePortfolioSummaries({
             investments: allInvestments,
             transactions: allTransactions,
+            canonicalSummaries: canonicalQuery.data?.summaries,
+            requireCanonical: true,
         });
 
     return {
@@ -76,10 +84,11 @@ export function usePortfolio() {
         // Surface the investments query state so pages can distinguish loading /
         // error from genuinely-empty — otherwise a failed fetch silently renders the
         // "no holdings" empty state and masks the error.
-        isLoading: investmentsQuery.isLoading,
-        isError: investmentsQuery.isError,
-        error: investmentsQuery.error,
-        refetch: investmentsQuery.refetch,
+        isLoading: investmentsQuery.isLoading || canonicalQuery.isLoading,
+        isError: investmentsQuery.isError || canonicalQuery.isError,
+        error: investmentsQuery.error || canonicalQuery.error,
+        refetch: async () =>
+            Promise.all([investmentsQuery.refetch(), canonicalQuery.refetch()]),
         totalPortfolioValue: totals.totalPortfolioValue,
         totalGainLoss: totals.totalGainLoss,
         totalRealizedGain: totals.totalRealizedGain,

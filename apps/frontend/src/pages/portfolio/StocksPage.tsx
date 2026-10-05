@@ -56,6 +56,7 @@ import { Money } from "@/components/shared/Money";
 import { PageShell } from "@/components/shared/PageShell";
 import { TextLink } from "@/components/shared/TextLink";
 import { PortfolioOversoldBadge } from "@/features/portfolio/PortfolioOversoldBadge";
+import { addAll, subtract, toNumber } from "@vision/shared-utils/money";
 
 interface StocksPageProps {
     assetClasses?: AssetClass[];
@@ -88,7 +89,7 @@ interface StocksPageProps {
      * symbol, and name stacked (Crypto).
      */
     assetCellVariant?: "split" | "combined";
-    /** Decimal places for the units column (Stocks: 4, Crypto: 6). */
+    /** Decimal places for the units column (Stocks: 4, Crypto: 8). */
     unitsDecimals?: number;
     /** Render the units column in a monospace font (Crypto). */
     unitsMonospace?: boolean;
@@ -250,14 +251,6 @@ export default function StocksPage({
                     holding.totalTaxes,
                     holding.currency,
                 );
-                acc.feeTransactions += convertToTarget(
-                    holding.feeTransactions ?? 0,
-                    holding.currency,
-                );
-                acc.taxTransactions += convertToTarget(
-                    holding.taxTransactions ?? 0,
-                    holding.currency,
-                );
                 return acc;
             },
             {
@@ -267,8 +260,6 @@ export default function StocksPage({
                 totalDividends: 0,
                 totalFees: 0,
                 totalTaxes: 0,
-                feeTransactions: 0,
-                taxTransactions: 0,
             },
         );
     }, [holdings, displayedPnlByHoldingId, convertToTarget]);
@@ -280,20 +271,19 @@ export default function StocksPage({
         totalDividends,
         totalFees,
         totalTaxes,
-        feeTransactions,
-        taxTransactions,
     } = totals;
-    // realized/unrealized (from the FX-aware pool) already net the per-row
-    // fees/taxes columns into cost/proceeds, so net gain subtracts ONLY standalone
-    // fee/tax transaction rows. Subtracting totalFees/totalTaxes double-counted the
-    // per-row columns. (totalFees/totalTaxes remain for the fees-&-taxes display card.)
-    // Pages that hide dividends (Crypto) also exclude them from net return.
-    const netGain =
-        totalRealizedGain +
-        totalUnrealizedGain +
-        (showDividends ? totalDividends : 0) -
-        feeTransactions -
-        taxTransactions;
+    // Canonical gainLoss includes custody fees and standalone deductions.
+    // These pages include only the income they surface in their summary cards.
+    const netGain = toNumber(
+        addAll(
+            holdings.map((holding) =>
+                addAll([
+                    subtract(holding.gainLoss, holding.totalIncome),
+                    showDividends ? holding.totalDividends : 0,
+                ]),
+            ),
+        ),
+    );
 
     // Stocks/Metals show avg-cost/price/value in the holding's native currency;
     // Crypto shows them converted to the display currency.

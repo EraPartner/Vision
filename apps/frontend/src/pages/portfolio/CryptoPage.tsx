@@ -18,7 +18,7 @@ export default function CryptoPage() {
             showDividends={false}
             dynamicUnrealizedIcon
             assetCellVariant="combined"
-            unitsDecimals={6}
+            unitsDecimals={8}
             unitsMonospace
             priceColumnsInTargetCurrency
             // Crypto has always shown spot-converted P&L and the legacy total-return

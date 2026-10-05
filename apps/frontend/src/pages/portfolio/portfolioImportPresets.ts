@@ -66,6 +66,19 @@ const PORTFOLIO_IMPORT_PRESETS: Record<string, PortfolioCustomConfig> = {
         dateFormat: "%Y-%m-%d %H:%M:%S",
         defaultAssetClass: "crypto",
     },
+    nexo_pro: {
+        ...DEFAULT_PORTFOLIO_IMPORT_CONFIG,
+        format: "nexo_pro_spot_history",
+        dateColumn: "timestamp",
+        typeColumn: "side",
+        symbolColumn: "pair",
+        unitsColumn: "filledAmount",
+        priceColumn: "executedPrice",
+        feesColumn: "tradingFee",
+        currencyColumn: "feeCurrency",
+        dateFormat: "%Y-%m-%d %H:%M:%S",
+        defaultAssetClass: "crypto",
+    },
     saxo: {
         ...DEFAULT_PORTFOLIO_IMPORT_CONFIG,
         format: "saxo_transaction_history",
@@ -89,6 +102,7 @@ type SpecializedHintKey =
     | "portfolioImport.ibkrParserHint"
     | "portfolioImport.kinesisParserHint"
     | "portfolioImport.nexoParserHint"
+    | "portfolioImport.nexoProParserHint"
     | "portfolioImport.saxoParserHint";
 
 const SPECIALIZED_HINT_KEYS: Partial<
@@ -97,6 +111,7 @@ const SPECIALIZED_HINT_KEYS: Partial<
     ibkr_transaction_history: "portfolioImport.ibkrParserHint",
     kinesis_transaction_history: "portfolioImport.kinesisParserHint",
     nexo_transaction_history: "portfolioImport.nexoParserHint",
+    nexo_pro_spot_history: "portfolioImport.nexoProParserHint",
     saxo_transaction_history: "portfolioImport.saxoParserHint",
 };
 

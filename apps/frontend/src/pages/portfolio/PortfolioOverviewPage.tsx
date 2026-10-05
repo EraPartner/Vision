@@ -76,6 +76,9 @@ import { useAccounts } from "@/hooks/useAccounts";
 import { accountLabel } from "@/features/accounts/groupAccounts";
 import { addAll, toNumber } from "@vision/shared-utils/money";
 import { PortfolioExposureCard } from "@/features/portfolio/PortfolioExposureCard";
+import { PageError } from "@/components/shared/PageError";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 
 function getPortfolioWidgets(t: (key: string) => string): WidgetDefinition[] {
     return [
@@ -122,6 +125,7 @@ export default function PortfolioOverviewPage() {
     const { t, tc } = useLanguage();
     const { appSettings } = useAppSettings();
     const targetCurrency = appSettings.defaultCurrency || "EUR";
+    const loadingSurfaceProps = useLoadingSurfaceProps();
     const {
         summaries,
         inactiveSummaries,
@@ -130,6 +134,10 @@ export default function PortfolioOverviewPage() {
         updateInvestment,
         refreshPrices,
         isRefreshingPrices,
+        isLoading,
+        isError,
+        error,
+        refetch,
     } = usePortfolio();
     const portfolioSummaryQuery = usePortfolioSummaryQuery(targetCurrency);
     const portfolioSummary = portfolioSummaryQuery.data;
@@ -401,6 +409,34 @@ export default function PortfolioOverviewPage() {
     ];
 
     const isEmpty = summaries.length === 0;
+
+    if (isLoading) {
+        return (
+            <PageShell {...loadingSurfaceProps}>
+                <PageHeader
+                    title={t("portfolio.overviewTitle")}
+                    icon={PAGE_ICONS["/portfolio"]}
+                />
+                <Skeleton className="h-24 w-full" />
+                <Skeleton className="h-64 w-full" />
+            </PageShell>
+        );
+    }
+    if (isError) {
+        return (
+            <PageShell>
+                <PageHeader
+                    title={t("portfolio.overviewTitle")}
+                    icon={PAGE_ICONS["/portfolio"]}
+                />
+                <PageError
+                    title={t("stocks.pageErrorTitle")}
+                    message={error?.message ?? t("common.error")}
+                    onRetry={() => refetch()}
+                />
+            </PageShell>
+        );
+    }
 
     return (
         <PageShell className="">

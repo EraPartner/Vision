@@ -21,6 +21,8 @@ interface CsvDropzoneProps {
     compact?: boolean;
     /** Optional bold field label rendered above the dropzone. */
     label?: string;
+    /** Portfolio imports also accept maintained XLSX statements. */
+    allowWorkbook?: boolean;
 }
 
 export function CsvDropzone({
@@ -28,6 +30,7 @@ export function CsvDropzone({
     onFileSelect,
     compact = false,
     label,
+    allowWorkbook = false,
 }: CsvDropzoneProps) {
     const { t } = useLanguage();
     const [dragOver, setDragOver] = useState(false);
@@ -35,13 +38,23 @@ export function CsvDropzone({
 
     const accept = useCallback(
         (f: File | null) => {
-            if (f && !isCsvFile(f)) {
-                toast.error(t("importPage.toast.noFile"));
+            if (
+                f &&
+                !isCsvFile(f) &&
+                !(allowWorkbook && f.name.toLowerCase().endsWith(".xlsx"))
+            ) {
+                toast.error(
+                    t(
+                        allowWorkbook
+                            ? "portfolioImport.invalidFile"
+                            : "importPage.toast.noFile",
+                    ),
+                );
                 return;
             }
             onFileSelect(f);
         },
-        [onFileSelect, t],
+        [allowWorkbook, onFileSelect, t],
     );
 
     const pad = compact ? "p-8" : "p-10";
@@ -54,7 +67,11 @@ export function CsvDropzone({
                 data-dropzone
                 role="button"
                 tabIndex={0}
-                aria-label={t("importPage.dropzoneAria")}
+                aria-label={t(
+                    allowWorkbook
+                        ? "portfolioImport.chooseFile"
+                        : "importPage.dropzoneAria",
+                )}
                 onClick={() => inputRef.current?.click()}
                 onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
@@ -85,7 +102,7 @@ export function CsvDropzone({
                 <input
                     ref={inputRef}
                     type="file"
-                    accept=".csv"
+                    accept={allowWorkbook ? ".csv,.xlsx" : ".csv"}
                     className="hidden"
                     onChange={(e) => accept(e.target.files?.[0] ?? null)}
                 />
@@ -129,7 +146,11 @@ export function CsvDropzone({
                         />
                         <div className="text-center">
                             <p className="font-medium text-foreground">
-                                {t("importPage.dropzone")}
+                                {t(
+                                    allowWorkbook
+                                        ? "portfolioImport.dropzone"
+                                        : "importPage.dropzone",
+                                )}
                             </p>
                             <p className="text-sm text-muted-foreground">
                                 {t("importPage.dropzoneOr")}

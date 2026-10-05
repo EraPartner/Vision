@@ -39,6 +39,7 @@ import {
 import { badgeVariants } from "@/components/ui/badge";
 import { TextLink } from "@/components/shared/TextLink";
 import { useBankBalances } from "./useDashboardQueries";
+import { isHoldingsOnlyPortfolioType } from "@/features/accounts/groupAccounts";
 
 const ACCOUNT_COLORS = [
     "hsl(var(--chart-1))",
@@ -232,6 +233,7 @@ export function BankBalancesWidget() {
     const balanceCards = entityAccounts.filter(
         (a) =>
             a.is_active &&
+            !isHoldingsOnlyPortfolioType(a.type) &&
             a.computed_balance != null &&
             Math.abs(a.computed_balance) > 0.000001,
     );
