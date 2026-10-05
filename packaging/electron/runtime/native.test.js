@@ -977,6 +977,9 @@ test("native seed SQL is applied transactionally with an argument array", async 
       repoRoot: path.resolve(__dirname, "..", "..", ".."),
       runtimeId,
       postgresBinDir: binDir,
+      bunPath: "/bin/echo",
+      alembicPath: "/bin/echo",
+      chromePath: "/bin/echo",
       runFile: async (executable, args) => {
         calls.push({ executable: path.basename(executable), args: [...args] });
         if (args[0] === "--version") {
@@ -1077,6 +1080,9 @@ test("native PostgreSQL readiness pins every probe to one loopback TCP port", as
       runtimeId: "vision_port_test",
       postgresBinDir: binDir,
       postgresPort: 55_432,
+      bunPath: "/bin/echo",
+      alembicPath: "/bin/echo",
+      chromePath: "/bin/echo",
       runFile: async (executable, args) => {
         calls.push({ executable: path.basename(executable), args });
         if (args[0] === "--version") {
@@ -2163,6 +2169,9 @@ test("native custom dump validation rejects corrupt or truncated input", async (
       repoRoot: path.resolve(__dirname, "..", "..", ".."),
       runtimeId: "vision_corrupt_dump",
       postgresBinDir: binDir,
+      bunPath: "/bin/echo",
+      alembicPath: "/bin/echo",
+      chromePath: "/bin/echo",
       runFile: async (executable, args) => {
         if (args[0] === "--version") {
           return {
