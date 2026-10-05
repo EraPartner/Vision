@@ -1,6 +1,6 @@
 ---
 name: release
-description: Prepare, build, or verify Vision Electron releases and version changes. Use for release cutting, desktop distribution builds, .dmg creation, packaging changes, image publication, or version bumps.
+description: Prepare, build, or verify Vision Electron releases and version changes. Use for release cutting, desktop distribution builds, .dmg creation, packaging changes, GitHub release publication, or version bumps.
 ---
 
 # Vision release workflow

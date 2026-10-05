@@ -4,6 +4,9 @@ Canonical guidance for coding agents working in this repository. Tool-specific a
 integration details, but must not duplicate or override the shared project contract here. If
 `AGENTS.local.md` exists, read it before work because it contains host-only setup.
 
+The global working agreement applies (signing, publication, safety); this file lists
+project-specific rules only.
+
 ## Project
 
 Vision is a self-hosted financial transaction manager. It supports transaction CRUD,
@@ -14,10 +17,12 @@ The Bun-workspaces monorepo uses React 19, TypeScript, Vite, Tailwind and Radix 
 Node/Bun, Express and PostgreSQL on the backend; Vitest for backend tests; and Electron for the
 desktop app.
 
-| Workspace                            | Path                 |
-| ------------------------------------ | -------------------- |
-| `vision-frontend`                    | `apps/frontend/`     |
-| `financial-transaction-manager-node` | `apps/node-backend/` |
+| Workspace                            | Path                     |
+| ------------------------------------ | ------------------------ |
+| `vision-frontend`                    | `apps/frontend/`         |
+| `financial-transaction-manager-node` | `apps/node-backend/`     |
+| `@vision/shared-utils`               | `packages/shared-utils/` |
+| `@vision/types`                      | `packages/types/`        |
 
 Use `bun run --filter '<workspace>' <script>` for filtered commands.
 
@@ -44,18 +49,17 @@ bun run typecheck
 bun run test
 bun run test:frontend
 bun run check
+# database (Python Alembic toolchain from config/requirements.txt; needs DATABASE_URL):
+bun run db:migrate            # upgrade to head through the app's migration runner
+bun run db:check              # single Alembic head plus migration-fidelity run on a test database
+bun run db:check-destructive  # flag destructive operations in migrations
 # from apps/node-backend:
 bun vitest run src/path/to/x.test.js
 bun vitest run --test-name-pattern="name"
 ```
 
 Use the repository skills in `.agents/skills/` for database migrations, localization, releases,
-documentation synchronization, and TODO backlog batches.
-
-For TODO backlog implementation, read `.agents/skills/implement-todo-batch/SKILL.md` for the
-canonical selection, recovery, delegation, validation, and publication workflow. Use
-`.agents/prompts/implement-todo-batch.md` as the portable kickoff. Deliver one batch,
-then stop; the skill itself does not authorize publication or merge.
+and documentation synchronization.
 
 ## Provider and host behavior
 
@@ -63,10 +67,6 @@ These obligations are tracked here because Codex does not auto-load `AGENTS.loca
 root file exists. `AGENTS.local.md` may add machine-specific convenience, but it cannot weaken or
 replace these rules.
 
-- In the devcontainer, Codex uses isolated container state. Codex authentication and configuration
-  do not synchronize with the host. Never copy `~/.codex/auth.json` into the container. Treat
-  changes under container `~/.codex/` as ephemeral and report them before the session ends; tracked
-  repository files under `.agents/` and `.codex/` persist through the workspace mount.
 - On the EraPartner macOS host, browser-driven visual review uses the native Vision Demo app and
   synthetic data, never the real financial stack. Launch it with
   `open "/Applications/Vision Demo.app"` and rebuild it with `./install-demo.sh` after relevant
@@ -115,8 +115,7 @@ internal refactors that preserve behavior, contracts, architecture, and document
 - Localization change: use the `i18n` skill and finish with `bun run validate-locales`.
 - Schema change: use the `db-migrations` skill; create a migration and rollback plan, but do not
   apply it to user data without approval.
-- Packaging, Electron, or compose change: follow the nested `packaging/AGENTS.md` rules and verify
-  the packaged compose copy.
+- Packaging or Electron change: follow the nested `packaging/AGENTS.md` rules.
 
 ## Verification
 
@@ -126,31 +125,37 @@ Scale checks to risk:
 - Cross-module change: targeted tests, workspace lint, and typecheck.
 - Security, persistence, migration, or destructive change: tests, lint, typecheck, build, and
   focused safety checks.
-- Destructive or irreversible command: explain the exact effect and get confirmation first.
 
 Finish with changed files, checks run, skipped checks, residual risk, and follow-ups.
 
 ## Key paths
 
-| Path                                      | Purpose                                      |
-| ----------------------------------------- | -------------------------------------------- |
-| `apps/frontend/src/`                      | React frontend                               |
-| `apps/node-backend/src/main.js`           | Backend entry point                          |
-| `alembic/versions/`                       | Database migrations                          |
-| `config/`                                 | Shared tool configuration                    |
-| `i18n/source/`                            | Locale source files                          |
-| `apps/frontend/src/locales/`              | Generated locales                            |
-| `packaging/electron/`                     | Desktop shell                                |
-| `docs/`                                   | Obsidian knowledge base                      |
-| `.devcontainer/`                          | Hardened development sandbox                 |
-| `.agents/skills/implement-todo-batch/`    | Bounded TODO batch orchestration |
-| `.agents/prompts/implement-todo-batch.md` | Portable kickoff for one TODO batch          |
+| Path                            | Purpose                         |
+| ------------------------------- | ------------------------------- |
+| `apps/frontend/src/`            | React frontend                  |
+| `apps/node-backend/src/main.js` | Backend entry point             |
+| `alembic/versions/`             | Database migrations             |
+| `config/`                       | Shared tool configuration       |
+| `i18n/source/`                  | Locale source files             |
+| `apps/frontend/src/locales/`    | Generated locales               |
+| `packaging/electron/`           | Desktop shell                   |
+| `docs/`                         | Obsidian knowledge base         |
+| `docs/guides/devcontainer.md`   | Built-in agent sandbox workflow |
 
-When an authorized local publication workflow uses direct commits, commit to `main` unless the user
-asks for a branch. Local editing sessions leave the reviewed diff for the LockBox `git-agent`.
+When the task authorizes a local commit, commit directly to `main` unless the user asks for a branch.
 
 Create a session note only when a substantial session produces durable context not already captured
 in an ADR, feature, reference, or guide. Examples include a multi-stage investigation, a cross-module
 delivery, or operational findings needed for later work. Do not create session notes for review-only
 work, routine fixes or refactors, formatting, generated-output refreshes, or documentation-only
 maintenance unless the user asks for one.
+
+## Claude Code notes
+
+- Claude-specific project skills are exposed under `.claude/skills/`. Their required outcomes must
+  stay aligned with the portable skills under `.agents/skills/`.
+- Path-scoped compatibility rules live in `.claude/rules/`. The canonical nested guidance remains
+  in `docs/AGENTS.md` and `packaging/AGENTS.md`.
+- Host-specific Claude setup belongs in the gitignored `CLAUDE.local.md`.
+- Use Claude Code's built-in sandbox for agent execution. See `docs/guides/devcontainer.md` for the
+  shared agent workflow.
