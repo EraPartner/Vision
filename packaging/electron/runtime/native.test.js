@@ -312,6 +312,7 @@ test("managed PostgreSQL initializes a private loopback-only cluster with argume
         decryptString: (value) => value.toString(),
       },
       auditWitness: fakeWitness(path.join(temp, "user-data")),
+      auditPlatform: "darwin",
       auditRequest: async (endpoint, payload) => {
         auditCalls.push({ endpoint, payload });
         return endpoint === "verify"
@@ -1400,6 +1401,7 @@ test("native audit verification rejects a changed legacy cutover even with the s
     auditBridgeToken: "a".repeat(64),
     auditSafeStorage: safeStorage,
     auditWitness: fakeWitness(userDataDir),
+    auditPlatform: "darwin",
     auditRequest: async (endpoint) => {
       assert.equal(endpoint, "verify");
       return {
@@ -1444,6 +1446,7 @@ test("native audit read supplies the external receipt and rejects mismatched cut
     auditBridgeToken: "a".repeat(64),
     auditSafeStorage: safeStorage,
     auditWitness: fakeWitness(userDataDir),
+    auditPlatform: "darwin",
     auditRequest: async (endpoint, payload) => {
       assert.equal(endpoint, "read");
       assert.deepEqual(payload.trustedCheckpoint, {
@@ -1528,6 +1531,7 @@ test("explicit enrollment of an existing chain records a forward-looking baselin
     auditBridgeToken: "a".repeat(64),
     auditSafeStorage: safeStorage,
     auditWitness: witness,
+    auditPlatform: "darwin",
     auditRequest: async (endpoint, payload) => {
       if (endpoint === "checkpoint") {
         recorded.push(payload);
@@ -1590,6 +1594,7 @@ test("native startup leaves a verified but unanchored tail unpromoted", async (t
     auditBridgeToken: "a".repeat(64),
     auditSafeStorage: safeStorage,
     auditWitness: fakeWitness(userDataDir),
+    auditPlatform: "darwin",
     auditRequest: async () => ({
       status: "partially_verified",
       sequence: 1,
@@ -1633,6 +1638,7 @@ test("verified live session closes an honest write before same-device restore", 
     auditBridgeToken: "a".repeat(64),
     auditSafeStorage: safeStorage,
     auditWitness: fakeWitness(userDataDir),
+    auditPlatform: "darwin",
     auditRequest: async (endpoint, payload) => {
       if (endpoint === "checkpoint") {
         recorded.push(payload);
@@ -1696,6 +1702,7 @@ test("transient first audit request can retry and establish the live session", a
     auditBridgeToken: "a".repeat(64),
     auditSafeStorage: safeStorage,
     auditWitness: fakeWitness(userDataDir),
+    auditPlatform: "darwin",
     auditRequest: async () => {
       attempts += 1;
       if (attempts === 1) throw new Error("temporary bridge failure");
@@ -1895,6 +1902,7 @@ test("explicit restore recovery accepts a checked older or inter-tick chain with
     auditBridgeToken: "a".repeat(64),
     auditSafeStorage: safeStorage,
     auditWitness: fakeWitness(userDataDir),
+    auditPlatform: "darwin",
     auditRequest: async (endpoint, payload) => {
       assert.equal(endpoint, "verify");
       if (payload.trustedCheckpoint) {
