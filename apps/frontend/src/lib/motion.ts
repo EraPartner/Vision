@@ -51,11 +51,28 @@ export const durations = {
 
 // ---------- Springs ----------
 
+/**
+ * Each spring is also sampled into a CSS `linear()` token in tokens.css
+ * (`--spring-<name>` + `--spring-<name>-duration`); springTokenParity.test.ts
+ * re-simulates these parameters and fails if the CSS samples drift.
+ */
 export const springs = {
     snappy: {
         type: "spring",
         stiffness: 420,
         damping: 32,
         mass: 0.7,
+    },
+    smooth: {
+        type: "spring",
+        stiffness: 300,
+        damping: 30,
+        mass: 1,
+    },
+    bouncy: {
+        type: "spring",
+        stiffness: 260,
+        damping: 20,
+        mass: 1,
     },
 } satisfies Record<string, Transition>;

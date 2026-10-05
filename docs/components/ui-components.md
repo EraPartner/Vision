@@ -2,8 +2,8 @@
 title: UI Components
 type: component
 status: active
-date: 2026-09-30
-updated: 2026-09-30
+date: 2026-10-05
+updated: 2026-10-05
 tags:
   [
     components,
@@ -133,6 +133,15 @@ Its semantic heading level is independent of typography. `CardTitle` defaults to
 `level={2}` so a page card follows the page `h1` without skipping a level. Use
 `level={3}` or `level={4}` only when the card is genuinely nested beneath a visible
 parent section heading; do not choose a level to obtain a visual size.
+
+**Role tokens** ([[docs/adr/178-design-system-role-tokens|ADR-178]]): new code picks a role
+instead of a raw size, opacity or shadow. Type uses `type-large-title`, `type-title-1..3`,
+`type-headline`, `type-body`, `type-callout`, `type-footnote` and `type-caption`; text emphasis
+uses `text-label-primary/secondary/tertiary/quaternary`; corners use `rounded-chip`,
+`rounded-control`, `rounded-card` and `rounded-sheet` (nested concentrically, optionally with
+`corner-continuous`); depth uses `shadow-elevation-1..4`; keyboard focus uses `focus-ring`; and
+spring motion pairs `ease-spring-*` with `duration-spring-*`. Existing primitives have not adopted
+these yet.
 
 **Motion and premium polish utilities**:
 

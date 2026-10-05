@@ -1582,3 +1582,109 @@
         }
     }
 }
+
+/* ------------------------------------------------------------------
+ * Design-system role utilities (ADR-178)
+ *
+ * Declared with @utility (top level) so Tailwind variants such as `md:` and
+ * `hover:` apply. Prefixed `type-` rather than `text-` so tailwind-merge never
+ * mistakes a role for a text colour and drops the call site's colour class.
+ * ------------------------------------------------------------------ */
+
+/* Type ramp. Tracking tightens as size grows (Apple's SF table direction,
+   tuned for Fraunces/Inter). Titles use the display face; the rest the body
+   face. Weight is part of the role; colour is not. */
+@utility type-large-title {
+    font-family: var(--font-display);
+    font-size: 2rem;
+    line-height: 2.375rem;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+}
+
+@utility type-title-1 {
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    line-height: 1.875rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+
+@utility type-title-2 {
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    line-height: 1.625rem;
+    font-weight: 600;
+    letter-spacing: -0.018em;
+}
+
+@utility type-title-3 {
+    font-family: var(--font-display);
+    font-size: 1.0625rem;
+    line-height: 1.375rem;
+    font-weight: 600;
+    letter-spacing: -0.014em;
+}
+
+@utility type-headline {
+    font-family: var(--font-body);
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 600;
+    letter-spacing: -0.011em;
+}
+
+@utility type-body {
+    font-family: var(--font-body);
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 400;
+    letter-spacing: -0.006em;
+}
+
+@utility type-callout {
+    font-family: var(--font-body);
+    font-size: 0.8125rem;
+    line-height: 1.125rem;
+    font-weight: 400;
+    letter-spacing: -0.004em;
+}
+
+@utility type-footnote {
+    font-family: var(--font-body);
+    font-size: 0.75rem;
+    line-height: 1rem;
+    font-weight: 400;
+    letter-spacing: 0;
+}
+
+@utility type-caption {
+    font-family: var(--font-body);
+    font-size: 0.6875rem;
+    line-height: 0.875rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+}
+
+/* macOS-style keyboard focus: a translucent ring that hugs the element's own
+   corner (outlines follow border-radius), leaving its box-shadow untouched. */
+@utility focus-ring {
+    &:focus-visible {
+        outline: 3px solid hsl(var(--ring) / 0.45);
+        outline-offset: 1px;
+    }
+
+    @media (prefers-contrast: more) {
+        &:focus-visible {
+            outline-color: hsl(var(--ring));
+        }
+    }
+}
+
+/* Continuous (squircle) corners where the engine supports corner-shape;
+   elsewhere the element keeps its ordinary circular radius. */
+@utility corner-continuous {
+    @supports (corner-shape: squircle) {
+        corner-shape: squircle;
+    }
+}
