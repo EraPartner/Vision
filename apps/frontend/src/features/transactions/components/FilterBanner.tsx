@@ -6,6 +6,7 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import { TransactionsExportButtons } from "./TransactionsExportButtons";
+import { useRecipient } from "@/hooks/useRecipients";
 
 interface FilterBannerProps {
     transactionIdFilter?: number;
@@ -48,6 +49,7 @@ export function FilterBanner({
     onClearTags,
 }: FilterBannerProps) {
     const { t } = useLanguage();
+    const recipientQuery = useRecipient(recipientIdFilter ?? null);
     const { appSettings } = useAppSettings();
 
     const hasAmountFilter = amountMinFilter != null || amountMaxFilter != null;
@@ -100,7 +102,10 @@ export function FilterBanner({
         );
     if (recipientIdFilter)
         scopeDescriptors.push(
-            t("filter.recipientId", { id: recipientIdFilter }),
+            recipientQuery.data?.name ??
+                (recipientQuery.isError
+                    ? t("filter.recipientUnknown")
+                    : t("filter.recipientId", { id: recipientIdFilter })),
         );
     if (categoryIdFilter)
         scopeDescriptors.push(t("filter.categoryId", { id: categoryIdFilter }));

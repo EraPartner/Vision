@@ -161,7 +161,7 @@ export function CategoryNodeDialog({
                         {isPending && (
                             <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                         )}
-                        {editNode ? t("common.save") : t("common.create")}
+                        {editNode ? t("common.save") : t("categories.createButton")}
                     </Button>
                 </DialogFooter>
             </form>

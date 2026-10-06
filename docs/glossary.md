@@ -3,7 +3,7 @@ title: Glossary & Terminology
 type: reference
 status: active
 date: 2026-03-31
-updated: 2026-09-04
+updated: 2026-10-06
 tags: [glossary, terminology, reference, search]
 description: Key terms, aliases, and disambiguation for the Vision project - helps with search and navigation
 aliases: [glossary, terms, terminology, dictionary, vocabulary, disambiguation]
@@ -20,7 +20,7 @@ aliases: [glossary, terms, terminology, dictionary, vocabulary, disambiguation]
 | ----------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
 | **Transaction**         | financial record, entry                               | A single income or expense record. Negative = expense, positive = income.                                                       | [[docs/features/transactions\|Transactions]]                |
 | **Category**            | label, tag                                            | Organization label in `GENERAL:DETAIL` format (e.g., `FOOD:GROCERIES`).                                                         | [[docs/api/categories\|Categories API]]                     |
-| **Recipient**           | payee, payer, counterparty                            | Person or entity associated with a transaction.                                                                                 | [[docs/api/recipients\|Recipients API]]                     |
+| **Recipient**           | payee, payer, counterparty                            | Person or entity associated with a transaction. The English UI calls it a **payee** and the Dutch UI an **ontvanger** ([[docs/adr/182-ui-copy-plain-words\|ADR-182]]); keys and API paths keep *recipient*. | [[docs/api/recipients\|Recipients API]]                     |
 | **Planned Transaction** | planned payment, scheduled payment, recurring payment | Future-dated transaction that can be one-time or recurring.                                                                     | [[docs/features/plannedTransactions\|Planned Transactions]] |
 | **Portfolio**           | investments, holdings                                 | Collection of owned positions (stocks, ETFs, crypto, metals, real estate, savings, bonds).                                      | [[docs/features/portfolio\|Portfolio]]                      |
 | **Investment**          | instrument, asset                                     | The entity selected, imported, created, or deleted (for example, Apple Inc. stock). Dutch: `belegging`.                         | [[docs/api/investments\|Investments API]]                   |

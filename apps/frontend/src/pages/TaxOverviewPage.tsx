@@ -111,7 +111,7 @@ export default function TaxOverviewPage() {
             <PageShell className="" data-print-page="tax">
                 <PageHeader
                     title={t("tax.page.title")}
-                    subtitle={t("tax.page.subtitle")}
+                    subtitle={t("tax.page.subtitle", { year: viewedYear })}
                     icon={PAGE_ICONS["/tax"]}
                 />
                 <Card>
@@ -132,7 +132,7 @@ export default function TaxOverviewPage() {
             <PageShell className="" data-print-page="tax">
                 <PageHeader
                     title={t("tax.page.title")}
-                    subtitle={t("tax.page.subtitle")}
+                    subtitle={t("tax.page.subtitle", { year: viewedYear })}
                     icon={PAGE_ICONS["/tax"]}
                     actions={
                         <div

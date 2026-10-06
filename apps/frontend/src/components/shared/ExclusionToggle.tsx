@@ -20,34 +20,30 @@ export function ExclusionToggle({
   exclusionsApply,
 }: ExclusionToggleProps) {
   const { t } = useLanguage();
+  // Nothing to toggle when Settings has no exclusions: the control is hidden rather
+  // than shown disabled.
+  if (!exclusionsApply) return null;
   return (
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            variant={isFiltered && exclusionsApply ? "default" : "outline"}
+            variant={isFiltered ? "default" : "outline"}
             size="sm"
             className={cn(
               "h-8 gap-2 text-xs ml-4 font-medium transition-colors",
-              isFiltered && exclusionsApply
+              isFiltered
                 ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                 : 'hover:bg-muted'
             )}
             onClick={() => onToggle(graphKey)}
-            disabled={!exclusionsApply}
           >
             {isFiltered ? <Filter className="h-4 w-4" /> : <FilterX className="h-4 w-4" />}
-            {exclusionsApply
-              ? (isFiltered ? t('exclusion.filtersActive') : t('exclusion.filtersIgnored'))
-              : t('exclusion.noExclusions')}
+            {isFiltered ? t('exclusion.filtersActive') : t('exclusion.filtersIgnored')}
           </Button>
         </TooltipTrigger>
         <TooltipContent>
-          {!exclusionsApply
-            ? t('exclusion.tooltipNone')
-            : isFiltered
-              ? t('exclusion.tooltipActive')
-              : t('exclusion.tooltipInactive')}
+          {isFiltered ? t('exclusion.tooltipActive') : t('exclusion.tooltipInactive')}
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>

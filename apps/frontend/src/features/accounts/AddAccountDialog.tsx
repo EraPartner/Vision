@@ -652,7 +652,7 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
                         {isPending && (
                             <Loader2 className="h-4 w-4 animate-spin mr-1" />
                         )}
-                        {isEditMode ? t("common.save") : t("common.create")}
+                        {isEditMode ? t("common.save") : t("accounts.addTitle")}
                     </Button>
                 </DialogFooter>
             </form>

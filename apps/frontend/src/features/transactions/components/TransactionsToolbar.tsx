@@ -297,7 +297,7 @@ export function TransactionsToolbar({
                         checked={showAll}
                         onCheckedChange={(checked) => onShowAllChange(checked === true)}
                     >
-                        {t("common.includeInactive")}
+                        {t("txPage.view.showExcluded")}
                     </DropdownMenuCheckboxItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuLabel>{t("txPage.view.columns")}</DropdownMenuLabel>

@@ -19,6 +19,13 @@ aliases: [ADRs, decisions, architecture decisions]
 
 [[docs/adr/172-calm-information-hierarchy|ADR-172]] reserves primary emphasis for selected totals and makes supporting surfaces quieter while preserving the visual identity.
 
+## Current copy decision
+
+[[docs/adr/182-ui-copy-plain-words|ADR-182]] puts the English and Dutch UI copy on the
+plain-words rule: sentence case outside navigation labels and proper names, *payee* for the
+counterparty, *excluded* for a transaction left out of totals, *income tax* instead of PIT,
+*exchange rate* instead of FX, and planned payments *marked as paid*.
+
 ## Current screen redesign decision
 
 [[docs/adr/181-home-transactions-redesign|ADR-181]] moves Home, Transactions and New Transaction

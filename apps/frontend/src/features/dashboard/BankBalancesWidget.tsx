@@ -67,7 +67,7 @@ function shortAccountName(account: string): string {
 }
 
 export function BankBalancesWidget() {
-    const { t, language } = useLanguage();
+    const { t, tc, language } = useLanguage();
     const monthLabelLocale = appLanguageToLocale(language);
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const { appSettings } = useAppSettings();
@@ -300,9 +300,7 @@ export function BankBalancesWidget() {
                             the count is that array's length — NOT the balance
                             cards below, which are a differently gated
                             (active-only, non-zero-balance) entity population. */}
-                        {t("bankWidget.acrossAccounts", {
-                            n: accounts.length.toString(),
-                        })}
+                        {tc("bankWidget.acrossAccounts", accounts.length)}
                     </p>
                 </CardContent>
             </Card>

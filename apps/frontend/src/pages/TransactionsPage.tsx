@@ -847,6 +847,7 @@ export default function TransactionsPage() {
                                 search: {
                                     onChange: setSearch,
                                     value: search,
+                                    placeholder: t("txPage.searchPlaceholder"),
                                     suggestions: ({ query, close }) => (
                                         <TransactionSearchSuggestions
                                             query={query}
