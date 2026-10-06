@@ -13,7 +13,7 @@ const Command = React.forwardRef<
     <CommandPrimitive
         ref={ref}
         className={cn(
-            "flex h-full w-full flex-col overflow-hidden rounded-xl bg-transparent text-popover-foreground",
+            "flex h-full w-full flex-col overflow-hidden rounded-card bg-transparent text-popover-foreground",
             className,
         )}
         {...props}
@@ -41,11 +41,11 @@ const CommandInput = React.forwardRef<
     React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input>
 >(({className, ...props}, ref) => (
     <div className="flex items-center border-b border-border/50 px-4" cmdk-input-wrapper="">
-        <Search className="mr-3 h-4 w-4 shrink-0 text-muted-foreground/70"/>
+        <Search className="mr-3 h-4 w-4 shrink-0 text-label-tertiary"/>
         <CommandPrimitive.Input
             ref={ref}
             className={cn(
-                "flex h-12 w-full rounded-md bg-transparent py-3 text-sm tracking-tight text-foreground outline-none placeholder:text-muted-foreground/70 disabled:cursor-not-allowed disabled:opacity-50",
+                "flex h-12 w-full rounded-md bg-transparent py-3 type-body text-foreground outline-none placeholder:text-label-tertiary disabled:cursor-not-allowed disabled:opacity-50",
                 className,
             )}
             {...props}
@@ -74,7 +74,7 @@ const CommandEmpty = React.forwardRef<
 >((props, ref) => (
     <CommandPrimitive.Empty
         ref={ref}
-        className="py-8 text-center text-sm tracking-tight text-muted-foreground/80"
+        className="py-8 text-center type-body text-label-secondary"
         {...props}
     />
 ));
@@ -112,7 +112,7 @@ const CommandItem = React.forwardRef<
     <CommandPrimitive.Item
         ref={ref}
         className={cn(
-            "relative flex cursor-default select-none items-center gap-2 rounded-lg px-3 py-2 text-sm tracking-tight outline-none transition-[background-color,color] duration-[var(--duration-fast)] ease-[var(--ease-glide)] data-[disabled=true]:pointer-events-none data-[selected='true']:bg-primary/10 data-[selected=true]:text-foreground data-[disabled=true]:opacity-50",
+            "relative flex cursor-default select-none items-center gap-2 rounded-control px-3 py-2 type-body outline-none transition-[background-color,color] duration-fast ease-glide data-[disabled=true]:pointer-events-none data-[selected='true']:bg-primary/10 data-[selected=true]:text-foreground data-[disabled=true]:opacity-50",
             className,
         )}
         {...props}

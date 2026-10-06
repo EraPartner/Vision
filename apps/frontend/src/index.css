@@ -80,11 +80,21 @@
         color: hsl(var(--foreground) / 0.72) !important;
     }
 
-    /* Focus ring — emerald, glass-aware */
+    /* Keyboard focus — the one macOS-style ring (ADR-178, ADR-179). The same
+       translucent 3px outline the `focus-ring` utility draws, so an element
+       with no utility of its own still gets the house ring. Outlines follow
+       the element's own border-radius, so no radius is forced here: the old
+       rule reshaped every focused element to a control radius. Primitives
+       that set `outline-none` restate the ring through `focus-ring`. */
     :focus-visible {
-        outline: 2px solid hsl(var(--ring) / 0.7);
-        outline-offset: 2px;
-        border-radius: calc(var(--radius) - 2px);
+        outline: 3px solid hsl(var(--ring) / var(--focus-ring-alpha));
+        outline-offset: 1px;
+    }
+
+    @media (prefers-contrast: more) {
+        :focus-visible {
+            outline-color: hsl(var(--ring));
+        }
     }
 
     ::selection {
@@ -167,6 +177,12 @@
      * thick    — dialogs, popovers
      * chrome   — sidebar rail, floating toolbars
      * elevated — hero tiles, featured KPIs
+     *
+     * Depth comes from the elevation tokens (ADR-178): thin reads
+     * --elevation-1, regular 2, elevated 3, thick 4, so every material
+     * shares one shadow model (contact + ambient) and theme variants keep
+     * their own shadow hue through --glass-shadow. Fills, borders and blur
+     * are unchanged.
      * ------------------------------------------------------------------ */
 
     .glass {
@@ -237,9 +253,7 @@
             hsl(var(--glass-surface) / 0.56) 100%
         );
         border: 1px solid hsl(var(--glass-border) / 0.08);
-        box-shadow:
-            0 1px 0 hsl(var(--glass-highlight) / 0.3) inset,
-            0 1px 18px hsl(var(--glass-shadow) / 0.06);
+        box-shadow: var(--elevation-1);
     }
 
     .dark .glass-thin,
@@ -249,9 +263,7 @@
             hsl(var(--glass-surface) / 0.64) 0%,
             hsl(var(--glass-surface-deep) / 0.78) 100%
         );
-        box-shadow:
-            0 1px 0 hsl(var(--glass-highlight) / 0.06) inset,
-            0 1px 24px hsl(var(--glass-shadow) / 0.35);
+        box-shadow: var(--elevation-1);
     }
 
     /* Regular — explicit stronger content material */
@@ -266,9 +278,7 @@
             hsl(var(--glass-surface) / 0.52) 100%
         );
         border: 1px solid hsl(var(--glass-border) / 0.1);
-        box-shadow:
-            inset 0 1px 0 hsl(var(--glass-highlight) / 0.6),
-            0 6px 20px -8px hsl(var(--glass-shadow) / 0.14);
+        box-shadow: var(--elevation-2);
     }
 
     .dark .glass-regular,
@@ -282,9 +292,7 @@
             hsl(var(--glass-surface-deep) / 0.9) 100%
         );
         border: 1px solid hsl(var(--glass-border) / 0.08);
-        box-shadow:
-            inset 0 1px 0 hsl(var(--glass-highlight) / 0.12),
-            0 8px 24px -8px hsl(var(--glass-shadow) / 0.5);
+        box-shadow: var(--elevation-2);
     }
 
     /* Thick — dialogs, popovers, important overlays */
@@ -296,11 +304,7 @@
             hsl(var(--glass-surface-deep) / 0.7) 100%
         );
         border: 1px solid hsl(var(--glass-border) / 0.14);
-        box-shadow:
-            0 1px 0 hsl(var(--glass-highlight) / 0.5) inset,
-            0 -1px 0 hsl(var(--glass-shadow) / 0.1) inset,
-            0 8px 16px hsl(var(--glass-shadow) / 0.14),
-            0 24px 64px -24px hsl(var(--glass-shadow) / 0.25);
+        box-shadow: var(--elevation-4);
     }
 
     .dark .glass-thick {
@@ -311,11 +315,7 @@
             hsl(var(--glass-surface-deep) / 0.94) 100%
         );
         border: 1px solid hsl(var(--glass-border) / 0.1);
-        box-shadow:
-            0 1px 0 hsl(var(--glass-highlight) / 0.1) inset,
-            0 -1px 0 hsl(var(--glass-shadow) / 0.35) inset,
-            0 8px 16px hsl(var(--glass-shadow) / 0.42),
-            0 32px 80px -28px hsl(var(--glass-shadow) / 0.55);
+        box-shadow: var(--elevation-4);
     }
 
     /* Chrome — sidebar rail, persistent toolbars.
@@ -372,9 +372,7 @@
             hsl(var(--glass-tint) / 0.08) 100%
         );
         border: 1px solid hsl(var(--glass-border) / 0.16);
-        box-shadow:
-            inset 0 1px 0 hsl(var(--glass-highlight) / 0.72),
-            0 18px 46px -16px hsl(var(--glass-shadow) / 0.3);
+        box-shadow: var(--elevation-3);
     }
 
     .dark .glass-elevated,
@@ -386,9 +384,7 @@
             hsl(var(--glass-tint) / 0.22) 100%
         );
         border: 1px solid hsl(var(--glass-border) / 0.12);
-        box-shadow:
-            inset 0 1px 0 hsl(var(--glass-highlight) / 0.18),
-            0 22px 56px -18px hsl(var(--glass-shadow) / 0.72);
+        box-shadow: var(--elevation-3);
     }
 
     /* Frozen first column inside a glass card. Keep each cell opaque so a wide

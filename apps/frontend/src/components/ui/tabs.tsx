@@ -52,7 +52,7 @@ const TabsList = React.forwardRef<
             // dragging the whole page into horizontal panning. The scrollbar is
             // hidden because the app's 10px bar would eat a quarter of the h-10
             // row; when everything fits (desktop) nothing about the list changes.
-            "inline-flex h-10 max-w-full items-center justify-center gap-1 overflow-x-auto rounded-xl border border-border/50 bg-muted/70 p-1 text-muted-foreground [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+            "inline-flex h-9 max-w-full items-center justify-center gap-1 overflow-x-auto rounded-card corner-continuous border border-border/50 bg-muted/70 p-1 text-label-secondary [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
             className,
         )}
         {...props}
@@ -74,7 +74,7 @@ const TabsTrigger = React.forwardRef<
             ref={ref}
             value={value}
             className={cn(
-                "relative inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium tracking-tight ring-offset-background transition-[color] duration-[var(--duration-normal)] ease-[var(--ease-glide)] hover:text-foreground/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:text-foreground",
+                "relative inline-flex items-center justify-center whitespace-nowrap rounded-control px-3 py-1 type-body font-medium transition-[color] duration-normal ease-glide hover:text-foreground focus-ring disabled:pointer-events-none disabled:opacity-50 data-[state=active]:text-foreground",
                 className,
             )}
             {...props}
@@ -84,7 +84,7 @@ const TabsTrigger = React.forwardRef<
                     layoutId={`${layoutId}-pill`}
                     aria-hidden="true"
                     transition={reducedMotion ? {duration: 0} : springs.snappy}
-                    className="absolute inset-0 rounded-lg bg-background/90 shadow-[0_4px_14px_-6px_hsl(var(--primary)/0.25)] ring-1 ring-primary/20"
+                    className="absolute inset-0 rounded-control bg-background/90 shadow-[0_4px_14px_-6px_hsl(var(--primary)/0.25)] ring-1 ring-primary/20"
                 />
             )}
             <span className="relative z-10 inline-flex items-center gap-2">{children}</span>
@@ -100,7 +100,7 @@ const TabsContent = React.forwardRef<
     <TabsPrimitive.Content
         ref={ref}
         className={cn(
-            "mt-3 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2",
+            "mt-3 focus-ring",
             className,
         )}
         {...props}

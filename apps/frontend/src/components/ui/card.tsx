@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
  * cancels it with matching specificity in index.css.
  */
 const cardVariants = cva(
-    "card-material glass-thin premium-frame relative rounded-[0.75rem] text-card-foreground",
+    "card-material glass-thin premium-frame relative rounded-card corner-continuous text-card-foreground",
     {
         variants: {
             variant: {
@@ -63,10 +63,9 @@ CardHeader.displayName = "CardHeader";
 const cardTitleVariants = cva("leading-tight", {
     variants: {
         variant: {
-            default:
-                "font-display text-xl font-semibold tracking-tight text-foreground",
-            sm: "font-display text-lg font-semibold tracking-tight text-foreground",
-            label: "font-sans text-sm font-medium text-muted-foreground",
+            default: "type-title-2 text-foreground",
+            sm: "type-title-3 text-foreground",
+            label: "type-body font-medium text-label-secondary",
         },
     },
     defaultVariants: {
@@ -102,10 +101,7 @@ const CardDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
     <p
         ref={ref}
-        className={cn(
-            "text-sm text-muted-foreground/90 tracking-tight",
-            className,
-        )}
+        className={cn("type-body text-label-secondary", className)}
         {...props}
     />
 ));

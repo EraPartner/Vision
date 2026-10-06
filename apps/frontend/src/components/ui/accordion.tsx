@@ -16,10 +16,10 @@ const AccordionItem = React.forwardRef<
 AccordionItem.displayName = "AccordionItem";
 
 const triggerBase =
-    "group flex flex-1 items-center justify-between gap-4 py-4 text-left text-sm font-medium tracking-tight text-foreground/90 outline-none transition-colors duration-[var(--duration-fast)] hover:text-foreground focus-visible:text-foreground data-[state=open]:text-foreground";
+    "group flex flex-1 items-center justify-between gap-4 py-4 text-left text-sm font-medium tracking-tight text-foreground/90 outline-none transition-colors duration-fast hover:text-foreground focus-visible:text-foreground data-[state=open]:text-foreground";
 
 const chevronBase =
-    "h-4 w-4 shrink-0 text-muted-foreground/80 transition-transform duration-[var(--duration-normal)] ease-[var(--ease-glide)]";
+    "h-4 w-4 shrink-0 text-muted-foreground/80 transition-transform duration-normal ease-glide";
 
 interface AccordionTriggerProps
     extends React.ComponentPropsWithoutRef<typeof AccordionPrimitive.Trigger> {

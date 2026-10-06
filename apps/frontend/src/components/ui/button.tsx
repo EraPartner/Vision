@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 /* Press feedback composes its transition through --press-compose. Keep the
    transform entry so active feedback and reduced-motion handling stay shared. */
 const buttonVariants = cva(
-    "press-feedback [--press-compose:background-color_var(--duration-fast)_var(--ease-glide),box-shadow_var(--duration-fast)_var(--ease-glide),color_var(--duration-fast)_var(--ease-glide),transform_var(--duration-press)_ease-out] inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium tracking-tight ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+    "press-feedback [--press-compose:background-color_var(--duration-fast)_var(--ease-glide),box-shadow_var(--duration-fast)_var(--ease-glide),color_var(--duration-fast)_var(--ease-glide),transform_var(--duration-press)_ease-out] inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-control type-body font-medium focus-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
     {
         variants: {
             variant: {
@@ -23,11 +23,14 @@ const buttonVariants = cva(
                 link: "text-primary underline-offset-4 hover:underline decoration-primary/50",
                 accent: "bg-accent text-accent-foreground shadow-sm hover:bg-accent/92",
             },
+            // macOS regular control height is 36px (ADR-179); `sm` is the
+            // 32px small size, `lg` the 40px large one. Icon-only actions that
+            // need a 40px touch target add `.icon-touch-target`.
             size: {
-                default: "h-10 px-4 py-2",
-                sm: "h-9 px-3",
-                lg: "h-11 rounded-xl px-8 text-[0.95rem]",
-                icon: "h-10 w-10",
+                default: "h-9 px-4",
+                sm: "h-8 px-3",
+                lg: "h-10 px-6",
+                icon: "h-9 w-9",
             },
         },
         defaultVariants: {

@@ -34,7 +34,7 @@ const Slider = React.forwardRef<
                 aria-labelledby={ariaLabelledBy}
                 aria-describedby={ariaDescribedBy}
                 aria-valuetext={ariaValueText}
-                className="block h-5 w-5 rounded-full border border-primary/40 bg-background shadow-glass-soft ring-offset-background transition-[scale,box-shadow] motion-reduce:transition-[box-shadow] duration-[var(--duration-fast)] hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+                className="block h-5 w-5 rounded-full border border-primary/40 bg-background shadow-glass-soft transition-[scale,box-shadow] motion-reduce:transition-[box-shadow] duration-fast hover:scale-110 focus-ring disabled:pointer-events-none disabled:opacity-50"
             />
         </SliderPrimitive.Root>
     ),

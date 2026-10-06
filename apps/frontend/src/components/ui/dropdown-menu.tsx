@@ -17,7 +17,7 @@ const DropdownMenuSub = DropdownMenuPrimitive.Sub;
 const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup;
 
 const itemBase =
-    "relative flex cursor-default select-none items-center rounded-md px-2 py-1.5 text-sm tracking-tight outline-none transition-colors duration-[var(--duration-fast)] data-[disabled]:pointer-events-none data-[disabled]:opacity-50 focus:bg-primary/10 focus:text-foreground data-[state=open]:bg-primary/10";
+    "relative flex cursor-default select-none items-center rounded-md px-2 py-1.5 type-body outline-none transition-colors duration-fast data-[disabled]:pointer-events-none data-[disabled]:opacity-50 focus:bg-primary/10 focus:text-foreground data-[state=open]:bg-primary/10";
 
 const DropdownMenuSubTrigger = React.forwardRef<
     React.ElementRef<typeof DropdownMenuPrimitive.SubTrigger>,
@@ -37,7 +37,7 @@ const DropdownMenuSubTrigger = React.forwardRef<
 DropdownMenuSubTrigger.displayName = DropdownMenuPrimitive.SubTrigger.displayName;
 
 const contentBase =
-    "z-50 min-w-[8rem] overflow-hidden rounded-xl glass-thick p-1.5 text-popover-foreground data-[state=open]:animate-in data-[state=open]:duration-[var(--duration-fast)] data-[state=closed]:animate-out data-[state=closed]:duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none";
+    "z-50 min-w-[8rem] overflow-hidden rounded-card corner-continuous glass-thick p-1.5 text-popover-foreground data-[state=open]:animate-in data-[state=open]:duration-fast data-[state=closed]:animate-out data-[state=closed]:duration-fast ease-out-expo data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none";
 
 const DropdownMenuSubContent = React.forwardRef<
     React.ElementRef<typeof DropdownMenuPrimitive.SubContent>,
@@ -142,7 +142,7 @@ const DropdownMenuSeparator = React.forwardRef<
 DropdownMenuSeparator.displayName = DropdownMenuPrimitive.Separator.displayName;
 
 const DropdownMenuShortcut = ({className, ...props}: React.HTMLAttributes<HTMLSpanElement>) => {
-    return <span className={cn("ml-auto text-xs tracking-widest text-muted-foreground/70", className)} {...props} />;
+    return <span className={cn("ml-auto type-footnote tracking-widest text-label-tertiary", className)} {...props} />;
 };
 DropdownMenuShortcut.displayName = "DropdownMenuShortcut";
 

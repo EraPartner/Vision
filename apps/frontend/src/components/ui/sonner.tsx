@@ -23,13 +23,13 @@ const Toaster = ({...props}: ToasterProps) => {
                 toastOptions={{
                     classNames: {
                         toast:
-                            "group toast glass-thick group-[.toaster]:rounded-xl group-[.toaster]:text-foreground group-[.toaster]:tracking-tight",
-                        title: "group-[.toast]:font-display group-[.toast]:text-sm group-[.toast]:font-semibold",
-                        description: "group-[.toast]:text-muted-foreground/90",
+                            "group toast glass-thick group-[.toaster]:rounded-card group-[.toaster]:corner-continuous group-[.toaster]:text-foreground",
+                        title: "group-[.toast]:type-headline",
+                        description: "group-[.toast]:type-body group-[.toast]:text-label-secondary",
                         actionButton:
-                            "group-[.toast]:rounded-md group-[.toast]:bg-primary group-[.toast]:text-primary-foreground group-[.toast]:shadow-[0_4px_14px_-6px_hsl(var(--primary)/0.4)]",
+                            "group-[.toast]:rounded-chip group-[.toast]:bg-primary group-[.toast]:text-primary-foreground group-[.toast]:shadow-[0_4px_14px_-6px_hsl(var(--primary)/0.4)]",
                         cancelButton:
-                            "group-[.toast]:rounded-md group-[.toast]:bg-foreground/[0.06] group-[.toast]:text-muted-foreground",
+                            "group-[.toast]:rounded-chip group-[.toast]:bg-foreground/[0.06] group-[.toast]:text-label-secondary",
                         success: "group-[.toaster]:text-success",
                         error: "group-[.toaster]:text-destructive",
                     },

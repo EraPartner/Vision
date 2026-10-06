@@ -4,7 +4,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const badgeVariants = cva(
-    "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium leading-4 normal-case tracking-normal transition-[background-color,color,border-color] duration-[var(--duration-fast)] ease-[var(--ease-glide)] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2",
+    "inline-flex items-center rounded-full border px-2.5 py-0.5 type-footnote font-medium normal-case transition-[background-color,color,border-color] duration-fast ease-glide focus-ring",
     {
         variants: {
             variant: {
@@ -31,7 +31,7 @@ const badgeVariants = cva(
             // Both sizes use readable body text; `sm` tightens horizontal padding.
             size: {
                 default: "",
-                sm: "px-2 py-0.5 text-xs normal-case tracking-normal",
+                sm: "px-2 py-0.5",
             },
         },
         defaultVariants: {

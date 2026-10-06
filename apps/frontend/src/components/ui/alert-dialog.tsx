@@ -41,7 +41,7 @@ const AlertDialogContent = React.forwardRef<
         <AlertDialogPrimitive.Content
             ref={composeRefs(ref, genieRef)}
             className={cn(
-                "glass-thick fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-5 rounded-2xl p-6 shadow-glass-elevated data-[state=open]:animate-dialog-in data-[state=closed]:animate-dialog-out data-[state=closed]:[transform-origin:var(--genie-origin,50%_50%)] motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none",
+                "glass-thick fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-5 rounded-sheet corner-continuous p-6 data-[state=open]:animate-dialog-in data-[state=closed]:animate-dialog-out data-[state=closed]:[transform-origin:var(--genie-origin,50%_50%)] motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none",
                 className,
             )}
             {...props}
@@ -67,7 +67,7 @@ const AlertDialogTitle = React.forwardRef<
 >(({className, ...props}, ref) => (
     <AlertDialogPrimitive.Title
         ref={ref}
-        className={cn("font-display text-xl font-semibold leading-tight tracking-tight text-foreground", className)}
+        className={cn("type-title-2 text-foreground", className)}
         {...props}
     />
 ));
@@ -79,7 +79,7 @@ const AlertDialogDescription = React.forwardRef<
 >(({className, ...props}, ref) => (
     <AlertDialogPrimitive.Description
         ref={ref}
-        className={cn("text-sm text-muted-foreground/90 tracking-tight", className)}
+        className={cn("type-body text-label-secondary", className)}
         {...props}
     />
 ));
