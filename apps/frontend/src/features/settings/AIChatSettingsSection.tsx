@@ -17,7 +17,7 @@ export function AIChatSettingsSection({ value, onChange }: AIChatSettingsSection
     const modelLabelId = useId();
 
     const statusDotClass = statusLoading
-        ? 'bg-muted-foreground/50'
+        ? 'bg-label-tertiary'
         : status?.ok
             ? 'bg-success'
             : 'bg-destructive';
@@ -34,7 +34,7 @@ export function AIChatSettingsSection({ value, onChange }: AIChatSettingsSection
     const statusDescription = (
         <span className="block space-y-1">
             {(status?.displayUrl || status?.baseUrl) && (
-                <span className="block break-all font-mono text-muted-foreground">
+                <span className="block break-all font-mono text-label-secondary">
                     {status.displayUrl || status.baseUrl}
                 </span>
             )}
@@ -42,7 +42,7 @@ export function AIChatSettingsSection({ value, onChange }: AIChatSettingsSection
                 <span className="block text-destructive">{status.error}</span>
             )}
             {!status?.ok && !statusLoading && status?.hint && (
-                <span className="block text-muted-foreground">{status.hint}</span>
+                <span className="block text-label-secondary">{status.hint}</span>
             )}
         </span>
     );
@@ -52,7 +52,7 @@ export function AIChatSettingsSection({ value, onChange }: AIChatSettingsSection
             <SettingRow title={t('settings.aiChat.status')} description={statusDescription}>
                 <div className="flex items-center gap-2">
                     <span aria-hidden="true" className={cn('inline-block h-2 w-2 rounded-full', statusDotClass)} />
-                    <span className="text-sm text-foreground">{statusLabel}</span>
+                    <span className="type-body text-foreground">{statusLabel}</span>
                 </div>
             </SettingRow>
             <SettingRow

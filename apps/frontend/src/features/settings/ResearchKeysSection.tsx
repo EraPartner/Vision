@@ -78,7 +78,7 @@ export function ResearchKeysSection() {
             ))}
             {isLoading && (
                 <SettingRow title={t("settings.research.loading")}>
-                    <span className="text-xs text-muted-foreground">…</span>
+                    <span className="type-footnote text-label-secondary">…</span>
                 </SettingRow>
             )}
         </SettingsGroup>
@@ -129,7 +129,7 @@ function ProviderKeyRow({
                     className={cn(
                         status.configured
                             ? "text-success"
-                            : "text-muted-foreground",
+                            : "text-label-secondary",
                     )}
                 >
                     {sourceLabel}
@@ -146,11 +146,10 @@ function ProviderKeyRow({
                     value={value}
                     onChange={(e) => setValue(e.target.value)}
                     placeholder={t("settings.research.placeholder")}
-                    className="h-8 text-sm font-mono"
+                    className="font-mono"
                     autoComplete="off"
                 />
                 <Button
-                    size="sm"
                     variant="outline"
                     disabled={!value.trim() || saving}
                     onClick={() => {
@@ -162,7 +161,6 @@ function ProviderKeyRow({
                 </Button>
                 {status.source === "settings" && (
                     <Button
-                        size="sm"
                         variant="ghost"
                         disabled={clearing}
                         onClick={onClear}
@@ -171,7 +169,7 @@ function ProviderKeyRow({
                     </Button>
                 )}
             </div>
-            <p className="text-2xs text-muted-foreground font-mono">
+            <p className="mt-2 font-mono type-caption text-label-tertiary">
                 {status.envVar}
             </p>
         </SettingRow>

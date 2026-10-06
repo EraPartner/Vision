@@ -2,6 +2,14 @@ import { useId, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
 import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card";
+import { List } from "@/components/ui/list";
+import {
     Select,
     SelectContent,
     SelectItem,
@@ -10,88 +18,78 @@ import {
 } from "@/components/ui/select";
 
 /**
- * Shared layout primitives for the Settings dialog. One visual language for
- * every setting: a section (title + optional description) holds one or more
- * cards; each card is a bordered, row-divided group of SettingRows.
+ * Shared layout primitives for the Settings window (ADR-183). One visual
+ * language for every setting: a section is the content of one sidebar entry
+ * and holds one or more groups; each group is a Card whose flush content is an
+ * inset list of SettingRows (label and optional footnote on the left, an h-9
+ * control on the right).
  *
- * These replace the previous per-tab mix of bare rows, full-width separators,
- * and ad-hoc bordered cards.
+ * The window's title bar already names the section, so SettingsSection renders
+ * no heading of its own; `title` labels the landmark for assistive technology.
  */
 
 interface SettingsSectionProps {
-    title: ReactNode;
-    description?: ReactNode;
-    /** Optional trailing element rendered on the title row (e.g. a status pill). */
-    aside?: ReactNode;
+    title: string;
     children: ReactNode;
 }
 
-export function SettingsSection({
-    title,
-    description,
-    aside,
-    children,
-}: SettingsSectionProps) {
+export function SettingsSection({ title, children }: SettingsSectionProps) {
     return (
-        <section className="space-y-4">
-            <div className="flex items-start justify-between gap-4">
-                <div className="space-y-1">
-                    <h2 className="text-base font-semibold text-foreground">
-                        {title}
-                    </h2>
-                    {description && (
-                        <p className="text-sm text-muted-foreground">
-                            {description}
-                        </p>
-                    )}
-                </div>
-                {aside && <div className="shrink-0">{aside}</div>}
-            </div>
-            <div className="space-y-5">{children}</div>
+        <section aria-label={title} className="space-y-6">
+            {children}
         </section>
     );
 }
 
 interface SettingsGroupProps {
-    /** Optional small label above the card grouping a cluster of rows. */
+    /** Group title above the rows, set as a label-variant card title. */
     label?: ReactNode;
     description?: ReactNode;
+    /** Optional trailing element on the title row (e.g. a count badge). */
+    aside?: ReactNode;
     children: ReactNode;
     className?: string;
 }
 
 /**
- * A bordered card that groups related SettingRows, dividing them with hairlines
- * instead of full-width separators. Pass `label` and `description` for group
- * context above the card without inventing another section-heading anatomy.
+ * A Card that groups related SettingRows on one surface, dividing them with
+ * hairlines. Pass `label` and `description` for group context without
+ * inventing another heading anatomy.
  */
 export function SettingsGroup({
     label,
     description,
+    aside,
     children,
     className,
 }: SettingsGroupProps) {
     return (
-        <div className="space-y-2">
+        <Card className={cn("@container/settings", className)}>
             {(label || description) && (
-                <div className="space-y-0.5 px-1">
-                    {label && <div className="eyebrow">{label}</div>}
+                <CardHeader className="space-y-0.5 px-4 pb-2 pt-4">
+                    <div className="flex items-center justify-between gap-3">
+                        {label ? (
+                            <CardTitle variant="label" level={3}>
+                                {label}
+                            </CardTitle>
+                        ) : (
+                            <span />
+                        )}
+                        {aside && <div className="shrink-0">{aside}</div>}
+                    </div>
                     {description && (
-                        <p className="text-xs text-muted-foreground">
+                        <CardDescription className="type-footnote">
                             {description}
-                        </p>
+                        </CardDescription>
                     )}
-                </div>
+                </CardHeader>
             )}
-            <div
-                className={cn(
-                    "@container/settings overflow-hidden rounded-xl border border-border bg-card/40 divide-y divide-border/60",
-                    className,
-                )}
-            >
-                {children}
-            </div>
-        </div>
+            <CardContent variant="flush">
+                <List className="rounded-none border-0 bg-transparent">
+                    {children}
+                </List>
+            </CardContent>
+        </Card>
     );
 }
 
@@ -103,15 +101,17 @@ interface SettingRowProps {
     /** Gives the title <Label> an id so a control can reference it via aria-labelledby. */
     labelId?: string;
     /**
-     * 'row' (default): title/description left, control right — for switches and
-     * compact selects. 'stack': control sits full-width below the title — for
-     * search inputs, lists, and anything that needs the full width.
-     * 'responsive': selects sit beside the label when the settings group has
-     * room, and below it when the content pane is narrow.
+     * 'row' (default): title/description left, control right — for switches,
+     * buttons and compact selects. 'stack': control sits full-width below the
+     * title — for search inputs, lists, and anything that needs the full width.
+     * 'responsive': selects sit beside the label when the group has room, and
+     * below it when the content pane is narrow.
      */
     layout?: "row" | "stack" | "responsive";
-    /** Tone the row for destructive actions (danger zone). */
+    /** Tone the row for destructive actions. */
     destructive?: boolean;
+    /** Keep the title for assistive technology only (e.g. a search field whose placeholder says it). */
+    titleHidden?: boolean;
     children: ReactNode;
     className?: string;
 }
@@ -130,8 +130,8 @@ export interface SelectRowConfig {
 
 /**
  * One SettingRow→Select block. The select rows across the settings sections
- * were identical apart from their title/value/options/change handler, now
- * expressed as config.
+ * are identical apart from their title/value/options/change handler, so they
+ * are expressed as config.
  */
 export function SelectSettingRow({
     title,
@@ -181,16 +181,17 @@ export function SettingRow({
     labelId,
     layout = "row",
     destructive,
+    titleHidden,
     children,
     className,
 }: SettingRowProps) {
     const titleClassName = cn(
-        "text-sm font-medium",
+        "type-body font-normal leading-tight",
+        destructive ? "text-destructive" : "text-foreground",
         htmlFor && "cursor-pointer",
-        destructive && "text-destructive",
     );
     const heading = (
-        <div className="space-y-0.5">
+        <div className={cn("min-w-0 space-y-0.5", titleHidden && "sr-only")}>
             {htmlFor || labelId ? (
                 <Label
                     id={labelId}
@@ -203,43 +204,45 @@ export function SettingRow({
                 <p className={titleClassName}>{title}</p>
             )}
             {description && (
-                <p className="text-xs text-muted-foreground">{description}</p>
+                <p className="type-footnote text-label-secondary">
+                    {description}
+                </p>
             )}
         </div>
     );
 
     if (layout === "stack") {
         return (
-            <div className={cn("space-y-3 px-4 py-3.5", className)}>
+            <li className={cn("space-y-3 px-4 py-3", className)}>
                 {heading}
                 <div>{children}</div>
-            </div>
+            </li>
         );
     }
 
     if (layout === "responsive") {
         return (
-            <div
+            <li
                 className={cn(
-                    "grid items-center gap-3 px-4 py-3.5 @min-[28rem]/settings:grid-cols-[minmax(0,1fr)_minmax(10rem,12rem)] @min-[28rem]/settings:gap-6",
+                    "grid min-h-11 items-center gap-3 px-4 py-2.5 @min-[28rem]/settings:grid-cols-[minmax(0,1fr)_minmax(10rem,14rem)] @min-[28rem]/settings:gap-6",
                     className,
                 )}
             >
                 {heading}
                 <div className="min-w-0">{children}</div>
-            </div>
+            </li>
         );
     }
 
     return (
-        <div
+        <li
             className={cn(
-                "flex items-center justify-between gap-4 px-4 py-3.5",
+                "flex min-h-11 items-center justify-between gap-4 px-4 py-2.5",
                 className,
             )}
         >
             {heading}
-            <div className="shrink-0">{children}</div>
-        </div>
+            <div className="flex shrink-0 items-center">{children}</div>
+        </li>
     );
 }

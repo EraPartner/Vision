@@ -81,7 +81,7 @@ export function AgentCloakDesktopSettingsSection() {
                     </span>
                 }
             >
-                <span role="status" className="flex items-center gap-2 text-sm">
+                <span role="status" className="flex items-center gap-2 type-body text-foreground">
                     <span
                         aria-hidden="true"
                         className={cn(
@@ -91,7 +91,7 @@ export function AgentCloakDesktopSettingsSection() {
                                 status.mappingKeyConfigured
                                 ? "bg-success"
                                 : status?.available
-                                  ? "bg-muted-foreground/50"
+                                  ? "bg-label-tertiary"
                                   : "bg-destructive",
                         )}
                     />
@@ -105,7 +105,6 @@ export function AgentCloakDesktopSettingsSection() {
             >
                 <div className="flex flex-wrap items-center gap-2">
                     <Button
-                        size="sm"
                         variant="outline"
                         onClick={() => {
                             toggle.reset();
@@ -116,7 +115,6 @@ export function AgentCloakDesktopSettingsSection() {
                         {t("settings.agentCloak.checkAgain")}
                     </Button>
                     <Button
-                        size="sm"
                         variant={status?.enabled ? "outline" : "default"}
                         onClick={() => toggle.mutate(!status?.enabled)}
                         disabled={!canToggle || toggle.isPending}

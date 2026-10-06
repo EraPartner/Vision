@@ -120,10 +120,7 @@ export const GeneralSection = memo(function GeneralSection() {
     ];
 
     return (
-        <SettingsSection
-            title={t("settings.tab.general")}
-            description={t("settings.section.general.desc")}
-        >
+        <SettingsSection title={t("settings.tab.general")}>
             <SettingsGroup label={t("settings.group.formatting")}>
                 {formattingRows.map((row) => (
                     <SelectSettingRow key={row.title} {...row} />

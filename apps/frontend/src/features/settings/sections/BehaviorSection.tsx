@@ -107,10 +107,7 @@ export const BehaviorSection = memo(function BehaviorSection() {
     };
 
     return (
-        <SettingsSection
-            title={t("settings.section.behavior")}
-            description={t("settings.section.behavior.desc")}
-        >
+        <SettingsSection title={t("settings.section.behavior")}>
             <SettingsGroup>
                 <SelectSettingRow
                     title={t("settings.general.startupSection")}
@@ -233,7 +230,6 @@ export const BehaviorSection = memo(function BehaviorSection() {
                 >
                     <Button
                         variant="outline"
-                        size="sm"
                         onClick={() => {
                             void handleResetRecurringDismissals();
                         }}

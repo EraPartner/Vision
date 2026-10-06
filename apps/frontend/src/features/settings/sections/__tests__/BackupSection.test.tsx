@@ -244,7 +244,7 @@ describe("BackupSection", () => {
             name: /restore this backup\?/i,
         });
         await user.click(
-            within(dialog).getByRole("button", { name: /yes, restore/i }),
+            within(dialog).getByRole("button", { name: /^restore$/i }),
         );
         await waitFor(() => {
             expect(backup.restoreBackup).toHaveBeenCalledWith(

@@ -13,10 +13,7 @@ export const AiSection = memo(function AiSection() {
     const { appSettings, updateAppSettings } = useAppSettings();
 
     return (
-        <SettingsSection
-            title={t("settings.section.ai")}
-            description={t("settings.section.ai.desc")}
-        >
+        <SettingsSection title={t("settings.section.ai")}>
             <AIChatSettingsSection
                 value={appSettings.aiDefaultModel}
                 onChange={(model) =>

@@ -1,4 +1,4 @@
-import { useState, useEffect, type KeyboardEvent } from "react";
+import { useState, useEffect, useRef, type KeyboardEvent } from "react";
 import {
     SlidersHorizontal,
     Palette,
@@ -10,15 +10,8 @@ import {
     type LucideIcon,
 } from "lucide-react";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
-import { cn } from "@/lib/utils";
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { List, ListRow } from "@/components/ui/list";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { GeneralSection } from "./sections/GeneralSection";
 import { AppearanceSection } from "./sections/AppearanceSection";
@@ -75,6 +68,13 @@ interface DashboardSettingsDialogProps {
     onSectionChange?: (section: SettingsSectionId) => void;
 }
 
+/**
+ * The Settings window (ADR-183): a macOS-style preferences window drawn as a
+ * Dialog, because the desktop shell has exactly one BrowserWindow. A sidebar of
+ * sections on the left, the current section's name in the title bar, and the
+ * section's groups in a scrolling pane. Every control saves on change; the
+ * window closes with its close button, Escape or the browser's Back.
+ */
 export function DashboardSettingsDialog({
     open,
     onOpenChange,
@@ -82,6 +82,7 @@ export function DashboardSettingsDialog({
     onSectionChange,
 }: DashboardSettingsDialogProps) {
     const { t } = useLanguage();
+    const tablistRef = useRef<HTMLUListElement>(null);
     const [activeSection, setActiveSection] = useState<SettingsSectionId>(
         () => resolveSettingsSection(defaultTab) ?? "general",
     );
@@ -90,6 +91,11 @@ export function DashboardSettingsDialog({
         if (open)
             setActiveSection(resolveSettingsSection(defaultTab) ?? "general");
     }, [open, defaultTab]);
+
+    const selectSection = (id: SettingsSectionId) => {
+        setActiveSection(id);
+        onSectionChange?.(id);
+    };
 
     const handleSectionKeyDown = (
         event: KeyboardEvent<HTMLButtonElement>,
@@ -109,9 +115,8 @@ export function DashboardSettingsDialog({
         if (nextIndex === undefined) return;
         event.preventDefault();
         const nextSection = SECTIONS[nextIndex];
-        setActiveSection(nextSection.id);
-        onSectionChange?.(nextSection.id);
-        event.currentTarget.parentElement
+        selectSection(nextSection.id);
+        tablistRef.current
             ?.querySelector<HTMLButtonElement>(
                 `#settings-tab-${nextSection.id}`,
             )
@@ -137,76 +142,83 @@ export function DashboardSettingsDialog({
         }
     };
 
+    const current = SECTIONS.find((s) => s.id === activeSection) ?? SECTIONS[0];
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="flex h-[82vh] w-full max-w-3xl flex-col gap-0 overflow-hidden p-0">
-                <DialogHeader className="border-b border-border/60 px-6 py-4 text-left">
-                    <DialogTitle>{t("settings.title")}</DialogTitle>
-                    <DialogDescription>
-                        {t("settings.description")} {t("settings.saveHint")}
-                    </DialogDescription>
-                </DialogHeader>
+            <DialogContent
+                aria-describedby={undefined}
+                className="flex h-[82vh] w-full max-w-4xl flex-col gap-0 overflow-hidden p-0 md:flex-row"
+            >
+                {/* The window is named "Settings" for assistive technology; the
+                    visible title bar shows the current section instead, as a
+                    macOS preferences window does. */}
+                <DialogTitle className="sr-only">
+                    {t("settings.title")}
+                </DialogTitle>
 
-                <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-                    {/* Section nav: a 208px sidebar from md up, a horizontally
-                        scrolling chip bar below it — a fixed sidebar would leave
-                        ~120px for every control at phone widths. md+ layout is
-                        unchanged. */}
-                    <nav
+                {/* Sidebar: a 224px rail from md up, a horizontally scrolling
+                    row of sections below it (a fixed rail would leave ~120px
+                    for every control at phone widths). */}
+                <aside className="flex shrink-0 flex-col border-b border-border/60 bg-foreground/[0.025] md:w-56 md:border-b-0 md:border-r">
+                    <List
+                        ref={tablistRef}
                         role="tablist"
                         aria-label={t("settings.title")}
-                        className="flex shrink-0 gap-1 overflow-x-auto border-b border-border/60 p-2 max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden md:w-52 md:flex-col md:gap-0.5 md:overflow-y-auto md:border-b-0 md:border-r"
+                        aria-orientation="vertical"
+                        className="flex flex-row gap-1 divide-y-0 overflow-x-auto rounded-none border-0 bg-transparent p-2 max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden md:flex-col md:gap-0.5 md:overflow-y-auto md:px-3 md:pt-10"
                     >
                         {SECTIONS.map(({ id, labelKey, icon: Icon }, index) => {
                             const active = activeSection === id;
                             return (
-                                <button
+                                <ListRow
                                     key={id}
-                                    type="button"
-                                    id={`settings-tab-${id}`}
-                                    role="tab"
-                                    aria-selected={active}
-                                    aria-controls={`settings-panel-${id}`}
-                                    tabIndex={active ? 0 : -1}
-                                    onClick={() => {
-                                        setActiveSection(id);
-                                        onSectionChange?.(id);
-                                    }}
-                                    onKeyDown={(event) =>
-                                        handleSectionKeyDown(event, index)
-                                    }
-                                    className={cn(
-                                        "flex shrink-0 items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors",
-                                        active
-                                            ? "bg-primary/10 text-primary"
-                                            : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
-                                    )}
+                                    asChild
+                                    leading={<Icon aria-hidden="true" />}
+                                    title={t(labelKey)}
+                                    className="min-h-0 shrink-0"
                                 >
-                                    <Icon className="h-4 w-4 shrink-0" />
-                                    <span className="whitespace-nowrap md:whitespace-normal md:break-words">
-                                        {t(labelKey)}
-                                    </span>
-                                </button>
+                                    <button
+                                        type="button"
+                                        id={`settings-tab-${id}`}
+                                        role="tab"
+                                        aria-selected={active}
+                                        aria-controls={`settings-panel-${id}`}
+                                        tabIndex={active ? 0 : -1}
+                                        onClick={() => selectSection(id)}
+                                        onKeyDown={(event) =>
+                                            handleSectionKeyDown(event, index)
+                                        }
+                                        className="rounded-control corner-continuous whitespace-nowrap aria-selected:bg-primary aria-selected:text-primary-foreground aria-selected:hover:bg-primary aria-selected:focus-visible:bg-primary aria-selected:[&_span]:text-primary-foreground"
+                                    />
+                                </ListRow>
                             );
                         })}
-                    </nav>
+                    </List>
+                    <p className="mt-auto hidden px-5 pb-4 type-caption text-label-tertiary md:block">
+                        {t("settings.autosaveHint")}
+                    </p>
+                </aside>
 
-                    {/* Content */}
+                {/* Content: title bar with the section name, then the pane */}
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                    <header className="flex h-12 shrink-0 items-center border-b border-border/60 px-6 pr-14">
+                        <h2
+                            id="settings-section-heading"
+                            className="type-title-3 truncate text-foreground"
+                        >
+                            {t(current.labelKey)}
+                        </h2>
+                    </header>
                     <ScrollArea
                         id={`settings-panel-${activeSection}`}
                         role="tabpanel"
                         aria-labelledby={`settings-tab-${activeSection}`}
                         tabIndex={0}
-                        className="min-h-0 flex-1"
+                        className="min-h-0 flex-1 focus-ring"
                     >
                         <div className="px-6 py-6">{renderSection()}</div>
                     </ScrollArea>
-                </div>
-
-                <div className="flex shrink-0 items-center justify-end border-t border-border/60 px-6 py-3.5">
-                    <Button onClick={() => onOpenChange(false)}>
-                        {t("settings.done")}
-                    </Button>
                 </div>
             </DialogContent>
         </Dialog>
