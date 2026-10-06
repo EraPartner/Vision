@@ -16,6 +16,7 @@ vi.mock("@/hooks/useExcludedIds", () => ({
 }));
 vi.mock("@/lib/api/aggregations", () => ({
     getAggregationMonthlySummary: vi.fn().mockResolvedValue({ data: {} }),
+    getAggregationAverageVsCurrent: vi.fn().mockResolvedValue({ data: {} }),
     getAggregationCategoryPivot: vi.fn().mockResolvedValue({ data: {} }),
     getAggregationRecipientInsights: vi.fn().mockResolvedValue({ data: {} }),
     getAggregationRecipientByYear: vi.fn().mockResolvedValue({ data: {} }),
