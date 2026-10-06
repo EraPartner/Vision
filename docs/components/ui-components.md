@@ -2,7 +2,7 @@
 title: UI Components
 type: component
 status: active
-date: 2026-10-05
+date: 2026-10-06
 updated: 2026-10-05
 tags:
   [
@@ -190,7 +190,7 @@ Approximately 130 raw Tailwind palette colors (`text-green-600 dark:text-green-4
 | --------------------------------------------------------------------------------- | ------------------------ | ------------------------------------------------- |
 | `text-success` / `bg-success` / `border-success` / `ring-success`                 | Positive/income/green    | Profit indicators, income amounts, success states |
 | `text-destructive` / `bg-destructive` / `border-destructive` / `ring-destructive` | Negative/expense/red     | Loss indicators, expense amounts, error states    |
-| `text-warning` / `bg-warning` / `border-warning`                                  | Caution/amber            | Warning banners, caution states                   |
+| `text-warning` / `bg-warning` / `border-warning`                                  | Caution/orange           | Warning banners, caution states (gold is gain)    |
 | `text-info` / `bg-info` / `border-info`                                           | Neutral information/blue | Import status, HTTP GET, frozen-year information  |
 
 These tokens resolve to the correct color for both light and dark modes and respect the macOS system-accent overlay (ADR-072) and all five theme variants.

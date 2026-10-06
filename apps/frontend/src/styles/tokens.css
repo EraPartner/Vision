@@ -45,7 +45,11 @@
         --destructive-foreground: 0 0% 100%;
         --success: 152 58% 38%;
         --info: 204 68% 41%;
-        --warning: 38 80% 33%;
+        /* Orange, not gold: gain reads in gold (see --gain), so warning keeps
+           its own hue. 4.9:1 on --background, 5.3:1 on --card, 4.5:1 on
+           --muted. Pair warning text with its icon; the colourblind skin's
+           loss orange (--loss-colorblind) is a neighbour. */
+        --warning: 26 88% 36%;
         --expense: 358 74% 44%;
         --loss-colorblind: 24 85% 45%;
 
@@ -257,7 +261,7 @@
         --destructive-foreground: 200 20% 6%;
         --success: 152 62% 54%;
         --info: 204 78% 62%;
-        --warning: 38 88% 62%;
+        --warning: 26 90% 62%;
         --expense: 358 92% 68%;
         --loss-colorblind: 24 90% 62%;
 
