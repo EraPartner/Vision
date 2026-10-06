@@ -7,6 +7,6 @@ describe("motion tokens", () => {
     expect(durations.fast).toBeLessThan(durations.page);
     expect(easings.outExpo).toHaveLength(4);
     expect(springs.snappy.type).toBe("spring");
-    expect(Object.keys(springs)).toEqual(["snappy"]);
+    expect(Object.keys(springs)).toEqual(["snappy", "smooth", "bouncy"]);
   });
 });

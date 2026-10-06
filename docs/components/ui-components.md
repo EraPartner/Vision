@@ -2,8 +2,8 @@
 title: UI Components
 type: component
 status: active
-date: 2026-09-30
-updated: 2026-09-30
+date: 2026-10-06
+updated: 2026-10-05
 tags:
   [
     components,
@@ -134,6 +134,15 @@ Its semantic heading level is independent of typography. `CardTitle` defaults to
 `level={3}` or `level={4}` only when the card is genuinely nested beneath a visible
 parent section heading; do not choose a level to obtain a visual size.
 
+**Role tokens** ([[docs/adr/178-design-system-role-tokens|ADR-178]]): new code picks a role
+instead of a raw size, opacity or shadow. Type uses `type-large-title`, `type-title-1..3`,
+`type-headline`, `type-body`, `type-callout`, `type-footnote` and `type-caption`; text emphasis
+uses `text-label-primary/secondary/tertiary/quaternary`; corners use `rounded-chip`,
+`rounded-control`, `rounded-card` and `rounded-sheet` (nested concentrically, optionally with
+`corner-continuous`); depth uses `shadow-elevation-1..4`; keyboard focus uses `focus-ring`; and
+spring motion pairs `ease-spring-*` with `duration-spring-*`. Existing primitives have not adopted
+these yet.
+
 **Motion and premium polish utilities**:
 
 - `.micro-lift` — a non-Card hover elevation (`translateY(-1px)`); it does not add a shadow.
@@ -181,7 +190,7 @@ Approximately 130 raw Tailwind palette colors (`text-green-600 dark:text-green-4
 | --------------------------------------------------------------------------------- | ------------------------ | ------------------------------------------------- |
 | `text-success` / `bg-success` / `border-success` / `ring-success`                 | Positive/income/green    | Profit indicators, income amounts, success states |
 | `text-destructive` / `bg-destructive` / `border-destructive` / `ring-destructive` | Negative/expense/red     | Loss indicators, expense amounts, error states    |
-| `text-warning` / `bg-warning` / `border-warning`                                  | Caution/amber            | Warning banners, caution states                   |
+| `text-warning` / `bg-warning` / `border-warning`                                  | Caution/orange           | Warning banners, caution states (gold is gain)    |
 | `text-info` / `bg-info` / `border-info`                                           | Neutral information/blue | Import status, HTTP GET, frozen-year information  |
 
 These tokens resolve to the correct color for both light and dark modes and respect the macOS system-accent overlay (ADR-072) and all five theme variants.

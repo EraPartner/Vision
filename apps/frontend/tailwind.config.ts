@@ -77,6 +77,14 @@ export default {
                 // work on tinted badges, gradients and card fills.
                 gain: "hsl(var(--gain) / <alpha-value>)",
                 loss: "hsl(var(--loss) / <alpha-value>)",
+                // Label hierarchy (ADR-178): text emphasis by role, derived
+                // from --foreground so theme variants inherit it.
+                label: {
+                    primary: "hsl(var(--foreground) / var(--label-primary-alpha))",
+                    secondary: "hsl(var(--foreground) / var(--label-secondary-alpha))",
+                    tertiary: "hsl(var(--foreground) / var(--label-tertiary-alpha))",
+                    quaternary: "hsl(var(--foreground) / var(--label-quaternary-alpha))",
+                },
                 muted: {
                     DEFAULT: "hsl(var(--muted))",
                     foreground: "hsl(var(--muted-foreground))",
@@ -120,10 +128,19 @@ export default {
                 sm: "calc(var(--radius) - 4px)",
                 xl: "calc(var(--radius) + 4px)",
                 "2xl": "calc(var(--radius) + 10px)",
+                // Role-named corner scale (ADR-178).
+                chip: "var(--radius-chip)",
+                control: "var(--radius-control)",
+                card: "var(--radius-card)",
+                sheet: "var(--radius-sheet)",
             },
             boxShadow: {
                 "glass-soft":
                     "0 1px 0 0 hsl(var(--glass-highlight) / 0.35) inset, 0 10px 30px -12px hsl(var(--glass-shadow) / 0.35)",
+                "elevation-1": "var(--elevation-1)",
+                "elevation-2": "var(--elevation-2)",
+                "elevation-3": "var(--elevation-3)",
+                "elevation-4": "var(--elevation-4)",
                 "glass-elevated":
                     "0 1px 0 0 hsl(var(--glass-highlight) / 0.5) inset, 0 22px 48px -18px hsl(var(--glass-shadow) / 0.55)",
             },
@@ -135,6 +152,10 @@ export default {
                 glide: "var(--ease-glide)",
                 "out-expo": "var(--ease-out-expo)",
                 "in-out-quart": "var(--ease-in-out-quart)",
+                // Sampled springs (ADR-178); pair with the matching duration.
+                "spring-snappy": "var(--spring-snappy)",
+                "spring-smooth": "var(--spring-smooth)",
+                "spring-bouncy": "var(--spring-bouncy)",
             },
             transitionDuration: {
                 fast: "var(--duration-fast)",
@@ -143,6 +164,9 @@ export default {
                 press: "var(--duration-press)",
                 dismiss: "var(--duration-dismiss)",
                 reveal: "var(--duration-reveal)",
+                "spring-snappy": "var(--spring-snappy-duration)",
+                "spring-smooth": "var(--spring-smooth-duration)",
+                "spring-bouncy": "var(--spring-bouncy-duration)",
             },
             keyframes: {
                 "accordion-down": {
