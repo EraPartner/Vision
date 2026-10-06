@@ -76,7 +76,9 @@ describe("TransactionsTable currency balances", () => {
                 allItems={[]}
                 serverMode={{}}
                 onRowUpdate={vi.fn()}
-                onOpenInfo={vi.fn()}
+                onSelectRow={vi.fn()}
+                selectedRowId={null}
+                isColumnVisible={() => true}
                 onQuickLook={vi.fn()}
                 onDuplicate={vi.fn()}
                 onFilterByRecipient={vi.fn()}
@@ -98,37 +100,18 @@ describe("TransactionsTable currency balances", () => {
         expect(screen.getByText("Running balance")).toBeInTheDocument();
         expect(screen.getAllByText("USD").length).toBeGreaterThan(0);
         expect(screen.getAllByText("EUR").length).toBeGreaterThan(0);
-        const infoButtons = screen.getAllByRole("button", {
-            name: /^Transaction info: .*Broker/,
+        const selectBoxes = screen.getAllByRole("checkbox", {
+            name: /^Select transaction: .*Broker/,
         });
-        expect(infoButtons).toHaveLength(2);
-        expect(infoButtons[0].getAttribute("aria-label")).not.toEqual(
-            infoButtons[1].getAttribute("aria-label"),
-        );
-        infoButtons[0].focus();
-        expect(await screen.findByRole("tooltip")).toHaveTextContent(
-            /Transaction info: .*Broker/,
+        expect(selectBoxes).toHaveLength(2);
+        expect(selectBoxes[0].getAttribute("aria-label")).not.toEqual(
+            selectBoxes[1].getAttribute("aria-label"),
         );
         await user.tab();
-        expect(
-            screen.getAllByRole("checkbox", {
-                name: /^Select transaction: .*Broker/,
-            }),
-        ).toHaveLength(2);
         expect(
             screen.getAllByRole("button", {
                 name: /^Active: .*Broker/,
                 pressed: true,
-            }),
-        ).toHaveLength(2);
-        expect(
-            screen.getAllByRole("button", {
-                name: /^Delete transaction: .*Broker/,
-            }),
-        ).toHaveLength(2);
-        expect(
-            screen.getAllByRole("button", {
-                name: /^Split transaction: .*Broker/,
             }),
         ).toHaveLength(2);
         expect(document.body.textContent).toContain("35");

@@ -18,7 +18,7 @@ interface TransactionQuickLookProps {
 /**
  * Quick Look: a read-only glass peek at a transaction, toggled with Space on
  * a focused table row (Finder behavior — Space closes it again). Editing
- * lives in TransactionInfoDialog; this stays glanceable.
+ * lives in TransactionInspector; this stays glanceable.
  */
 export function TransactionQuickLook({ transaction, onClose }: TransactionQuickLookProps) {
     const { t } = useLanguage();

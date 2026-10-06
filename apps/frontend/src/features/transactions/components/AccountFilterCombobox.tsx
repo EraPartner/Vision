@@ -9,7 +9,7 @@
  * their history stays reachable.
  */
 import { useMemo, useState } from "react";
-import { Check, ChevronsUpDown, Landmark } from "lucide-react";
+import { Check, ChevronDown, ChevronsUpDown, Landmark } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,9 +23,11 @@ interface AccountFilterComboboxProps {
     value?: number;
     /** Called with the picked account (id + display label), or null to clear. */
     onChange: (selection: { id: number; label: string } | null) => void;
+    /** Toolbar chip styling (ADR-181) instead of the plain outline button. */
+    chip?: boolean;
 }
 
-export function AccountFilterCombobox({ value, onChange }: AccountFilterComboboxProps) {
+export function AccountFilterCombobox({ value, onChange, chip = false }: AccountFilterComboboxProps) {
     const { t } = useLanguage();
     const [open, setOpen] = useState(false);
 
@@ -34,7 +36,9 @@ export function AccountFilterCombobox({ value, onChange }: AccountFilterCombobox
     const accounts = useMemo(() => data?.items ?? [], [data?.items]);
 
     const selected = accounts.find((a) => a.id === value);
-    const label = selected ? (selected.display_name || selected.name) : t("txPage.filter.account");
+    const label = selected
+        ? (selected.display_name || selected.name)
+        : t(chip ? "txPage.filter.allAccounts" : "txPage.filter.account");
 
     const pick = (selection: { id: number; label: string } | null) => {
         onChange(selection);
@@ -46,19 +50,29 @@ export function AccountFilterCombobox({ value, onChange }: AccountFilterCombobox
             <PopoverTrigger asChild>
                 <Button
                     type="button"
-                    variant={selected ? "secondary" : "outline"}
+                    variant={selected && !chip ? "secondary" : "outline"}
                     size="sm"
                     role="combobox"
                     aria-expanded={open}
                     aria-label={t("txPage.filter.accountAria")}
-                    className="gap-1.5"
+                    className={cn(
+                        "gap-1.5",
+                        chip && "h-8 rounded-chip px-3 type-callout font-medium",
+                        chip &&
+                            selected &&
+                            "border-primary/30 bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary",
+                    )}
                 >
-                    <Landmark className="h-4 w-4" />
+                    <Landmark className="h-4 w-4" aria-hidden="true" />
                     <span className="max-w-[10rem] truncate">{label}</span>
-                    <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-50" />
+                    {chip ? (
+                        <ChevronDown className="h-3 w-3 shrink-0 opacity-50" aria-hidden="true" />
+                    ) : (
+                        <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-50" />
+                    )}
                 </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[260px] p-0" align="end">
+            <PopoverContent className="w-[260px] p-0" align={chip ? "start" : "end"}>
                 <Command>
                     <CommandInput placeholder={t("combobox.account.search")} />
                     <CommandList>

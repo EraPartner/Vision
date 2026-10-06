@@ -6,7 +6,10 @@ import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ACCOUNT_LIST_ITEM_STUB, ok } from "@/test/msw/handlers";
-import { TransactionInfoDialog } from "@/features/transactions/components/TransactionInfoDialog";
+import {
+    TransactionInspector,
+    type TransactionInspectorProps,
+} from "@/features/transactions/components/TransactionInspector";
 import type { TableTransaction } from "@/features/transactions/types";
 
 const API_BASE = "http://localhost:3002";
@@ -27,150 +30,215 @@ const TX: TableTransaction = {
     is_active: true,
 };
 
-describe("TransactionInfoDialog", () => {
+function renderInspector(
+    overrides: Partial<TransactionInspectorProps> = {},
+    presentation: TransactionInspectorProps["presentation"] = "docked",
+) {
+    const props: TransactionInspectorProps = {
+        transaction: TX,
+        presentation,
+        onClose: vi.fn(),
+        onApplyLocal: vi.fn(),
+        onSelectCategory: vi.fn(),
+        onSelectRecipient: vi.fn(),
+        onDuplicate: vi.fn(),
+        onFilterByRecipient: vi.fn(),
+        onToggleActive: vi.fn(),
+        onDelete: vi.fn(),
+        updatePending: false,
+        deletePending: false,
+        ...overrides,
+    };
+    return renderWithApp(<TransactionInspector {...props} />);
+}
+
+describe("TransactionInspector", () => {
     beforeEach(() => {
         server.use(
             http.get(`${API_BASE}/api/attachments/transaction/:id`, () =>
                 ok({ items: [] }),
             ),
+            http.get(`${API_BASE}/api/recipients/1`, () =>
+                ok({ id: 1, name: "Alice", is_active: true, links: [] }),
+            ),
         );
     });
 
-    it("renders dialog when infoTransaction is provided", async () => {
-        renderWithApp(
-            <TransactionInfoDialog
-                infoTransaction={TX}
-                onClose={vi.fn()}
-                onApplyLocal={vi.fn()}
-            />,
-        );
+    it("renders the panel, named after the payee, when a transaction is selected", async () => {
+        renderInspector();
 
-        expect(await screen.findByRole("dialog")).toBeInTheDocument();
-        // txPage.detailsTitle = "Transaction Details" — findByRole waits for async i18n load
+        // txPage.detailsTitle names the landmark; the heading is the payee.
         expect(
-            await screen.findByRole("heading", {
+            await screen.findByRole("complementary", {
                 name: /transaction details/i,
             }),
         ).toBeInTheDocument();
+        expect(
+            screen.getByRole("heading", { name: "Alice", level: 2 }),
+        ).toBeInTheDocument();
     });
 
-    it("does not render dialog when infoTransaction is null", () => {
-        renderWithApp(
-            <TransactionInfoDialog
-                infoTransaction={null}
-                onClose={vi.fn()}
-                onApplyLocal={vi.fn()}
-            />,
-        );
+    it("presents the same content as a sheet on narrow screens", async () => {
+        renderInspector({}, "sheet");
+        expect(await screen.findByRole("dialog")).toBeInTheDocument();
+        expect(
+            await screen.findByRole("heading", { name: "Alice", level: 2 }),
+        ).toBeInTheDocument();
+    });
 
-        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    it("does not render the panel when no transaction is selected", () => {
+        renderInspector({ transaction: null });
+
+        expect(screen.queryByRole("complementary")).not.toBeInTheDocument();
     });
 
     it("shows transaction ID value", async () => {
-        renderWithApp(
-            <TransactionInfoDialog
-                infoTransaction={TX}
-                onClose={vi.fn()}
-                onApplyLocal={vi.fn()}
-            />,
-        );
+        renderInspector();
 
-        await screen.findByRole("dialog");
+        await screen.findByRole("complementary");
         expect(screen.getByText("42")).toBeInTheDocument();
     });
 
     it("shows memo (description) value", async () => {
-        renderWithApp(
-            <TransactionInfoDialog
-                infoTransaction={TX}
-                onClose={vi.fn()}
-                onApplyLocal={vi.fn()}
-            />,
-        );
+        renderInspector();
 
-        await screen.findByRole("dialog");
+        await screen.findByRole("complementary");
         expect(screen.getByText("Test purchase")).toBeInTheDocument();
     });
 
-    it("shows recipient value", async () => {
-        renderWithApp(
-            <TransactionInfoDialog
-                infoTransaction={TX}
-                onClose={vi.fn()}
-                onApplyLocal={vi.fn()}
-            />,
+    it("shows the recipient and category pickers with the row's values", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/categories/tree`, () =>
+                ok({
+                    items: [
+                        {
+                            id: 1,
+                            name: "GROCERIES",
+                            parentId: null,
+                            pathIds: [1],
+                            path: ["FOOD", "GROCERIES"],
+                            category_name: "FOOD:GROCERIES",
+                            depth: 2,
+                            description: null,
+                            is_active: true,
+                            hierarchyOnly: false,
+                            legacyCompatible: false,
+                        },
+                    ],
+                    total: 1,
+                    links: [],
+                }),
+            ),
         );
+        renderInspector();
 
-        await screen.findByRole("dialog");
-        expect(screen.getByText("Alice")).toBeInTheDocument();
+        await screen.findByRole("complementary");
+        expect(
+            await screen.findByRole("combobox", { name: /^recipient$/i }),
+        ).toHaveTextContent("Alice");
+        await waitFor(() =>
+            expect(
+                screen.getByRole("combobox", { name: /^category$/i }),
+            ).toHaveTextContent("FOOD / GROCERIES"),
+        );
     });
 
-    it("shows category value", async () => {
-        renderWithApp(
-            <TransactionInfoDialog
-                infoTransaction={TX}
-                onClose={vi.fn()}
-                onApplyLocal={vi.fn()}
-            />,
+    it("changes the category through the page's handler", async () => {
+        const user = userEvent.setup();
+        const onSelectCategory = vi.fn();
+        server.use(
+            http.get(`${API_BASE}/api/categories/tree`, () =>
+                ok({
+                    items: [
+                        {
+                            id: 2,
+                            name: "Household",
+                            parentId: null,
+                            pathIds: [2],
+                            path: ["Household"],
+                            category_name: "Household",
+                            depth: 1,
+                            description: null,
+                            is_active: true,
+                            hierarchyOnly: false,
+                            legacyCompatible: false,
+                        },
+                    ],
+                    total: 1,
+                    links: [],
+                }),
+            ),
         );
+        renderInspector({ onSelectCategory });
+        await user.click(
+            await screen.findByRole("combobox", { name: /^category$/i }),
+        );
+        await user.click(await screen.findByRole("option", { name: "Household" }));
+        expect(onSelectCategory).toHaveBeenCalledWith(42, 2, "Household");
+    });
 
-        await screen.findByRole("dialog");
-        expect(screen.getByText("FOOD:GROCERIES")).toBeInTheDocument();
+    it("offers the payee rule once the row's category differs from the payee's usual one", async () => {
+        const user = userEvent.setup();
+        let patched: Record<string, unknown> | undefined;
+        server.use(
+            http.patch(`${API_BASE}/api/recipients/1`, async ({ request }) => {
+                patched = (await request.json()) as Record<string, unknown>;
+                return ok({ id: 1, name: "Alice", default_category_id: 1, links: [] });
+            }),
+        );
+        renderInspector();
+        await user.click(
+            await screen.findByRole("button", { name: /^always use$/i }),
+        );
+        await waitFor(() => expect(patched).toEqual({ default_category_id: 1 }));
+    });
+
+    it("shows the row actions in the footer and routes them to the page", async () => {
+        const user = userEvent.setup();
+        const onDuplicate = vi.fn();
+        const onToggleActive = vi.fn();
+        const onDelete = vi.fn();
+        const onFilterByRecipient = vi.fn();
+        renderInspector({ onDuplicate, onToggleActive, onDelete, onFilterByRecipient });
+        await screen.findByRole("complementary");
+
+        await user.click(screen.getByRole("button", { name: /^duplicate$/i }));
+        expect(onDuplicate).toHaveBeenCalledWith(TX);
+        await user.click(screen.getByRole("button", { name: /mark as inactive/i }));
+        expect(onToggleActive).toHaveBeenCalledWith(42, true);
+        await user.click(screen.getByRole("button", { name: /show all from payee/i }));
+        expect(onFilterByRecipient).toHaveBeenCalledWith(TX);
+        await user.click(screen.getByRole("button", { name: /^delete…$/i }));
+        expect(onDelete).toHaveBeenCalledWith(42, "Test purchase");
+        expect(
+            screen.getByRole("button", { name: /split transaction/i }),
+        ).toBeInTheDocument();
     });
 
     it("shows comment value", async () => {
-        renderWithApp(
-            <TransactionInfoDialog
-                infoTransaction={TX}
-                onClose={vi.fn()}
-                onApplyLocal={vi.fn()}
-            />,
-        );
+        renderInspector();
 
-        await screen.findByRole("dialog");
+        await screen.findByRole("complementary");
         expect(screen.getByText("Test comment")).toBeInTheDocument();
     });
 
-    it("shows status as Active for an active transaction", async () => {
-        renderWithApp(
-            <TransactionInfoDialog
-                infoTransaction={TX}
-                onClose={vi.fn()}
-                onApplyLocal={vi.fn()}
-            />,
-        );
-
-        await screen.findByRole("dialog");
-        // txPage.statusActive = "Active"
-        expect(screen.getByText(/^active$/i)).toBeInTheDocument();
-    });
-
-    it("shows status as Inactive for an inactive transaction", async () => {
+    it("marks an inactive transaction in the header and offers to reactivate it", async () => {
         const inactiveTx = { ...TX, is_active: false };
 
-        renderWithApp(
-            <TransactionInfoDialog
-                infoTransaction={inactiveTx}
-                onClose={vi.fn()}
-                onApplyLocal={vi.fn()}
-            />,
-        );
+        renderInspector({ transaction: inactiveTx });
 
-        await screen.findByRole("dialog");
+        await screen.findByRole("complementary");
         // txPage.statusInactive = "Inactive"
-        expect(screen.getByText(/^inactive$/i)).toBeInTheDocument();
+        expect(screen.getByText(/· inactive$/i)).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: /mark as active/i }),
+        ).toBeInTheDocument();
     });
 
     it("shows Edit pencil buttons for editable fields", async () => {
-        renderWithApp(
-            <TransactionInfoDialog
-                infoTransaction={TX}
-                onClose={vi.fn()}
-                onApplyLocal={vi.fn()}
-            />,
-        );
+        renderInspector();
 
-        await screen.findByRole("dialog");
+        await screen.findByRole("complementary");
         // Each control identifies the field it edits.
         const editButtons = await screen.findAllByRole("button", {
             name: /^edit /i,
@@ -203,13 +271,7 @@ describe("TransactionInfoDialog", () => {
                 },
             ),
         );
-        renderWithApp(
-            <TransactionInfoDialog
-                infoTransaction={{ ...TX, comment: "" }}
-                onClose={vi.fn()}
-                onApplyLocal={onApplyLocal}
-            />,
-        );
+        renderInspector({ transaction: { ...TX, comment: "" }, onApplyLocal });
         await user.click(
             await screen.findByRole("button", { name: "Edit Comment" }),
         );
@@ -227,15 +289,9 @@ describe("TransactionInfoDialog", () => {
     it("clicking Edit on memo field shows text input", async () => {
         const user = userEvent.setup();
 
-        renderWithApp(
-            <TransactionInfoDialog
-                infoTransaction={TX}
-                onClose={vi.fn()}
-                onApplyLocal={vi.fn()}
-            />,
-        );
+        renderInspector();
 
-        await screen.findByRole("dialog");
+        await screen.findByRole("complementary");
 
         await user.click(
             await screen.findByRole("button", { name: "Edit Description" }),
@@ -268,22 +324,19 @@ describe("TransactionInfoDialog", () => {
             ),
         );
 
-        renderWithApp(
-            <TransactionInfoDialog
-                infoTransaction={TX}
-                onClose={vi.fn()}
-                onApplyLocal={onApplyLocal}
-            />,
-        );
+        renderInspector({ onApplyLocal });
 
         await user.click(
             await screen.findByRole("button", { name: "Edit Bank Account" }),
         );
-        const input = screen.getByRole("combobox", {
-            name: "Bank Account",
-        });
-        await user.clear(input);
-        await user.type(input, "Main Checking");
+        await user.click(screen.getByLabelText("Bank Account"));
+        await user.type(
+            screen.getByPlaceholderText(/search accounts/i),
+            "Main Checking",
+        );
+        await user.click(
+            await screen.findByRole("option", { name: "Main Checking" }),
+        );
         await user.click(screen.getByRole("button", { name: /^save$/i }));
 
         await waitFor(() => expect(receivedBody).toEqual({ account_id: 1 }));
@@ -306,15 +359,9 @@ describe("TransactionInfoDialog", () => {
             }),
         );
 
-        renderWithApp(
-            <TransactionInfoDialog
-                infoTransaction={TX}
-                onClose={vi.fn()}
-                onApplyLocal={vi.fn()}
-            />,
-        );
+        renderInspector();
 
-        await screen.findByRole("dialog");
+        await screen.findByRole("complementary");
 
         await user.click(
             await screen.findByRole("button", { name: "Edit Description" }),
@@ -350,15 +397,9 @@ describe("TransactionInfoDialog", () => {
                 }),
             );
 
-            renderWithApp(
-                <TransactionInfoDialog
-                    infoTransaction={TX}
-                    onClose={vi.fn()}
-                    onApplyLocal={onApplyLocal}
-                />,
-            );
+            renderInspector({ onApplyLocal });
 
-            await screen.findByRole("dialog");
+            await screen.findByRole("complementary");
 
             await user.click(
                 await screen.findByRole("button", { name: "Edit Description" }),
@@ -396,14 +437,8 @@ describe("TransactionInfoDialog", () => {
                 return ok(TX);
             }),
         );
-        renderWithApp(
-            <TransactionInfoDialog
-                infoTransaction={TX}
-                onClose={vi.fn()}
-                onApplyLocal={vi.fn()}
-            />,
-        );
-        await screen.findByRole("dialog");
+        renderInspector();
+        await screen.findByRole("complementary");
         await user.click(
             await screen.findByRole("button", { name: "Edit Date" }),
         );
@@ -416,42 +451,30 @@ describe("TransactionInfoDialog", () => {
         expect(patchCount).toBe(0);
     });
 
-    it("Escape dismisses the focused tooltip before closing the dialog", async () => {
+    it("Escape inside the panel asks the page to close it", async () => {
         const user = userEvent.setup();
         const onClose = vi.fn();
 
-        renderWithApp(
-            <TransactionInfoDialog
-                infoTransaction={TX}
-                onClose={onClose}
-                onApplyLocal={vi.fn()}
-            />,
-        );
+        renderInspector({ onClose });
 
-        await screen.findByRole("dialog");
-
-        expect(await screen.findByRole("tooltip")).toHaveTextContent(
-            "Edit Date",
-        );
+        const close = await screen.findByRole("button", { name: /^close$/i });
+        close.focus();
         await user.keyboard("{Escape}");
-        expect(onClose).not.toHaveBeenCalled();
-        await user.keyboard("{Escape}");
-
-        // Controlled component — onClose signals parent to clear infoTransaction prop;
-        // dialog stays open in this test since we can't update the prop via a mock.
         await waitFor(() => expect(onClose).toHaveBeenCalled());
     });
 
-    it("shows Attachments section", async () => {
-        renderWithApp(
-            <TransactionInfoDialog
-                infoTransaction={TX}
-                onClose={vi.fn()}
-                onApplyLocal={vi.fn()}
-            />,
-        );
+    it("the close button asks the page to close it", async () => {
+        const user = userEvent.setup();
+        const onClose = vi.fn();
+        renderInspector({ onClose });
+        await user.click(await screen.findByRole("button", { name: /^close$/i }));
+        expect(onClose).toHaveBeenCalled();
+    });
 
-        await screen.findByRole("dialog");
+    it("shows Attachments section", async () => {
+        renderInspector();
+
+        await screen.findByRole("complementary");
         // Wait for the attachments query to settle so we don't race the loading
         // spinner. The mocked GET resolves synchronously but React Query still
         // flushes through a microtask cycle, which under CI load was racing the
@@ -471,15 +494,9 @@ describe("TransactionInfoDialog", () => {
     });
 
     it("shows no-attachments message when attachment list is empty", async () => {
-        renderWithApp(
-            <TransactionInfoDialog
-                infoTransaction={TX}
-                onClose={vi.fn()}
-                onApplyLocal={vi.fn()}
-            />,
-        );
+        renderInspector();
 
-        await screen.findByRole("dialog");
+        await screen.findByRole("complementary");
         // txPage.noAttachments = "No attachments yet"
         expect(
             await screen.findByText(/no attachments yet/i),
@@ -488,27 +505,9 @@ describe("TransactionInfoDialog", () => {
 
     // ─── Edge cases ────────────────────────────────────────────────────────
 
-    it("dialog renders in open state (a11y / backdrop guard)", async () => {
-        renderWithApp(
-            <TransactionInfoDialog
-                infoTransaction={TX}
-                onClose={vi.fn()}
-                onApplyLocal={vi.fn()}
-            />,
-        );
-        const dialog = await screen.findByRole("dialog");
-        expect(dialog).toHaveAttribute("data-state", "open");
-    });
-
     it("first focusable element exists for keyboard nav", async () => {
-        renderWithApp(
-            <TransactionInfoDialog
-                infoTransaction={TX}
-                onClose={vi.fn()}
-                onApplyLocal={vi.fn()}
-            />,
-        );
-        await screen.findByRole("dialog");
+        renderInspector();
+        await screen.findByRole("complementary");
         const buttons = await screen.findAllByRole("button");
         expect(buttons.length).toBeGreaterThan(0);
     });
@@ -542,15 +541,9 @@ describe("TransactionInfoDialog", () => {
             ),
         );
 
-        renderWithApp(
-            <TransactionInfoDialog
-                infoTransaction={TX}
-                onClose={vi.fn()}
-                onApplyLocal={onApplyLocal}
-            />,
-        );
+        renderInspector({ onApplyLocal });
 
-        await screen.findByRole("dialog");
+        await screen.findByRole("complementary");
 
         await user.click(
             await screen.findByRole("button", { name: "Edit Amount" }),
@@ -611,15 +604,9 @@ describe("TransactionInfoDialog", () => {
             ),
         );
 
-        renderWithApp(
-            <TransactionInfoDialog
-                infoTransaction={txWithTag}
-                onClose={vi.fn()}
-                onApplyLocal={vi.fn()}
-            />,
-        );
+        renderInspector({ transaction: txWithTag });
 
-        await screen.findByRole("dialog");
+        await screen.findByRole("complementary");
         // The chip is present before removal.
         const removeButton = await screen.findByRole("button", {
             name: /remove tag travel/i,
@@ -654,15 +641,9 @@ describe("TransactionInfoDialog", () => {
             }),
         );
 
-        renderWithApp(
-            <TransactionInfoDialog
-                infoTransaction={TX}
-                onClose={vi.fn()}
-                onApplyLocal={vi.fn()}
-            />,
-        );
+        renderInspector();
 
-        await screen.findByRole("dialog");
+        await screen.findByRole("complementary");
 
         await user.click(
             await screen.findByRole("button", { name: "Edit Description" }),

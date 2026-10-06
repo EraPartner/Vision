@@ -1,6 +1,8 @@
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
-import { useSearchParams } from "react-router";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
+import { Import } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -18,14 +20,26 @@ import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useDebounce, SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
 import { useTransactionListData } from "@/features/transactions/hooks/useTransactionListData";
 import { FilterBanner } from "@/features/transactions/components/FilterBanner";
-import { AccountFilterCombobox } from "@/features/transactions/components/AccountFilterCombobox";
-import { TableActions } from "@/features/transactions/components/TableActions";
+import { TransactionsToolbar } from "@/features/transactions/components/TransactionsToolbar";
 import { TransactionsTable } from "@/features/transactions/components/TransactionsTable";
+import { AddTransactionButton } from "@/features/transactions/components/AddTransactionSheet";
+import {
+    OPTIONAL_TRANSACTION_COLUMNS,
+    TRANSACTIONS_COLUMNS_PAGE_KEY,
+    datePresetFor,
+    datePresetRange,
+    type DatePreset,
+} from "@/features/transactions/transactionColumns";
+import { useWidgetVisibility } from "@/hooks/useWidgetVisibility";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { useNeedsCategoryCount } from "@/hooks/useNeedsCategoryCount";
+import { useAccounts } from "@/hooks/useAccounts";
+import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import {
     TransactionSearchSuggestions,
     type QuickFilterParams,
 } from "@/features/transactions/components/TransactionSearchSuggestions";
-import { TransactionInfoDialog } from "@/features/transactions/components/TransactionInfoDialog";
+import { TransactionInspector } from "@/features/transactions/components/TransactionInspector";
 import { TransactionQuickLook } from "@/features/transactions/components/TransactionQuickLook";
 import {
     BulkActionsBar,
@@ -38,6 +52,11 @@ import type {
 import type { BulkTransactionFilter } from "@/types/api";
 import { PageShell } from "@/components/shared/PageShell";
 
+/** Router state Home passes to land on one row (`navigate("/transactions", { state })`). */
+export interface TransactionsLocationState {
+    selectTransactionId?: number;
+}
+
 export default function TransactionsPage() {
     const { t } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
@@ -45,7 +64,18 @@ export default function TransactionsPage() {
     const pageSize = appSettings.defaultPageSize;
     const loadMoreOffset = Math.min(50, Math.max(15, Math.floor(pageSize / 5)));
     const [searchParams, setSearchParams] = useSearchParams();
+    const location = useLocation();
+    const navigate = useNavigate();
     const [showAll, setShowAll] = useState(false);
+    // The inspector docks beside the list from the lg breakpoint; below it the
+    // same content is presented as a sheet.
+    const inspectorDocked = useMediaQuery("(min-width: 1024px)");
+    const columnVisibility = useWidgetVisibility(
+        TRANSACTIONS_COLUMNS_PAGE_KEY,
+        OPTIONAL_TRANSACTION_COLUMNS,
+    );
+    const { data: needsCategoryCount } = useNeedsCategoryCount();
+    const { data: accountsData } = useAccounts({ active: "true" });
     const [search, setSearch] = useState(
         () => searchParams.get("search") || "",
     );
@@ -76,11 +106,15 @@ export default function TransactionsPage() {
             { replace: true },
         );
     }, [debouncedSearch, search, searchParam, setSearchParams]);
-    const [infoTransaction, setInfoTransaction] =
-        useState<TableTransaction | null>(null);
+    // The selected row drives the inspector; it is derived from the list on
+    // every render, so local patches and refetches flow into it.
+    const [selectedId, setSelectedId] = useState<number | null>(() => {
+        const state = location.state as TransactionsLocationState | null;
+        return state?.selectTransactionId ?? null;
+    });
     const [quickLookTransaction, setQuickLookTransaction] =
         useState<TableTransaction | null>(null);
-    const infoReturnFocusRef = useRef<HTMLElement | null>(null);
+    const selectReturnFocusRef = useRef<HTMLElement | null>(null);
     const quickLookReturnFocusRef = useRef<HTMLElement | null>(null);
 
     const rememberFocusedElement = useCallback(() => {
@@ -88,16 +122,20 @@ export default function TransactionsPage() {
             ? document.activeElement
             : null;
     }, []);
-    const openInfo = useCallback(
-        (transaction: TableTransaction) => {
-            infoReturnFocusRef.current = rememberFocusedElement();
-            setInfoTransaction(transaction);
+    const selectRow = useCallback(
+        (transaction: TableTransaction | null) => {
+            if (transaction) {
+                const active = rememberFocusedElement();
+                if (active?.getAttribute("role") === "row")
+                    selectReturnFocusRef.current = active;
+            }
+            setSelectedId(transaction?.id ?? null);
         },
         [rememberFocusedElement],
     );
-    const closeInfo = useCallback(() => {
-        setInfoTransaction(null);
-        requestAnimationFrame(() => infoReturnFocusRef.current?.focus());
+    const closeInspector = useCallback(() => {
+        setSelectedId(null);
+        requestAnimationFrame(() => selectReturnFocusRef.current?.focus());
     }, []);
     const openQuickLook = useCallback(
         (transaction: TableTransaction) => {
@@ -268,40 +306,8 @@ export default function TransactionsPage() {
                     return { ...item, ...patch };
                 }),
             );
-
-            setInfoTransaction((prev) => {
-                if (!prev || prev.id !== transactionId) return prev;
-                return {
-                    ...prev,
-                    ...(patch.amount !== undefined
-                        ? { amount: Number(patch.amount) }
-                        : {}),
-                    ...(patch.category_name !== undefined
-                        ? {
-                              category: String(
-                                  patch.category_name ??
-                                      t("txPage.field.uncategorized"),
-                              ),
-                          }
-                        : {}),
-                    ...(patch.category_id !== undefined
-                        ? { categoryId: Number(patch.category_id) }
-                        : {}),
-                    ...(patch.recipient_name !== undefined
-                        ? {
-                              recipient: String(
-                                  patch.recipient_name ??
-                                      t("txPage.field.unknown"),
-                              ),
-                          }
-                        : {}),
-                    ...(patch.recipient_id !== undefined
-                        ? { recipientId: Number(patch.recipient_id) }
-                        : {}),
-                };
-            });
         },
-        [setAllItems, t],
+        [setAllItems],
     );
 
     const applyInfoFieldLocally = useCallback(
@@ -366,34 +372,6 @@ export default function TransactionsPage() {
                     }
                 }),
             );
-
-            setInfoTransaction((prev) => {
-                if (!prev || prev.id !== transactionId) return prev;
-                switch (field) {
-                    case "date":
-                        return { ...prev, date: String(value ?? "") };
-                    case "memo":
-                        return { ...prev, memo: String(value ?? "") };
-                    case "amount":
-                        return {
-                            ...prev,
-                            amount:
-                                typeof value === "number" ? value : prev.amount,
-                        };
-                    case "currency":
-                        return { ...prev, currency: String(value ?? "") };
-                    case "bank":
-                        return {
-                            ...prev,
-                            bank: String(value ?? ""),
-                            accountId: accountId ?? undefined,
-                        };
-                    case "comment":
-                        return { ...prev, comment: String(value ?? "") };
-                    default:
-                        return prev;
-                }
-            });
         },
         [setAllItems],
     );
@@ -405,7 +383,9 @@ export default function TransactionsPage() {
             confirmLabel: t("txPage.delete.confirm"),
             variant: "destructive",
         });
-        if (ok) deleteMutation.mutate(id);
+        if (!ok) return;
+        if (selectedId === id) setSelectedId(null);
+        deleteMutation.mutate(id);
     };
 
     const toggleActive = (id: number, currentActive: boolean) => {
@@ -472,6 +452,66 @@ export default function TransactionsPage() {
                     next.delete("account_id");
                     next.delete("filter_label");
                 }
+                return next;
+            });
+        },
+        [setSearchParams],
+    );
+
+    const handleCategoryFilterChange = useCallback(
+        (selection: { id: number; label: string } | null) => {
+            setSearchParams((prev) => {
+                const next = new URLSearchParams(prev);
+                next.delete("category_ids");
+                if (selection) {
+                    next.set("category_id", String(selection.id));
+                    next.set("filter_label", selection.label);
+                } else {
+                    next.delete("category_id");
+                    next.delete("filter_label");
+                }
+                return next;
+            });
+        },
+        [setSearchParams],
+    );
+
+    const handleDatePresetChange = useCallback(
+        (preset: DatePreset) => {
+            const range = datePresetRange(preset, new Date());
+            setSearchParams((prev) => {
+                const next = new URLSearchParams(prev);
+                if (range) {
+                    next.set("start_date", range.start);
+                    next.set("end_date", range.end);
+                } else {
+                    next.delete("start_date");
+                    next.delete("end_date");
+                }
+                return next;
+            });
+        },
+        [setSearchParams],
+    );
+
+    const handleTypeChange = useCallback(
+        (type: "income" | "expense" | undefined) => {
+            setSearchParams((prev) => {
+                const next = new URLSearchParams(prev);
+                if (type) next.set("transaction_type", type);
+                else next.delete("transaction_type");
+                return next;
+            });
+        },
+        [setSearchParams],
+    );
+
+    const handleNeedsCategoryChange = useCallback(
+        (on: boolean) => {
+            setSearchParams((prev) => {
+                const next = new URLSearchParams(prev);
+                if (on) next.set("uncategorised", "true");
+                else next.delete("uncategorised");
                 return next;
             });
         },
@@ -615,14 +655,58 @@ export default function TransactionsPage() {
             })),
         [allItems, t],
     );
+    const selectedTransaction = useMemo(
+        () =>
+            selectedId == null
+                ? null
+                : (transactions.find((tx) => tx.id === selectedId) ?? null),
+        [transactions, selectedId],
+    );
+    // A row that left the loaded list (deleted, filtered out) closes the
+    // inspector rather than showing stale details.
+    useEffect(() => {
+        if (selectedId != null && !isLoading && allItems.length > 0 && !selectedTransaction) {
+            setSelectedId(null);
+        }
+    }, [selectedId, selectedTransaction, isLoading, allItems.length]);
+
+    const datePreset = datePresetFor(startDateFilter, endDateFilter, new Date());
+    const customDateLabel =
+        startDateFilter || endDateFilter
+            ? `${startDateFilter ? formatDateStringWithAppSettings(startDateFilter, appSettings.dateFormat) : "…"} – ${endDateFilter ? formatDateStringWithAppSettings(endDateFilter, appSettings.dateFormat) : "…"}`
+            : undefined;
+    const accountCount = accountsData?.total ?? accountsData?.items.length;
+    const headerSubtitle =
+        accountCount != null && accountCount > 0
+            ? t("txPage.countInAccounts", { n: totalItems, m: accountCount })
+            : t("txPage.tableSubtitle", { n: totalItems });
+    const headerActions = (
+        <>
+            <Button asChild variant="outline">
+                <Link to="/import">
+                    <Import className="h-4 w-4" aria-hidden="true" />
+                    {t("txPage.importLink")}
+                </Link>
+            </Button>
+            <AddTransactionButton
+                onCreated={(created) => {
+                    setSelectedId(created.id);
+                    navigate("/transactions", {
+                        replace: true,
+                        state: { selectTransactionId: created.id },
+                    });
+                }}
+            />
+        </>
+    );
 
     if (isLoading) {
         return (
             <PageShell className="">
                 <PageHeader
                     title={t("txPage.title")}
-                    subtitle={t("txPage.subtitle")}
                     icon={PAGE_ICONS["/transactions"]}
+                    actions={headerActions}
                 />
                 <Card {...loadingSurfaceProps}>
                     <CardHeader className="pb-3">
@@ -660,13 +744,52 @@ export default function TransactionsPage() {
         );
     }
 
+    const inspector = (
+        <TransactionInspector
+            transaction={selectedTransaction}
+            presentation={inspectorDocked ? "docked" : "sheet"}
+            onClose={closeInspector}
+            onApplyLocal={applyInfoFieldLocally}
+            onSelectCategory={handleSelectCategory}
+            onSelectRecipient={handleSelectRecipient}
+            onDuplicate={handleDuplicate}
+            onFilterByRecipient={handleFilterByRecipient}
+            onToggleActive={toggleActive}
+            onDelete={handleDelete}
+            updatePending={updateMutation.isPending}
+            deletePending={deleteMutation.isPending}
+        />
+    );
+
     return (
         <>
             <PageShell className="">
                 <PageHeader
                     title={t("txPage.title")}
-                    subtitle={t("txPage.subtitle")}
+                    subtitle={headerSubtitle}
                     icon={PAGE_ICONS["/transactions"]}
+                    actions={headerActions}
+                />
+
+                <TransactionsToolbar
+                    accountIdFilter={accountIdFilter}
+                    onAccountChange={handleAccountFilterChange}
+                    categoryIdFilter={categoryIdFilter}
+                    onCategoryChange={handleCategoryFilterChange}
+                    datePreset={datePreset}
+                    customDateLabel={customDateLabel}
+                    onDatePresetChange={handleDatePresetChange}
+                    transactionTypeFilter={transactionTypeFilter}
+                    onTypeChange={handleTypeChange}
+                    needsCategory={!!uncategorisedFilter}
+                    needsCategoryCount={needsCategoryCount}
+                    onNeedsCategoryChange={handleNeedsCategoryChange}
+                    showAll={showAll}
+                    onShowAllChange={setShowAll}
+                    columns={OPTIONAL_TRANSACTION_COLUMNS}
+                    isColumnVisible={columnVisibility.isVisible}
+                    setColumnVisible={columnVisibility.setWidgetVisible}
+                    onResetColumns={columnVisibility.resetToDefaults}
                 />
 
                 <FilterBanner
@@ -710,83 +833,78 @@ export default function TransactionsPage() {
                     }}
                 />
 
-                <TransactionsTable
-                    transactions={transactions}
-                    allItems={allItems}
-                    serverMode={{
-                        sort: {
-                            onChange: handleSortChange,
-                            key: sortKey,
-                            dir: sortDir,
-                        },
-                        search: {
-                            onChange: setSearch,
-                            value: search,
-                            suggestions: ({ query, close }) => (
-                                <TransactionSearchSuggestions
-                                    query={query}
-                                    onApply={handleApplyQuickFilter}
-                                    close={close}
+                <div className="flex items-start gap-4">
+                    <div className="min-w-0 flex-1">
+                        <TransactionsTable
+                            transactions={transactions}
+                            allItems={allItems}
+                            serverMode={{
+                                sort: {
+                                    onChange: handleSortChange,
+                                    key: sortKey,
+                                    dir: sortDir,
+                                },
+                                search: {
+                                    onChange: setSearch,
+                                    value: search,
+                                    suggestions: ({ query, close }) => (
+                                        <TransactionSearchSuggestions
+                                            query={query}
+                                            onApply={handleApplyQuickFilter}
+                                            close={close}
+                                        />
+                                    ),
+                                },
+                                pagination: {
+                                    totalItems,
+                                    isFetchingMore,
+                                    hasMore: hasMoreRef.current,
+                                    loadMoreOffset,
+                                    onLoadMore: loadMore,
+                                },
+                            }}
+                            onRowUpdate={handleUpdate}
+                            onSelectRow={selectRow}
+                            selectedRowId={selectedId}
+                            onQuickLook={openQuickLook}
+                            onDuplicate={handleDuplicate}
+                            onFilterByRecipient={handleFilterByRecipient}
+                            onToggleActive={toggleActive}
+                            onDelete={handleDelete}
+                            onSelectCategory={handleSelectCategory}
+                            onSelectRecipient={handleSelectRecipient}
+                            cancelEditingRef={cancelTableEditingRef}
+                            onEditingChange={setEditing}
+                            selectedIds={selectedIds}
+                            onSelectionChange={setSelectedIds}
+                            isColumnVisible={columnVisibility.isVisible}
+                            actions={
+                                selectedIds.size === 0 ? undefined : (
+                                <BulkActionsBar
+                                    selectedIds={selectedIds}
+                                    selectionMode={selectionMode}
+                                    totalMatching={totalItems}
+                                    visibleItemCount={allItems.length}
+                                    filter={currentFilter}
+                                    onClearSelection={() => {
+                                        setSelectedIds(new Set());
+                                        setSelectionMode("ids");
+                                    }}
+                                    onPromoteToFilterMode={() =>
+                                        setSelectionMode("filter")
+                                    }
                                 />
-                            ),
-                        },
-                        pagination: {
-                            totalItems,
-                            isFetchingMore,
-                            hasMore: hasMoreRef.current,
-                            loadMoreOffset,
-                            onLoadMore: loadMore,
-                        },
-                    }}
-                    onRowUpdate={handleUpdate}
-                    onOpenInfo={openInfo}
-                    onQuickLook={openQuickLook}
-                    onDuplicate={handleDuplicate}
-                    onFilterByRecipient={handleFilterByRecipient}
-                    onToggleActive={toggleActive}
-                    onDelete={handleDelete}
-                    onSelectCategory={handleSelectCategory}
-                    onSelectRecipient={handleSelectRecipient}
-                    cancelEditingRef={cancelTableEditingRef}
-                    onEditingChange={setEditing}
-                    selectedIds={selectedIds}
-                    onSelectionChange={setSelectedIds}
-                    actions={
-                        <>
-                            <BulkActionsBar
-                                selectedIds={selectedIds}
-                                selectionMode={selectionMode}
-                                totalMatching={totalItems}
-                                visibleItemCount={allItems.length}
-                                filter={currentFilter}
-                                onClearSelection={() => {
-                                    setSelectedIds(new Set());
-                                    setSelectionMode("ids");
-                                }}
-                                onPromoteToFilterMode={() =>
-                                    setSelectionMode("filter")
-                                }
-                            />
-                            <AccountFilterCombobox
-                                value={accountIdFilter}
-                                onChange={handleAccountFilterChange}
-                            />
-                            <TableActions
-                                showAll={showAll}
-                                onToggleShowAll={() => setShowAll(!showAll)}
-                            />
-                        </>
-                    }
-                    updatePending={updateMutation.isPending}
-                    deletePending={deleteMutation.isPending}
-                />
+                                )
+                            }
+                            updatePending={updateMutation.isPending}
+                            deletePending={deleteMutation.isPending}
+                        />
+                    </div>
+                    {inspectorDocked && inspector}
+                </div>
             </PageShell>
+            {!inspectorDocked && inspector}
             <ConfirmDialog />
-            <TransactionInfoDialog
-                infoTransaction={infoTransaction}
-                onClose={closeInfo}
-                onApplyLocal={applyInfoFieldLocally}
-            />
             <TransactionQuickLook
                 transaction={quickLookTransaction}
                 onClose={closeQuickLook}

@@ -15,7 +15,6 @@ import {
 } from "@/components/shared/VirtualDataTable";
 import { CategoryCombobox } from "@/components/shared/CategoryCombobox";
 import { RecipientCombobox } from "@/components/shared/RecipientCombobox";
-import { SplitTransactionDialog } from "@/features/splits/SplitTransactionDialog";
 import { TagChip } from "@/components/shared/TagInput";
 import { EmptyState } from "@/components/shared/EmptyState";
 import {
@@ -32,16 +31,13 @@ import {
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
-import {
-    Tooltip,
-    TooltipTrigger,
-    TooltipContent,
-} from "@/components/ui/tooltip";
 import { Money } from "@/components/shared/Money";
 import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
-import { getCategoryColor } from "@/utils/categoryColors";
+import { getCategoryChartColor } from "@/utils/categoryColors";
 import { cn } from "@/lib/utils";
+import type { Column } from "@/types/dataTable";
 import type { RawApiTransaction, TableTransaction } from "../types";
+import { amountClass } from "../amountClass";
 
 interface TransactionsTableProps {
     transactions: TableTransaction[];
@@ -49,7 +45,9 @@ interface TransactionsTableProps {
     /** Server sort + search + pagination config, forwarded to VirtualDataTable. */
     serverMode: VirtualTableServerMode;
     onRowUpdate: (sourceIndex: number, updated: TableTransaction) => void;
-    onOpenInfo: (row: TableTransaction) => void;
+    /** Selects the row the inspector shows (click, Enter, arrow keys). */
+    onSelectRow: (row: TableTransaction | null) => void;
+    selectedRowId: number | null;
     onQuickLook: (row: TableTransaction) => void;
     onDuplicate: (row: TableTransaction) => void;
     onFilterByRecipient: (row: TableTransaction) => void;
@@ -67,11 +65,13 @@ interface TransactionsTableProps {
     ) => void;
     cancelEditingRef: React.MutableRefObject<(() => void) | null>;
     onEditingChange: (editing: boolean) => void;
-    actions: React.ReactNode;
+    actions?: React.ReactNode;
     updatePending: boolean;
     deletePending: boolean;
     selectedIds: Set<number>;
     onSelectionChange: (next: Set<number>) => void;
+    /** Optional columns the View menu turned on (ids from transactionColumns.ts). */
+    isColumnVisible: (id: string) => boolean;
 }
 
 export function TransactionsTable({
@@ -79,7 +79,8 @@ export function TransactionsTable({
     allItems,
     serverMode,
     onRowUpdate,
-    onOpenInfo,
+    onSelectRow,
+    selectedRowId,
     onQuickLook,
     onDuplicate,
     onFilterByRecipient,
@@ -94,10 +95,12 @@ export function TransactionsTable({
     deletePending,
     selectedIds,
     onSelectionChange,
+    isColumnVisible,
 }: TransactionsTableProps) {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
     const fmt = useCurrencyFormatter();
+    const uncategorisedLabel = t("txPage.field.uncategorized");
     const getRowLabel = useCallback(
         (row: TableTransaction) =>
             [
@@ -113,9 +116,6 @@ export function TransactionsTable({
         [appSettings.dateFormat, fmt],
     );
 
-    // Display values sourced from the same server-mode config the table runs on
-    // (always provided by TransactionsPage; fallbacks only satisfy the types).
-    const totalItems = serverMode.pagination?.totalItems ?? 0;
     const search = serverMode.search?.value ?? "";
 
     const toggleSelect = useCallback(
@@ -140,8 +140,14 @@ export function TransactionsTable({
         transactions.length > 0 && selectedIds.size === transactions.length;
     const someSelected = selectedIds.size > 0 && !allSelected;
 
-    const columns = useMemo(
-        () => [
+    const showTags = isColumnVisible("tags");
+    const showCurrency = isColumnVisible("currency");
+    const showRunningBalance = isColumnVisible("runningBalance");
+    const showStatus = isColumnVisible("is_active");
+
+    const columns = useMemo<Column<TableTransaction>[]>(() => {
+        const inactive = (row: TableTransaction) => !row.is_active;
+        const core: Column<TableTransaction>[] = [
             {
                 key: "select",
                 header: (
@@ -162,7 +168,7 @@ export function TransactionsTable({
                 filterable: false,
                 defaultWidth: 40,
                 minWidth: 36,
-                render: (row: TableTransaction) => (
+                render: (row) => (
                     <Checkbox
                         checked={selectedIds.has(row.id)}
                         onCheckedChange={() => toggleSelect(row.id)}
@@ -175,14 +181,16 @@ export function TransactionsTable({
                 key: "date",
                 header: t("txPage.col.date"),
                 editable: true,
-                type: "date" as const,
-                render: (row: TableTransaction) => (
+                type: "date",
+                defaultWidth: 112,
+                minWidth: 96,
+                render: (row) => (
                     <span
                         className={cn(
-                            "whitespace-nowrap",
-                            row.is_active
-                                ? "text-foreground"
-                                : "text-muted-foreground line-through",
+                            "whitespace-nowrap tabular-nums",
+                            inactive(row)
+                                ? "text-label-tertiary line-through"
+                                : "text-label-secondary",
                         )}
                     >
                         {row.date
@@ -195,51 +203,10 @@ export function TransactionsTable({
                 ),
             },
             {
-                key: "category",
-                header: t("txPage.col.category"),
-                editable: false,
-                render: (row: TableTransaction, isEditing: boolean) => {
-                    if (isEditing) {
-                        const original = allItems.find((t) => t.id === row.id);
-                        return (
-                            <CategoryCombobox
-                                value={
-                                    row.categoryId ??
-                                    original?.category_id ??
-                                    null
-                                }
-                                onSelect={(catId, categoryName) => {
-                                    if (!original) return;
-                                    onSelectCategory(
-                                        original.id,
-                                        catId,
-                                        categoryName ?? null,
-                                    );
-                                    cancelEditingRef.current?.();
-                                }}
-                                className="w-full"
-                            />
-                        );
-                    }
-                    return (
-                        <Badge
-                            variant="outline"
-                            className={cn(
-                                "font-medium",
-                                getCategoryColor(row.category),
-                                !row.is_active && "opacity-50 line-through",
-                            )}
-                        >
-                            {row.category}
-                        </Badge>
-                    );
-                },
-            },
-            {
                 key: "recipient",
                 header: t("txPage.col.recipient"),
                 editable: false,
-                render: (row: TableTransaction, isEditing: boolean) => {
+                render: (row, isEditing) => {
                     if (isEditing) {
                         const original = allItems.find((t) => t.id === row.id);
                         return (
@@ -263,19 +230,121 @@ export function TransactionsTable({
                         );
                     }
                     return (
-                        <span
-                            className={
-                                row.is_active
-                                    ? "text-foreground"
-                                    : "text-muted-foreground line-through"
-                            }
-                        >
-                            {row.recipient}
+                        <span className="flex min-w-0 flex-col leading-tight">
+                            <span
+                                className={cn(
+                                    "truncate font-medium",
+                                    inactive(row)
+                                        ? "text-label-tertiary line-through"
+                                        : "text-foreground",
+                                )}
+                            >
+                                {row.recipient}
+                            </span>
+                            {row.memo && (
+                                <span className="truncate type-footnote text-label-secondary">
+                                    {row.memo}
+                                </span>
+                            )}
                         </span>
                     );
                 },
             },
             {
+                key: "category",
+                header: t("txPage.col.category"),
+                editable: false,
+                defaultWidth: 180,
+                minWidth: 120,
+                render: (row, isEditing) => {
+                    if (isEditing) {
+                        const original = allItems.find((t) => t.id === row.id);
+                        return (
+                            <CategoryCombobox
+                                value={
+                                    row.categoryId ??
+                                    original?.category_id ??
+                                    null
+                                }
+                                onSelect={(catId, categoryName) => {
+                                    if (!original) return;
+                                    onSelectCategory(
+                                        original.id,
+                                        catId,
+                                        categoryName ?? null,
+                                    );
+                                    cancelEditingRef.current?.();
+                                }}
+                                className="w-full"
+                            />
+                        );
+                    }
+                    const uncategorised =
+                        !row.categoryId || row.category === uncategorisedLabel;
+                    return (
+                        <span
+                            className={cn(
+                                "flex min-w-0 items-center gap-2",
+                                inactive(row) && "opacity-50",
+                            )}
+                        >
+                            <span
+                                aria-hidden="true"
+                                className={cn(
+                                    "h-2 w-2 shrink-0 rounded-full",
+                                    uncategorised &&
+                                        "border border-dashed border-label-tertiary",
+                                )}
+                                style={
+                                    uncategorised
+                                        ? undefined
+                                        : {
+                                              backgroundColor:
+                                                  getCategoryChartColor(
+                                                      row.category,
+                                                  ),
+                                          }
+                                }
+                            />
+                            <span
+                                className={cn(
+                                    "truncate",
+                                    uncategorised
+                                        ? "text-label-tertiary"
+                                        : "text-foreground",
+                                )}
+                            >
+                                {uncategorised
+                                    ? t("txPage.needsCategory")
+                                    : row.category}
+                            </span>
+                        </span>
+                    );
+                },
+            },
+            {
+                key: "bank",
+                header: t("txPage.col.account"),
+                editable: false,
+                defaultWidth: 150,
+                minWidth: 100,
+                render: (row) => (
+                    <span
+                        className={cn(
+                            "truncate",
+                            inactive(row)
+                                ? "text-label-tertiary"
+                                : "text-label-secondary",
+                        )}
+                    >
+                        {row.bank}
+                    </span>
+                ),
+            },
+        ];
+        const optional: Column<TableTransaction>[] = [];
+        if (showTags)
+            optional.push({
                 key: "tags",
                 header: t("txPage.col.tags"),
                 editable: false,
@@ -283,7 +352,7 @@ export function TransactionsTable({
                 filterable: false,
                 defaultWidth: 160,
                 minWidth: 120,
-                render: (row: TableTransaction) => {
+                render: (row) => {
                     const tags = row.tags ?? [];
                     if (tags.length === 0) return null;
                     return (
@@ -294,7 +363,7 @@ export function TransactionsTable({
                             {tags.length > 3 && (
                                 <Badge
                                     variant="outline"
-                                    className="text-xs py-0 px-1.5 h-5 text-muted-foreground"
+                                    className="h-5 px-1.5 py-0 text-xs text-muted-foreground"
                                 >
                                     +{tags.length - 3}
                                 </Badge>
@@ -302,54 +371,53 @@ export function TransactionsTable({
                         </div>
                     );
                 },
-            },
-            {
+            });
+        if (showCurrency)
+            optional.push({
                 key: "currency",
                 header: t("txPage.col.currency"),
                 editable: false,
                 defaultWidth: 76,
                 minWidth: 68,
-                render: (row: TableTransaction) => (
-                    <span className="eyebrow text-muted-foreground">
+                render: (row) => (
+                    <span className="eyebrow text-label-secondary">
                         {row.currency}
                     </span>
                 ),
-            },
-            {
-                key: "amount",
-                header: t("txPage.col.amount"),
-                editable: true,
-                type: "number" as const,
-                defaultWidth: 90,
-                minWidth: 70,
-                className: "text-right",
-                render: (row: TableTransaction) => (
-                    <span
-                        className={cn(
-                            "font-medium whitespace-nowrap",
-                            row.amount >= 0 ? "text-gain" : "text-loss",
-                            !row.is_active && "opacity-50 line-through",
-                        )}
-                    >
-                        <Money
-                            signed
-                            amount={row.amount}
-                            currency={row.currency}
-                        />
-                    </span>
-                ),
-            },
-            {
+            });
+        const amount: Column<TableTransaction> = {
+            key: "amount",
+            header: t("txPage.col.amount"),
+            editable: true,
+            type: "number",
+            defaultWidth: 120,
+            minWidth: 90,
+            className: "text-right",
+            render: (row) => (
+                <span
+                    className={cn(
+                        "whitespace-nowrap font-medium tabular-nums",
+                        amountClass(row.amount),
+                        inactive(row) && "opacity-50 line-through",
+                    )}
+                >
+                    <Money signed amount={row.amount} currency={row.currency} />
+                </span>
+            ),
+        };
+        const trailing: Column<TableTransaction>[] = [];
+        if (showRunningBalance)
+            trailing.push({
                 key: "runningBalance",
                 header: t("txPage.col.runningBalance"),
                 editable: false,
                 sortable: false,
                 filterable: false,
-                defaultWidth: 120,
+                defaultWidth: 130,
                 minWidth: 100,
                 className: "text-right",
-                render: (row: TableTransaction) => (
-                    <span className="whitespace-nowrap tabular-nums">
+                render: (row) => (
+                    <span className="whitespace-nowrap tabular-nums text-label-secondary">
                         {row.runningBalance == null ? (
                             "—"
                         ) : (
@@ -360,50 +428,15 @@ export function TransactionsTable({
                         )}
                     </span>
                 ),
-            },
-            {
-                key: "info",
-                header: t("txPage.col.info"),
-                editable: false,
-                sortable: false,
-                filterable: false,
-                defaultWidth: 96,
-                minWidth: 80,
-                render: (row: TableTransaction) => (
-                    <div className="flex items-center">
-                        <SplitTransactionDialog
-                            triggerLabel={`${t("splitDialog.buttonTitle")}: ${getRowLabel(row)}`}
-                            transactionId={row.id}
-                            transactionAmount={row.amount}
-                            transactionCurrency={row.currency}
-                        />
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="icon-touch-target text-muted-foreground hover:text-foreground"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        onOpenInfo(row);
-                                    }}
-                                    aria-label={`${t("aria.transactionInfo")}: ${getRowLabel(row)}`}
-                                >
-                                    <Info className="h-4 w-4" />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>{`${t("aria.transactionInfo")}: ${getRowLabel(row)}`}</TooltipContent>
-                        </Tooltip>
-                    </div>
-                ),
-            },
-            {
+            });
+        if (showStatus)
+            trailing.push({
                 key: "is_active",
                 header: t("txPage.col.status"),
                 editable: false,
                 defaultWidth: 145,
                 minWidth: 130,
-                render: (row: TableTransaction) => (
+                render: (row) => (
                     <Button
                         variant="ghost"
                         size="sm"
@@ -411,7 +444,7 @@ export function TransactionsTable({
                             "gap-1.5",
                             row.is_active
                                 ? "text-accent hover:text-accent"
-                                : "text-muted-foreground hover:text-muted-foreground opacity-50",
+                                : "text-label-secondary opacity-60",
                         )}
                         onClick={(e) => {
                             e.stopPropagation();
@@ -431,55 +464,29 @@ export function TransactionsTable({
                             : t("txPage.statusInactive")}
                     </Button>
                 ),
-            },
-            {
-                key: "delete",
-                header: "",
-                className: "!px-1",
-                defaultWidth: 40,
-                minWidth: 36,
-                editable: false,
-                render: (row: TableTransaction) => (
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="icon-touch-target text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                onClick={() =>
-                                    onDelete(row.id, row.memo || row.recipient)
-                                }
-                                disabled={deletePending}
-                                aria-label={`${t("aria.deleteTransaction")}: ${getRowLabel(row)}`}
-                            >
-                                <Trash2 className="h-4 w-4" />
-                            </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>{`${t("aria.deleteTransaction")}: ${getRowLabel(row)}`}</TooltipContent>
-                    </Tooltip>
-                ),
-            },
-        ],
-        [
-            t,
-            appSettings.dateFormat,
-            getRowLabel,
-            allSelected,
-            someSelected,
-            selectedIds,
-            toggleSelect,
-            toggleSelectAll,
-            allItems,
-            onSelectCategory,
-            onSelectRecipient,
-            onOpenInfo,
-            onToggleActive,
-            onDelete,
-            cancelEditingRef,
-            updatePending,
-            deletePending,
-        ],
-    );
+            });
+        return [...core, ...optional, amount, ...trailing];
+    }, [
+        t,
+        appSettings.dateFormat,
+        getRowLabel,
+        allSelected,
+        someSelected,
+        selectedIds,
+        toggleSelect,
+        toggleSelectAll,
+        allItems,
+        onSelectCategory,
+        onSelectRecipient,
+        onToggleActive,
+        cancelEditingRef,
+        updatePending,
+        uncategorisedLabel,
+        showTags,
+        showCurrency,
+        showRunningBalance,
+        showStatus,
+    ]);
 
     const rowContextMenu = useCallback(
         (
@@ -493,24 +500,24 @@ export function TransactionsTable({
             const canDuplicate = hasRecipient && !!row.date && !!row.bank;
             return (
                 <ContextMenuContent className="w-60">
-                    <ContextMenuItem onSelect={() => onOpenInfo(row)}>
-                        <Info className="mr-2 h-4 w-4 text-muted-foreground" />
+                    <ContextMenuItem onSelect={() => onSelectRow(row)}>
+                        <Info className="mr-2 h-4 w-4 text-label-secondary" />
                         {t("contextMenu.info")}
                         <ContextMenuShortcut>↵</ContextMenuShortcut>
                     </ContextMenuItem>
                     <ContextMenuItem onSelect={() => onQuickLook(row)}>
-                        <Eye className="mr-2 h-4 w-4 text-muted-foreground" />
+                        <Eye className="mr-2 h-4 w-4 text-label-secondary" />
                         {t("contextMenu.quickLook")}
                         <ContextMenuShortcut>␣</ContextMenuShortcut>
                     </ContextMenuItem>
                     <ContextMenuItem onSelect={helpers.startEditing}>
-                        <Pencil className="mr-2 h-4 w-4 text-muted-foreground" />
+                        <Pencil className="mr-2 h-4 w-4 text-label-secondary" />
                         {t("contextMenu.editInline")}
                     </ContextMenuItem>
                     {(canDuplicate || hasRecipient) && <ContextMenuSeparator />}
                     {canDuplicate && (
                         <ContextMenuItem onSelect={() => onDuplicate(row)}>
-                            <Copy className="mr-2 h-4 w-4 text-muted-foreground" />
+                            <Copy className="mr-2 h-4 w-4 text-label-secondary" />
                             {t("contextMenu.duplicate")}
                         </ContextMenuItem>
                     )}
@@ -518,7 +525,7 @@ export function TransactionsTable({
                         <ContextMenuItem
                             onSelect={() => onFilterByRecipient(row)}
                         >
-                            <Filter className="mr-2 h-4 w-4 text-muted-foreground" />
+                            <Filter className="mr-2 h-4 w-4 text-label-secondary" />
                             {t("contextMenu.showAllFromRecipient", {
                                 name: row.recipient,
                             })}
@@ -530,9 +537,9 @@ export function TransactionsTable({
                         disabled={updatePending}
                     >
                         {row.is_active ? (
-                            <ToggleLeft className="mr-2 h-4 w-4 text-muted-foreground" />
+                            <ToggleLeft className="mr-2 h-4 w-4 text-label-secondary" />
                         ) : (
-                            <ToggleRight className="mr-2 h-4 w-4 text-muted-foreground" />
+                            <ToggleRight className="mr-2 h-4 w-4 text-label-secondary" />
                         )}
                         {row.is_active
                             ? t("contextMenu.markInactive")
@@ -554,7 +561,7 @@ export function TransactionsTable({
         },
         [
             t,
-            onOpenInfo,
+            onSelectRow,
             onQuickLook,
             onDuplicate,
             onFilterByRecipient,
@@ -565,17 +572,23 @@ export function TransactionsTable({
         ],
     );
 
+    const selectRow = useCallback(
+        (row: TableTransaction) => onSelectRow(row),
+        [onSelectRow],
+    );
+
     return (
         <VirtualDataTable
-            title={t("txPage.tableTitle")}
-            subtitle={t("txPage.tableSubtitle", { n: totalItems })}
             columns={columns}
             data={transactions}
             getRowLabel={getRowLabel}
             onRowUpdate={onRowUpdate}
-            onRowOpen={onOpenInfo}
+            onRowOpen={selectRow}
+            onRowSelect={selectRow}
+            selectedRowKey={selectedRowId}
             onRowQuickLook={onQuickLook}
             rowContextMenu={rowContextMenu}
+            rowHeight={52}
             emptyMessage={
                 <EmptyState
                     headingLevel={3}
@@ -599,9 +612,10 @@ export function TransactionsTable({
             }
             serverMode={serverMode}
             actions={actions}
-            maxHeight={700}
+            maxHeight={720}
             cancelEditingRef={cancelEditingRef}
             onEditingChange={onEditingChange}
+            scrollRestorationKey="transactions"
         />
     );
 }
