@@ -4,9 +4,9 @@ type: feature
 status: active
 date: 2026-10-06
 updated: 2026-10-06
-tags: [feature, transactions, finance, phase-q, recipient-groups, bulk-actions, optimistic-updates, optimistic-create, june-2026, context-menu, quick-look, keyboard-nav, duplicate, filter-by-recipient, deep-link, electron-native, new-transaction, render-loop-fix, category-ids-filter, multi-value-filter, balance-write-protection, tag-editing-fix, amount-filter, search-suggestions, date-search, tag-search, url-state]
+tags: [feature, transactions, finance, phase-q, recipient-groups, bulk-actions, optimistic-updates, optimistic-create, june-2026, context-menu, quick-look, keyboard-nav, duplicate, filter-by-recipient, deep-link, electron-native, new-transaction, render-loop-fix, category-ids-filter, multi-value-filter, balance-write-protection, tag-editing-fix, amount-filter, search-suggestions, date-search, tag-search, url-state, inspector, add-transaction-sheet, transactions-toolbar, adr-181]
 aliases: [transactions-feature, income, expenses, financial-records, money-tracking]
-description: Core transaction management - income, expenses, and tracking financial activities. Phase Q adds recipient-group filtering for linked-recipient transaction discovery. Bulk operations enable atomic multi-row delete, recategorize, reassign, activate/deactivate, export, and tag. June 2026 (ADR-070): useUpdateTransaction/useDeleteTransaction are now optimistic. June 2026 Premium v3 (ADR-071): useCreateTransaction is now optimistic (temp negative-id row → server-row swap → onSettled invalidate; virtual list excluded; 6 tests). June 2026 Premium v3 V5-V7: per-row context menu, Quick Look dialog (Space), keyboard row navigation (↑/↓/Enter), Duplicate, and Filter-by-recipient actions. June 2026 V12 (ADR-072): /transactions?new=1 deep link opens AddTransactionDialog (used by native menu and dock menu). 2026-06-25: balance field is now write-protected (import pipeline only); PATCH and manual create can no longer set it; TransactionInfoDialog renders it read-only. 2026-06-26: TransactionInfoDialog tag-editing state bug fixed — last-tag removal chip persisted on screen after PATCH succeeded; dialog now tracks tag slugs in local state seeded from infoTransaction.tags. 2026-06-28: free-text search now also matches the transaction date (ISO text) and active tag slugs; new amount_min/amount_max/amount_exact filter params; TransactionSearchSuggestions dropdown for quick filters; FilterBanner shows amount descriptors. Aug 2026: search and sort (sort_key/sort_dir) are URL-backed; load-more and attachment-delete failures surface a retry-capable toast instead of failing silently.
+description: Core transaction management - income, expenses, and tracking financial activities. Phase Q adds recipient-group filtering for linked-recipient transaction discovery. Bulk operations enable atomic multi-row delete, recategorize, reassign, activate/deactivate, export, and tag. June 2026 (ADR-070): useUpdateTransaction/useDeleteTransaction are now optimistic. June 2026 Premium v3 (ADR-071): useCreateTransaction is now optimistic (temp negative-id row → server-row swap → onSettled invalidate; virtual list excluded; 6 tests). June 2026 Premium v3 V5-V7: per-row context menu, Quick Look dialog (Space), keyboard row navigation (↑/↓/Enter), Duplicate, and Filter-by-recipient actions. June 2026 V12 (ADR-072): /transactions?new=1 deep link opens AddTransactionDialog (used by native menu and dock menu). 2026-06-25: balance field is now write-protected (import pipeline only); PATCH and manual create can no longer set it; TransactionInfoDialog renders it read-only. 2026-06-26: TransactionInfoDialog tag-editing state bug fixed — last-tag removal chip persisted on screen after PATCH succeeded; dialog now tracks tag slugs in local state seeded from infoTransaction.tags. 2026-06-28: free-text search now also matches the transaction date (ISO text) and active tag slugs; new amount_min/amount_max/amount_exact filter params; TransactionSearchSuggestions dropdown for quick filters; FilterBanner shows amount descriptors. Aug 2026: search and sort (sort_key/sort_dir) are URL-backed; load-more and attachment-delete failures surface a retry-capable toast instead of failing silently. October 2026 (ADR-181): the Transactions page is rebuilt around a filter-chip toolbar, a selection-driven inspector (replaces the details dialog) and an Add Transaction sheet with Expense / Income / Transfer kinds (replaces the add dialog); `N` opens the sheet on the web.
 related_code: ["apps/node-backend/src/routes/transactions.js", "apps/node-backend/src/repositories/transactionRepository.js", "apps/node-backend/src/lib/filterBuilder.js", "apps/node-backend/src/services/bulkSelection.js", "apps/frontend/src/features/transactions/", "apps/frontend/src/features/transactions/components/TransactionSearchSuggestions.tsx", "apps/frontend/src/pages/TransactionsPage.tsx"]
 ---
 
@@ -41,7 +41,7 @@ Transactions represent any financial movement - from grocery shopping to salary 
 
 ### Currency-aware running balance
 
-The main table requests `include_balance=true` and shows separate **Currency** and **Running balance** columns. The backend computes each running series independently by `account_id` and `currency`, ordered by transaction date and ID. It therefore never adds EUR and USD amounts into one apparent balance. Legacy rows with no currency use the EUR partition. The account-detail sparkline is restricted to the account's declared currency; its ledger rows still show all currency partitions.
+The main table always requests `include_balance=true`; **Currency** and **Running balance** are optional columns, hidden by default and switched on from the toolbar View menu (see [[#Toolbar, columns and View menu]]). The backend computes each running series independently by `account_id` and `currency`, ordered by transaction date and ID. It therefore never adds EUR and USD amounts into one apparent balance. Legacy rows with no currency use the EUR partition. The account-detail sparkline is restricted to the account's declared currency; its ledger rows still show all currency partitions.
 
 `running_balance` is calculated for the response and is distinct from the imported, write-protected `balance` field below. See [[docs/adr/128-account-currency-running-balances|ADR-128]].
 
@@ -69,7 +69,7 @@ The main table requests `include_balance=true` and shows separate **Currency** a
 >
 > - `PATCH /api/transactions/:id` rejects any body that contains `balance` (`ALLOWED_COLUMNS.transactions` no longer includes it).
 > - `POST /api/transactions` (create) does not accept or forward `balance`; the repository `create()` method ignores it.
-> - `TransactionInfoDialog` renders the `balance` field as a read-only display value; the edit affordance is removed (`'balance'` removed from `InfoEditableField` in `types.ts`).
+> - The transaction detail UI (originally `TransactionInfoDialog`, now `TransactionInspector`) renders the `balance` field as a read-only display value; the edit affordance is removed (`'balance'` removed from `InfoEditableField` in `types.ts`).
 >
 > **Why:** The account's computed balance (used by the bank-balances widget and reconciliation) anchors on the `balance` column of the most-recent active transaction. A hand-typed value could corrupt the entire account total. See [[docs/adr/094-balance-reconciliation-drift|ADR-094 addendum]].
 >
@@ -99,7 +99,7 @@ Transactions can be tagged with freeform labels (e.g., `rome-2020`, `home-renova
 Key capabilities:
 
 - Create tags on first use with auto-slug normalisation
-- Attach tags to individual transactions via the info dialog
+- Attach tags to individual transactions from the inspector's Tags section
 - Bulk-tag multiple transactions via checkbox selection + toolbar
 - Filter the transaction list by one or more tags
 - Soft-delete tags; historical tags are preserved
@@ -107,11 +107,11 @@ Key capabilities:
 ### Tag Editing in TransactionInfoDialog — State Fix (2026-06-26)
 
 > [!info] Bug fixed 2026-06-26
-> Removing the last (or only) tag from a transaction in `TransactionInfoDialog` used to leave the chip on screen even after the `PATCH {tags:[]}` call succeeded. The dialog bound `TagInput`'s `value` directly to the frozen `infoTransaction` snapshot in `TransactionsPage` state. The `applyInfoFieldLocally` update path did not handle `tags`, so the snapshot never updated even though the backend and the transactions table (which reads from the React Query cache) were always correct.
+> The dialog described here was replaced by `TransactionInspector` ([[#Inspector]]), which keeps the same local `tagSlugs` approach and the regression test (now in `TransactionInspector.test.tsx`). Removing the last (or only) tag from a transaction in `TransactionInfoDialog` used to leave the chip on screen even after the `PATCH {tags:[]}` call succeeded. The dialog bound `TagInput`'s `value` directly to the frozen `infoTransaction` snapshot in `TransactionsPage` state. The `applyInfoFieldLocally` update path did not handle `tags`, so the snapshot never updated even though the backend and the transactions table (which reads from the React Query cache) were always correct.
 >
 > **Fix:** The dialog now maintains a local `tagSlugs` state variable, seeded by a `useEffect` keyed on `infoTransaction?.tags`. Tag removals update `tagSlugs` optimistically and are rolled back on mutation error. The transactions table continues to self-correct via the `onSettled` invalidation regardless.
 >
-> A regression test ("removing the only tag clears the chip and PATCHes empty tags") was added to `apps/frontend/src/features/transactions/__tests__/TransactionInfoDialog.test.tsx`.
+> A regression test ("removing the only tag clears the chip and PATCHes empty tags") was added to `TransactionInfoDialog.test.tsx` and now lives in `apps/frontend/src/features/transactions/__tests__/TransactionInspector.test.tsx`.
 
 See [[docs/features/tags#transactioninfodialog--tag-editing-state-fix-2026-06-26|Tags — TransactionInfoDialog Tag Editing Fix]] for the full root-cause analysis.
 
@@ -281,11 +281,13 @@ TransactionsPage has been decomposed into feature-scoped modules under [[apps/fr
 - `types.ts` — Shared types: `TableTransaction`, `RawApiTransaction`, `InfoEditableField`
 - `hooks/useTransactionListData.ts` — React Query hook for infinite-scroll list data management; owns `allItems`, sort/search/filter state, `loadMore`, and editing guards
 - `components/FilterBanner.tsx` — Displays active filter pills and clear-all action
-- `components/TableActions.tsx` — Toolbar actions: CSV export button and "show inactive" toggle
-- `components/TransactionsTable.tsx` — `VirtualDataTable` wrapper with column renderers (category/recipient comboboxes, inline date/amount edit, row toggle/delete, info/split dialogs)
-- `components/TransactionInfoDialog.tsx` — Per-row info display and inline field editor
+- `components/TransactionsToolbar.tsx` — Filter chips and View menu (replaced `TableActions.tsx`; see [[#Toolbar, columns and View menu]])
+- `components/TransactionsTable.tsx` — `VirtualDataTable` wrapper with column renderers (category/recipient comboboxes, inline edit, optional columns, row context menu); row selection drives the inspector
+- `components/TransactionInspector.tsx` — Selected-row details, inline field editor and row actions (replaced `TransactionInfoDialog.tsx`; see [[#Inspector]])
+- `components/AddTransactionSheet.tsx` — New-transaction sheet (replaced `AddTransactionDialog.tsx`; see [[docs/components/form-dialogs#AddTransactionSheet]])
+- `transactionColumns.ts`, `amountClass.ts`, `hooks/useUncategorisedCountForRecipient.ts`, `hooks/useCreateTransfer.ts` — Optional column definitions and date presets, amount colour, per-payee uncategorised count, two-leg transfer creation
 - `components/TransactionQuickLook.tsx` — Read-only Space-toggled glance dialog (NEW, premium v3 V6)
-- `pages/TransactionsPage.tsx` — Slim composer that wires the hook to components and owns mutation handlers (`applyTransactionLocalPatch`, `applyInfoFieldLocally`, `handleDuplicate`, `handleFilterByRecipient`) and `useConfirmDialog`
+- `pages/TransactionsPage.tsx` — Composer that wires the hook to components, owns the selected row and mutation handlers (`applyTransactionLocalPatch`, `applyInfoFieldLocally`, `handleDuplicate`, `handleFilterByRecipient`) and `useConfirmDialog`
 
 This structure keeps related code together, makes each module focused and testable, and makes the page composition logic clear at a glance.
 
@@ -301,7 +303,7 @@ Right-clicking a transaction row opens a Radix `ContextMenu` (`modal={false}` �
 
 | Action                    | Key hint | Condition                                            |
 | ------------------------- | -------- | ---------------------------------------------------- |
-| Show details              | ↵        | Always                                               |
+| Show details              | ↵        | Always (selects the row and shows the inspector)     |
 | Quick Look                | ␣        | Always                                               |
 | Edit in row               | —        | Always                                               |
 | Duplicate                 | —        | `recipient_id` + `date` + `bank_account` all present |
@@ -311,14 +313,15 @@ Right-clicking a transaction row opens a Radix `ContextMenu` (`modal={false}` �
 
 #### Keyboard Row Navigation
 
-Selection, Edit, Info, Split, and Delete controls identify the transaction by its formatted
-date, recipient, and amount. Info, Split, and Delete tooltips also appear on keyboard focus.
-The Active button exposes its pressed state to distinguish active and inactive transactions.
+The row checkbox and the optional Status button identify the transaction by its formatted
+date, recipient, and amount. The Status button exposes its pressed state to distinguish active and
+inactive transactions. The per-row Info, Split, and Delete icon columns were removed in ADR-181:
+those actions live in the inspector footer and the row context menu.
 
 Rows are focusable when any row handler is wired. Shortcuts while a row is focused:
 
-- **↑ / ↓** — move focus to adjacent row (virtual scroll aware; up to 5 rAF retries until the target DOM node is mounted).
-- **Enter** — open the transaction details dialog (`TransactionInfoDialog`).
+- **↑ / ↓** — move focus to adjacent row (virtual scroll aware; up to 5 rAF retries until the target DOM node is mounted). Focusing a row selects it, so the inspector follows the arrow keys.
+- **Enter** — select the row and show it in the inspector (`TransactionInspector`).
 - **Space** — open the Quick Look dialog (`TransactionQuickLook`).
 
 These shortcuts are shown in `ShortcutsOverlay` (`?` key).
@@ -328,7 +331,7 @@ These shortcuts are shown in `ShortcutsOverlay` (`?` key).
 `TransactionQuickLook` is a read-only glance dialog (Space to open, Space or Esc to close):
 
 - Displays: big money amount with sign color, recipient, date · bank, category badge, inactive badge, tag chips, memo/comment.
-- Intentionally read-only — editing lives in `TransactionInfoDialog`.
+- Intentionally read-only — editing lives in `TransactionInspector`.
 - Focus returns to the source row on close so keyboard navigation continues.
 
 #### Duplicate
@@ -350,31 +353,48 @@ Code links: [[apps/frontend/src/features/transactions/components/TransactionsTab
 
 ---
 
-### Extra Information Dialog Inline Editing
+### Inspector
 
-- In the transaction extra information dialog, existing detail rows can now be edited inline using a per-row pencil action.
-- Transaction ID is displayed for reference and remains non-editable.
-- Inline row editing provides save/cancel controls and persists through the existing transaction update flow (`PATCH /api/transactions/:id`).
-- Text and number editors submit with Enter or the named Save button. The date editor keeps native button behavior: Enter opens the calendar and does not save until the user chooses Save.
+`TransactionInspector` (ADR-181) replaced the modal `TransactionInfoDialog`. Selecting a row, by click or by moving row focus with the arrow keys, opens it for that row. `TransactionsPage` owns the selected id and derives the selected row from the list on every render, so local patches and refetches flow into it.
 
-Code link: [[apps/frontend/src/pages/TransactionsPage.tsx]]
+- **Presentation**: docked `aside` beside the list (332px wide, sticky) from 1024px (`useMediaQuery("(min-width: 1024px)")`); below that the same content is a right-hand `Sheet`. Escape and the close button clear the selection.
+- **Sections**: Category and payee (category and recipient comboboxes, "Use for all {count}" for the payee's other uncategorised rows, "Always use {category} for {payee}?" to set the recipient's default category, and a note when the payee rule already applies), Details (per-field inline edit: date, description, amount, currency, account, comment; transaction ID and balance are read-only), Tags (`TagInput`, local `tagSlugs` state) and Attachments (`AttachmentPanel`).
+- **Footer actions**: Split (`SplitTransactionDialog`), Duplicate, Show all from payee, Mark inactive / active, and Delete. Edits use the same `PATCH /api/transactions/:id` contract as before (text and number editors submit with Enter or Save; the date editor keeps native button behavior and does not save on Enter).
+- **Landing on a row**: `TransactionsPage` accepts `location.state.selectTransactionId`. Home's recent-transactions rows and the Add Transaction button's `onCreated` navigate with it, and the created row is selected after an add.
+
+Code links: [[apps/frontend/src/features/transactions/components/TransactionInspector.tsx]], [[apps/frontend/src/pages/TransactionsPage.tsx]], [[apps/frontend/src/components/shared/VirtualDataTable.tsx]]
+
+---
+
+### Toolbar, columns and View menu
+
+`TransactionsToolbar` (ADR-181) replaced `TableActions`. It sits above the list as a `toolbar` of filter chips; every chip writes the same URL params as the deep links and search suggestions, so `FilterBanner` and the export buttons keep describing the active set.
+
+- **Chips**: Account, Category, Date (Any / This month / Last month / This year, or a custom range label), Type (All / Income / Expense) and **Needs category** (the `uncategorised` filter, with the sidebar-badge count).
+- **View menu**: **Include inactive** (the `showAll` switch), optional columns **Tags**, **Currency**, **Running balance** and **Status**, and **Reset columns**. The core columns (select, date, payee, category, account, amount) are always shown.
+- **Persistence**: optional-column visibility uses `useWidgetVisibility` under the page key `transactionsColumns` in the `widget_visibility` setting ([[docs/features/settings#Widget Visibility System]]). All four optional columns default to hidden.
+- **Cells**: the payee cell shows the memo as a subline; the category cell shows a colour dot, or a dashed dot and "Needs category" when the row has no category. Amounts use `amountClass` (money in is `text-gain`, spending uses the text colour).
+- **Header**: the subtitle reads "{n} transactions in {m} accounts" once the account count is known. The header actions are an Import link and the Add Transaction button.
+
+Code links: [[apps/frontend/src/features/transactions/components/TransactionsToolbar.tsx]], [[apps/frontend/src/features/transactions/transactionColumns.ts]], [[apps/frontend/src/features/transactions/components/TransactionsTable.tsx]]
 
 ---
 
 ### Deep Links / Query-Param Triggers (V12, June 2026)
 
-#### `/transactions?new=1` — Open Add Transaction Dialog
+#### `/transactions?new=1` — Open Add Transaction Sheet
 
-Navigating to `/transactions?new=1` immediately opens `AddTransactionDialog`. The dialog's mounting hook reads the `new` search param and, if present, opens the dialog and then strips the param from the URL (using `replace` navigation so the browser Back button does not re-trigger it).
+Navigating to `/transactions?new=1` immediately opens `AddTransactionSheet`. The sheet's mounting hook reads the `new` search param and, if present, opens the sheet and then strips the param from the URL (using `replace` navigation so the browser Back button does not re-trigger it).
 
 This deep link is used by:
 
 - The **native macOS menu** (File → New Transaction ⌘N via `ElectronBridge` `menu:action` dispatch)
 - The **dock menu** (New Transaction item)
+- The **web `N` shortcut**: a bare `N` press (outside inputs and with no dialog open) navigates to `/transactions?new=1` from any page (`AppLayout`). The command palette's **New transaction** action and the shortcuts overlay list it too.
 
 The param is safe to include in any navigation: navigating to `/transactions` without `?new=1` is unaffected.
 
-Code link: [[apps/frontend/src/features/transactions/components/AddTransactionDialog.tsx]]
+Code links: [[apps/frontend/src/features/transactions/components/AddTransactionSheet.tsx]], [[apps/frontend/src/components/layout/AppLayout.tsx]]
 
 ---
 
@@ -526,6 +546,10 @@ The delete confirmation (`txPage.delete.desc`) used to say that the action canno
 - [[docs/api/categories]] - Categories API
 - [[docs/api/recipients]] - Recipients API
 - [[docs/features/import]] - CSV Import Feature
+- [[docs/components/form-dialogs#AddTransactionSheet]] - Add Transaction sheet (Expense / Income / Transfer)
+- [[docs/features/transfers]] - Transfers
+- [[docs/features/views]] - Page views
+- [[docs/adr/181-home-transactions-redesign]] - Home and Transactions redesign
 - [[docs/features/portfolio]] - Portfolio & Investments
 
 ## Migrations
@@ -540,7 +564,7 @@ The delete confirmation (`txPage.delete.desc`) used to say that the action canno
 
 ## List visibility filters
 
-Include inactive is a labeled switch with a stable label and an explicit on/off state. Recipients also uses an Uncategorized only switch. These controls retain the existing filtering and URL behavior.
+Include inactive is a labeled switch with a stable label and an explicit on/off state. On Transactions it lives in the toolbar View menu as a checkbox item (off by default); Recipients also uses an Uncategorized only switch. These controls retain the existing filtering and URL behavior.
 
 
 ## Clarity and recovery feedback

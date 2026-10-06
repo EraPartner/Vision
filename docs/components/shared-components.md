@@ -134,6 +134,10 @@ Resolves audit finding [[docs/reference/codebase-audit-2026-05#ux.2|ux.2]] for V
 
 > [!info] The `onActivateKeyDown` helper in `[[apps/frontend/src/utils/a11y.ts]]` remains for in-page selection surfaces on Owes and Watchlist. Cross-page entity navigation uses real links. VirtualDataTable uses an inline handler only when a consumer intentionally supplies an in-page row activation callback.
 
+### Row Selection (ADR-181)
+
+When `onRowSelect` is provided, a plain click on a row (outside its controls: buttons, links, inputs, comboboxes, checkboxes) selects it, and so does moving row focus with the arrow keys, the way Finder and Mail drive an inspector. `selectedRowKey` is the selected row's `id`; the selected row carries `aria-selected="true"`, `data-selected`, and a tinted surface. Providing `onRowSelect` also makes rows focusable and routes touch taps to selection instead of `onRowOpen`/`onRowDoubleClick`. Transactions uses it to drive [[docs/features/transactions#Inspector|the inspector]].
+
 ### Props Interface
 
 ```typescript
@@ -146,6 +150,8 @@ interface VirtualDataTableProps<T> {
   actions?: React.ReactNode;
   onRowUpdate?: (index: number, updatedRow: T) => void;
   onRowDoubleClick?: (row: T, index: number) => void;
+  onRowSelect?: (row: T, index: number) => void;
+  selectedRowKey?: string | number | null;
   serverMode?: {
     search?: { onChange: (query: string) => void; value?: string };
     sort?: {
@@ -400,8 +406,11 @@ interface RecipientComboboxProps {
   active?: boolean;
   className?: string;
   portalContainer?: HTMLElement | null;
+  allowCreate?: boolean; // offers "Add “name”" for a typed name with no match (ADR-181)
 }
 ```
+
+With `allowCreate`, a typed name that matches no recipient offers a create row; the combobox creates (or reuses, when the server already has it) the recipient and selects it. `AddTransactionSheet` enables it.
 
 The standard and deferred variants forward field-error ARIA attributes to the actual trigger button. This lets dialog validation associate a `FieldError` with the combobox and focus the trigger by id after a blocked submit. `active` defaults to the existing include-inactive behavior; creation forms can opt into active-only search.
 
@@ -436,7 +445,9 @@ Toggle button for per-graph exclusion control in the Statistics page. Shows whet
 
 **Path:** `[[apps/frontend/src/components/shared/WidgetVisibilityDialog.tsx]]`
 
-Dialog for toggling widget visibility on pages that support configurable layouts (Statistics, Portfolio Tax).
+Dialog for toggling widget visibility on pages that support configurable layouts (Home, Statistics, Portfolio Tax).
+
+By default it renders its own trigger button (visible count `n/m`). Passing `open` and `onOpenChange` switches it to **controlled mode**: no trigger is rendered and the page owns the open state. Home uses this so the page header's ••• menu can open it as **Customize…** ([[docs/components/dashboard]]). Each widget row shows `labelKey` (translated) when the `WidgetDefinition` has one, otherwise `label`.
 
 ## onActivateKeyDown (a11y utility)
 

@@ -195,10 +195,23 @@ package "Feature Components - Dashboard" {
   class CategoryPieChart
   class BankBalancesWidget
   class CashFlowComparisonChart
+  class MonthToDateHero {
+    +useMonthToDate (average-vs-current)
+    +useRestOfMonthPlanned
+  }
+  class NeedsAttentionList
+  class NetWorthCard
+  class UpcomingPaymentsList
+  class AccountsList
+  class RecentTransactionsList
 }
 
 package "Feature Components - Forms" {
-  class AddTransactionDialog
+  class AddTransactionSheet {
+    +Expense / Income / Transfer
+    +silent useCreateTransaction
+    +useCreateTransfer (two legs)
+  }
   class AddCategoryDialog
   class AddRecipientDialog
   class AddInvestmentDialog
@@ -263,6 +276,15 @@ package "Feature Components - Recipients" {
 }
 
 package "Feature Components - Transactions" {
+  class TransactionsToolbar {
+    +filter chips
+    +View menu (optional columns)
+  }
+  class TransactionInspector {
+    +docked aside >= 1024px
+    +sheet below
+    +footer row actions
+  }
   class TransactionQuickLook {
     +read-only glance dialog
     +Space to open/close
@@ -410,12 +432,14 @@ AppSidebar --> useSidebarPreferences : hidden sections
 AppSidebar --> useUpdateStatus : update dot
 AboutSection --> useUpdateStatus : version, notes, install
 
-AddTransactionDialog --> CategoryCombobox
+AddTransactionSheet --> CategoryCombobox
 CategoriesPage --> CategoryNodeDialog
-AddTransactionDialog --> RecipientCombobox
+AddTransactionSheet --> RecipientCombobox
 VirtualDataTable --> ColumnFilter
 DataTable --> ColumnFilter
 VirtualDataTable --> TransactionQuickLook : onRowQuickLook (Space)
+VirtualDataTable --> TransactionInspector : onRowSelect (via TransactionsPage)
+TransactionInspector --> SplitTransactionDialog : footer Split
 SuggestionCard --> useUpcomingPlannedPayments
 UpcomingPaymentsNotification --> useUpcomingPlannedPayments
 

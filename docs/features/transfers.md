@@ -2,8 +2,8 @@
 title: Feature - Internal Transfers
 type: feature
 status: active
-date: 2026-10-03
-updated: 2026-10-03
+date: 2026-10-06
+updated: 2026-10-06
 tags: [feature, transfers, internal-transfer, cash-flow, reconciliation, detection, statistics, aggregations, adr-083, migration-0044, migration-0045, mark-transfer-validation, release-orphans-manual]
 description: "Automatic detection of transfers between a user's own accounts via a windowed cross-batch reconciliation pass, persisted as a transfer_peer_id pairing, and excluded from cash-flow aggregates by default with a global includeTransfers toggle. 2026-06-25: markTransfer() now validates both rows exist, are active, are on different accounts, and have opposite signs; releaseOrphans() now covers MANUAL transfers."
 aliases: [internal transfers, transfer detection, transfer exclusion]
@@ -99,6 +99,10 @@ structural sanity.
 
 **Related code:** [[apps/node-backend/src/services/transferReconciliationService.js]]
 
+### Creating a transfer from the UI (ADR-181)
+
+The **Transfer** kind of the Add Transaction sheet ([[docs/components/form-dialogs#AddTransactionSheet]]) records a move between two own accounts without a dedicated endpoint. `useCreateTransfer` creates or reuses a recipient named after the counterpart account for each leg (`POST /api/recipients`), posts the outflow (negative, sending account) and the inflow (positive, receiving account) with `POST /api/transactions`, then calls `POST /api/transactions/transfers` with the two ids, so the guards above apply (different accounts, opposite signs). If the mark fails after both rows exist, the rows are kept; reconciliation links equal-and-opposite rows on its own and either leg can be marked by hand. No API contract changed.
+
 ## `releaseOrphans()` — Now Covers MANUAL Transfers (2026-06-25)
 
 `releaseOrphans()` previously cleared only peerless `transfer_source = 'auto'` rows. A peerless
@@ -127,3 +131,4 @@ transaction mutations).
 - [[docs/reference/data-model|Data Model Reference]]
 - [[docs/features/import|Import Feature]]
 - [[docs/adr/010-phase1-aggregation-strategy|ADR-010: Aggregation Strategy]]
+- [[docs/components/form-dialogs#AddTransactionSheet|AddTransactionSheet]] (creates both legs from the Transfer kind, ADR-181)

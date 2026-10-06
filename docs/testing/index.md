@@ -172,7 +172,7 @@ bun vitest run src/path/to/test.test.js
 
 **What's new:**
 
-1. **TransactionInfoDialog**: Cancel without edit → no PATCH sent
+1. **TransactionInfoDialog** (now `TransactionInspector`): Cancel without edit → no PATCH sent
 2. **AddInvestmentFromMarketDialog**: Blank name → no POST (guard test)
 3. **LinkTransactionDialog**: "Link & Execute" disabled with no selection; onExecute rejection keeps dialog open
 4. **ExecutionHistoryDialog**: transactions GET 5xx → dialog renders without crash
@@ -386,7 +386,7 @@ server needed. Use the filesystem and Vitest collection for current totals.
 
 4. **Component-Integration Tests** (historical Phase A inventory):
    The original page-test set covered CRUD, error states, export endpoints, and internationalization.
-   - `TransactionsPage.integration.test.tsx` (18 tests) — empty-list, error state, Add Transaction dialog, form submission, export JSON success/error toasts
+   - `TransactionsPage.integration.test.tsx` (30 tests) — empty-list, error state, Add Transaction sheet, form submission, filter-chip toolbar, export JSON success/error toasts
    - `ImportPage.integration.test.tsx` (23 tests) — CSV import workflow, bank source selection, file input handling
    - `LanguageSwitch.integration.test.tsx` (32 tests) — EN/NL switching across 8 pages with i18n validation
    - `OwesPage.integration.test.tsx` (17 tests) — splits tracking, Record Payment dialog, Settle all workflow, export CSV success/error toasts
@@ -394,7 +394,7 @@ server needed. Use the filesystem and Vitest collection for current totals.
    - `CategoriesPage.integration.test.tsx` (18 tests) — Category CRUD, validation, error handling
    - `RecipientsPage.integration.test.tsx` (18 tests) — Recipient CRUD, validation, insights button
    - `AdminPages.integration.test.tsx` (25 tests) — Admin dashboard, provider health, endpoint liveness, database operations (updated 2026-05-02 with 8 new data-rendering tests)
-   - `DashboardPage.integration.test.tsx` (16 tests) — Landing page, quick stats, recent activity
+   - `DashboardPage.integration.test.tsx` (22 tests) — Landing page, hero and lists, recent activity
    - `PlannedPaymentsPage.integration.test.tsx` (16 tests) — New Payment dialog, loan scheduling, error states
    - `TaxOverviewPage.integration.test.tsx` (16 tests) — Tax profile dialog, employment step selection, deduction workflow
    - `StatisticsPage.integration.test.tsx` (18 tests) — Analytics tabs, including live recipient-insights rendering
@@ -403,7 +403,7 @@ server needed. Use the filesystem and Vitest collection for current totals.
    - `PortfolioOverviewPage.integration.test.tsx` (14 tests) — Portfolio summary page rendering
    - `MarketLookupPage.integration.test.tsx` (12 tests) — Market data lookup, quote search, news display
    - `DbMaintenancePage.integration.test.tsx` (12 tests) — Database operations, view refresh, cache clearing
-   - `AddTransactionDialog.integration.test.tsx` (10 tests) — Dialog open/close, form submission, duplicate detection
+   - `AddTransactionSheet.integration.test.tsx` (23 tests; originally `AddTransactionDialog.integration.test.tsx`) — Sheet open/close, form submission, kinds, duplicate detection
    - `NotFound.integration.test.tsx` (5 tests) — 404 page, navigation fallback
 
 **Snapshot result:** the Phase A set passed at completion. Current results and totals come from the
@@ -499,7 +499,7 @@ All three dialogs now include tests for server-side 422 validation errors:
 
 - Test pattern: `vi.spyOn(toast, "error")` + `server.use(http.post(..., () => err(422, "message")))`
 - Verify error toast displays with pattern like `"failed to create [resource]"` (AddCategoryDialog, AddRecipientDialog)
-- Verify transaction dialog also tests 422 validation error path in AddTransactionDialog.integration.test.tsx
+- Verify the Add Transaction sheet also tests the 422 validation error path in AddTransactionSheet.integration.test.tsx
 - Ensures user-facing error messages are shown for validation failures returned by backend
 
 **Key patterns demonstrated:**
@@ -532,7 +532,7 @@ Three dialog component integration test files now include comprehensive tests fo
 - **AddRecipientDialog** — "shows error toast when server returns 422 validation error" (line 78-95)
   - Simulates `name already exists` validation failure
   - Verifies toast message matches `/failed to create recipient/i`
-- **AddTransactionDialog** — "shows error toast when server returns 422 validation error" (line 204-234)
+- **AddTransactionSheet** (was AddTransactionDialog) — "shows error toast when server returns 422 validation error"
   - Simulates `amount must be positive` validation failure
   - Verifies toast message matches `/failed to create transaction/i`
 

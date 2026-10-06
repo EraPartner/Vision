@@ -2,8 +2,8 @@
 title: Frontend Component-Integration Tests (RTL + MSW)
 type: testing
 status: active
-date: 2026-04-30
-updated: 2026-09-24
+date: 2026-10-06
+updated: 2026-10-06
 last-updated: 2026-09-24
 last_updated_timestamp: 2026-09-24T00:00:00Z
 added_dashboard_error_state_tests: 2026-05-02
@@ -147,7 +147,7 @@ This pattern is used in error-state tests across:
 ### Full Dialog Submission Example
 
 ```tsx
-describe("AddTransactionDialog", () => {
+describe("AddTransactionSheet", () => {
   it("submits POST /api/transactions and closes on success", async () => {
     const user = userEvent.setup();
     let capturedBody: unknown;
@@ -162,18 +162,19 @@ describe("AddTransactionDialog", () => {
       ),
     );
 
-    renderWithApp(<AddTransactionDialog />);
+    renderWithApp(<AddTransactionButton />);
 
     await user.click(
       await screen.findByRole("button", { name: /add transaction/i }),
     );
-    await user.type(screen.getByLabelText(/amount/i), "12.50");
-    await user.click(screen.getByRole("button", { name: /submit/i }));
+    await user.type(screen.getByLabelText(/amount/i), "12,50");
+    // ... pick the account and recipient from their comboboxes ...
+    await user.click(screen.getByRole("button", { name: /^add expense$/i }));
 
     await waitFor(() =>
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
     );
-    expect((capturedBody as Record<string, unknown>).amount).toBe("12.50");
+    expect((capturedBody as Record<string, unknown>).recipient_id).toBe(7);
   });
 
   it("shows error toast on duplicate detection (409)", async () => {
@@ -186,8 +187,8 @@ describe("AddTransactionDialog", () => {
       ),
     );
 
-    renderWithApp(<AddTransactionDialog />);
-    // ... fill form and submit ...
+    renderWithApp(<AddTransactionButton />);
+    // ... open the sheet, fill the form and submit ...
 
     await waitFor(() =>
       expect(toastSpy).toHaveBeenCalledWith(
@@ -357,11 +358,12 @@ and test totals; per-file counts here are updated only when that row is touched.
 
 | Test File                                                                         | Scope                                                                                       | Tests |
 | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ----- |
-| `apps/frontend/src/pages/__tests__/TransactionsPage.integration.test.tsx`         | Transactions list page (with export JSON tests + multi-value filter render-loop regression) | 26    |
+| `apps/frontend/src/pages/__tests__/TransactionsPage.integration.test.tsx`         | Transactions list page (with export JSON tests, filter-chip toolbar and multi-value filter render-loop regression) | 30    |
 | `apps/frontend/src/pages/__tests__/ImportPage.integration.test.tsx`               | CSV Import page                                                                             | 23    |
 | `apps/frontend/src/pages/__tests__/LanguageSwitch.integration.test.tsx`           | Language switching across pages                                                             | 32    |
 | `apps/frontend/src/pages/__tests__/TaxOverviewPage.integration.test.tsx`          | Tax Overview page                                                                           | 16    |
-| `apps/frontend/src/pages/__tests__/AddTransactionDialog.integration.test.tsx`     | Add Transaction form                                                                        | 10    |
+| `apps/frontend/src/pages/__tests__/AddTransactionSheet.integration.test.tsx`      | Add Transaction sheet (Expense / Income / Transfer, validation, duplicate handling)         | 23    |
+| `apps/frontend/src/features/transactions/__tests__/TransactionInspector.test.tsx` | Transaction inspector (docked and sheet, field edit, row actions, tags, attachments)        | 26    |
 | `apps/frontend/src/pages/__tests__/PlannedPaymentsPage.integration.test.tsx`      | Planned Payments page                                                                       | 16    |
 | `apps/frontend/src/pages/__tests__/PortfolioOverviewPage.integration.test.tsx`    | Portfolio Overview page                                                                     | 14    |
 | `apps/frontend/src/pages/__tests__/OwesPage.integration.test.tsx`                 | Owes/Splits page (with export CSV tests)                                                    | 17    |
@@ -370,7 +372,7 @@ and test totals; per-file counts here are updated only when that row is touched.
 | `apps/frontend/src/pages/__tests__/RecipientsPage.integration.test.tsx`           | Recipients management                                                                       | 18    |
 | `apps/frontend/src/pages/__tests__/StatisticsPage.integration.test.tsx`           | Statistics and embedded recipient insights                                                  | 18    |
 | `apps/frontend/src/pages/__tests__/portfolio/PortfolioPages.integration.test.tsx` | Portfolio (investments, performance, net worth)                                             | 69    |
-| `apps/frontend/src/pages/__tests__/DashboardPage.integration.test.tsx`            | Dashboard landing page with error-state coverage                                            | 18    |
+| `apps/frontend/src/pages/__tests__/DashboardPage.integration.test.tsx`            | Dashboard landing page (hero, lists, Customize menu) with error-state coverage              | 22    |
 | `apps/frontend/src/pages/__tests__/AIChatPage.integration.test.tsx`               | AI Chat feature                                                                             | 15    |
 | `apps/frontend/src/pages/__tests__/MarketLookupPage.integration.test.tsx`         | Market lookup/quotes                                                                        | 12    |
 | `apps/frontend/src/pages/__tests__/ImportReviewPage.integration.test.tsx`         | Import review/staging                                                                       | 14    |

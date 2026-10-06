@@ -260,7 +260,7 @@ Code links: [[apps/frontend/src/index.css]], [[apps/frontend/src/components/ui/b
 **CommandPalette.tsx** — New in June 2026:
 
 - ⌘K / Ctrl+K keyboard shortcut, also triggered by topbar button.
-- Built on `cmdk` library; covers every page (grouped Money / Wealth / Research, plus admin pages in admin mode), theme modes (Light, Dark, System, Schedule), and settings navigation.
+- Built on `cmdk` library; covers every page (grouped Money / Wealth / Research, plus admin pages in admin mode), a New transaction action (navigates to `/transactions?new=1`), theme modes (Light, Dark, System, Schedule), and settings navigation.
 - Navigation just navigates; a destination inside a hidden sidebar section shows that section.
 - 5 new i18n keys: `commandPalette.*` in en/nl.
 
@@ -831,7 +831,7 @@ Standardized tinted change chip:
 Glass dialog listing real keyboard shortcuts:
 
 - Triggered by the `?` key (when focus is not in an `input`/`textarea`/`contenteditable`).
-- Lists: ⌘K (command palette), ⌘, (settings), ⌘B (toggle sidebar), ⌘Z (undo delete), ↑/↓ (table row navigation), ↵ (open transaction details), Space (Quick Look), ? (this overlay), Esc (close dialog), the chart scrub drag hint, and a right-click row tip.
+- Lists: ⌘K (command palette), N (new transaction), ⌘, (settings), ⌘B (toggle sidebar), ⌘Z (undo delete), ↑/↓ (table row navigation), ↵ (open transaction details), Space (Quick Look), ? (this overlay), Esc (close dialog), the chart scrub drag hint, and a right-click row tip.
 - Mounted in `AppLayout` alongside `CommandPalette`.
 - i18n keys (premium v3 V5 additions): `shortcuts.tableNav`, `shortcuts.tableOpen`, `shortcuts.quickLook`, `shortcuts.rowMenu` (tip line); prior batch: `shortcuts.title`, `shortcuts.showHelp`, `shortcuts.closeDialog`, `shortcuts.chartScrub`, `shortcuts.undoDelete`, `shortcuts.goTo`.
 
@@ -907,7 +907,7 @@ Read-only glanceable peek dialog toggled by Space on a focused transaction row (
 - Displays: large money amount (sign + color), recipient, date · bank, category badge, inactive badge if applicable, tag chips, memo/comment block, "Press Space to close" hint.
 - `Dialog` opened by `quickLookTransaction` state in `TransactionsPage`; closed by Space inside `DialogContent` or by Esc (Radix default).
 - Focus returns to the originating row after close so ↑/↓ navigation continues uninterrupted.
-- Distinct from `TransactionInfoDialog` (which allows editing). Quick Look is intentionally read-only.
+- Distinct from `TransactionInspector` (which allows editing). Quick Look is intentionally read-only.
 
 Code links: [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/features/transactions/components/TransactionQuickLook.tsx]], [[apps/frontend/src/features/transactions/components/TransactionsTable.tsx]], [[apps/frontend/src/pages/TransactionsPage.tsx]]
 

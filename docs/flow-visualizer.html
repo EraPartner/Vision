@@ -1999,8 +1999,8 @@
               {
                 "from": "browser",
                 "to": "fe.features",
-                "payload": "click 'Add transaction' \u2192 AddTransactionDialog submit",
-                "annotation": "apps/frontend/src/features/transactions/components/AddTransactionDialog.tsx",
+                "payload": "click 'Add transaction' \u2192 AddTransactionSheet submit (Expense / Income)",
+                "annotation": "apps/frontend/src/features/transactions/components/AddTransactionSheet.tsx",
                 "title": "Enter a payment"
               },
               {
@@ -3529,13 +3529,13 @@
             "id": "attach-receipt",
             "name": "Attach a receipt to a transaction",
             "category": "Attachments",
-            "summary": "User uploads a receipt image / PDF from a transaction's detail view; file lands on disk, metadata in Postgres.",
+            "summary": "User uploads a receipt image / PDF from a transaction's inspector; file lands on disk, metadata in Postgres.",
             "steps": [
               {
                 "from": "browser",
                 "to": "fe.features",
-                "payload": "TransactionInfoDialog  \u00b7  drag-and-drop file",
-                "annotation": "AttachmentPanel inside the transaction details."
+                "payload": "TransactionInspector  \u00b7  drag-and-drop file",
+                "annotation": "AttachmentPanel inside the transaction inspector (features/transactions/components/TransactionInspector.tsx)."
               },
               {
                 "from": "fe.features",
@@ -5078,7 +5078,7 @@
                 "from": "fe.hooks",
                 "to": "fe.pages",
                 "title": "Render the latest active month",
-                "note": "Cards use the latest month with transactions; charts keep their own date scope.",
+                "note": "Summary cards (hidden by default since ADR-181; the Home hero reads average-vs-current instead) use the latest month with transactions; charts keep their own date scope.",
                 "payload": "income, spending, net and history",
                 "annotation": "apps/frontend/src/hooks/useFilteredDashboardStats.ts; apps/frontend/src/pages/DashboardPage.tsx"
               }

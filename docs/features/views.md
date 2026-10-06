@@ -75,19 +75,25 @@ The main landing page providing a quick overview of your finances.
 
 ### Widgets Available
 
-| Widget                    | Description                                                                                                                                           |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Suggestions**           | Compact upcoming-payment summary; expand to review the next payments in date order or open Planned Payments |
-| **Stat Cards**            | Total income, expenses, net worth summary                                                                                                             |
-| **Bank Balances**         | Current balance per bank account                                                                                                                      |
-| **Monthly Trends**        | Income vs expenses over time (bar chart)                                                                                                              |
-| **Category Distribution** | Transaction count by category for the latest 50 active transactions (pie chart)                                                                       |
-| **Cashflow Forecast**     | Actual cash flow and one forecast; expand comparison controls for other methods                                                                                                                            |
-| **Recent Transactions**   | Latest transactions table                                                                                                                             |
+| Widget (id)                         | Default | Description                                                                                                  |
+| ----------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------ |
+| **Month to date** (`hero`)          | On      | Spent so far this month, pace against a typical month, income so far, planned in and out, cumulative chart   |
+| **Needs attention** (`attention`)   | On      | Transactions without a category, planned payments that look paid, accounts with no recent import             |
+| **Net worth** (`netWorth`)          | On      | Net worth, this month's change, assets against debt                                                          |
+| **Next 7 days** (`upcoming`)        | On      | Upcoming planned payments                                                                                    |
+| **Accounts** (`accounts`)           | On      | Active accounts with balance and where it comes from                                                         |
+| **Summary cards** (`statCards`)     | Off     | Latest-month income, spending, net and total transactions                                                    |
+| **Bank balances** (`bankBalances`)  | Off     | Balance history per bank account                                                                             |
+| **Monthly Trends** (`monthlyTrends`) | On     | Income vs expenses over time (bar chart)                                                                     |
+| **Category Distribution** (`categoryPie`) | On | Transaction count by category for the latest 50 active transactions (pie chart)                          |
+| **Cashflow Forecast** (`cashflowComparison`) | On | Actual cash flow and one forecast; expand comparison controls for other methods                       |
+| **Recent Transactions** (`recentTransactions`) | On | Latest five transactions as a list; a row opens in Transactions                                    |
+
+The page header greets by time of day over today's long date. See [[docs/components/dashboard#Home layout (ADR-181)]] for layout and data sources, and [[docs/adr/181-home-transactions-redesign|ADR-181]] for the decision.
 
 ### Features
 
-- **Widget Customization**: Show/hide widgets via the visibility dialog
+- **Widget Customization**: Show/hide widgets from the header ••• menu (**Customize…**), which opens the visibility dialog
 - **Exclusion Controls**: Filter categories/recipients from dashboard stats
 - **Summary period**: “Latest month” means the newest month represented in the transaction data; income and spending links use that same month.
 - **Upcoming payments**: The dashboard reminder starts collapsed. Expand it for the next five payments, soonest first, individual dismissal controls, and the planned-payment link.
@@ -111,7 +117,9 @@ Full transaction management with advanced filtering and editing.
 
 ### Features
 
-- **List View**: Paginated table of all transactions
+- **List View**: Paginated table of all transactions; the header subtitle reads "{n} transactions in {m} accounts"
+- **Filter chips**: Account, Category, Date presets, Type and Needs category above the list, plus a View menu for Include inactive and optional columns (Tags, Currency, Running balance, Status). See [[docs/features/transactions#Toolbar, columns and View menu]]
+- **Inspector**: Selecting a row (click or arrow keys) shows its details beside the list (a sheet below 1024px): category and payee, inline-editable details, tags, attachments, and Split / Duplicate / Show all from payee / Mark inactive / Delete. See [[docs/features/transactions#Inspector]]
 - **Server Search Sync**: Search input is controlled and persists the typed value after execution (`VirtualDataTable` + `TransactionsPage`)
 - **Progressive Search Updates**: Typing and backspacing both update search terms (including loosened queries) with debounced server requests
 - **Filters**:
@@ -123,7 +131,7 @@ Full transaction management with advanced filtering and editing.
   - Currency
   - Hidden/active status
 - **Inline Editing**: Quick edit amount, category, recipient
-- **Extra Info Inline Editing**: Edit information rows, including a previously blank comment, from the dialog. Pencil buttons identify the field in their accessible name and hover/focus tooltip; transaction ID remains read-only.
+- **Inspector Inline Editing**: Edit detail rows, including a previously blank comment, from the inspector. Pencil buttons identify the field in their accessible name and hover/focus tooltip; transaction ID remains read-only.
 - **Bulk Actions**: Select multiple transactions for batch operations
 - **Export**: Download filtered transactions as CSV
 - **Search**: Full-text search on memo/description
@@ -139,7 +147,7 @@ Code links: [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps
 
 ### Actions
 
-- Create new transaction
+- Create new transaction (Add Transaction button or `N`; sheet with Expense / Income / Transfer, see [[docs/components/form-dialogs#AddTransactionSheet]])
 - Edit existing transaction
 - Delete transaction
 - Split transaction (see [[docs/features/transactions]])
@@ -700,12 +708,13 @@ The in-app help sheet (`?`) lists all active shortcuts. The table below mirrors 
 | Shortcut       | Action                                                                                                                                                        |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Ctrl/Cmd + K` | Open command palette                                                                                                                                          |
+| `N`            | New transaction (opens `/transactions?new=1`; inert while typing or with a dialog open; desktop menu keeps ⌘N)                                                |
 | `Ctrl/Cmd + ,` | Open Settings                                                                                                                                                 |
 | `Ctrl/Cmd + B` | Toggle sidebar                                                                                                                                                |
 | `[` / `]`      | Cycle backward / forward through the three section roots (Home → Portfolio → Research); wraps around; inert while typing or with modifier keys held |
 | `Ctrl/Cmd + Z` | Undo last delete                                                                                                                                              |
 | `↑` / `↓`      | Navigate table rows                                                                                                                                           |
-| `↵`            | Open selected row                                                                                                                                             |
+| `↵`            | Select the focused row and show it in the inspector                                                                                                           |
 | `Space`        | Quick-look selected row                                                                                                                                       |
 | `?`            | Show keyboard shortcuts help                                                                                                                                  |
 | `Esc`          | Close dialog                                                                                                                                                  |

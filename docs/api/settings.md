@@ -135,7 +135,7 @@ Response semantics:
 | dashboard_settings           | object  | Dashboard/stats exclusions and exclusion scope                                               |
 | theme_settings               | object  | Theme variant, mode, and optional schedule settings                                          |
 | backup_settings              | object  | Desktop backup directory and backup-on-quit behavior                                         |
-| widget_visibility            | object  | Per-page widget visibility state                                                             |
+| widget_visibility            | object  | Per-page widget visibility state, keyed by page (`dashboard`, `statistics`, `portfolioTax`, `transactionsColumns`) |
 | onboarding_complete          | boolean | First-run onboarding completion state                                                        |
 | dismissed_recurring_patterns | array   | IDs/patterns dismissed from recurring suggestions                                            |
 | rebalance_plans              | array   | Saved custom portfolio rebalancing plans (max 50 entries)                                    |

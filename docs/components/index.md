@@ -2,8 +2,8 @@
 title: Components Documentation Index
 type: components-index
 status: active
-date: 2026-04-23
-updated: 2026-08-10
+date: 2026-10-06
+updated: 2026-10-06
 last_modified: 2026-08-10
 tags:
   [
@@ -58,7 +58,7 @@ Page-level content uses `components/shared/PageShell.tsx` for standard spacing, 
 | -------------------------------------------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
 | [[docs/components/ui-components\|UI Components]]               | Base UI components (Radix-based) with performance-optimized design tokens | Button, Card, Dialog, Table, etc.                                       |
 | [[docs/components/charts\|Chart Primitives]]                   | visx + d3 charts with design-token styling                                | AreaChart, BarChart, PieChart, LineChart, Sparkline                     |
-| [[docs/components/dashboard\|Dashboard]]                       | Dashboard widgets and stat cards                                          | StatCard, MonthlyTrends, CategoryPie, BankBalances                      |
+| [[docs/components/dashboard\|Dashboard]]                       | Home hero, lists, widgets and stat cards                                  | MonthToDateHero, NeedsAttentionList, StatCard, MonthlyTrends, CategoryPie |
 | [[docs/components/statistics\|Statistics]]                     | Analytics page sub-components                                             | ChartCard, MonthlyRhythm, CategoryPieChart, CategoryPivotTable          |
 | [[docs/components/form-dialogs\|Form Dialogs]]                 | Add/edit data dialogs with optimized glass surfaces                       | Transaction, Category, Recipient, Investment, Settings                  |
 | [[docs/components/dashboard-settings-dialog\|Settings Dialog]] | Multi-tab settings with thin orchestrator pattern (Phase 3)               | General, Dashboard, App, Backup, Appearance tabs                        |

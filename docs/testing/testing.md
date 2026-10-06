@@ -1009,7 +1009,7 @@ Launched initial frontend component-integration test infrastructure to validate 
    - `ImportPage.integration.test.tsx` — 5 tests: heading, bank source label, select trigger placeholder, Import Transactions button, CSV file input
    - `LanguageSwitch.integration.test.tsx` — 8 tests: EN/NL switching across 4 pages (PlannedPayments, Transactions, Import, TaxOverview)
    - `TaxOverviewPage.integration.test.tsx` — 5 tests: heading, empty state, CTA button via `findAllByRole`, sheet open, Employment radio via `getByRole` anchored to start
-   - `AddTransactionDialog.integration.test.tsx` — 4 tests: dialog open/close, form submission with request body capture, 409 duplicate error handling via toast spy
+   - `AddTransactionDialog.integration.test.tsx` (since renamed `AddTransactionSheet.integration.test.tsx`) — 4 tests: dialog open/close, form submission with request body capture, 409 duplicate error handling via toast spy
    - `PlannedPaymentsPage.integration.test.tsx` — 2 tests: heading, New Payment button
    - `PortfolioOverviewPage.integration.test.tsx` — 2 tests: heading, empty state
 
@@ -1183,7 +1183,7 @@ See [[docs/testing/test-inventory#phase-f2--stale-refetch--mutation-invalidation
 
 **Goal:** Every dialog taking user input has at least one field-validation test and one submit-error test (5xx response).
 
-**What landed:** 9 new tests ensuring dialogs stay open on error, field guards block submission, validation errors show as toasts. Tests for TransactionInfoDialog, AddInvestmentFromMarketDialog, LinkTransactionDialog, ExecutionHistoryDialog, CustomChartBuilderModal.
+**What landed:** 9 new tests ensuring dialogs stay open on error, field guards block submission, validation errors show as toasts. Tests for TransactionInfoDialog (now `TransactionInspector`), AddInvestmentFromMarketDialog, LinkTransactionDialog, ExecutionHistoryDialog, CustomChartBuilderModal.
 
 **Coverage delta:** 1210 → **1219 vitest** (+9).
 
