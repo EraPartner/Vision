@@ -169,3 +169,66 @@ test("CI Complete requires native production and filesystem security gates", () 
   );
   assert.match(ciComplete, /require trivy-scan "\$TRIVY_SCAN_RESULT"/);
 });
+
+test("jobs downstream of the PR-only Dependency Review still run on pushes", () => {
+  const workflow = fs.readFileSync(
+    path.join(__dirname, "../../.github/workflows/ci.yml"),
+    "utf8",
+  );
+  // A job condition without a status function gets an implicit success(),
+  // which is false once any transitive dependency was skipped. Dependency
+  // Review is skipped outside pull requests, so such a job never runs on a
+  // push to main, and CI Complete then fails on its required result.
+  assert.match(
+    workflowJob(workflow, "dependency-review"),
+    /\n    if: github\.event_name == 'pull_request'\n/,
+  );
+  const jobs = workflow.slice(workflow.indexOf("\njobs:\n"));
+  const names = [...jobs.matchAll(/\n  ([a-z][a-z0-9-]*):\n/g)].map(
+    (match) => match[1],
+  );
+  const needsOf = (name) =>
+    workflowJob(workflow, name)
+      .match(/\n    needs:([\s\S]*?)(?=\n    [a-z-]+:)/)?.[1]
+      ?.match(/[a-z][a-z0-9-]*/g) ?? [];
+  const conditionOf = (name) =>
+    workflowJob(workflow, name).match(/\n    if: (.+)/)?.[1] ?? "";
+
+  const downstream = new Set(["dependency-review"]);
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const name of names) {
+      if (
+        !downstream.has(name) &&
+        needsOf(name).some((need) => downstream.has(need))
+      ) {
+        downstream.add(name);
+        grew = true;
+      }
+    }
+  }
+  downstream.delete("dependency-review");
+
+  const gated = [
+    "trivy-scan",
+    "native-runtime-verify",
+    "test-live-api-contracts",
+  ];
+  for (const name of [...gated, "quality-gate", "ci-complete"]) {
+    assert.ok(downstream.has(name), `${name} must depend on dependency-review`);
+  }
+  for (const name of downstream) {
+    assert.match(
+      conditionOf(name),
+      /always\(\)|!cancelled\(\)/,
+      `${name} needs an explicit status function in its if: condition`,
+    );
+  }
+  for (const name of gated) {
+    assert.match(
+      conditionOf(name),
+      /^\$\{\{ !cancelled\(\) && needs\.quality-gate\.result == 'success' && /,
+      `${name} must still wait for a passing Quality Gate`,
+    );
+  }
+});
