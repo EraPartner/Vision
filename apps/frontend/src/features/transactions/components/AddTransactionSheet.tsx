@@ -406,10 +406,10 @@ export function AddTransactionSheet({
                                     onChange={(e) =>
                                         setForm((f) => ({
                                             ...f,
-                                            currency: e.target.value,
+                                            currency: e.target.value.toUpperCase(),
                                         }))
                                     }
-                                    className="h-8 w-[5.5ch] border-0 bg-transparent px-0 text-center type-title-3 text-label-secondary shadow-none uppercase"
+                                    className="h-8 w-[5.5ch] border-0 bg-transparent px-0 text-center type-title-3 text-label-secondary shadow-none"
                                 />
                             </div>
                             <FieldError

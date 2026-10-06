@@ -168,6 +168,7 @@ export function TransactionsTable({
                 filterable: false,
                 defaultWidth: 40,
                 minWidth: 36,
+                className: "px-2 text-clip",
                 render: (row) => (
                     <Checkbox
                         checked={selectedIds.has(row.id)}
@@ -182,8 +183,8 @@ export function TransactionsTable({
                 header: t("txPage.col.date"),
                 editable: true,
                 type: "date",
-                defaultWidth: 112,
-                minWidth: 96,
+                defaultWidth: 128,
+                minWidth: 104,
                 render: (row) => (
                     <span
                         className={cn(

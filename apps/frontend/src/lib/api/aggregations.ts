@@ -99,7 +99,7 @@ export interface AverageVsCurrentData {
         projected_monthly_total: number;
         avg_monthly_spending: number;
         variance: number;
-        pace: number;
+        pace: number | null;
     };
 }
 

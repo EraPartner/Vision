@@ -120,7 +120,7 @@ export function MonthToDateHero({ currency, className }: MonthToDateHeroProps) {
 
     return (
         <Card className={cn("overflow-hidden", className)}>
-            <CardContent className="grid gap-6 p-6 lg:grid-cols-5">
+            <CardContent variant="headerless" className="grid gap-6 lg:grid-cols-5">
                 <div className="space-y-3 lg:col-span-2">
                     <p className="eyebrow">{t("home.spentSoFar", { month: monthName })}</p>
                     {isLoading || !data ? (
