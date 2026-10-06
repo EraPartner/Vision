@@ -131,7 +131,7 @@ export function StatCard({
                 <Link
                     to={to}
                     aria-label={title}
-                    className="absolute inset-0 z-10 rounded-[inherit] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    className="absolute inset-0 z-10 rounded-[inherit] focus-ring"
                 />
             )}
             <div className={cn(to && "pointer-events-none relative z-20")}>

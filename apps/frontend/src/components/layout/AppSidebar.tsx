@@ -145,7 +145,7 @@ export function AppSidebar() {
                         type="button"
                         onClick={() => toggleSidebar()}
                         aria-label={t("aria.toggleSidebar")}
-                        className="h-8 w-8 shrink-0 rounded-xl bg-gradient-to-br from-primary via-primary/85 to-accent/70 flex items-center justify-center shadow-[0_10px_30px_-10px_hsl(var(--primary)/0.55)] ring-1 ring-primary/20 transition-transform duration-normal hover:scale-[1.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="h-8 w-8 shrink-0 rounded-xl bg-gradient-to-br from-primary via-primary/85 to-accent/70 flex items-center justify-center shadow-[0_10px_30px_-10px_hsl(var(--primary)/0.55)] ring-1 ring-primary/20 transition-transform duration-normal hover:scale-[1.04] focus-ring"
                     >
                         <VisionMark className="h-4 w-4 text-primary-foreground" />
                     </button>
@@ -163,7 +163,7 @@ export function AppSidebar() {
                                 type="button"
                                 onClick={() => toggleSidebar()}
                                 aria-label={t("aria.collapseSidebar")}
-                                className="h-7 w-7 shrink-0 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-foreground/[0.06] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                className="h-7 w-7 shrink-0 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-foreground/[0.06] transition-colors focus-ring"
                             >
                                 <PanelLeftClose className="h-4 w-4" />
                             </button>
@@ -212,7 +212,7 @@ export function AppSidebar() {
                                                     {isActive && <ActiveRail />}
                                                     <item.icon
                                                         className={cn(
-                                                            "h-4 w-4 transition-colors duration-[var(--duration-normal)]",
+                                                            "h-4 w-4 transition-colors duration-normal",
                                                             isActive &&
                                                                 "text-primary",
                                                         )}
@@ -267,7 +267,7 @@ export function AppSidebar() {
                                 <DropdownMenuTrigger asChild>
                                     <button
                                         type="button"
-                                        className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors hover:bg-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2"
+                                        className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors hover:bg-primary/20 focus-ring"
                                         aria-label={`${t("nav.chooseWorkspace")}: ${t(activeWorkspace.labelKey)}`}
                                         title={t("nav.chooseWorkspace")}
                                     >
@@ -338,7 +338,7 @@ export function AppSidebar() {
                                                         )}
                                                         <item.icon
                                                             className={cn(
-                                                                "h-4 w-4 transition-colors duration-[var(--duration-normal)]",
+                                                                "h-4 w-4 transition-colors duration-normal",
                                                                 isActive &&
                                                                     "text-primary",
                                                             )}
@@ -407,7 +407,7 @@ export function AppSidebar() {
                                                         )}
                                                         <item.icon
                                                             className={cn(
-                                                                "h-4 w-4 transition-colors duration-[var(--duration-normal)]",
+                                                                "h-4 w-4 transition-colors duration-normal",
                                                                 isActive &&
                                                                     "text-primary",
                                                             )}
@@ -466,7 +466,7 @@ function WorkspaceTab({
             className={cn(
                 // Transition list composed via --press-compose (press-feedback owns the
                 // `transition` shorthand — see index.css); press entry restated verbatim.
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 press-feedback [--press-compose:background-color_var(--duration-normal)_var(--ease-glide),color_var(--duration-normal)_var(--ease-glide),box-shadow_var(--duration-normal)_var(--ease-glide),scale_var(--duration-normal)_var(--ease-glide),transform_var(--duration-press)_ease-out] min-w-0 flex-1 flex items-center justify-center gap-1 rounded-lg px-1.5 py-1.5 text-xs font-medium tracking-tight",
+                "focus-ring press-feedback [--press-compose:background-color_var(--duration-normal)_var(--ease-glide),color_var(--duration-normal)_var(--ease-glide),box-shadow_var(--duration-normal)_var(--ease-glide),scale_var(--duration-normal)_var(--ease-glide),transform_var(--duration-press)_ease-out] min-w-0 flex-1 flex items-center justify-center gap-1 rounded-lg px-1.5 py-1.5 text-xs font-medium tracking-tight",
                 active
                     ? "bg-background/90 text-foreground shadow-[0_6px_18px_-8px_hsl(var(--primary)/0.35)] ring-1 ring-primary/25 scale-[1.02]"
                     : "text-muted-foreground hover:text-foreground hover:bg-background/40",

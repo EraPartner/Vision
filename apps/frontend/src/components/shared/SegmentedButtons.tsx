@@ -1,5 +1,9 @@
 import type { ReactNode } from "react";
-import { Button, type ButtonProps } from "@/components/ui/button";
+import {
+    SegmentedControl,
+    SegmentedControlItem,
+    type SegmentedControlProps,
+} from "@/components/ui/segmented-control";
 
 interface SegmentedButtonsProps<T> {
     options: T[];
@@ -7,18 +11,18 @@ interface SegmentedButtonsProps<T> {
     getLabel: (option: T) => ReactNode;
     isSelected: (option: T) => boolean;
     onSelect: (option: T) => void;
-    /** Per-button sizing classes; sites differ on height/padding. */
+    /** Extra classes on each segment, for example `tabular-nums`. */
     buttonClassName?: string;
     className?: string;
-    selectedVariant?: ButtonProps["variant"];
-    unselectedVariant?: ButtonProps["variant"];
+    size?: SegmentedControlProps["size"];
     "aria-label"?: string;
     "aria-labelledby"?: string;
 }
 
 /**
- * The research pages' segmented option row: a flex strip of small buttons
- * where the selected one is "default" and the rest are "ghost".
+ * Option row over a list of options, rendered as the segmented control
+ * (ADR-179). Keeps the predicate-based API the research pages use; the
+ * selected option is the one `isSelected` reports.
  */
 export function SegmentedButtons<T>({
     options,
@@ -26,34 +30,35 @@ export function SegmentedButtons<T>({
     getLabel,
     isSelected,
     onSelect,
-    buttonClassName = "h-8 px-2.5 text-xs",
-    className = "flex gap-1",
-    selectedVariant = "default",
-    unselectedVariant = "ghost",
+    buttonClassName,
+    className,
+    size = "sm",
     "aria-label": ariaLabel,
     "aria-labelledby": ariaLabelledBy,
 }: SegmentedButtonsProps<T>) {
+    const selected = options.find(isSelected);
+    const value = selected === undefined ? undefined : String(getKey(selected));
     return (
-        <div
+        <SegmentedControl
             className={className}
-            role="group"
+            size={size}
+            value={value ?? ""}
+            onValueChange={(next) => {
+                const option = options.find((o) => String(getKey(o)) === next);
+                if (option !== undefined) onSelect(option);
+            }}
             aria-label={ariaLabel}
             aria-labelledby={ariaLabelledBy}
         >
             {options.map((option) => (
-                <Button
+                <SegmentedControlItem
                     key={getKey(option)}
-                    size="sm"
-                    variant={
-                        isSelected(option) ? selectedVariant : unselectedVariant
-                    }
+                    value={String(getKey(option))}
                     className={buttonClassName}
-                    aria-pressed={isSelected(option)}
-                    onClick={() => onSelect(option)}
                 >
                     {getLabel(option)}
-                </Button>
+                </SegmentedControlItem>
             ))}
-        </div>
+        </SegmentedControl>
     );
 }

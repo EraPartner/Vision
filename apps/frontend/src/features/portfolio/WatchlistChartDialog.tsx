@@ -238,7 +238,7 @@ export function WatchlistChartDialog({
                                                 );
                                                 setEditingPrice(true);
                                             }}
-                                            className="rounded-sm text-2xl font-bold text-primary hover:underline text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                            className="rounded-sm text-2xl font-bold text-primary hover:underline text-left focus-ring"
                                         >
                                             {formatDisplayCurrency(
                                                 targetPrice,

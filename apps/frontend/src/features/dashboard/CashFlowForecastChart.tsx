@@ -197,7 +197,7 @@ export function CashFlowForecastChart({
                         type="button"
                         onClick={() => setRollingDays(days)}
                         aria-pressed={active}
-                        className="min-h-8 px-3 py-0.5 rounded-full border text-xs transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="min-h-8 px-3 py-0.5 rounded-full border text-xs transition-opacity focus-ring"
                         style={{
                             borderColor: active
                                 ? "hsl(var(--primary))"
@@ -280,7 +280,7 @@ export function CashFlowForecastChart({
                         type="button"
                         onClick={() => toggleMethod(m.id)}
                         aria-pressed={active}
-                        className="flex min-h-8 items-center gap-1.5 px-2 py-0.5 rounded-full border text-xs transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="flex min-h-8 items-center gap-1.5 px-2 py-0.5 rounded-full border text-xs transition-opacity focus-ring"
                         style={methodToggleStyle(color, active)}
                     >
                         <span
@@ -321,7 +321,7 @@ export function CashFlowForecastChart({
             {data && !isLoading && (
                 <>
                     <details className="mb-3">
-                        <summary className="w-fit cursor-pointer rounded-sm py-2 text-xs text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                        <summary className="w-fit cursor-pointer rounded-sm py-2 text-xs text-muted-foreground focus-ring">
                             {t("cashflow.compareMethods")}
                         </summary>
                         <p className="mb-3 text-xs text-muted-foreground">

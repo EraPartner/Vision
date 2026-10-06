@@ -81,7 +81,7 @@ export function TagChip({ tag, onRemove, inactive }: TagChipProps) {
                     // focus:outline-none is a utility, so it beats the global
                     // :focus-visible ring in index.css even on keyboard focus —
                     // restore a ring of our own rather than dropping it.
-                    className="ml-0.5 -m-3.5 rounded-sm p-3.5 hover:opacity-70 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="ml-0.5 -m-3.5 rounded-sm p-3.5 hover:opacity-70 focus:outline-none focus-ring"
                     aria-label={t('aria.removeTag', { tag: tag.slug })}
                 >
                     <X className="h-3 w-3" />
@@ -189,7 +189,7 @@ export function TagInput({ 'aria-labelledby': ariaLabelledBy, value, onChange, d
                     tabIndex={disabled ? -1 : 0}
                     className={cn(
                         'flex flex-wrap gap-1 items-center min-h-9 px-3 py-1.5 rounded-md border border-input bg-background text-sm cursor-text',
-                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2',
+                        'focus-ring',
                         disabled && 'opacity-50 pointer-events-none',
                         className,
                     )}

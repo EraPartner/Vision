@@ -386,7 +386,7 @@ export function AnalysisPivotPanel({
                 <label className="grid min-w-0 max-w-full gap-2 text-sm">
                     {t("analysis.ext.pivot.filterField")}
                     <select
-                        className="h-10 w-full min-w-0 rounded-lg border border-input bg-background px-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="h-9 w-full min-w-0 rounded-control border border-input bg-background px-3 focus-ring"
                         value=""
                         onChange={(e) =>
                             e.target.value &&
@@ -607,7 +607,7 @@ export function AnalysisPivotPanel({
                                                                     ),
                                                             },
                                                         )}
-                                                        className="mr-2 rounded px-1 focus-visible:ring-2"
+                                                        className="mr-2 rounded px-1 focus-ring"
                                                         onClick={() =>
                                                             setExpandedColumns(
                                                                 (previous) => {
@@ -738,7 +738,7 @@ export function AnalysisPivotPanel({
                                                                     ),
                                                                 },
                                                             )}
-                                                            className="mr-2 rounded px-1 focus-visible:ring-2"
+                                                            className="mr-2 rounded px-1 focus-ring"
                                                             onClick={() =>
                                                                 setExpanded(
                                                                     (
@@ -818,7 +818,7 @@ export function AnalysisPivotPanel({
                                                             className="p-2 text-right tabular-nums"
                                                         >
                                                             <button
-                                                                className="rounded px-1 underline-offset-2 hover:underline focus-visible:ring-2"
+                                                                className="rounded px-1 underline-offset-2 hover:underline focus-ring"
                                                                 title={t(
                                                                     "analysis.ext.pivot.drill",
                                                                 )}

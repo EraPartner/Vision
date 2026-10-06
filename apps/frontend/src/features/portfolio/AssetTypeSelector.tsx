@@ -35,7 +35,7 @@ export function AssetTypeSelector({ visibleAssetClasses, assetDescriptions, onSe
             className={cn(
               'flex flex-col items-start gap-2 p-4 rounded-lg border border-border text-left',
               'hover:border-primary hover:bg-primary/5 transition-colors',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+              'focus-ring'
             )}
           >
             <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">

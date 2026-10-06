@@ -565,7 +565,7 @@ export function CustomChartBuilderModal({
                                                                     cat.id,
                                                                 )
                                                             }
-                                                            className="ml-1 inline-flex min-h-6 min-w-6 items-center justify-center rounded-full hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring p-0.5"
+                                                            className="ml-1 inline-flex min-h-6 min-w-6 items-center justify-center rounded-full hover:bg-muted focus-ring p-0.5"
                                                         >
                                                             <X className="h-3 w-3" />
                                                         </button>
@@ -713,7 +713,7 @@ export function CustomChartBuilderModal({
                                                                     rec.id,
                                                                 )
                                                             }
-                                                            className="ml-1 inline-flex min-h-6 min-w-6 items-center justify-center rounded-full hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring p-0.5"
+                                                            className="ml-1 inline-flex min-h-6 min-w-6 items-center justify-center rounded-full hover:bg-muted focus-ring p-0.5"
                                                         >
                                                             <X className="h-3 w-3" />
                                                         </button>
@@ -863,7 +863,7 @@ export function CustomChartBuilderModal({
                                                                     tag.id,
                                                                 )
                                                             }
-                                                            className="ml-1 inline-flex min-h-6 min-w-6 items-center justify-center rounded-full hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring p-0.5"
+                                                            className="ml-1 inline-flex min-h-6 min-w-6 items-center justify-center rounded-full hover:bg-muted focus-ring p-0.5"
                                                         >
                                                             <X className="h-3 w-3" />
                                                         </button>

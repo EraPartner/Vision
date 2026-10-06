@@ -379,7 +379,7 @@ export function PortfolioImportPage() {
         <PageShell className="mx-auto max-w-3xl space-y-6 p-4">
             <PortfolioImportSession accounts={brokerAccounts} />
             <details className="rounded-lg border">
-                <summary className="cursor-pointer p-4 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <summary className="cursor-pointer p-4 text-sm font-medium focus-ring">
                     {t("portfolioImport.session.advanced")}
                 </summary>
                 <Card>
@@ -509,7 +509,7 @@ export function PortfolioImportPage() {
                         ) : (
                             <>
                                 <details className="rounded-lg border p-3">
-                                    <summary className="cursor-pointer text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                                    <summary className="cursor-pointer text-sm font-medium focus-ring">
                                         {t("portfolioImport.formatOptions")}
                                     </summary>
                                     <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -618,7 +618,7 @@ export function PortfolioImportPage() {
 
                         {/* Save parser */}
                         <details className="rounded-lg border p-3">
-                            <summary className="cursor-pointer text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                            <summary className="cursor-pointer text-sm font-medium focus-ring">
                                 {t("portfolioImport.saveParserOptions")}
                             </summary>
                             <div className="mt-4 flex flex-wrap items-end gap-2">

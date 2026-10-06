@@ -332,7 +332,7 @@ export function AnalysisInterchangePanel({
                             </Button>
                         </div>
                         <details>
-                            <summary className="cursor-pointer rounded text-sm text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                            <summary className="cursor-pointer rounded text-sm text-muted-foreground focus-ring">
                                 {t("analysis.ext.workbook.preview")}
                             </summary>
                             <div className="overflow-auto">
@@ -393,7 +393,7 @@ export function AnalysisInterchangePanel({
                                                 event.target.value,
                                         }))
                                     }
-                                    className="h-10 w-full min-w-0 rounded-lg border border-input/70 bg-background/80 px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2"
+                                    className="h-9 w-full min-w-0 rounded-control border border-input/70 bg-background/80 px-3 text-sm focus-ring"
                                 >
                                     {resultColumns.map((column) => (
                                         <option
@@ -421,7 +421,7 @@ export function AnalysisInterchangePanel({
                                                 event.target.value,
                                         }))
                                     }
-                                    className="h-10 w-full min-w-0 rounded-lg border border-input/70 bg-background/80 px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2"
+                                    className="h-9 w-full min-w-0 rounded-control border border-input/70 bg-background/80 px-3 text-sm focus-ring"
                                 >
                                     {attachment.columns.map(({ id, label }) => (
                                         <option key={id} value={id}>

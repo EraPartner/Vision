@@ -197,8 +197,9 @@ export default {
                 "accordion-down": "accordion-down var(--duration-dismiss) ease-out",
                 "accordion-up": "accordion-up var(--duration-dismiss) ease-out",
                 shimmer: shimmerAnimation,
-                // Overshooting bezier gives the spring feel without JS.
-                "dialog-in": "dialog-in var(--duration-slow) cubic-bezier(0.34, 1.45, 0.64, 1) both",
+                // A real spring (ADR-178): the sampled `smooth` spring and its
+                // settle time replace the overshooting bezier that faked one.
+                "dialog-in": "dialog-in var(--spring-smooth-duration) var(--spring-smooth) both",
                 // Dismissal is a settle, not an arrival — glide (Apple's sheet
                 // curve) is the same cubic-bezier `--ease-out-quint` resolved
                 // to, so this is a rename, not a retune.

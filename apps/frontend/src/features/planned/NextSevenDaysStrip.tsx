@@ -251,7 +251,7 @@ export function NextSevenDaysStrip({
                                                 "plannedPage.next7.itemTitle",
                                                 { name: p.name },
                                             )}
-                                            className="group/item rounded-md px-1 py-0.5 text-left transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                            className="group/item rounded-md px-1 py-0.5 text-left transition-colors hover:bg-primary/10 focus-ring"
                                         >
                                             <span
                                                 className={cn(

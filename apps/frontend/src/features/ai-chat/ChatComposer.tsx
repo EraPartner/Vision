@@ -132,7 +132,7 @@ export function ChatComposer({
                         placeholder={t("aiChat.composerPlaceholder")}
                         disabled={disabled || isStreaming}
                         rows={1}
-                        className="min-h-[40px] max-h-[200px] resize-none border-0 bg-transparent px-2 py-2 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                        className="min-h-[40px] max-h-[200px] resize-none border-0 bg-transparent px-2 py-2 shadow-none focus-visible:outline-none"
                     />
                     {isStreaming ? (
                         <Button

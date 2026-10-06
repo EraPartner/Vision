@@ -524,7 +524,7 @@ export default function StocksPage({
                                                                             priceFreshnessLabel,
                                                                     },
                                                                 )}
-                                                                className="ml-auto inline-flex items-center gap-1 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2"
+                                                                className="ml-auto inline-flex items-center gap-1 rounded-sm focus-ring"
                                                             >
                                                                 {t(
                                                                     "portfolio.price",

@@ -1,6 +1,6 @@
 import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { registerUndo } from "@/lib/undo";
+import { undoToast } from "@/lib/undoToast";
 import { downloadBlob } from "@/lib/downloadBlob";
 import { apiClient } from "@/lib/api";
 import {
@@ -281,12 +281,10 @@ export function useDeleteTransaction() {
                         });
                     }
                 };
-                registerUndo(restore);
-                toast.success(t("transactions.deleted"), {
-                    action: {
-                        label: t("common.undo"),
-                        onClick: () => void restore(),
-                    },
+                undoToast({
+                    message: t("transactions.deleted"),
+                    undoLabel: t("common.undo"),
+                    undo: restore,
                 });
             } else {
                 toast.success(t("transactions.deleted"));

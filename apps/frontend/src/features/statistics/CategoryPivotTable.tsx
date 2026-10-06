@@ -551,7 +551,7 @@ export function CategoryPivotTable({
                                                                               },
                                                                           )
                                                                 }
-                                                                className="inline-flex items-center gap-1 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 rounded"
+                                                                className="inline-flex items-center gap-1 hover:text-primary focus-ring rounded"
                                                             >
                                                                 {isCollapsed ? (
                                                                     <ChevronRight className="h-4 w-4" />

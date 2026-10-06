@@ -465,7 +465,7 @@ export function AnalysisWorkbenchPanel(props: Props) {
         <label className="block min-w-0 text-sm">
             {tr(label)}
             <select
-                className="mt-1 h-10 min-w-0 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="mt-1 h-9 min-w-0 w-full rounded-control border border-input bg-background px-3 text-sm focus-ring"
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
             >

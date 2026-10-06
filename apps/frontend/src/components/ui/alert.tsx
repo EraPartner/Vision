@@ -4,7 +4,7 @@ import {cva, type VariantProps} from "class-variance-authority";
 import {cn} from "@/lib/utils";
 
 const alertVariants = cva(
-    "relative w-full rounded-xl p-4 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.04)] [&>svg~*]:pl-7 [&>svg+div]:translate-y-[-3px] [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4",
+    "relative w-full rounded-card corner-continuous p-4 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.04)] [&>svg~*]:pl-7 [&>svg+div]:translate-y-[-3px] [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4",
     {
         variants: {
             variant: {
@@ -36,7 +36,7 @@ const AlertTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<H
     ({className, ...props}, ref) => (
         <h5
             ref={ref}
-            className={cn("mb-1 font-display text-sm font-semibold leading-tight tracking-tight", className)}
+            className={cn("mb-1 type-headline leading-tight", className)}
             {...props}
         />
     ),
@@ -47,7 +47,7 @@ const AlertDescription = React.forwardRef<HTMLParagraphElement, React.HTMLAttrib
     ({className, ...props}, ref) => (
         <div
             ref={ref}
-            className={cn("text-sm opacity-90 tracking-tight [&_p]:leading-relaxed", className)}
+            className={cn("type-body opacity-90 [&_p]:leading-relaxed", className)}
             {...props}
         />
     ),

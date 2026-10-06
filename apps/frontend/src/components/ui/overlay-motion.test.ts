@@ -11,9 +11,9 @@ const FLOATING_FILES = [
 ];
 
 const FLOATING_MOTION_CLASSES = [
-    "data-[state=open]:duration-[var(--duration-fast)]",
-    "data-[state=closed]:duration-[var(--duration-fast)]",
-    "ease-[var(--ease-out-expo)]",
+    "data-[state=open]:duration-fast",
+    "data-[state=closed]:duration-fast",
+    "ease-out-expo",
     "motion-reduce:data-[state=open]:animate-none",
     "motion-reduce:data-[state=closed]:animate-none",
 ];
@@ -44,13 +44,13 @@ describe("overlay motion contract", () => {
 
         for (const state of openStates) {
             expect(source).toContain(`data-[state=${state}]:animate-in`);
-            expect(source).toContain(`data-[state=${state}]:duration-[var(--duration-fast)]`);
+            expect(source).toContain(`data-[state=${state}]:duration-fast`);
             expect(source).toContain(`motion-reduce:data-[state=${state}]:animate-none`);
         }
         expect(source).not.toContain("data-[state=open]");
-        expect(source).toContain("data-[state=closed]:duration-[var(--duration-fast)]");
+        expect(source).toContain("data-[state=closed]:duration-fast");
         expect(source).toContain("motion-reduce:data-[state=closed]:animate-none");
-        expect(source).toContain("ease-[var(--ease-out-expo)]");
+        expect(source).toContain("ease-out-expo");
     });
 
     it("keeps Sheet slower and gates both its content and overlay", () => {
@@ -58,9 +58,9 @@ describe("overlay motion contract", () => {
         const overlay = sourceBetween(source, "const SheetOverlay", "SheetOverlay.displayName");
         const content = sourceBetween(source, "const sheetVariants", "const SheetContent");
         const required = [
-            "data-[state=open]:duration-[var(--duration-slow)]",
-            "data-[state=closed]:duration-[var(--duration-normal)]",
-            "ease-[var(--ease-out-expo)]",
+            "data-[state=open]:duration-slow",
+            "data-[state=closed]:duration-normal",
+            "ease-out-expo",
             "motion-reduce:data-[state=open]:animate-none",
             "motion-reduce:data-[state=closed]:animate-none",
         ];

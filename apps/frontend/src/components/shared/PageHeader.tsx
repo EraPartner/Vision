@@ -31,7 +31,7 @@ export function PageHeader({
                 {Icon && (
                     <div
                         className={cn(
-                            "hidden sm:flex h-9 w-9 shrink-0 rounded-lg bg-gradient-to-br",
+                            "hidden sm:flex h-9 w-9 shrink-0 rounded-control bg-gradient-to-br",
                             iconColor,
                             "items-center justify-center",
                         )}
@@ -40,11 +40,11 @@ export function PageHeader({
                     </div>
                 )}
                 <div className="min-w-0">
-                    <h1 className="page-header-title break-words text-3xl font-bold text-foreground tracking-tight">
+                    <h1 className="page-header-title break-words type-large-title text-foreground">
                         {title}
                     </h1>
                     {subtitle && (
-                        <p className="page-header-subtitle max-w-prose text-pretty text-muted-foreground mt-1">
+                        <p className="page-header-subtitle mt-1 max-w-prose text-pretty type-body text-muted-foreground">
                             {subtitle}
                         </p>
                     )}

@@ -258,7 +258,7 @@ function EditableCell({
                 "font-mono text-xs",
                 dirtyCls,
                 canEdit &&
-                    "cursor-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+                    "cursor-text focus-ring",
             )}
             onClick={() => canEdit && setEditing(true)}
             title={
@@ -656,7 +656,7 @@ export default function TableDataEditorPage() {
                                                 placeholder={t(
                                                     "dbEditor.filterPlaceholder",
                                                 )}
-                                                className="h-7 rounded-md border-border/40 bg-background/40 pl-7 pr-2 font-mono text-2xs shadow-none placeholder:text-muted-foreground/40 focus-visible:bg-background/80 focus-visible:ring-offset-0"
+                                                className="h-7 rounded-md border-border/40 bg-background/40 pl-7 pr-2 font-mono text-2xs shadow-none placeholder:text-muted-foreground/40 focus-visible:bg-background/80"
                                                 onChange={(e) =>
                                                     setDraftFilters((p) => ({
                                                         ...p,

@@ -463,7 +463,7 @@ export default function ResearchDossiersPage() {
                                     </Label>
                                     <select
                                         id="dossier-workspace"
-                                        className="h-10 w-full rounded-lg border bg-background px-3"
+                                        className="h-9 w-full rounded-control border bg-background px-3"
                                         value={draft.workspace}
                                         onChange={(event) =>
                                             edit({
@@ -623,7 +623,7 @@ export default function ResearchDossiersPage() {
                                             </Label>
                                             <select
                                                 id={`origin-${item.id}`}
-                                                className="h-10 w-full rounded-lg border bg-background px-3"
+                                                className="h-9 w-full rounded-control border bg-background px-3"
                                                 value={item.origin}
                                                 onChange={(event) =>
                                                     updateEvidence(item.id, {
@@ -666,7 +666,7 @@ export default function ResearchDossiersPage() {
                                             </Label>
                                             <select
                                                 id={`stance-${item.id}`}
-                                                className="h-10 w-full rounded-lg border bg-background px-3"
+                                                className="h-9 w-full rounded-control border bg-background px-3"
                                                 value={item.stance}
                                                 onChange={(event) =>
                                                     updateEvidence(item.id, {
@@ -701,7 +701,7 @@ export default function ResearchDossiersPage() {
                                             </Label>
                                             <select
                                                 id={`source-document-${item.id}`}
-                                                className="h-10 w-full rounded-lg border bg-background px-3"
+                                                className="h-9 w-full rounded-control border bg-background px-3"
                                                 value={
                                                     item.source.documentId ?? ""
                                                 }
@@ -1102,7 +1102,7 @@ function DossierLinkPicker<T extends string | number>({
                 </p>
             )}
             <details className="rounded-lg border p-3">
-                <summary className="cursor-pointer rounded-sm text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <summary className="cursor-pointer rounded-sm text-sm font-medium focus-ring">
                     {label}
                     <span className="ml-2 text-xs font-normal text-muted-foreground">
                         {t("dossiers.linksSelected", {

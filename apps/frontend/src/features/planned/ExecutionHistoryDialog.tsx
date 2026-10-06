@@ -213,7 +213,7 @@ export function ExecutionHistoryDialog({
                         role="region"
                         aria-label={t("plannedPage.history.title")}
                         tabIndex={0}
-                        className="overflow-x-auto rounded-md border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+                        className="overflow-x-auto rounded-md border focus-ring"
                     >
                         <div className="min-w-[36rem]">
                             <div className="grid grid-cols-[7rem_10rem_minmax(12rem,1fr)_max-content] gap-3 border-b bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground">

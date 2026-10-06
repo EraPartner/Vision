@@ -105,7 +105,7 @@ export function InvestigationPrivacySummary({
                 ))}
             </div>
             <details className="mt-3 border-t pt-3 text-xs">
-                <summary className="w-fit cursor-pointer rounded-sm text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
+                <summary className="w-fit cursor-pointer rounded-sm text-muted-foreground focus-ring">
                     {t("aiResearch.modeGuideTitle")}
                 </summary>
                 <dl className="mt-3 space-y-3 leading-relaxed text-muted-foreground">

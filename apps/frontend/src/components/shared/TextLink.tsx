@@ -4,7 +4,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const textLinkVariants = cva(
-    "rounded-sm underline-offset-4 decoration-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2",
+    "rounded-sm underline-offset-4 decoration-1 focus-ring",
     {
         variants: {
             tone: {

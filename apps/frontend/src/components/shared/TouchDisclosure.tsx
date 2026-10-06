@@ -24,7 +24,7 @@ export function TouchDisclosure({
     className,
 }: TouchDisclosureProps) {
     const triggerClassName = cn(
-        "inline-flex cursor-help items-center rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 [@media(pointer:coarse)]:min-h-10 [@media(pointer:coarse)]:min-w-10 [@media(pointer:coarse)]:justify-center",
+        "inline-flex cursor-help items-center rounded-sm focus-ring [@media(pointer:coarse)]:min-h-10 [@media(pointer:coarse)]:min-w-10 [@media(pointer:coarse)]:justify-center",
         className,
     );
 

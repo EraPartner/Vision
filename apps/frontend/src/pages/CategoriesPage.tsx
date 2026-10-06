@@ -140,7 +140,7 @@ export default function CategoriesPage() {
                             aria-label={`${isExpanded ? t("categoriesPage.collapseAll") : t("categoriesPage.expandAll")}: ${node.path.join(" / ")}`}
                             aria-expanded={isExpanded}
                             onClick={() => toggleExpanded(node.id)}
-                            className="rounded p-1 focus-visible:ring-2 focus-visible:ring-ring"
+                            className="rounded p-1 focus-ring"
                         >
                             {isExpanded ? (
                                 <ChevronDown className="h-4 w-4" />

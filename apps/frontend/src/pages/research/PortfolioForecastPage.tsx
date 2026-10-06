@@ -217,7 +217,6 @@ export default function PortfolioForecastPage() {
                             getLabel={(h) => t(h.labelKey)}
                             isSelected={(h) => horizonMonths === h.months}
                             onSelect={(h) => setHorizonMonths(h.months)}
-                            buttonClassName="h-8 px-3 text-xs"
                         />
                     </div>
 
@@ -254,7 +253,7 @@ export default function PortfolioForecastPage() {
                     </div>
 
                     <details className="group rounded-lg border border-border/60 md:col-span-2 lg:col-span-3">
-                        <summary className="cursor-pointer rounded-lg px-4 py-3 text-sm marker:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
+                        <summary className="cursor-pointer rounded-lg px-4 py-3 text-sm marker:text-muted-foreground focus-ring">
                             <span className="font-medium">
                                 {t("research.forecast.assumptions")}
                             </span>
@@ -404,7 +403,7 @@ export default function PortfolioForecastPage() {
                                     getLabel={(p) => p}
                                     isSelected={(p) => paths === p}
                                     onSelect={setPaths}
-                                    buttonClassName="h-8 px-3 text-xs tabular-nums"
+                                    buttonClassName="tabular-nums"
                                 />
                             </div>
                         </div>

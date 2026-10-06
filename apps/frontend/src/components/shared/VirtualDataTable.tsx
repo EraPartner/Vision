@@ -288,7 +288,7 @@ function VirtualizedTableRow<T extends Record<string, unknown>>({
             aria-rowindex={virtualIndex + 2}
             tabIndex={rowsInteractive ? (isFirstVisible ? 0 : -1) : undefined}
             className={cn(
-                "flex items-center border-b border-border transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2",
+                "flex items-center border-b border-border transition-colors hover:bg-muted/50 focus-ring",
                 isEditing && "bg-primary/5",
                 onRowDoubleClick && "cursor-pointer",
                 rowsInteractive && "touch-manipulation active:bg-muted",
@@ -1320,7 +1320,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                                 : key,
                                     })}
                                     onClick={() => setColumnFilter(key, "")}
-                                    className="-m-3.5 ml-0.5 rounded-sm p-3.5 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+                                    className="-m-3.5 ml-0.5 rounded-sm p-3.5 hover:text-destructive focus-ring"
                                 >
                                     <X className="h-3 w-3" />
                                 </button>
@@ -1490,7 +1490,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                                 ),
                                             )}
                                             tabIndex={0}
-                                            className="absolute -right-3 bottom-0 top-0 z-10 w-6 touch-none cursor-col-resize before:absolute before:inset-y-2 before:left-1/2 before:w-px before:-translate-x-1/2 before:bg-border before:transition-[width,background-color] hover:before:w-0.5 hover:before:bg-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 focus-visible:before:w-0.5 focus-visible:before:bg-primary/70 active:before:bg-primary"
+                                            className="absolute -right-3 bottom-0 top-0 z-10 w-6 touch-none cursor-col-resize before:absolute before:inset-y-2 before:left-1/2 before:w-px before:-translate-x-1/2 before:bg-border before:transition-[width,background-color] hover:before:w-0.5 hover:before:bg-primary/50 focus-visible:outline-none focus-ring focus-visible:before:w-0.5 focus-visible:before:bg-primary/70 active:before:bg-primary"
                                             onFocus={(e) =>
                                                 syncRenderedColumnWidth(
                                                     e.currentTarget,

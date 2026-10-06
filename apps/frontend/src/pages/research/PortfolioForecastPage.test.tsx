@@ -18,20 +18,20 @@ describe("PortfolioForecastPage locale inputs", () => {
     it("exposes selected options and supports adjusting the named blend slider with the keyboard", async () => {
         const user = userEvent.setup();
         renderWithApp(<PortfolioForecastPage />);
-        const fiveYears = await screen.findByRole("button", { name: "5Y" });
-        expect(fiveYears).toHaveAttribute("aria-pressed", "true");
-        const oneYear = screen.getByRole("button", { name: "1Y" });
+        const fiveYears = await screen.findByRole("radio", { name: "5Y" });
+        expect(fiveYears).toHaveAttribute("aria-checked", "true");
+        const oneYear = screen.getByRole("radio", { name: "1Y" });
         await user.click(oneYear);
-        expect(oneYear).toHaveAttribute("aria-pressed", "true");
-        expect(fiveYears).toHaveAttribute("aria-pressed", "false");
+        expect(oneYear).toHaveAttribute("aria-checked", "true");
+        expect(fiveYears).toHaveAttribute("aria-checked", "false");
         await user.click(screen.getByText("Forecast assumptions"));
-        expect(screen.getByRole("button", { name: "1000" })).toHaveAttribute(
-            "aria-pressed",
+        expect(screen.getByRole("radio", { name: "1000" })).toHaveAttribute(
+            "aria-checked",
             "true",
         );
-        await user.click(screen.getByRole("button", { name: "500" }));
-        expect(screen.getByRole("button", { name: "500" })).toHaveAttribute(
-            "aria-pressed",
+        await user.click(screen.getByRole("radio", { name: "500" }));
+        expect(screen.getByRole("radio", { name: "500" })).toHaveAttribute(
+            "aria-checked",
             "true",
         );
         await user.click(screen.getByRole("tab", { name: /blended/i }));
@@ -75,7 +75,7 @@ describe("PortfolioForecastPage locale inputs", () => {
         slider.focus();
         await user.keyboard("{ArrowRight}");
         await user.click(screen.getByRole("tab", { name: /bootstrap/i }));
-        await user.click(screen.getByRole("button", { name: "2000" }));
+        await user.click(screen.getByRole("radio", { name: "2000" }));
         await user.click(heading);
         expect(disclosure).not.toHaveAttribute("open");
         expect(summary).toHaveTextContent(
@@ -97,8 +97,8 @@ describe("PortfolioForecastPage locale inputs", () => {
         expect(
             screen.getByRole("slider", { name: "Return blend" }),
         ).toHaveAttribute("aria-valuenow", "55");
-        expect(screen.getByRole("button", { name: "2000" })).toHaveAttribute(
-            "aria-pressed",
+        expect(screen.getByRole("radio", { name: "2000" })).toHaveAttribute(
+            "aria-checked",
             "true",
         );
     });

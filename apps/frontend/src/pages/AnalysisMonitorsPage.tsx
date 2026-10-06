@@ -368,7 +368,7 @@ export default function AnalysisMonitorsPage() {
                             </Label>
                             <select
                                 id="monitor-kind"
-                                className="h-10 w-full rounded-lg border bg-background px-3"
+                                className="h-9 w-full rounded-control border bg-background px-3"
                                 value={form.kind}
                                 onChange={(event) =>
                                     setForm({
@@ -394,7 +394,7 @@ export default function AnalysisMonitorsPage() {
                                     </Label>
                                     <select
                                         id="monitor-analysis"
-                                        className="h-10 w-full rounded-lg border bg-background px-3"
+                                        className="h-9 w-full rounded-control border bg-background px-3"
                                         value={form.savedAnalysisId}
                                         onChange={(event) =>
                                             setForm((current) => ({
@@ -480,7 +480,7 @@ export default function AnalysisMonitorsPage() {
                                             </Label>
                                             <select
                                                 id="monitor-field"
-                                                className="h-10 w-full rounded-lg border bg-background px-3"
+                                                className="h-9 w-full rounded-control border bg-background px-3"
                                                 value={form.fieldId}
                                                 onChange={(event) =>
                                                     setForm((current) => ({
@@ -510,7 +510,7 @@ export default function AnalysisMonitorsPage() {
                                                 </Label>
                                                 <select
                                                     id="monitor-operator"
-                                                    className="h-10 w-full rounded-lg border bg-background px-3"
+                                                    className="h-9 w-full rounded-control border bg-background px-3"
                                                     value={form.operator}
                                                     onChange={(event) =>
                                                         setForm((current) => ({
@@ -558,7 +558,7 @@ export default function AnalysisMonitorsPage() {
                                 </Label>
                                 <select
                                     id="monitor-dossier"
-                                    className="h-10 w-full rounded-lg border bg-background px-3"
+                                    className="h-9 w-full rounded-control border bg-background px-3"
                                     value={form.dossierId}
                                     onChange={(event) =>
                                         setForm((current) => ({
@@ -946,7 +946,7 @@ export default function AnalysisMonitorsPage() {
                                             </Label>
                                             <select
                                                 id="edit-field"
-                                                className="h-10 w-full rounded-lg border bg-background px-3"
+                                                className="h-9 w-full rounded-control border bg-background px-3"
                                                 value={edit.fieldId ?? ""}
                                                 onChange={(event) =>
                                                     setEdit((current) => ({
@@ -985,7 +985,7 @@ export default function AnalysisMonitorsPage() {
                                                 </Label>
                                                 <select
                                                     id="edit-operator"
-                                                    className="h-10 w-full rounded-lg border bg-background px-3"
+                                                    className="h-9 w-full rounded-control border bg-background px-3"
                                                     value={
                                                         edit.operator ?? "above"
                                                     }
