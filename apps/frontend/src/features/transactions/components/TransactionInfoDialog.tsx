@@ -452,6 +452,9 @@ export function TransactionInfoDialog({
                                                             title={t(
                                                                 "common.cancel",
                                                             )}
+                                                            aria-label={t(
+                                                                "aria.cancel",
+                                                            )}
                                                         >
                                                             <X className="h-3.5 w-3.5" />
                                                         </Button>

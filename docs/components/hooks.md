@@ -2,9 +2,9 @@
 title: Custom Hooks
 type: component
 status: active
-date: 2026-09-27
-updated: 2026-09-27
-last_modified: 2026-09-03
+date: 2026-10-05
+updated: 2026-10-05
+last_modified: 2026-10-05
 tags: [components, hooks, react-query, zustand, form-state, data-table, phase-4, phase-13, phase-c, phase-d, i18n, notifications, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, mount-guard, query-key-fix, prefetch, memoization, useCallback, parseLocaleNumber, currency-utilities, exclusion-ids, ssrf-correctness, loading-states, error-states, isError, refetch, recipient-insights-filter, optimistic-updates, optimistic-create, liquid-glass-v2, premium-v3, june-2026, fx-aware-pnl, useFxAwarePnl, useTabParam, useTaxYearParam, url-state]
 description: Custom React hooks for data fetching and state management. Includes toast notifications for mutations via i18n keys. Phase 13 adds useBankAccounts hook for export filtering. May 2026 bug hunt adds mount guard to usePlannedPayments, fixes queryKey mismatch in usePortfolioPrefetch, and documents parseLocaleNumber utility for locale-aware number parsing. 2026-05-29 adds useExcludedIds as a shared exclusion-resolution hook and exposes isLoading/isError/error/refetch from usePortfolio so asset pages can distinguish loading/error from empty. 2026-06-01: useStatistics adds recipientInsightsFilteredQuery so the all-years Top Recipients chart reacts to exclusion toggles. 2026-06-10: useUpdateTransaction/useDeleteTransaction made optimistic (ADR-070 Tier 5). 2026-06-10 Premium v3 (ADR-071): useCreateTransaction made optimistic (temp negative-id row, server swap, rollback, onSettled invalidate; 6 tests total). 2026-06-10 V11: useUpcomingPlannedPayments — shared "due in next 7 days" query + module-level dismissed-ID store (useSyncExternalStore, persists to localStorage). 2026-06-24: SuggestionCard deleted — useUpcomingPlannedPayments now has a single consumer (UpcomingPaymentsNotification). Aug 2026 (PR #156): adds useTabParam (page-level Tabs ↔ `?tab=`) and useTaxYearParam (BelgianTaxProfileContext viewedYear ↔ `?year=`). 2026-08-11: the full category list is unified behind useAllCategories under one key (`['categories','all']`) — useExcludedIds and the Settings exclusion picker no longer keep two cache entries; useOllamaStatus polls adaptively (30s healthy, 2min unreachable, stopped when AI chat is disabled server-side).
 related_code: ["apps/frontend/src/hooks"]
@@ -192,6 +192,10 @@ interface UseCategoriesOptions {
   search?: string;
 }
 ```
+
+### User Feedback
+
+The category-tree mutations used by the Categories page (`useCreateCategoryNode`, `useUpdateCategoryNode`, `useMergeCategoryNode`, `useDeleteCategoryNode`) show a success toast and a `categories.*FailedTitle` error toast. Since 2026-10-05 `useDeleteCategoryNode()` confirms a delete with `categories.deleted` ("Category deleted"); before that a successful delete was silent. It offers no Undo, because no restore path exists for a deleted category.
 
 ---
 
@@ -722,6 +726,7 @@ Currency formatting and parsing utilities.
 | `formatCurrencyParts(amount, currency, locale, digits, signed?)`   | Pure parts formatter with the same cache and malformed-input fallback as the string formatter                                                                     |
 | `numberFormatToLocale(appSettings)`                                | Derives the locale string from app settings for number formatting                                                                                                 |
 | `parseLocaleNumber(input)`                                         | Intelligently parses locale-aware numeric strings (comma or period decimal/thousands) back to a number (see [[docs/reference/code-patterns#Number Parsing Pattern | code-patterns]]) |
+| `formatNumberPlaceholder(numberFormat)`                            | Formats `0` with two decimals in the given number format (`0,00` for `eu`, `0.00` otherwise) for money and decimal input placeholders                             |
 | `getCurrencySymbol(currencyCode)`                                  | Returns currency symbol for ISO currency code                                                                                                                     |
 | `formatCurrencyCompact(amount, currency, locale, digits, signed?)` | Returns compact/full text, compaction state, and display parts; the optional sign applies to both forms                                                           |
 | `formatCurrencyAxisCompact(amount, currency, locale)`              | Returns a width-bounded chart-axis currency label                                                                                                                 |

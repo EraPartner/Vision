@@ -166,6 +166,18 @@ export function numberFormatToLocale(numberFormat: string): string {
 }
 
 /**
+ * Zero amount for a money input placeholder in the selected number format
+ * ("0,00" for European, "0.00" otherwise), so the hint shows the decimal
+ * separator that parseLocaleNumber accepts.
+ */
+export function formatNumberPlaceholder(numberFormat: NumberFormat): string {
+    return getNumberFormatter(numberFormatToLocale(numberFormat), {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    }).format(0);
+}
+
+/**
  * Get currency symbol from ISO currency code
  * @param currencyCode ISO 4217 currency code (e.g., 'EUR', 'USD', 'GBP')
  * @returns Currency symbol (e.g., '€', '$', '£')

@@ -87,6 +87,9 @@ function AttachmentRow({
                 onClick={() => onDelete(attachment.id)}
                 disabled={deleting}
                 title={t("txPage.deleteAttachment")}
+                aria-label={t("aria.deleteAttachment", {
+                    name: attachment.filename,
+                })}
             >
                 {deleting ? (
                     <Loader2 className="h-3 w-3 animate-spin" />

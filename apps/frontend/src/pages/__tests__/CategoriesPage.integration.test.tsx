@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
+import { toast } from "sonner";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { err, noContent, ok, ok201 } from "@/test/msw/handlers";
@@ -288,8 +289,11 @@ describe("CategoriesPage hierarchy", () => {
         spy.mockRestore();
     });
 
-    it("deletes a leaf only after confirmation", async () => {
+    it("deletes a leaf only after confirmation and confirms the deletion", async () => {
         const user = userEvent.setup();
+        const success = vi
+            .spyOn(toast, "success")
+            .mockReturnValue("t" as never);
         let deleted = false;
         server.use(
             http.get(`${API_BASE}/api/categories/tree`, () =>
@@ -310,7 +314,12 @@ describe("CategoriesPage hierarchy", () => {
             }),
         );
         expect(deleted).toBe(false);
+        expect(success).not.toHaveBeenCalled();
         await user.click(screen.getByRole("button", { name: /^delete$/i }));
         await waitFor(() => expect(deleted).toBe(true));
+        await waitFor(() => {
+            expect(success).toHaveBeenCalledWith("Category deleted");
+        });
+        success.mockRestore();
     });
 });

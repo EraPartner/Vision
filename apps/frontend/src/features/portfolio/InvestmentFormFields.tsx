@@ -13,7 +13,11 @@ import { DatePicker } from "@/components/shared/DatePicker";
 import { parseLocalDateFromYmd, toYmd } from "@/lib/dateUtils";
 import type { PriceProvider } from "@/types/api";
 import { PriceProviderFields } from "./PriceProviderFields";
-import { INVESTMENT_CURRENCIES } from "@/utils/currency";
+import {
+    INVESTMENT_CURRENCIES,
+    formatNumberPlaceholder,
+} from "@/utils/currency";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import type { ReactNode } from "react";
 
 export interface InvestmentForm {
@@ -69,6 +73,7 @@ export function InvestmentFormFields({
     initialBrokerField,
     errors = {},
 }: InvestmentFormFieldsProps) {
+    const { appSettings } = useAppSettings();
     return (
         <>
             {/* Basic Info */}
@@ -513,7 +518,9 @@ export function InvestmentFormFields({
                                 type="text"
                                 inputMode="decimal"
                                 className="h-9"
-                                placeholder="0.00"
+                                placeholder={formatNumberPlaceholder(
+                                    appSettings.numberFormat,
+                                )}
                                 value={form.initialFees}
                                 onChange={(e) =>
                                     setForm((f) => ({

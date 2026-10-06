@@ -43,6 +43,7 @@ import {
     type FieldErrorMap,
 } from "@/hooks/useFieldErrors";
 import { useUnsavedChanges } from "@/contexts/UnsavedChangesContext";
+import { formatNumberPlaceholder } from "@/utils/currency";
 import type { TransactionCreate } from "@/types/api";
 
 /** Visual order — decides which field gets focus on a blocked submit. */
@@ -251,8 +252,8 @@ export function AddTransactionDialog() {
                                 id="tx_amount"
                                 type="text"
                                 inputMode="decimal"
-                                placeholder={t(
-                                    "form.addTransaction.amountPlaceholder",
+                                placeholder={formatNumberPlaceholder(
+                                    appSettings.numberFormat,
                                 )}
                                 value={form.amount}
                                 onChange={(e) =>

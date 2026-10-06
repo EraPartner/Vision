@@ -34,7 +34,10 @@ import {
 import { SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
-import { formatEditableNumber } from "@/utils/currency";
+import {
+    formatEditableNumber,
+    formatNumberPlaceholder,
+} from "@/utils/currency";
 
 type ReyndersChoice = "auto" | "yes" | "no";
 
@@ -57,6 +60,7 @@ interface Props {
 export function PortfolioTaxAdjustmentsDialog({ investments }: Props) {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
+    const zeroPlaceholder = formatNumberPlaceholder(appSettings.numberFormat);
     const profile = useBelgianTaxProfile((state) => state.profile);
     const { getAdjustment, saveManyForYear, isLoading } =
         usePortfolioTaxAdjustments();
@@ -302,7 +306,7 @@ export function PortfolioTaxAdjustmentsDialog({ investments }: Props) {
                                                         },
                                                     }))
                                                 }
-                                                placeholder="0.00"
+                                                placeholder={zeroPlaceholder}
                                             />
                                         </div>
                                         <div className="space-y-1">
@@ -335,7 +339,7 @@ export function PortfolioTaxAdjustmentsDialog({ investments }: Props) {
                                                         },
                                                     }))
                                                 }
-                                                placeholder="0.00"
+                                                placeholder={zeroPlaceholder}
                                             />
                                         </div>
                                     </div>

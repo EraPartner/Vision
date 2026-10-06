@@ -4,6 +4,7 @@ import {
     formatCurrencyCompact,
     formatPercent,
     formatEditableNumber,
+    formatNumberPlaceholder,
     numberFormatToLocale,
     parseLocaleNumber,
 } from "./currency";
@@ -377,6 +378,16 @@ describe("formatEditableNumber", () => {
             const draft = formatEditableNumber(1234.56, format);
             expect(parseLocaleNumber(draft, format)).toBe(1234.56);
             expect(draft).toBe(format === "eu" ? "1234,56" : "1234.56");
+        }
+    });
+});
+
+describe("formatNumberPlaceholder", () => {
+    test("shows a zero amount with the decimal separator each format parses", () => {
+        for (const format of ["eu", "us", "ch", "in"] as const) {
+            const placeholder = formatNumberPlaceholder(format);
+            expect(placeholder).toBe(format === "eu" ? "0,00" : "0.00");
+            expect(parseLocaleNumber(placeholder, format)).toBe(0);
         }
     });
 });

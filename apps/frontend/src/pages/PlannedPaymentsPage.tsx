@@ -123,6 +123,14 @@ export default function PlannedPaymentsPage() {
             setActionLoading(true);
             try {
                 await toggleActive(payment.id);
+                toast.success(
+                    t(
+                        payment.is_active
+                            ? "plannedPage.toast.paused"
+                            : "plannedPage.toast.resumed",
+                        { name: payment.name },
+                    ),
+                );
             } catch (error) {
                 logger.error("Failed to toggle status:", error);
                 toast.error(t("plannedPage.toggleFailed"));
@@ -146,6 +154,9 @@ export default function PlannedPaymentsPage() {
             setActionLoading(true);
             try {
                 await deletePayment(payment.id);
+                toast.success(
+                    t("plannedPage.toast.deleted", { name: payment.name }),
+                );
             } catch (error) {
                 logger.error("Failed to delete payment:", error);
                 toast.error(t("plannedPage.deleteFailed"));
@@ -164,8 +175,14 @@ export default function PlannedPaymentsPage() {
             if (editing) {
                 await updatePayment(editing.id, data);
                 setEditing(undefined);
+                toast.success(
+                    t("plannedPage.toast.updated", { name: data.name }),
+                );
             } else {
                 await addPayment(data);
+                toast.success(
+                    t("plannedPage.toast.created", { name: data.name }),
+                );
             }
             setFormOpen(false);
         } catch (error) {
