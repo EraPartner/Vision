@@ -49,7 +49,7 @@ describe("Language switch (integration)", () => {
     it("PlannedPaymentsPage renders English heading by default", async () => {
         renderWithApp(<PlannedPaymentsPage />);
         expect(
-            await screen.findByRole("heading", { name: /planned payments/i }),
+            await screen.findByRole("heading", { name: /^planned$/i }),
         ).toBeInTheDocument();
     });
 
@@ -58,7 +58,7 @@ describe("Language switch (integration)", () => {
         renderWithApp(<PlannedPaymentsPage />);
         expect(
             await screen.findByRole("heading", {
-                name: /geplande betalingen/i,
+                name: /^gepland$/i,
             }),
         ).toBeInTheDocument();
     });
@@ -94,17 +94,17 @@ describe("Language switch (integration)", () => {
     it("ImportPage renders English heading by default", async () => {
         renderWithApp(<ImportPage />);
         expect(
-            await screen.findByRole("heading", { name: /import & export/i }),
+            await screen.findByRole("heading", { name: /^import$/i }),
         ).toBeInTheDocument();
     });
 
     it("ImportPage renders Dutch heading when language is nl", async () => {
         useDutch();
         renderWithApp(<ImportPage />);
-        // Dutch: "Importeren & exporteren"
+        // Dutch: "Importeren"
         expect(
             await screen.findByRole("heading", {
-                name: /importeren & exporteren/i,
+                name: /^importeren$/i,
             }),
         ).toBeInTheDocument();
     });

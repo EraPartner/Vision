@@ -4054,6 +4054,7 @@ const en: Record<string, string> = {
   'tax.onRealizedGains': 'On realized gains',
   'tax.otherFees': 'Other fees',
   'tax.otherTaxes': 'Other taxes',
+  'tax.page.loadError': 'Couldn\'t load tax statistics: {msg}',
   'tax.page.subtitle': 'Estimated Belgian income tax for {year}',
   'tax.page.title': 'Taxes',
   'tax.pit.bracketRange1': 'EUR 0 - EUR 16,320',

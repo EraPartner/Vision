@@ -174,7 +174,7 @@ describe("RestoreFromBackupCard", () => {
             await screen.findByRole("button", { name: /Restore from backup/i }),
         );
         await screen.findByText("Restore this backup?");
-        await user.click(screen.getByRole("button", { name: /Yes, restore/i }));
+        await user.click(screen.getByRole("button", { name: /^Restore$/i }));
 
         await waitFor(() => {
             expect(backup.restoreBackup).toHaveBeenCalledWith(
@@ -210,7 +210,7 @@ describe("RestoreFromBackupCard", () => {
             await screen.findByRole("button", { name: /Restore from backup/i }),
         );
         await screen.findByText("Restore this backup?");
-        await user.click(screen.getByRole("button", { name: /Yes, restore/i }));
+        await user.click(screen.getByRole("button", { name: /^Restore$/i }));
 
         await waitFor(() => {
             expect(window.localStorage.getItem("vision_theme")).toBe("dark");
@@ -237,7 +237,7 @@ describe("RestoreFromBackupCard", () => {
             await screen.findByRole("button", { name: /Restore from backup/i }),
         );
         await screen.findByText("Restore this backup?");
-        await user.click(screen.getByRole("button", { name: /Yes, restore/i }));
+        await user.click(screen.getByRole("button", { name: /^Restore$/i }));
 
         await waitFor(() => {
             expect(toast.error).toHaveBeenCalled();
@@ -259,7 +259,7 @@ describe("RestoreFromBackupCard", () => {
             await screen.findByRole("button", { name: /Restore from backup/i }),
         );
         await screen.findByText("Restore this backup?");
-        await user.click(screen.getByRole("button", { name: /Yes, restore/i }));
+        await user.click(screen.getByRole("button", { name: /^Restore$/i }));
 
         expect(
             await screen.findByText("Backup is encrypted"),

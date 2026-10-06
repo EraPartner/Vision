@@ -4054,6 +4054,7 @@ const nl: Record<string, string> = {
   'tax.onRealizedGains': 'Op gerealiseerde winsten',
   'tax.otherFees': 'Overige kosten',
   'tax.otherTaxes': 'Overige belastingen',
+  'tax.page.loadError': 'Kon belastingstatistieken niet laden: {msg}',
   'tax.page.subtitle': 'Geschatte Belgische personenbelasting voor {year}',
   'tax.page.title': 'Belastingen',
   'tax.pit.bracketRange1': 'EUR 0 - EUR 16.320',

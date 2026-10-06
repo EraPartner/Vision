@@ -214,9 +214,9 @@ describe("TaxOverviewPage (integration)", () => {
             ),
         );
         renderWithApp(<TaxOverviewPage />);
-        // statsPage.error = "Failed to load statistics: {msg}"
+        // tax.page.loadError = "Couldn't load tax statistics: {msg}"
         expect(
-            await screen.findByText(/couldn't load statistics/i, {}, { timeout: 8000 }),
+            await screen.findByText(/couldn't load tax statistics/i, {}, { timeout: 8000 }),
         ).toBeInTheDocument();
         // A user without a profile must NOT be told to set one up on a fetch error
         expect(screen.queryByText(/no tax profile yet/i)).not.toBeInTheDocument();

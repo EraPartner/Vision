@@ -146,7 +146,7 @@ describe("WatchlistChartDialog", () => {
         // Assert — all five range buttons are present
         for (const label of ["1m", "3m", "6m", "1y", "5y"]) {
             expect(
-                await screen.findByRole("button", { name: label }),
+                await screen.findByRole("radio", { name: label }),
             ).toBeInTheDocument();
         }
     });
@@ -183,7 +183,7 @@ describe("WatchlistChartDialog", () => {
 
         // Act — click the one-year range button
         capturedRange = null;
-        await user.click(await screen.findByRole("button", { name: "1y" }));
+        await user.click(await screen.findByRole("radio", { name: "1y" }));
 
         // Assert — chart re-fetched with 1y range
         await waitFor(() => expect(capturedRange).toBe("1y"));
