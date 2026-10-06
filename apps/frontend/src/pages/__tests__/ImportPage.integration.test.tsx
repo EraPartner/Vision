@@ -28,7 +28,7 @@ describe("ImportPage (integration)", () => {
     it("renders page heading", async () => {
         renderWithApp(<ImportPage />);
         expect(
-            await screen.findByRole("heading", { name: /import & export/i }),
+            await screen.findByRole("heading", { name: "Import", level: 1 }),
         ).toBeInTheDocument();
     });
 
@@ -56,10 +56,67 @@ describe("ImportPage (integration)", () => {
         expect(status).toHaveTextContent("transactions imported");
         expect(status).toHaveTextContent("3 duplicates · 1 error");
 
+        // No date span known: the link still leads to the transactions list.
+        expect(
+            within(status).getByRole("link", {
+                name: /show 42 imported transactions/i,
+            }),
+        ).toHaveAttribute("href", "/transactions");
+
         await userEvent.click(
             screen.getByRole("button", { name: /dismiss import receipt/i }),
         );
         expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    });
+
+    it("links the receipt to the imported rows' date span on the Transactions page", async () => {
+        renderWithApp(<ImportPage />, {
+            initialEntries: [
+                {
+                    pathname: "/import",
+                    state: {
+                        importCommitReceipt: {
+                            imported: 1,
+                            duplicates: 0,
+                            errors: 0,
+                            dateFrom: "2026-03-01",
+                            dateTo: "2026-03-31",
+                        },
+                    },
+                },
+            ],
+        });
+
+        const status = await screen.findByRole("status");
+        const link = within(status).getByRole("link", {
+            name: /show 1 imported transaction$/i,
+        });
+        const href = link.getAttribute("href") ?? "";
+        const params = new URLSearchParams(href.split("?")[1]);
+        expect(href.startsWith("/transactions?")).toBe(true);
+        expect(params.get("start_date")).toBe("2026-03-01");
+        expect(params.get("end_date")).toBe("2026-03-31");
+        expect(params.get("filter_label")).toBe("Imported from CSV");
+    });
+
+    it("hides the receipt link when nothing was imported", async () => {
+        renderWithApp(<ImportPage />, {
+            initialEntries: [
+                {
+                    pathname: "/import",
+                    state: {
+                        importCommitReceipt: {
+                            imported: 0,
+                            duplicates: 2,
+                            errors: 0,
+                        },
+                    },
+                },
+            ],
+        });
+
+        const status = await screen.findByRole("status");
+        expect(within(status).queryByRole("link")).not.toBeInTheDocument();
     });
 
     it.each([
@@ -254,8 +311,75 @@ describe("ImportPage (integration)", () => {
         const btn = await screen.findByRole("button", {
             name: /import transactions/i,
         });
-        // Button requires a file: disabled={!file || loading}
         expect(btn).toBeDisabled();
+        expect(screen.getByText("Choose a file to continue.")).toBeInTheDocument();
+    });
+
+    it("unlocks Import only once a file and a bank are chosen, naming the missing piece", async () => {
+        const user = userEvent.setup();
+        server.use(
+            http.get(`${API_BASE}/api/info/supported-adapters`, () =>
+                ok({ items: [{ key: "kbc", name: "KBC" }], total: 1 }),
+            ),
+        );
+        renderWithApp(<ImportPage />);
+
+        const btn = await screen.findByRole("button", {
+            name: /import transactions/i,
+        });
+        const fileInput = document.querySelector(
+            'input[type="file"][accept=".csv"]',
+        ) as HTMLInputElement;
+        await user.upload(
+            fileInput,
+            new File(["date,amount\n"], "statement.csv", { type: "text/csv" }),
+        );
+
+        expect(await screen.findByText("statement.csv")).toBeInTheDocument();
+        expect(screen.getByText("Choose your bank.")).toBeInTheDocument();
+        expect(btn).toBeDisabled();
+
+        await user.click(screen.getByRole("combobox", { name: /bank source/i }));
+        await user.click(await screen.findByRole("option", { name: /kbc/i }));
+
+        expect(await screen.findByText("Ready to import.")).toBeInTheDocument();
+        expect(btn).toBeEnabled();
+    });
+
+    it("keeps Import locked for a custom setup until the required columns are mapped", async () => {
+        const user = userEvent.setup();
+        renderWithApp(<ImportPage />);
+
+        const fileInput = (await waitFor(() =>
+            document.querySelector('input[type="file"][accept=".csv"]'),
+        )) as HTMLInputElement;
+        await user.upload(
+            fileInput,
+            new File(["date,amount\n"], "statement.csv", { type: "text/csv" }),
+        );
+        await user.click(screen.getByRole("combobox", { name: /bank source/i }));
+        await user.click(
+            await screen.findByRole("option", { name: /custom or other/i }),
+        );
+
+        expect(
+            await screen.findByText("Map the date, payee and amount columns."),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: /import transactions/i }),
+        ).toBeDisabled();
+    });
+
+    it("asks for the file before the bank", async () => {
+        renderWithApp(<ImportPage />);
+        const dropzone = await screen.findByRole("button", {
+            name: /choose a csv file/i,
+        });
+        const bank = screen.getByRole("combobox", { name: /bank source/i });
+        expect(
+            dropzone.compareDocumentPosition(bank) &
+                Node.DOCUMENT_POSITION_FOLLOWING,
+        ).toBeTruthy();
     });
 
     it("orders the recurring import task before history and export", async () => {
@@ -418,7 +542,7 @@ describe("ImportPage (integration)", () => {
         );
         renderWithApp(<ImportPage />);
         expect(
-            await screen.findByRole("heading", { name: /import & export/i }),
+            await screen.findByRole("heading", { name: "Import", level: 1 }),
         ).toBeInTheDocument();
         // apiRequest retries on 500 (MAX_RETRIES=2, ~1.5 s backoff) — needs extended timeout
         expect(
@@ -438,7 +562,7 @@ describe("ImportPage (integration)", () => {
         );
         renderWithApp(<ImportPage />);
         expect(
-            await screen.findByRole("heading", { name: /import & export/i }),
+            await screen.findByRole("heading", { name: "Import", level: 1 }),
         ).toBeInTheDocument();
         expect(await screen.findByText(/no imports yet/i)).toBeInTheDocument();
         consoleSpy.mockRestore();

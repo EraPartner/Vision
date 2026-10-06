@@ -21,6 +21,16 @@ export function useImportPreview(batchId: number) {
     });
 }
 
+/**
+ * The date span of the staged rows, carried into the Import page's receipt so
+ * it can link to the imported transactions (there is no per-batch filter on
+ * the Transactions page; the span is the closest filter it reads).
+ */
+export interface ImportDateRange {
+    dateFrom?: string;
+    dateTo?: string;
+}
+
 export function useImportReviewMutations(
     batchId: number,
     newAccountCount: number,
@@ -66,8 +76,9 @@ export function useImportReviewMutations(
     });
 
     const commitMutation = useMutation({
-        mutationFn: () => apiClient.commitImportBatch(batchId),
-        onSuccess: (data) => {
+        mutationFn: (_range: ImportDateRange) =>
+            apiClient.commitImportBatch(batchId),
+        onSuccess: (data, range) => {
             toast.success(
                 t("importReview.toast.success", {
                     imported: data.imported,
@@ -111,6 +122,8 @@ export function useImportReviewMutations(
                         imported: data.imported,
                         duplicates: data.duplicates,
                         errors: data.errors,
+                        dateFrom: range.dateFrom,
+                        dateTo: range.dateTo,
                     },
                 },
             });
@@ -120,6 +133,24 @@ export function useImportReviewMutations(
                 description: apiErrorToMessage(err, t),
             });
         },
+    });
+
+    // Discarding cancels the parked batch: DELETE /api/import/batches/:id rolls
+    // back any batch that is not in progress, and an awaiting_review batch has
+    // committed nothing, so this only clears the staging rows.
+    const discardMutation = useMutation({
+        mutationFn: () => apiClient.rollbackImportBatch(batchId),
+        onSuccess: () => {
+            toast.success(t("importReview.toast.discarded"));
+            queryClient.invalidateQueries({ queryKey: importKeys.batchesAll });
+            navigate("/import", { replace: true });
+        },
+        onError: (err: Error) => {
+            toast.error(t("importReview.toast.discardFailed"), {
+                description: apiErrorToMessage(err, t),
+            });
+        },
+        meta: { suppressErrorToast: true },
     });
 
     return {
@@ -143,7 +174,9 @@ export function useImportReviewMutations(
             recipientId: number,
             categoryId: number | null,
         ) => persistDefault.mutateAsync({ recipientId, categoryId }),
-        commit: () => commitMutation.mutate(),
+        commit: (range: ImportDateRange = {}) => commitMutation.mutate(range),
         isCommitting: commitMutation.isPending,
+        discard: () => discardMutation.mutate(),
+        isDiscarding: discardMutation.isPending,
     };
 }

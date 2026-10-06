@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
-import { CheckCircle2, ChevronDown, X } from "lucide-react";
+import { ArrowRight, CheckCircle2, ChevronDown, X } from "lucide-react";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { ImportHistoryCard } from "@/features/imports/ImportHistoryCard";
@@ -17,7 +17,13 @@ import {
 } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Card, CardContent } from "@/components/ui/card";
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card";
 import { RollingNumber } from "@/components/shared/RollingNumber";
 import { PageShell } from "@/components/shared/PageShell";
 
@@ -25,7 +31,12 @@ interface ImportCommitReceipt {
     imported: number;
     duplicates: number;
     errors: number;
+    /** Date span of the imported rows (YYYY-MM-DD), when the review page knew it. */
+    dateFrom?: string;
+    dateTo?: string;
 }
+
+const YMD = /^\d{4}-\d{2}-\d{2}$/;
 
 function readCommitReceipt(state: unknown): ImportCommitReceipt | null {
     if (
@@ -37,7 +48,7 @@ function readCommitReceipt(state: unknown): ImportCommitReceipt | null {
     const receipt = (state as { importCommitReceipt?: unknown })
         .importCommitReceipt;
     if (!receipt || typeof receipt !== "object") return null;
-    const { imported, duplicates, errors } =
+    const { imported, duplicates, errors, dateFrom, dateTo } =
         receipt as Partial<ImportCommitReceipt>;
     if (
         ![imported, duplicates, errors].every(
@@ -48,7 +59,34 @@ function readCommitReceipt(state: unknown): ImportCommitReceipt | null {
         )
     )
         return null;
-    return { imported: imported!, duplicates: duplicates!, errors: errors! };
+    return {
+        imported: imported!,
+        duplicates: duplicates!,
+        errors: errors!,
+        dateFrom:
+            typeof dateFrom === "string" && YMD.test(dateFrom)
+                ? dateFrom
+                : undefined,
+        dateTo:
+            typeof dateTo === "string" && YMD.test(dateTo) ? dateTo : undefined,
+    };
+}
+
+/**
+ * Where the receipt's "Show imported transactions" link goes. There is no
+ * per-batch filter on the Transactions page, so the link narrows the list to
+ * the imported rows' date span (the `start_date`/`end_date` params it reads).
+ */
+function importedTransactionsHref(
+    receipt: ImportCommitReceipt,
+    label: string,
+): string {
+    const params = new URLSearchParams();
+    if (receipt.dateFrom) params.set("start_date", receipt.dateFrom);
+    if (receipt.dateTo) params.set("end_date", receipt.dateTo);
+    if (receipt.dateFrom || receipt.dateTo) params.set("filter_label", label);
+    const query = params.toString();
+    return query ? `/transactions?${query}` : "/transactions";
 }
 
 export default function ImportPage() {
@@ -75,9 +113,9 @@ export default function ImportPage() {
                 icon={PAGE_ICONS["/import"]}
             />
             {commitReceipt && (
-                <Card role="status" className="border-success/30 bg-success/5">
+                <Card role="status" className="bg-success/5">
                     <CardContent
-                        variant="state"
+                        variant="headerless"
                         className="flex items-start gap-3"
                     >
                         <CheckCircle2
@@ -85,10 +123,10 @@ export default function ImportPage() {
                             aria-hidden
                         />
                         <div className="min-w-0 flex-1">
-                            <h2 className="font-display text-lg font-semibold text-foreground">
+                            <h2 className="type-title-3 text-foreground">
                                 {t("importPage.commitReceiptTitle")}
                             </h2>
-                            <p className="mt-1 text-sm text-muted-foreground">
+                            <p className="mt-1 type-body text-label-secondary">
                                 <span className="font-semibold text-foreground">
                                     <RollingNumber
                                         value={String(commitReceipt.imported)}
@@ -99,7 +137,7 @@ export default function ImportPage() {
                                     commitReceipt.imported,
                                 )}
                             </p>
-                            <p className="mt-1 text-xs text-muted-foreground">
+                            <p className="mt-1 type-footnote text-label-secondary">
                                 {tc(
                                     "importPage.commitReceiptDuplicates",
                                     commitReceipt.duplicates,
@@ -110,6 +148,30 @@ export default function ImportPage() {
                                     commitReceipt.errors,
                                 )}
                             </p>
+                            {commitReceipt.imported > 0 && (
+                                <Button
+                                    asChild
+                                    variant="outline"
+                                    size="sm"
+                                    className="mt-3"
+                                >
+                                    <Link
+                                        to={importedTransactionsHref(
+                                            commitReceipt,
+                                            t("importPage.importedFilterLabel"),
+                                        )}
+                                    >
+                                        {tc(
+                                            "importPage.showImported",
+                                            commitReceipt.imported,
+                                        )}
+                                        <ArrowRight
+                                            className="h-4 w-4"
+                                            aria-hidden
+                                        />
+                                    </Link>
+                                </Button>
+                            )}
                         </div>
                         <Button
                             type="button"
@@ -132,43 +194,45 @@ export default function ImportPage() {
                 </div>
                 <aside className="min-w-0 space-y-6">
                     <ExportCard />
-                    <Collapsible
-                        open={setupOpen}
-                        onOpenChange={setSetupOpen}
-                        className="rounded-xl border border-border/60 bg-card/40 p-4"
-                    >
-                        <div className="flex items-start justify-between gap-4">
-                            <div>
-                                <h2 className="font-display text-lg font-semibold">
-                                    {t("importPage.setupReference")}
-                                </h2>
-                                <p className="mt-1 text-sm text-muted-foreground">
-                                    {t("importPage.setupReferenceDesc")}
-                                </p>
-                            </div>
-                            <CollapsibleTrigger asChild>
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="icon"
-                                    aria-label={t(
-                                        "importPage.toggleSetupReference",
-                                    )}
-                                >
-                                    <ChevronDown
-                                        className={cn(
-                                            "h-4 w-4 transition-transform duration-fast motion-reduce:transition-none",
-                                            setupOpen && "rotate-180",
+                    <Collapsible open={setupOpen} onOpenChange={setSetupOpen}>
+                        <Card>
+                            <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
+                                <div className="min-w-0 space-y-1.5">
+                                    <CardTitle variant="sm">
+                                        {t("importPage.setupReference")}
+                                    </CardTitle>
+                                    <CardDescription>
+                                        {t("importPage.setupReferenceDesc")}
+                                    </CardDescription>
+                                </div>
+                                <CollapsibleTrigger asChild>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="icon"
+                                        className="shrink-0"
+                                        aria-label={t(
+                                            "importPage.toggleSetupReference",
                                         )}
-                                    />
-                                </Button>
-                            </CollapsibleTrigger>
-                        </div>
-                        <CollapsibleContent className="space-y-4 pt-4">
-                            <RecipientsImportCard />
-                            <CategoriesImportCard />
-                            <SupportedBanksCard />
-                        </CollapsibleContent>
+                                    >
+                                        <ChevronDown
+                                            className={cn(
+                                                "h-4 w-4 transition-transform duration-fast motion-reduce:transition-none",
+                                                setupOpen && "rotate-180",
+                                            )}
+                                            aria-hidden
+                                        />
+                                    </Button>
+                                </CollapsibleTrigger>
+                            </CardHeader>
+                            <CollapsibleContent>
+                                <CardContent className="space-y-4">
+                                    <RecipientsImportCard />
+                                    <CategoriesImportCard />
+                                    <SupportedBanksCard />
+                                </CardContent>
+                            </CollapsibleContent>
+                        </Card>
                     </Collapsible>
                 </aside>
             </div>
