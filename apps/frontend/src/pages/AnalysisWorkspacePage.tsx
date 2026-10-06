@@ -985,7 +985,7 @@ export default function AnalysisWorkspacePage() {
                 {["data", "prepare", "calculate", "present"].map((step) => (
                     <a
                         key={step}
-                        className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted focus-ring"
                         href={`#analysis-${step}`}
                         onClick={() => {
                             if (step === "prepare" || step === "calculate")
@@ -1046,7 +1046,7 @@ export default function AnalysisWorkspacePage() {
                         >
                             <summary
                                 ref={templateSummaryRef}
-                                className="cursor-pointer rounded-lg p-4 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                className="cursor-pointer rounded-lg p-4 text-sm font-medium focus-ring"
                             >
                                 {t(
                                     templatesOpen
@@ -1063,7 +1063,7 @@ export default function AnalysisWorkspacePage() {
                                         <button
                                             key={template.id}
                                             type="button"
-                                            className="rounded-lg border border-border bg-card/60 p-3 text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                            className="rounded-lg border border-border bg-card/60 p-3 text-left hover:bg-muted focus-ring"
                                             onClick={() => {
                                                 resetPendingDraft();
                                                 setTemplatesOpen(false);
@@ -1210,7 +1210,7 @@ export default function AnalysisWorkspacePage() {
                             >
                                 <summary
                                     ref={builderSummaryRef}
-                                    className="cursor-pointer rounded-sm text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                    className="cursor-pointer rounded-sm text-sm font-medium focus-ring"
                                 >
                                     {t("analysis.editConfiguration")}
                                 </summary>
@@ -1230,7 +1230,7 @@ export default function AnalysisWorkspacePage() {
                                         <details
                                             open={mode === "sql" || undefined}
                                         >
-                                            <summary className="cursor-pointer rounded-lg border px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                                            <summary className="cursor-pointer rounded-lg border px-3 py-2 text-sm focus-ring">
                                                 {t("analysis.advanced")}
                                             </summary>
                                             <Button
@@ -2344,7 +2344,7 @@ export default function AnalysisWorkspacePage() {
                                 setToolsOpen(event.currentTarget.open)
                             }
                         >
-                            <summary className="cursor-pointer rounded-lg px-6 py-4 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                            <summary className="cursor-pointer rounded-lg px-6 py-4 text-sm font-medium focus-ring">
                                 {t("analysis.refineTitle")}
                                 <span className="mt-1 block max-w-2xl font-normal text-muted-foreground">
                                     {t("analysis.refineHelp")}
@@ -2436,7 +2436,7 @@ export default function AnalysisWorkspacePage() {
                                 placeholder={t("analysis.namePlaceholder")}
                             />
                             <details className="rounded-lg border border-border/60 p-3">
-                                <summary className="cursor-pointer text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 rounded-sm">
+                                <summary className="cursor-pointer text-sm font-medium focus-ring rounded-sm">
                                     {t("analysis.sourcesLabel")}
                                 </summary>
                                 <div className="pt-3 space-y-2">
@@ -2572,7 +2572,7 @@ export default function AnalysisWorkspacePage() {
                                 </p>
                             </details>
                             <details>
-                                <summary className="cursor-pointer rounded-sm text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                                <summary className="cursor-pointer rounded-sm text-sm font-medium focus-ring">
                                     {t("analysis.filesAndScenarios")}
                                 </summary>
                                 <div className="mt-3">
@@ -2917,7 +2917,7 @@ export default function AnalysisWorkspacePage() {
                                     className="rounded-lg border p-3"
                                 >
                                     <button
-                                        className="w-full break-words text-left font-medium hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                        className="w-full break-words text-left font-medium hover:text-primary focus-ring"
                                         onClick={() => loadSaved(saved)}
                                     >
                                         {saved.name}

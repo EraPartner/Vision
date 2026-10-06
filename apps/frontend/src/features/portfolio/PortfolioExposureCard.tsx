@@ -235,7 +235,7 @@ export function PortfolioExposureCard({ currency }: { currency: string }) {
                                     key={row.id}
                                     className="first:rounded-t-lg last:rounded-b-lg"
                                 >
-                                    <summary className="cursor-pointer rounded-lg p-3 text-sm font-medium hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+                                    <summary className="cursor-pointer rounded-lg p-3 text-sm font-medium hover:bg-muted/40 focus-ring">
                                         <span className="ml-1 inline-flex w-[calc(100%-1.5rem)] flex-wrap items-center justify-between gap-x-4 gap-y-1 align-middle">
                                             <span>{row.label}</span>
                                             <span className="flex items-baseline gap-3 tabular-nums">
@@ -305,7 +305,7 @@ export function PortfolioExposureCard({ currency }: { currency: string }) {
                     </>
                 )}
                 <details className="rounded-lg border">
-                    <summary className="cursor-pointer rounded-lg p-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                    <summary className="cursor-pointer rounded-lg p-3 text-sm font-medium focus-ring">
                         {t("portfolio.exposure.sourcesAndImport")}
                     </summary>
                     <div className="space-y-3 border-t p-3">
@@ -337,7 +337,7 @@ export function PortfolioExposureCard({ currency }: { currency: string }) {
                         )}
                         <Label
                             htmlFor={sourceInputId}
-                            className="inline-flex cursor-pointer items-center rounded-md border px-3 py-2 text-sm focus-within:ring-2 focus-within:ring-ring"
+                            className="inline-flex cursor-pointer items-center rounded-md border px-3 py-2 text-sm focus-within:ring-2 focus-within:ring-ring/70"
                         >
                             <Upload
                                 aria-hidden="true"

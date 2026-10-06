@@ -966,7 +966,7 @@ export default function ChartBuilderPage() {
                                 ))}
                             </SymbolSearchBox>
                             <details className="text-xs text-muted-foreground">
-                                <summary className="cursor-pointer rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
+                                <summary className="cursor-pointer rounded-sm focus-ring">
                                     {t("research.builder.sourceHelp")}
                                 </summary>
                                 <p className="mt-2 max-w-2xl">
@@ -1101,7 +1101,7 @@ export default function ChartBuilderPage() {
                             {t("research.builder.saveAs")}
                         </Button>
                         <details className="rounded-lg border border-border/60">
-                            <summary className="cursor-pointer rounded-lg px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
+                            <summary className="cursor-pointer rounded-lg px-3 py-2 text-sm focus-ring">
                                 {t("research.builder.layoutActions")}
                             </summary>
                             <div className="flex flex-wrap gap-2 p-2">
@@ -1149,7 +1149,7 @@ export default function ChartBuilderPage() {
                         />
                     </div>
                     <details className="w-full rounded-lg border border-border/60">
-                        <summary className="cursor-pointer rounded-lg px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
+                        <summary className="cursor-pointer rounded-lg px-3 py-2 text-sm font-medium focus-ring">
                             {t("research.builder.options")}
                             {(logLeft || rebaseAll) && (
                                 <span className="ml-2 text-xs font-normal text-muted-foreground">

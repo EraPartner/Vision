@@ -125,7 +125,7 @@ export function RollingNumber({
                     className="inline-block h-[1em] overflow-hidden"
                 >
                     <span
-                        className="flex flex-col transition-transform duration-reveal ease-[var(--ease-glide)]"
+                        className="flex flex-col transition-transform duration-reveal ease-glide"
                         style={{
                             transform: `translateY(calc(${digit} * -1em))`,
                         }}

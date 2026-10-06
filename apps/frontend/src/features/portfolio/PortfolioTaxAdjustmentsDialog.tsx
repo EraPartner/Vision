@@ -356,7 +356,7 @@ export function PortfolioTaxAdjustmentsDialog({ investments }: Props) {
                                             }}
                                         >
                                             <summary
-                                                className="cursor-pointer rounded-sm text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                                className="cursor-pointer rounded-sm text-sm font-medium focus-ring"
                                                 aria-label={`${t("tax.treatmentOptions")}: ${inv.name}`}
                                             >
                                                 {t("tax.treatmentOptions")}

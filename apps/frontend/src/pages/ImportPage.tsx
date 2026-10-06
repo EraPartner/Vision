@@ -157,7 +157,7 @@ export default function ImportPage() {
                                 >
                                     <ChevronDown
                                         className={cn(
-                                            "h-4 w-4 transition-transform duration-[var(--duration-fast)] motion-reduce:transition-none",
+                                            "h-4 w-4 transition-transform duration-fast motion-reduce:transition-none",
                                             setupOpen && "rotate-180",
                                         )}
                                     />

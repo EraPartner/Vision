@@ -35,14 +35,14 @@ const NotFound = () => {
                 </Button>
                 <div className="flex items-center justify-center gap-3 text-sm text-muted-foreground">
                     <Link
-                        className="ring-offset-background rounded-sm underline-offset-4 transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2"
+                        className="rounded-sm underline-offset-4 transition-colors hover:text-foreground hover:underline focus-ring"
                         to="/transactions"
                     >
                         {t('nav.transactions')}
                     </Link>
                     <span aria-hidden="true">·</span>
                     <Link
-                        className="ring-offset-background rounded-sm underline-offset-4 transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2"
+                        className="rounded-sm underline-offset-4 transition-colors hover:text-foreground hover:underline focus-ring"
                         to="/import"
                     >
                         {t('nav.importExport')}

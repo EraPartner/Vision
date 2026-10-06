@@ -316,7 +316,7 @@ export function AIInvestigationPanel() {
                 <textarea
                     ref={questionRef}
                     aria-label={t("aiResearch.question")}
-                    className="min-h-28 w-full resize-y rounded-xl border bg-background p-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+                    className="min-h-28 w-full resize-y rounded-xl border bg-background p-3 text-sm focus-ring"
                     value={question}
                     onChange={(event) => {
                         setQuestion(event.target.value);
@@ -352,7 +352,7 @@ export function AIInvestigationPanel() {
                     </div>
                 )}
                 <details className="rounded-lg border border-border/60 px-3 py-2">
-                    <summary className="cursor-pointer rounded-sm text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                    <summary className="cursor-pointer rounded-sm text-sm focus-ring">
                         <span className="font-medium">
                             {t("aiResearch.configure")}
                         </span>
@@ -384,7 +384,7 @@ export function AIInvestigationPanel() {
                                 <span>{t("aiResearch.depth")}</span>
                                 <select
                                     aria-label={t("aiResearch.depth")}
-                                    className="h-10 w-full min-w-0 rounded-md border bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+                                    className="h-9 w-full min-w-0 rounded-control border bg-background px-3 text-sm text-foreground focus-ring"
                                     value={depth}
                                     onChange={(event) =>
                                         setDepthOverride(
@@ -405,7 +405,7 @@ export function AIInvestigationPanel() {
                                 <span>{t("aiResearch.researchMode")}</span>
                                 <select
                                     aria-label={t("aiResearch.researchMode")}
-                                    className="h-10 w-full min-w-0 rounded-md border bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+                                    className="h-9 w-full min-w-0 rounded-control border bg-background px-3 text-sm text-foreground focus-ring"
                                     value={researchMode}
                                     disabled={
                                         route === "openai-api" &&
@@ -434,7 +434,7 @@ export function AIInvestigationPanel() {
                                 <span>{t("aiResearch.route")}</span>
                                 <select
                                     aria-label={t("aiResearch.route")}
-                                    className="h-10 w-full min-w-0 rounded-md border bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+                                    className="h-9 w-full min-w-0 rounded-control border bg-background px-3 text-sm text-foreground focus-ring"
                                     value={route}
                                     onChange={(event) => {
                                         setRoute(
@@ -503,7 +503,7 @@ export function AIInvestigationPanel() {
                 </div>
             )}
             <details className="mt-3 rounded-lg border border-border/60 px-3 py-2">
-                <summary className="cursor-pointer rounded-sm text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <summary className="cursor-pointer rounded-sm text-sm focus-ring">
                     <span className="font-medium">
                         {t("aiResearch.evidenceOptions")}
                     </span>
@@ -894,7 +894,7 @@ export function AIInvestigationPanel() {
                 </span>
             </div>
             <details className="mt-4 rounded-lg border border-border/60 p-3 text-xs">
-                <summary className="cursor-pointer text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
+                <summary className="cursor-pointer text-sm font-medium focus-ring">
                     {t("aiResearch.disclosureHistory")}
                 </summary>
                 <div className="mt-2 flex flex-wrap gap-2">

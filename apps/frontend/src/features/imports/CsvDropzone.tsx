@@ -93,7 +93,7 @@ export function CsvDropzone({
                     "relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed",
                     pad,
                     "cursor-pointer transition-colors duration-fast",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2",
+                    "focus-ring",
                     dragOver
                         ? "border-primary bg-primary/5"
                         : "border-border hover:border-primary/50 hover:bg-muted/50",

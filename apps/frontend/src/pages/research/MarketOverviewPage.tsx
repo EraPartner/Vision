@@ -126,10 +126,10 @@ export default function MarketOverviewPage() {
                             // Transition list composed via --press-compose (press-feedback owns
                             // the `transition` shorthand — see index.css); the transform entry is
                             // the press curve AND micro-lift's hover ride, both at 90ms as before.
-                            "micro-lift press-feedback [--press-compose:color_var(--default-transition-duration)_var(--default-transition-timing-function),background-color_var(--default-transition-duration)_var(--default-transition-timing-function),border-color_var(--default-transition-duration)_var(--default-transition-timing-function),transform_var(--duration-press)_ease-out] hover:border-primary/40 outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                            "micro-lift press-feedback [--press-compose:color_var(--default-transition-duration)_var(--default-transition-timing-function),background-color_var(--default-transition-duration)_var(--default-transition-timing-function),border-color_var(--default-transition-duration)_var(--default-transition-timing-function),transform_var(--duration-press)_ease-out] hover:border-primary/40 outline-none focus-ring",
                             pct == null && "bg-muted/20",
                             held &&
-                                "border-accent/60 ring-2 ring-accent ring-offset-1 ring-offset-background shadow-[0_0_14px_-2px_hsl(var(--accent)/0.55)]",
+                                "border-accent/60 ring-2 ring-accent ring-offset-1 shadow-[0_0_14px_-2px_hsl(var(--accent)/0.55)]",
                         )}
                     >
                         {held && (

@@ -188,7 +188,7 @@ export function PortfolioCsvColumnMapper({
                 ).map(renderField)}
             </div>
             <details className="rounded-lg border p-3">
-                <summary className="cursor-pointer text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <summary className="cursor-pointer text-sm font-medium focus-ring">
                     {t("portfolioImport.optionalColumns")}
                 </summary>
                 <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">

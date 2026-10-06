@@ -46,7 +46,7 @@ export function OllamaStatusBanner({
                 </p>
                 {(shownUrl || status?.hint) && (
                     <details className="mt-2 text-xs text-muted-foreground">
-                        <summary className="w-fit cursor-pointer rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                        <summary className="w-fit cursor-pointer rounded-sm focus-ring">
                             {t("aiChat.banner.connectionDetails")}
                         </summary>
                         {shownUrl && (
@@ -70,7 +70,7 @@ export function OllamaStatusBanner({
                     href={OLLAMA_SETUP_URL}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 inline-flex h-8 items-center gap-1 rounded-lg px-2 text-xs text-foreground hover:bg-muted"
+                    className="focus-ring inline-flex h-8 items-center gap-1 rounded-lg px-2 text-xs text-foreground hover:bg-muted"
                 >
                     {t("aiChat.banner.setup")}
                     <ExternalLink className="h-3 w-3" />

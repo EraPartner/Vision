@@ -132,7 +132,7 @@ export function AnalysisChartPanel({
                 <label className="grid gap-2 text-sm font-medium">
                     {t("analysis.ext.chart.type")}
                     <select
-                        className="h-10 w-full min-w-0 rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="h-9 w-full min-w-0 rounded-control border border-input bg-background px-3 text-sm focus-ring"
                         value={spec.kind}
                         onChange={(e) =>
                             onChange({
@@ -160,7 +160,7 @@ export function AnalysisChartPanel({
                 <label className="grid gap-2 text-sm font-medium">
                     {t("analysis.ext.chart.x")}
                     <select
-                        className="h-10 w-full min-w-0 rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="h-9 w-full min-w-0 rounded-control border border-input bg-background px-3 text-sm focus-ring"
                         value={spec.x}
                         onChange={(e) =>
                             onChange({ ...spec, x: e.target.value })

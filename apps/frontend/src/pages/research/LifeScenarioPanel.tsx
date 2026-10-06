@@ -383,7 +383,7 @@ export default function LifeScenarioPanel({
                         <select
                             id="life-scenario-saved"
                             disabled={saving}
-                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                            className="flex h-9 w-full rounded-control border border-input bg-background px-3 text-sm"
                             value={draft.id ?? ""}
                             onChange={(event) => {
                                 const selected = scenarios.find(

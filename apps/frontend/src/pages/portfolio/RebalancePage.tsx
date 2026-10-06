@@ -641,7 +641,7 @@ export default function RebalancePage() {
                             </div>
                         </div>
                         <details className="rounded-lg border px-3 py-2">
-                            <summary className="cursor-pointer rounded-sm py-1 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                            <summary className="cursor-pointer rounded-sm py-1 font-medium focus-ring">
                                 {t("rebalance.commitment.methodology")}
                             </summary>
                             <ul className="mt-2 list-disc space-y-2 pl-5 text-xs leading-relaxed text-muted-foreground">

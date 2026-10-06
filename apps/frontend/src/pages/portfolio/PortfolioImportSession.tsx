@@ -1067,7 +1067,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                 </Label>
                                 <select
                                     id="portfolio-placeholder-policy"
-                                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                                    className="h-9 w-full rounded-control border bg-background px-3 text-sm"
                                     value={
                                         reference.placeholderBasisPolicy ?? ""
                                     }
@@ -1216,7 +1216,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                 </Label>
                                 <select
                                     id="portfolio-existing-batch"
-                                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                                    className="h-9 w-full rounded-control border bg-background px-3 text-sm"
                                     value={existingBatchId}
                                     disabled={locked || existingLoading}
                                     onChange={(event) =>
@@ -1467,7 +1467,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                             "portfolioImport.session.policyForFile",
                                             { name: item.name },
                                         )}
-                                        className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                                        className="h-9 w-full rounded-control border bg-background px-3 text-sm"
                                         value={item.adoptPolicy ?? ""}
                                         disabled={
                                             locked ||
@@ -1514,7 +1514,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                             </Label>
                                             <select
                                                 id={`transfer-${item.id}`}
-                                                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                                                className="h-9 w-full rounded-control border bg-background px-3 text-sm"
                                                 value={
                                                     item.detected.source !==
                                                         "nexo" ||
@@ -1646,7 +1646,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                     </Label>
                     <select
                         id="portfolio-session-policy"
-                        className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                        className="h-9 w-full rounded-control border bg-background px-3 text-sm"
                         value={policy}
                         disabled={locked}
                         onChange={(event) => {

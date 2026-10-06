@@ -39,7 +39,7 @@ export function UpcomingPaymentsNotification() {
       <AlertTitle className="mb-0 pr-8 text-primary font-semibold">
         <button type="button" aria-expanded={expanded} aria-controls={detailsId}
           onClick={() => setExpanded(!expanded)}
-          className="flex min-h-8 items-center gap-2 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          className="flex min-h-8 items-center gap-2 rounded-sm text-left focus-ring">
           {tc('upcoming.count', visibleUpcoming.length)}
           <ChevronDown aria-hidden="true" className={`h-4 w-4 transition-transform ${expanded ? "rotate-180" : ""}`} />
         </button>
@@ -57,7 +57,7 @@ export function UpcomingPaymentsNotification() {
               </span>
               <button
                 type="button"
-                className="inline-flex items-center justify-center h-8 w-8 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                className="inline-flex items-center justify-center h-8 w-8 shrink-0 focus-ring rounded-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
                 title={t('upcoming.dismissPayment', { name: pt.memo || pt.recipient_name || t('upcoming.unnamed') })}
                 aria-label={t('upcoming.dismissPayment', { name: pt.memo || pt.recipient_name || t('upcoming.unnamed') })}
                 onClick={() => dismiss(pt)}
@@ -75,7 +75,7 @@ export function UpcomingPaymentsNotification() {
         <div className="mt-2">
           <Link
             to="/planned"
-            className="text-xs text-primary hover:underline font-medium inline-flex min-h-8 items-center rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="text-xs text-primary hover:underline font-medium inline-flex min-h-8 items-center rounded-sm focus-ring"
           >
             {t('upcoming.viewAllLink')}
           </Link>
@@ -83,7 +83,7 @@ export function UpcomingPaymentsNotification() {
       </AlertDescription>
       <button
         type="button"
-        className="absolute top-2 right-2 inline-flex items-center justify-center h-8 w-8 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+        className="absolute top-2 right-2 inline-flex items-center justify-center h-8 w-8 shrink-0 focus-ring rounded-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
         title={t('upcoming.dismissAll')}
         aria-label={t('upcoming.dismissAll')}
         onClick={() => dismiss(visibleUpcoming)}
