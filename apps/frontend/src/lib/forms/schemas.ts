@@ -10,8 +10,8 @@
  * errors via `useFieldErrors`/`<FieldError>`, or the form's existing toast).
  * Nothing about when or where errors appear is decided here.
  *
- * Consumers today: AddTransactionDialog (+ addTransactionForm schema),
- * TransactionInfoDialog, the portfolio Add/Edit txn dialogs
+ * Consumers today: AddTransactionSheet (+ addTransactionForm schema),
+ * TransactionInspector, the portfolio Add/Edit txn dialogs
  * (portfolioTxnSchema.ts), AddAccountDialog (accountFormSchema.ts), and
  * TaxProfileDialog (taxProfileSchema.ts). New forms should compose these
  * builders rather than hand-rolling `if (!value)` chains.

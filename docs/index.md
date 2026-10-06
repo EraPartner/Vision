@@ -2,8 +2,8 @@
 title: Vision Project Knowledge Base
 type: index
 status: active
-date: 2026-10-04
-updated: 2026-10-04
+date: 2026-10-06
+updated: 2026-10-06
 last_modified: 2026-10-04
 tags:
   [
@@ -249,7 +249,7 @@ Vision 1.0.2 for migration. See [[docs/guides/native-macos-runtime|Native macOS 
 - **Native menu bar**: App (Settings… ⌘,), File (New Transaction ⌘N, Import CSV… ⇧⌘I), Edit/View (Toggle Sidebar ⌃⌘S) / Window / Help roles, Go ⌘1–⌘9 mirroring in-app shortcuts — all labels from the shared i18n JSON.
 - **Dock menu + badge**: dock menu has New Transaction and Dashboard; badge driven by `UpcomingPaymentsNotification` (visible upcoming payment count).
 - **CSV import handoff**: window-wide drag-and-drop (renderer reads `File` directly, closes Chromium navigate-to-file hole); Finder "Open With" / dock drop (main reads file, sends `{name, content}` — path never crosses sandbox boundary). Both paths feed `lib/importHandoff.ts` (one-slot 30s-TTL, same pattern as `lib/undo.ts`).
-- **`/transactions?new=1` deep link**: opens `AddTransactionDialog`, strips param on open (used by menu and dock).
+- **`/transactions?new=1` deep link**: opens the Add Transaction sheet (originally `AddTransactionDialog`, replaced by `AddTransactionSheet` in [[docs/adr/181-home-transactions-redesign|ADR-181]]), strips param on open (used by menu, dock and the web `N` shortcut).
 - **System accent overlay**: `systemAccent` boolean in `theme_settings`; `ThemeHydration` overlays `--primary`/`--ring`/`--sidebar-primary` (+ foregrounds) via `lib/accentColor.ts` HSL; composes with all five variants; live via `AppleColorPreferencesChangedNotification`. Switch in Settings → Appearance (Electron/macOS only).
 - **Vibrancy opt-in**: ADR-117 supersedes the original always-present native material; the effective enhanced tier now enables both `vibrancy: 'under-window'` and the translucent body, while other tiers remove both.
 - **`window.electronAPI` bridge**: new minimal contextBridge surface (`platform`, `ready()`, `setDockBadge`, `getAccentColor`, `onAccentColorChanged`, `onMenuAction`, `onCsvOpen`, `onFullScreenChange`). Sandbox posture unchanged.

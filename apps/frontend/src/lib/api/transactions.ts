@@ -86,6 +86,17 @@ export function updateTransaction(
     });
 }
 
+/**
+ * Marks two existing rows as the legs of one transfer (ADR transfers contract):
+ * both must be active, on different accounts and of opposite sign.
+ */
+export function markTransfer(aId: number, bId: number): Promise<void> {
+    return apiRequest<void>("/api/transactions/transfers", {
+        method: "POST",
+        body: JSON.stringify({ aId, bId }),
+    });
+}
+
 export async function deleteTransaction(id: number): Promise<void> {
     await apiRequest<void>(`/api/transactions/${id}`, { method: "DELETE" });
 }

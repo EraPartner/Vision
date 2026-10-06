@@ -198,7 +198,7 @@
       "paths": [
         "alembic/manual/contract_drop_bank_account/up.sql",
         "apps/node-backend/src/repositories/transactionRepository.js",
-        "apps/frontend/src/features/transactions/components/AddTransactionDialog.tsx"
+        "apps/frontend/src/features/transactions/components/AddTransactionSheet.tsx"
       ],
       "readers": "Responses project the bank_account display label from accounts.name; request schemas reject bank_account.",
       "writers": "Canonical first-party paths write account_id only.",

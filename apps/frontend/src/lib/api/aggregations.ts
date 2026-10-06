@@ -82,6 +82,34 @@ export function getAggregationRecipientInsights(params?: {
     );
 }
 
+export interface AverageVsCurrentData {
+    past_6_months: {
+        avg_daily_spending: number;
+        avg_monthly_spending: number;
+        months_counted: number;
+    };
+    current_month: {
+        /** One entry per day with activity; spending is a positive magnitude. */
+        daily_data: Array<{ date: string; spending: number; income: number }>;
+        total_spending: number;
+        days_elapsed: number;
+        days_in_month: number;
+    };
+    comparison: {
+        projected_monthly_total: number;
+        avg_monthly_spending: number;
+        variance: number;
+        pace: number | null;
+    };
+}
+
+/** Month-to-date spending against the six-month average (Home hero). */
+export function getAggregationAverageVsCurrent(params?: {
+    currency?: string;
+}): Promise<AggregationEnvelope<AverageVsCurrentData>> {
+    return requestWithQuery("/api/aggregations/average-vs-current", params);
+}
+
 export function getAggregationBankBalances(params?: {
     currency?: string;
 }): Promise<

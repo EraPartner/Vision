@@ -2,8 +2,8 @@
 title: Custom Hooks
 type: component
 status: active
-date: 2026-10-05
-updated: 2026-10-05
+date: 2026-10-06
+updated: 2026-10-06
 last_modified: 2026-10-05
 tags: [components, hooks, react-query, zustand, form-state, data-table, phase-4, phase-13, phase-c, phase-d, i18n, notifications, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, mount-guard, query-key-fix, prefetch, memoization, useCallback, parseLocaleNumber, currency-utilities, exclusion-ids, ssrf-correctness, loading-states, error-states, isError, refetch, recipient-insights-filter, optimistic-updates, optimistic-create, liquid-glass-v2, premium-v3, june-2026, fx-aware-pnl, useFxAwarePnl, useTabParam, useTaxYearParam, url-state]
 description: Custom React hooks for data fetching and state management. Includes toast notifications for mutations via i18n keys. Phase 13 adds useBankAccounts hook for export filtering. May 2026 bug hunt adds mount guard to usePlannedPayments, fixes queryKey mismatch in usePortfolioPrefetch, and documents parseLocaleNumber utility for locale-aware number parsing. 2026-05-29 adds useExcludedIds as a shared exclusion-resolution hook and exposes isLoading/isError/error/refetch from usePortfolio so asset pages can distinguish loading/error from empty. 2026-06-01: useStatistics adds recipientInsightsFilteredQuery so the all-years Top Recipients chart reacts to exclusion toggles. 2026-06-10: useUpdateTransaction/useDeleteTransaction made optimistic (ADR-070 Tier 5). 2026-06-10 Premium v3 (ADR-071): useCreateTransaction made optimistic (temp negative-id row, server swap, rollback, onSettled invalidate; 6 tests total). 2026-06-10 V11: useUpcomingPlannedPayments — shared "due in next 7 days" query + module-level dismissed-ID store (useSyncExternalStore, persists to localStorage). 2026-06-24: SuggestionCard deleted — useUpcomingPlannedPayments now has a single consumer (UpcomingPaymentsNotification). Aug 2026 (PR #156): adds useTabParam (page-level Tabs ↔ `?tab=`) and useTaxYearParam (BelgianTaxProfileContext viewedYear ↔ `?year=`). 2026-08-11: the full category list is unified behind useAllCategories under one key (`['categories','all']`) — useExcludedIds and the Settings exclusion picker no longer keep two cache entries; useOllamaStatus polls adaptively (30s healthy, 2min unreachable, stopped when AI chat is disabled server-side).
@@ -64,6 +64,7 @@ the shared `hooks/` tree or feature-local `use*.ts(x)` modules; ESLint rejects d
 | --------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
 | `useDebounce()` | Debounce value changes; exports `SEARCH_DEBOUNCE_MS = 300` — the shared constant all search inputs must use | [[apps/frontend/src/hooks/useDebounce.ts\|useDebounce.ts]] |
 | `useIsMobile()` | Responsive breakpoint check                                                                                 | `use-mobile.tsx`                                           |
+| `useMediaQuery(query)` | Tracks any CSS media query (false until the first client measure); Transactions uses `(min-width: 1024px)` to dock the inspector | [[apps/frontend/src/hooks/useMediaQuery.ts\|useMediaQuery.ts]] |
 
 ### Portfolio Hooks
 
@@ -98,6 +99,8 @@ Hook for managing transactions.
 - **Derived fields**: the optimistically inserted row may lack `category_name` and `recipient_name` (only ids are in the payload). The `onSettled` refetch corrects this within one round-trip.
 - 6 tests total in `hooks/__tests__/useOptimisticTransactions.test.tsx`.
 
+`useCreateTransaction(options?: { silent?: boolean })` (ADR-181): with `silent: true` the success path skips the generic `transactions.created` toast. `AddTransactionSheet` passes it. Transfers use the separate `useCreateTransfer` hook (`features/transactions/hooks/useCreateTransfer.ts`), which creates both legs and links them; see [[docs/components/form-dialogs#AddTransactionSheet]].
+
 ### Optimistic Update / Delete (June 2026, ADR-070)
 
 `useUpdateTransaction` and `useDeleteTransaction` are now optimistic as of June 2026 (ADR-070 Tier 5):
@@ -124,7 +127,7 @@ const {
 } = useTransactions(options);
 
 // Mutations
-const createMutation = useCreateTransaction();
+const createMutation = useCreateTransaction(); // options?: { silent?: boolean } skips the generic "created" toast
 const updateMutation = useUpdateTransaction(); // optimistic since ADR-070
 const deleteMutation = useDeleteTransaction(); // optimistic since ADR-070
 ```
@@ -467,6 +470,8 @@ const {
   widgets, // WidgetDefinition[]
 } = useWidgetVisibility(pageId, widgetDefinitions);
 ```
+
+A `WidgetDefinition` is `{ id, label?, labelKey?, description?, defaultVisible? }`; `labelKey` is translated by the consuming UI. Page keys in use: `dashboard`, `statistics`, `portfolioTax` and `transactionsColumns` (optional Transactions columns, all default-hidden). See [[docs/features/settings#Widget Visibility System]].
 
 ### Usage
 

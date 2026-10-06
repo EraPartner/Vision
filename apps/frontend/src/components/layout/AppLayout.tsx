@@ -28,7 +28,7 @@ import {
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useVisualEffectsTier } from "@/hooks/useVisualEffectsTier";
 import { consumeUndo } from "@/lib/undo";
-import { isTypingTarget } from "@/lib/keyboard";
+import { isShortcutSafeTarget, isTypingTarget } from "@/lib/keyboard";
 import { readSidebarCollapsed } from "@/hooks/useSidebarPreferences";
 import { cn } from "@/lib/utils";
 import { BackgroundQueryIndicator } from "@/components/shared/BackgroundQueryIndicator";
@@ -115,8 +115,23 @@ export function AppLayout({ children }: AppLayoutProps) {
     // ⌘, — the macOS settings convention (always free in Electron).
     // ⌘Z — consume a pending destructive-action undo (inert while typing,
     // so text-field undo keeps working).
+    // N — new transaction. Browsers keep ⌘N for themselves, so the web
+    // shortcut is the bare key (inert while typing or with an overlay open);
+    // the desktop menu still offers ⌘N through the same deep link.
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
+            if (
+                e.key.toLowerCase() === "n" &&
+                !e.metaKey &&
+                !e.ctrlKey &&
+                !e.altKey &&
+                !e.shiftKey &&
+                !isShortcutSafeTarget(e.target)
+            ) {
+                e.preventDefault();
+                navigate("/transactions?new=1");
+                return;
+            }
             if (
                 e.key === "," &&
                 (e.metaKey || e.ctrlKey) &&
@@ -139,7 +154,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         };
         document.addEventListener("keydown", onKeyDown);
         return () => document.removeEventListener("keydown", onKeyDown);
-    }, [openSettingsOnTab]);
+    }, [openSettingsOnTab, navigate]);
     const { t } = useLanguage();
     const { tier: effectsTier, largeDisplay } = useVisualEffectsTier();
     useGoToShortcuts();

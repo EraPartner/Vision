@@ -509,7 +509,25 @@ export const defaultHandlers = [
         }),
     ),
     http.get(`${API_BASE}/api/aggregations/average-vs-current`, () =>
-        aggOk({ months: [] }),
+        aggOk({
+            past_6_months: {
+                avg_daily_spending: 0,
+                avg_monthly_spending: 0,
+                months_counted: 0,
+            },
+            current_month: {
+                daily_data: [],
+                total_spending: 0,
+                days_elapsed: 1,
+                days_in_month: 30,
+            },
+            comparison: {
+                projected_monthly_total: 0,
+                avg_monthly_spending: 0,
+                variance: 0,
+                pace: 0,
+            },
+        }),
     ),
     http.get(`${API_BASE}/api/aggregations/:name`, () => ok(null)),
     http.get(`${API_BASE}/api/portfolio/summary`, () =>
@@ -743,6 +761,13 @@ export const defaultHandlers = [
     http.get(`${API_BASE}/api/planned-transactions/due-soon`, () =>
         ok({ items: [], total: 0, days: 7 }),
     ),
+    http.get(`${API_BASE}/api/planned-transactions/match-suggestions`, () =>
+        ok({ items: [], total: 0 }),
+    ),
+    http.get(`${API_BASE}/api/transactions/transfer-suggestions`, () =>
+        ok({ items: [] }),
+    ),
+    http.post(`${API_BASE}/api/transactions/transfers`, () => noContent()),
 
     // ── Phase F1: full contract surface coverage ────────────────────────────
 

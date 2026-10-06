@@ -205,6 +205,28 @@ bun run generate-locales
 
 ### Recent keys added
 
+#### Home and Transactions redesign (2026-10-06, ADR-181)
+
+100 keys were added and 8 removed in English and Dutch, and two existing values changed. Source: `i18n/source/en.json` and `nl.json`.
+
+| Prefix                       | Used for                                                                                                                                      |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `addTxn.*`                   | `AddTransactionSheet`: kind control (`addTxn.kind.*`), per-kind submit verbs, transfer account labels, date chips (`addTxn.date.*`), hints (`addTxn.hint.*`), `addTxn.transferSameAccount`, `addTxn.usualCategory` |
+| `txPage.filter.*`            | `TransactionsToolbar` chips: account, category, date presets, type, Needs category, toolbar and chip ARIA names                               |
+| `txPage.view.*`              | Toolbar View menu: menu label, columns heading, Reset columns                                                                                 |
+| `txPage.col.account`         | Account column header (the optional-column headers `txPage.col.tags`, `.currency`, `.runningBalance` and `.status` already existed)           |
+| `txPage.inspector.*`         | `TransactionInspector` sections and payee-rule tips                                                                                           |
+| `txPage.countInAccounts`, `txPage.needsCategory` | Transactions header subtitle "{n} transactions in {m} accounts"; the category cell for rows without a category                  |
+| `home.*`                     | Home hero (`home.pace.*`, `home.chart.*`), Needs attention, Net worth, Next 7 days, Accounts, recent list and the ••• menu (`home.menu`, `home.customize`) |
+| `dashboard.*`                | Widget labels and descriptions for `hero`, `attention`, `netWorth`, `upcoming`, `accounts` (the greeting keys already existed)                |
+| `combobox.recipient.create`  | Create row in `RecipientCombobox` with `allowCreate`                                                                                          |
+
+Removed: `aria.transactionInfo`, `dashboard.subtitle`, `txPage.activeOnly`, `txPage.col.info`, `txPage.field.status`, `txPage.showingAll`, `txPage.subtitle` and `txPage.tableTitle`, whose UI went with the details dialog, the Info column and the old page headers. Changed values: `addTxn.bankAccount` and `dashboard.widgetDescriptions.recentTransactions`. The new-transaction shortcut reuses the existing `shortcuts.newTransaction`.
+
+Code links: [[apps/frontend/src/features/transactions/components/AddTransactionSheet.tsx]], [[apps/frontend/src/features/transactions/components/TransactionsToolbar.tsx]], [[apps/frontend/src/features/transactions/components/TransactionInspector.tsx]], [[apps/frontend/src/pages/DashboardPage.tsx]]
+
+---
+
 #### Trust fixes: honest copy, feedback toasts and labels (2026-10-05)
 
 Thirty keys were added and one removed in English and Dutch, and four existing keys changed.
@@ -230,7 +252,7 @@ Changed values:
 
 Removed: `form.addTransaction.amountPlaceholder` ("0.00" / "0,00"). Money and decimal placeholders now come from `formatNumberPlaceholder(appSettings.numberFormat)`; see [[docs/reference/code-patterns#number-parsing-pattern-parselocalenumber|Number Parsing Pattern]].
 
-Existing keys gained callers: `common.close` is the screen-reader label of the `Sheet` close button, which was hardcoded "Close", and `aria.cancel` labels the inline-edit cancel button in `TransactionInfoDialog`.
+Existing keys gained callers: `common.close` is the screen-reader label of the `Sheet` close button, which was hardcoded "Close", and `aria.cancel` labels the inline-edit cancel button in the transaction detail UI (`TransactionInfoDialog`, now `TransactionInspector`).
 
 #### Manual-trade broker assignment (2026-09-05)
 

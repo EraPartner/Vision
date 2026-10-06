@@ -2,8 +2,8 @@
 title: Dashboard Components
 type: component
 status: active
-date: 2026-09-27
-updated: 2026-09-08
+date: 2026-10-06
+updated: 2026-10-06
 tags:
   [
     components,
@@ -84,7 +84,35 @@ Dashboard components follow the [[docs/reference/code-patterns#surface-shell-pat
 | ForecastInner               | Month-view forecast rendering with multi-method chart, toggles, and diagnostics panel                                                       | [[apps/frontend/src/features/dashboard/ForecastInner.tsx\|ForecastInner.tsx]]                             |
 | ForecastInnerRolling        | Rolling-window forecast rendering with preset duration chips and "today" reference line                                                     | [[apps/frontend/src/features/dashboard/ForecastInnerRolling.tsx\|ForecastInnerRolling.tsx]]               |
 | CashFlowForecastDiagnostics | Diagnostics sheet showing backtest accuracy and ensemble weights (Phase C + F)                                                              | [[apps/frontend/src/features/dashboard/CashFlowForecastDiagnostics.tsx\|CashFlowForecastDiagnostics.tsx]] |
-| BankBalancesWidget          | Bank account balance cards and history chart with entity display names                                                                      | [[apps/frontend/src/features/dashboard/BankBalancesWidget.tsx\|BankBalancesWidget.tsx]]                   |
+| BankBalancesWidget          | Bank account balance cards and history chart with entity display names (hidden by default since ADR-181)                                    | [[apps/frontend/src/features/dashboard/BankBalancesWidget.tsx\|BankBalancesWidget.tsx]]                   |
+| MonthToDateHero             | Home hero: month-to-date spending, pace against a typical month, cumulative spend line, income so far and planned in/out                    | [[apps/frontend/src/features/dashboard/MonthToDateHero.tsx\|MonthToDateHero.tsx]]                         |
+| NeedsAttentionList          | Home list of items that need a decision, each linking to where it is settled                                                                | [[apps/frontend/src/features/dashboard/NeedsAttentionList.tsx\|NeedsAttentionList.tsx]]                   |
+| NetWorthCard                | Home net-worth number, this month's change, assets against debt                                                                             | [[apps/frontend/src/features/dashboard/NetWorthCard.tsx\|NetWorthCard.tsx]]                               |
+| UpcomingPaymentsList        | Home "Next 7 days" planned payments                                                                                                         | [[apps/frontend/src/features/dashboard/UpcomingPaymentsList.tsx\|UpcomingPaymentsList.tsx]]               |
+| AccountsList                | Home list of active accounts with balance and provenance                                                                                    | [[apps/frontend/src/features/dashboard/AccountsList.tsx\|AccountsList.tsx]]                               |
+| RecentTransactionsList      | Home recent-transactions list; a row opens it in Transactions                                                                               | [[apps/frontend/src/features/dashboard/RecentTransactionsList.tsx\|RecentTransactionsList.tsx]]           |
+
+---
+
+## Home layout (ADR-181)
+
+[[docs/adr/181-home-transactions-redesign|ADR-181]] rebuilt Home (`DashboardPage`) around a month-to-date hero and lists. The page header shows a time-of-day greeting (morning before 12:00, afternoon before 18:00, otherwise evening) over today's long date, a **•••** menu whose **Customize…** item opens the widget-visibility dialog, and the Add Transaction button (it navigates to `/transactions` with `selectTransactionId` once a row is created). Top to bottom:
+
+1. `MonthToDateHero` (widget id `hero`), full width.
+2. A five-column grid. Left, three columns: `NeedsAttentionList` (`attention`), the optional stat cards (`statCards`, `NetSummaryCard` plus Income, Spending and Total Transactions `StatCard`s), the optional `BankBalancesWidget` (`bankBalances`) and `RecentTransactionsList` (`recentTransactions`). Right, two columns: `NetWorthCard` (`netWorth`), `UpcomingPaymentsList` (`upcoming`) and `AccountsList` (`accounts`).
+3. The charts row (`MonthlyTrendsChart` over three columns, `CategoryPieChart` over two) and the lazily painted `CashFlowForecastChart` (`cashflowComparison`), unchanged.
+
+### MonthToDateHero
+
+Reads `GET /api/aggregations/average-vs-current` through `useMonthToDate(currency)` (`features/dashboard/useHomeQueries.ts`, key `dashboardKeys.monthToDate`, typed `AverageVsCurrentData`; see [[docs/api/aggregations#Average vs. Current]]) and `useRestOfMonthPlanned()` (active planned rows from today to month end, executed one-time rows dropped, split into incoming and outgoing totals). It shows the spent-so-far amount, a pace sentence (nothing yet, no history, even, under or over a typical month, from `comparison.projected_monthly_total` against the six-month average; `pace` is nullable), income so far, planned in and planned out, and an SVG chart of cumulative spend with a dashed straight "typical month" guide and a dotted projection. The endpoint accepts no exclusion parameters, so settings-level category and recipient exclusions do not apply to the hero.
+
+### Lists
+
+- `NeedsAttentionList`: a "needs a category" row (`useNeedsCategoryCount`, links to `/transactions?uncategorised=true`), a "looks paid" row from `usePlannedMatchSuggestions` (links to `/planned`) and up to three accounts whose last transaction is older than 30 days (links to `/import`). With nothing to do it shows a positive empty row.
+- `NetWorthCard`: net worth, the monthly change and percentage, and assets (liquid plus investments) against debt bars, from `useNetWorthSummary`; links to `/portfolio/net-worth`.
+- `UpcomingPaymentsList`: up to five items from the shared `useUpcomingPlannedPayments` source, labelled Today, Tomorrow or the date; links to `/planned`.
+- `AccountsList`: up to six active accounts with type, balance provenance and `computed_balance`; each row links to `/accounts/:id`.
+- `RecentTransactionsList`: the latest five rows (still honouring the per-graph exclusion toggle) with a category colour dot; a row links to `/transactions` with `state.selectTransactionId`.
 
 ---
 
@@ -701,28 +729,38 @@ Dashboard uses a widget visibility system to let users customize their view.
 import { useWidgetVisibility, WidgetVisibilityDialog } from "@/hooks/useWidgetVisibility";
 
 const DASHBOARD_WIDGETS = [
-  { id: 'statCards', label: 'Statistics Cards' },
-  { id: 'monthlyTrends', label: 'Monthly Trends' },
-  { id: 'categoryPie', label: 'Category Distribution' },
+  { id: 'hero', label: t('dashboard.hero') },
+  { id: 'statCards', label: t('dashboard.statCards'), defaultVisible: false },
+  { id: 'monthlyTrends', label: t('dashboard.monthlyTrends') },
+  // ...
 ];
 
 function Dashboard() {
-  const { isVisible, setWidgetVisible } = useWidgetVisibility('dashboard', DASHBOARD_WIDGETS);
+  const { isVisible, setWidgetVisible, setAllVisible, resetToDefaults, widgets } =
+    useWidgetVisibility('dashboard', DASHBOARD_WIDGETS);
+  const [customizeOpen, setCustomizeOpen] = useState(false);
 
   return (
     <>
-      {isVisible('statCards') && <StatCard ... />}
+      {isVisible('hero') && <MonthToDateHero ... />}
       {isVisible('monthlyTrends') && <MonthlyTrendsChart ... />}
 
+      {/* Opened from the header ••• menu ("Customize…"); controlled, so no trigger button */}
       <WidgetVisibilityDialog
-        widgets={DASHBOARD_WIDGETS}
-        visibility={isVisible}
-        onChange={setWidgetVisible}
+        open={customizeOpen}
+        onOpenChange={setCustomizeOpen}
+        widgets={widgets}
+        isVisible={isVisible}
+        setWidgetVisible={setWidgetVisible}
+        setAllVisible={setAllVisible}
+        resetToDefaults={resetToDefaults}
       />
     </>
   );
 }
 ```
+
+Widget ids (page key `dashboard`, persisted in the `widget_visibility` setting): `hero`, `attention`, `netWorth`, `upcoming`, `accounts`, `monthlyTrends`, `categoryPie`, `cashflowComparison` and `recentTransactions` are visible by default. `statCards` and `bankBalances` are hidden by default since ADR-181 (the hero covers last month's totals); a user who explicitly saved a value for either keeps it. `WidgetVisibilityDialog` lives in `components/shared/` and accepts controlled `open` / `onOpenChange` ([[docs/components/shared-components#WidgetVisibilityDialog]]).
 
 ### Hook API
 
@@ -789,6 +827,7 @@ API (/api/aggregations/monthly-summary) → Hook (useFilteredDashboardStats) →
 - `useUpcomingPlannedPayments()` — Shared hook for "due in next 7 days" payments + module-level dismissed-ID store; AppLayout keeps its native badge effect active on all routes while the visible `UpcomingPaymentsNotification` is dashboard-only — see [[docs/components/hooks#useupcomingplannedpayments-v11|Custom Hooks — useUpcomingPlannedPayments]]
 - `useTransactions()` - Transaction list with filters
 - `useWidgetVisibility()` - Widget visibility state
+- `useMonthToDate()` / `useRestOfMonthPlanned()` — Home hero queries (`features/dashboard/useHomeQueries.ts`)
 
 ---
 
@@ -799,5 +838,7 @@ API (/api/aggregations/monthly-summary) → Hook (useFilteredDashboardStats) →
 - [[docs/components/index]] - Components Index
 - [[docs/components/charts]] - Chart Primitives (visx/d3)
 - [[docs/features/views]] - Dashboard view
+- [[docs/adr/181-home-transactions-redesign]] - Home and Transactions redesign
+- [[docs/features/transactions]] - Transactions (recent-transactions rows open the inspector)
 - [[docs/api/info]] - Legacy Info API (coexists through Phase 8)
 - [[docs/performance/materialized-views]] - Dashboard optimization

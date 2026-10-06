@@ -176,22 +176,23 @@ describe("TransactionsPage (integration)", () => {
         ).toBeInTheDocument();
     });
 
-    it("shows Active Only toggle button in actions bar", async () => {
+    it("offers Include inactive in the View menu, off by default", async () => {
+        const user = userEvent.setup();
         renderTransactionsPage();
-        // TableActions renders txPage.activeOnly = "Active Only" when showAll = false
+        await user.click(await screen.findByRole("button", { name: /^view$/i }));
         expect(
-            await screen.findByRole("switch", {
+            await screen.findByRole("menuitemcheckbox", {
                 name: /include inactive/i,
                 checked: false,
             }),
         ).toBeInTheDocument();
     });
 
-    it("shows page subtitle text", async () => {
+    it("shows the transaction count as the page subtitle", async () => {
         renderTransactionsPage();
-        // txPage.subtitle describes the ledger's role.
+        // txPage.tableSubtitle: "{n} transactions" (no accounts in the stub).
         expect(
-            await screen.findByText(/search, review, and refine the ledger/i),
+            await screen.findByText(/^0 transactions$/i),
         ).toBeInTheDocument();
     });
 
@@ -260,12 +261,45 @@ describe("TransactionsPage (integration)", () => {
         });
     });
 
-    it("shows All Transactions section heading", async () => {
+    it("shows the filter toolbar with every chip at its default", async () => {
         renderTransactionsPage();
-        // txPage.tableTitle = "All Transactions"
+        const toolbar = await screen.findByRole("toolbar", { name: /filters/i });
+        expect(toolbar).toBeInTheDocument();
         expect(
-            await screen.findByText(/all transactions/i),
-        ).toBeInTheDocument();
+            screen.getByRole("combobox", { name: /filter by account/i }),
+        ).toHaveTextContent(/all accounts/i);
+        expect(
+            screen.getByRole("combobox", { name: /filter by category/i }),
+        ).toHaveTextContent(/all categories/i);
+        expect(
+            screen.getByRole("button", { name: /filter by date/i }),
+        ).toHaveTextContent(/any date/i);
+        expect(
+            screen.getByRole("button", { name: /needs category/i }),
+        ).toHaveAttribute("aria-pressed", "false");
+    });
+
+    it("the Needs category chip writes the uncategorised filter param", async () => {
+        const user = userEvent.setup();
+        const captured: URLSearchParams[] = [];
+        server.use(
+            http.get(`${API_BASE}/api/transactions`, ({ request }) => {
+                captured.push(new URL(request.url).searchParams);
+                return ok({ items: [], total: 0, limit: 50, offset: 0, links: [] });
+            }),
+        );
+        renderTransactionsPage();
+        await user.click(
+            await screen.findByRole("button", { name: /needs category/i }),
+        );
+        await waitFor(() =>
+            expect(
+                captured.some((p) => p.get("uncategorised") === "true"),
+            ).toBe(true),
+        );
+        expect(
+            screen.getByRole("button", { name: /needs category/i }),
+        ).toHaveAttribute("aria-pressed", "true");
     });
 
     it("closes Add Transaction dialog when Cancel is clicked", async () => {
@@ -362,7 +396,7 @@ describe("TransactionsPage (integration)", () => {
         // format, the same format as the typed value.
         const amountInput = screen.getByPlaceholderText("0,00");
         await user.clear(amountInput);
-        await user.type(amountInput, "-25,50");
+        await user.type(amountInput, "25,50");
 
         // Select an existing canonical account.
         await user.click(
@@ -383,25 +417,36 @@ describe("TransactionsPage (integration)", () => {
         );
 
         // Submit
-        await user.click(screen.getByRole("button", { name: /create/i }));
+        await user.click(screen.getByRole("button", { name: /^add expense$/i }));
 
         // POST was called
-        expect(postCalled).toBe(true);
+        await waitFor(() => expect(postCalled).toBe(true));
     });
 
-    it("clicking Active Only button toggles to Showing All mode", async () => {
+    it("toggling Include inactive requests inactive rows too", async () => {
         const user = userEvent.setup();
+        const captured: URLSearchParams[] = [];
+        server.use(
+            http.get(`${API_BASE}/api/transactions`, ({ request }) => {
+                captured.push(new URL(request.url).searchParams);
+                return ok({ items: [], total: 0, limit: 50, offset: 0, links: [] });
+            }),
+        );
         renderTransactionsPage();
 
-        const activeOnlyBtn = await screen.findByRole("switch", {
-            name: /include inactive/i,
-            checked: false,
-        });
-        await user.click(activeOnlyBtn);
+        await user.click(await screen.findByRole("button", { name: /^view$/i }));
+        await user.click(
+            await screen.findByRole("menuitemcheckbox", {
+                name: /include inactive/i,
+            }),
+        );
 
-        // txPage.showingAll = "Showing All" — label flips after toggle
+        await waitFor(() =>
+            expect(captured.some((p) => p.get("active") !== "true")).toBe(true),
+        );
+        await user.click(screen.getByRole("button", { name: /^view$/i }));
         expect(
-            await screen.findByRole("switch", {
+            await screen.findByRole("menuitemcheckbox", {
                 name: /include inactive/i,
                 checked: true,
             }),

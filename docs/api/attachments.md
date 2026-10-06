@@ -4,8 +4,8 @@ type: endpoint
 method: GET, POST, DELETE
 path: /api/attachments
 description: Manage receipt and document attachments for transactions
-date: 2026-04-24
-updated: 2026-08-26
+date: 2026-10-06
+updated: 2026-10-06
 tags: [api, attachments, receipts, files, storage, phase-5a, security, path-traversal, rfc-5987]
 status: active
 aliases: [attachments-api, receipts, documents, file-management]
@@ -197,7 +197,7 @@ The [[apps/frontend/src/components/shared/AttachmentPanel.tsx]] component handle
 - Provides user-friendly error messages — **delete failures** (Aug 2026) show `toast.error(t('txPage.deleteAttachmentError'))`; previously a failed delete only reset the row's spinner with no message, looking like a silent no-op
 
 ### Usage in Transactions
-The [[apps/frontend/src/features/transactions/components/TransactionInfoDialog.tsx]] integrates `AttachmentPanel` at the bottom of the transaction detail view.
+The [[apps/frontend/src/features/transactions/components/TransactionInspector.tsx]] integrates `AttachmentPanel` as the last section of the transaction inspector (it replaced `TransactionInfoDialog`).
 
 ### API Client
 The [[apps/frontend/src/lib/api/attachments.ts]] module provides typed methods:

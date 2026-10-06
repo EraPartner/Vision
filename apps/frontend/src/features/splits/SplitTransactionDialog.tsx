@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactElement } from "react";
 import {
     Dialog,
     DialogContent,
@@ -39,6 +39,8 @@ interface SplitEntry {
 
 interface SplitTransactionDialogProps {
     triggerLabel?: string;
+    /** Replaces the default icon button; rendered through DialogTrigger asChild. */
+    trigger?: ReactElement;
     transactionId: number;
     transactionAmount: number;
     transactionCurrency: string;
@@ -46,6 +48,7 @@ interface SplitTransactionDialogProps {
 
 export function SplitTransactionDialog({
     triggerLabel,
+    trigger,
     transactionId,
     transactionAmount,
     transactionCurrency,
@@ -181,25 +184,29 @@ export function SplitTransactionDialog({
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
-            <Tooltip>
-                <TooltipTrigger asChild>
-                    <DialogTrigger asChild>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="icon-touch-target text-muted-foreground hover:text-primary"
-                            aria-label={
-                                triggerLabel ?? t("splitDialog.buttonTitle")
-                            }
-                        >
-                            <Users className="h-4 w-4" />
-                        </Button>
-                    </DialogTrigger>
-                </TooltipTrigger>
-                <TooltipContent>
-                    {triggerLabel ?? t("splitDialog.buttonTitle")}
-                </TooltipContent>
-            </Tooltip>
+            {trigger ? (
+                <DialogTrigger asChild>{trigger}</DialogTrigger>
+            ) : (
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <DialogTrigger asChild>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="icon-touch-target text-muted-foreground hover:text-primary"
+                                aria-label={
+                                    triggerLabel ?? t("splitDialog.buttonTitle")
+                                }
+                            >
+                                <Users className="h-4 w-4" />
+                            </Button>
+                        </DialogTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        {triggerLabel ?? t("splitDialog.buttonTitle")}
+                    </TooltipContent>
+                </Tooltip>
+            )}
             <DialogContent className="sm:max-w-lg">
                 {/* Portal target: dropdowns render here (inside dialog DOM) so the dialog focus trap covers them */}
                 <div ref={setPortalContainer} />

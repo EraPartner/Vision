@@ -23,7 +23,7 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useTheme } from "@/stores/hydration/ThemeHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useDebounce, SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
-import { Keyboard, Calculator, Clock, MonitorSmartphone } from "lucide-react";
+import { Keyboard, Calculator, Clock, MonitorSmartphone, Plus } from "lucide-react";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { numberFormatToLocale } from "@/utils/currency";
 import { toast } from "sonner";
@@ -383,6 +383,14 @@ export function CommandPalette({
                 )}
                 <CommandSeparator />
                 <CommandGroup heading={t("commandPalette.actions")}>
+                    <CommandItem
+                        value={t("shortcuts.newTransaction")}
+                        onSelect={() => runAction(() => navigate("/transactions?new=1"))}
+                    >
+                        <Plus className="text-label-secondary" />
+                        <span>{t("shortcuts.newTransaction")}</span>
+                        <CommandShortcut>N</CommandShortcut>
+                    </CommandItem>
                     <CommandItem
                         value={t("layout.light")}
                         onSelect={() => runAction(() => setMode("light"))}

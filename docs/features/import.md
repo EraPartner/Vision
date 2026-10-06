@@ -2,8 +2,8 @@
 title: Feature - CSV Import, Export, Attachments & Deduplication
 type: feature
 status: active
-date: 2026-10-03
-updated: 2026-10-03
+date: 2026-10-06
+updated: 2026-10-06
 last_modified: 2026-10-03
 tags:
   [
@@ -952,7 +952,7 @@ Vision supports receipt and document attachments for transactions via the attach
 
 - [[apps/frontend/src/components/shared/AttachmentPanel.tsx]]: React Query-integrated upload/list/delete UI with thumbnail preview and hover-reveal delete button
 - [[apps/frontend/src/lib/api/attachments.ts]]: Typed API client for attachment operations
-- [[apps/frontend/src/features/transactions/components/TransactionInfoDialog.tsx]]: AttachmentPanel integrated into transaction detail view
+- [[apps/frontend/src/features/transactions/components/TransactionInspector.tsx]]: AttachmentPanel integrated into the transaction inspector
 
 ### API
 

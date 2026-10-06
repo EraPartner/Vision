@@ -2,8 +2,8 @@
 title: React Query Keys Reference
 type: reference
 status: active
-date: 2026-03-31
-updated: 2026-09-08
+date: 2026-10-06
+updated: 2026-10-06
 tags: [reference, react-query, caching, frontend]
 description: Complete reference of all React Query keys used in the Vision frontend
 aliases: [react query keys, query keys, cache keys, queryKey, invalidation]
@@ -31,6 +31,7 @@ named beside their owning feature when they express a distinct backend or prefet
 | `['transactions', 'all-for-stats', targetCurrency]`                                           | `targetCurrency: string`                                                                                   | `useStatistics()`   | All transactions for statistics            |
 | `['transactions', 'owes-recipient', recipientId]`                                             | `recipientId: number`                                                                                      | `OwesPage`          | Transactions for a specific recipient      |
 | `['dashboardRecentTransactions', excludedCategoryIds, excludedRecipientIds, exclusionsApply]` | Arrays + boolean                                                                                           | `DashboardPage`     | Recent transactions for dashboard          |
+| `['filteredDashboardStats', 'monthToDate', currency]`                                         | `currency: string`                                                                                         | `useMonthToDate()`  | Home hero month-to-date pace (`average-vs-current`); shares the dashboard-stats invalidation prefix |
 
 **Invalidation:** Mutations invalidate `['transactions']`, `['transactions-virtual']`, and `['monthlySummary']`.
 
@@ -152,6 +153,7 @@ cannot leave stale insights in the interface. A successful dismissal invalidates
 | --------------------------------------------- | ------------------- | ------------------------------- | ------------------------------------------------- |
 | `['plannedTransactions', showInactive]`       | `showInactive`      | `usePlannedPayments()`          | Planned-payment management list                   |
 | `['upcomingPlannedPayments', ...]`            | Forecast parameters | Dashboard cash-flow forecast    | Upcoming planned payments                         |
+| `['upcomingPlannedPayments', 'restOfMonth', todayYmd]` | `todayYmd: string` | `useRestOfMonthPlanned()` | Planned rows from today to month end (Home hero) |
 | `['account-planned-transactions', accountId]` | `accountId: number` | `useAccountPlannedTransactions` | Active, unexecuted plans for one account forecast |
 
 **Invalidation:** Planned-payment mutations invalidate the management, upcoming, and

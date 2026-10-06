@@ -19,6 +19,13 @@ aliases: [ADRs, decisions, architecture decisions]
 
 [[docs/adr/172-calm-information-hierarchy|ADR-172]] reserves primary emphasis for selected totals and makes supporting surfaces quieter while preserving the visual identity.
 
+## Current screen redesign decision
+
+[[docs/adr/181-home-transactions-redesign|ADR-181]] moves Home, Transactions and New Transaction
+onto the design system: a month-to-date hero and Needs attention list on Home, filter chips, a
+View menu and a docked inspector on Transactions, and a New Transaction sheet that records
+expenses, income and transfers and opens from N on the web.
+
 ## Current navigation decision
 
 [[docs/adr/180-sidebar-sections-replace-workspaces|ADR-180]] replaces the three workspaces with

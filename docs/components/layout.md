@@ -90,6 +90,7 @@ function App() {
 - **Atmosphere layer**: Fixed `liquid-canvas` layer with two slow-drifting aurora blobs (compositor-only `transform`, 64s/76s alternate) + radial wash + SVG grain. Drift pauses under `prefers-reduced-motion`. Colors derive from `--primary`/`--accent`.
 - **Scroll-linked topbar**: `::before` pseudo-element fades with `[data-scrolled]` attribute; passive scroll listener; gradients cannot `transition` directly so the material lives in the pseudo-element.
 - **CommandPalette**: Mounted here, triggered by topbar ⌘K button or keyboard shortcut.
+- **New-transaction shortcut**: bare `N` navigates to `/transactions?new=1`, which opens the Add Transaction sheet ([[docs/components/form-dialogs#AddTransactionSheet]]). Browsers keep ⌘N, so the web shortcut is the bare key; it is inert while typing in an input and while a dialog or alert-dialog overlay is open (`isShortcutSafeTarget`) and ignores modified keys. The desktop menu keeps ⌘N through the same deep link ([[docs/components/layout#ElectronBridge]]).
 - **PageTransition**: Wraps children in an enter-only spring (pathname-keyed `motion.div`).
 - **Responsive sidebar integration**: Labelled sidebar that collapses to an icon rail (remembered); see [[#AppSidebar]].
 - **Topbar**: sidebar trigger, scroll-linked page title, a search button below the `md` breakpoint (the search field lives in the sidebar) and the background-query indicator. The theme dropdown and the update badge were removed ([[docs/adr/180-sidebar-sections-replace-workspaces|ADR-180]]); theme modes live in Settings › Appearance, the command palette and Electron View › Appearance, and update status in the sidebar Settings dot and Settings › About.
@@ -242,6 +243,7 @@ Code link: [[apps/frontend/src/components/layout/PageTransition.tsx]]
 
 - Every non-admin page, grouped by `PALETTE_SECTIONS` as Money (top items plus Money), Wealth and Research (plus AI Chat)
 - Admin pages when `adminMode` is enabled
+- A **New transaction** action (shortcut hint `N`) in the Actions group, which navigates to `/transactions?new=1`
 - Theme modes in the Actions group: Light, Dark, System, Schedule
 - Settings navigation
 

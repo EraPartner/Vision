@@ -1,7 +1,7 @@
 /**
  * AttachmentPanel — upload, list, and delete file attachments for a transaction.
  *
- * Drop-in panel used inside TransactionInfoDialog.  Manages its own
+ * Drop-in panel used inside TransactionInspector.  Manages its own
  * fetch/mutation state so the parent dialog stays focused on field editing.
  */
 

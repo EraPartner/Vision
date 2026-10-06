@@ -827,7 +827,27 @@ describe("Phase F1: extended GET endpoint contracts", () => {
             "GET /api/aggregations/average-vs-current returns expected shape",
             "/api/aggregations/average-vs-current",
             "GET /api/aggregations/average-vs-current",
-            aggregationsEnvelope(z.object({ months: z.array(z.unknown()) })),
+            aggregationsEnvelope(
+                z.object({
+                    past_6_months: z.object({
+                        avg_daily_spending: z.number(),
+                        avg_monthly_spending: z.number(),
+                        months_counted: z.number(),
+                    }),
+                    current_month: z.object({
+                        daily_data: z.array(z.unknown()),
+                        total_spending: z.number(),
+                        days_elapsed: z.number(),
+                        days_in_month: z.number(),
+                    }),
+                    comparison: z.object({
+                        projected_monthly_total: z.number(),
+                        avg_monthly_spending: z.number(),
+                        variance: z.number(),
+                        pace: z.number().nullable(),
+                    }),
+                }),
+            ),
         ],
         [
             "GET /api/ai/conversations/:id returns conversation + messages",

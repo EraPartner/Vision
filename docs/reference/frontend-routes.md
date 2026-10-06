@@ -29,8 +29,8 @@ Settings remain a dialog rather than a page route, but its section is deep-linka
 
 | Route                     | Component             | Layout    | Description                          | Code                                                                         |
 | ------------------------- | --------------------- | --------- | ------------------------------------ | ---------------------------------------------------------------------------- |
-| `/`                       | `DashboardPage`       | AppLayout | Financial overview dashboard         | [[apps/frontend/src/pages/DashboardPage.tsx\|DashboardPage.tsx]]             |
-| `/transactions`           | `TransactionsPage`    | AppLayout | Transaction CRUD with virtual table  | [[apps/frontend/src/pages/TransactionsPage.tsx\|TransactionsPage.tsx]]       |
+| `/`                       | `DashboardPage`       | AppLayout | Home: month-to-date hero and lists   | [[apps/frontend/src/pages/DashboardPage.tsx\|DashboardPage.tsx]]             |
+| `/transactions`           | `TransactionsPage`    | AppLayout | Transactions list, filters, inspector | [[apps/frontend/src/pages/TransactionsPage.tsx\|TransactionsPage.tsx]]       |
 | `/categories`             | `CategoriesPage`      | AppLayout | Category management                  | [[apps/frontend/src/pages/CategoriesPage.tsx\|CategoriesPage.tsx]]           |
 | `/accounts`               | `AccountsPage`        | AppLayout | Account management                   | [[apps/frontend/src/pages/AccountsPage.tsx\|AccountsPage.tsx]]               |
 | `/accounts/:id`           | `AccountDetailPage`   | AppLayout | Account ledger and reconciliation    | [[apps/frontend/src/pages/AccountDetailPage.tsx\|AccountDetailPage.tsx]]     |

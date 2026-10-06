@@ -2,8 +2,8 @@
 title: Aggregations API
 type: endpoint
 status: active
-date: 2026-10-04
-updated: 2026-10-04
+date: 2026-10-06
+updated: 2026-10-06
 last_modified: 2026-09-19
 recipient_pivot_added: 2026-04-28
 tag_pivot_added: 2026-06-26
@@ -322,13 +322,29 @@ Average metrics vs. current period (always computed live in Phase 2).
 
 ```json
 {
-  "averageDailySpend": 75.0,
-  "currentDailySpend": 82.5,
-  "percentChange": 10.0,
-  "averageMonthlySpend": 2250.0,
-  "currentMonthlySpend": 1320.0
+  "past_6_months": {
+    "avg_daily_spending": 75.0,
+    "avg_monthly_spending": 2250.0,
+    "months_counted": 6
+  },
+  "current_month": {
+    "daily_data": [{ "date": "2026-10-01", "spending": 82.5, "income": 0 }],
+    "total_spending": 330.0,
+    "days_elapsed": 6,
+    "days_in_month": 31
+  },
+  "comparison": {
+    "projected_monthly_total": 1705.0,
+    "avg_monthly_spending": 2250.0,
+    "variance": -545.0,
+    "pace": 0.73
+  }
 }
 ```
+
+Spending and `daily_data[].spending` are positive magnitudes; `daily_data` has one entry per day with activity. `comparison.pace` is the current daily rate over the six-month daily average, or `null` when that average is zero. Internal transfers are excluded unless the include-transfers setting is on. The endpoint takes no exclusion parameters.
+
+The Home month-to-date hero ([[docs/components/dashboard#MonthToDateHero]]) consumes this endpoint through `getAggregationAverageVsCurrent` (typed `AverageVsCurrentData`, `apps/frontend/src/lib/api/aggregations.ts`). No API contract changed; the example above corrects the previously documented shape.
 
 > [!note]
 > This endpoint always returns `meta.source === 'live'` in Phase 2 because the "current period" metric requires dynamic computation. Future phases may optimize this with additional MV variants.

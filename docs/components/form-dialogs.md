@@ -34,69 +34,73 @@ Every visible field label targets the actual input or trigger with matching `htm
 
 ## Component List
 
-| Component            | Description         | File                                                                                                      |
-| -------------------- | ------------------- | --------------------------------------------------------------------------------------------------------- |
-| AddTransactionDialog | Add new transaction | [[apps/frontend/src/features/transactions/components/AddTransactionDialog.tsx\|AddTransactionDialog.tsx]] |
-| AddCategoryDialog    | Add new category    | [[apps/frontend/src/features/categories/AddCategoryDialog.tsx\|AddCategoryDialog.tsx]]                    |
-| AddRecipientDialog   | Add new recipient   | [[apps/frontend/src/features/recipients/AddRecipientDialog.tsx\|AddRecipientDialog.tsx]]                  |
+| Component           | Description                                         | File                                                                                                  |
+| ------------------- | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| AddTransactionSheet | Add new transaction (right-hand sheet, not a dialog) | [[apps/frontend/src/features/transactions/components/AddTransactionSheet.tsx\|AddTransactionSheet.tsx]] |
+| AddCategoryDialog   | Add new category                                    | [[apps/frontend/src/features/categories/AddCategoryDialog.tsx\|AddCategoryDialog.tsx]]                |
+| AddRecipientDialog  | Add new recipient                                   | [[apps/frontend/src/features/recipients/AddRecipientDialog.tsx\|AddRecipientDialog.tsx]]              |
 
 ---
 
-## AddTransactionDialog
+## AddTransactionSheet
 
-Modal dialog for creating new transactions.
+Right-hand `Sheet` (max width 470px) for creating transactions, introduced by [[docs/adr/181-home-transactions-redesign|ADR-181]]. It replaced the modal `AddTransactionDialog`. The file exports two components:
+
+- `AddTransactionSheet` — the controlled sheet.
+- `AddTransactionButton` — the primary "Add transaction" button together with the sheet it opens. Used in the Home and Transactions page headers.
 
 ### Props
 
 ```typescript
-// No props - component manages its own state
-```
-
-### Form Fields
-
-| Field              | Type   | Required | Description                  |
-| ------------------ | ------ | -------- | ---------------------------- |
-| `transaction_date` | date   | Yes      | Transaction date             |
-| `bank_account`     | string | Yes      | Bank account name            |
-| `recipient_id`     | number | Yes      | Recipient ID                 |
-| `category_id`      | number | No       | Category ID                  |
-| `amount`           | number | Yes      | Transaction amount           |
-| `currency`         | string | No       | Currency code (default: EUR) |
-| `memo`             | string | No       | Description/memo             |
-| `comment`          | string | No       | User comment                 |
-
-### Usage
-
-```tsx
-import { AddTransactionDialog } from "@/features/transactions/components/AddTransactionDialog";
-
-function TransactionsPage() {
-  return (
-    <div>
-      <AddTransactionDialog />
-      {/* Transaction list */}
-    </div>
-  );
+interface AddTransactionSheetProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** Fires once the row (for a transfer: its outflow leg) exists on the server. */
+  onCreated?: (transaction: Transaction, kind: TransactionKind) => void;
 }
 ```
 
+`AddTransactionButton` accepts `onCreated`, `size` (`"default" | "sm"`) and `className`. Transactions selects the created row in the inspector; Home navigates to `/transactions` with `location.state.selectTransactionId`.
+
+### Kind and sign
+
+A segmented control picks **Expense**, **Income** or **Transfer** (`TransactionKind`). The amount field is a **magnitude**: the kind supplies the sign (`signedAmount`: income is positive, expense and the transfer outflow are negative). A typed minus is ignored rather than flipping the kind.
+
+### Form fields
+
+| Field              | Kinds             | Required | Description                                                                       |
+| ------------------ | ----------------- | -------- | --------------------------------------------------------------------------------- |
+| `amount`           | all               | Yes      | Magnitude, parsed with the app number format, non-zero                            |
+| `recipient_id`     | expense, income   | Yes      | Debounced server-search `RecipientCombobox`; a typed new name can be created in place (`allowCreate`) |
+| `bank_account`     | all               | Yes      | "From account" for a transfer; its currency fills `currency`                      |
+| `to_bank_account`  | transfer          | Yes      | Receiving account; must differ from the sending one                               |
+| `transaction_date` | all               | Yes      | Chips **Today** / **Yesterday** / **Other date** (opens the date picker)          |
+| `category_id`      | expense, income   | No       | Pre-filled with the recipient's usual category until the user picks another       |
+| `memo`, `comment`  | all               | No       | Description and comment                                                           |
+
+A note appears when the chosen date is on or before the account's statement anchor date (backdated entry).
+
+### Validation
+
+Submit-time validation lives in `addTransactionForm.ts` (`createAddTransactionSchema`, a Zod discriminated union on `kind`, so every missing field is reported in one pass). Messages are i18n keys translated by the sheet and routed to each field through `useFieldErrors` (inline ARIA errors, focus on the first invalid field in `ADD_TRANSACTION_FIELD_ORDER`).
+
+### Create flow
+
+- **Expense / Income**: `useCreateTransaction({ silent: true })` posts one row. `silent` skips the generic "created" toast; the option was added to the hook in this change. A 409 conflict shows the `addTxn.duplicateError` toast and an inline "Add anyway" prompt.
+- **Transfer**: `useCreateTransfer` (`features/transactions/hooks/useCreateTransfer.ts`) creates or gets a recipient named after the counterpart account for each leg (`POST /api/recipients`), posts the outflow and inflow rows with `POST /api/transactions`, then links them with `POST /api/transactions/transfers` (`{ aId, bId }`, `apiClient.markTransfer`). If the link call fails, both rows are kept; reconciliation or a manual mark can link them later. See [[docs/features/transfers]].
+
+### Opening the sheet
+
+- The header button (`AddTransactionButton`).
+- The `?new=1` deep link: when `/transactions?new=1` is present the sheet opens and strips the param with `replace` navigation.
+- Web shortcut: bare `N` (see [[docs/components/layout]]).
+
 ### Features
 
-- Recipient selection uses the debounced server-search `RecipientCombobox`, so results are not limited to the first page.
-- Category selection uses the searchable complete-list `CategoryCombobox`; category creation remains a separate workflow.
-- Both combobox popovers mount in a dialog-owned portal container so Radix focus trapping and option interaction remain reliable.
-- Auto-populates today's date
-- Fetches recipients/categories from API
-- Validates required fields
-- Shows loading state during submission
-- Handles duplicate detection
-- Resets form on successful submission
-- Closes dialog on success
-
-### Amount Convention
-
-- **Negative** = Expense
-- **Positive** = Income
+- Recipient, category and account selection use searchable comboboxes whose popovers mount in a sheet-owned portal container so Radix focus trapping stays reliable.
+- Focus lands on the amount field when the sheet opens.
+- Unsaved edits register with `UnsavedChangesContext`.
+- The form resets and the sheet closes on success.
 
 ---
 
@@ -312,6 +316,9 @@ Dialog for splitting a transaction's amount among multiple recipients.
 
 ```typescript
 interface SplitTransactionDialogProps {
+  triggerLabel?: string;
+  /** Replaces the default icon button (rendered through DialogTrigger asChild); the inspector footer passes a labelled ghost button. */
+  trigger?: ReactElement;
   transactionId: number;
   transactionAmount: number;
   transactionCurrency: string;
@@ -447,41 +454,51 @@ interface OnboardingWizardProps {
 - [[docs/api/categories]] - Categories API
 - [[docs/api/recipients]] - Recipients API
 - [[docs/api/splits]] - Splits API
+- [[docs/features/transfers]] - Transfers (two-leg creation from the Transfer kind)
+- [[docs/adr/181-home-transactions-redesign]] - Home and Transactions redesign (AddTransactionSheet)
 
 ## AddTransactionForm
 
-Form state management for the Add Transaction dialog. This is a lightweight utility module (not a React component) that provides a typed form state interface and a factory function for initializing the form.
+Form state and validation for the Add Transaction sheet. This is a lightweight utility module (not a React component) that provides a typed form state interface, a factory function for initializing the form, the signing helper and the submit-time Zod schema.
 
 ### Type: AddTransactionFormState
 
-| Field              | Type     | Description                                                  |
-| ------------------ | -------- | ------------------------------------------------------------ |
-| `transaction_date` | `string` | ISO date string (YYYY-MM-DD), defaults to today              |
-| `bank_account`     | `string` | Bank account identifier                                      |
-| `recipient_id`     | `string` | Recipient ID (empty string if none)                          |
-| `category_id`      | `string` | Category ID (empty string if none)                           |
-| `memo`             | `string` | Transaction memo/description                                 |
-| `amount`           | `string` | Amount as string (positive for income, negative for expense) |
-| `currency`         | `string` | Currency code, defaults to EUR                               |
-| `comment`          | `string` | Additional comment field                                     |
+| Field              | Type                                 | Description                                                  |
+| ------------------ | ------------------------------------ | ------------------------------------------------------------ |
+| `kind`             | `"expense" \| "income" \| "transfer"` | What the sheet records; supplies the sign of the amount      |
+| `transaction_date` | `string`                             | ISO date string (YYYY-MM-DD), defaults to today              |
+| `bank_account`     | `string`                             | Bank account name (sending account for a transfer)           |
+| `account_id`       | `number \| null`                     | Resolved account id                                          |
+| `to_bank_account`  | `string`                             | Transfer only: receiving account name                        |
+| `to_account_id`    | `number \| null`                     | Transfer only: receiving account id                          |
+| `recipient_id`     | `string`                             | Recipient ID (empty string if none)                          |
+| `category_id`      | `string`                             | Category ID (empty string if none)                           |
+| `memo`             | `string`                             | Transaction memo/description                                 |
+| `amount`           | `string`                             | Magnitude as typed; the kind decides the sign on submit      |
+| `currency`         | `string`                             | Currency code, defaults to EUR                               |
+| `comment`          | `string`                             | Additional comment field                                     |
 
 ### Function: createAddTransactionFormState
 
 ```ts
 function createAddTransactionFormState(
   defaultCurrency?: string,
+  kind: TransactionKind = "expense",
 ): AddTransactionFormState;
 ```
 
 Returns a fresh form state object with sensible defaults:
 
+- `kind`: the given kind, `'expense'` by default
 - `transaction_date`: Current date (YYYY-MM-DD)
-- `bank_account`, `recipient_id`, `category_id`, `memo`, `amount`, `comment`: Empty strings
+- `bank_account`, `to_bank_account`, `recipient_id`, `category_id`, `memo`, `amount`, `comment`: Empty strings; `account_id` and `to_account_id`: `null`
 - `currency`: Provided `defaultCurrency` or `'EUR'`
+
+`signedAmount(kind, magnitude)` returns the API amount and `createAddTransactionSchema(numberFormat)` the submit-time schema (required rules per kind, non-zero amount, different accounts for a transfer).
 
 ### Usage
 
-Used by [[apps/frontend/src/features/transactions/components/AddTransactionDialog.tsx|AddTransactionDialog]] to initialize and reset the form state. The flat string-based state is designed for easy integration with controlled form inputs.
+Used by [[apps/frontend/src/features/transactions/components/AddTransactionSheet.tsx|AddTransactionSheet]] to initialize, reset and validate the form state. The flat string-based state is designed for easy integration with controlled form inputs.
 
 **Code**: [[apps/frontend/src/features/transactions/addTransactionForm.ts]]
 

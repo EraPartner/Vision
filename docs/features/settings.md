@@ -247,7 +247,8 @@ const { isVisible, setWidgetVisible, setAllVisible, resetToDefaults } =
   useWidgetVisibility("statistics", STATISTICS_WIDGETS);
 ```
 
-- **Page-scoped**: Each page has its own visibility state (e.g., `'statistics'`, `'portfolioTax'`)
+- **Page-scoped**: Each page has its own visibility state. Page keys in use: `'dashboard'` (Home widgets), `'statistics'`, `'portfolioTax'` and `'transactionsColumns'` (the optional Transactions columns Tags, Currency, Running balance and Status, all default-hidden; see [[docs/features/transactions#Toolbar, columns and View menu]]). Widget ids are the persisted keys, so renaming one silently discards saved choices for it
+- **Labels**: a `WidgetDefinition` carries either `label` or a translated `labelKey`
 - **Persisted**: Saved to `widget_visibility` setting key
 - **Failure feedback**: A rejected save keeps the optimistic local visibility but triggers the shared translated settings error toast, warning that the change may not survive a restart
 - **Defaultable**: Each widget defines its own `defaultVisible` state

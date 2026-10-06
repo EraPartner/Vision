@@ -150,6 +150,14 @@ interface VirtualDataTableProps<T> {
     /** Called on Space on a focused row (Quick Look). Falls back to onRowDoubleClick. */
     onRowQuickLook?: (row: T, index: number) => void;
     /**
+     * Selection (ADR-181): a plain click on a row (outside its controls)
+     * selects it, and so does moving row focus with the arrow keys, the way
+     * Finder and Mail drive their inspector. `selectedRowKey` is the selected
+     * row's `id`; the row carries `aria-selected` and the selected surface.
+     */
+    onRowSelect?: (row: T, index: number) => void;
+    selectedRowKey?: string | number | null;
+    /**
      * Right-click menu for rows: return a <ContextMenuContent> (it is rendered
      * inside a per-row Radix ContextMenu root). `helpers.startEditing` begins
      * the table's inline edit for that row.
@@ -211,6 +219,8 @@ interface VirtualizedTableRowProps<T extends Record<string, unknown>> {
     onRowDoubleClick?: (row: T, index: number) => void;
     onRowOpen?: (row: T, index: number) => void;
     onRowQuickLook?: (row: T, index: number) => void;
+    onRowSelect?: (row: T, index: number) => void;
+    isSelected: boolean;
     rowContextMenu?: VirtualDataTableProps<T>["rowContextMenu"];
     startEditing: (sourceIndex: number, row: T) => void;
     saveEditing?: (sourceIndex: number, row: T) => void;
@@ -242,6 +252,8 @@ function VirtualizedTableRow<T extends Record<string, unknown>>({
     onRowDoubleClick,
     onRowOpen,
     onRowQuickLook,
+    onRowSelect,
+    isSelected,
     rowContextMenu,
     startEditing,
     saveEditing,
@@ -279,20 +291,41 @@ function VirtualizedTableRow<T extends Record<string, unknown>>({
                 ?.focus();
         }
     }, [isEditing]);
-    const rowsInteractive = !!(onRowDoubleClick || onRowOpen || onRowQuickLook);
+    const rowsInteractive = !!(
+        onRowDoubleClick ||
+        onRowOpen ||
+        onRowQuickLook ||
+        onRowSelect
+    );
+    const isControlTarget = (target: EventTarget | null) =>
+        target instanceof HTMLElement &&
+        !!target.closest(
+            'button, a, input, select, textarea, label, [role="button"], [role="menuitem"], [role="checkbox"], [role="combobox"], [contenteditable="true"]',
+        );
     const rowEl = (
         <div
             data-index={virtualIndex}
             ref={attachRow}
             role="row"
             aria-rowindex={virtualIndex + 2}
+            aria-selected={onRowSelect ? isSelected : undefined}
+            data-selected={isSelected ? "" : undefined}
             tabIndex={rowsInteractive ? (isFirstVisible ? 0 : -1) : undefined}
             className={cn(
-                "flex items-center border-b border-border transition-colors hover:bg-muted/50 focus-ring",
+                "flex items-center border-b border-border/60 transition-colors hover:bg-foreground/[0.03] focus-ring focus-visible:outline-offset-[-2px]",
                 isEditing && "bg-primary/5",
+                isSelected && "bg-primary/[0.08] hover:bg-primary/[0.1]",
                 onRowDoubleClick && "cursor-pointer",
                 rowsInteractive && "touch-manipulation active:bg-muted",
             )}
+            onFocus={
+                onRowSelect
+                    ? (event) => {
+                          if (event.target !== event.currentTarget) return;
+                          if (!isSelected) onRowSelect(row, sourceIndex);
+                      }
+                    : undefined
+            }
             style={{
                 position: "absolute",
                 top: 0,
@@ -308,19 +341,17 @@ function VirtualizedTableRow<T extends Record<string, unknown>>({
                 }
             }}
             onClick={
-                isCoarsePointer && rowsInteractive
+                rowsInteractive
                     ? (event) => {
-                          if (isEditing) return;
-                          const openAction = onRowOpen ?? onRowDoubleClick;
-                          if (!openAction) return;
-                          const target = event.target as HTMLElement;
-                          if (
-                              target.closest(
-                                  'button, a, input, select, textarea, label, [role="button"], [role="menuitem"], [role="checkbox"], [contenteditable="true"]',
-                              )
-                          )
+                          if (isEditing || isControlTarget(event.target)) return;
+                          if (onRowSelect) {
+                              onRowSelect(row, sourceIndex);
                               return;
-                          openAction(row, sourceIndex);
+                          }
+                          // Without selection a tap opens the row (desktop
+                          // pointers keep double-click / Enter for that).
+                          if (!isCoarsePointer) return;
+                          (onRowOpen ?? onRowDoubleClick)?.(row, sourceIndex);
                       }
                     : undefined
             }
@@ -547,6 +578,8 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
     onRowDoubleClick,
     onRowOpen,
     onRowQuickLook,
+    onRowSelect,
+    selectedRowKey,
     rowContextMenu,
     serverMode,
     maxHeight = 600,
@@ -1644,6 +1677,11 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                             onRowDoubleClick={onRowDoubleClick}
                                             onRowOpen={onRowOpen}
                                             onRowQuickLook={onRowQuickLook}
+                                            onRowSelect={onRowSelect}
+                                            isSelected={
+                                                selectedRowKey != null &&
+                                                rowKey === selectedRowKey
+                                            }
                                             rowContextMenu={rowContextMenu}
                                             startEditing={startEditing}
                                             saveEditing={
@@ -1656,7 +1694,8 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                             focusRowByIndex={
                                                 onRowDoubleClick ||
                                                 onRowOpen ||
-                                                onRowQuickLook
+                                                onRowQuickLook ||
+                                                onRowSelect
                                                     ? focusRowByIndex
                                                     : undefined
                                             }
