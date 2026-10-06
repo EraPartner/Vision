@@ -1,3 +1,4 @@
+import { Briefcase, Import } from "lucide-react";
 import { describe, expect, it } from "vitest";
 import {
     ADMIN_SECTION,
@@ -61,6 +62,15 @@ describe("navigation registry", () => {
         for (const root of SECTION_CYCLE) {
             expect(navUrls.has(root.url)).toBe(true);
         }
+    });
+
+    it("distinguishes the budgeting and portfolio importers by icon", () => {
+        const budgetingImport = ALL_NAV_ITEMS.find((i) => i.url === "/import");
+        const portfolioImport = ALL_NAV_ITEMS.find(
+            (i) => i.url === "/portfolio/import",
+        );
+        expect(budgetingImport?.icon).toBe(Import);
+        expect(portfolioImport?.icon).toBe(Briefcase);
     });
 
     it("hides only Research by default", () => {
