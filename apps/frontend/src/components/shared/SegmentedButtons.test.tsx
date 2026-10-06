@@ -3,36 +3,49 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { SegmentedButtons } from "./SegmentedButtons";
 
-describe("SegmentedButtons variants", () => {
-    it("supports an outline unselected state and still selects options", () => {
+describe("SegmentedButtons", () => {
+    it("renders the options as a segmented control and reports a new choice", () => {
         const onSelect = vi.fn();
         render(
             <SegmentedButtons
+                aria-label="Range"
                 options={["1M", "1Y"]}
                 getKey={(option) => option}
                 getLabel={(option) => option}
                 isSelected={(option) => option === "1M"}
                 onSelect={onSelect}
-                unselectedVariant="outline"
+                buttonClassName="tabular-nums"
             />,
         );
 
-        expect(screen.getByRole("button", { name: "1M" })).toHaveClass(
-            "bg-primary",
-        );
-        expect(screen.getByRole("button", { name: "1Y" })).toHaveClass(
-            "border-input/70",
-        );
-
-        expect(screen.getByRole("button", { name: "1M" })).toHaveAttribute(
-            "aria-pressed",
+        expect(screen.getByRole("radiogroup", { name: "Range" })).toBeInTheDocument();
+        expect(screen.getByRole("radio", { name: "1M" })).toHaveAttribute(
+            "aria-checked",
             "true",
         );
-        expect(screen.getByRole("button", { name: "1Y" })).toHaveAttribute(
-            "aria-pressed",
+        expect(screen.getByRole("radio", { name: "1Y" })).toHaveAttribute(
+            "aria-checked",
             "false",
         );
-        fireEvent.click(screen.getByRole("button", { name: "1Y" }));
+        expect(screen.getByRole("radio", { name: "1Y" })).toHaveClass("tabular-nums");
+        fireEvent.click(screen.getByRole("radio", { name: "1Y" }));
         expect(onSelect).toHaveBeenCalledWith("1Y");
+    });
+
+    it("maps numeric keys back to their option", () => {
+        const onSelect = vi.fn();
+        const options = [{ months: 12 }, { months: 60 }];
+        render(
+            <SegmentedButtons
+                aria-label="Horizon"
+                options={options}
+                getKey={(option) => option.months}
+                getLabel={(option) => `${option.months}m`}
+                isSelected={(option) => option.months === 12}
+                onSelect={onSelect}
+            />,
+        );
+        fireEvent.click(screen.getByRole("radio", { name: "60m" }));
+        expect(onSelect).toHaveBeenCalledWith(options[1]);
     });
 });
