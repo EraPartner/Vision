@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
+import { toast } from "sonner";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok } from "@/test/msw/handlers";
@@ -207,9 +208,10 @@ describe("LinkTransactionDialog", () => {
         expect(linkBtn).not.toBeDisabled();
     });
 
-    it("clicking 'Link & Execute' calls onExecute with correct args and closes dialog", async () => {
+    it("clicking 'Link & Execute' calls onExecute with correct args, confirms and closes dialog", async () => {
         // Arrange
         setupCandidateHandler();
+        const success = vi.spyOn(toast, "success").mockReturnValue("t" as never);
         const user = userEvent.setup();
         const onExecute = vi.fn().mockResolvedValue(undefined);
         const onOpenChange = vi.fn();
@@ -240,6 +242,10 @@ describe("LinkTransactionDialog", () => {
             );
         });
         await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+        expect(success).toHaveBeenCalledWith(
+            'Planned payment "Monthly Rent" executed and linked to the transaction',
+        );
+        success.mockRestore();
     });
 
     it("local search input filters displayed transactions", async () => {
@@ -360,6 +366,7 @@ describe("LinkTransactionDialog", () => {
     it("execution failure: onExecute rejection keeps dialog open", async () => {
         setupCandidateHandler();
         const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        const success = vi.spyOn(toast, "success").mockReturnValue("t" as never);
         const user = userEvent.setup();
         const onExecute = vi.fn().mockRejectedValue(new Error("link failed"));
         const onOpenChange = vi.fn();
@@ -381,6 +388,8 @@ describe("LinkTransactionDialog", () => {
         // Dialog should NOT auto-close on error (only closes after successful resolve)
         await new Promise((r) => setTimeout(r, 200));
         expect(onOpenChange).not.toHaveBeenCalledWith(false);
+        expect(success).not.toHaveBeenCalled();
+        success.mockRestore();
         errSpy.mockRestore();
     });
 });

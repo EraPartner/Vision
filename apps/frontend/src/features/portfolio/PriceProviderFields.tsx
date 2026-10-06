@@ -24,6 +24,8 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import type { PriceProvider } from "@/types/api";
+import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
+import { formatNumberPlaceholder } from "@/utils/currency";
 import { usePriceProviderCatalog } from "./usePriceProviderCatalog";
 
 type TranslateFn = (
@@ -62,6 +64,7 @@ export function PriceProviderFields<F extends PriceProviderFormShape>({
     currentPriceError,
     t,
 }: PriceProviderFieldsProps<F>) {
+    const { appSettings } = useAppSettings();
     const priceProviders = usePriceProviderCatalog(t);
     const selectedProvider = priceProviders.find(
         (provider) => provider.key === form.priceProvider,
@@ -140,7 +143,9 @@ export function PriceProviderFields<F extends PriceProviderFormShape>({
                         }
                         type="text"
                         inputMode="decimal"
-                        placeholder="0.00"
+                        placeholder={formatNumberPlaceholder(
+                            appSettings.numberFormat,
+                        )}
                         value={form.currentPrice}
                         onChange={(e) =>
                             setForm((f) => ({

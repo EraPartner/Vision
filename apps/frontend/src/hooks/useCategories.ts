@@ -115,8 +115,10 @@ export function useDeleteCategoryNode() {
     const { t } = useLanguage();
     return useMutation({
         mutationFn: (id: number) => apiClient.deleteCategoryNode(id),
-        onSuccess: () =>
-            queryClient.invalidateQueries({ queryKey: categoryKeys.all }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: categoryKeys.all });
+            toast.success(t("categories.deleted"));
+        },
         onError: (error: Error) =>
             toast.error(t("categories.deleteFailedTitle"), {
                 description: apiErrorToMessage(error, t),

@@ -2,8 +2,8 @@
 title: Form Dialogs
 type: component
 status: active
-date: 2026-09-09
-updated: 2026-09-09
+date: 2026-10-05
+updated: 2026-10-05
 tags: [components, forms, dialogs, settings, refactor, phase-3]
 description: Modal dialogs for adding, editing data, and configuring settings throughout the application
 aliases:
@@ -710,7 +710,7 @@ interface DashboardSettingsDialogProps {
 - **State isolation**: BackupTab manages its own internal state (passphrase, encrypt) without propagating to parent
 - **React Query integration**: Fetches categories/recipients on demand for exclusion UI
 - **Electron support**: Backup directory picker, auto-backup-on-quit, restore flow
-- **Confirmation dialogs**: Reset-all uses AlertDialog with user confirmation
+- **Confirmation dialogs**: Reset-all asks first through the destructive `useConfirmDialog` confirmation (since 2026-10-05; see [[docs/components/form-dialogs#reset-all|Reset All]])
 
 ### Usage
 
@@ -759,22 +759,31 @@ Persists all modified settings, closes the dialog, and shows success toast. Call
 
 #### Reset All
 
-Reset button in AppTab calls parent's `handleReset()`:
+> [!info] 2026-10-05: reset asks first
+> The orchestrator `handleReset()` that reset immediately is gone. **Reset all settings** lives in the danger zone of `AboutSection`, and its `handleResetAll()` asks first through the destructive `useConfirmDialog` confirmation. The dialog text says that all preferences return to their defaults and that the theme, accounts, transactions and other data are kept. See [[docs/components/dashboard-settings-dialog#aboutsection|DashboardSettingsDialog — AboutSection]].
 
 ```typescript
-const handleReset = () => {
+const handleResetAll = async () => {
+  const confirmed = await confirm({
+    title: t("settings.app.resetAllConfirm.title"),
+    description: t("settings.app.resetAllConfirm.desc"),
+    confirmLabel: t("settings.app.resetAllConfirm.action"),
+    variant: "destructive",
+  });
+  if (!confirmed) return;
   resetSettings();
-  resetAppSettings();
-  setLocalExcludedCategories([]);
-  setLocalExcludedRecipients([]);
-  setLocalExcludeHidden(true);
-  setLocalExclusionScope("everywhere");
-  setLocalAppSettings(DEFAULT_APP_SETTINGS);
+  resetAppSettings(); // also clears the session tier override
+  apiClient
+    .saveSetting("includeTransfers", false)
+    .then(() => queryClient.invalidateQueries())
+    .catch(() => {
+      /* non-fatal */
+    });
   toast.info(t("settings.resetToDefaults"));
 };
 ```
 
-Resets all settings to defaults. Dialog remains open.
+Cancelling changes nothing. Confirming resets the app and dashboard settings to their defaults and keeps the dialog open.
 
 ### Related Code
 

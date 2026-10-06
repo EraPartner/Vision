@@ -358,8 +358,9 @@ describe("TransactionsPage (integration)", () => {
         );
         await screen.findByRole("dialog");
 
-        // Fill amount
-        const amountInput = screen.getByPlaceholderText(/0\.00/i);
+        // Fill amount. The placeholder follows the default European number
+        // format, the same format as the typed value.
+        const amountInput = screen.getByPlaceholderText("0,00");
         await user.clear(amountInput);
         await user.type(amountInput, "-25,50");
 

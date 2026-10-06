@@ -105,5 +105,8 @@ describe("forecast comparison controls", () => {
         expect(screen.getByTestId("visible-methods")).toHaveTextContent(
             /^simple_avg$/,
         );
+        expect(
+            screen.getByRole("button", { name: "Combined forecast Error" }),
+        ).toBeInTheDocument();
     });
 });

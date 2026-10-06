@@ -4,6 +4,7 @@ import {X} from "lucide-react";
 import * as React from "react";
 
 import {cn} from "@/lib/utils";
+import {useLanguage} from "@/stores/hydration/LanguageHydration";
 
 const Sheet = SheetPrimitive.Root;
 
@@ -55,19 +56,22 @@ interface SheetContentProps
 }
 
 const SheetContent = React.forwardRef<React.ElementRef<typeof SheetPrimitive.Content>, SheetContentProps>(
-    ({side = "right", className, children, ...props}, ref) => (
-        <SheetPortal>
-            <SheetOverlay/>
-            <SheetPrimitive.Content ref={ref} className={cn(sheetVariants({side}), className)} {...props}>
-                {children}
-                <SheetPrimitive.Close
-                    className="absolute right-4 top-4 rounded-lg p-1 text-muted-foreground opacity-70 ring-offset-background transition-[opacity,background-color,color] duration-[var(--duration-fast)] ease-[var(--ease-glide)] hover:bg-foreground/[0.06] hover:text-foreground hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 disabled:pointer-events-none">
-                    <X className="h-4 w-4"/>
-                    <span className="sr-only">Close</span>
-                </SheetPrimitive.Close>
-            </SheetPrimitive.Content>
-        </SheetPortal>
-    ),
+    ({side = "right", className, children, ...props}, ref) => {
+        const {t} = useLanguage();
+        return (
+            <SheetPortal>
+                <SheetOverlay/>
+                <SheetPrimitive.Content ref={ref} className={cn(sheetVariants({side}), className)} {...props}>
+                    {children}
+                    <SheetPrimitive.Close
+                        className="absolute right-4 top-4 rounded-lg p-1 text-muted-foreground opacity-70 ring-offset-background transition-[opacity,background-color,color] duration-[var(--duration-fast)] ease-[var(--ease-glide)] hover:bg-foreground/[0.06] hover:text-foreground hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 disabled:pointer-events-none">
+                        <X className="h-4 w-4"/>
+                        <span className="sr-only">{t("common.close")}</span>
+                    </SheetPrimitive.Close>
+                </SheetPrimitive.Content>
+            </SheetPortal>
+        );
+    },
 );
 SheetContent.displayName = SheetPrimitive.Content.displayName;
 

@@ -1,11 +1,17 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
+import { toast } from "sonner";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { err, ok, ACCOUNT_LIST_ITEM_STUB } from "@/test/msw/handlers";
+import {
+    err,
+    noContent,
+    ok,
+    ACCOUNT_LIST_ITEM_STUB,
+} from "@/test/msw/handlers";
 import PlannedPaymentsPage from "@/pages/PlannedPaymentsPage";
 import PlannedPaymentForm from "@/features/planned/PlannedPaymentForm";
 import { todayYmd } from "@/lib/timezone";
@@ -743,5 +749,183 @@ describe("PlannedPaymentForm (inline validation)", () => {
             is_loan: false,
             account_id: 1,
         });
+    });
+
+    it("confirms a created payment with a success toast", async () => {
+        const user = userEvent.setup();
+        const success = vi
+            .spyOn(toast, "success")
+            .mockReturnValue("t" as never);
+        server.use(
+            http.get(`${API_BASE}/api/planned-transactions`, () =>
+                ok({ items: [], total: 0, limit: 1000, offset: 0, links: [] }),
+            ),
+            http.post(`${API_BASE}/api/planned-transactions`, () =>
+                ok({ ...rentPayment, id: 99, memo: "Groceries" }),
+            ),
+        );
+
+        renderWithApp(<PlannedPaymentsPage />);
+
+        await user.click(
+            await screen.findByRole("button", { name: /new payment/i }),
+        );
+        await screen.findByRole("dialog");
+        await user.type(screen.getByLabelText("Name *"), "Groceries");
+        await user.type(screen.getByLabelText("Amount *"), "100");
+        await pickBankAccount(user, "Main");
+        await user.click(submitBtn());
+
+        await waitFor(() => {
+            expect(success).toHaveBeenCalledWith(
+                'Planned payment "Groceries" created',
+            );
+        });
+        success.mockRestore();
+    });
+});
+
+// ─── Success feedback for row actions ───────────────────────────────────────
+//
+// Pausing, resuming, editing and deleting used to finish silently. Each now
+// confirms through the shared toast system; none offers Undo because no undo
+// path exists for planned payments.
+describe("PlannedPaymentsPage (success feedback)", () => {
+    function serveRent(
+        payment: typeof rentPayment & { account_id?: number } = rentPayment,
+    ) {
+        server.use(
+            http.get(`${API_BASE}/api/planned-transactions`, () =>
+                ok({
+                    items: [payment],
+                    total: 1,
+                    limit: 1000,
+                    offset: 0,
+                    links: [],
+                }),
+            ),
+        );
+    }
+
+    it("confirms pausing an active payment", async () => {
+        const user = userEvent.setup();
+        const success = vi
+            .spyOn(toast, "success")
+            .mockReturnValue("t" as never);
+        serveRent();
+        server.use(
+            http.patch(`${API_BASE}/api/planned-transactions/1`, () =>
+                ok({ ...rentPayment, is_active: false }),
+            ),
+        );
+
+        renderWithApp(<PlannedPaymentsPage />);
+        await user.click(
+            await screen.findByRole("button", { name: "Active: Rent" }),
+        );
+
+        await waitFor(() => {
+            expect(success).toHaveBeenCalledWith(
+                'Planned payment "Rent" paused',
+            );
+        });
+        success.mockRestore();
+    });
+
+    it("confirms resuming a paused payment", async () => {
+        const user = userEvent.setup();
+        const success = vi
+            .spyOn(toast, "success")
+            .mockReturnValue("t" as never);
+        serveRent({ ...rentPayment, is_active: false });
+        server.use(
+            http.patch(`${API_BASE}/api/planned-transactions/1`, () =>
+                ok({ ...rentPayment, is_active: true }),
+            ),
+        );
+
+        renderWithApp(<PlannedPaymentsPage />, {
+            initialEntries: ["/planned?show_all=true"],
+        });
+        await user.click(
+            await screen.findByRole("button", { name: "Paused: Rent" }),
+        );
+
+        await waitFor(() => {
+            expect(success).toHaveBeenCalledWith(
+                'Planned payment "Rent" resumed',
+            );
+        });
+        success.mockRestore();
+    });
+
+    it("confirms saving an edited payment", async () => {
+        const user = userEvent.setup();
+        const success = vi
+            .spyOn(toast, "success")
+            .mockReturnValue("t" as never);
+        let patched = false;
+        serveRent({ ...rentPayment, account_id: ACCOUNT_LIST_ITEM_STUB.id });
+        server.use(
+            http.patch(`${API_BASE}/api/planned-transactions/1`, () => {
+                patched = true;
+                return ok({
+                    ...rentPayment,
+                    account_id: ACCOUNT_LIST_ITEM_STUB.id,
+                });
+            }),
+        );
+
+        renderWithApp(<PlannedPaymentsPage />);
+        await user.click(
+            await screen.findByRole("button", {
+                name: "Edit planned payment: Rent",
+            }),
+        );
+        await screen.findByRole("dialog");
+        await user.click(screen.getByRole("button", { name: /save changes/i }));
+
+        await waitFor(() => {
+            expect(success).toHaveBeenCalledWith(
+                'Planned payment "Rent" updated',
+            );
+        });
+        expect(patched).toBe(true);
+        success.mockRestore();
+    });
+
+    it("confirms a deletion only after the destructive dialog is accepted", async () => {
+        const user = userEvent.setup();
+        const success = vi
+            .spyOn(toast, "success")
+            .mockReturnValue("t" as never);
+        let deleted = false;
+        serveRent();
+        server.use(
+            http.delete(`${API_BASE}/api/planned-transactions/1`, () => {
+                deleted = true;
+                return noContent();
+            }),
+        );
+
+        renderWithApp(<PlannedPaymentsPage />);
+        await user.click(
+            await screen.findByRole("button", {
+                name: "Delete planned payment: Rent",
+            }),
+        );
+        const dialog = await screen.findByRole("alertdialog");
+        expect(success).not.toHaveBeenCalled();
+        await user.click(
+            within(dialog).getByRole("button", { name: "Delete" }),
+        );
+
+        await waitFor(() => {
+            expect(success).toHaveBeenCalledWith(
+                'Planned payment "Rent" deleted',
+            );
+        });
+        expect(deleted).toBe(true);
+        success.mockRestore();
     });
 });

@@ -1,11 +1,14 @@
 // @vitest-environment jsdom
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { renderWithApp } from "@/test/renderWithApp";
 import { TagChip } from "@/components/shared/TagInput";
 
 describe("TagChip", () => {
-    it("expands the remove control hit area without changing the visible icon", () => {
-        render(
+    it("expands the remove control hit area without changing the visible icon", async () => {
+        // The remove label is translated, so render inside the app's language
+        // provider and wait for the English dictionary.
+        renderWithApp(
             <TagChip
                 tag={{
                     id: 1,
@@ -19,7 +22,9 @@ describe("TagChip", () => {
             />,
         );
 
-        const remove = screen.getByRole("button", { name: "Remove tag travel" });
+        const remove = await screen.findByRole("button", {
+            name: "Remove tag travel",
+        });
         expect(remove).toHaveClass("p-3.5", "-m-3.5");
         expect(remove.querySelector("svg")).toHaveClass("h-3", "w-3");
     });
