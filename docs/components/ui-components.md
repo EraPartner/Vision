@@ -3,7 +3,7 @@ title: UI Components
 type: component
 status: active
 date: 2026-10-06
-updated: 2026-10-05
+updated: 2026-10-06
 tags:
   [
     components,
@@ -124,10 +124,10 @@ reduced-motion gate.
 
 Code links: [[apps/frontend/src/index.css]], [[apps/frontend/src/styles/tokens.css]], [[apps/frontend/src/components/ui/card.tsx]], [[apps/frontend/src/components/ui/dialog.tsx]], [[apps/frontend/src/components/ui/input.tsx]], [[apps/frontend/src/components/ui/button.tsx]]
 
-`CardTitle` has three named typography roles: `default` for an xl display title,
-`sm` for the smallest supported display title (`text-lg`), and `label` for the
-readable `text-sm` body role used by metric labels. Call sites do not downsize the display
-face with `text-xs`, `text-sm`, or `text-base` overrides.
+`CardTitle` has three named typography roles: `default` renders `type-title-2`,
+`sm` renders `type-title-3` (the smallest supported display title), and `label` renders the
+readable `type-body` medium role in `text-label-secondary` used by metric labels. Call sites do
+not downsize the display face with `text-xs`, `text-sm`, or `text-base` overrides.
 
 Its semantic heading level is independent of typography. `CardTitle` defaults to
 `level={2}` so a page card follows the page `h1` without skipping a level. Use
@@ -140,8 +140,14 @@ instead of a raw size, opacity or shadow. Type uses `type-large-title`, `type-ti
 uses `text-label-primary/secondary/tertiary/quaternary`; corners use `rounded-chip`,
 `rounded-control`, `rounded-card` and `rounded-sheet` (nested concentrically, optionally with
 `corner-continuous`); depth uses `shadow-elevation-1..4`; keyboard focus uses `focus-ring`; and
-spring motion pairs `ease-spring-*` with `duration-spring-*`. Existing primitives have not adopted
-these yet.
+spring motion pairs `ease-spring-*` with `duration-spring-*`. The shared primitives adopted them in
+[[docs/adr/179-primitives-adopt-role-tokens|ADR-179]]: regular controls are 36px (`h-9`, `sm`
+32px, `lg` 40px) on `rounded-control`; cards, menus, popovers, alerts and toasts use `rounded-card
+corner-continuous`; dialogs and sheets use `rounded-sheet corner-continuous`; the glass tiers read
+`--elevation-1..4`; the dialog entrance and the switch thumb run on the CSS springs. New
+primitives from the same change: `SegmentedControl`, `List`/`ListRow`, `Inspector` and the
+`undoToast` helper (see [[docs/components/shared-components|Shared Components]] and
+[[docs/features/transactions|Transactions]]).
 
 **Motion and premium polish utilities**:
 
@@ -204,9 +210,17 @@ These tokens resolve to the correct color for both light and dark modes and resp
 
 **Sonner success icon:** The Sonner success toast icon uses `text-success` instead of `text-emerald-500` so it inherits theme-variant green.
 
-### focus-visible Ring Convention (June 2026)
+### Keyboard focus ring (ADR-179, October 2026)
 
-The default treatment, where component geometry permits, is the semantic house ring `focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2` rather than `focus:ring-*` or a raw primary-colour ring. This avoids mouse-click rings and keeps keyboard focus visible across theme variants. Constrained nested controls may use semantic `ring-ring` variants without an offset, sidebar-owned rings, or deliberately suppress an inherited ring.
+Keyboard focus is one mechanism. The base `:focus-visible` rule in `index.css` draws a 3px
+translucent outline in `--ring` at the palette's `--focus-ring-alpha`, offset by 1px, with the
+full ring colour under `prefers-contrast: more`, and sets no `border-radius`, so the ring follows
+each element's own shape. A primitive that resets the outline (`outline-none`) restates it with
+the `focus-ring` utility, which is the same treatment. Rows inside a clipped group pull the ring
+inward with `focus-visible:outline-offset-[-3px]`. The Tailwind spellings `focus-visible:ring-2 …
+ring-offset-2`, `ring-offset-background` and `focus:ring-*` are no longer used in
+`apps/frontend/src`; `components/ui/primitives.contract.test.ts` keeps them out. Sidebar-owned
+rings are the one remaining exception until the navigation pass.
 
 ### Overscroll Behavior (June 2026)
 
@@ -280,7 +294,7 @@ Code links: [[apps/frontend/package.json]], [[apps/frontend/src/index.css]]
 
 Page-level consistency is provided by reusable shared components:
 
-- `PageHeader` for canonical page title/subtitle/icon/actions layout
+- `PageHeader` for canonical page title/subtitle/icon/actions layout; the title renders `type-large-title` and the subtitle `type-body` (ADR-179)
 - Destination identity icons come from `lib/pageIcons.ts`. Sidebar, command palette, page headers, and identity empty states must not choose separate icons for the same route.
 - Ordinary section and chart headings are text-first. Keep an icon only when it communicates identity, state, action, or distinguishes sibling cards; do not add an icon that merely repeats the heading noun.
 - `EmptyState` for standardized empty-state messaging and CTA composition (see below)
@@ -304,6 +318,7 @@ Frontend notification rendering is standardized on Sonner:
 
 - `App` mounts only `Sonner`
 - New and existing flows should use `toast` from `sonner`
+- A reversible action uses `undoToast` from `lib/undoToast.ts` instead of a confirmation: it shows the success toast with an Undo action that shares the one Undo slot with ⌘Z (ADR-179)
 - Legacy Radix toast plumbing (`use-toast` hook wrappers and Radix toaster bridge) has been removed from the frontend package
 
 Code links: [[apps/frontend/src/App.tsx]], [[apps/frontend/src/components/ui/sonner.tsx]], [[apps/frontend/src/features/portfolio/AddToWatchlistDialog.tsx]], [[apps/frontend/src/features/portfolio/WatchlistChartDialog.tsx]], [[apps/frontend/src/pages/research/WatchlistPage.tsx]], [[apps/frontend/package.json]]
@@ -397,7 +412,7 @@ Code links: [[apps/frontend/src/App.tsx]], [[apps/frontend/src/components/ui/son
 
 ## Button
 
-Primary action component with multiple variants. Standard and small buttons share the same corner radius across primary, outline, secondary and destructive styles. Large buttons retain their larger radius. Color and border distinguish emphasis; hover changes the surface without lifting the control or adding a colored glow. Shared press feedback, keyboard focus, disabled states and reduced-motion handling remain intact.
+Primary action component with multiple variants. Every size and variant uses the `rounded-control` corner; `default` and `icon` are 36px tall, `sm` 32px and `lg` 40px (ADR-179). Color and border distinguish emphasis; hover changes the surface without lifting the control or adding a colored glow. Shared press feedback, keyboard focus, disabled states and reduced-motion handling remain intact.
 
 ### Variants
 

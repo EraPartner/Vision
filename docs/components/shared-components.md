@@ -2,8 +2,8 @@
 title: Shared Components Reference
 type: component
 status: active
-date: 2026-04-26
-updated: 2026-08-31
+date: 2026-10-06
+updated: 2026-10-06
 last_modified: 2026-08-27
 tags: [component, shared, utility, frontend, reference, phase-13, phase-c, phase-d, multi-select, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, dateutils, utc-safe-dates, date-formatting, debounce, accessibility, aria-label, useCallback, aria-grid, keyboard-operability, a11y, performance, memoization, selection-toggle, upcoming-payments-hook, june-2026, symbol-search, research, ui-consistency, glass-consistency, popover-glass-thick, trend-hue, gain-loss, design-system, card-sheen, corner-orb, adr-105]
 description: Reference documentation for shared utility components used across the application. May 2026 adds UTC-safe date parsing, ARIA grid semantics on VirtualDataTable, the onActivateKeyDown keyboard helper, and the columnKeySignature selection-toggle reprocessing fix. June 2026 V11: UpcomingPaymentsNotification refactored onto shared useUpcomingPlannedPayments hook; its visible reminder is dashboard-only while AppLayout keeps native badge synchronization mounted on all routes. 2026-06-24: SuggestionCard dashboard widget removed; UpcomingPaymentsNotification is now the sole upcoming-payments notification surface. June 2026 V12: SymbolSearchBox and SymbolSearchResultItem added — canonical chrome and result row for all research symbol pickers. June 2026 (glass consistency): SymbolSearchBox dropdown material changed from glass-elevated to glass-thick to match the rest of the floating-overlay system. 2026-06-24 (gain/loss consistency pass): TrendHue added — single shared overlay component for the faint diagonal card hue on all summary/stat cards. 2026-08-27: StateBlock unifies empty, page-error, and crash-fallback anatomy; CardSheen has a named feature tier for the Performance total-value card's 10rem sheen. 2026-08-25: VirtualDataTable visible rows gained a memo boundary so server-search input updates do not rebuild unchanged row subtrees; StatCard moved into shared ownership for its dashboard, portfolio, research, and statistics consumers. 2026-08-26: SymbolSearchBox gained ARIA listbox semantics and input-owned keyboard navigation; RecipientCombobox now resolves the selected label independently of its filtered search page; VirtualDataTable column resizing gained pointer and keyboard operation.
@@ -27,11 +27,23 @@ related_code:
   - apps/frontend/src/components/notifications/UpdateNotification.tsx
   - apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx
   - apps/frontend/src/utils/a11y.ts
+  - apps/frontend/src/components/shared/SegmentedButtons.tsx
+  - apps/frontend/src/components/ui/segmented-control.tsx
+  - apps/frontend/src/components/ui/list.tsx
+  - apps/frontend/src/components/ui/inspector.tsx
 ---
 
 # Shared Components Reference
 
 `MultiCombobox` and its bank-account/category wrappers forward `id`, `aria-label`, and `aria-labelledby` to the rendered trigger. This lets a normal `<Label htmlFor>` name the real combobox button. `SegmentedButtons`, `ChartPeriodSelector`, and `ResearchRangeSelector` expose the same group-naming contract.
+
+## Segmented control, inset list and inspector (ADR-179)
+
+[[docs/adr/179-primitives-adopt-role-tokens|ADR-179]] adds three primitives in `components/ui/` for the screen passes:
+
+- `SegmentedControl` / `SegmentedControlItem` (`segmented-control.tsx`): a macOS-style picker on Radix ToggleGroup in single mode. The group is a `radiogroup`, each segment a `radio` with `aria-checked`; one pill glides between segments on the snappy spring, and clicking the chosen segment does not clear it. Sizes `default` (36px) and `sm` (32px). `SegmentedButtons` keeps its predicate API (`options`, `getKey`, `getLabel`, `isSelected`, `onSelect`, `buttonClassName`, `size`, `aria-label`/`aria-labelledby`) and renders this control; its `selectedVariant`/`unselectedVariant` props are gone.
+- `List` / `ListRow` (`list.tsx`): an inset grouped list on one `rounded-card` surface with hairline dividers. A row takes `leading`, `title`, `subtitle`, `trailing` and `chevron`; it renders a button when `onActivate` is set, wraps a link or custom control with `asChild`, and is static otherwise. Interactive rows keep the keyboard ring inside the clipped group.
+- `Inspector` with `InspectorHeader`, `InspectorTitle`, `InspectorClose`, `InspectorBody`, `InspectorSection`, `InspectorField` and `InspectorFooter` (`inspector.tsx`): a non-modal details pane docked beside a list, exposed as a `complementary` landmark. Focus is not trapped, Escape inside the panel calls `onClose`, and the close button is labelled with `common.close`. Screens decide its width and may show the same content in a `Sheet` on phones.
 
 `PageShell` owns page-level vertical rhythm. It defaults to 24px (`space-y-6`); only Dashboard uses the explicit `rhythm="airy"` 32px variant. Route entrance motion remains owned by `PageTransition`, so PageShell adds no animation.
 
