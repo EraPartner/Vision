@@ -1,5 +1,4 @@
-import { Briefcase, Receipt, Telescope, type LucideIcon } from "lucide-react";
-import type { Workspace } from "@/hooks/useWorkspace";
+import type { LucideIcon } from "lucide-react";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 
 /**
@@ -7,13 +6,17 @@ import { PAGE_ICONS } from "@/lib/pageIcons";
  *
  * Every navigation surface derives its view from this registry instead of
  * hand-maintaining its own list (which had already drifted apart):
- *   - AppSidebar renders the grouped workspace sections, the workspace
- *     switcher, the workspace-agnostic pages, and the admin section;
+ *   - AppSidebar renders one labelled sidebar: the top items, the Money,
+ *     Wealth and Research sections (each can be hidden), the admin section,
+ *     and the footer items;
  *   - CommandPalette flattens the same sections into searchable page entries
  *     (`PALETTE_SECTIONS`);
  *   - useGoToShortcuts binds the `g`-then-key sequences (`GO_TO_ROUTES`,
  *     derived from `shortcutKey`), and ShortcutsOverlay lists them;
  *   - useDocumentTitle resolves the per-route title via `matchNavTitleKey`.
+ *
+ * Sections replaced the three workspace modes (ADR-180): everything is
+ * visible at once, like Finder or Music, so nothing hides behind a switch.
  */
 export interface NavItem {
     /** i18n key for the page label — resolved through the active locale. */
@@ -23,337 +26,295 @@ export interface NavItem {
     /** Second key of the `g`-then-key go-to sequence, if the page has one. */
     shortcutKey?: string;
     /**
-     * Label override for the shortcuts-overlay go-to list, for the one entry
-     * whose page title is ambiguous there (the portfolio dashboard: "G P"
-     * reads "Portfolio", not a second "Dashboard"). Omitted everywhere else.
+     * A live count rendered next to the label: things that need the user
+     * (uncategorized transactions, payments due) or are waiting (insights,
+     * unread monitor results). The sidebar maps each id to its hook.
      */
-    goToTitleKey?: string;
+    badge?: "needs-category" | "planned-due" | "insights" | "monitors";
+    /**
+     * Active when the pathname matches exactly, instead of the default
+     * boundary-aware prefix match. Used by section roots that have children
+     * with their own entries (`/portfolio`, `/research`, `/admin`).
+     */
+    exact?: boolean;
 }
 
-export interface NavGroup {
-    /** i18n key for the sidebar group label (e.g. "nav.overview"). */
-    labelKey: string;
+export type NavSectionId = "top" | "money" | "wealth" | "research" | "admin";
+
+export interface NavSection {
+    id: NavSectionId;
+    /** i18n key for the section heading. The top section has none. */
+    labelKey?: string;
+    /** A section with a heading can be hidden ("Hide" / "Show"). */
+    collapsible: boolean;
+    /** Hidden until the user shows it (persisted per browser). */
+    defaultHidden?: boolean;
     items: NavItem[];
 }
 
-export interface NavWorkspaceSection {
-    id: Workspace;
-    /** i18n key for the workspace label — switcher tab and palette heading. */
-    labelKey: string;
-    /** Workspace-switcher icon (also the collapsed-rail cycle button). */
-    icon: LucideIcon;
-    /** Section root: `[` / `]` cycling lands here; active only on exact match. */
-    rootUrl: string;
-    groups: NavGroup[];
-}
+const TOP_SECTION: NavSection = {
+    id: "top",
+    collapsible: false,
+    items: [
+        {
+            titleKey: "nav.home",
+            url: "/",
+            icon: PAGE_ICONS["/"],
+            shortcutKey: "h",
+            exact: true,
+        },
+        {
+            titleKey: "nav.transactions",
+            url: "/transactions",
+            icon: PAGE_ICONS["/transactions"],
+            shortcutKey: "t",
+            badge: "needs-category",
+        },
+        {
+            titleKey: "nav.accounts",
+            url: "/accounts",
+            icon: PAGE_ICONS["/accounts"],
+        },
+        {
+            titleKey: "nav.plannedPayments",
+            url: "/planned",
+            icon: PAGE_ICONS["/planned"],
+            badge: "planned-due",
+        },
+    ],
+};
+
+const MONEY_SECTION: NavSection = {
+    id: "money",
+    labelKey: "nav.money",
+    collapsible: true,
+    items: [
+        {
+            titleKey: "nav.categories",
+            url: "/categories",
+            icon: PAGE_ICONS["/categories"],
+            shortcutKey: "c",
+        },
+        {
+            titleKey: "nav.recipients",
+            url: "/recipients",
+            icon: PAGE_ICONS["/recipients"],
+            shortcutKey: "r",
+        },
+        {
+            titleKey: "nav.statistics",
+            url: "/statistics",
+            icon: PAGE_ICONS["/statistics"],
+            shortcutKey: "s",
+            badge: "insights",
+        },
+        {
+            titleKey: "nav.whoOwesYou",
+            url: "/owes",
+            icon: PAGE_ICONS["/owes"],
+        },
+        {
+            titleKey: "nav.taxes",
+            url: "/tax",
+            icon: PAGE_ICONS["/tax"],
+        },
+        {
+            titleKey: "nav.importExport",
+            url: "/import",
+            icon: PAGE_ICONS["/import"],
+            shortcutKey: "i",
+        },
+    ],
+};
+
+const WEALTH_SECTION: NavSection = {
+    id: "wealth",
+    labelKey: "nav.wealth",
+    collapsible: true,
+    items: [
+        {
+            titleKey: "nav.portfolio",
+            url: "/portfolio",
+            icon: PAGE_ICONS["/portfolio"],
+            shortcutKey: "p",
+            exact: true,
+        },
+        {
+            titleKey: "nav.netWorth",
+            url: "/portfolio/net-worth",
+            icon: PAGE_ICONS["/portfolio/net-worth"],
+            shortcutKey: "n",
+        },
+        {
+            titleKey: "nav.stocksEtfs",
+            url: "/portfolio/stocks",
+            icon: PAGE_ICONS["/portfolio/stocks"],
+        },
+        {
+            titleKey: "nav.crypto",
+            url: "/portfolio/crypto",
+            icon: PAGE_ICONS["/portfolio/crypto"],
+        },
+        {
+            titleKey: "nav.metals",
+            url: "/portfolio/metals",
+            icon: PAGE_ICONS["/portfolio/metals"],
+        },
+        {
+            titleKey: "nav.realEstate",
+            url: "/portfolio/real-estate",
+            icon: PAGE_ICONS["/portfolio/real-estate"],
+        },
+        {
+            titleKey: "nav.savingsBonds",
+            url: "/portfolio/savings",
+            icon: PAGE_ICONS["/portfolio/savings"],
+        },
+        {
+            titleKey: "nav.performance",
+            url: "/portfolio/performance",
+            icon: PAGE_ICONS["/portfolio/performance"],
+        },
+        {
+            titleKey: "nav.rebalance",
+            url: "/portfolio/rebalance",
+            icon: PAGE_ICONS["/portfolio/rebalance"],
+        },
+        {
+            titleKey: "nav.portfolioTaxes",
+            url: "/portfolio/tax",
+            icon: PAGE_ICONS["/portfolio/tax"],
+        },
+        {
+            titleKey: "nav.portfolioImport",
+            url: "/portfolio/import",
+            icon: PAGE_ICONS["/portfolio/import"],
+        },
+    ],
+};
+
+const RESEARCH_SECTION: NavSection = {
+    id: "research",
+    labelKey: "nav.research",
+    collapsible: true,
+    defaultHidden: true,
+    items: [
+        {
+            titleKey: "nav.researchHome",
+            url: "/research",
+            icon: PAGE_ICONS["/research"],
+            exact: true,
+        },
+        {
+            titleKey: "nav.markets",
+            url: "/research/markets",
+            icon: PAGE_ICONS["/research/markets"],
+            shortcutKey: "m",
+        },
+        {
+            titleKey: "nav.marketLookup",
+            url: "/research/market",
+            icon: PAGE_ICONS["/research/market"],
+        },
+        {
+            titleKey: "nav.compare",
+            url: "/research/compare",
+            icon: PAGE_ICONS["/research/compare"],
+        },
+        {
+            titleKey: "nav.chartBuilder",
+            url: "/research/charts",
+            icon: PAGE_ICONS["/research/charts"],
+        },
+        {
+            titleKey: "nav.forecast",
+            url: "/research/forecast",
+            icon: PAGE_ICONS["/research/forecast"],
+        },
+        {
+            titleKey: "nav.watchlist",
+            url: "/research/watchlist",
+            icon: PAGE_ICONS["/research/watchlist"],
+        },
+        {
+            titleKey: "nav.dossiers",
+            url: "/research/dossiers",
+            icon: PAGE_ICONS["/research/dossiers"],
+        },
+        {
+            titleKey: "nav.analysisWorkspace",
+            url: "/analysis",
+            icon: PAGE_ICONS["/analysis"],
+            exact: true,
+        },
+        {
+            titleKey: "nav.analysisMonitors",
+            url: "/analysis/monitors",
+            icon: PAGE_ICONS["/analysis/monitors"],
+            badge: "monitors",
+        },
+    ],
+};
 
 /**
- * Workspace-agnostic pages (AI chat, and the cross-workspace Accounts hub —
- * ADR-088). The sidebar pins them above the workspace switcher; the palette
- * lists them at the tail of the Budgeting section; navigating to them never
- * forces a workspace switch (see WORKSPACE_AGNOSTIC_URLS).
+ * Admin pages — shown only when `appSettings.adminMode` is on (sidebar and
+ * palette both gate on it). The sidebar renders them as a section that can
+ * be hidden like the others; the palette lists them last.
  */
-export const GLOBAL_NAV_ITEMS: NavItem[] = [
+export const ADMIN_SECTION: NavSection = {
+    id: "admin",
+    labelKey: "nav.admin",
+    collapsible: true,
+    items: [
+        {
+            titleKey: "nav.adminOverview",
+            url: "/admin",
+            icon: PAGE_ICONS["/admin"],
+            exact: true,
+        },
+        {
+            titleKey: "nav.dbMaintenance",
+            url: "/admin/db",
+            icon: PAGE_ICONS["/admin/db"],
+        },
+        {
+            titleKey: "nav.adminProviders",
+            url: "/admin/providers",
+            icon: PAGE_ICONS["/admin/providers"],
+        },
+        {
+            titleKey: "nav.adminEndpoints",
+            url: "/admin/endpoints",
+            icon: PAGE_ICONS["/admin/endpoints"],
+        },
+        {
+            titleKey: "nav.exchangeRates",
+            url: "/admin/exchange-rates",
+            icon: PAGE_ICONS["/admin/exchange-rates"],
+        },
+    ],
+};
+
+export const ADMIN_NAV_ITEMS: ReadonlyArray<NavItem> = ADMIN_SECTION.items;
+
+/** The always-shown sections, top to bottom. Admin is appended at runtime. */
+export const NAV_SECTIONS: ReadonlyArray<NavSection> = [
+    TOP_SECTION,
+    MONEY_SECTION,
+    WEALTH_SECTION,
+    RESEARCH_SECTION,
+];
+
+/**
+ * Footer items: the assistant and Settings. Settings is not a route (it is
+ * the `?settings=` dialog), so only the assistant is a NavItem here.
+ */
+export const FOOTER_NAV_ITEMS: ReadonlyArray<NavItem> = [
     {
         titleKey: "nav.aiChat",
         url: "/ai-chat",
         icon: PAGE_ICONS["/ai-chat"],
         shortcutKey: "a",
-    },
-    {
-        titleKey: "nav.accounts",
-        url: "/accounts",
-        icon: PAGE_ICONS["/accounts"],
-    },
-    {
-        titleKey: "nav.analysisWorkspace",
-        url: "/analysis",
-        icon: PAGE_ICONS["/analysis"],
-    },
-    {
-        titleKey: "nav.analysisMonitors",
-        url: "/analysis/monitors",
-        icon: PAGE_ICONS["/analysis/monitors"],
-    },
-];
-
-const BUDGETING_SECTION: NavWorkspaceSection = {
-    id: "budgeting",
-    labelKey: "nav.budgeting",
-    icon: Receipt,
-    rootUrl: "/",
-    groups: [
-        {
-            labelKey: "nav.overview",
-            items: [
-                {
-                    titleKey: "nav.dashboard",
-                    url: "/",
-                    icon: PAGE_ICONS["/"],
-                    shortcutKey: "d",
-                },
-                {
-                    titleKey: "nav.transactions",
-                    url: "/transactions",
-                    icon: PAGE_ICONS["/transactions"],
-                    shortcutKey: "t",
-                },
-            ],
-        },
-        {
-            labelKey: "nav.organization",
-            items: [
-                {
-                    titleKey: "nav.categories",
-                    url: "/categories",
-                    icon: PAGE_ICONS["/categories"],
-                    shortcutKey: "c",
-                },
-                {
-                    titleKey: "nav.recipients",
-                    url: "/recipients",
-                    icon: PAGE_ICONS["/recipients"],
-                    shortcutKey: "r",
-                },
-            ],
-        },
-        {
-            labelKey: "nav.analysis",
-            items: [
-                {
-                    titleKey: "nav.statistics",
-                    url: "/statistics",
-                    icon: PAGE_ICONS["/statistics"],
-                    shortcutKey: "s",
-                },
-                {
-                    titleKey: "nav.plannedPayments",
-                    url: "/planned",
-                    icon: PAGE_ICONS["/planned"],
-                },
-                {
-                    titleKey: "nav.whoOwesYou",
-                    url: "/owes",
-                    icon: PAGE_ICONS["/owes"],
-                },
-                {
-                    titleKey: "nav.taxOverview",
-                    url: "/tax",
-                    icon: PAGE_ICONS["/tax"],
-                },
-            ],
-        },
-        {
-            labelKey: "nav.tools",
-            items: [
-                {
-                    titleKey: "nav.importExport",
-                    url: "/import",
-                    icon: PAGE_ICONS["/import"],
-                    shortcutKey: "i",
-                },
-            ],
-        },
-    ],
-};
-
-const PORTFOLIO_SECTION: NavWorkspaceSection = {
-    id: "portfolio",
-    labelKey: "nav.portfolio",
-    icon: Briefcase,
-    rootUrl: "/portfolio",
-    groups: [
-        {
-            labelKey: "nav.overview",
-            items: [
-                {
-                    titleKey: "nav.dashboard",
-                    url: "/portfolio",
-                    icon: PAGE_ICONS["/portfolio"],
-                    shortcutKey: "p",
-                    goToTitleKey: "nav.portfolio",
-                },
-                {
-                    titleKey: "nav.netWorth",
-                    url: "/portfolio/net-worth",
-                    icon: PAGE_ICONS["/portfolio/net-worth"],
-                    shortcutKey: "n",
-                },
-            ],
-        },
-        {
-            labelKey: "nav.investments",
-            items: [
-                {
-                    titleKey: "nav.stocksEtfs",
-                    url: "/portfolio/stocks",
-                    icon: PAGE_ICONS["/portfolio/stocks"],
-                },
-                {
-                    titleKey: "nav.crypto",
-                    url: "/portfolio/crypto",
-                    icon: PAGE_ICONS["/portfolio/crypto"],
-                },
-                {
-                    titleKey: "nav.metals",
-                    url: "/portfolio/metals",
-                    icon: PAGE_ICONS["/portfolio/metals"],
-                },
-            ],
-        },
-        {
-            labelKey: "nav.assets",
-            items: [
-                {
-                    titleKey: "nav.realEstate",
-                    url: "/portfolio/real-estate",
-                    icon: PAGE_ICONS["/portfolio/real-estate"],
-                },
-                {
-                    titleKey: "nav.savingsBonds",
-                    url: "/portfolio/savings",
-                    icon: PAGE_ICONS["/portfolio/savings"],
-                },
-            ],
-        },
-        {
-            labelKey: "nav.analysis",
-            items: [
-                {
-                    titleKey: "nav.performance",
-                    url: "/portfolio/performance",
-                    icon: PAGE_ICONS["/portfolio/performance"],
-                },
-                {
-                    titleKey: "nav.rebalance",
-                    url: "/portfolio/rebalance",
-                    icon: PAGE_ICONS["/portfolio/rebalance"],
-                },
-                {
-                    titleKey: "nav.taxOverview",
-                    url: "/portfolio/tax",
-                    icon: PAGE_ICONS["/portfolio/tax"],
-                },
-            ],
-        },
-        {
-            labelKey: "nav.tools",
-            items: [
-                {
-                    titleKey: "nav.portfolioImport",
-                    url: "/portfolio/import",
-                    icon: PAGE_ICONS["/portfolio/import"],
-                },
-            ],
-        },
-    ],
-};
-
-const RESEARCH_SECTION: NavWorkspaceSection = {
-    id: "research",
-    labelKey: "nav.research",
-    icon: Telescope,
-    rootUrl: "/research",
-    groups: [
-        {
-            labelKey: "nav.overview",
-            items: [
-                {
-                    titleKey: "nav.researchHome",
-                    url: "/research",
-                    icon: PAGE_ICONS["/research"],
-                },
-                {
-                    titleKey: "nav.markets",
-                    url: "/research/markets",
-                    icon: PAGE_ICONS["/research/markets"],
-                    shortcutKey: "m",
-                },
-                {
-                    titleKey: "nav.marketLookup",
-                    url: "/research/market",
-                    icon: PAGE_ICONS["/research/market"],
-                },
-            ],
-        },
-        {
-            labelKey: "nav.analysis",
-            items: [
-                {
-                    titleKey: "nav.compare",
-                    url: "/research/compare",
-                    icon: PAGE_ICONS["/research/compare"],
-                },
-                {
-                    titleKey: "nav.chartBuilder",
-                    url: "/research/charts",
-                    icon: PAGE_ICONS["/research/charts"],
-                },
-                {
-                    titleKey: "nav.forecast",
-                    url: "/research/forecast",
-                    icon: PAGE_ICONS["/research/forecast"],
-                },
-                {
-                    titleKey: "nav.watchlist",
-                    url: "/research/watchlist",
-                    icon: PAGE_ICONS["/research/watchlist"],
-                },
-                {
-                    titleKey: "nav.dossiers",
-                    url: "/research/dossiers",
-                    icon: PAGE_ICONS["/research/dossiers"],
-                },
-            ],
-        },
-    ],
-};
-
-/** Workspace lookup for the sidebar (typed so every Workspace has a section). */
-export const NAV_WORKSPACE_BY_ID: Record<Workspace, NavWorkspaceSection> = {
-    budgeting: BUDGETING_SECTION,
-    portfolio: PORTFOLIO_SECTION,
-    research: RESEARCH_SECTION,
-};
-
-/** The workspace sections in left-to-right display/cycle order. */
-export const NAV_WORKSPACES: ReadonlyArray<NavWorkspaceSection> = [
-    BUDGETING_SECTION,
-    PORTFOLIO_SECTION,
-    RESEARCH_SECTION,
-];
-
-/**
- * Admin pages — shown only when `appSettings.adminMode` is on (both sidebar
- * and palette gate on it). Icons reconciled: the palette's drifted copy used a
- * generic `Settings` placeholder for the first four; the sidebar's semantic
- * icons win and both surfaces now share them.
- */
-export const ADMIN_NAV_ITEMS: NavItem[] = [
-    {
-        titleKey: "nav.adminOverview",
-        url: "/admin",
-        icon: PAGE_ICONS["/admin"],
-    },
-    {
-        titleKey: "nav.dbMaintenance",
-        url: "/admin/db",
-        icon: PAGE_ICONS["/admin/db"],
-    },
-    {
-        titleKey: "nav.adminProviders",
-        url: "/admin/providers",
-        icon: PAGE_ICONS["/admin/providers"],
-    },
-    {
-        titleKey: "nav.adminEndpoints",
-        url: "/admin/endpoints",
-        icon: PAGE_ICONS["/admin/endpoints"],
-    },
-    {
-        titleKey: "nav.exchangeRates",
-        url: "/admin/exchange-rates",
-        icon: PAGE_ICONS["/admin/exchange-rates"],
     },
 ];
 
@@ -361,39 +322,35 @@ export const ADMIN_NAV_ITEMS: NavItem[] = [
 // Derived views — consumers use these instead of re-declaring the data.
 // ---------------------------------------------------------------------------
 
-function flattenGroups(section: NavWorkspaceSection): NavItem[] {
-    return section.groups.flatMap((group) => group.items);
-}
-
 /**
- * All navigable pages across every workspace (global + admin included), in
- * display order. Used to resolve a pathname back to its title key and to look
- * up palette recents.
+ * All navigable pages (admin and footer included), in display order. Used to
+ * resolve a pathname back to its title key and to look up palette recents.
  */
 export const ALL_NAV_ITEMS: ReadonlyArray<NavItem> = [
-    ...NAV_WORKSPACES.flatMap(flattenGroups),
-    ...GLOBAL_NAV_ITEMS,
-    ...ADMIN_NAV_ITEMS,
+    ...NAV_SECTIONS.flatMap((section) => section.items),
+    ...FOOTER_NAV_ITEMS,
+    ...ADMIN_SECTION.items,
 ];
 
 /**
- * The command palette's always-visible nav sections: each workspace flattened
- * in sidebar order, with the workspace-agnostic pages carried at the tail of
- * the Budgeting section (AI chat's historical spot). Reconciled: the palette's
- * drifted copy was missing Rebalance, Portfolio Import and Accounts, and
- * ordered Performance ahead of the investment pages; it now follows the
- * sidebar's maintained order.
+ * The command palette's always-visible page groups: the top items join the
+ * Money group (they are money pages too), then Wealth and Research, with the
+ * assistant at the end of Research so every page has a heading.
  */
 export const PALETTE_SECTIONS: ReadonlyArray<{
     headingKey: string;
     pages: ReadonlyArray<NavItem>;
-}> = NAV_WORKSPACES.map((ws) => ({
-    headingKey: ws.labelKey,
-    pages:
-        ws.id === "budgeting"
-            ? [...flattenGroups(ws), ...GLOBAL_NAV_ITEMS]
-            : flattenGroups(ws),
-}));
+}> = [
+    {
+        headingKey: "nav.money",
+        pages: [...TOP_SECTION.items, ...MONEY_SECTION.items],
+    },
+    { headingKey: "nav.wealth", pages: WEALTH_SECTION.items },
+    {
+        headingKey: "nav.research",
+        pages: [...RESEARCH_SECTION.items, ...FOOTER_NAV_ITEMS],
+    },
+];
 
 /** Gmail-style go-to sequences: press `g`, then a destination key. Derived
  *  from `shortcutKey` in registry order; shared with ShortcutsOverlay so the
@@ -404,13 +361,7 @@ export const GO_TO_ROUTES: ReadonlyArray<{
     titleKey: string;
 }> = ALL_NAV_ITEMS.flatMap((item) =>
     item.shortcutKey
-        ? [
-              {
-                  key: item.shortcutKey,
-                  url: item.url,
-                  titleKey: item.goToTitleKey ?? item.titleKey,
-              },
-          ]
+        ? [{ key: item.shortcutKey, url: item.url, titleKey: item.titleKey }]
         : [],
 );
 
@@ -419,30 +370,46 @@ export const GO_TO_KEY_BY_URL: ReadonlyMap<string, string> = new Map(
     GO_TO_ROUTES.map((r) => [r.url, r.key]),
 );
 
-/** The three workspace section roots, in left-to-right cycle order. `[` / `]`
- *  step between them; shared with ShortcutsOverlay so the help stays truthful. */
+/** `[` / `]` step between the three area roots (Home, Portfolio, Research),
+ *  as they did between the workspace roots; shared with ShortcutsOverlay. */
 export const SECTION_CYCLE: ReadonlyArray<{ url: string; titleKey: string }> =
-    NAV_WORKSPACES.map((ws) => ({ url: ws.rootUrl, titleKey: ws.labelKey }));
+    [
+        { url: "/", titleKey: "nav.home" },
+        { url: "/portfolio", titleKey: "nav.portfolio" },
+        { url: "/research", titleKey: "nav.research" },
+    ];
 
-/** Workspace root urls — active only on an exact match (they have children). */
-export const WORKSPACE_ROOT_URLS: ReadonlySet<string> = new Set(
-    NAV_WORKSPACES.map((ws) => ws.rootUrl),
-);
-
-/** Urls of workspace-agnostic pages: jumping to one keeps the current
- *  workspace (and its sidebar) instead of forcing a switch. */
-export const WORKSPACE_AGNOSTIC_URLS: ReadonlySet<string> = new Set(
-    GLOBAL_NAV_ITEMS.map((item) => item.url),
-);
+/** Which registry section a nav item belongs to, by url. */
+export const SECTION_ID_BY_URL: ReadonlyMap<string, NavSectionId> = new Map([
+    ...NAV_SECTIONS.flatMap((section) =>
+        section.items.map(
+            (item) => [item.url, section.id] as [string, NavSectionId],
+        ),
+    ),
+    ...ADMIN_SECTION.items.map(
+        (item) => [item.url, ADMIN_SECTION.id] as [string, NavSectionId],
+    ),
+]);
 
 /**
- * Resolve a pathname to the title key of the most specific matching nav route,
- * or `undefined` when nothing matches. The root ("/") matches only exactly;
- * every other route matches its own path or any child path ("/import/42/review"
- * → "/import") with the longest matching prefix winning so siblings and parents
- * don't shadow a deeper page.
+ * Whether a nav item is the active one for `pathname`. Exact items match only
+ * themselves; every other item also owns its child routes
+ * (`/import/42/review` lights up Import) with a boundary check so a sibling
+ * whose path is a string prefix (`/research/market` vs `/research/markets`)
+ * does not light up too.
  */
-export function matchNavTitleKey(pathname: string): string | undefined {
+export function isActiveNavItem(item: NavItem, pathname: string): boolean {
+    if (item.exact) return pathname === item.url;
+    return pathname === item.url || pathname.startsWith(item.url + "/");
+}
+
+/**
+ * Resolve a pathname to the most specific matching nav item, or `undefined`
+ * when nothing matches. The root ("/") matches only exactly; every other
+ * route matches its own path or any child path, with the longest matching
+ * prefix winning so siblings and parents don't shadow a deeper page.
+ */
+export function matchNavItem(pathname: string): NavItem | undefined {
     let best: NavItem | undefined;
     for (const route of ALL_NAV_ITEMS) {
         const matches =
@@ -453,5 +420,19 @@ export function matchNavTitleKey(pathname: string): string | undefined {
         if (matches && (!best || route.url.length > best.url.length))
             best = route;
     }
-    return best?.titleKey;
+    return best;
+}
+
+/** Title key of the most specific nav route for `pathname`, if any. */
+export function matchNavTitleKey(pathname: string): string | undefined {
+    return matchNavItem(pathname)?.titleKey;
+}
+
+/**
+ * The section whose item is active for `pathname`, so the sidebar can show a
+ * hidden section while the user is inside it.
+ */
+export function matchNavSectionId(pathname: string): NavSectionId | undefined {
+    const item = matchNavItem(pathname);
+    return item ? SECTION_ID_BY_URL.get(item.url) : undefined;
 }

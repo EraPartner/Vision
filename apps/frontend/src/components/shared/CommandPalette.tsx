@@ -21,10 +21,9 @@ import {
 } from "lucide-react";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useTheme } from "@/stores/hydration/ThemeHydration";
-import { useWorkspace } from "@/hooks/useWorkspace";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useDebounce, SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
-import { Keyboard, Calculator } from "lucide-react";
+import { Keyboard, Calculator, Clock, MonitorSmartphone } from "lucide-react";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { numberFormatToLocale } from "@/utils/currency";
 import { toast } from "sonner";
@@ -33,7 +32,6 @@ import {
     ADMIN_NAV_ITEMS,
     GO_TO_KEY_BY_URL,
     PALETTE_SECTIONS,
-    WORKSPACE_AGNOSTIC_URLS,
     type NavItem as PaletteEntry,
 } from "@/lib/navigation";
 import {
@@ -78,7 +76,6 @@ export function CommandPalette({
     const navigate = useNavigate();
     const { t } = useLanguage();
     const { setMode } = useTheme();
-    const { setWorkspace } = useWorkspace();
     const { appSettings } = useAppSettings();
     const [query, setQuery] = useState("");
     const debouncedQuery = useDebounce(query.trim(), SEARCH_DEBOUNCE_MS);
@@ -170,15 +167,6 @@ export function CommandPalette({
     const goTo = (url: string) => {
         onOpenChange(false);
         pushPaletteRecent(url);
-        // Keep the sidebar workspace in sync with cross-workspace jumps.
-        // Workspace-agnostic pages (AI chat, Accounts) keep the current one.
-        if (url.startsWith("/portfolio")) {
-            setWorkspace("portfolio");
-        } else if (url.startsWith("/research")) {
-            setWorkspace("research");
-        } else if (!WORKSPACE_AGNOSTIC_URLS.has(url)) {
-            setWorkspace("budgeting");
-        }
         navigate(url);
     };
 
@@ -228,14 +216,14 @@ export function CommandPalette({
                                 )
                             }
                         >
-                            <LineChart className="text-muted-foreground" />
+                            <LineChart className="text-label-secondary" />
                             <span className="font-medium">
                                 {tickerQuote?.symbol ?? tickerSymbol}
                             </span>
                             {tickerQuote ? (
                                 <>
                                     {tickerQuote.name && (
-                                        <span className="truncate text-xs text-muted-foreground">
+                                        <span className="truncate type-footnote text-label-secondary">
                                             {tickerQuote.name}
                                         </span>
                                     )}
@@ -248,7 +236,7 @@ export function CommandPalette({
                                         </span>
                                         <span
                                             className={cn(
-                                                "text-xs font-semibold",
+                                                "type-footnote font-semibold",
                                                 tickerQuote.changePercent >= 0
                                                     ? "text-gain"
                                                     : "text-loss",
@@ -285,9 +273,9 @@ export function CommandPalette({
                             }
                         >
                             {fxResult ? (
-                                <ArrowLeftRight className="text-muted-foreground" />
+                                <ArrowLeftRight className="text-label-secondary" />
                             ) : (
-                                <Calculator className="text-muted-foreground" />
+                                <Calculator className="text-label-secondary" />
                             )}
                             <span className="font-semibold tabular-nums">
                                 {fxResult ?? calcResult}
@@ -312,7 +300,7 @@ export function CommandPalette({
                                 )
                             }
                         >
-                            <Receipt className="text-muted-foreground" />
+                            <Receipt className="text-label-secondary" />
                             <span>
                                 {t("commandPalette.searchTransactions", {
                                     q: query.trim(),
@@ -334,7 +322,7 @@ export function CommandPalette({
                                     )
                                 }
                             >
-                                <Users className="text-muted-foreground" />
+                                <Users className="text-label-secondary" />
                                 <span>{r.name}</span>
                             </CommandItem>
                         ))}
@@ -348,7 +336,7 @@ export function CommandPalette({
                                 value={`recent ${t(page.titleKey)} ${page.url}`}
                                 onSelect={() => goTo(page.url)}
                             >
-                                <page.icon className="text-muted-foreground" />
+                                <page.icon className="text-label-secondary" />
                                 <span>{t(page.titleKey)}</span>
                                 <GoToHint url={page.url} />
                             </CommandItem>
@@ -368,7 +356,7 @@ export function CommandPalette({
                                     value={`${t(page.titleKey)} ${page.url}`}
                                     onSelect={() => goTo(page.url)}
                                 >
-                                    <page.icon className="text-muted-foreground" />
+                                    <page.icon className="text-label-secondary" />
                                     <span>{t(page.titleKey)}</span>
                                     <GoToHint url={page.url} />
                                 </CommandItem>
@@ -386,7 +374,7 @@ export function CommandPalette({
                                     value={`${t(page.titleKey)} ${page.url}`}
                                     onSelect={() => goTo(page.url)}
                                 >
-                                    <page.icon className="text-muted-foreground" />
+                                    <page.icon className="text-label-secondary" />
                                     <span>{t(page.titleKey)}</span>
                                 </CommandItem>
                             ))}
@@ -399,15 +387,29 @@ export function CommandPalette({
                         value={t("layout.light")}
                         onSelect={() => runAction(() => setMode("light"))}
                     >
-                        <Sun className="text-muted-foreground" />
+                        <Sun className="text-label-secondary" />
                         <span>{t("layout.light")}</span>
                     </CommandItem>
                     <CommandItem
                         value={t("layout.dark")}
                         onSelect={() => runAction(() => setMode("dark"))}
                     >
-                        <Moon className="text-muted-foreground" />
+                        <Moon className="text-label-secondary" />
                         <span>{t("layout.dark")}</span>
+                    </CommandItem>
+                    <CommandItem
+                        value={t("layout.system")}
+                        onSelect={() => runAction(() => setMode("system"))}
+                    >
+                        <MonitorSmartphone className="text-label-secondary" />
+                        <span>{t("layout.system")}</span>
+                    </CommandItem>
+                    <CommandItem
+                        value={t("layout.schedule")}
+                        onSelect={() => runAction(() => setMode("schedule"))}
+                    >
+                        <Clock className="text-label-secondary" />
+                        <span>{t("layout.schedule")}</span>
                     </CommandItem>
                     <CommandItem
                         value={t("layout.settings")}
@@ -415,7 +417,7 @@ export function CommandPalette({
                             runAction(() => onOpenSettings("general"))
                         }
                     >
-                        <Settings className="text-muted-foreground" />
+                        <Settings className="text-label-secondary" />
                         <span>{t("layout.settings")}</span>
                         <CommandShortcut>⌘,</CommandShortcut>
                     </CommandItem>
@@ -423,7 +425,7 @@ export function CommandPalette({
                         value={t("shortcuts.title")}
                         onSelect={() => runAction(onOpenShortcuts)}
                     >
-                        <Keyboard className="text-muted-foreground" />
+                        <Keyboard className="text-label-secondary" />
                         <span>{t("shortcuts.title")}</span>
                         <CommandShortcut>?</CommandShortcut>
                     </CommandItem>

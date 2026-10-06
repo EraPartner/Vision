@@ -46,7 +46,8 @@ export interface ElectronMenuAction {
     | "open-settings"
     | "open-shortcuts"
     | "new-transaction"
-    | "toggle-sidebar";
+    | "toggle-sidebar"
+    | "set-theme";
   payload?: unknown;
 }
 

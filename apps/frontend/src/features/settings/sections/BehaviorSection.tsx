@@ -122,7 +122,7 @@ export const BehaviorSection = memo(function BehaviorSection() {
                         })
                     }
                     options={[
-                        { value: "budgeting", label: t("nav.budgeting") },
+                        { value: "budgeting", label: t("nav.home") },
                         { value: "portfolio", label: t("nav.portfolio") },
                         { value: "research", label: t("nav.research") },
                         { value: "ai-chat", label: t("nav.aiChat") },

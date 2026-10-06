@@ -200,17 +200,6 @@ describe("motion token parity (tokens.css <-> lib/motion.ts)", () => {
         expect(violations).toEqual([]);
     });
 
-    it("keeps the sidebar workspace-pill scale and press transitions distinct", () => {
-        const sidebar = readFileSync(
-            join(process.cwd(), "src/components/layout/AppSidebar.tsx"),
-            "utf8",
-        );
-        expect(sidebar).toContain(
-            "scale_var(--duration-normal)_var(--ease-glide)",
-        );
-        expect(sidebar).toContain("transform_var(--duration-press)_ease-out");
-    });
-
     it("keeps the shared durations in step (CSS ms <-> Framer seconds)", () => {
         const css = parseCssDurations();
         for (const key of Object.keys(css)) {

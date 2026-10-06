@@ -133,7 +133,7 @@ describe("AppLayout a11y landmarks", () => {
 
         await user.click(
             screen.getByRole("button", {
-                name: /^(Open settings|layout\.openSettings)$/,
+                name: "Settings",
             }),
         );
         await screen.findByRole("dialog", { name: "Settings" });

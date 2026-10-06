@@ -12,10 +12,10 @@ import {Separator} from "@/components/ui/separator";
 import {Sheet, SheetContent} from "@/components/ui/sheet";
 import {Skeleton} from "@/components/ui/skeleton";
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from "@/components/ui/tooltip";
+import {writeSidebarCollapsed} from "@/hooks/useSidebarPreferences";
 
-const SIDEBAR_COOKIE_NAME = "sidebar:state";
-const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
-const SIDEBAR_WIDTH = "16rem";
+// 240px labelled sidebar (ADR-180); the icon rail stays 48px wide.
+const SIDEBAR_WIDTH = "15rem";
 const SIDEBAR_WIDTH_MOBILE = "18rem";
 const SIDEBAR_WIDTH_ICON = "3rem";
 const SIDEBAR_KEYBOARD_SHORTCUT = "b";
@@ -41,6 +41,12 @@ function useSidebar() {
     return context;
 }
 
+/** The sidebar context when one is mounted; `null` outside a SidebarProvider
+ *  (settings sections render in tests and previews without the shell). */
+function useOptionalSidebar() {
+    return React.useContext(SidebarContext);
+}
+
 const SidebarProvider = React.forwardRef<
     HTMLDivElement,
     React.ComponentProps<"div"> & {
@@ -63,7 +69,9 @@ const SidebarProvider = React.forwardRef<
                 _setOpen(openState);
             }
 
-            document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`;
+            // Icons-only is a remembered choice (ADR-180), not a per-launch
+            // default: the next launch reads it back through `defaultOpen`.
+            writeSidebarCollapsed(!openState);
         },
         [setOpenProp, open],
     );
@@ -175,15 +183,16 @@ const Sidebar = React.forwardRef<
         >
             <div
                 className={cn(
-                    "relative h-svh bg-transparent transition-[width] duration-normal ease-glide",
-                    collapsible === "offcanvas"
-                        ? "w-0"
-                        : collapsible === "icon"
-                            ? variant === "floating" || variant === "inset"
-                                ? "w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4))]"
-                                : "w-[var(--sidebar-width-icon)]"
-                            : "w-[var(--sidebar-width)]",
+                    // The gap that pushes the page over. It must follow the
+                    // open/collapsed state, not the collapsible mode: with the
+                    // labelled sidebar as default (ADR-180) a fixed icon-wide
+                    // gap left the expanded sidebar covering the page.
+                    "relative h-svh w-[var(--sidebar-width)] bg-transparent transition-[width] duration-normal ease-glide",
+                    "group-data-[collapsible=offcanvas]:w-0",
                     "group-data-[side=right]:rotate-180",
+                    variant === "floating" || variant === "inset"
+                        ? "group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4))]"
+                        : "group-data-[collapsible=icon]:w-[var(--sidebar-width-icon)]",
                 )}
             />
             <div
@@ -342,7 +351,7 @@ const SidebarGroup = React.forwardRef<HTMLDivElement, React.ComponentProps<"div"
         <div
             ref={ref}
             data-sidebar="group"
-            className={cn("relative flex w-full min-w-0 flex-col p-2 group-data-[collapsible=icon]:px-1.5", className)}
+            className={cn("relative flex w-full min-w-0 flex-col px-2.5 py-1 group-data-[collapsible=icon]:px-2", className)}
             {...props}
         />
     );
@@ -358,7 +367,7 @@ const SidebarGroupLabel = React.forwardRef<HTMLDivElement, React.ComponentProps<
                 ref={ref}
                 data-sidebar="group-label"
                 className={cn(
-"flex h-8 shrink-0 items-center rounded-md px-3 eyebrow outline-none transition-[margin,opa] duration-fast ease-glide focus-ring [&>svg]:size-4 [&>svg]:shrink-0",
+"flex h-7 shrink-0 items-center rounded-chip px-2 type-caption font-semibold text-label-tertiary outline-none transition-[margin,opacity] duration-fast ease-glide focus-ring [&>svg]:size-4 [&>svg]:shrink-0",
                     "group-data-[collapsible=icon]:-mt-8 group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:pointer-events-none",
                     className,
                 )}
@@ -398,7 +407,7 @@ const SidebarGroupContent = React.forwardRef<HTMLDivElement, React.ComponentProp
 SidebarGroupContent.displayName = "SidebarGroupContent";
 
 const SidebarMenu = React.forwardRef<HTMLUListElement, React.ComponentProps<"ul">>(({className, ...props}, ref) => (
-    <ul ref={ref} data-sidebar="menu" className={cn("flex w-full min-w-0 flex-col gap-0.5 group-data-[collapsible=icon]:items-center", className)} {...props} />
+    <ul ref={ref} data-sidebar="menu" className={cn("flex w-full min-w-0 flex-col gap-px group-data-[collapsible=icon]:items-center", className)} {...props} />
 ));
 SidebarMenu.displayName = "SidebarMenu";
 
@@ -408,7 +417,7 @@ const SidebarMenuItem = React.forwardRef<HTMLLIElement, React.ComponentProps<"li
 SidebarMenuItem.displayName = "SidebarMenuItem";
 
 const sidebarMenuButtonVariants = cva(
-    "peer/menu-button flex w-full items-center gap-2.5 overflow-hidden rounded-lg px-3 text-left text-sm tracking-tight text-foreground/80 outline-none transition-[background-color,color,box-shadow] duration-fast ease-glide hover:bg-foreground/[0.06] hover:text-foreground focus-ring active:bg-foreground/[0.08] disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-primary/10 data-[active=true]:font-medium data-[active=true]:text-foreground data-[state=open]:hover:bg-foreground/[0.06] data-[state=open]:hover:text-foreground group-data-[collapsible=icon]:!size-9 group-data-[collapsible=icon]:!justify-center group-data-[collapsible=icon]:!p-0 [&>span:last-child]:truncate group-data-[collapsible=icon]:[&>span:last-child]:hidden [&>svg]:size-[18px] [&>svg]:shrink-0 [&>svg]:text-muted-foreground/80 data-[active=true]:[&>svg]:text-primary",
+    "peer/menu-button group/menu-button flex w-full items-center gap-2.5 overflow-hidden rounded-chip px-2 text-left type-callout text-foreground outline-none transition-[background-color,color,box-shadow] duration-fast ease-glide hover:bg-foreground/[0.06] focus-ring focus-visible:outline-offset-[-3px] active:bg-foreground/[0.08] disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-primary/[0.12] dark:data-[active=true]:bg-primary/[0.16] data-[active=true]:font-semibold data-[state=open]:hover:bg-foreground/[0.06] group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:!justify-center group-data-[collapsible=icon]:!p-0 [&>span:last-child]:truncate group-data-[collapsible=icon]:[&>span:last-child]:hidden [&>svg]:size-[17px] [&>svg]:shrink-0 [&>svg]:text-primary",
     {
         variants: {
             variant: {
@@ -417,9 +426,9 @@ const sidebarMenuButtonVariants = cva(
                     "border border-input/70 bg-background/40 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.04)] hover:border-input hover:bg-foreground/[0.06]",
             },
             size: {
-                default: "h-9 text-sm",
-                sm: "h-8 text-xs",
-                lg: "h-11 text-sm group-data-[collapsible=icon]:!p-0",
+                default: "h-[30px]",
+                sm: "h-7 type-footnote",
+                lg: "h-10 type-body group-data-[collapsible=icon]:!p-0",
             },
         },
         defaultVariants: {
@@ -506,11 +515,10 @@ const SidebarMenuBadge = React.forwardRef<HTMLDivElement, React.ComponentProps<"
             ref={ref}
             data-sidebar="menu-badge"
             className={cn(
-                "pointer-events-none absolute right-2 flex h-5 min-w-5 select-none items-center justify-center rounded-md bg-foreground/[0.08] px-1.5 text-2xs font-medium tabular-nums tracking-wide text-muted-foreground",
-                "peer-data-[active=true]/menu-button:bg-primary/15 peer-data-[active=true]/menu-button:text-primary",
-                "peer-data-[size=sm]/menu-button:top-1",
-                "peer-data-[size=default]/menu-button:top-2",
-                "peer-data-[size=lg]/menu-button:top-3",
+                "pointer-events-none absolute right-2 flex h-[18px] min-w-[18px] select-none items-center justify-center rounded-full px-1.5 type-caption tabular-nums text-label-tertiary",
+                "peer-data-[size=sm]/menu-button:top-[5px]",
+                "peer-data-[size=default]/menu-button:top-[7px]",
+                "peer-data-[size=lg]/menu-button:top-[11px]",
                 "group-data-[collapsible=icon]:hidden",
                 className,
             )}
@@ -534,7 +542,7 @@ const SidebarMenuSkeleton = React.forwardRef<
         <div
             ref={ref}
             data-sidebar="menu-skeleton"
-            className={cn("flex h-9 items-center gap-2.5 rounded-lg px-3", className)}
+            className={cn("flex h-8 items-center gap-2.5 rounded-chip px-2", className)}
             {...props}
         >
             {showIcon && <Skeleton className="size-[18px] rounded-md" data-sidebar="menu-skeleton-icon"/>}
@@ -628,6 +636,7 @@ export {
     SidebarRail,
     SidebarSeparator,
     SidebarTrigger,
+    useOptionalSidebar,
     useSidebar,
 };
 /* eslint-enable react-refresh/only-export-components */

@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import { http } from "msw";
-import { InsightsNavBadge } from "../InsightsNavBadge";
+import { NavItemBadge, SidebarCount } from "../NavItemBadge";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok } from "@/test/msw/handlers";
@@ -10,7 +10,22 @@ import { insightsCountRefetchInterval } from "@/hooks/useInsightsDigest";
 
 const API_BASE = "http://localhost:3002";
 
-describe("InsightsNavBadge", () => {
+describe("SidebarCount", () => {
+    it("renders nothing for zero and caps large counts", () => {
+        const { container, rerender } = renderWithApp(
+            <SidebarCount count={0} label="0 items" />,
+        );
+        expect(container.querySelector("[data-sidebar=count]")).toBeNull();
+        rerender(<SidebarCount count={250} label="250 items" tone="hot" />);
+        expect(screen.getByText("99+")).toBeInTheDocument();
+        expect(screen.getByText("250 items")).toHaveClass("sr-only");
+        expect(
+            container.querySelector("[data-sidebar=count]"),
+        ).toHaveAttribute("data-tone", "hot");
+    });
+});
+
+describe("NavItemBadge insights", () => {
     it("retries pending counts quickly and unavailable counts after backoff", () => {
         expect(insightsCountRefetchInterval("pending")).toBe(2_000);
         expect(insightsCountRefetchInterval("unavailable")).toBe(60_000);
@@ -33,9 +48,10 @@ describe("InsightsNavBadge", () => {
             }),
         );
 
-        renderWithApp(<InsightsNavBadge />);
+        renderWithApp(<NavItemBadge kind="insights" />);
 
-        expect(await screen.findByText("3")).toBeVisible();
+        expect(await screen.findByText("3")).toBeInTheDocument();
+        expect(screen.getByText("3 new insights")).toHaveClass("sr-only");
         expect(digestRequests).toBe(0);
     });
 
@@ -52,9 +68,21 @@ describe("InsightsNavBadge", () => {
             }),
         );
 
-        renderWithApp(<InsightsNavBadge />);
+        renderWithApp(<NavItemBadge kind="insights" />);
 
         await waitFor(() => expect(countRequests).toBe(1));
         expect(screen.queryByText(/\d+/)).not.toBeInTheDocument();
+    });
+});
+
+describe("NavItemBadge monitors", () => {
+    it("shows the server-side unread count", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/analysis/monitors/notifications`, () =>
+                ok({ items: [], total: 0, unreadCount: 2, links: [] }),
+            ),
+        );
+        renderWithApp(<NavItemBadge kind="monitors" />);
+        expect(await screen.findByText("2")).toBeInTheDocument();
     });
 });

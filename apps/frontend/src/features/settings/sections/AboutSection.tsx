@@ -21,6 +21,7 @@ import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useSettings } from "@/stores/hydration/SettingsHydration";
 import { apiClient } from "@/lib/api";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import { updateStatusKeys, useUpdateStatus } from "@/hooks/useUpdateStatus";
 import { cn } from "@/lib/utils";
 import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import {
@@ -56,9 +57,12 @@ export const AboutSection = memo(function AboutSection({
     const queryClient = useQueryClient();
     const { confirm, ConfirmDialog } = useConfirmDialog();
 
-    const [updateStatus, setUpdateStatus] = useState<UpdateCheckStatus | null>(
-        null,
-    );
+    // The sidebar's update dot and this section read one shared status
+    // (ADR-180); a manual check refreshes both.
+    const { data: polledUpdateStatus } = useUpdateStatus();
+    const [checkedUpdateStatus, setCheckedUpdateStatus] =
+        useState<UpdateCheckStatus | null>(null);
+    const updateStatus = checkedUpdateStatus ?? polledUpdateStatus ?? null;
     const [checkingUpdate, setCheckingUpdate] = useState(false);
     const [applyPhase, setApplyPhase] = useState<ApplyPhase>("idle");
     const applyingUpdate = applyPhase !== "idle" && applyPhase !== "done";
@@ -74,7 +78,8 @@ export const AboutSection = memo(function AboutSection({
         setCheckingUpdate(true);
         try {
             const result = await apiClient.checkForUpdates();
-            setUpdateStatus(result);
+            setCheckedUpdateStatus(result);
+            queryClient.setQueryData(updateStatusKeys.check, result);
             if (result.up_to_date) {
                 toast.success(t("settings.app.upToDate"));
             } else {
