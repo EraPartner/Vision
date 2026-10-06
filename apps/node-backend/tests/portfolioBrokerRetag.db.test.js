@@ -169,6 +169,9 @@ describeDb("portfolio broker bulk re-tag (real Postgres)", () => {
     ]);
 
     const retag = retagPortfolioTransactions(request(uuid("5")));
+    // COMMIT releases the row lock, so the re-tag can reject before the
+    // assertion below attaches; handle it now, the assertion still sees it.
+    retag.catch(() => {});
     let waitError;
     try {
       await waitForRetagAccountLock();
