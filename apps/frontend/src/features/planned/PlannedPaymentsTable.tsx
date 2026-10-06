@@ -1,12 +1,12 @@
-import { useMemo, type ReactElement } from "react";
+import { useMemo, type ReactNode } from "react";
+import { Link } from "react-router";
 import {
-    CalendarClock,
-    CheckCircle2,
-    Circle,
+    ExternalLink,
+    MoreHorizontal,
+    Pause,
     Pencil,
+    Play,
     Repeat,
-    ToggleLeft,
-    ToggleRight,
     Trash2,
 } from "lucide-react";
 
@@ -16,12 +16,14 @@ import {
     type Column,
 } from "@/components/shared/VirtualDataTable";
 import { Button } from "@/components/ui/button";
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { PlannedDueBadge } from "@/features/planned/PlannedDueBadge";
 import type { PlannedPayment } from "@/hooks/usePlannedPayments";
@@ -52,23 +54,16 @@ interface PlannedPaymentsTableProps {
     onEdit: (payment: PlannedPayment) => void;
     onToggleActive: (payment: PlannedPayment) => void | Promise<void>;
     onDelete: (payment: PlannedPayment) => void | Promise<void>;
+    /** Rendered instead of the rows when `payments` is empty. */
+    emptyState?: ReactNode;
 }
 
-function ActionTooltip({
-    label,
-    children,
-}: {
-    label: string;
-    children: ReactElement;
-}) {
-    return (
-        <Tooltip>
-            <TooltipTrigger asChild>{children}</TooltipTrigger>
-            <TooltipContent>{label}</TooltipContent>
-        </Tooltip>
-    );
-}
-
+/**
+ * The planned payments list (ADR-183): a worded "Mark as paid" action per row
+ * and a ••• menu with Edit, Pause or Resume and Delete. A paused row carries a
+ * Paused badge instead of a status column; a paid row links to the transaction
+ * that paid it.
+ */
 export function PlannedPaymentsTable({
     payments,
     totalCount,
@@ -78,6 +73,7 @@ export function PlannedPaymentsTable({
     onEdit,
     onToggleActive,
     onDelete,
+    emptyState,
 }: PlannedPaymentsTableProps) {
     const { t, tc } = useLanguage();
     const rows = useMemo<PlannedPaymentRow[]>(
@@ -88,79 +84,31 @@ export function PlannedPaymentsTable({
     const columns = useMemo<Column<PlannedPaymentRow>[]>(
         () => [
             {
-                key: "is_executed",
-                header: "",
-                editable: false,
-                defaultWidth: 52,
-                render: (row) => (
-                    <ActionTooltip
-                        label={`${
-                            row.is_executed
-                                ? t("plannedPage.execute.linked", {
-                                      n: row.executed_transaction_id ?? 0,
-                                  })
-                                : t("plannedPage.execute.button")
-                        }: ${row.name}`}
-                    >
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className={cn(
-                                "icon-touch-target",
-                                row.is_executed
-                                    ? "text-accent hover:text-accent"
-                                    : "text-muted-foreground hover:text-foreground",
-                            )}
-                            onClick={(event) => {
-                                event.stopPropagation();
-                                if (!row.is_executed) onRequestExecution(row);
-                            }}
-                            disabled={
-                                actionLoading ||
-                                !row.is_active ||
-                                row.is_executed
-                            }
-                            aria-label={`${
-                                row.is_executed
-                                    ? t("plannedPage.execute.linked", {
-                                          n: row.executed_transaction_id ?? 0,
-                                      })
-                                    : t("plannedPage.execute.button")
-                            }: ${row.name}`}
-                        >
-                            {row.is_executed ? (
-                                <CheckCircle2 className="h-5 w-5" />
-                            ) : (
-                                <Circle className="h-5 w-5" />
-                            )}
-                        </Button>
-                    </ActionTooltip>
-                ),
-            },
-            {
                 key: "name",
                 header: t("plannedPage.col.payment"),
                 editable: false,
-                minWidth: 180,
+                minWidth: 200,
                 render: (row) => {
                     const rowHref = safeHref(row.url);
                     return (
-                        <div className="flex flex-col gap-0.5">
+                        <div className="flex min-w-0 flex-col gap-0.5">
                             <div
                                 className={cn(
-                                    "font-medium flex items-center gap-2",
+                                    "flex min-w-0 items-center gap-2 type-body font-medium",
                                     !row.is_active || row.is_executed
-                                        ? "text-muted-foreground line-through"
+                                        ? "text-label-secondary line-through"
                                         : "text-foreground",
                                 )}
                             >
-                                <span>{row.name}</span>
+                                <span className="truncate">{row.name}</span>
                                 {row.is_loan && (
-                                    <Badge
-                                        variant="secondary"
-                                        className="eyebrow"
-                                    >
+                                    <Badge variant="secondary" size="sm">
                                         {t("plannedPage.loanBadge")}
+                                    </Badge>
+                                )}
+                                {!row.is_active && (
+                                    <Badge variant="muted" size="sm">
+                                        {t("plannedPage.statusPaused")}
                                     </Badge>
                                 )}
                                 {rowHref && (
@@ -173,39 +121,17 @@ export function PlannedPaymentsTable({
                                         }
                                         aria-label={`${t("plannedPage.openLink")}: ${row.name}`}
                                         title={`${t("plannedPage.openLink")}: ${row.name}`}
-                                        className="text-muted-foreground hover:text-primary"
+                                        className="shrink-0 rounded-chip text-label-secondary hover:text-primary focus-ring"
                                     >
-                                        <svg
-                                            xmlns="http://www.w3.org/2000/svg"
-                                            className="h-4 w-4"
-                                            fill="none"
-                                            viewBox="0 0 24 24"
-                                            stroke="currentColor"
-                                        >
-                                            <path
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                                strokeWidth={2}
-                                                d="M13.828 10.172a4 4 0 010 5.656l-1.414 1.414a4 4 0 01-5.656-5.656l1.414-1.414"
-                                            />
-                                            <path
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                                strokeWidth={2}
-                                                d="M15 7h6v6"
-                                            />
-                                            <path
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                                strokeWidth={2}
-                                                d="M21 3l-6 6"
-                                            />
-                                        </svg>
+                                        <ExternalLink
+                                            className="h-3.5 w-3.5"
+                                            aria-hidden
+                                        />
                                     </a>
                                 )}
                             </div>
                             {row.recipient && (
-                                <span className="text-xs text-muted-foreground">
+                                <span className="truncate type-footnote text-label-secondary">
                                     → {row.recipient}
                                 </span>
                             )}
@@ -217,12 +143,12 @@ export function PlannedPaymentsTable({
                 key: "amount",
                 header: t("plannedPage.col.amount"),
                 editable: false,
-                defaultWidth: 120,
+                defaultWidth: 130,
                 render: (row) => (
                     <span
                         className={cn(
                             "font-semibold tabular-nums",
-                            row.amount < 0 ? "text-loss" : "text-gain",
+                            row.amount < 0 ? "text-foreground" : "text-gain",
                         )}
                     >
                         <Money
@@ -251,34 +177,41 @@ export function PlannedPaymentsTable({
                 editable: false,
                 defaultWidth: 160,
                 render: (row) => {
+                    const executed = (row.execution_count ?? 0) > 0 && (
+                        <span className="type-footnote text-label-secondary">
+                            {t("plannedPage.executedCount", {
+                                n: row.execution_count ?? 0,
+                            })}
+                        </span>
+                    );
                     if (row.is_loan && row.loan_term_months) {
                         return (
                             <div className="flex flex-col gap-0.5">
-                                <div className="flex items-center gap-1.5">
-                                    <Repeat className="h-3.5 w-3.5 text-primary" />
-                                    <span className="text-sm">
+                                <div className="flex items-center gap-1.5 type-body">
+                                    <Repeat
+                                        className="h-3.5 w-3.5 text-label-secondary"
+                                        aria-hidden
+                                    />
+                                    <span>
                                         {tc(
                                             "plannedPage.loanTerm",
                                             row.loan_term_months,
                                         )}
                                     </span>
                                 </div>
-                                {(row.execution_count ?? 0) > 0 && (
-                                    <span className="text-xs text-muted-foreground">
-                                        {t("plannedPage.executedCount", {
-                                            n: row.execution_count ?? 0,
-                                        })}
-                                    </span>
-                                )}
+                                {executed}
                             </div>
                         );
                     }
 
                     return row.is_recurring ? (
                         <div className="flex flex-col gap-0.5">
-                            <div className="flex items-center gap-1.5">
-                                <Repeat className="h-3.5 w-3.5 text-primary" />
-                                <span className="text-sm">
+                            <div className="flex items-center gap-1.5 type-body">
+                                <Repeat
+                                    className="h-3.5 w-3.5 text-label-secondary"
+                                    aria-hidden
+                                />
+                                <span>
                                     {row.frequency === "custom" &&
                                     row.custom_interval_days
                                         ? t("plannedPage.everyNDays", {
@@ -291,16 +224,10 @@ export function PlannedPaymentsTable({
                                           )}
                                 </span>
                             </div>
-                            {(row.execution_count ?? 0) > 0 && (
-                                <span className="text-xs text-muted-foreground">
-                                    {t("plannedPage.executedCount", {
-                                        n: row.execution_count ?? 0,
-                                    })}
-                                </span>
-                            )}
+                            {executed}
                         </div>
                     ) : (
-                        <span className="text-sm text-muted-foreground">
+                        <span className="type-body text-label-secondary">
                             {t("plannedPage.oneTime")}
                         </span>
                     );
@@ -319,90 +246,110 @@ export function PlannedPaymentsTable({
                               ? String(row.category)
                               : "";
                     return categoryLabel ? (
-                        <Badge variant="outline" className="font-medium">
-                            {categoryLabel}
-                        </Badge>
+                        <Badge variant="outline">{categoryLabel}</Badge>
                     ) : (
-                        <span className="text-muted-foreground text-sm">—</span>
+                        <span className="type-body text-label-tertiary">—</span>
                     );
                 },
             },
             {
-                key: "is_active",
-                header: t("plannedPage.col.status"),
+                key: "is_executed",
+                header: "",
                 editable: false,
-                defaultWidth: 130,
-                render: (row) => (
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        className={cn(
-                            "gap-1.5",
-                            row.is_active
-                                ? "text-accent hover:text-accent"
-                                : "text-muted-foreground hover:text-foreground",
-                        )}
-                        onClick={async (event) => {
-                            event.stopPropagation();
-                            await onToggleActive(row);
-                        }}
-                        disabled={actionLoading}
-                        aria-label={`${row.is_active ? t("plannedPage.statusActive") : t("plannedPage.statusPaused")}: ${row.name}`}
-                        aria-pressed={row.is_active}
-                    >
-                        {row.is_active ? (
-                            <ToggleRight className="h-4 w-4" />
-                        ) : (
-                            <ToggleLeft className="h-4 w-4" />
-                        )}
-                        {row.is_active
-                            ? t("plannedPage.statusActive")
-                            : t("plannedPage.statusPaused")}
-                    </Button>
-                ),
+                defaultWidth: 150,
+                render: (row) =>
+                    row.is_executed ? (
+                        <Badge variant="success">
+                            {row.executed_transaction_id != null ? (
+                                <Link
+                                    to={`/transactions?transaction_id=${row.executed_transaction_id}`}
+                                    onClick={(event) =>
+                                        event.stopPropagation()
+                                    }
+                                    className="rounded-chip focus-ring"
+                                >
+                                    {t("plannedPage.execute.linked", {
+                                        n: row.executed_transaction_id,
+                                    })}
+                                </Link>
+                            ) : (
+                                t("plannedPage.execute.linked", {
+                                    n: row.executed_transaction_id ?? 0,
+                                })
+                            )}
+                        </Badge>
+                    ) : (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                onRequestExecution(row);
+                            }}
+                            disabled={actionLoading || !row.is_active}
+                            aria-label={`${t("plannedPage.execute.button")}: ${row.name}`}
+                        >
+                            {t("plannedPage.execute.button")}
+                        </Button>
+                    ),
             },
             {
                 key: "actions",
                 header: "",
                 editable: false,
-                defaultWidth: 96,
+                defaultWidth: 56,
                 render: (row) => (
-                    <div className="flex items-center gap-1">
-                        <ActionTooltip
-                            label={`${t("aria.editPlannedPayment")}: ${row.name}`}
-                        >
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                className="icon-touch-target text-muted-foreground hover:text-primary hover:bg-primary/10"
-                                onClick={(event) => {
-                                    event.stopPropagation();
-                                    onEdit(row);
-                                }}
+                                className="icon-touch-target text-label-secondary hover:text-foreground"
                                 disabled={actionLoading}
-                                aria-label={`${t("aria.editPlannedPayment")}: ${row.name}`}
+                                aria-label={t("plannedPage.rowMenu", {
+                                    name: row.name,
+                                })}
+                                onClick={(event) => event.stopPropagation()}
                             >
-                                <Pencil className="h-4 w-4" />
+                                <MoreHorizontal className="h-4 w-4" aria-hidden />
                             </Button>
-                        </ActionTooltip>
-                        <ActionTooltip
-                            label={`${t("aria.deletePlannedPayment")}: ${row.name}`}
-                        >
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="icon-touch-target text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                aria-label={`${t("aria.deletePlannedPayment")}: ${row.name}`}
-                                onClick={async (event) => {
-                                    event.stopPropagation();
-                                    await onDelete(row);
-                                }}
-                                disabled={actionLoading}
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuItem onSelect={() => onEdit(row)}>
+                                <Pencil
+                                    className="mr-2 h-4 w-4 text-label-secondary"
+                                    aria-hidden
+                                />
+                                {t("common.edit")}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                onSelect={() => void onToggleActive(row)}
                             >
-                                <Trash2 className="h-4 w-4" />
-                            </Button>
-                        </ActionTooltip>
-                    </div>
+                                {row.is_active ? (
+                                    <Pause
+                                        className="mr-2 h-4 w-4 text-label-secondary"
+                                        aria-hidden
+                                    />
+                                ) : (
+                                    <Play
+                                        className="mr-2 h-4 w-4 text-label-secondary"
+                                        aria-hidden
+                                    />
+                                )}
+                                {row.is_active
+                                    ? t("plannedPage.pause")
+                                    : t("plannedPage.resume")}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onSelect={() => void onDelete(row)}
+                            >
+                                <Trash2 className="mr-2 h-4 w-4" aria-hidden />
+                                {t("common.delete")}
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 ),
             },
         ],
@@ -424,8 +371,8 @@ export function PlannedPaymentsTable({
             subtitle={t("plannedPage.tableSubtitle", { n: totalCount })}
             columns={columns}
             data={rows}
-            emptyIcon={CalendarClock}
-            emptyMessage={t("plannedPage.empty")}
+            emptyMessage={emptyState ?? t("plannedPage.empty")}
+            getRowLabel={(row) => row.name}
         />
     );
 }

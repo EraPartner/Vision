@@ -5,6 +5,7 @@ import { plannedKeys } from "@/lib/queryKeys";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { List } from "@/components/ui/list";
 import {
     Repeat,
     AlertTriangle,
@@ -238,7 +239,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                         variant="label"
                         className="flex items-center gap-2"
                     >
-                        <Sparkles className="h-4 w-4 text-primary" />
+                        <Sparkles className="h-4 w-4 text-primary" aria-hidden />
                         {t("recurring.loading")}
                     </CardTitle>
                 </CardHeader>
@@ -254,12 +255,12 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
     if (patterns.length === 0 && amountAlerts.length === 0) {
         return (
             <p
-                className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 text-sm text-muted-foreground"
+                className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 type-body text-label-secondary"
                 role="status"
             >
                 <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
                 <span>{t("recurring.allCaughtUp")}</span>
-                <span className="text-xs">{t("recurring.noPatterns")}</span>
+                <span className="type-footnote">{t("recurring.noPatterns")}</span>
             </p>
         );
     }
@@ -268,19 +269,22 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
         <div className="space-y-4">
             {/* Amount Change Alerts */}
             {amountAlerts.length > 0 && (
-                <Card className="!border-destructive/60 bg-destructive/5">
+                <Card className="border-warning/40 bg-warning/5">
                     <CardHeader className="p-4">
                         <div className="flex items-start justify-between gap-3">
                             <div>
                                 <CardTitle
                                     variant="label"
-                                    className="flex items-center gap-2 text-destructive"
+                                    className="flex items-center gap-2 text-warning"
                                 >
-                                    <AlertTriangle className="h-4 w-4" />
+                                    <AlertTriangle
+                                        className="h-4 w-4"
+                                        aria-hidden
+                                    />
                                     {t("recurring.amountChanges")}
                                     <Badge
                                         variant="outline"
-                                        className="ml-1 border-destructive/30 text-destructive"
+                                        className="ml-1 border-warning/40 text-warning"
                                     >
                                         {amountAlerts.length}
                                     </Badge>
@@ -303,35 +307,41 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                         : "recurring.review",
                                 )}
                                 {amountAlertsExpanded ? (
-                                    <ChevronUp className="mt-0.5 h-4 w-4 shrink-0" />
+                                    <ChevronUp
+                                        className="mt-0.5 h-4 w-4 shrink-0"
+                                        aria-hidden
+                                    />
                                 ) : (
-                                    <ChevronDown className="mt-0.5 h-4 w-4 shrink-0" />
+                                    <ChevronDown
+                                        className="mt-0.5 h-4 w-4 shrink-0"
+                                        aria-hidden
+                                    />
                                 )}
                             </Button>
                         </div>
                     </CardHeader>
                     {amountAlertsExpanded && (
                         <CardContent className="px-4 pb-4">
-                            <p className="mb-3 text-sm text-muted-foreground">
+                            <p className="mb-3 type-body text-label-secondary">
                                 {t("recurring.amountChangesDesc")}
                             </p>
-                            <div className="space-y-3">
+                            <List>
                                 {amountAlerts.slice(0, 5).map((pattern) => {
                                     const lastChange =
                                         pattern.amountChanges[
                                             pattern.amountChanges.length - 1
                                         ];
                                     return (
-                                        <div
+                                        <li
                                             key={`alert-${pattern.recipientId}-${pattern.direction}`}
-                                            className="flex items-center justify-between gap-3 rounded-lg border border-destructive/20 bg-background p-3"
+                                            className="flex items-center justify-between gap-3 px-4 py-3"
                                         >
                                             <div className="min-w-0 flex-1">
-                                                <p className="text-sm font-semibold text-foreground truncate">
+                                                <p className="truncate type-body font-semibold text-foreground">
                                                     {pattern.recipientName}
                                                 </p>
-                                                <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                                    <span className="text-xs text-muted-foreground line-through">
+                                                <div className="mt-1 flex flex-wrap items-center gap-2">
+                                                    <span className="type-footnote text-label-secondary line-through">
                                                         {formatCurrency(
                                                             lastChange.previousAmount,
                                                             {
@@ -340,12 +350,12 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                                             },
                                                         )}
                                                     </span>
-                                                    <span className="text-xs">
+                                                    <span className="type-footnote text-label-tertiary">
                                                         →
                                                     </span>
                                                     <span
                                                         className={cn(
-                                                            "text-xs font-bold",
+                                                            "type-footnote font-semibold",
                                                             lastChange.direction ===
                                                                 "increased"
                                                                 ? "text-loss"
@@ -363,7 +373,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                                     <Badge
                                                         variant="outline"
                                                         className={cn(
-                                                            "text-xs",
+                                                            "type-footnote",
                                                             lastChange.direction ===
                                                                 "increased"
                                                                 ? "text-loss border-loss/30"
@@ -372,9 +382,15 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                                     >
                                                         {lastChange.direction ===
                                                         "increased" ? (
-                                                            <TrendingUp className="h-3 w-3 mr-1" />
+                                                            <TrendingUp
+                                                                className="mr-1 h-3 w-3"
+                                                                aria-hidden
+                                                            />
                                                         ) : (
-                                                            <TrendingDown className="h-3 w-3 mr-1" />
+                                                            <TrendingDown
+                                                                className="mr-1 h-3 w-3"
+                                                                aria-hidden
+                                                            />
                                                         )}
                                                         {formatPercent(
                                                             lastChange.percentChange,
@@ -385,7 +401,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                                         )}
                                                     </Badge>
                                                 </div>
-                                                <p className="text-xs text-muted-foreground mt-1">
+                                                <p className="mt-1 type-footnote text-label-secondary">
                                                     {t("recurring.changedOn", {
                                                         date: safeDateLabel(
                                                             lastChange.date,
@@ -398,18 +414,18 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
-                                                className="icon-touch-target shrink-0 text-muted-foreground hover:text-foreground"
+                                                className="icon-touch-target shrink-0 text-label-secondary hover:text-foreground"
                                                 aria-label={t("aria.dismiss")}
                                                 onClick={() =>
                                                     dismiss(pattern.recipientId)
                                                 }
                                             >
-                                                <X className="h-3.5 w-3.5" />
+                                                <X className="h-3.5 w-3.5" aria-hidden />
                                             </Button>
-                                        </div>
+                                        </li>
                                     );
                                 })}
-                            </div>
+                            </List>
                         </CardContent>
                     )}
                 </Card>
@@ -425,7 +441,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                     variant="label"
                                     className="flex items-center gap-2"
                                 >
-                                    <Sparkles className="h-4 w-4 text-primary" />
+                                    <Sparkles className="h-4 w-4 text-primary" aria-hidden />
                                     {t("recurring.patterns")}
                                     <Badge variant="secondary" className="ml-1">
                                         {patterns.length}
@@ -446,31 +462,34 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                         : "recurring.review",
                                 )}
                                 {expanded ? (
-                                    <ChevronUp className="h-4 w-4" />
+                                    <ChevronUp className="h-4 w-4" aria-hidden />
                                 ) : (
-                                    <ChevronDown className="h-4 w-4" />
+                                    <ChevronDown className="h-4 w-4" aria-hidden />
                                 )}
                             </Button>
                         </div>
                     </CardHeader>
                     {expanded && (
                         <CardContent className="px-4 pb-4">
-                            <p className="mb-3 text-sm text-muted-foreground">
+                            <p className="mb-3 type-body text-label-secondary">
                                 {t("recurring.patternsDesc")}
                             </p>
-                            <div className="space-y-3">
+                            <List>
                                 {patterns.map((pattern) => (
-                                    <div
+                                    <li
                                         key={`${pattern.recipientId}-${pattern.direction}`}
-                                        className="flex items-center gap-3 rounded-lg border bg-card p-3"
+                                        className="flex items-center gap-3 px-4 py-3"
                                     >
-                                        <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                                            <Repeat className="h-4 w-4 text-primary" />
+                                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-primary/10">
+                                            <Repeat
+                                                className="h-4 w-4 text-primary"
+                                                aria-hidden
+                                            />
                                         </div>
 
-                                        <div className="flex-1 min-w-0">
+                                        <div className="min-w-0 flex-1">
                                             <div className="flex items-center gap-2">
-                                                <p className="text-sm font-semibold text-foreground truncate">
+                                                <p className="truncate type-body font-semibold text-foreground">
                                                     {pattern.recipientName}
                                                 </p>
                                                 <ConfidenceBadge
@@ -480,18 +499,15 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                                     t={t}
                                                 />
                                             </div>
-                                            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                                                <Badge
-                                                    variant="outline"
-                                                    className="text-xs"
-                                                >
+                                            <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                                                <Badge variant="outline" size="sm">
                                                     {PATTERN_LABELS[
                                                         pattern.detectedPattern
                                                     ] ||
                                                         pattern.detectedPattern}
                                                 </Badge>
                                                 {pattern.categoryName && (
-                                                    <span className="text-xs text-muted-foreground">
+                                                    <span className="type-footnote text-label-secondary">
                                                         {categoryTree?.items.find(
                                                             (node) =>
                                                                 node.id ===
@@ -500,13 +516,16 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                                             pattern.categoryName}
                                                     </span>
                                                 )}
-                                                <span className="text-xs text-muted-foreground">
+                                                <span className="type-footnote text-label-secondary">
                                                     · {pattern.occurrences}
                                                     {t("recurring.seen")}
                                                 </span>
                                             </div>
-                                            <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-                                                <Calendar className="h-3 w-3" />
+                                            <div className="mt-1 flex items-center gap-1 type-footnote text-label-secondary">
+                                                <Calendar
+                                                    className="h-3 w-3"
+                                                    aria-hidden
+                                                />
                                                 {t("recurring.nextExpected", {
                                                     date: safeDateLabel(
                                                         pattern.predictedNext,
@@ -517,8 +536,8 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                             </div>
                                         </div>
 
-                                        <div className="text-right shrink-0 flex flex-col items-end gap-1.5">
-                                            <span className="text-sm font-bold text-foreground">
+                                        <div className="flex shrink-0 flex-col items-end gap-1.5 text-right">
+                                            <span className="type-body font-semibold tabular-nums text-foreground">
                                                 {formatCurrency(
                                                     pattern.latestAmount,
                                                     {
@@ -531,20 +550,20 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                                 <Button
                                                     size="sm"
                                                     variant="default"
-                                                    className="h-7 text-xs gap-1"
+                                                    className="h-7 gap-1 type-footnote"
                                                     onClick={() =>
                                                         handleCreatePlanned(
                                                             pattern,
                                                         )
                                                     }
                                                 >
-                                                    <Plus className="h-3 w-3" />
+                                                    <Plus className="h-3 w-3" aria-hidden />
                                                     {t("recurring.track")}
                                                 </Button>
                                                 <Button
                                                     size="sm"
                                                     variant="ghost"
-                                                    className="h-7 text-xs text-muted-foreground"
+                                                    className="h-7 type-footnote text-label-secondary"
                                                     onClick={() =>
                                                         dismiss(
                                                             pattern.recipientId,
@@ -555,9 +574,9 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                                 </Button>
                                             </div>
                                         </div>
-                                    </div>
+                                    </li>
                                 ))}
-                            </div>
+                            </List>
                         </CardContent>
                     )}
                 </Card>
@@ -573,19 +592,19 @@ function ConfidenceBadge({
     confidence: number;
     t: (key: string) => string;
 }) {
-    let color = "text-muted-foreground border-muted";
+    let color = "text-label-secondary border-border";
     let label = t("recurring.confidence.low");
 
     if (confidence >= 80) {
-        color = "text-accent border-accent/30 bg-accent/10";
+        color = "text-success border-success/30 bg-success/10";
         label = t("recurring.confidence.high");
     } else if (confidence >= 60) {
-        color = "text-chart-5 border-chart-5/30 bg-chart-5/10";
+        color = "text-warning border-warning/30 bg-warning/10";
         label = t("recurring.confidence.medium");
     }
 
     return (
-        <Badge variant="outline" className={cn("text-xs", color)}>
+        <Badge variant="outline" size="sm" className={cn(color)}>
             {confidence}% {label}
         </Badge>
     );

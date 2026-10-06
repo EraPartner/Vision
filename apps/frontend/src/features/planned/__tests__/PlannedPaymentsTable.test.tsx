@@ -1,16 +1,16 @@
 // @vitest-environment jsdom
 import type { ReactNode } from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { TooltipProvider } from "@/components/ui/tooltip";
 import { PlannedPaymentsTable } from "@/features/planned/PlannedPaymentsTable";
 import type { PlannedPayment } from "@/hooks/usePlannedPayments";
 
 const translations = vi.hoisted<Record<string, string>>(() => ({
-    "aria.deletePlannedPayment": "Delete planned payment",
-    "aria.editPlannedPayment": "Edit planned payment",
+    "common.delete": "Delete",
+    "common.edit": "Edit",
     "plannedPage.due.overdue": "Overdue",
     "plannedPage.everyNDays": "Every {n} days",
     "plannedPage.execute.button": "Mark as paid",
@@ -21,7 +21,9 @@ const translations = vi.hoisted<Record<string, string>>(() => ({
     "plannedPage.loanTerm.other": "Loan ({count} months)",
     "plannedPage.oneTime": "One-time",
     "plannedPage.openLink": "Open related link",
-    "plannedPage.statusActive": "Active",
+    "plannedPage.pause": "Pause",
+    "plannedPage.resume": "Resume",
+    "plannedPage.rowMenu": "Actions for {name}",
     "plannedPage.statusPaused": "Paused",
 }));
 
@@ -118,7 +120,7 @@ function renderTable(
         ...callbacks,
     };
     render(
-        <TooltipProvider>
+        <MemoryRouter>
             <PlannedPaymentsTable
                 payments={payments}
                 totalCount={payments.length}
@@ -126,13 +128,18 @@ function renderTable(
                 actionLoading={false}
                 {...props}
             />
-        </TooltipProvider>,
+        </MemoryRouter>,
     );
     return props;
 }
 
+async function openRowMenu(user: ReturnType<typeof userEvent.setup>, name: string) {
+    await user.click(screen.getByRole("button", { name: `Actions for ${name}` }));
+    return screen.findByRole("menu");
+}
+
 describe("PlannedPaymentsTable", () => {
-    it("wires execute, edit, toggle, and delete actions to the page callbacks", async () => {
+    it("wires Mark as paid and the row menu's Edit, Pause and Delete to the page callbacks", async () => {
         const user = userEvent.setup();
         const row = payment();
         const callbacks = renderTable([row]);
@@ -140,72 +147,56 @@ describe("PlannedPaymentsTable", () => {
         await user.click(
             screen.getByRole("button", { name: "Mark as paid: Rent" }),
         );
-        await user.click(
-            screen.getByRole("button", { name: "Edit planned payment: Rent" }),
-        );
-        await user.click(screen.getByRole("button", { name: "Active: Rent" }));
-        await user.click(
-            screen.getByRole("button", {
-                name: "Delete planned payment: Rent",
-            }),
-        );
-
         expect(callbacks.onRequestExecution).toHaveBeenCalledWith(
             expect.objectContaining({ id: 1 }),
         );
+
+        let menu = await openRowMenu(user, "Rent");
+        await user.click(within(menu).getByRole("menuitem", { name: "Edit" }));
         expect(callbacks.onEdit).toHaveBeenCalledWith(
             expect.objectContaining({ id: 1 }),
         );
+
+        menu = await openRowMenu(user, "Rent");
+        await user.click(within(menu).getByRole("menuitem", { name: "Pause" }));
         expect(callbacks.onToggleActive).toHaveBeenCalledWith(
             expect.objectContaining({ id: 1 }),
+        );
+
+        menu = await openRowMenu(user, "Rent");
+        await user.click(
+            within(menu).getByRole("menuitem", { name: "Delete" }),
         );
         expect(callbacks.onDelete).toHaveBeenCalledWith(
             expect.objectContaining({ id: 1 }),
         );
     });
 
-    it("distinguishes row actions and shows their tooltip on keyboard focus", async () => {
+    it("marks a paused row with a badge and offers Resume instead of Pause", async () => {
         const user = userEvent.setup();
         const callbacks = renderTable([
             payment(),
             payment({ id: 2, name: "Internet", is_active: false }),
         ]);
-        await user.tab();
+
+        expect(screen.getByText("Paused")).toBeInTheDocument();
         expect(
-            screen.getByRole("button", { name: "Mark as paid: Rent" }),
-        ).toHaveFocus();
-        expect(await screen.findByRole("tooltip")).toHaveTextContent(
-            "Mark as paid: Rent",
-        );
-        await user.tab();
+            screen.getByRole("button", { name: "Actions for Rent" }),
+        ).toHaveAttribute("aria-haspopup", "menu");
+
+        const menu = await openRowMenu(user, "Internet");
         expect(
-            screen.getByRole("button", { name: "Active: Rent" }),
-        ).toHaveFocus();
-        expect(
-            screen.getByRole("button", { name: "Active: Rent" }),
-        ).toHaveAttribute("aria-pressed", "true");
-        expect(
-            screen.getByRole("button", { name: "Paused: Internet" }),
-        ).toHaveAttribute("aria-pressed", "false");
-        await user.tab();
-        expect(await screen.findByRole("tooltip")).toHaveTextContent(
-            "Edit planned payment: Rent",
-        );
-        await user.tab();
-        expect(await screen.findByRole("tooltip")).toHaveTextContent(
-            "Delete planned payment: Rent",
-        );
+            within(menu).queryByRole("menuitem", { name: "Pause" }),
+        ).not.toBeInTheDocument();
         await user.click(
-            screen.getByRole("button", {
-                name: "Edit planned payment: Internet",
-            }),
+            within(menu).getByRole("menuitem", { name: "Resume" }),
         );
-        expect(callbacks.onEdit).toHaveBeenCalledWith(
+        expect(callbacks.onToggleActive).toHaveBeenCalledWith(
             expect.objectContaining({ id: 2 }),
         );
     });
 
-    it("disables execution for executed and inactive payments", () => {
+    it("links a paid row to its transaction and disables Mark as paid for a paused one", () => {
         renderTable([
             payment({
                 id: 1,
@@ -217,8 +208,12 @@ describe("PlannedPaymentsTable", () => {
         ]);
 
         expect(
-            screen.getByRole("button", { name: /paid.*99/i }),
-        ).toBeDisabled();
+            screen.queryByRole("button", { name: "Mark as paid: Executed" }),
+        ).not.toBeInTheDocument();
+        expect(screen.getByRole("link", { name: /paid/i })).toHaveAttribute(
+            "href",
+            "/transactions?transaction_id=99",
+        );
         expect(
             screen.getByRole("button", { name: "Mark as paid: Paused" }),
         ).toBeDisabled();

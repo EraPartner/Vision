@@ -82,14 +82,42 @@ beforeEach(() => {
     );
 });
 
+/**
+ * The header's primary action. The empty state repeats "Add payment" once
+ * there is nothing planned, so the first match is the header button.
+ */
+async function addButton() {
+    const [button] = await screen.findAllByRole("button", {
+        name: /add payment/i,
+    });
+    return button;
+}
+
+async function openViewMenu(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(await screen.findByRole("button", { name: "View" }));
+    await screen.findByRole("menu");
+}
+
+async function openRowMenu(
+    user: ReturnType<typeof userEvent.setup>,
+    name: string,
+) {
+    await user.click(
+        await screen.findByRole("button", { name: `Actions for ${name}` }),
+    );
+    await screen.findByRole("menu");
+}
+
 describe("PlannedPaymentsPage (integration)", () => {
     it("hydrates the show-all filter from the URL", async () => {
+        const user = userEvent.setup();
         renderWithApp(<PlannedPaymentsPage />, {
             initialEntries: ["/planned?show_all=true"],
         });
 
+        await openViewMenu(user);
         expect(
-            await screen.findByRole("switch", {
+            await screen.findByRole("menuitemcheckbox", {
                 name: /include paused/i,
                 checked: true,
             }),
@@ -99,14 +127,14 @@ describe("PlannedPaymentsPage (integration)", () => {
     it("renders page heading", async () => {
         renderWithApp(<PlannedPaymentsPage />);
         expect(
-            await screen.findByRole("heading", { name: /planned payments/i }),
+            await screen.findByRole("heading", { name: "Planned", level: 1 }),
         ).toBeInTheDocument();
     });
 
-    it("renders New Payment button", async () => {
+    it("renders the Add payment button", async () => {
         renderWithApp(<PlannedPaymentsPage />);
         expect(
-            await screen.findByRole("button", { name: /new payment/i }),
+            await addButton(),
         ).toBeInTheDocument();
     });
 
@@ -129,7 +157,7 @@ describe("PlannedPaymentsPage (integration)", () => {
             screen.getByRole("button", { name: /retry/i }),
         ).toBeInTheDocument();
         expect(
-            screen.queryByRole("button", { name: /new payment/i }),
+            screen.queryByRole("button", { name: /add payment/i }),
         ).not.toBeInTheDocument();
 
         consoleSpy.mockRestore();
@@ -139,22 +167,20 @@ describe("PlannedPaymentsPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<PlannedPaymentsPage />);
 
-        const newPaymentBtn = await screen.findByRole("button", {
-            name: /new payment/i,
-        });
+        const newPaymentBtn = await addButton();
         await user.click(newPaymentBtn);
 
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
-        expect(screen.getByText(/new planned payment/i)).toBeInTheDocument();
+        expect(
+            screen.getByRole("heading", { name: "New payment" }),
+        ).toBeInTheDocument();
     });
 
     it("dialog shows Name and Amount fields", async () => {
         const user = userEvent.setup();
         renderWithApp(<PlannedPaymentsPage />);
 
-        const newPaymentBtn = await screen.findByRole("button", {
-            name: /new payment/i,
-        });
+        const newPaymentBtn = await addButton();
         await user.click(newPaymentBtn);
 
         await screen.findByRole("dialog");
@@ -167,9 +193,7 @@ describe("PlannedPaymentsPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<PlannedPaymentsPage />);
 
-        const newPaymentBtn = await screen.findByRole("button", {
-            name: /new payment/i,
-        });
+        const newPaymentBtn = await addButton();
         await user.click(newPaymentBtn);
 
         await screen.findByRole("dialog");
@@ -177,7 +201,7 @@ describe("PlannedPaymentsPage (integration)", () => {
         await user.click(screen.getByRole("button", { name: /cancel/i }));
 
         // Dialog should close
-        await screen.findByRole("heading", { name: /planned payments/i });
+        await screen.findByRole("heading", { name: "Planned", level: 1 });
         expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
 
@@ -187,11 +211,12 @@ describe("PlannedPaymentsPage (integration)", () => {
         expect(await screen.findByText(/all payments/i)).toBeInTheDocument();
     });
 
-    it("shows Active Only filter button", async () => {
+    it("offers Include paused in the View menu, off by default", async () => {
+        const user = userEvent.setup();
         renderWithApp(<PlannedPaymentsPage />);
-        // plannedPage.activeOnly = "Active Only" — initial state of the toggle
+        await openViewMenu(user);
         expect(
-            await screen.findByRole("switch", {
+            await screen.findByRole("menuitemcheckbox", {
                 name: /include paused/i,
                 checked: false,
             }),
@@ -201,7 +226,7 @@ describe("PlannedPaymentsPage (integration)", () => {
     it("shows page subtitle text", async () => {
         renderWithApp(<PlannedPaymentsPage />);
         // Wait for full page load (translations lazy-load after settings fetch + locale import)
-        await screen.findByRole("button", { name: /new payment/i });
+        await addButton();
         expect(
             screen.getByText(
                 /see recurring bills and future payments/i,
@@ -213,9 +238,7 @@ describe("PlannedPaymentsPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<PlannedPaymentsPage />);
 
-        const newPaymentBtn = await screen.findByRole("button", {
-            name: /new payment/i,
-        });
+        const newPaymentBtn = await addButton();
         await user.click(newPaymentBtn);
 
         await screen.findByRole("dialog");
@@ -231,7 +254,7 @@ describe("PlannedPaymentsPage (integration)", () => {
         // First "New" open: dirty the sticky fields — flip the direction
         // toggle to Income and type a name.
         await user.click(
-            await screen.findByRole("button", { name: /new payment/i }),
+            await addButton(),
         );
         await screen.findByRole("dialog");
         await user.click(screen.getByRole("radio", { name: /income/i }));
@@ -244,7 +267,7 @@ describe("PlannedPaymentsPage (integration)", () => {
         // Close without saving, reopen "New".
         await user.keyboard("{Escape}");
         expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-        await user.click(screen.getByRole("button", { name: /new payment/i }));
+        await user.click(await addButton());
         await screen.findByRole("dialog");
 
         // The form remounted blank: direction back on its Expense default
@@ -359,19 +382,21 @@ describe("PlannedPaymentsPage (integration)", () => {
         expect(await screen.findByText("Rent")).toBeInTheDocument();
     });
 
-    it("toggles to Showing All mode when Active Only button is clicked", async () => {
+    it("turns Include paused on from the View menu", async () => {
         const user = userEvent.setup();
         renderWithApp(<PlannedPaymentsPage />);
 
-        const activeOnlyBtn = await screen.findByRole("switch", {
-            name: /include paused/i,
-            checked: false,
-        });
-        await user.click(activeOnlyBtn);
+        await openViewMenu(user);
+        await user.click(
+            await screen.findByRole("menuitemcheckbox", {
+                name: /include paused/i,
+                checked: false,
+            }),
+        );
 
-        // After toggle, button label flips to "Showing All" (plannedPage.showingAll)
+        await openViewMenu(user);
         expect(
-            await screen.findByRole("switch", {
+            await screen.findByRole("menuitemcheckbox", {
                 name: /include paused/i,
                 checked: true,
             }),
@@ -460,7 +485,7 @@ describe("PlannedPaymentsPage (integration)", () => {
         );
 
         renderWithApp(<PlannedPaymentsPage />);
-        await screen.findByRole("heading", { name: /planned payments/i });
+        await screen.findByRole("heading", { name: "Planned", level: 1 });
         // Hook usePlannedPayments may use multiple fetches; sample baseline
         await new Promise((r) => setTimeout(r, 100));
         const before = getCalls;
@@ -517,8 +542,11 @@ describe("PlannedPaymentForm (inline validation)", () => {
         return { user, onSubmit };
     }
 
+    // Scoped to the sheet: the page behind it has its own "Add payment".
     const submitBtn = () =>
-        screen.getByRole("button", { name: /create payment/i });
+        within(screen.getByRole("dialog")).getByRole("button", {
+            name: /add payment/i,
+        });
 
     /** Empty form, waited out to real English (the dictionary loads lazily). */
     async function renderEmptyForm() {
@@ -531,7 +559,7 @@ describe("PlannedPaymentForm (inline validation)", () => {
                 onSubmit={onSubmit}
             />,
         );
-        await screen.findByText("New planned payment");
+        await screen.findByRole("heading", { name: "New payment" });
         return { user, onSubmit };
     }
 
@@ -727,7 +755,7 @@ describe("PlannedPaymentForm (inline validation)", () => {
         renderWithApp(<PlannedPaymentsPage />);
 
         await user.click(
-            await screen.findByRole("button", { name: /new payment/i }),
+            await addButton(),
         );
         await screen.findByRole("dialog");
 
@@ -768,7 +796,7 @@ describe("PlannedPaymentForm (inline validation)", () => {
         renderWithApp(<PlannedPaymentsPage />);
 
         await user.click(
-            await screen.findByRole("button", { name: /new payment/i }),
+            await addButton(),
         );
         await screen.findByRole("dialog");
         await user.type(screen.getByLabelText("Name"), "Groceries");
@@ -820,13 +848,15 @@ describe("PlannedPaymentsPage (success feedback)", () => {
         );
 
         renderWithApp(<PlannedPaymentsPage />);
+        await openRowMenu(user, "Rent");
         await user.click(
-            await screen.findByRole("button", { name: "Active: Rent" }),
+            await screen.findByRole("menuitem", { name: "Pause" }),
         );
 
         await waitFor(() => {
             expect(success).toHaveBeenCalledWith(
-                'Planned payment "Rent" paused',
+                "Payment paused",
+                expect.objectContaining({ description: "Rent" }),
             );
         });
         success.mockRestore();
@@ -847,13 +877,15 @@ describe("PlannedPaymentsPage (success feedback)", () => {
         renderWithApp(<PlannedPaymentsPage />, {
             initialEntries: ["/planned?show_all=true"],
         });
+        await openRowMenu(user, "Rent");
         await user.click(
-            await screen.findByRole("button", { name: "Paused: Rent" }),
+            await screen.findByRole("menuitem", { name: "Resume" }),
         );
 
         await waitFor(() => {
             expect(success).toHaveBeenCalledWith(
-                'Planned payment "Rent" resumed',
+                "Payment resumed",
+                expect.objectContaining({ description: "Rent" }),
             );
         });
         success.mockRestore();
@@ -877,10 +909,9 @@ describe("PlannedPaymentsPage (success feedback)", () => {
         );
 
         renderWithApp(<PlannedPaymentsPage />);
+        await openRowMenu(user, "Rent");
         await user.click(
-            await screen.findByRole("button", {
-                name: "Edit planned payment: Rent",
-            }),
+            await screen.findByRole("menuitem", { name: "Edit" }),
         );
         await screen.findByRole("dialog");
         await user.click(screen.getByRole("button", { name: /save changes/i }));
@@ -909,10 +940,9 @@ describe("PlannedPaymentsPage (success feedback)", () => {
         );
 
         renderWithApp(<PlannedPaymentsPage />);
+        await openRowMenu(user, "Rent");
         await user.click(
-            await screen.findByRole("button", {
-                name: "Delete planned payment: Rent",
-            }),
+            await screen.findByRole("menuitem", { name: "Delete" }),
         );
         const dialog = await screen.findByRole("alertdialog");
         expect(success).not.toHaveBeenCalled();

@@ -17,9 +17,10 @@ const FIELD_GRID_CONTRACTS: FieldGridContract[] = [
         responsiveCount: 0,
     },
     {
+        // The direction picker is a SegmentedControl (ADR-183), so the form
+        // no longer needs a fixed two-column grid for it.
         file: "src/features/planned/PlannedPaymentForm.tsx",
         responsiveCount: 4,
-        allowedFixed: ["grid grid-cols-2 gap-2"],
     },
     {
         file: "src/features/tax/profile-steps/IncomeStep.tsx",
@@ -103,9 +104,7 @@ describe("responsive layout contract", () => {
         expect(readSource("src/pages/StatisticsPage.tsx")).toContain(
             "lg:[&>*:only-child]:col-span-2",
         );
-        const portfolio = readSource(
-            "src/pages/portfolio/PortfolioOverviewPage.tsx",
-        );
+        const portfolio = readSource("src/pages/portfolio/PortfolioPage.tsx");
         expect(portfolio).toContain("lg:[&>*:only-child]:col-span-2");
         expect(portfolio).toContain("lg:[&>*:only-child]:col-span-3");
     });
