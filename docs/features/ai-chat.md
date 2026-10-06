@@ -2,9 +2,9 @@
 title: Feature - AI Chat
 type: feature
 status: active
-date: 2026-10-03
-updated: 2026-10-03
-last_modified: 2026-10-03
+date: 2026-10-06
+updated: 2026-10-06
+last_modified: 2026-10-06
 tags:
   [
     feature,
@@ -73,7 +73,7 @@ related_code:
 - **Thinking indicator** — animated "Thinking..." dots appear in a bot bubble while streaming but no content received yet; replaced by first token or tool result on arrival.
 - **Background streaming** — in-flight chat requests survive navigation; user can leave the AI chat page, browse elsewhere, and the stream keeps running. Sidebar shows live activity indicator on conversations with active streams.
 - **URL-backed conversation selection** — conversation ID persists in URL search param `?c=<id>`, enabling deep-linking and restoring selection on page reload.
-- Accessible globally via a sidebar entry above the Budget/Portfolio workspace switcher.
+- Accessible globally via the AI Chat entry in the sidebar footer, above Settings (`G A` also opens it).
 - SSE token streaming for progressive response display.
 - Interrupted, stopped, and stalled streams retain their partial answer, label
   its state, and offer a one-click retry of the same request.

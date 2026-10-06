@@ -1,7 +1,7 @@
 ---
 title: ADR-099 Sidebar / Navigation Information Architecture
 type: adr
-date: 2026-06-18
+date: 2026-10-06
 tags:
   [
     adr,
@@ -22,7 +22,9 @@ aliases: [sidebar IA, navigation IA, nav layout]
 
 ## Status
 
-Accepted
+Accepted. The workspace layout is superseded by
+[[docs/adr/180-sidebar-sections-replace-workspaces|ADR-180]] (sections in one labelled
+sidebar); the placement rules for cross-workspace pages below still apply.
 
 ## Date
 

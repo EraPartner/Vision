@@ -9,7 +9,7 @@ const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(naviga
 
 function Key({ children }: { children: React.ReactNode }) {
     return (
-        <kbd className="inline-flex min-w-[1.6rem] items-center justify-center rounded-md border border-border/60 bg-muted/60 px-1.5 py-0.5 text-2xs font-medium text-muted-foreground">
+        <kbd className="inline-flex h-5 min-w-5 items-center justify-center rounded-chip border border-border/60 bg-foreground/[0.05] px-1.5 type-caption font-medium text-label-secondary">
             {children}
         </kbd>
     );
@@ -77,12 +77,12 @@ export function ShortcutsOverlay({ open, onOpenChange }: ShortcutsOverlayProps) 
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-md">
                 <DialogHeader>
-                    <DialogTitle className="font-display">{t("shortcuts.title")}</DialogTitle>
+                    <DialogTitle>{t("shortcuts.title")}</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-3">
                     {general.map((row, i) => (
-                        <div key={i} className="flex items-center justify-between gap-4 text-sm">
-                            <span className="text-foreground/85">{row.label}</span>
+                        <div key={i} className="flex items-center justify-between gap-4 type-callout">
+                            <span className="text-foreground">{row.label}</span>
                             <span className="flex items-center gap-1">{row.keys}</span>
                         </div>
                     ))}
@@ -91,8 +91,8 @@ export function ShortcutsOverlay({ open, onOpenChange }: ShortcutsOverlayProps) 
                     </p>
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                         {GO_TO_ROUTES.map((route) => (
-                            <div key={route.key} className="flex items-center justify-between gap-3 text-sm">
-                                <span className="truncate text-foreground/85">{t(route.titleKey)}</span>
+                            <div key={route.key} className="flex items-center justify-between gap-3 type-callout">
+                                <span className="truncate text-foreground">{t(route.titleKey)}</span>
                                 <span className="flex shrink-0 items-center gap-1">
                                     <Key>G</Key>
                                     <Key>{route.key.toUpperCase()}</Key>
@@ -106,15 +106,15 @@ export function ShortcutsOverlay({ open, onOpenChange }: ShortcutsOverlayProps) 
                                 {t("shortcuts.desktopSection")}
                             </p>
                             {desktop.map((row, i) => (
-                                <div key={`desktop-${i}`} className="flex items-center justify-between gap-4 text-sm">
-                                    <span className="text-foreground/85">{row.label}</span>
+                                <div key={`desktop-${i}`} className="flex items-center justify-between gap-4 type-callout">
+                                    <span className="text-foreground">{row.label}</span>
                                     <span className="flex items-center gap-1">{row.keys}</span>
                                 </div>
                             ))}
                         </>
                     )}
-                    <p className="pt-1 text-xs text-muted-foreground">{t("shortcuts.chartScrub")}</p>
-                    <p className="text-xs text-muted-foreground">{t("shortcuts.rowMenu")}</p>
+                    <p className="pt-1 type-footnote text-label-secondary">{t("shortcuts.chartScrub")}</p>
+                    <p className="type-footnote text-label-secondary">{t("shortcuts.rowMenu")}</p>
                 </div>
             </DialogContent>
         </Dialog>

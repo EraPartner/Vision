@@ -690,9 +690,9 @@
         }
     }
 
-    /* Workspace-aware hue: portfolio leads with champagne gold, budgeting
+    /* Area-aware hue: the Wealth pages lead with champagne gold, the rest
        with emerald. Same alphas, swapped hues. */
-    .liquid-canvas[data-workspace="portfolio"]::before {
+    .liquid-canvas[data-tint="wealth"]::before {
         background: radial-gradient(
             closest-side,
             hsl(var(--accent) / var(--aurora-primary-alpha)),
@@ -700,7 +700,7 @@
         );
     }
 
-    .liquid-canvas[data-workspace="portfolio"]::after {
+    .liquid-canvas[data-tint="wealth"]::after {
         background: radial-gradient(
             closest-side,
             hsl(var(--primary) / var(--aurora-accent-alpha)),

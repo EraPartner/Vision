@@ -3,8 +3,8 @@ title: Frontend Architecture
 type: architecture
 status: active
 description: "React frontend architecture, design system, and diagrams with liquid-glass aesthetic, visx charts, Framer Motion, and Zustand store. May 2026 Tailwind v4 migration with unified CSS architecture. June 2026 Liquid Glass v2 — atmosphere layer, saturated blur tiers, CommandPalette, optimistic mutations, route preload. June 2026 Premium v3 — RollingNumber/Money/DeltaPill, chart scrub+sync, ChartSkeleton, PageTitleContext, palette v2, ShortcutsOverlay + go-to sequences, animated tabs, workspace aurora, ShaderAurora behind visual-effects tier model (ADR-075), per-widget dashboard hydration, optimistic create. 2026-06-24: --gain/--loss CSS semantic tokens unified app-wide (tokens.css baseline, skin-v2.css Okabe-Ito overrides); gain/loss Tailwind color utilities added; colorblindGainLoss default OFF/classic."
-date: 2026-10-05
-updated: 2026-10-05
+date: 2026-10-06
+updated: 2026-10-06
 tags: [architecture, frontend, uml, plantuml, react, phase-4, phase-6, phase-9, liquid-glass, liquid-glass-v2, premium-v3, visx, framer-motion, statistics-refactoring, zustand, state-management, tailwind-v4, css-architecture, command-palette, optimistic-updates, route-preload, chart-scrub, chart-sync, shader-aurora, visual-effects-tiers, auto-adapt-display, fx-reduced, role-based-glass, glass-by-default, june-2026, gain-loss, css-tokens, skin-v2, tailwind-colors]
 aliases: [frontend architecture, react architecture, frontend design, design system]
 ---
@@ -588,7 +588,7 @@ Centralized in `apps/frontend/src/lib/motion.ts`:
 - **Page transitions**: `PageTransition.tsx` (re-added June 2026) — enter-only spring keyed on pathname; no `AnimatePresence` exit to avoid double-rendering Suspense boundaries around lazy routes.
 - **Route loading**: 2px top hairline shimmer replaces the old `PageLoader` full-screen spinner.
 - **Dialog/alert-dialog**: `dialog-in` / `dialog-out` CSS keyframes with overshoot bezier (`cubic-bezier(0.34, 1.45, 0.64, 1)`); `motion-reduce` disables both. Fixes Tailwind v4 `translate`-property double-offset bug from the prior shadcn recipe.
-- **Sidebar active rail**: framer-motion `layoutId="active-rail"` (`ActiveRail` component) that glides between nav items on route change; instant under reduced motion.
+- **Sidebar selection**: the active row carries a `primary` selection fill. The former framer `ActiveRail` glide was removed with the workspace sidebar ([[docs/adr/180-sidebar-sections-replace-workspaces|ADR-180]]).
 - **Chart animations**: Stagger + fade entry (extended to 12 children, was 8); gated by `useReducedMotion()`.
 - **Theme crossfade**: `ThemeHydration` wraps the dark-class flip in `document.startViewTransition` (degrades gracefully on unsupported browsers / reduced-motion).
 
@@ -654,7 +654,7 @@ component owns presentation and navigation only:
 
 - Covers all budgeting and portfolio pages, admin pages (when enabled), theme and settings actions.
 - Mounted by `AppLayout` with a topbar `⌘K` trigger button.
-- Cross-workspace jumps sync the sidebar workspace automatically.
+- Palette jumps just navigate; a destination inside a hidden sidebar section shows that section ([[docs/adr/180-sidebar-sections-replace-workspaces|ADR-180]]).
 - 5 new i18n keys: `commandPalette.*` (en + nl).
 
 ### Route Preload (Liquid Glass v2)
@@ -701,8 +701,8 @@ A second June 2026 batch with 18 items. See [[docs/adr/071-premium-v3-effects-to
 
 #### Materials & Atmosphere (Premium v3)
 
-- **Go-to key sequences**: `hooks/useGoToShortcuts.ts` — `g` then a destination key (900 ms window, inert in inputs); route table shared with ShortcutsOverlay so the help sheet stays truthful. (A cursor-specular sheen was implemented and removed same-day at user request.)
-- **Workspace-aware aurora**: `AppLayout` reads `useWorkspace()` (route-derived, no provider), sets `data-workspace` on `.liquid-canvas`. CSS swaps blob hue emphasis (portfolio = gold-led, budgeting = emerald-led).
+- **Go-to key sequences**: `hooks/useGoToShortcuts.ts` — `g` then a destination key (900 ms window, inert in inputs); route table (`GO_TO_ROUTES`, derived from the navigation registry in `lib/navigation.ts`) shared with ShortcutsOverlay so the help sheet stays truthful. (A cursor-specular sheen was implemented and removed same-day at user request.)
+- **Route-tinted aurora**: `AppLayout` sets `data-tint="wealth"` on `.liquid-canvas` under `/portfolio`, otherwise `"money"` (replaces the `useWorkspace()`-derived `data-workspace`, ADR-180). CSS swaps blob hue emphasis (wealth = gold-led, money = emerald-led).
 - **Light-mode paper & ink**: Conservative token deltas in `tokens.css` light block (warmer paper background `oklch(40 36% 96%)`, deeper ink foreground, warmed border/muted). `premium-frame` gains an embossed bottom hairline. `styles/themes.ts` `defaultLight` palette kept mirrored; `themes.test.ts` 4/4 green.
 - **`ShaderAurora`** (`components/layout/ShaderAurora.tsx`): Raw WebGL (no external dependency), one fullscreen triangle, 4-octave value-noise fbm tinted from `--primary`/`--accent` CSS vars (re-resolved on theme change via `MutationObserver`). Renders at 0.25× resolution upscaled and additionally capped at 640px wide, ~30 fps cap, single static frame under `prefers-reduced-motion`, rAF-paused when `document.hidden`. Any WebGL creation failure silently leaves the CSS blobs (always rendered underneath) as the fallback. Mounted in `AppLayout` only when the _effective_ visual-effects tier (ADR-075) is `'enhanced'`.
 
@@ -740,7 +740,7 @@ AppLayout
 ├── Topbar (scroll-linked ::before + ⌘K trigger + page title collapse)
 ├── CommandPalette (⌘K, all pages + theme/settings + palette v2 recents+search)
 ├── ShortcutsOverlay (? key, glass dialog)
-├── AppSidebar (ActiveRail layoutId)
+├── AppSidebar (sections, NavItemBadge counts)
 ├── PageTransition (enter-only spring)
 └── Routes (each page wrapped in per-widget skeleton pattern)
 ```
@@ -780,7 +780,7 @@ App
 │                                       ├── LiquidCanvas (fixed atmosphere layer)
 │                                       ├── Topbar (scroll-linked ::before + ⌘K trigger)
 │                                       ├── CommandPalette (⌘K, all pages + theme/settings)
-│                                       ├── AppSidebar (ActiveRail layoutId)
+│                                       ├── AppSidebar (sections, NavItemBadge counts)
 │                                       ├── PageTransition (enter-only spring)
 │                                           └── Routes
 │                                               ├── Budgeting (/, /transactions, etc.)

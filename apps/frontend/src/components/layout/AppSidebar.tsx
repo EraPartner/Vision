@@ -1,13 +1,6 @@
-import {
-    DropdownMenu,
-    DropdownMenuTrigger,
-    DropdownMenuContent,
-    DropdownMenuLabel,
-    DropdownMenuRadioGroup,
-    DropdownMenuRadioItem,
-} from "@/components/ui/dropdown-menu";
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef } from "react";
 import { NavLink, useLocation } from "react-router";
+import { PanelLeftClose, Search, Settings } from "lucide-react";
 import {
     Sidebar,
     SidebarContent,
@@ -19,49 +12,33 @@ import {
     SidebarMenu,
     SidebarMenuButton,
     SidebarMenuItem,
+    SidebarSeparator,
     useSidebar,
 } from "@/components/ui/sidebar";
-import { PanelLeftClose } from "lucide-react";
-import { m, useReducedMotion } from "framer-motion";
-import { useWorkspace } from "@/hooks/useWorkspace";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { usePortfolioPrefetch } from "@/hooks/usePortfolioPrefetch";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
+import { useHiddenSections } from "@/hooks/useSidebarPreferences";
+import { useUpdateStatus } from "@/hooks/useUpdateStatus";
 import { cn } from "@/lib/utils";
-import { springs } from "@/lib/motion";
 import { preloadRoute } from "@/lib/routePreload";
 import {
-    ADMIN_NAV_ITEMS,
-    GLOBAL_NAV_ITEMS,
+    ADMIN_SECTION,
+    FOOTER_NAV_ITEMS,
     GO_TO_KEY_BY_URL,
-    NAV_WORKSPACE_BY_ID,
-    NAV_WORKSPACES,
-    WORKSPACE_ROOT_URLS,
+    NAV_SECTIONS,
+    isActiveNavItem,
+    matchNavSectionId,
+    type NavItem,
+    type NavSection,
 } from "@/lib/navigation";
-import { InsightsNavBadge } from "@/components/layout/InsightsNavBadge";
-import { MonitorInboxBadge } from "@/components/layout/MonitorInboxBadge";
+import { NavItemBadge } from "@/components/layout/NavItemBadge";
 import { VisionMark } from "@/components/shared/VisionMark";
-import { APP_NAME, APP_VERSION } from "@/lib/appIdentity";
+import { APP_NAME } from "@/lib/appIdentity";
 
-/**
- * The active-route accent rail as a shared layout element: framer-motion
- * glides it between nav items on navigation instead of blinking it on/off.
- *
- * Sized as a flush full-height 2px bar (not a rounded inset pill) so it reads
- * as one continuous edge with the item's rounded-lg corner clip — no bulge.
- * This is the sole active indicator; the menu button's old inset box-shadow
- * was removed (ui/sidebar.tsx) to avoid doubling it.
- */
-function ActiveRail() {
-    const reducedMotion = useReducedMotion();
-    return (
-        <m.span
-            layoutId="sidebar-active-rail"
-            aria-hidden="true"
-            className="absolute inset-y-0 left-0 w-[2px] bg-primary"
-            transition={reducedMotion ? { duration: 0 } : springs.snappy}
-        />
-    );
+interface AppSidebarProps {
+    onOpenSettings: () => void;
+    onOpenPalette: () => void;
 }
 
 // Collapsed-rail tooltips double as shortcut teachers: "Transactions · G T".
@@ -70,25 +47,21 @@ function withGoToHint(title: string, url: string): string {
     return key ? `${title} · G ${key.toUpperCase()}` : title;
 }
 
-function isActiveRoute(itemUrl: string, pathname: string) {
-    // Workspace roots are active only on an exact match (they have children).
-    if (WORKSPACE_ROOT_URLS.has(itemUrl)) return pathname === itemUrl;
-    if (itemUrl === "/analysis") return pathname === itemUrl;
-    // Boundary-aware prefix match so a route whose path is a string prefix of
-    // another (e.g. /research/market vs /research/markets) doesn't light up its
-    // sibling. Child routes (/import/:id) still highlight their parent nav item.
-    return pathname === itemUrl || pathname.startsWith(itemUrl + "/");
-}
-
-export function AppSidebar() {
-    const { state, toggleSidebar } = useSidebar();
-    const collapsed = state === "collapsed";
+/**
+ * One labelled sidebar (ADR-180): the top items, then the Money, Wealth and
+ * Research sections, each of which the user can hide, then Admin when admin
+ * mode is on, and a footer with the assistant and Settings. Everything is
+ * visible at once; the icon rail is a remembered choice, not the default.
+ */
+export function AppSidebar({ onOpenSettings, onOpenPalette }: AppSidebarProps) {
+    const { state, toggleSidebar, isMobile } = useSidebar();
+    const collapsed = state === "collapsed" && !isMobile;
     const location = useLocation();
-    const { workspace, setWorkspace } = useWorkspace();
     const { t } = useLanguage();
-    const { prefetchNetWorth, prefetchPerformance } =
-        usePortfolioPrefetch(workspace);
+    const { prefetchNetWorth, prefetchPerformance } = usePortfolioPrefetch();
     const { appSettings } = useAppSettings();
+    const { data: updateStatus } = useUpdateStatus();
+    const updateReady = updateStatus !== undefined && !updateStatus.up_to_date;
 
     const handleNavHover = useCallback(
         (url: string) => {
@@ -99,30 +72,14 @@ export function AppSidebar() {
         [prefetchNetWorth, prefetchPerformance],
     );
 
-    // The active workspace's nav, localized from the shared registry.
-    const activeWorkspace = NAV_WORKSPACE_BY_ID[workspace];
-    const groups = useMemo(
+    const sections = useMemo(
         () =>
-            activeWorkspace.groups.map((group) => ({
-                label: t(group.labelKey),
-                items: group.items.map((item) => ({
-                    title: t(item.titleKey),
-                    url: item.url,
-                    icon: item.icon,
-                })),
-            })),
-        [activeWorkspace, t],
+            appSettings.adminMode
+                ? [...NAV_SECTIONS, ADMIN_SECTION]
+                : NAV_SECTIONS,
+        [appSettings.adminMode],
     );
-
-    const adminItems = useMemo(
-        () =>
-            ADMIN_NAV_ITEMS.map((item) => ({
-                title: t(item.titleKey),
-                url: item.url,
-                icon: item.icon,
-            })),
-        [t],
-    );
+    const activeSectionId = matchNavSectionId(location.pathname);
 
     return (
         <Sidebar
@@ -130,14 +87,11 @@ export function AppSidebar() {
             className="app-sidebar glass-chrome border-r border-sidebar-border/60"
         >
             <SidebarHeader
-                className={cn(
-                    "border-b border-sidebar-border/50 py-4",
-                    collapsed ? "px-0" : "px-4",
-                )}
+                className={cn("gap-2 pb-2 pt-3", collapsed ? "px-2" : "px-3")}
             >
                 <div
                     className={cn(
-                        "flex items-center gap-3",
+                        "flex h-8 items-center gap-2.5",
                         collapsed && "justify-center",
                     )}
                 >
@@ -145,342 +99,259 @@ export function AppSidebar() {
                         type="button"
                         onClick={() => toggleSidebar()}
                         aria-label={t("aria.toggleSidebar")}
-                        className="h-8 w-8 shrink-0 rounded-xl bg-gradient-to-br from-primary via-primary/85 to-accent/70 flex items-center justify-center shadow-[0_10px_30px_-10px_hsl(var(--primary)/0.55)] ring-1 ring-primary/20 transition-transform duration-normal hover:scale-[1.04] focus-ring"
+                        aria-expanded={!collapsed}
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-chip bg-gradient-to-br from-primary via-primary/85 to-accent/70 text-primary-foreground shadow-[0_6px_18px_-8px_hsl(var(--primary)/0.6)] transition-transform duration-normal hover:scale-[1.04] focus-ring"
                     >
-                        <VisionMark className="h-4 w-4 text-primary-foreground" />
+                        <VisionMark className="h-3.5 w-3.5" />
                     </button>
                     {!collapsed && (
                         <>
-                            <div className="overflow-hidden flex-1">
-                                <h1 className="font-display text-lg font-semibold text-sidebar-foreground tracking-tight truncate leading-none">
-                                    Vision
-                                </h1>
-                                <p className="mt-1 eyebrow truncate">
-                                    {t("nav.financeManager")}
-                                </p>
-                            </div>
+                            <span className="min-w-0 flex-1 truncate font-display type-headline text-sidebar-foreground">
+                                {APP_NAME}
+                            </span>
                             <button
                                 type="button"
                                 onClick={() => toggleSidebar()}
                                 aria-label={t("aria.collapseSidebar")}
-                                className="h-7 w-7 shrink-0 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-foreground/[0.06] transition-colors focus-ring"
+                                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-chip text-label-tertiary transition-colors duration-fast hover:bg-foreground/[0.06] hover:text-foreground focus-ring"
                             >
                                 <PanelLeftClose className="h-4 w-4" />
                             </button>
                         </>
                     )}
                 </div>
+                <button
+                    type="button"
+                    onClick={onOpenPalette}
+                    aria-label={t("commandPalette.openLabel")}
+                    aria-keyshortcuts="Meta+K Control+K"
+                    className={cn(
+                        "flex h-8 items-center gap-2 rounded-chip bg-foreground/[0.06] type-callout text-label-tertiary transition-colors duration-fast hover:bg-foreground/[0.09] hover:text-label-secondary focus-ring",
+                        collapsed ? "w-8 justify-center" : "w-full px-2.5",
+                    )}
+                >
+                    <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    {!collapsed && (
+                        <>
+                            <span className="min-w-0 flex-1 truncate text-left">
+                                {t("commandPalette.hint")}
+                            </span>
+                            <kbd
+                                aria-hidden="true"
+                                className="type-caption text-label-tertiary"
+                            >
+                                ⌘K
+                            </kbd>
+                        </>
+                    )}
+                </button>
             </SidebarHeader>
 
-            <SidebarContent>
-                {/* Navigation landmark so SR users can jump straight to (or past) the
-            sidebar. Replicates SidebarContent's column layout (flex-col gap-2)
-            so wrapping everything in one flex child is visually free. */}
+            <SidebarContent className="gap-0">
                 <nav
                     aria-label={t("nav.primary")}
-                    className="flex w-full flex-col gap-2"
+                    className="flex w-full flex-col"
                 >
-                    {/* Workspace-agnostic pages (AI chat, Accounts hub — ADR-088), shown
-            above the workspace switcher */}
-                    <SidebarGroup>
-                        <SidebarGroupContent>
-                            <SidebarMenu>
-                                {GLOBAL_NAV_ITEMS.map((item) => {
-                                    const title = t(item.titleKey);
-                                    const isActive = isActiveRoute(
-                                        item.url,
-                                        location.pathname,
-                                    );
-                                    return (
-                                        <SidebarMenuItem key={item.url}>
-                                            <SidebarMenuButton
-                                                asChild
-                                                isActive={isActive}
-                                                tooltip={withGoToHint(
-                                                    title,
-                                                    item.url,
-                                                )}
-                                            >
-                                                <NavLink
-                                                    to={item.url}
-                                                    onMouseEnter={() =>
-                                                        handleNavHover(item.url)
-                                                    }
-                                                    className="relative"
-                                                    aria-label={title}
-                                                >
-                                                    {isActive && <ActiveRail />}
-                                                    <item.icon
-                                                        className={cn(
-                                                            "h-4 w-4 transition-colors duration-normal",
-                                                            isActive &&
-                                                                "text-primary",
-                                                        )}
-                                                    />
-                                                    <span
-                                                        className={
-                                                            isActive
-                                                                ? "font-semibold tracking-tight"
-                                                                : "tracking-tight"
-                                                        }
-                                                    >
-                                                        {title}
-                                                    </span>
-                                                    {item.url ===
-                                                        "/analysis/monitors" && (
-                                                        <MonitorInboxBadge
-                                                            collapsed={
-                                                                collapsed
-                                                            }
-                                                        />
-                                                    )}
-                                                </NavLink>
-                                            </SidebarMenuButton>
-                                        </SidebarMenuItem>
-                                    );
-                                })}
-                            </SidebarMenu>
-                        </SidebarGroupContent>
-                    </SidebarGroup>
-
-                    {/* Workspace switcher */}
-                    {!collapsed && (
-                        <div className="px-3 pt-3">
-                            <div className="flex rounded-xl bg-sidebar-accent/60 ring-1 ring-sidebar-border/50 p-1 gap-1">
-                                {NAV_WORKSPACES.map((ws) => (
-                                    <WorkspaceTab
-                                        key={ws.id}
-                                        active={workspace === ws.id}
-                                        onClick={() => setWorkspace(ws.id)}
-                                        icon={
-                                            <ws.icon className="h-3.5 w-3.5" />
-                                        }
-                                        label={t(ws.labelKey)}
-                                    />
-                                ))}
-                            </div>
-                        </div>
-                    )}
-                    {collapsed && (
-                        <div className="flex justify-center pt-3 px-1.5">
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <button
-                                        type="button"
-                                        className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors hover:bg-primary/20 focus-ring"
-                                        aria-label={`${t("nav.chooseWorkspace")}: ${t(activeWorkspace.labelKey)}`}
-                                        title={t("nav.chooseWorkspace")}
-                                    >
-                                        <activeWorkspace.icon className="h-4 w-4" />
-                                    </button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent side="right" align="start">
-                                    <DropdownMenuLabel>
-                                        {t("nav.chooseWorkspace")}
-                                    </DropdownMenuLabel>
-                                    <DropdownMenuRadioGroup
-                                        value={workspace}
-                                        onValueChange={(value) => {
-                                            const selected =
-                                                NAV_WORKSPACES.find(
-                                                    (item) => item.id === value,
-                                                );
-                                            if (selected)
-                                                setWorkspace(selected.id);
-                                        }}
-                                    >
-                                        {NAV_WORKSPACES.map((item) => (
-                                            <DropdownMenuRadioItem
-                                                key={item.id}
-                                                value={item.id}
-                                            >
-                                                {t(item.labelKey)}
-                                            </DropdownMenuRadioItem>
-                                        ))}
-                                    </DropdownMenuRadioGroup>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        </div>
-                    )}
-
-                    {groups.map((group) => (
-                        <SidebarGroup key={group.label}>
-                            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
-                            <SidebarGroupContent>
-                                <SidebarMenu>
-                                    {group.items.map((item) => {
-                                        const isActive = isActiveRoute(
-                                            item.url,
-                                            location.pathname,
-                                        );
-                                        return (
-                                            <SidebarMenuItem key={item.url}>
-                                                <SidebarMenuButton
-                                                    asChild
-                                                    isActive={isActive}
-                                                    tooltip={withGoToHint(
-                                                        item.title,
-                                                        item.url,
-                                                    )}
-                                                >
-                                                    <NavLink
-                                                        to={item.url}
-                                                        onMouseEnter={() =>
-                                                            handleNavHover(
-                                                                item.url,
-                                                            )
-                                                        }
-                                                        className="relative"
-                                                        aria-label={item.title}
-                                                    >
-                                                        {isActive && (
-                                                            <ActiveRail />
-                                                        )}
-                                                        <item.icon
-                                                            className={cn(
-                                                                "h-4 w-4 transition-colors duration-normal",
-                                                                isActive &&
-                                                                    "text-primary",
-                                                            )}
-                                                        />
-                                                        <span
-                                                            className={
-                                                                isActive
-                                                                    ? "font-semibold tracking-tight"
-                                                                    : "tracking-tight"
-                                                            }
-                                                        >
-                                                            {item.title}
-                                                        </span>
-                                                        {!collapsed &&
-                                                            item.url ===
-                                                                "/statistics" && (
-                                                                <InsightsNavBadge />
-                                                            )}
-                                                    </NavLink>
-                                                </SidebarMenuButton>
-                                            </SidebarMenuItem>
-                                        );
-                                    })}
-                                </SidebarMenu>
-                            </SidebarGroupContent>
-                        </SidebarGroup>
+                    {sections.map((section, index) => (
+                        <NavSectionGroup
+                            key={section.id}
+                            section={section}
+                            collapsed={collapsed}
+                            containsActive={activeSectionId === section.id}
+                            pathname={location.pathname}
+                            onHover={handleNavHover}
+                            separator={collapsed && index > 0}
+                        />
                     ))}
-
-                    {appSettings.adminMode && (
-                        <SidebarGroup>
-                            <SidebarGroupLabel>
-                                {t("nav.admin")}
-                            </SidebarGroupLabel>
-                            <SidebarGroupContent>
-                                <SidebarMenu>
-                                    {adminItems.map((item) => {
-                                        const isActive =
-                                            item.url === "/admin"
-                                                ? location.pathname === "/admin"
-                                                : isActiveRoute(
-                                                      item.url,
-                                                      location.pathname,
-                                                  );
-                                        return (
-                                            <SidebarMenuItem key={item.url}>
-                                                <SidebarMenuButton
-                                                    asChild
-                                                    isActive={isActive}
-                                                    tooltip={withGoToHint(
-                                                        item.title,
-                                                        item.url,
-                                                    )}
-                                                >
-                                                    <NavLink
-                                                        to={item.url}
-                                                        onMouseEnter={() =>
-                                                            handleNavHover(
-                                                                item.url,
-                                                            )
-                                                        }
-                                                        className="relative"
-                                                        aria-label={item.title}
-                                                    >
-                                                        {isActive && (
-                                                            <ActiveRail />
-                                                        )}
-                                                        <item.icon
-                                                            className={cn(
-                                                                "h-4 w-4 transition-colors duration-normal",
-                                                                isActive &&
-                                                                    "text-primary",
-                                                            )}
-                                                        />
-                                                        <span
-                                                            className={
-                                                                isActive
-                                                                    ? "font-semibold tracking-tight"
-                                                                    : "tracking-tight"
-                                                            }
-                                                        >
-                                                            {item.title}
-                                                        </span>
-                                                    </NavLink>
-                                                </SidebarMenuButton>
-                                            </SidebarMenuItem>
-                                        );
-                                    })}
-                                </SidebarMenu>
-                            </SidebarGroupContent>
-                        </SidebarGroup>
-                    )}
                 </nav>
             </SidebarContent>
 
-            <SidebarFooter className="border-t border-sidebar-border/50 p-3">
-                {!collapsed && (
-                    <div className="flex items-center justify-center gap-2">
-                        <div className="h-1.5 w-1.5 rounded-full bg-accent shadow-[0_0_8px_hsl(var(--accent)/0.7)] motion-safe:animate-pulse" />
-                        <p className="text-center eyebrow">
-                            {APP_NAME} v{APP_VERSION}
-                        </p>
-                    </div>
-                )}
+            <SidebarFooter className="border-t border-sidebar-border/50 px-2.5 py-2 group-data-[collapsible=icon]:px-2">
+                <SidebarMenu>
+                    {FOOTER_NAV_ITEMS.map((item) => (
+                        <NavMenuItem
+                            key={item.url}
+                            item={item}
+                            collapsed={collapsed}
+                            pathname={location.pathname}
+                            onHover={handleNavHover}
+                        />
+                    ))}
+                    <SidebarMenuItem>
+                        <SidebarMenuButton
+                            onClick={onOpenSettings}
+                            tooltip={`${t("layout.settings")} · ⌘,`}
+                            title={`${t("layout.settings")} (⌘,)`}
+                            className="relative"
+                        >
+                            <Settings aria-hidden="true" />
+                            <span className="truncate group-data-[collapsible=icon]:hidden">
+                                {t("layout.settings")}
+                            </span>
+                            {updateReady && (
+                                <>
+                                    <span
+                                        aria-hidden="true"
+                                        data-testid="update-ready-dot"
+                                        className={cn(
+                                            "h-[7px] w-[7px] shrink-0 rounded-full bg-primary",
+                                            collapsed
+                                                ? "absolute right-1 top-1"
+                                                : "ml-auto",
+                                        )}
+                                    />
+                                    <span className="sr-only">
+                                        {t("layout.updateReady")}
+                                    </span>
+                                </>
+                            )}
+                        </SidebarMenuButton>
+                    </SidebarMenuItem>
+                </SidebarMenu>
             </SidebarFooter>
         </Sidebar>
     );
 }
 
-function WorkspaceTab({
-    active,
-    onClick,
-    icon,
-    label,
-}: {
-    active: boolean;
-    onClick: () => void;
-    icon: React.ReactNode;
-    label: string;
-}) {
+interface NavSectionGroupProps {
+    section: NavSection;
+    collapsed: boolean;
+    /** The active page is inside this section, so it must be visible. */
+    containsActive: boolean;
+    pathname: string;
+    onHover: (url: string) => void;
+    separator: boolean;
+}
+
+function NavSectionGroup({
+    section,
+    collapsed,
+    containsActive,
+    pathname,
+    onHover,
+    separator,
+}: NavSectionGroupProps) {
+    const { t } = useLanguage();
+    const { isHidden, setSectionHidden } = useHiddenSections();
+    const contentId = useId();
+    const hidden = section.collapsible && isHidden(section.id);
+    const open = !hidden || containsActive;
+
+    // Landing inside a hidden section (deep link, palette, shortcut) shows
+    // it for good: the user is clearly using it now.
+    useEffect(() => {
+        if (hidden && containsActive) setSectionHidden(section.id, false);
+    }, [hidden, containsActive, section.id, setSectionHidden]);
+
+    const label = section.labelKey ? t(section.labelKey) : undefined;
+    const toggleLabel = open ? t("nav.hideSection") : t("nav.showSection");
+
     return (
-        <button
-            onClick={onClick}
-            title={label}
-            aria-pressed={active}
-            className={cn(
-                // Transition list composed via --press-compose (press-feedback owns the
-                // `transition` shorthand — see index.css); press entry restated verbatim.
-                "focus-ring press-feedback [--press-compose:background-color_var(--duration-normal)_var(--ease-glide),color_var(--duration-normal)_var(--ease-glide),box-shadow_var(--duration-normal)_var(--ease-glide),scale_var(--duration-normal)_var(--ease-glide),transform_var(--duration-press)_ease-out] min-w-0 flex-1 flex items-center justify-center gap-1 rounded-lg px-1.5 py-1.5 text-xs font-medium tracking-tight",
-                active
-                    ? "bg-background/90 text-foreground shadow-[0_6px_18px_-8px_hsl(var(--primary)/0.35)] ring-1 ring-primary/25 scale-[1.02]"
-                    : "text-muted-foreground hover:text-foreground hover:bg-background/40",
+        <SidebarGroup className="group/section">
+            {separator && <SidebarSeparator className="mx-1 mb-1" />}
+            {label && (
+                <SidebarGroupLabel className="justify-between pr-1">
+                    <span className="truncate">{label}</span>
+                    {section.collapsible && (
+                        <button
+                            type="button"
+                            onClick={() => setSectionHidden(section.id, open)}
+                            aria-expanded={open}
+                            aria-controls={contentId}
+                            aria-label={`${toggleLabel} ${label}`}
+                            className="rounded-chip px-1 type-caption font-medium text-label-tertiary opacity-0 transition-opacity duration-fast hover:text-foreground focus-ring focus-visible:opacity-100 group-hover/section:opacity-100 aria-[expanded=false]:opacity-100"
+                        >
+                            {toggleLabel}
+                        </button>
+                    )}
+                </SidebarGroupLabel>
             )}
-        >
-            <span
+            <div
+                id={contentId}
+                aria-hidden={!open}
                 className={cn(
-                    "shrink-0 transition-colors duration-fast",
-                    active && "text-primary",
+                    "grid transition-[grid-template-rows] duration-normal ease-glide motion-reduce:transition-none",
+                    open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
                 )}
             >
-                {icon}
-            </span>
-            <span className="truncate">{label}</span>
-        </button>
+                <SidebarGroupContent
+                    className="min-h-0 overflow-hidden"
+                    inert={!open}
+                >
+                    <SidebarMenu>
+                        {section.items.map((item) => (
+                            <NavMenuItem
+                                key={item.url}
+                                item={item}
+                                collapsed={collapsed}
+                                pathname={pathname}
+                                onHover={onHover}
+                            />
+                        ))}
+                    </SidebarMenu>
+                </SidebarGroupContent>
+            </div>
+        </SidebarGroup>
+    );
+}
+
+interface NavMenuItemProps {
+    item: NavItem;
+    collapsed: boolean;
+    pathname: string;
+    onHover: (url: string) => void;
+}
+
+function NavMenuItem({ item, collapsed, pathname, onHover }: NavMenuItemProps) {
+    const { t } = useLanguage();
+    const title = t(item.titleKey);
+    const isActive = isActiveNavItem(item, pathname);
+    const goToKey = GO_TO_KEY_BY_URL.get(item.url);
+    const linkRef = useRef<HTMLAnchorElement>(null);
+
+    // A long sidebar scrolls; the page the user is on must be in view.
+    useEffect(() => {
+        if (isActive) linkRef.current?.scrollIntoView?.({ block: "nearest" });
+    }, [isActive]);
+
+    return (
+        <SidebarMenuItem>
+            <SidebarMenuButton
+                asChild
+                isActive={isActive}
+                tooltip={withGoToHint(title, item.url)}
+            >
+                <NavLink
+                    ref={linkRef}
+                    to={item.url}
+                    onMouseEnter={() => onHover(item.url)}
+                    onFocus={() => onHover(item.url)}
+                    className="relative"
+                    aria-current={isActive ? "page" : undefined}
+                >
+                    <item.icon aria-hidden="true" />
+                    <span className="truncate group-data-[collapsible=icon]:hidden">
+                        {title}
+                    </span>
+                    {collapsed ? (
+                        item.badge && <NavItemBadge kind={item.badge} collapsed />
+                    ) : (
+                        (item.badge || goToKey) && (
+                            <span className="ml-auto flex shrink-0 items-center gap-1.5">
+                                {item.badge && <NavItemBadge kind={item.badge} />}
+                                {goToKey && (
+                                    <kbd
+                                        aria-hidden="true"
+                                        className="hidden type-caption text-label-tertiary opacity-0 transition-opacity duration-fast group-hover/menu-button:opacity-100 group-focus-visible/menu-button:opacity-100 md:inline"
+                                    >
+                                        G {goToKey.toUpperCase()}
+                                    </kbd>
+                                )}
+                            </span>
+                        )
+                    )}
+                </NavLink>
+            </SidebarMenuButton>
+        </SidebarMenuItem>
     );
 }

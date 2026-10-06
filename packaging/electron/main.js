@@ -2352,7 +2352,7 @@ function menuAction(action, payload) {
 // Mirrors GO_TO_ROUTES in apps/frontend/src/hooks/useGoToShortcuts.ts — keep
 // both lists in sync when adding a destination.
 const GO_MENU_ROUTES = [
-  { url: "/", titleKey: "nav.dashboard" },
+  { url: "/", titleKey: "nav.home" },
   { url: "/transactions", titleKey: "nav.transactions" },
   { url: "/statistics", titleKey: "nav.statistics" },
   { url: "/categories", titleKey: "nav.categories" },
@@ -2361,6 +2361,14 @@ const GO_MENU_ROUTES = [
   { url: "/portfolio", titleKey: "nav.portfolio" },
   { url: "/portfolio/net-worth", titleKey: "nav.netWorth" },
   { url: "/ai-chat", titleKey: "nav.aiChat" },
+];
+
+// View › Appearance entries; ids match the renderer's ThemeMode union.
+const THEME_MENU_MODES = [
+  { id: "light", titleKey: "layout.light" },
+  { id: "dark", titleKey: "layout.dark" },
+  { id: "system", titleKey: "layout.system" },
+  { id: "schedule", titleKey: "layout.schedule" },
 ];
 
 // Keyboard matcher for the accelerator-only menu items (see the
@@ -2486,6 +2494,15 @@ function setupApplicationMenu() {
             process.platform === "darwin" ? "Ctrl+Cmd+S" : "Ctrl+Shift+S",
           click: () => menuAction("toggle-sidebar"),
         },
+        {
+          // Appearance moved out of the top bar into Settings and this menu
+          // (ADR-180). The renderer applies the mode through its theme store.
+          label: t("menu.appearance"),
+          submenu: THEME_MENU_MODES.map((mode) => ({
+            label: t(mode.titleKey),
+            click: () => menuAction("set-theme", mode.id),
+          })),
+        },
         { type: "separator" },
         { role: "reload" },
         ...(app.isPackaged ? [] : [{ role: "toggleDevTools" }]),
@@ -2550,7 +2567,7 @@ function setupDockMenu() {
         click: () => menuAction("new-transaction"),
       },
       {
-        label: t("nav.dashboard"),
+        label: t("nav.home"),
         click: () => menuAction("navigate", "/"),
       },
     ]),

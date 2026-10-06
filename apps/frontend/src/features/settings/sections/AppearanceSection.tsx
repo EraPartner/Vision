@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { themes, type ThemeVariant } from '@/styles/themes';
 import { isElectronMac } from '@/lib/api/electron';
+import { useOptionalSidebar } from '@/components/ui/sidebar';
 import { useSettingsStore, type VisualEffectsTier } from '@/stores/settingsStore';
 import { useLargeDisplay } from '@/hooks/useVisualEffectsTier';
 import { SettingsSection, SettingsGroup, SettingRow, SelectSettingRow } from '../SettingsPrimitives';
@@ -58,6 +59,9 @@ export const AppearanceSection = memo(function AppearanceSection() {
     const largeDisplay = useLargeDisplay();
     const setSessionTierOverride = useSettingsStore((s) => s.setSessionTierOverride);
     const sessionTierOverride = useSettingsStore((s) => s.sessionTierOverride);
+    // Labelled sidebar or icon rail (ADR-180): the same remembered choice the
+    // sidebar's own collapse button makes.
+    const sidebar = useOptionalSidebar();
     const capped = (appSettings.autoAdaptDisplay ?? true) && largeDisplay;
     const tierInUse: VisualEffectsTier = capped
         ? (sessionTierOverride ?? 'reduced')
@@ -120,6 +124,22 @@ export const AppearanceSection = memo(function AppearanceSection() {
                     </div>
                 </SettingRow>
             </SettingsGroup>
+
+            {/* Sidebar */}
+            {sidebar && (
+                <SettingsGroup label={t('settings.group.sidebar')}>
+                    <SelectSettingRow
+                        title={t('settings.appearance.sidebar')}
+                        description={t('settings.appearance.sidebarHint')}
+                        value={sidebar.open ? 'labels' : 'icons'}
+                        onValueChange={(v) => sidebar.setOpen(v === 'labels')}
+                        options={[
+                            { value: 'labels', label: t('settings.appearance.sidebar.labels') },
+                            { value: 'icons', label: t('settings.appearance.sidebar.icons') },
+                        ]}
+                    />
+                </SettingsGroup>
+            )}
 
             {/* Color mode */}
             <SettingsGroup label={t('settings.group.colorMode')}>

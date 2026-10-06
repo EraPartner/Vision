@@ -2,11 +2,11 @@
 title: Test Inventory
 type: testing
 status: active
-date: 2026-09-24
-last_modified: 2026-09-24
-updated: 2026-09-24
-last-updated: 2026-09-24
-last_updated_timestamp: 2026-09-24T00:00:00Z
+date: 2026-10-06
+last_modified: 2026-10-06
+updated: 2026-10-06
+last-updated: 2026-10-06
+last_updated_timestamp: 2026-10-06T00:00:00Z
 added_portfolio_tax_pure_module_tests: 2026-05-29
 added_chart_aria_tests: 2026-05-29
 added_portfolio_math_tests: 2026-05-05
@@ -141,9 +141,8 @@ New context unit test coverage added for frontend state management providers:
 | `apps/frontend/src/contexts/__tests__/SettingsContexts.test.tsx`          | Context test | 12    | Settings contexts: `useAppSettings` (4 tests), `useSettings` (4 tests), `useTheme` (4 tests) with Zustand store operations |
 | `apps/frontend/src/stores/hydration/__tests__/LanguageHydration.test.tsx` | Context test | 6     | Language context: hook guard, initial state, language switching                                                            |
 | `apps/frontend/src/contexts/__tests__/SettingsPreloadContext.test.tsx`    | Context test | 5     | Settings preload: API fetch integration, loading state, settings load                                                      |
-| `apps/frontend/src/hooks/__tests__/useWorkspace.test.tsx`                 | Context test | 6     | Workspace context: hook guard, workspace state, switching                                                                  |
 
-**Total context unit tests:** 5 test files, 37 tests, all passing (2026-05-03)
+**Total context unit tests:** 4 test files, 31 tests, all passing (the 6-test `useWorkspace` file was removed by ADR-180)
 
 **Key patterns used:**
 
@@ -613,11 +612,14 @@ Six new frontend dialog and wizard component integration test files added. Tests
 | --------------------------------------------------------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `apps/frontend/src/features/onboarding/__tests__/OnboardingWizard.test.tsx` | 11    | Multi-step wizard (welcome → bank → categories → tour → backup); full flow completion; `onComplete()` callback; bank step calls `GET /api/info/supported-adapters` — returns `{ adapters, total_count }` envelope shape (not caught by default handlers, requires `server.use()` override); navigation prev/next between steps; form validation per step |
 
-**Notifications and Update Tests (1 file, 8 tests):**
+**Navigation and Update Tests (ADR-180):**
 
-| File                                                                               | Tests | Coverage                                                                                                                                                                                                                                                                                                                                   |
-| ---------------------------------------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `apps/frontend/src/components/notifications/__tests__/UpdateNotification.test.tsx` | 8     | Version check via `GET /api/admin/update/check`; three install paths: web (reload hint), Electron (`window.electronUpdater.installShellUpdate`), Docker (pullImage instruction); requires stubbing `window.electronUpdater` global in `beforeEach` per-test; cleanup in `afterEach`; platform detection via `apiClient.isElectron()` check |
+| File                                                                                    | Coverage                                                                                                                                                      |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/frontend/src/lib/__tests__/navigation.test.ts`                                    | Registry: every parameterless route listed once, admin pages only in Admin, every non-admin page in the palette, unique go-to keys, Research hidden by default, child-route matching |
+| `apps/frontend/src/components/layout/AppSidebar.test.tsx`                               | Labelled Money and Wealth with Research hidden by default, Hide/Show persistence, hidden section revealed for the active page, Settings and palette callbacks, update dot, needs-category count                                                                                   |
+| `apps/frontend/src/components/layout/__tests__/NavItemBadge.test.tsx`                   | Count rendering (zero, 99+), insights count readiness and pending states, server-side monitor unread count                                                                               |
+| `apps/frontend/src/features/settings/sections/__tests__/AboutSection.test.tsx`          | Settings › About: reset-all confirmation, available version with release-notes link, up-to-date state (replaces the removed `UpdateNotification.test.tsx`)                                                |
 
 **AI Chat Conversation List Tests (1 file, 10 tests):**
 
@@ -810,7 +812,6 @@ A coverage-matrix audit found stale claims (matrix said contexts had ZERO tests;
 | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `SettingsContexts`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | AppSettings + Settings boot fetch fail (4xx/5xx via spyOn), mutation error logged but state preserved, debounced persistence, theme idempotence               |
 | `SettingsPreloadContext`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | 4xx-like and 5xx-like spy-rejection paths, multi-consumer cache fan-out                                                                                       |
-| `useWorkspace`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | sessionStorage write success and failure, corrupted stored value handling                                                                                     |
 | `LanguageHydration`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | missing-param interpolation, idempotent setLanguage, en↔nl roundtrip                                                                                          |
 | `AddToWatchlistDialog`, `WatchlistChartDialog`, `ExecutionHistoryDialog`, `DashboardSettingsDialog`, `WidgetVisibilityDialog`, `TaxProfileDialog`, `ExportDialog`, `SplitTransactionDialog`, `AddRecipientDialog`, `LinkTransactionDialog`, `InvestmentDetailDialog`, `MergeRecipientsDialog`, `PortfolioTaxAdjustmentsDialog`, `EditPortfolioTxnDialog`, `AddPortfolioTxnDialog`, `EditInvestmentDialog`, `AddCategoryDialog`, `RecipientPatternsDialog`, `CustomChartBuilderModal`, `TransactionInfoDialog`, `AddInvestmentFromMarketDialog` | Escape closes (where not already covered), `data-state="open"` modality guard, first-focusable keyboard-nav check, submit-error toast/dialog-stays-open paths |
 | `TransactionsPage`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | 401/404 error surfacing, no error banner with paginated data, refetch behaviour around dialog flows                                                           |

@@ -2,7 +2,7 @@
 title: State Management Deep Dive
 type: component
 status: active
-date: 2026-04-25
+date: 2026-10-06
 tags: [state-management, react-query, context, frontend, patterns, workspace]
 description: Comprehensive guide to Vision's state management architecture — React Query for server state, React Context for global state, and local component state patterns
 aliases:
@@ -188,7 +188,8 @@ Vision uses four actual React contexts under `contexts/`, four Zustand hydration
 | Belgian tax profile | React context                     | [[apps/frontend/src/contexts/BelgianTaxProfileContext.tsx]]     | Belgian tax profile data                                | `useBelgianTaxProfile()`      |
 | Page title          | React context                     | [[apps/frontend/src/contexts/PageTitleContext.tsx]]             | Current page title                                      | `usePageTitle()`              |
 | Unsaved changes     | React context                     | [[apps/frontend/src/contexts/UnsavedChangesContext.tsx]]        | Navigation protection                                   | `useUnsavedChanges()`         |
-| Workspace           | Router-backed hook                | [[apps/frontend/src/hooks/useWorkspace.ts]]                     | Route-derived workspace with admin-route session memory | `useWorkspace()`              |
+| Sidebar preferences | `localStorage` external store     | [[apps/frontend/src/hooks/useSidebarPreferences.ts]]            | Hidden sidebar sections and icons-only state (ADR-180)  | `useHiddenSections()`         |
+| Update status       | React Query                       | [[apps/frontend/src/hooks/useUpdateStatus.ts]]                  | Shared update check, polled every 5 min while visible   | `useUpdateStatus()`           |
 
 ### App settings hydration — Detailed Analysis
 

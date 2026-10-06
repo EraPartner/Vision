@@ -2,10 +2,10 @@
 title: Testing Documentation
 type: testing
 status: active
-date: 2026-10-03
-updated: 2026-09-25
-last-updated: 2026-09-25
-last_updated_timestamp: 2026-09-25T00:00:00Z
+date: 2026-10-06
+updated: 2026-10-06
+last-updated: 2026-10-06
+last_updated_timestamp: 2026-10-06T00:00:00Z
 added_portfolio_math_tests: 2026-05-05
 added_import_pipeline_tests: 2026-05-05
 wired_real_db_harness: 2026-07-27
@@ -519,9 +519,8 @@ Test React Context hooks and providers in isolation using `renderHook` with cust
 - `apps/frontend/src/contexts/__tests__/SettingsContexts.test.tsx` (12 tests)
 - `apps/frontend/src/stores/hydration/__tests__/LanguageHydration.test.tsx` (6 tests)
 - `apps/frontend/src/contexts/__tests__/SettingsPreloadContext.test.tsx` (5 tests)
-- `apps/frontend/src/hooks/__tests__/useWorkspace.test.tsx` (6 tests)
 
-Total: 37 context tests, all passing.
+Total: 31 context tests, all passing (the `useWorkspace` test file was removed by ADR-180).
 
 ### Integration Tests
 
@@ -1766,7 +1765,7 @@ Six new frontend test files covering multi-step wizards, platform-specific updat
    - Wizard completion calls `onComplete()` callback
    - Navigation between steps via prev/next buttons
 
-2. **UpdateNotification** (8 tests)
+2. **UpdateNotification** (8 tests; component and tests removed by ADR-180 — update status is now covered through `AboutSection` and `AppSidebar` tests)
    - Version check via `GET /api/admin/update/check`
    - Platform-aware install paths: web (operator hint) and Electron (native/source update)
    - Electron branch requires `window.electronUpdater` global stub
@@ -1808,7 +1807,7 @@ When testing components that conditionally branch on `apiClient.isElectron()` (c
 // @vitest-environment jsdom
 import { vi, beforeEach, afterEach } from "vitest";
 
-describe("UpdateNotification", () => {
+describe("AboutSection update install", () => {
   beforeEach(() => {
     // Install Electron stub as global
     const mockElectronUpdater = {
@@ -1824,7 +1823,7 @@ describe("UpdateNotification", () => {
   });
 
   it("calls window.electronUpdater.installShellUpdate on Electron", async () => {
-    renderWithApp(<UpdateNotification />);
+    renderWithApp(<AboutSection />);
     const installBtn = screen.getByRole("button", { name: /install/i });
     await user.click(installBtn);
     expect(window.electronUpdater.installShellUpdate).toHaveBeenCalled();
@@ -1932,7 +1931,7 @@ describe("RestoreFromBackupCard", () => {
 
 ### Pattern Integration
 
-**UpdateNotification (Electron stub + partial timers):**
+**Update install (Electron stub + partial timers; formerly `UpdateNotification`):**
 
 ```typescript
 // Install Electron stub to route to shell update path

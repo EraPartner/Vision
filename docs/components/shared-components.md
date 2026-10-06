@@ -24,7 +24,7 @@ related_code:
   - apps/frontend/src/components/shared/SymbolSearchResultItem.tsx
   - apps/frontend/src/components/shared/TrendHue.tsx
   - apps/frontend/src/components/shared/CardSheen.tsx
-  - apps/frontend/src/components/notifications/UpdateNotification.tsx
+  - apps/frontend/src/hooks/useUpdateStatus.ts
   - apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx
   - apps/frontend/src/utils/a11y.ts
   - apps/frontend/src/components/shared/SegmentedButtons.tsx
@@ -690,11 +690,9 @@ Three named tiers, deliberately — not call-site drift. Low-emphasis content ca
 
 ## Notification Components
 
-### UpdateNotification
+### Update status (UpdateNotification removed)
 
-**Path:** `[[apps/frontend/src/components/notifications/UpdateNotification.tsx]]`
-
-Displays app update notifications in the Electron desktop app. Checks for new versions via the `electronUpdater` API.
+`UpdateNotification` (the topbar badge and dialog) was removed by [[docs/adr/180-sidebar-sections-replace-workspaces|ADR-180]]. The shared `useUpdateStatus` hook (`[[apps/frontend/src/hooks/useUpdateStatus.ts]]`, query key `["update-status"]`, polled every 5 minutes while the window is visible) feeds the sidebar's Settings dot and Settings › About, which owns the install action. See [[docs/features/application-updates|Application updates]].
 
 ### UpcomingPaymentsNotification
 

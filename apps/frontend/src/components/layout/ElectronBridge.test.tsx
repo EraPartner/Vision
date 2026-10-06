@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => {
         tier: { value: "enhanced" as "reduced" | "standard" | "enhanced" },
         navigate: vi.fn(),
         toggleSidebar: vi.fn(),
+        setThemeMode: vi.fn(),
         menuAction: undefined as
             | ((event: { action: string; payload?: unknown }) => void)
             | undefined,
@@ -37,6 +38,9 @@ vi.mock("react-router", () => ({ useNavigate: () => mocks.navigate }));
 vi.mock("@/components/ui/sidebar", () => ({
     useSidebar: () => ({ toggleSidebar: mocks.toggleSidebar }),
 }));
+vi.mock("@/stores/hydration/ThemeHydration", () => ({
+    useTheme: () => ({ setMode: mocks.setThemeMode }),
+}));
 vi.mock("@/hooks/useVisualEffectsTier", () => ({
     useVisualEffectsTier: () => ({ tier: mocks.tier.value }),
 }));
@@ -53,6 +57,7 @@ afterEach(() => {
     mocks.tier.value = "enhanced";
     mocks.navigate.mockClear();
     mocks.toggleSidebar.mockClear();
+    mocks.setThemeMode.mockClear();
     mocks.menuAction = undefined;
     mocks.setNativeVibrancy.mockClear();
     document.documentElement.className = "";
@@ -110,5 +115,22 @@ describe("ElectronBridge menu routes", () => {
         });
 
         expect(onOpenSettings).toHaveBeenCalledWith("general");
+    });
+
+    it("applies View › Appearance modes and ignores unknown payloads", () => {
+        render(
+            <ElectronBridge
+                onOpenSettings={vi.fn()}
+                onOpenShortcuts={vi.fn()}
+            />,
+        );
+
+        act(() => {
+            mocks.menuAction?.({ action: "set-theme", payload: "dark" });
+            mocks.menuAction?.({ action: "set-theme", payload: "neon" });
+        });
+
+        expect(mocks.setThemeMode).toHaveBeenCalledTimes(1);
+        expect(mocks.setThemeMode).toHaveBeenCalledWith("dark");
     });
 });

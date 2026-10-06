@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router";
 import { useSidebar } from "@/components/ui/sidebar";
+import { useTheme } from "@/stores/hydration/ThemeHydration";
+import type { ThemeMode } from "@/stores/settingsStore";
 import { useVisualEffectsTier } from "@/hooks/useVisualEffectsTier";
 import {
     getElectronAPI,
@@ -9,6 +11,19 @@ import {
     type ElectronMenuAction,
 } from "@/lib/api/electron";
 import { registerPendingImportFile } from "@/lib/importHandoff";
+
+const THEME_MODES: ReadonlyArray<ThemeMode> = [
+    "light",
+    "dark",
+    "system",
+    "schedule",
+];
+
+function isThemeMode(value: unknown): value is ThemeMode {
+    return (
+        typeof value === "string" && (THEME_MODES as string[]).includes(value)
+    );
+}
 
 interface ElectronBridgeProps {
     onOpenSettings: (tab: string) => void;
@@ -34,6 +49,7 @@ export function ElectronBridge({
 }: ElectronBridgeProps) {
     const navigate = useNavigate();
     const { toggleSidebar } = useSidebar();
+    const { setMode: setThemeMode } = useTheme();
     const { tier: effectsTier } = useVisualEffectsTier();
 
     // The IPC subscriptions must attach exactly once (main flushes its queue
@@ -41,12 +57,14 @@ export function ElectronBridge({
     const handlersRef = useRef({
         navigate,
         toggleSidebar,
+        setThemeMode,
         onOpenSettings,
         onOpenShortcuts,
     });
     handlersRef.current = {
         navigate,
         toggleSidebar,
+        setThemeMode,
         onOpenSettings,
         onOpenShortcuts,
     };
@@ -88,6 +106,11 @@ export function ElectronBridge({
                         break;
                     case "toggle-sidebar":
                         h.toggleSidebar();
+                        break;
+                    case "set-theme":
+                        // View › Appearance (ADR-180): the same modes as
+                        // Settings › Appearance.
+                        if (isThemeMode(payload)) h.setThemeMode(payload);
                         break;
                 }
             },

@@ -2,8 +2,8 @@
 title: Views & Pages
 type: feature
 status: active
-date: 2026-10-04
-updated: 2026-10-04
+date: 2026-10-06
+updated: 2026-10-06
 tags:
   [
     feature,
@@ -34,31 +34,37 @@ Vision provides a comprehensive set of views for managing your finances. This do
 
 ## Navigation
 
-The sidebar navigation provides access to all views:
+The sidebar navigation provides access to all views ([[docs/adr/180-sidebar-sections-replace-workspaces|ADR-180]]):
 
 ```
-Dashboard
+Home (Dashboard)
 Transactions
-Categories
-Recipients
+Accounts
 Planned Payments
-Statistics
-Import
-Owes (Splits)
-Tax
-Portfolio
-  - Overview
-  - Stocks
+Money
+  - Categories
+  - Recipients
+  - Statistics
+  - Who Owes You
+  - Taxes
+  - Import / Export
+Wealth
+  - Portfolio
+  - Net Worth
+  - Stocks & ETFs
   - Crypto
   - Metals
   - Real Estate
-  - Savings
+  - Savings & Bonds
   - Performance
-  - Net Worth
-  - Exchange Rates
-  - Watchlist
-  - Market Lookup
-  - Tax
+  - Rebalance
+  - Portfolio taxes
+  - Import portfolio history
+Research (hidden until shown)
+  - Research Home, Markets, Market Lookup, Compare, Chart Builder
+  - Forecast, Watchlist, Dossiers, Analysis workspace, Analysis monitors
+Admin (admin mode)
+Footer: AI Chat, Settings
 ```
 
 ---
@@ -601,7 +607,7 @@ While not a separate view, settings are accessible via the sidebar/settings dial
 - **Grep verification snapshot**: no `toLocaleDateString(` or `toLocaleString(` in `apps/frontend/src`; no `form.currency || 'EUR'`; no persisted `defaultBankAccount` (removed — was unused)
 - **Locale/language undefined-name sweep**: post-patch type/grep validation shows no `Cannot find name 'locale'` or `Cannot find name 'language'`; frontend build passes after watchlist formatter scoping fix in [[apps/frontend/src/features/portfolio/WatchlistChartDialog.tsx]]
 
-Code links: [[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx]], [[apps/frontend/src/components/notifications/UpdateNotification.tsx]], [[apps/frontend/src/stores/hydration/AppSettingsHydration.tsx]], [[apps/frontend/src/stores/hydration/SettingsHydration.tsx]], [[apps/frontend/src/components/shared/DatePicker.tsx]], [[apps/frontend/src/lib/dateUtils.ts]], [[apps/frontend/src/pages/TransactionsPage.tsx]], [[apps/frontend/src/pages/RecipientsPage.tsx]], [[apps/frontend/src/features/statistics/RecipientInsightsTab.tsx]], [[apps/frontend/src/pages/PlannedPaymentsPage.tsx]], [[apps/frontend/src/features/planned/PlannedPaymentForm.tsx]], [[apps/frontend/src/hooks/usePlannedPayments.ts]], [[apps/frontend/src/features/planned/RecurringDetectionPanel.tsx]], [[apps/frontend/src/pages/OwesPage.tsx]], [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/features/dashboard/BankBalancesWidget.tsx]], [[apps/frontend/src/features/dashboard/CashFlowForecastChart.tsx]], [[apps/frontend/src/features/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/pages/StatisticsPage.tsx]], [[apps/frontend/src/pages/TaxOverviewPage.tsx]], [[apps/frontend/src/features/tax/SuggestedDeductionsCard.tsx]], [[apps/frontend/src/features/portfolio/PortfolioTaxAdjustmentsDialog.tsx]], [[apps/frontend/src/features/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/features/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/research/MarketLookupPage.tsx]], [[apps/frontend/src/features/portfolio/WatchlistChartDialog.tsx]], [[apps/frontend/src/pages/research/WatchlistPage.tsx]], [[apps/frontend/src/features/portfolio/AddInvestmentFromMarketDialog.tsx]], `apps/frontend/src/components/charts/` (chart.tsx removed in ADR-018 visx/d3 migration)
+Code links: [[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx]], [[apps/frontend/src/stores/hydration/AppSettingsHydration.tsx]], [[apps/frontend/src/stores/hydration/SettingsHydration.tsx]], [[apps/frontend/src/components/shared/DatePicker.tsx]], [[apps/frontend/src/lib/dateUtils.ts]], [[apps/frontend/src/pages/TransactionsPage.tsx]], [[apps/frontend/src/pages/RecipientsPage.tsx]], [[apps/frontend/src/features/statistics/RecipientInsightsTab.tsx]], [[apps/frontend/src/pages/PlannedPaymentsPage.tsx]], [[apps/frontend/src/features/planned/PlannedPaymentForm.tsx]], [[apps/frontend/src/hooks/usePlannedPayments.ts]], [[apps/frontend/src/features/planned/RecurringDetectionPanel.tsx]], [[apps/frontend/src/pages/OwesPage.tsx]], [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/features/dashboard/BankBalancesWidget.tsx]], [[apps/frontend/src/features/dashboard/CashFlowForecastChart.tsx]], [[apps/frontend/src/features/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/pages/StatisticsPage.tsx]], [[apps/frontend/src/pages/TaxOverviewPage.tsx]], [[apps/frontend/src/features/tax/SuggestedDeductionsCard.tsx]], [[apps/frontend/src/features/portfolio/PortfolioTaxAdjustmentsDialog.tsx]], [[apps/frontend/src/features/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/features/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/research/MarketLookupPage.tsx]], [[apps/frontend/src/features/portfolio/WatchlistChartDialog.tsx]], [[apps/frontend/src/pages/research/WatchlistPage.tsx]], [[apps/frontend/src/features/portfolio/AddInvestmentFromMarketDialog.tsx]], `apps/frontend/src/components/charts/` (chart.tsx removed in ADR-018 visx/d3 migration)
 
 ---
 
@@ -696,7 +702,7 @@ The in-app help sheet (`?`) lists all active shortcuts. The table below mirrors 
 | `Ctrl/Cmd + K` | Open command palette                                                                                                                                          |
 | `Ctrl/Cmd + ,` | Open Settings                                                                                                                                                 |
 | `Ctrl/Cmd + B` | Toggle sidebar                                                                                                                                                |
-| `[` / `]`      | Cycle backward / forward through the three workspace sections (Budgeting → Portfolio → Research); wraps around; inert while typing or with modifier keys held |
+| `[` / `]`      | Cycle backward / forward through the three section roots (Home → Portfolio → Research); wraps around; inert while typing or with modifier keys held |
 | `Ctrl/Cmd + Z` | Undo last delete                                                                                                                                              |
 | `↑` / `↓`      | Navigate table rows                                                                                                                                           |
 | `↵`            | Open selected row                                                                                                                                             |
@@ -708,7 +714,7 @@ The in-app help sheet (`?`) lists all active shortcuts. The table below mirrors 
 
 | Shortcut | Destination                            |
 | -------- | -------------------------------------- |
-| `g d`    | Dashboard (`/`)                        |
+| `g h`    | Home (`/`; was `g d`)                  |
 | `g t`    | Transactions (`/transactions`)         |
 | `g s`    | Statistics (`/statistics`)             |
 | `g c`    | Categories (`/categories`)             |
@@ -765,7 +771,7 @@ Post-upload review screen for ambiguous import rows.
 
 ## Admin pages (`/admin/*`)
 
-Workspace-agnostic observability hub (gated by Settings → App → Developer toggle, ADR-034). All admin routes preserve last active workspace.
+Observability hub shown as the sidebar's Admin section (gated by Settings → App → Developer toggle, ADR-034).
 
 | Route              | Page                   | Purpose                                                                          |
 | ------------------ | ---------------------- | -------------------------------------------------------------------------------- |
@@ -789,6 +795,6 @@ Workspace-agnostic observability hub (gated by Settings → App → Developer to
 - [[docs/guides/visual-learning|Understand Vision Visually]] — conceptual diagrams and a suggested reading order
 
 
-## Workspace navigation
+## Sidebar navigation
 
-The collapsed sidebar opens a workspace menu with Budgeting, Portfolio, and Research choices and an explicit current selection. Expanded workspace buttons expose the selected state. Switching preserves the existing workspace route behavior.
+One labelled sidebar replaces the workspace switcher ([[docs/adr/180-sidebar-sections-replace-workspaces|ADR-180]]). It lists the top pages (Home, Transactions, Accounts, Planned Payments) and the Money, Wealth and Research sections; Research is hidden until shown, every headed section has a *Hide* / *Show* control, and the choice is remembered per browser. The sidebar can be collapsed to an icon rail (⌘B or Settings › Appearance › Sidebar). Transactions, Planned Payments, Statistics and Analysis monitors show live counts. See [[docs/components/layout|Layout components]].

@@ -226,7 +226,7 @@ package "Tax Pages" {
   }
 }
 
-package "Admin Pages (Workspace-Agnostic)" {
+package "Admin Pages (sidebar Admin section)" {
   class AdminOverviewPage {
     +Summary Tiles
     +Links to Details
@@ -265,7 +265,7 @@ package "Admin Pages (Workspace-Agnostic)" {
   }
 }
 
-package "Workspace-Agnostic Pages" {
+package "Global Pages (AI Chat, Analysis)" {
   class AIChatPage <<ADR-024>> {
     +Local Ollama chat
     +Tool-augmented result cards
@@ -344,8 +344,8 @@ AdminOverviewPage --> ExchangeRatesPage : "/admin/exchange-rates"
 AppLayout --> NotFound : "*"
 
 note right of AdminOverviewPage
-  Workspace-agnostic routes
-  Preserve last active workspace
+  Admin section: shown in the sidebar
+  only when admin mode is on (ADR-180)
 end note
 
 note bottom of ResearchHomePage

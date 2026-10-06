@@ -2,8 +2,8 @@
 title: Appearance Feature
 type: feature
 status: active
-date: 2026-10-05
-updated: 2026-10-05
+date: 2026-10-06
+updated: 2026-10-06
 tags: [feature, appearance, theming, personalization, frontend, settings, phase-1, visual-effects-tiers, auto-adapt-display, fx-reduced, shader-aurora, webgl, premium-v3, system-accent, vibrancy, electron-native, macos, june-2026, canvas-text, aurora-legibility, liquid-glass-sidebar, accessibility, colorblind, gain-loss, skin-v2]
 description: Per-user theme variant selection with five color palettes, light/dark mode switching, and schedule-based mode transitions. June 2026 (ADR-075): Visual-effects tier model (reduced/standard/enhanced) + autoAdaptDisplay replaces the ADR-071 enhancedEffects boolean; large-display heuristic auto-drops to reduced on 4K-class screens. June 2026 V12 (ADR-072): system accent color overlay (Electron/macOS only, persisted in theme_settings.systemAccent) and vibrancy gated on effective tier. 2026-06-24: colorblind gain/loss palette promoted to a persisted user setting (colorblindGainLoss, default false/classic); --gain/--loss CSS tokens unified app-wide; gain/loss Tailwind color utilities added. 2026-10-05 — the default light theme gives --gain its own WCAG AA gold (36 74% 33%); dark mode and the other variants keep the accent gain.
 aliases: [appearance, theming, theme variants, color palettes, dark mode, light mode, system accent, vibrancy]
@@ -183,6 +183,11 @@ The Appearance tab in **Settings → Appearance** provides:
 - Radio button group: Light, Dark, System, Schedule
 - Selecting a mode updates the current theme immediately
 - If Schedule is selected, time input fields appear below
+- The topbar theme dropdown was removed ([[docs/adr/180-sidebar-sections-replace-workspaces|ADR-180]]). The same four modes are also available in the command palette's Actions group (Light, Dark, System, Schedule) and, in Electron, under View › Appearance (the `set-theme` menu action). Schedule times are edited here only.
+
+### Sidebar Row
+
+A **Sidebar** group offers *Labels* or *Icons only*. It reads and writes the same open state as the sidebar's own collapse button, which is remembered in `localStorage` (`vision.sidebar.collapsed`) rather than in server settings. The group is omitted when the section renders without the app shell.
 
 ### Schedule Times (Conditional)
 

@@ -2,8 +2,8 @@
 title: Electron Desktop Architecture
 type: architecture-doc
 status: active
-date: 2026-10-05
-updated: 2026-10-05
+date: 2026-10-06
+updated: 2026-10-06
 tags:
   [
     architecture,
@@ -109,7 +109,7 @@ related_code:
     "apps/frontend/src/components/layout/ElectronBridge.tsx",
     "apps/frontend/src/lib/importHandoff.ts",
     "apps/frontend/src/lib/accentColor.ts",
-    "apps/frontend/src/components/notifications/UpdateNotification.tsx",
+    "apps/frontend/src/hooks/useUpdateStatus.ts",
     "apps/frontend/src/features/settings/sections/AboutSection.tsx",
     "apps/node-backend/src/main.js",
     "alembic/versions/0001_initial_database_schema.py",
@@ -576,7 +576,7 @@ The accelerators declared in `setupApplicationMenu()` (⌘1–⌘9, ⌘N, ⇧⌘
 - Role items (Reload, Zoom, Copy, Paste, …) are unchanged — they use Electron/AppKit's native path.
 
 > [!warning] Manual sync point — accelerators and routes
-> `handleMenuAccelerator` must mirror the accelerators declared in `setupApplicationMenu()`. `GO_MENU_ROUTES` in `packaging/electron/main.js` must stay in sync with `GO_TO_ROUTES` in `apps/frontend/src/hooks/useGoToShortcuts.ts`. Both files carry a comment flagging the dependency.
+> `handleMenuAccelerator` must mirror the accelerators declared in `setupApplicationMenu()`. `GO_MENU_ROUTES` in `packaging/electron/main.js` must stay in sync with `GO_TO_ROUTES` in `apps/frontend/src/lib/navigation.ts`. Both files carry a comment flagging the dependency.
 
 > [!info] AZERTY/non-QWERTY confirmation pending
 > End-to-end tests on the real stack confirmed ⌘7 → /portfolio and ⌘1 → / after a client-side navigation. Real-keyboard validation on a built `.app` (including AZERTY layout) is still pending (logged in TODO.md).
@@ -607,8 +607,8 @@ Built via `Menu.setApplicationMenu` after the shell loads the language persisted
 | App    | Settings… (⌘,)                                                                                                 |
 | File   | New Transaction (⌘N), Import CSV… (⇧⌘I)                                                                        |
 | Edit   | System role (undo, cut, copy, paste, …)                                                                        |
-| View   | Toggle Sidebar (⌃⌘S), Reload (dev-only), Zoom In/Out/Reset, Enter Full Screen, Toggle DevTools (dev-only)      |
-| Go     | ⌘1–⌘9 routes from `GO_MENU_ROUTES` (manually mirrors `GO_TO_ROUTES` in `hooks/useGoToShortcuts.ts`)            |
+| View   | Toggle Sidebar (⌃⌘S), Appearance › Light / Dark / System / Schedule, Reload (dev-only), Zoom In/Out/Reset, Enter Full Screen, Toggle DevTools (dev-only) |
+| Go     | ⌘1–⌘9 routes from `GO_MENU_ROUTES` (manually mirrors `GO_TO_ROUTES` in `lib/navigation.ts`); the first item is titled Home |
 | Window | System role (minimise, zoom, …)                                                                                |
 | Help   | About Vision (Windows/Linux), Keyboard Shortcuts (opens overlay via `menu:action`), Source Code, Documentation |
 
@@ -620,13 +620,13 @@ The repository and documentation Help items use fixed HTTPS destinations from
 the packaged main process; no renderer-supplied URL reaches `shell.openExternal`.
 
 > [!warning] Manual sync point
-> `GO_MENU_ROUTES` in `packaging/electron/main.js` must be kept in sync by hand with `GO_TO_ROUTES` in `apps/frontend/src/hooks/useGoToShortcuts.ts`. Both files carry a comment flagging this dependency.
+> `GO_MENU_ROUTES` in `packaging/electron/main.js` must be kept in sync by hand with `GO_TO_ROUTES` in `apps/frontend/src/lib/navigation.ts`. Both files carry a comment flagging this dependency.
 
-Menu and dock items dispatch `{action, payload}` over `menu:action`. `ElectronBridge` maps actions to: `navigate` (React Router push), `open-settings`, `open-shortcuts` (ShortcutsOverlay), `new-transaction` (navigate to `/transactions?new=1`), `toggle-sidebar`.
+Menu and dock items dispatch `{action, payload}` over `menu:action`. `ElectronBridge` maps actions to: `navigate` (React Router push), `open-settings`, `open-shortcuts` (ShortcutsOverlay), `new-transaction` (navigate to `/transactions?new=1`), `toggle-sidebar`, and `set-theme` (View › Appearance; the payload is a theme mode, `light`, `dark`, `system` or `schedule`, applied through the renderer's theme store; any other payload is ignored). The `set-theme` action was added by [[docs/adr/180-sidebar-sections-replace-workspaces|ADR-180]] when the topbar theme dropdown was removed.
 
 #### Dock Menu and Desktop Badge
 
-The macOS dock menu contains **New Transaction** and **Dashboard**. Both dispatch the same `menu:action` channel, and their labels rebuild when the in-app language changes.
+The macOS dock menu contains **New Transaction** and **Home** (`nav.home`). Both dispatch the same `menu:action` channel, and their labels rebuild when the in-app language changes.
 
 The desktop badge reflects the visible (non-dismissed) count of upcoming planned payments. `UpcomingPaymentsNotification` owns the due-payments query and dismissal state; it calls `setDockBadge(count)` whenever the count changes and clears it on unmount. Main maps that count to the macOS dock badge, Linux launcher badge count, or a generated 32px PNG Windows taskbar overlay. The badge is entirely renderer-driven — main has no knowledge of upcoming payments.
 
@@ -671,7 +671,7 @@ Mounted once in `AppLayout`, inside `SidebarProvider`. Responsibilities:
 
 - Calls `electronAPI.ready()` on mount (drains the send queue).
 - Attaches `onMenuAction`, `onCsvOpen`, `onFullScreenChange` listeners via stable refs so React re-renders never tear down IPC subscriptions.
-- Routes menu actions: `navigate` → React Router; `open-settings` / `open-shortcuts` / `toggle-sidebar` → dispatch to UI state; `new-transaction` → navigate to `/transactions?new=1`.
+- Routes menu actions: `navigate` → React Router; `open-settings` / `open-shortcuts` / `toggle-sidebar` → dispatch to UI state; `set-theme` → set the theme mode; `new-transaction` → navigate to `/transactions?new=1`.
 - Manages `electron-mac`, `electron-fullscreen`, and `vibrancy` html classes, and mirrors the effective vibrancy state to the native window through IPC.
 - Attaches window-level `dragover`/`drop` for CSV handoff (exempts `[data-dropzone]` ancestors).
 
@@ -858,17 +858,15 @@ On failure at any step: error toast shown, user can manually restore from `pre-u
 
 #### Frontend UI
 
-**UpdateNotification component:**
+The topbar update badge and dialog (`UpdateNotification`) were removed ([[docs/adr/180-sidebar-sections-replace-workspaces|ADR-180]]). The sidebar Settings row shows a dot from the shared `useUpdateStatus` query, and the update flow runs in Settings › About (`AboutSection`, see [[docs/features/application-updates|Application updates]]).
+
+**AboutSection (Settings → About):**
 
 - Phases: idle → backing-up → downloading → restarting → done
 - Mode-aware routing distinguishes packaged native and source installation
-- Localized labels include `update.backingUp` and `update.downloadingUpdate`
-
-**AppTab (Settings → App):**
-
-- Shows current update mode
-- Manual "Check for Updates" button
-- Displays latest available version if newer
+- Localized labels include `update.backingUp` and `update.downloading`
+- Manual "Check for Updates" button, which refreshes the shared status query
+- Displays latest available version if newer; the install button appears in Electron only
 
 #### Retired CI/CD Integration (April–May 2026)
 

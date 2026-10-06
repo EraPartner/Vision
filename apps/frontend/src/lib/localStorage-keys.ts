@@ -58,6 +58,12 @@ export const LOCAL_STORAGE_KEYS = Object.freeze({
 
     /** Recent custom SQL text from the manual analysis workspace. */
     ANALYSIS_SQL_HISTORY: "vision.analysis.sqlHistory",
+
+    /** '1' when the sidebar is shown as icons only (ADR-180). */
+    SIDEBAR_COLLAPSED: "vision.sidebar.collapsed",
+
+    /** JSON object of sidebar section ids the user has hidden (ADR-180). */
+    SIDEBAR_HIDDEN_SECTIONS: "vision.sidebar.hiddenSections",
 } as const);
 
 export type LocalStorageKey =
