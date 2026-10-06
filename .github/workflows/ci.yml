@@ -698,7 +698,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     needs: [changes, quality-gate]
-    if: needs.changes.outputs.code == 'true'
+    # Check Quality Gate's result directly. The implicit success() also needs
+    # every transitive dependency to succeed, and the PR-only Dependency Review
+    # is skipped on pushes, so a plain condition skips this job on main.
+    if: ${{ !cancelled() && needs.quality-gate.result == 'success' && needs.changes.outputs.code == 'true' }}
     permissions:
       contents: read
       security-events: write # required to upload SARIF to GitHub Security
@@ -745,7 +748,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     needs: [changes, quality-gate]
-    if: needs.changes.outputs.code == 'true'
+    # Explicit Quality Gate check, as in trivy-scan, so pushes to main run it.
+    if: ${{ !cancelled() && needs.quality-gate.result == 'success' && needs.changes.outputs.code == 'true' }}
     permissions:
       contents: read
     steps:
@@ -784,7 +788,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     needs: [changes, quality-gate]
-    if: needs.changes.outputs.code == 'true' && !github.event.pull_request.draft
+    # Explicit Quality Gate check, as in trivy-scan, so pushes to main run it.
+    if: ${{ !cancelled() && needs.quality-gate.result == 'success' && needs.changes.outputs.code == 'true' && !github.event.pull_request.draft }}
     permissions:
       contents: read
     steps:
