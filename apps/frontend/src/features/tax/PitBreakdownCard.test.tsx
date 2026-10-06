@@ -35,7 +35,7 @@ describe("PitBreakdownCard", () => {
         );
 
         const label = await screen.findByText(
-            /federal pit \(before reductions\)/i,
+            /federal income tax \(before reductions\)/i,
         );
         const row = label.closest("tr") as HTMLTableRowElement;
         expect(within(row).getByText(/111,00/)).toBeInTheDocument();

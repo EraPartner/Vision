@@ -63,7 +63,7 @@ export function SplitTransactionDialog({
     const createSplits = useCreateSplits();
     const { data: existingSplitsData, isLoading: isLoadingExistingSplits } =
         useSplitsByTransaction(open ? transactionId : null);
-    const { t } = useLanguage();
+    const { t, tc } = useLanguage();
     const { appSettings } = useAppSettings();
     const formatCurrency = useCurrencyFormatter(transactionCurrency);
 
@@ -232,9 +232,10 @@ export function SplitTransactionDialog({
                             <Alert className="py-3">
                                 <AlertDescription>
                                     {existingSplits.length > 0
-                                        ? t("splitDialog.alreadySplit", {
-                                              n: existingSplits.length,
-                                          })
+                                        ? tc(
+                                              "splitDialog.alreadySplit",
+                                              existingSplits.length,
+                                          )
                                         : t("splitDialog.notSplitYet")}
                                     {existingRecipientNames && (
                                         <span className="block mt-1 text-xs text-muted-foreground">

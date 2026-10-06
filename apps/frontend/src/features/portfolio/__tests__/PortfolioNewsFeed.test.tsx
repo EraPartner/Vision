@@ -19,7 +19,7 @@ describe("PortfolioNewsFeed", () => {
         renderWithApp(<PortfolioNewsFeed symbols={["AAPL"]} />);
 
         expect(
-            await screen.findByText(/no recent news for your holdings.*provider has recent coverage/i),
+            await screen.findByText(/no recent news for your holdings.*provider covers them/i),
         ).toBeInTheDocument();
         expect(requestedCount).toBe("6");
     });

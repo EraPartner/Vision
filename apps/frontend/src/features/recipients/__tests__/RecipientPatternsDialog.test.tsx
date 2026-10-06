@@ -74,17 +74,17 @@ describe("RecipientPatternsDialog", () => {
         await user.click(screen.getByRole("switch", { name: /case/i }));
         await user.click(screen.getByRole("button", { name: /preview/i }));
         expect(await screen.findByRole("status")).toHaveTextContent(
-            "2 existing recipients",
+            "2 existing payees",
         );
         await act(async () => {
             finish({ matchCount: 99, recipientIds: [] });
         });
         expect(screen.getByRole("status")).toHaveTextContent(
-            "2 existing recipients",
+            "2 existing payees",
         );
         await user.type(input, "X");
         expect(
-            screen.queryByText(/existing recipients would match/),
+            screen.queryByText(/existing payees would match/),
         ).not.toBeInTheDocument();
         await user.clear(input);
         await user.type(input, "   ");
@@ -134,7 +134,7 @@ describe("RecipientPatternsDialog", () => {
         renderDialog();
 
         // Assert — empty-state paragraph rendered (recipientPatterns.empty key)
-        expect(await screen.findByText(/no patterns/i)).toBeInTheDocument();
+        expect(await screen.findByText(/no rules/i)).toBeInTheDocument();
     });
 
     it("'Add Pattern' button is visible when no form is open", async () => {

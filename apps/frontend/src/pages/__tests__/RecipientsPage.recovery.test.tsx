@@ -62,7 +62,7 @@ it("keeps loaded recipients and retries a failed next page at the same offset", 
     const retry = await screen.findByRole("button", { name: "Retry" });
     expect(screen.getByText("First recipient")).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent(
-        "Could not load more recipients",
+        "Couldn't load more payees",
     );
     failing = false;
     await user.click(retry);

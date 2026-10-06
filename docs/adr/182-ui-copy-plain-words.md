@@ -90,17 +90,20 @@ a way that removes or hides an action.
    statement*; the Transactions search placeholder names what it searches (*Search payees,
    notes or amounts*); Create buttons in the add dialogs name their object (*Add category*,
    *Add account*, *Add payee*); the exclusion toggle is hidden when Settings has no exclusions
-   instead of rendering disabled.
+   instead of rendering disabled; error toasts read *Couldn't create the payee* instead of
+   *Failed to create recipient*; the Import page cards are titled by what they do (*Import from
+   your bank*, *Payees from CSV*, *Categories from CSV*, *Export your data*).
 
 ## Consequences
 
 - Positive: one vocabulary across screens; the words match the sidebar from ADR-180 and the
   Home and Transactions screens from ADR-181; Dutch loses its Title Case drift.
 - Neutral: locale keys are unchanged except for the plural conversions
-  (`bankWidget.acrossAccounts.one/.other`, `tax.dividendConventionIncomplete.one/.other`), the
+  (`bankWidget.acrossAccounts.one/.other`, `tax.dividendConventionIncomplete.one/.other`,
+  `merge.mergeCount.one/.other`, `splitDialog.alreadySplit.one/.other`), the
   five new keys (`categories.createButton`, `recipients.createButton`, `filter.recipientUnknown`,
-  `txPage.searchPlaceholder`, `txPage.view.showExcluded`) and the two removed ones
-  (`exclusion.noExclusions`, `exclusion.tooltipNone`). `tax.page.subtitle` now takes a `{year}`
+  `txPage.searchPlaceholder`, `txPage.view.showExcluded`) and the three removed ones
+  (`exclusion.noExclusions`, `exclusion.tooltipNone` and the now unused `common.create`). `tax.page.subtitle` now takes a `{year}`
   placeholder. Tests that asserted on the old English copy were updated.
 - Negative: the glossary term (*Recipient*) and the API vocabulary differ from the English UI
   word (*payee*); the glossary records the mapping. Navigation labels the direction page

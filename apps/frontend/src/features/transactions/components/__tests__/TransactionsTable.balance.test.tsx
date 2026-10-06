@@ -110,7 +110,7 @@ describe("TransactionsTable currency balances", () => {
         await user.tab();
         expect(
             screen.getAllByRole("button", {
-                name: /^Active: .*Broker/,
+                name: /^Included: .*Broker/,
                 pressed: true,
             }),
         ).toHaveLength(2);

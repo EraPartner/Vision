@@ -12,9 +12,9 @@ const translations = vi.hoisted<Record<string, string>>(() => ({
     "aria.deletePlannedPayment": "Delete planned payment",
     "aria.editPlannedPayment": "Edit planned payment",
     "plannedPage.due.overdue": "Overdue",
-    "plannedPage.everyNDays": "Every {n}d",
-    "plannedPage.execute.button": "Execute payment",
-    "plannedPage.execute.linked": "Executed (linked to transaction #{n})",
+    "plannedPage.everyNDays": "Every {n} days",
+    "plannedPage.execute.button": "Mark as paid",
+    "plannedPage.execute.linked": "Paid (transaction {n})",
     "plannedPage.freq.monthly": "Monthly",
     "plannedPage.loanBadge": "Loan",
     "plannedPage.loanTerm.one": "Loan ({count} month)",
@@ -138,7 +138,7 @@ describe("PlannedPaymentsTable", () => {
         const callbacks = renderTable([row]);
 
         await user.click(
-            screen.getByRole("button", { name: "Execute payment: Rent" }),
+            screen.getByRole("button", { name: "Mark as paid: Rent" }),
         );
         await user.click(
             screen.getByRole("button", { name: "Edit planned payment: Rent" }),
@@ -172,10 +172,10 @@ describe("PlannedPaymentsTable", () => {
         ]);
         await user.tab();
         expect(
-            screen.getByRole("button", { name: "Execute payment: Rent" }),
+            screen.getByRole("button", { name: "Mark as paid: Rent" }),
         ).toHaveFocus();
         expect(await screen.findByRole("tooltip")).toHaveTextContent(
-            "Execute payment: Rent",
+            "Mark as paid: Rent",
         );
         await user.tab();
         expect(
@@ -217,10 +217,10 @@ describe("PlannedPaymentsTable", () => {
         ]);
 
         expect(
-            screen.getByRole("button", { name: /linked.*99/i }),
+            screen.getByRole("button", { name: /paid.*99/i }),
         ).toBeDisabled();
         expect(
-            screen.getByRole("button", { name: "Execute payment: Paused" }),
+            screen.getByRole("button", { name: "Mark as paid: Paused" }),
         ).toBeDisabled();
     });
 
@@ -251,7 +251,7 @@ describe("PlannedPaymentsTable", () => {
             screen.getByRole("link", { name: "Open related link: Custom" }),
         ).toHaveAttribute("href", "https://example.com/bill");
         expect(screen.getAllByRole("link")).toHaveLength(1);
-        expect(screen.getByText("Every 9d")).toBeInTheDocument();
+        expect(screen.getByText("Every 9 days")).toBeInTheDocument();
         expect(screen.getByText("One-time")).toBeInTheDocument();
         expect(screen.getByText("Loan (24 months)")).toBeInTheDocument();
         expect(screen.getAllByText("Loan")).toHaveLength(2);

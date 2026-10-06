@@ -109,7 +109,7 @@ describe("ImportHistoryCard", () => {
         await screen.findByText("failed.csv");
 
         const rollbackButtons = screen.getAllByRole("button", {
-            name: /rollback/i,
+            name: /^roll back$/i,
         });
         expect(rollbackButtons).toHaveLength(1);
     });
@@ -134,13 +134,13 @@ describe("ImportHistoryCard", () => {
         renderWithApp(<ImportHistoryCard />);
 
         const rollbackBtn = await screen.findByRole("button", {
-            name: /rollback/i,
+            name: /^roll back$/i,
         });
         await user.click(rollbackBtn);
 
         const dialog = await screen.findByRole("alertdialog");
         expect(
-            within(dialog).getByText(/roll back import/i),
+            within(dialog).getByText(/roll back import\?/i),
         ).toBeInTheDocument();
         expect(within(dialog).getByText(/march\.csv/i)).toBeInTheDocument();
     });
@@ -176,7 +176,7 @@ describe("ImportHistoryCard", () => {
         renderWithApp(<ImportHistoryCard />);
 
         const rollbackBtn = await screen.findByRole("button", {
-            name: /rollback/i,
+            name: /^roll back$/i,
         });
         await user.click(rollbackBtn);
 
@@ -220,7 +220,7 @@ describe("ImportHistoryCard", () => {
         renderWithApp(<ImportHistoryCard />);
 
         const rollbackBtn = await screen.findByRole("button", {
-            name: /rollback/i,
+            name: /^roll back$/i,
         });
         await user.click(rollbackBtn);
 

@@ -22,7 +22,7 @@ describe("AddCategoryDialog (create mode)", () => {
         );
         await user.type(screen.getByLabelText(/^general$/i), "   ");
         await user.type(screen.getByLabelText(/^detail$/i), "Coffee");
-        await user.click(screen.getByRole("button", { name: /^create$/i }));
+        await user.click(screen.getByRole("button", { name: /^add category$/i }));
         expect(await screen.findByRole("alert")).toHaveTextContent(
             /enter a name/i,
         );
@@ -82,7 +82,7 @@ describe("AddCategoryDialog (create mode)", () => {
         await screen.findByRole("dialog");
         await user.type(screen.getByLabelText(/^general$/i), "FOOD");
         await user.type(screen.getByLabelText(/^detail$/i), "GROCERIES");
-        await user.click(screen.getByRole("button", { name: /^create$/i }));
+        await user.click(screen.getByRole("button", { name: /^add category$/i }));
         await waitFor(() =>
             expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
         );
@@ -96,7 +96,7 @@ describe("AddCategoryDialog (create mode)", () => {
         );
         await screen.findByRole("dialog");
         await user.type(screen.getByLabelText(/^detail$/i), "GROCERIES");
-        await user.click(screen.getByRole("button", { name: /^create$/i }));
+        await user.click(screen.getByRole("button", { name: /^add category$/i }));
         // Dialog stays open — validation blocked the submit
         expect(screen.getByRole("dialog")).toBeInTheDocument();
     });
@@ -116,10 +116,10 @@ describe("AddCategoryDialog (create mode)", () => {
         await screen.findByRole("dialog");
         await user.type(screen.getByLabelText(/^general$/i), "FOOD");
         await user.type(screen.getByLabelText(/^detail$/i), "GROCERIES");
-        await user.click(screen.getByRole("button", { name: /^create$/i }));
+        await user.click(screen.getByRole("button", { name: /^add category$/i }));
         await waitFor(() =>
             expect(toastSpy).toHaveBeenCalledWith(
-                expect.stringMatching(/failed to create category/i),
+                expect.stringMatching(/couldn't create the category/i),
                 expect.anything(),
             ),
         );

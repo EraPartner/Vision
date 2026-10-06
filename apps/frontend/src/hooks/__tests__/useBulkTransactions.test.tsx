@@ -122,7 +122,7 @@ describe("useBulkDeleteTransactions", () => {
 
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
         expect(toast.success).toHaveBeenCalledWith(
-            "Deleted 7 transactions — the selection changed from 10 to 8",
+            "Deleted 7 transactions. The selection changed from 10 to 8.",
         );
     });
 
@@ -142,7 +142,7 @@ describe("useBulkDeleteTransactions", () => {
 
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
         expect(toast.success).toHaveBeenCalledWith(
-            "Deleted 2 of 3 transactions — 1 no longer matched",
+            "Deleted 2 of 3 transactions. 1 no longer matched.",
         );
     });
 
@@ -284,7 +284,7 @@ describe("useBulkUpdateTransactions", () => {
 
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
         expect(toast.success).toHaveBeenCalledWith(
-            "Updated 4 transactions — the selection changed from 5 to 4",
+            "Updated 4 transactions. The selection changed from 5 to 4.",
         );
     });
 });

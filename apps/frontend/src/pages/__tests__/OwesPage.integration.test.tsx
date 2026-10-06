@@ -545,10 +545,10 @@ describe("OwesPage (integration)", () => {
             await screen.findByRole("button", { name: /export csv/i }),
         );
 
-        // owesPage.export.failed = "Failed to export CSV"
+        // owesPage.export.failed = "Couldn't export CSV"
         await waitFor(() =>
             expect(toastSpy).toHaveBeenCalledWith(
-                "Failed to export CSV",
+                "Couldn't export CSV",
                 expect.anything(),
             ),
         );

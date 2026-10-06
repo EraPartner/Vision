@@ -112,7 +112,7 @@ describe("StatisticsPage (integration)", () => {
 
         expect(
             await screen.findByText(
-                /failed to load statistics/i,
+                /couldn't load statistics/i,
                 {},
                 { timeout: 5000 },
             ),
@@ -268,11 +268,11 @@ describe("StatisticsPage (integration)", () => {
         renderWithApp(<StatisticsPage />);
 
         await user.click(
-            await screen.findByRole("tab", { name: /^recipients$/i }),
+            await screen.findByRole("tab", { name: /^payees$/i }),
         );
 
         expect(await screen.findByText("Corner Shop")).toBeInTheDocument();
-        expect(screen.getByText(/recipient details/i)).toBeInTheDocument();
+        expect(screen.getByText(/payee details/i)).toBeInTheDocument();
     });
 
     it("shows empty-state heading when no monthly data", async () => {
@@ -294,7 +294,7 @@ describe("StatisticsPage (integration)", () => {
     it("shows Widgets button in empty state", async () => {
         renderWithApp(<StatisticsPage />);
         expect(
-            await screen.findByRole("button", { name: /widgets/i }),
+            await screen.findByRole("button", { name: /customize/i }),
         ).toBeInTheDocument();
     });
 
@@ -303,13 +303,13 @@ describe("StatisticsPage (integration)", () => {
         renderWithApp(<StatisticsPage />);
 
         const widgetsBtn = await screen.findByRole("button", {
-            name: /widgets/i,
+            name: /customize/i,
         });
         await user.click(widgetsBtn);
 
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
         expect(
-            await screen.findByRole("heading", { name: /manage widgets/i }),
+            await screen.findByRole("heading", { name: /customize this page/i }),
         ).toBeInTheDocument();
     });
 
@@ -338,7 +338,7 @@ describe("StatisticsPage (integration)", () => {
         renderWithApp(<StatisticsPage />);
 
         const widgetsBtn = await screen.findByRole("button", {
-            name: /widgets/i,
+            name: /customize/i,
         });
         await user.click(widgetsBtn);
         await screen.findByRole("dialog");
@@ -392,7 +392,7 @@ describe("StatisticsPage (integration)", () => {
         expect(yearlyTab).toHaveAttribute("aria-selected", "true");
     });
 
-    it.each(["Categories", "Recipients", "Yearly", "Flow", "Custom Charts"])(
+    it.each(["Categories", "Payees", "Yearly", "Flow", "Custom charts"])(
         "keeps overview content out of %s and restores it on return",
         async (name) => {
             server.use(
@@ -421,7 +421,7 @@ describe("StatisticsPage (integration)", () => {
                 screen.getByRole("combobox", { name: /date range/i }),
             ).toBeInTheDocument();
             expect(
-                screen.getByRole("button", { name: /widgets/i }),
+                screen.getByRole("button", { name: /customize/i }),
             ).toBeInTheDocument();
 
             await user.click(screen.getByRole("tab", { name: /overview/i }));

@@ -80,14 +80,14 @@ describe("WatchlistPage (integration)", () => {
             await chart.findByText(/50[.,]00.*above target/i),
         ).toBeInTheDocument();
         const editTarget = chart.getByRole("button", {
-            name: /Edit: Target Price, NVIDIA.*100/,
+            name: /Edit: Target price, NVIDIA.*100/,
         });
         editTarget.focus();
         expect(await screen.findByRole("tooltip")).toHaveTextContent(
-            "Edit: Target Price, NVIDIA (NVDA)",
+            "Edit: Target price, NVIDIA (NVDA)",
         );
         await user.keyboard("{Enter}");
-        const input = chart.getByRole("textbox", { name: /^Target Price:/ });
+        const input = chart.getByRole("textbox", { name: /^Target price:/ });
         expect(input).toHaveFocus();
         await user.clear(input);
         await user.type(input, "200");

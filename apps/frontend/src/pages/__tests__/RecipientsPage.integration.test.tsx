@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
-import { act, screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
@@ -27,7 +27,7 @@ describe("RecipientsPage (integration)", () => {
         );
         await user.click(retry);
         expect(
-            await screen.findByRole("button", { name: /add recipient/i }),
+            await screen.findByRole("button", { name: /add payee/i }),
         ).toBeInTheDocument();
         expect(
             screen.queryByRole("button", { name: "Retry" }),
@@ -43,7 +43,7 @@ describe("RecipientsPage (integration)", () => {
 
         expect(
             await screen.findByRole("switch", {
-                name: /include inactive/i,
+                name: /show inactive/i,
                 checked: true,
             }),
         ).toBeInTheDocument();
@@ -53,7 +53,7 @@ describe("RecipientsPage (integration)", () => {
                 checked: true,
             }),
         ).toBeInTheDocument();
-        expect(screen.getByPlaceholderText(/search database/i)).toHaveValue(
+        expect(screen.getByPlaceholderText(/^search…$/i)).toHaveValue(
             "coffee",
         );
     });
@@ -61,23 +61,23 @@ describe("RecipientsPage (integration)", () => {
     it("renders page heading", async () => {
         renderWithApp(<RecipientsPage />);
         const headings = await screen.findAllByRole("heading", {
-            name: /all recipients/i,
+            name: /all payees/i,
         });
         expect(headings).toHaveLength(1);
         expect(
-            await screen.findByRole("button", { name: /add recipient/i }),
+            await screen.findByRole("button", { name: /add payee/i }),
         ).toBeInTheDocument();
         expect(
-            screen.getByRole("button", { name: /merge recipients/i }),
+            screen.getByRole("button", { name: /merge payees/i }),
         ).toBeInTheDocument();
         expect(
-            screen.getByPlaceholderText(/search database/i),
+            screen.getByPlaceholderText(/^search…$/i),
         ).toBeInTheDocument();
     });
 
     it("renders without crashing when recipient list is empty", async () => {
         renderWithApp(<RecipientsPage />);
-        await screen.findAllByRole("heading", { name: /all recipients/i });
+        await screen.findAllByRole("heading", { name: /all payees/i });
     });
 
     it("shows error state when the recipients API fails", async () => {
@@ -107,14 +107,14 @@ describe("RecipientsPage (integration)", () => {
     it("shows Add Recipient button", async () => {
         renderWithApp(<RecipientsPage />);
         expect(
-            await screen.findByRole("button", { name: /add recipient/i }),
+            await screen.findByRole("button", { name: /add payee/i }),
         ).toBeInTheDocument();
     });
 
     it("shows Merge Recipients button", async () => {
         renderWithApp(<RecipientsPage />);
         expect(
-            await screen.findByRole("button", { name: /merge recipients/i }),
+            await screen.findByRole("button", { name: /merge payees/i }),
         ).toBeInTheDocument();
     });
 
@@ -123,13 +123,13 @@ describe("RecipientsPage (integration)", () => {
         renderWithApp(<RecipientsPage />);
 
         const addBtn = await screen.findByRole("button", {
-            name: /add recipient/i,
+            name: /add payee/i,
         });
         await user.click(addBtn);
 
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
         expect(
-            await screen.findByRole("heading", { name: /add recipient/i }),
+            await screen.findByRole("heading", { name: /add payee/i }),
         ).toBeInTheDocument();
     });
 
@@ -138,13 +138,13 @@ describe("RecipientsPage (integration)", () => {
         renderWithApp(<RecipientsPage />);
 
         const mergeBtn = await screen.findByRole("button", {
-            name: /merge recipients/i,
+            name: /merge payees/i,
         });
         await user.click(mergeBtn);
 
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
         expect(
-            await screen.findByRole("heading", { name: /merge recipients/i }),
+            await screen.findByRole("heading", { name: /merge payees/i }),
         ).toBeInTheDocument();
     });
 
@@ -153,7 +153,7 @@ describe("RecipientsPage (integration)", () => {
         renderWithApp(<RecipientsPage />);
 
         const addBtn = await screen.findByRole("button", {
-            name: /add recipient/i,
+            name: /add payee/i,
         });
         await user.click(addBtn);
 
@@ -162,7 +162,7 @@ describe("RecipientsPage (integration)", () => {
         await user.click(screen.getByRole("button", { name: /cancel/i }));
 
         // Dialog should close
-        await screen.findAllByRole("heading", { name: /all recipients/i });
+        await screen.findAllByRole("heading", { name: /all payees/i });
         expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
 
@@ -170,7 +170,7 @@ describe("RecipientsPage (integration)", () => {
         renderWithApp(<RecipientsPage />);
         // VirtualDataTable server-side search: placeholder = table.searchDatabase = "Search database..."
         expect(
-            await screen.findByPlaceholderText(/search database/i),
+            await screen.findByPlaceholderText(/^search…$/i),
         ).toBeInTheDocument();
     });
 
@@ -179,7 +179,7 @@ describe("RecipientsPage (integration)", () => {
         // Default MSW returns { items: [] } → EmptyState title = recipientsPage.empty = "No recipients found"
         expect(
             await screen.findByRole("heading", {
-                name: /no recipients found/i,
+                name: /no payees found/i,
             }),
         ).toBeInTheDocument();
     });
@@ -189,7 +189,7 @@ describe("RecipientsPage (integration)", () => {
         // recipientsPage.activeOnly = "Active Only"
         expect(
             await screen.findByRole("switch", {
-                name: /include inactive/i,
+                name: /show inactive/i,
                 checked: false,
             }),
         ).toBeInTheDocument();
@@ -252,7 +252,7 @@ describe("RecipientsPage (integration)", () => {
 
         const name = "A very long recipient name";
         const patterns = screen.getByRole("button", {
-            name: `Patterns for ${name}`,
+            name: `Rules for ${name}`,
         });
         expect(
             screen.getByRole("button", { name: `Unmerge ${name}` }),
@@ -267,20 +267,20 @@ describe("RecipientsPage (integration)", () => {
         act(() => patterns.focus());
         expect(
             await screen.findByRole("tooltip", {
-                name: `Patterns for ${name}`,
+                name: `Rules for ${name}`,
             }),
         ).toBeInTheDocument();
         await user.keyboard("{Escape}");
         await user.click(screen.getByRole("button", { name: `Edit: ${name}` }));
         const recipientInput = screen.getByRole("textbox", {
-            name: `Recipient: ${name}`,
+            name: `Payee: ${name}`,
         });
         expect(recipientInput).toHaveFocus();
         const notesInput = screen.getByRole("textbox", {
             name: `Notes: ${name}`,
         });
         expect(
-            screen.getByRole("combobox", { name: `Default Category: ${name}` }),
+            screen.getByRole("combobox", { name: `Default category: ${name}` }),
         ).toBeInTheDocument();
         await user.click(notesInput);
         await user.type(notesInput, "Draft note");
@@ -314,7 +314,7 @@ describe("RecipientsPage (integration)", () => {
         renderWithApp(<RecipientsPage />);
 
         const addBtn = await screen.findByRole("button", {
-            name: /add recipient/i,
+            name: /add payee/i,
         });
         await user.click(addBtn);
 
@@ -370,14 +370,14 @@ describe("RecipientsPage (integration)", () => {
 
         // Each icon action identifies the recipient in its accessible name.
         const patternsBtn = await screen.findByRole("button", {
-            name: /^patterns for /i,
+            name: /^rules for /i,
         });
         await user.click(patternsBtn);
 
         // recipientPatterns.title = "Match Patterns"
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
         expect(
-            await screen.findByRole("heading", { name: /match patterns/i }),
+            await screen.findByRole("heading", { name: /match rules/i }),
         ).toBeInTheDocument();
 
         if (heightDescriptor)
@@ -437,14 +437,14 @@ describe("RecipientsPage (integration)", () => {
         renderWithApp(<RecipientsPage />);
 
         const patternsBtn = await screen.findByRole("button", {
-            name: /^patterns for /i,
+            name: /^rules for /i,
         });
         await user.click(patternsBtn);
 
         await screen.findByRole("dialog");
 
         // recipientPatterns.empty = "No patterns yet. Add one to auto-match future imports."
-        expect(await screen.findByText(/no patterns yet/i)).toBeInTheDocument();
+        expect(await screen.findByText(/no rules yet/i)).toBeInTheDocument();
 
         if (heightDescriptor)
             Object.defineProperty(
@@ -465,7 +465,7 @@ describe("RecipientsPage (integration)", () => {
         renderWithApp(<RecipientsPage />);
 
         const activeOnlyBtn = await screen.findByRole("switch", {
-            name: /include inactive/i,
+            name: /show inactive/i,
             checked: false,
         });
         await user.click(activeOnlyBtn);
@@ -473,7 +473,7 @@ describe("RecipientsPage (integration)", () => {
         // recipientsPage.showingAll = "Showing All"
         expect(
             await screen.findByRole("switch", {
-                name: /include inactive/i,
+                name: /show inactive/i,
                 checked: true,
             }),
         ).toBeInTheDocument();
@@ -525,7 +525,7 @@ describe("RecipientsPage (integration)", () => {
 
         // Open Merge dialog
         await user.click(
-            await screen.findByRole("button", { name: /merge recipients/i }),
+            await screen.findByRole("button", { name: /merge payees/i }),
         );
         await screen.findByRole("dialog");
 
@@ -537,7 +537,7 @@ describe("RecipientsPage (integration)", () => {
 
         // merge.mergeCount = "Merge {n} recipient(s)" → "Merge 1 recipient(s)"
         await user.click(
-            await screen.findByRole("button", { name: /merge 1 recipient/i }),
+            await screen.findByRole("button", { name: /merge 1 payee/i }),
         );
 
         expect(mergeCalled).toBe(true);
@@ -562,18 +562,20 @@ describe("RecipientsPage (integration)", () => {
         renderWithApp(<RecipientsPage />);
 
         const addBtn = await screen.findByRole("button", {
-            name: /add recipient/i,
+            name: /add payee/i,
         });
         await user.click(addBtn);
 
         await screen.findByRole("dialog");
 
-        // form.addRecipient.name = "Name", addRec.namePlaceholder = "Recipient name"
-        const nameInput = screen.getByPlaceholderText(/recipient name/i);
+        // form.addRecipient.name = "Name", addRec.namePlaceholder = "Payee name"
+        const nameInput = screen.getByPlaceholderText(/payee name/i);
         await user.type(nameInput, "Bob");
 
-        // common.create = "Create"
-        await user.click(screen.getByRole("button", { name: /^create$/i }));
+        // recipients.createButton = "Add payee"
+        await user.click(within(screen.getByRole("dialog")).getByRole("button", {
+                name: /^add payee$/i,
+            }));
 
         expect(postCalled).toBe(true);
     });
@@ -628,7 +630,7 @@ describe("RecipientsPage (integration)", () => {
         const dialog = await screen.findByRole("alertdialog");
         expect(dialog).toHaveTextContent('Delete "Northwind Market"?');
         expect(dialog).toHaveTextContent(
-            /transactions, planned payments, or bank account links cannot be deleted/i,
+            /transactions, planned payments or accounts cannot be deleted/i,
         );
         expect(dialog).toHaveTextContent(/reassign or merge them first/i);
         expect(deletedId).toBeUndefined();
@@ -693,7 +695,7 @@ describe("RecipientsPage (integration)", () => {
         renderWithApp(<RecipientsPage />);
 
         const patternsBtn = await screen.findByRole("button", {
-            name: /^patterns for /i,
+            name: /^rules for /i,
         });
         await user.click(patternsBtn);
 
@@ -727,7 +729,7 @@ describe("RecipientsPage (integration)", () => {
         renderWithApp(<RecipientsPage />);
         expect(
             await screen.findByText(
-                /error loading recipients/i,
+                /couldn't load payees/i,
                 {},
                 { timeout: 4000 },
             ),
@@ -758,10 +760,10 @@ describe("RecipientsPage (integration)", () => {
         renderWithApp(<RecipientsPage />);
         // Page heading still renders even with a large list backing the table
         expect(
-            await screen.findByRole("heading", { name: /recipients/i }),
+            await screen.findByRole("heading", { name: /payees/i }),
         ).toBeInTheDocument();
         expect(
-            screen.queryByText(/error loading recipients/i),
+            screen.queryByText(/couldn't load payees/i),
         ).not.toBeInTheDocument();
     });
 
@@ -792,15 +794,17 @@ describe("RecipientsPage (integration)", () => {
         );
         const user = userEvent.setup();
         renderWithApp(<RecipientsPage />);
-        await screen.findByRole("heading", { name: /recipients/i });
+        await screen.findByRole("heading", { name: /payees/i });
         const before = getCalls;
 
         await user.click(
-            await screen.findByRole("button", { name: /add recipient/i }),
+            await screen.findByRole("button", { name: /add payee/i }),
         );
         await screen.findByRole("dialog");
         await user.type(screen.getByLabelText(/^name$/i), "Test Recipient");
-        await user.click(screen.getByRole("button", { name: /^create$/i }));
+        await user.click(within(screen.getByRole("dialog")).getByRole("button", {
+                name: /^add payee$/i,
+            }));
         await waitFor(() =>
             expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
         );
@@ -825,7 +829,7 @@ describe("RecipientsPage (integration)", () => {
             }),
         );
         renderWithApp(<RecipientsPage />);
-        await screen.findByRole("heading", { name: /recipients/i });
+        await screen.findByRole("heading", { name: /payees/i });
         await waitFor(() => expect(limitsSeen.length).toBeGreaterThan(0));
         expect(limitsSeen.every((l) => l !== null && Number(l) > 0)).toBe(true);
     });
@@ -847,7 +851,7 @@ describe("RecipientsPage (integration)", () => {
         );
         renderWithApp(<RecipientsPage />);
         const heading = await screen.findByRole("heading", {
-            name: /recipients/i,
+            name: /payees/i,
         });
         expect(heading).toBeInTheDocument();
     });

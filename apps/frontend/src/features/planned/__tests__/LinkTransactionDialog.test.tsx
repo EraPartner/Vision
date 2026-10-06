@@ -179,7 +179,7 @@ describe("LinkTransactionDialog", () => {
         await screen.findByText("Rent payment");
 
         // Assert — button exists but is disabled before selection
-        const linkBtn = screen.getByRole("button", { name: "Link & Execute" });
+        const linkBtn = screen.getByRole("button", { name: "Link and mark as paid" });
         expect(linkBtn).toBeDisabled();
     });
 
@@ -204,7 +204,7 @@ describe("LinkTransactionDialog", () => {
         await user.click(radio);
 
         // Assert
-        const linkBtn = screen.getByRole("button", { name: "Link & Execute" });
+        const linkBtn = screen.getByRole("button", { name: "Link and mark as paid" });
         expect(linkBtn).not.toBeDisabled();
     });
 
@@ -229,7 +229,7 @@ describe("LinkTransactionDialog", () => {
         const radio = screen.getByRole("radio");
         await user.click(radio);
 
-        const linkBtn = screen.getByRole("button", { name: "Link & Execute" });
+        const linkBtn = screen.getByRole("button", { name: "Link and mark as paid" });
         await user.click(linkBtn);
 
         // Assert — onExecute called with payment id, transaction id, and the
@@ -243,7 +243,7 @@ describe("LinkTransactionDialog", () => {
         });
         await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
         expect(success).toHaveBeenCalledWith(
-            'Planned payment "Monthly Rent" executed and linked to the transaction',
+            'Marked "Monthly Rent" as paid and linked the transaction',
         );
         success.mockRestore();
     });
@@ -286,7 +286,7 @@ describe("LinkTransactionDialog", () => {
         await screen.findByText("Rent payment");
 
         // Act — type into search to filter
-        const searchInput = screen.getByPlaceholderText("Search memo, recipient, amount…");
+        const searchInput = screen.getByPlaceholderText("Search memo, payee, amount…");
         await user.type(searchInput, "Rent");
 
         // Assert — only rent tx visible, gym tx filtered out
@@ -305,7 +305,7 @@ describe("LinkTransactionDialog", () => {
             />,
         );
 
-        expect(await screen.findByRole("textbox", { name: "Search memo, recipient, amount…" })).toBeInTheDocument();
+        expect(await screen.findByRole("textbox", { name: "Search memo, payee, amount…" })).toBeInTheDocument();
         const tolerance = screen.getByRole("spinbutton", { name: /tolerance/i });
         await user.clear(tolerance);
         expect(tolerance).toHaveValue(null);
@@ -360,7 +360,7 @@ describe("LinkTransactionDialog", () => {
         );
         await screen.findByText("Rent payment");
         // No radio click → button disabled
-        expect(screen.getByRole("button", { name: "Link & Execute" })).toBeDisabled();
+        expect(screen.getByRole("button", { name: "Link and mark as paid" })).toBeDisabled();
     });
 
     it("execution failure: onExecute rejection keeps dialog open", async () => {
@@ -382,7 +382,7 @@ describe("LinkTransactionDialog", () => {
 
         await screen.findByText("Rent payment");
         await user.click(screen.getByRole("radio"));
-        await user.click(screen.getByRole("button", { name: "Link & Execute" }));
+        await user.click(screen.getByRole("button", { name: "Link and mark as paid" }));
 
         await waitFor(() => expect(onExecute).toHaveBeenCalled());
         // Dialog should NOT auto-close on error (only closes after successful resolve)

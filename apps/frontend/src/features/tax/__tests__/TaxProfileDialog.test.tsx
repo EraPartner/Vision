@@ -44,7 +44,7 @@ describe("TaxProfileDialog", () => {
         await openSheet(user);
 
         // Assert — sheet header title is visible
-        expect(await screen.findByText("Belgian Tax Profile")).toBeInTheDocument();
+        expect(await screen.findByRole("heading", { name: "Tax profile" })).toBeInTheDocument();
     });
 
     it("shows employment step by default (radio options visible)", async () => {
@@ -190,7 +190,7 @@ describe("TaxProfileDialog", () => {
 
         // Assert — sheet content disappears
         await waitFor(() =>
-            expect(screen.queryByText("Belgian Tax Profile")).not.toBeInTheDocument(),
+            expect(screen.queryByRole("heading", { name: "Tax profile" })).not.toBeInTheDocument(),
         );
     });
 
@@ -278,9 +278,9 @@ describe("TaxProfileDialog", () => {
         const user = userEvent.setup();
         renderWithApp(<TaxProfileDialog />);
         await openSheet(user);
-        await screen.findByText("Belgian Tax Profile");
+        await screen.findByRole("heading", { name: "Tax profile" });
         await user.keyboard("{Escape}");
-        await waitFor(() => expect(screen.queryByText("Belgian Tax Profile")).not.toBeInTheDocument());
+        await waitFor(() => expect(screen.queryByRole("heading", { name: "Tax profile" })).not.toBeInTheDocument());
     });
 
     it("sheet renders in open state (a11y / backdrop guard)", async () => {

@@ -257,7 +257,7 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
             ?.parentElement as HTMLElement;
         expect(balanceCard).toHaveTextContent(/950,00/);
         expect(balanceCard).toHaveTextContent(
-            /bank statement \+ 2 entries since/i,
+            /statement of .* plus 2 entries since/i,
         );
 
         // Ledger table: rows carry the running-balance column.
@@ -329,7 +329,7 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
         // Delete is present but disabled, with the close-instead explanation.
         const del = screen.getByRole("menuitem", { name: /delete/i });
         expect(del).toHaveAttribute("aria-disabled", "true");
-        expect(del).toHaveTextContent(/has transactions — close instead/i);
+        expect(del).toHaveTextContent(/has transactions\. close it instead/i);
     });
 
     it("defaults residual cash to a visible zero-out adjustment before closing", async () => {
@@ -514,7 +514,7 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
         await screen.findByRole("heading", { name: "Drifty", level: 1 });
 
         const chip = screen.getByRole("button", { name: "Reconcile balance" });
-        expect(chip.textContent).toContain("statement 01/03/2025");
+        expect(chip.textContent).toContain("statement of 01/03/2025");
         expect(chip.className).toMatch(/text-warning/);
         expect(chip.className).not.toMatch(/text-destructive/);
     });
@@ -876,7 +876,7 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
         expect(await screen.findByText("Landlord")).toBeInTheDocument();
         expect(
             within(plannedCard!).getByText(
-                /not included in the current balance/i,
+                /not part of the current balance/i,
             ),
         ).toBeInTheDocument();
         expect(screen.getAllByText(/950/).length).toBeGreaterThan(0);

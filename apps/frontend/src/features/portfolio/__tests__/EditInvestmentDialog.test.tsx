@@ -450,7 +450,7 @@ describe("manual price validation", () => {
         expect(price).toHaveAttribute("aria-invalid", "true");
         expect(payload).toBeUndefined();
         await user.click(
-            screen.getByRole("combobox", { name: /price provider/i }),
+            screen.getByRole("combobox", { name: /live price source/i }),
         );
         await user.click(await screen.findByRole("option", { name: /yahoo/i }));
         expect(

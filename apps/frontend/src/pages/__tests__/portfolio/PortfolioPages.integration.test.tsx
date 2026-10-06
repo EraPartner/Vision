@@ -125,7 +125,7 @@ describe("Portfolio pages (integration)", () => {
     it("CryptoPage renders heading", async () => {
         renderWithApp(<CryptoPage />);
         expect(
-            await screen.findByRole("heading", { name: /cryptocurrency/i }),
+            await screen.findByRole("heading", { name: /^crypto$/i }),
         ).toBeInTheDocument();
     });
 
@@ -287,10 +287,10 @@ describe("Portfolio pages (integration)", () => {
         });
 
         expect(
-            await screen.findByRole("button", { name: "3 Months" }),
+            await screen.findByRole("button", { name: "3 months" }),
         ).toHaveAttribute("aria-pressed", "true");
         expect(
-            screen.getByRole("button", { name: /fx.?neutral/i }),
+            screen.getByRole("button", { name: /without currency effects/i }),
         ).toHaveClass("bg-background");
         expect(requestedPeriods).toContain("3m");
         expect(
@@ -305,7 +305,9 @@ describe("Portfolio pages (integration)", () => {
         // Default MSW returns { snapshots: [] } → PerformanceEmptyState renders
         // performance.emptyTitle = "No performance history yet"
         expect(
-            await screen.findByText(/no performance history yet/i),
+            await screen.findByRole("heading", {
+                name: /no performance history yet/i,
+            }),
         ).toBeInTheDocument();
     });
 
@@ -400,25 +402,25 @@ describe("Portfolio pages (integration)", () => {
         renderWithApp(<PerformancePage />);
 
         const heroHeading = await screen.findByRole("heading", {
-            name: "Portfolio Value",
+            name: "Portfolio value",
         });
         const hero = heroHeading.closest(".premium-frame");
-        expect(hero).toHaveTextContent("Total Invested");
-        expect(hero).toHaveTextContent("Net P&L");
+        expect(hero).toHaveTextContent("Total invested");
+        expect(hero).toHaveTextContent("Net profit or loss");
         expect(hero).toHaveTextContent("Asset gain");
-        expect(hero).toHaveTextContent("FX effect");
+        expect(hero).toHaveTextContent("Currency effect");
         expect(hero).toHaveTextContent("Stocks, crypto & metals (% of group)");
         expect(hero).toHaveTextContent("900,00 € (72,0%)");
         expect(hero).toHaveTextContent("220,00 € (17,6%)");
         expect(hero).toHaveTextContent("130,00 € (10,4%)");
         expect(screen.getByRole("note")).toHaveTextContent(
-            "Latest chart snapshot is provisional",
+            "Today's value may still change",
         );
         expect(
-            screen.getByRole("heading", { name: "Total Return" }),
+            screen.getByRole("heading", { name: "Total return" }),
         ).toBeInTheDocument();
         expect(
-            screen.getByRole("heading", { name: "Annualized Return" }),
+            screen.getByRole("heading", { name: "Annualized return" }),
         ).toBeInTheDocument();
         expect(
             screen.getByRole("heading", { name: /real return/i }),
@@ -467,7 +469,7 @@ describe("Portfolio pages (integration)", () => {
         // networth.unableToLoad = "Unable to load net worth"
         expect(
             await screen.findByText(
-                /unable to load net worth/i,
+                /couldn't load net worth/i,
                 {},
                 { timeout: 5000 },
             ),
@@ -510,7 +512,7 @@ describe("Portfolio pages (integration)", () => {
 
         renderWithApp(<NetWorthPage />);
 
-        const liquid = await screen.findByText("Liquid Assets", {
+        const liquid = await screen.findByText("Cash & savings", {
             selector: "dt",
         });
         const investments = screen.getByText("Investments", { selector: "dt" });
@@ -628,7 +630,7 @@ describe("Portfolio pages (integration)", () => {
         renderWithApp(<NetWorthPage />);
 
         const heading = await screen.findByRole("heading", {
-            name: "By Account",
+            name: "By account",
         });
         const card = heading.closest(".glass-thin") as HTMLElement;
         expect(card).toHaveTextContent(/Daily cash.*900,00/s);
@@ -698,7 +700,7 @@ describe("Portfolio pages (integration)", () => {
         renderWithApp(<NetWorthPage />);
         await screen.findByRole("heading", { name: "Net Worth", level: 1 });
         expect(
-            screen.queryByRole("heading", { name: "By Account" }),
+            screen.queryByRole("heading", { name: "By account" }),
         ).not.toBeInTheDocument();
         release();
         expect(
@@ -740,7 +742,7 @@ describe("Portfolio pages (integration)", () => {
         });
 
         expect(
-            await screen.findByRole("button", { name: "3 Months" }),
+            await screen.findByRole("button", { name: "3 months" }),
         ).toHaveAttribute("aria-pressed", "true");
     }, 15_000);
 
@@ -834,7 +836,7 @@ describe("Portfolio pages (integration)", () => {
         ).toBeInTheDocument();
         expect(
             within(liveTable).getByRole("columnheader", {
-                name: "1 unit → EUR",
+                name: "1 unit in EUR",
             }),
         ).toBeInTheDocument();
         expect(within(liveTable).getByText("USD")).toBeInTheDocument();
@@ -863,7 +865,7 @@ describe("Portfolio pages (integration)", () => {
 
         expect(
             await screen.findByText(
-                /failed to load exchange rates/i,
+                /couldn't load exchange rates/i,
                 {},
                 { timeout: 5000 },
             ),
@@ -921,7 +923,7 @@ describe("Portfolio pages (integration)", () => {
         renderWithApp(<PortfolioTaxPage />);
         expect(
             await screen.findByRole("heading", {
-                name: /investment tax & fees/i,
+                name: /investment taxes & fees/i,
             }),
         ).toBeInTheDocument();
     });
@@ -946,7 +948,7 @@ describe("Portfolio pages (integration)", () => {
         renderWithApp(<PortfolioTaxPage />);
         // widgets.button = "Widgets"
         expect(
-            await screen.findByRole("button", { name: /widgets/i }),
+            await screen.findByRole("button", { name: /customize/i }),
         ).toBeInTheDocument();
     });
 
@@ -955,13 +957,13 @@ describe("Portfolio pages (integration)", () => {
         renderWithApp(<PortfolioTaxPage />);
 
         const widgetsBtn = await screen.findByRole("button", {
-            name: /widgets/i,
+            name: /customize/i,
         });
         await user.click(widgetsBtn);
 
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
         expect(
-            await screen.findByRole("heading", { name: /manage widgets/i }),
+            await screen.findByRole("heading", { name: /customize this page/i }),
         ).toBeInTheDocument();
     });
 
@@ -1060,9 +1062,9 @@ describe("Portfolio pages (integration)", () => {
 
     it("PerformancePage shows empty state description text", async () => {
         renderWithApp(<PerformancePage />);
-        // performance.emptyDescription = "No performance snapshots yet. Refresh investment prices to generate the first snapshot."
+        // performance.emptyDescription = "No performance history yet. Refresh investment prices to create the first snapshot."
         expect(
-            await screen.findByText(/no performance snapshots yet/i),
+            await screen.findByText(/refresh investment prices to create the first snapshot/i),
         ).toBeInTheDocument();
     });
 
@@ -1148,7 +1150,7 @@ describe("Portfolio pages (integration)", () => {
         renderWithApp(<PortfolioTaxPage />);
 
         const widgetsBtn = await screen.findByRole("button", {
-            name: /widgets/i,
+            name: /customize/i,
         });
         await user.click(widgetsBtn);
         await screen.findByRole("dialog");
@@ -1189,7 +1191,7 @@ describe("Portfolio pages (integration)", () => {
         expect(
             await screen.findByRole(
                 "heading",
-                { name: /cryptocurrency/i },
+                { name: /^crypto$/i },
                 { timeout: 5000 },
             ),
         ).toBeInTheDocument();
@@ -1299,7 +1301,7 @@ describe("Portfolio pages (integration)", () => {
         expect(
             await screen.findByRole(
                 "heading",
-                { name: /investment tax & fees/i },
+                { name: /investment taxes & fees/i },
                 { timeout: 5000 },
             ),
         ).toBeInTheDocument();
@@ -1321,7 +1323,7 @@ describe("Portfolio pages (integration)", () => {
 
         // With a single allowed asset class, dialog skips the type selector
         const dialog = await screen.findByRole("dialog");
-        expect(within(dialog).getByLabelText(/name \*/i)).toBeInTheDocument();
+        expect(within(dialog).getByLabelText(/^name$/i)).toBeInTheDocument();
     });
 
     it("CryptoPage Add Investment POST success shows success toast", async () => {
@@ -1347,7 +1349,7 @@ describe("Portfolio pages (integration)", () => {
         });
         await user.click(addBtns[0]);
 
-        const nameInput = await screen.findByLabelText(/name \*/i);
+        const nameInput = await screen.findByLabelText(/^name$/i);
         await user.type(nameInput, "Bitcoin");
 
         // "Add initial purchase" defaults ON and now requires an amount —
@@ -1385,7 +1387,7 @@ describe("Portfolio pages (integration)", () => {
         });
         await user.click(addBtns[0]);
 
-        const nameInput = await screen.findByLabelText(/name \*/i);
+        const nameInput = await screen.findByLabelText(/^name$/i);
         await user.type(nameInput, "Bitcoin");
 
         // "Add initial purchase" defaults ON and now requires an amount —
@@ -1399,7 +1401,7 @@ describe("Portfolio pages (integration)", () => {
         await vi.waitFor(
             () => {
                 expect(toastSpy).toHaveBeenCalledWith(
-                    expect.stringMatching(/failed to create investment/i),
+                    expect.stringMatching(/couldn't create the investment/i),
                     expect.anything(),
                 );
             },
@@ -1436,7 +1438,7 @@ describe("Portfolio pages (integration)", () => {
         });
         await user.click(addBtns[0]);
 
-        const nameInput = await screen.findByLabelText(/name \*/i);
+        const nameInput = await screen.findByLabelText(/^name$/i);
         await user.type(nameInput, "Bitcoin");
 
         await user.click(screen.getByRole("button", { name: /^add$/i }));
@@ -1483,7 +1485,7 @@ describe("Portfolio pages (integration)", () => {
         await user.click(screen.getByRole("button", { name: /^stock/i }));
 
         // After selecting type, dialog advances to details — Name * input appears
-        expect(await screen.findByLabelText(/name \*/i)).toBeInTheDocument();
+        expect(await screen.findByLabelText(/^name$/i)).toBeInTheDocument();
     });
 
     // ─── WatchlistPage mutation tests ─────────────────────────────────────────
@@ -1726,7 +1728,7 @@ describe("Portfolio pages (integration)", () => {
             await screen.findByRole("dialog");
 
             // ETF (unit-based): fill units + price per unit (any 2 of 3 satisfies validation)
-            const unitsInput = screen.getByLabelText(/units \/ shares/i);
+            const unitsInput = screen.getByLabelText(/units or shares/i);
             const priceInput = screen.getByLabelText(/price per unit/i);
             await user.clear(unitsInput);
             await user.type(unitsInput, "10");
@@ -2032,7 +2034,7 @@ describe("Portfolio pages (integration)", () => {
             });
             await user.click(addBtns[0]);
 
-            const nameInput = await screen.findByLabelText(/name \*/i);
+            const nameInput = await screen.findByLabelText(/^name$/i);
             await user.type(nameInput, "Bitcoin");
 
             await user.click(screen.getByRole("button", { name: /^add$/i }));
@@ -2082,7 +2084,7 @@ describe("Portfolio pages (integration)", () => {
             await screen.findByRole("heading", { name: /choose asset type/i });
             await user.click(screen.getByRole("button", { name: /^stock/i }));
 
-            const nameInput = await screen.findByLabelText(/name \*/i);
+            const nameInput = await screen.findByLabelText(/^name$/i);
             await user.type(nameInput, "Apple");
 
             // "Add initial purchase" defaults ON and now requires an amount —

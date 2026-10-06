@@ -33,8 +33,9 @@ describe("FilterBanner", () => {
         );
         const banner = await screen.findByText(/Filtered by /i);
         expect(banner).toHaveTextContent("Main account");
-        expect(banner).toHaveTextContent("Recipient #7");
-        expect(banner).toHaveTextContent("Account #3");
+        await screen.findByText(/Test Recipient/);
+        expect(banner).toHaveTextContent("Test Recipient");
+        expect(banner).toHaveTextContent("Account 3");
         expect(banner).toHaveTextContent("Categories (2)");
     });
     it("uses a supplied label once for a single scope", async () => {
@@ -47,7 +48,7 @@ describe("FilterBanner", () => {
         );
         const banner = await screen.findByText(/Filtered by /i);
         expect(banner).toHaveTextContent("Main account");
-        expect(banner).not.toHaveTextContent("Account #3");
+        expect(banner).not.toHaveTextContent("Account 3");
     });
     it("describes category filters and formats signed bounds locally", async () => {
         renderWithApp(

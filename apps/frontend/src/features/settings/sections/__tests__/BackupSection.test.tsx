@@ -115,9 +115,9 @@ describe("BackupSection", () => {
         renderWithApp(<BackupSection />);
 
         expect(
-            await screen.findByText(/backup is only available in the desktop/i),
+            await screen.findByText(/backups are only available in the desktop app/i),
         ).toBeInTheDocument();
-        expect(screen.queryByText(/backup directory/i)).not.toBeInTheDocument();
+        expect(screen.queryByText(/backup folder/i)).not.toBeInTheDocument();
     });
 
     it("renders backup directory + sections when Electron is available", async () => {
@@ -128,7 +128,7 @@ describe("BackupSection", () => {
         renderWithApp(<BackupSection />);
 
         expect(
-            await screen.findByText(/backup directory/i),
+            await screen.findByText(/backup folder/i),
         ).toBeInTheDocument();
         expect(
             await screen.findByText(/restore from backup/i),
@@ -229,7 +229,7 @@ describe("BackupSection", () => {
         await user.click(restoreButton);
 
         let dialog = await screen.findByRole("alertdialog", {
-            name: /restore database\?/i,
+            name: /restore this backup\?/i,
         });
         expect(
             within(dialog).getByText("snapshot.visionbak"),
@@ -241,7 +241,7 @@ describe("BackupSection", () => {
 
         await user.click(restoreButton);
         dialog = await screen.findByRole("alertdialog", {
-            name: /restore database\?/i,
+            name: /restore this backup\?/i,
         });
         await user.click(
             within(dialog).getByRole("button", { name: /yes, restore/i }),

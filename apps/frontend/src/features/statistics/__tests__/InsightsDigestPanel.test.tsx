@@ -229,7 +229,7 @@ describe("InsightsDigestPanel", () => {
 
         expect(
             await screen.findByText(
-                "No new insights right now — you're all caught up",
+                "No new insights right now. You're all caught up.",
             ),
         ).toBeInTheDocument();
     });

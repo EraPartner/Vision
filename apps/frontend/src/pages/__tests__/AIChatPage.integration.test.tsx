@@ -173,7 +173,7 @@ describe("AIChatPage (integration)", () => {
         renderWithApp(<AIChatPage />);
         // aiChat.emptyState = "Start a conversation -- ask about spending, portfolio returns..."
         expect(
-            await screen.findByText(/start a conversation/i),
+            await screen.findByText(/ask about spending/i),
         ).toBeInTheDocument();
     });
 
@@ -379,7 +379,7 @@ describe("AIChatPage (integration)", () => {
         expect(capturedBody).toMatchObject({
             conversationId: "conv-digest",
             message:
-                "Give me my insights digest for today — anything new or unusual in my spending?",
+                "Give me my insights digest for today. Anything new or unusual in my spending?",
             useTools: true,
             insightsPreCall: true,
         });

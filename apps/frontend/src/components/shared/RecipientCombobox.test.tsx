@@ -83,7 +83,7 @@ describe("RecipientCombobox", () => {
         ).toBeInTheDocument();
 
         await userEvent.click(trigger);
-        const search = screen.getByPlaceholderText("Search recipients…");
+        const search = screen.getByPlaceholderText("Search payees…");
         await userEvent.type(search, "missing");
         await waitFor(() =>
             expect(screen.getByText("Beyond First Page")).toBeInTheDocument(),
@@ -93,7 +93,7 @@ describe("RecipientCombobox", () => {
         expect(trigger).toHaveAttribute("aria-expanded", "false");
 
         await userEvent.click(trigger);
-        expect(screen.getByPlaceholderText("Search recipients…")).toHaveValue(
+        expect(screen.getByPlaceholderText("Search payees…")).toHaveValue(
             "",
         );
     });

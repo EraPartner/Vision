@@ -114,7 +114,7 @@ describe("Language switch (integration)", () => {
         renderWithApp(<TaxOverviewPage />);
         expect(
             await screen.findByRole("heading", {
-                name: /belgian personal tax overview/i,
+                name: /^taxes$/i,
             }),
         ).toBeInTheDocument();
     });
@@ -124,7 +124,7 @@ describe("Language switch (integration)", () => {
         renderWithApp(<TaxOverviewPage />);
         // Dutch: "Belgisch overzicht van persoonlijke belastingen"
         expect(
-            await screen.findByRole("heading", { name: /belgisch overzicht/i }),
+            await screen.findByRole("heading", { name: /^belastingen$/i }),
         ).toBeInTheDocument();
     });
 
@@ -132,7 +132,7 @@ describe("Language switch (integration)", () => {
     it("CategoriesPage renders English heading by default", async () => {
         renderWithApp(<CategoriesPage />);
         expect(
-            await screen.findByRole("heading", { name: /^categories$/i }),
+            await screen.findByRole("heading", { name: /^categories$/i, level: 1 }),
         ).toBeInTheDocument();
     });
 
@@ -141,7 +141,7 @@ describe("Language switch (integration)", () => {
         renderWithApp(<CategoriesPage />);
         // Dutch: categories.title = "Categorieën"
         expect(
-            await screen.findByRole("heading", { name: /^categorieën$/i }),
+            await screen.findByRole("heading", { name: /^categorieën$/i, level: 1 }),
         ).toBeInTheDocument();
     });
 
@@ -149,7 +149,7 @@ describe("Language switch (integration)", () => {
     it("RecipientsPage renders English heading by default", async () => {
         renderWithApp(<RecipientsPage />);
         const headings = await screen.findAllByRole("heading", {
-            name: /all recipients/i,
+            name: /all payees/i,
         });
         expect(headings.length).toBeGreaterThan(0);
     });
@@ -245,7 +245,7 @@ describe("Language switch (integration)", () => {
     it("PortfolioOverviewPage renders English heading by default", async () => {
         renderWithApp(<PortfolioOverviewPage />);
         expect(
-            await screen.findByRole("heading", { name: /portfolio overview/i }),
+            await screen.findByRole("heading", { name: /^portfolio$/i, level: 1 }),
         ).toBeInTheDocument();
     });
 
@@ -255,7 +255,7 @@ describe("Language switch (integration)", () => {
         // Dutch: portfolio.overviewTitle = "Portefeuilleoverzicht"
         expect(
             await screen.findByRole("heading", {
-                name: /^portefeuilleoverzicht$/i,
+                name: /^portefeuille$/i,
             }),
         ).toBeInTheDocument();
     });

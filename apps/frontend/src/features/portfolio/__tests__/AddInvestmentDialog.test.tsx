@@ -78,7 +78,7 @@ describe("AddInvestmentDialog", () => {
         await user.click(screen.getByRole("button", { name: /^etf/i }));
 
         // Assert — Name field appears on the details step
-        expect(await screen.findByLabelText(/name \*/i)).toBeInTheDocument();
+        expect(await screen.findByLabelText(/^name$/i)).toBeInTheDocument();
     });
 
     it("back button returns to type step", async () => {
@@ -92,7 +92,7 @@ describe("AddInvestmentDialog", () => {
         );
         await screen.findByRole("heading", { name: /choose asset type/i });
         await user.click(screen.getByRole("button", { name: /^etf/i }));
-        await screen.findByLabelText(/name \*/i);
+        await screen.findByLabelText(/^name$/i);
         await user.click(screen.getByRole("button", { name: /back/i }));
 
         // Assert — type selector is visible again
@@ -113,7 +113,7 @@ describe("AddInvestmentDialog", () => {
         await screen.findByRole("heading", { name: /choose asset type/i });
         await user.click(screen.getByRole("button", { name: /^etf/i }));
 
-        const nameInput = await screen.findByLabelText(/name \*/i);
+        const nameInput = await screen.findByLabelText(/^name$/i);
         await user.type(nameInput, "MSCI World ETF");
 
         // Uncheck "Add initial purchase" to avoid the transaction call path
@@ -147,7 +147,7 @@ describe("AddInvestmentDialog", () => {
         await screen.findByRole("heading", { name: /choose asset type/i });
         await user.click(screen.getByRole("button", { name: /^etf/i }));
 
-        const nameInput = await screen.findByLabelText(/name \*/i);
+        const nameInput = await screen.findByLabelText(/^name$/i);
         await user.type(nameInput, "Failed ETF");
 
         const initialPurchaseSwitch = screen.getByRole("switch");
@@ -193,7 +193,7 @@ describe("AddInvestmentDialog", () => {
         await user.click(triggerButton);
         await screen.findByRole("heading", { name: /choose asset type/i });
         await user.click(screen.getByRole("button", { name: /^etf/i }));
-        await screen.findByLabelText(/name \*/i);
+        await screen.findByLabelText(/^name$/i);
         await user.keyboard("{Escape}");
         await waitFor(() =>
             expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
@@ -218,7 +218,7 @@ describe("investment numeric validation", () => {
         await user.click(
             await screen.findByRole("button", { name: /add investment/i }),
         );
-        await user.type(await screen.findByLabelText(/name \*/i), "Test ETF");
+        await user.type(await screen.findByLabelText(/^name$/i), "Test ETF");
         await user.type(screen.getByLabelText(/total cost/i), "100");
         await user.type(screen.getByLabelText(/^units/i), "2");
         const fees = screen.getByLabelText(/fees/i);
@@ -245,7 +245,7 @@ describe("investment numeric validation", () => {
         await user.click(
             await screen.findByRole("button", { name: /add investment/i }),
         );
-        await user.type(await screen.findByLabelText(/name \*/i), "Test ETF");
+        await user.type(await screen.findByLabelText(/^name$/i), "Test ETF");
         await user.type(screen.getByLabelText(/total cost/i), "100");
         await user.click(screen.getByRole("button", { name: /^add$/i }));
         const units = screen.getByLabelText(/^units/i);
@@ -265,7 +265,7 @@ describe("investment numeric validation", () => {
         await user.click(
             await screen.findByRole("button", { name: /add investment/i }),
         );
-        await user.type(await screen.findByLabelText(/name \*/i), "Savings");
+        await user.type(await screen.findByLabelText(/^name$/i), "Savings");
         await user.click(screen.getByRole("switch"));
         const rate = screen.getByLabelText(/interest rate/i);
         await user.type(rate, "abc");
@@ -287,7 +287,7 @@ describe("investment numeric validation", () => {
                 await screen.findByRole("button", { name: /add investment/i }),
             );
             await user.type(
-                await screen.findByLabelText(/name \*/i),
+                await screen.findByLabelText(/^name$/i),
                 "Property",
             );
             await user.click(screen.getByRole("switch"));

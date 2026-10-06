@@ -168,7 +168,7 @@ describe("CategoriesPage hierarchy", () => {
             screen.getByLabelText(/parent category/i),
             "3",
         );
-        await user.click(screen.getByRole("button", { name: /^create$/i }));
+        await user.click(screen.getByRole("button", { name: /^add category$/i }));
         await waitFor(() =>
             expect(body).toMatchObject({ name: "fruit", parentId: 3 }),
         );
@@ -284,7 +284,7 @@ describe("CategoriesPage hierarchy", () => {
         );
         renderWithApp(<CategoriesPage />);
         expect(
-            await screen.findByText(/error loading categories/i),
+            await screen.findByText(/couldn't load categories/i),
         ).toBeInTheDocument();
         spy.mockRestore();
     });

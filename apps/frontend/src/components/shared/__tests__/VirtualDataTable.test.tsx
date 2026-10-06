@@ -514,7 +514,7 @@ describe("VirtualDataTable — server-side search", () => {
     it("uses the localized search placeholder in server-search mode", () => {
         renderTable({ serverMode: { search: { onChange: vi.fn() } } });
         expect(
-            screen.getByPlaceholderText("Search database…"),
+            screen.getByPlaceholderText("Search…"),
         ).toBeInTheDocument();
     });
 
@@ -531,7 +531,7 @@ describe("VirtualDataTable — server-side search", () => {
         });
         expect(renderName).toHaveBeenCalledTimes(DATA.length);
 
-        fireEvent.change(screen.getByPlaceholderText("Search database…"), {
+        fireEvent.change(screen.getByPlaceholderText("Search…"), {
             target: { value: "a" },
         });
 
@@ -543,7 +543,7 @@ describe("VirtualDataTable — server-side search", () => {
         const onSearchChange = vi.fn();
         renderTable({ serverMode: { search: { onChange: onSearchChange } } });
 
-        fireEvent.change(screen.getByPlaceholderText("Search database…"), {
+        fireEvent.change(screen.getByPlaceholderText("Search…"), {
             target: { value: "test query" },
         });
         expect(onSearchChange).not.toHaveBeenCalled();
@@ -557,7 +557,7 @@ describe("VirtualDataTable — server-side search", () => {
         const onSearchChange = vi.fn();
         renderTable({ serverMode: { search: { onChange: onSearchChange } } });
 
-        fireEvent.change(screen.getByPlaceholderText("Search database…"), {
+        fireEvent.change(screen.getByPlaceholderText("Search…"), {
             target: { value: "partial" },
         });
         await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS - 1);
@@ -569,7 +569,7 @@ describe("VirtualDataTable — server-side search", () => {
         const onSearchChange = vi.fn();
         renderTable({ serverMode: { search: { onChange: onSearchChange } } });
 
-        const input = screen.getByPlaceholderText("Search database…");
+        const input = screen.getByPlaceholderText("Search…");
         fireEvent.change(input, { target: { value: "ab" } });
         await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS);
 
@@ -584,7 +584,7 @@ describe("VirtualDataTable — server-side search", () => {
         const onSearchChange = vi.fn();
         renderTable({ serverMode: { search: { onChange: onSearchChange } } });
 
-        fireEvent.change(screen.getByPlaceholderText("Search database…"), {
+        fireEvent.change(screen.getByPlaceholderText("Search…"), {
             target: { value: "  ab  " },
         });
         await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS);
@@ -598,7 +598,7 @@ describe("VirtualDataTable — server-side search", () => {
         const onSearchChange = vi.fn();
         renderTable({ serverMode: { search: { onChange: onSearchChange } } });
 
-        fireEvent.change(screen.getByPlaceholderText("Search database…"), {
+        fireEvent.change(screen.getByPlaceholderText("Search…"), {
             target: { value: "  abc " },
         });
         await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS);
@@ -632,7 +632,7 @@ describe("VirtualDataTable — server-side search", () => {
         }
         renderWithApp(<Harness />);
 
-        const input = screen.getByPlaceholderText("Search database…");
+        const input = screen.getByPlaceholderText("Search…");
         fireEvent.change(input, { target: { value: "abcd" } });
         await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS);
         expect(onSearchChange).toHaveBeenLastCalledWith("abcd");

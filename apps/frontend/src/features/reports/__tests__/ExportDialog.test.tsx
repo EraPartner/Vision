@@ -108,7 +108,7 @@ describe("ExportDialog", () => {
         expect(
             await screen.findByText(/executive summary/i),
         ).toBeInTheDocument();
-        expect(await screen.findByText(/cashflow trend/i)).toBeInTheDocument();
+        expect(await screen.findByText(/cash flow trend/i)).toBeInTheDocument();
     });
 
     it("switching to portfolio report type shows portfolio sections", async () => {
@@ -259,11 +259,11 @@ describe("ExportDialog", () => {
             );
             if (type === "financial") {
                 expect(
-                    screen.getByText(/statistics filters/i),
+                    screen.getByText(/statistics exclusions/i),
                 ).toHaveTextContent(/2.*1/);
             } else {
                 expect(
-                    screen.queryByText(/statistics filters/i),
+                    screen.queryByText(/statistics exclusions/i),
                 ).not.toBeInTheDocument();
             }
             await user.click(

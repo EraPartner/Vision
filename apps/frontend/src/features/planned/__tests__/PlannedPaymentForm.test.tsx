@@ -70,9 +70,9 @@ async function renderForm(initial?: PlannedPayment) {
     return { onSubmit };
 }
 
-/** The magnitude field — labelled "Amount *". */
+/** The magnitude field — labelled "Amount". */
 function amountInput() {
-    return screen.getByLabelText("Amount *");
+    return screen.getByLabelText("Amount", { selector: "#pp-amount" });
 }
 
 function submitButton() {
@@ -84,7 +84,7 @@ function submitButton() {
  * is an AccountCombobox that requires an existing account selection.
  */
 async function fillRequired(user: ReturnType<typeof userEvent.setup>) {
-    await user.type(screen.getByLabelText("Name *"), "Rent");
+    await user.type(screen.getByLabelText("Name"), "Rent");
     await user.click(screen.getByLabelText(/bank account/i));
     await user.type(screen.getByPlaceholderText(/search accounts/i), "Main");
     await user.click(await screen.findByRole("option", { name: "Main" }));

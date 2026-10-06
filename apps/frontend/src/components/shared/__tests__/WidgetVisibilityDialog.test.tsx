@@ -28,27 +28,27 @@ afterEach(() => vi.restoreAllMocks());
 describe("WidgetVisibilityDialog", () => {
     it("renders trigger button", async () => {
         renderWithApp(<WidgetVisibilityDialog {...makeProps()} />);
-        expect(await screen.findByRole("button", { name: /widgets/i })).toBeInTheDocument();
+        expect(await screen.findByRole("button", { name: /customize/i })).toBeInTheDocument();
     });
 
     it("shows visible count in trigger button", async () => {
         const isVisible = (id: string) => id !== "tax-summary";
         renderWithApp(<WidgetVisibilityDialog {...makeProps({ isVisible })} />);
-        const trigger = await screen.findByRole("button", { name: /widgets/i });
+        const trigger = await screen.findByRole("button", { name: /customize/i });
         expect(trigger.textContent).toContain("2/3");
     });
 
     it("opens dialog on trigger click", async () => {
         const user = userEvent.setup();
         renderWithApp(<WidgetVisibilityDialog {...makeProps()} />);
-        await user.click(await screen.findByRole("button", { name: /widgets/i }));
+        await user.click(await screen.findByRole("button", { name: /customize/i }));
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
     });
 
     it("shows all widget labels in open dialog", async () => {
         const user = userEvent.setup();
         renderWithApp(<WidgetVisibilityDialog {...makeProps()} />);
-        await user.click(await screen.findByRole("button", { name: /widgets/i }));
+        await user.click(await screen.findByRole("button", { name: /customize/i }));
         await screen.findByRole("dialog");
         expect(screen.getByText("Cash Flow")).toBeInTheDocument();
         expect(screen.getByText("Account Balance")).toBeInTheDocument();
@@ -62,7 +62,7 @@ describe("WidgetVisibilityDialog", () => {
         renderWithApp(
             <WidgetVisibilityDialog {...makeProps({ isVisible, setWidgetVisible })} />,
         );
-        await user.click(await screen.findByRole("button", { name: /widgets/i }));
+        await user.click(await screen.findByRole("button", { name: /customize/i }));
         await screen.findByRole("dialog");
         await user.click(screen.getByRole("switch", { name: /tax summary/i }));
         expect(setWidgetVisible).toHaveBeenCalledWith("tax-summary", true);
@@ -74,7 +74,7 @@ describe("WidgetVisibilityDialog", () => {
         renderWithApp(
             <WidgetVisibilityDialog {...makeProps({ isVisible: () => false, setAllVisible })} />,
         );
-        await user.click(await screen.findByRole("button", { name: /widgets/i }));
+        await user.click(await screen.findByRole("button", { name: /customize/i }));
         await screen.findByRole("dialog");
         await user.click(screen.getByRole("button", { name: /show all/i }));
         expect(setAllVisible).toHaveBeenCalledWith(true);
@@ -86,7 +86,7 @@ describe("WidgetVisibilityDialog", () => {
         renderWithApp(
             <WidgetVisibilityDialog {...makeProps({ setAllVisible })} />,
         );
-        await user.click(await screen.findByRole("button", { name: /widgets/i }));
+        await user.click(await screen.findByRole("button", { name: /customize/i }));
         await screen.findByRole("dialog");
         await user.click(screen.getByRole("button", { name: /hide all/i }));
         expect(setAllVisible).toHaveBeenCalledWith(false);
@@ -98,7 +98,7 @@ describe("WidgetVisibilityDialog", () => {
         renderWithApp(
             <WidgetVisibilityDialog {...makeProps({ resetToDefaults })} />,
         );
-        await user.click(await screen.findByRole("button", { name: /widgets/i }));
+        await user.click(await screen.findByRole("button", { name: /customize/i }));
         await screen.findByRole("dialog");
         await user.click(screen.getByRole("button", { name: /reset/i }));
         expect(resetToDefaults).toHaveBeenCalledOnce();
@@ -109,7 +109,7 @@ describe("WidgetVisibilityDialog", () => {
     it("Escape key closes dialog", async () => {
         const user = userEvent.setup();
         renderWithApp(<WidgetVisibilityDialog {...makeProps()} />);
-        await user.click(await screen.findByRole("button", { name: /widgets/i }));
+        await user.click(await screen.findByRole("button", { name: /customize/i }));
         await screen.findByRole("dialog");
         await user.keyboard("{Escape}");
         await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
@@ -118,7 +118,7 @@ describe("WidgetVisibilityDialog", () => {
     it("dialog renders in open state (a11y / backdrop guard)", async () => {
         const user = userEvent.setup();
         renderWithApp(<WidgetVisibilityDialog {...makeProps()} />);
-        await user.click(await screen.findByRole("button", { name: /widgets/i }));
+        await user.click(await screen.findByRole("button", { name: /customize/i }));
         const dialog = await screen.findByRole("dialog");
         expect(dialog).toHaveAttribute("data-state", "open");
     });
@@ -126,7 +126,7 @@ describe("WidgetVisibilityDialog", () => {
     it("first focusable element reachable via Tab (keyboard nav)", async () => {
         const user = userEvent.setup();
         renderWithApp(<WidgetVisibilityDialog {...makeProps()} />);
-        await user.click(await screen.findByRole("button", { name: /widgets/i }));
+        await user.click(await screen.findByRole("button", { name: /customize/i }));
         await screen.findByRole("dialog");
         const buttons = screen.getAllByRole("button");
         expect(buttons.length).toBeGreaterThan(0);

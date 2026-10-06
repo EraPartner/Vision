@@ -90,7 +90,7 @@ describe("RestoreFromBackupCard", () => {
         renderWithApp(<RestoreFromBackupCard />);
 
         expect(
-            await screen.findByText("Already have a Vision database?"),
+            await screen.findByText("Already have a Vision backup?"),
         ).toBeInTheDocument();
         expect(
             screen.getByText(/If you have a Vision backup/i),
@@ -113,7 +113,7 @@ describe("RestoreFromBackupCard", () => {
 
         expect(backup.selectFile).toHaveBeenCalledTimes(1);
         // Confirm dialog title must not appear.
-        expect(screen.queryByText("Restore database?")).not.toBeInTheDocument();
+        expect(screen.queryByText("Restore this backup?")).not.toBeInTheDocument();
     });
 
     it("opens the confirm dialog with the selected file basename", async () => {
@@ -130,7 +130,7 @@ describe("RestoreFromBackupCard", () => {
         );
 
         expect(
-            await screen.findByText("Restore database?"),
+            await screen.findByText("Restore this backup?"),
         ).toBeInTheDocument();
         expect(screen.getByText("snapshot.visionbak")).toBeInTheDocument();
     });
@@ -145,13 +145,13 @@ describe("RestoreFromBackupCard", () => {
         await user.click(
             await screen.findByRole("button", { name: /Restore from backup/i }),
         );
-        await screen.findByText("Restore database?");
+        await screen.findByText("Restore this backup?");
 
         await user.click(screen.getByRole("button", { name: /^Cancel$/ }));
 
         await waitFor(() => {
             expect(
-                screen.queryByText("Restore database?"),
+                screen.queryByText("Restore this backup?"),
             ).not.toBeInTheDocument();
         });
         expect(backup.restoreBackup).not.toHaveBeenCalled();
@@ -173,7 +173,7 @@ describe("RestoreFromBackupCard", () => {
         await user.click(
             await screen.findByRole("button", { name: /Restore from backup/i }),
         );
-        await screen.findByText("Restore database?");
+        await screen.findByText("Restore this backup?");
         await user.click(screen.getByRole("button", { name: /Yes, restore/i }));
 
         await waitFor(() => {
@@ -209,7 +209,7 @@ describe("RestoreFromBackupCard", () => {
         await user.click(
             await screen.findByRole("button", { name: /Restore from backup/i }),
         );
-        await screen.findByText("Restore database?");
+        await screen.findByText("Restore this backup?");
         await user.click(screen.getByRole("button", { name: /Yes, restore/i }));
 
         await waitFor(() => {
@@ -236,7 +236,7 @@ describe("RestoreFromBackupCard", () => {
         await user.click(
             await screen.findByRole("button", { name: /Restore from backup/i }),
         );
-        await screen.findByText("Restore database?");
+        await screen.findByText("Restore this backup?");
         await user.click(screen.getByRole("button", { name: /Yes, restore/i }));
 
         await waitFor(() => {
@@ -258,7 +258,7 @@ describe("RestoreFromBackupCard", () => {
         await user.click(
             await screen.findByRole("button", { name: /Restore from backup/i }),
         );
-        await screen.findByText("Restore database?");
+        await screen.findByText("Restore this backup?");
         await user.click(screen.getByRole("button", { name: /Yes, restore/i }));
 
         expect(
