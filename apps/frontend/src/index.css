@@ -1667,10 +1667,13 @@
 }
 
 /* macOS-style keyboard focus: a translucent ring that hugs the element's own
-   corner (outlines follow border-radius), leaving its box-shadow untouched. */
+   corner (outlines follow border-radius), leaving its box-shadow untouched.
+   The alpha is a per-mode token so the ring keeps 3:1 against the canvas
+   (WCAG 1.4.11); the 1px offset shows the surface behind the control, which
+   is what separates the ring from a filled primary button of the same hue. */
 @utility focus-ring {
     &:focus-visible {
-        outline: 3px solid hsl(var(--ring) / 0.45);
+        outline: 3px solid hsl(var(--ring) / var(--focus-ring-alpha));
         outline-offset: 1px;
     }
 
