@@ -79,6 +79,14 @@ export type ThemeTokens = {
     "glass-highlight": string;
     "glass-shadow": string;
     "glass-tint": string;
+    /* ADR-178 label hierarchy: alpha over --foreground per level. Unitless
+       strings, not HSL; each palette tunes them to its own contrast. */
+    "label-secondary-alpha": string;
+    "label-tertiary-alpha": string;
+    "label-quaternary-alpha": string;
+    /* Alpha of the `focus-ring` outline, tuned per palette so the ring reads
+       at 3:1 or more on background, card and muted (WCAG 1.4.11). */
+    "focus-ring-alpha": string;
 };
 
 export type TokenKey = keyof ThemeTokens;
@@ -114,7 +122,7 @@ const defaultLight: ThemeTokens = {
     "destructive-foreground": "0 0% 100%",
     success: REPORT_THEME_DEFAULTS.light.success,
     info: "204 68% 41%",
-    warning: "38 80% 33%",
+    warning: "26 88% 36%",
     expense: REPORT_THEME_DEFAULTS.light.expense,
     "chart-1": REPORT_THEME_DEFAULTS.light.chart1,
     "chart-2": REPORT_THEME_DEFAULTS.light.chart2,
@@ -139,6 +147,10 @@ const defaultLight: ThemeTokens = {
     "glass-highlight": "42 60% 98%",
     "glass-shadow": "200 40% 10%",
     "glass-tint": "158 40% 40%",
+    "label-secondary-alpha": "0.72",
+    "label-tertiary-alpha": "0.5",
+    "label-quaternary-alpha": "0.3",
+    "focus-ring-alpha": "0.76",
 };
 
 const defaultDark: ThemeTokens = {
@@ -163,7 +175,7 @@ const defaultDark: ThemeTokens = {
     "destructive-foreground": "200 20% 6%",
     success: REPORT_THEME_DEFAULTS.dark.success,
     info: "204 78% 62%",
-    warning: "38 88% 62%",
+    warning: "26 90% 62%",
     expense: REPORT_THEME_DEFAULTS.dark.expense,
     "chart-1": REPORT_THEME_DEFAULTS.dark.chart1,
     "chart-2": REPORT_THEME_DEFAULTS.dark.chart2,
@@ -188,6 +200,10 @@ const defaultDark: ThemeTokens = {
     "glass-highlight": "42 40% 94%",
     "glass-shadow": "0 0% 0%",
     "glass-tint": "158 50% 45%",
+    "label-secondary-alpha": "0.68",
+    "label-tertiary-alpha": "0.42",
+    "label-quaternary-alpha": "0.26",
+    "focus-ring-alpha": "0.5",
 };
 
 /* ------------------------------------------------------------------
@@ -241,6 +257,10 @@ const draculaDark: ThemeTokens = {
     "glass-highlight": "265 89% 90%",
     "glass-shadow": "231 30% 4%",
     "glass-tint": "265 70% 55%",
+    "label-secondary-alpha": "0.68",
+    "label-tertiary-alpha": "0.44",
+    "label-quaternary-alpha": "0.28",
+    "focus-ring-alpha": "0.72",
 };
 
 const draculaLight: ThemeTokens = {
@@ -290,6 +310,10 @@ const draculaLight: ThemeTokens = {
     "glass-highlight": "265 80% 96%",
     "glass-shadow": "231 30% 10%",
     "glass-tint": "265 60% 55%",
+    "label-secondary-alpha": "0.72",
+    "label-tertiary-alpha": "0.54",
+    "label-quaternary-alpha": "0.32",
+    "focus-ring-alpha": "0.66",
 };
 
 /* ------------------------------------------------------------------
@@ -342,6 +366,13 @@ const solarizedLight: ThemeTokens = {
     "glass-highlight": "44 90% 97%",
     "glass-shadow": "194 40% 15%",
     "glass-tint": "205 60% 45%",
+    /* Solarized's base foreground reads at only 4.4:1 on its own card, so no
+       alpha reaches AA here; secondary stays as close as the hierarchy allows
+       and the contract test holds this palette to 4:1 instead. */
+    "label-secondary-alpha": "0.95",
+    "label-tertiary-alpha": "0.8",
+    "label-quaternary-alpha": "0.5",
+    "focus-ring-alpha": "0.85",
 };
 
 const solarizedDark: ThemeTokens = {
@@ -391,6 +422,10 @@ const solarizedDark: ThemeTokens = {
     "glass-highlight": "44 40% 90%",
     "glass-shadow": "192 100% 4%",
     "glass-tint": "205 60% 45%",
+    "label-secondary-alpha": "0.74",
+    "label-tertiary-alpha": "0.52",
+    "label-quaternary-alpha": "0.32",
+    "focus-ring-alpha": "0.76",
 };
 
 /* ------------------------------------------------------------------
@@ -443,6 +478,10 @@ const nordDark: ThemeTokens = {
     "glass-highlight": "218 27% 94%",
     "glass-shadow": "220 30% 6%",
     "glass-tint": "210 34% 50%",
+    "label-secondary-alpha": "0.7",
+    "label-tertiary-alpha": "0.48",
+    "label-quaternary-alpha": "0.3",
+    "focus-ring-alpha": "0.92",
 };
 
 const nordLight: ThemeTokens = {
@@ -492,6 +531,10 @@ const nordLight: ThemeTokens = {
     "glass-highlight": "218 27% 98%",
     "glass-shadow": "220 30% 14%",
     "glass-tint": "213 32% 50%",
+    "label-secondary-alpha": "0.76",
+    "label-tertiary-alpha": "0.58",
+    "label-quaternary-alpha": "0.34",
+    "focus-ring-alpha": "0.82",
 };
 
 /* ------------------------------------------------------------------
@@ -544,6 +587,10 @@ const highContrastLight: ThemeTokens = {
     "glass-highlight": "0 0% 100%",
     "glass-shadow": "0 0% 0%",
     "glass-tint": "220 100% 40%",
+    "label-secondary-alpha": "0.85",
+    "label-tertiary-alpha": "0.7",
+    "label-quaternary-alpha": "0.5",
+    "focus-ring-alpha": "1",
 };
 
 const highContrastDark: ThemeTokens = {
@@ -593,6 +640,10 @@ const highContrastDark: ThemeTokens = {
     "glass-highlight": "0 0% 100%",
     "glass-shadow": "0 0% 0%",
     "glass-tint": "60 100% 50%",
+    "label-secondary-alpha": "0.85",
+    "label-tertiary-alpha": "0.7",
+    "label-quaternary-alpha": "0.5",
+    "focus-ring-alpha": "1",
 };
 
 export const themes: Record<ThemeVariant, ThemePalette> = {
