@@ -287,8 +287,8 @@ describe("Portfolio pages (integration)", () => {
         });
 
         expect(
-            await screen.findByRole("button", { name: "3 months" }),
-        ).toHaveAttribute("aria-pressed", "true");
+            await screen.findByRole("radio", { name: "3 months" }),
+        ).toHaveAttribute("aria-checked", "true");
         expect(
             screen.getByRole("button", { name: /without currency effects/i }),
         ).toHaveClass("bg-background");
@@ -742,8 +742,8 @@ describe("Portfolio pages (integration)", () => {
         });
 
         expect(
-            await screen.findByRole("button", { name: "3 months" }),
-        ).toHaveAttribute("aria-pressed", "true");
+            await screen.findByRole("radio", { name: "3 months" }),
+        ).toHaveAttribute("aria-checked", "true");
     }, 15_000);
 
     it("NetWorthPage identifies the live investment-price timestamp in its hero", async () => {

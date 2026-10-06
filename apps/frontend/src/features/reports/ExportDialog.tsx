@@ -105,15 +105,24 @@ function isCustomRangeValid(from: string, to: string): boolean {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 interface ExportDialogProps {
-    /** Custom trigger element; defaults to an "Export PDF" button. */
+    /**
+     * Custom trigger element; defaults to an "Export PDF" button. Pass `null`
+     * to render no trigger and drive the dialog through `open`/`onOpenChange`
+     * (for example from a ••• menu item).
+     */
     trigger?: React.ReactNode;
     /** Pre-selected report type when the dialog opens. Defaults to 'financial'. */
     defaultType?: ReportType;
+    /** Controlled open state; leave undefined to let the trigger own it. */
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
 }
 
 export function ExportDialog({
     trigger,
     defaultType = "financial",
+    open: controlledOpen,
+    onOpenChange,
 }: ExportDialogProps) {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
@@ -124,8 +133,13 @@ export function ExportDialog({
     const defaultCurrency = appSettings.defaultCurrency || "EUR";
     const currentYear = new Date().getFullYear();
 
-    // ── Dialog state
-    const [open, setOpen] = useState(false);
+    // ── Dialog state (controlled when `open` is given)
+    const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+    const open = controlledOpen ?? uncontrolledOpen;
+    const setOpen = (next: boolean) => {
+        if (controlledOpen === undefined) setUncontrolledOpen(next);
+        onOpenChange?.(next);
+    };
 
     // ── Form state
     const [reportType, setReportType] = useState<ReportType>(defaultType);
@@ -269,14 +283,16 @@ export function ExportDialog({
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-                {trigger ?? (
-                    <Button variant="outline" size="sm" className="gap-1.5">
-                        <FileDown className="h-4 w-4" />
-                        {t("export.openDialog")}
-                    </Button>
-                )}
-            </DialogTrigger>
+            {trigger !== null && (
+                <DialogTrigger asChild>
+                    {trigger ?? (
+                        <Button variant="outline" size="sm" className="gap-1.5">
+                            <FileDown className="h-4 w-4" />
+                            {t("export.openDialog")}
+                        </Button>
+                    )}
+                </DialogTrigger>
+            )}
 
             <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader>

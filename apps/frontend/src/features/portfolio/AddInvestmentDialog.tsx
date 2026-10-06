@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { parseDecimal } from "@/lib/decimal";
 import { deriveUnitMath, parsePositive } from "@/lib/portfolioUnitMath";
 import {
@@ -34,6 +34,8 @@ type Props = {
     // when provided, only these asset classes are shown; if exactly one is provided
     // the dialog will open directly to the details form for that class
     allowedAssetClasses?: AssetClass[];
+    /** Custom trigger; defaults to a small primary "Add investment" button. */
+    trigger?: ReactNode;
 };
 
 function makeEmptyForm(defaultCurrency: string): InvestmentForm {
@@ -68,7 +70,7 @@ function makeEmptyForm(defaultCurrency: string): InvestmentForm {
     };
 }
 
-export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
+export function AddInvestmentDialog({ allowedAssetClasses, trigger }: Props) {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
     const defaultCurrency = appSettings.defaultCurrency || "EUR";
@@ -353,9 +355,11 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
             }}
         >
             <DialogTrigger asChild>
-                <Button size="sm" className="gap-1.5">
-                    <Plus className="h-4 w-4" /> {t("addInv.title")}
-                </Button>
+                {trigger ?? (
+                    <Button size="sm" className="gap-1.5">
+                        <Plus className="h-4 w-4" /> {t("addInv.title")}
+                    </Button>
+                )}
             </DialogTrigger>
             <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
