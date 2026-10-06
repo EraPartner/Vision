@@ -47,7 +47,7 @@ describe("Phase F5 — chaos resilience", () => {
 
         renderWithApp(<RecipientsPage />);
         await waitFor(() =>
-            expect(screen.getByRole("heading", { name: /recipients/i })).toBeInTheDocument(),
+            expect(screen.getByRole("heading", { name: /payees/i })).toBeInTheDocument(),
         );
         errSpy.mockRestore();
     });

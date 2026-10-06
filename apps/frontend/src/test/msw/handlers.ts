@@ -1033,6 +1033,10 @@ export const defaultHandlers = [
 
     // Recipients sub-routes
     http.get(`${API_BASE}/api/recipients/clusters`, () => ok({ clusters: [] })),
+    // Literal sub-routes above must stay ahead of this `:id` catch-all.
+    http.get(`${API_BASE}/api/recipients/:id`, ({ params }) =>
+        ok({ ...RECIPIENT_STUB, id: Number(params.id) }),
+    ),
     http.get(`${API_BASE}/api/recipients/:id/aliases`, () =>
         ok({ aliases: [] }),
     ),

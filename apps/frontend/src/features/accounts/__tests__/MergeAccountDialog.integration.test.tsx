@@ -134,7 +134,7 @@ describe("MergeAccountDialog (integration, WP-B5 §3 F9 preview)", () => {
         // Interleaved stamps → the anchor-clearing warning.
         expect(
             screen.getByText(
-                /merging two stamped accounts — the statement anchor will be cleared/i,
+                /both accounts have statement readings, so the statement anchor will be cleared/i,
             ),
         ).toBeInTheDocument();
 
@@ -192,7 +192,7 @@ describe("MergeAccountDialog (integration, WP-B5 §3 F9 preview)", () => {
             ),
         ).toBeInTheDocument();
         expect(
-            screen.getByText(/40,00.*excluded from the converted total/i),
+            screen.getByText(/40,00.*left out of the converted total/i),
         ).toBeInTheDocument();
     });
 

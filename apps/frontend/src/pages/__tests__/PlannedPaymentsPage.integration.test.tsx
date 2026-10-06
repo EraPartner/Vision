@@ -159,8 +159,8 @@ describe("PlannedPaymentsPage (integration)", () => {
 
         await screen.findByRole("dialog");
 
-        expect(screen.getByLabelText("Name *")).toBeInTheDocument();
-        expect(screen.getByLabelText("Amount *")).toBeInTheDocument();
+        expect(screen.getByLabelText("Name")).toBeInTheDocument();
+        expect(screen.getByLabelText("Amount", { selector: "#pp-amount" })).toBeInTheDocument();
     });
 
     it("closes dialog when Cancel is clicked", async () => {
@@ -204,7 +204,7 @@ describe("PlannedPaymentsPage (integration)", () => {
         await screen.findByRole("button", { name: /new payment/i });
         expect(
             screen.getByText(
-                /keep recurring bills and future payments visible/i,
+                /see recurring bills and future payments/i,
             ),
         ).toBeInTheDocument();
     });
@@ -239,7 +239,7 @@ describe("PlannedPaymentsPage (integration)", () => {
             "aria-checked",
             "true",
         );
-        await user.type(screen.getByLabelText("Name *"), "Salary");
+        await user.type(screen.getByLabelText("Name"), "Salary");
 
         // Close without saving, reopen "New".
         await user.keyboard("{Escape}");
@@ -257,7 +257,7 @@ describe("PlannedPaymentsPage (integration)", () => {
             "aria-checked",
             "false",
         );
-        expect(screen.getByLabelText("Name *")).toHaveValue("");
+        expect(screen.getByLabelText("Name")).toHaveValue("");
     });
 
     it("shows payment name in table row when MSW returns a planned payment", async () => {
@@ -335,7 +335,7 @@ describe("PlannedPaymentsPage (integration)", () => {
         renderWithApp(<PlannedPaymentsPage />);
 
         // "Est. Monthly" label always renders; just verify it's present
-        expect(await screen.findByText(/est\. monthly/i)).toBeInTheDocument();
+        expect(await screen.findByText(/estimated monthly/i)).toBeInTheDocument();
     });
 
     it("shows All Payments table with payment row after data loads", async () => {
@@ -511,8 +511,8 @@ describe("PlannedPaymentForm (inline validation)", () => {
             />,
         );
         await screen.findByRole("dialog");
-        await user.type(screen.getByLabelText("Name *"), "Mortgage");
-        await user.type(screen.getByLabelText("Amount *"), "100");
+        await user.type(screen.getByLabelText("Name"), "Mortgage");
+        await user.type(screen.getByLabelText("Amount", { selector: "#pp-amount" }), "100");
         await pickBankAccount(user, "Main");
         return { user, onSubmit };
     }
@@ -546,13 +546,13 @@ describe("PlannedPaymentForm (inline validation)", () => {
         expect(submit).toBeEnabled();
         await user.click(submit);
 
-        const name = screen.getByLabelText("Name *");
+        const name = screen.getByLabelText("Name");
         await waitFor(() => expect(name).toHaveFocus());
         expect(describedError(name)).toHaveTextContent(/name is required/i);
 
         // The rest are flagged as well, not just the focused one. (Due date
         // defaults to today, so it is not among them.)
-        const amount = screen.getByLabelText("Amount *");
+        const amount = screen.getByLabelText("Amount", { selector: "#pp-amount" });
         expect(amount).toHaveAttribute("aria-invalid", "true");
         expect(describedError(amount)).toHaveTextContent(
             /valid amount is required/i,
@@ -570,7 +570,7 @@ describe("PlannedPaymentForm (inline validation)", () => {
         // A combobox takes no name from its own content, so a <Label> with no
         // htmlFor (or one pointing at a control with no id) left these nameless.
         for (const name of [
-            /^recipient$/i,
+            /^payee$/i,
             /^category$/i,
             /^tags$/i,
             /bank account/i,
@@ -731,8 +731,8 @@ describe("PlannedPaymentForm (inline validation)", () => {
         );
         await screen.findByRole("dialog");
 
-        await user.type(screen.getByLabelText("Name *"), "Groceries");
-        await user.type(screen.getByLabelText("Amount *"), "100");
+        await user.type(screen.getByLabelText("Name"), "Groceries");
+        await user.type(screen.getByLabelText("Amount", { selector: "#pp-amount" }), "100");
         await pickBankAccount(user, "Main");
 
         await user.click(submitBtn());
@@ -771,8 +771,8 @@ describe("PlannedPaymentForm (inline validation)", () => {
             await screen.findByRole("button", { name: /new payment/i }),
         );
         await screen.findByRole("dialog");
-        await user.type(screen.getByLabelText("Name *"), "Groceries");
-        await user.type(screen.getByLabelText("Amount *"), "100");
+        await user.type(screen.getByLabelText("Name"), "Groceries");
+        await user.type(screen.getByLabelText("Amount", { selector: "#pp-amount" }), "100");
         await pickBankAccount(user, "Main");
         await user.click(submitBtn());
 

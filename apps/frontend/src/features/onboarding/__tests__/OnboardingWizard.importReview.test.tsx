@@ -116,7 +116,7 @@ describe("OnboardingWizard — import step outcomes", () => {
         expect(screen.queryByText(/transactions imported/i)).not.toBeInTheDocument();
         expect(toast.success).not.toHaveBeenCalled();
         expect(toast.info).toHaveBeenCalledWith(
-            "4 transactions are ready — review them to finish the import",
+            "4 transactions are ready. Review them to finish the import.",
         );
 
         // The affordance the bug was missing, and where it goes.

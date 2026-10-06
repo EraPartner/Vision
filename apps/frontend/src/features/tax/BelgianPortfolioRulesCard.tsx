@@ -44,7 +44,7 @@ export function BelgianPortfolioRulesCard({
     taxTable,
 }: BelgianPortfolioRulesCardProps) {
     const formatPercent = usePercentFormatter();
-    const { t } = useLanguage();
+    const { t, tc } = useLanguage();
     const fmt = useCurrencyFormatter();
     const dividendMetrics = [
         {
@@ -160,9 +160,10 @@ export function BelgianPortfolioRulesCard({
 
                 {unknownDividendConventionCount > 0 && (
                     <p className="rounded-md border border-warning/40 bg-warning/10 p-3 text-xs text-foreground">
-                        {t("tax.dividendConventionIncomplete", {
-                            count: unknownDividendConventionCount,
-                        })}
+                        {tc(
+                            "tax.dividendConventionIncomplete",
+                            unknownDividendConventionCount,
+                        )}
                     </p>
                 )}
 

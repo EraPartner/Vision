@@ -70,7 +70,7 @@ describe("MergeRecipientsDialog", () => {
         renderDialog(true);
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
         expect(
-            await screen.findByText(/merge recipients/i),
+            await screen.findByText(/merge payees/i),
         ).toBeInTheDocument();
     });
 

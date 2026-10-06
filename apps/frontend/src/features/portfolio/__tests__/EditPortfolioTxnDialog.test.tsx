@@ -330,7 +330,7 @@ describe("EditPortfolioTxnDialog", () => {
             await screen.findByRole("button", { name: /^edit$/i }),
         );
         await screen.findByRole("dialog");
-        const fxInput = screen.getByLabelText(/fx rate to eur/i);
+        const fxInput = screen.getByLabelText(/exchange rate to eur/i);
         fireEvent.change(fxInput, { target: { value: "0" } });
         await user.click(screen.getByRole("button", { name: /save/i }));
 
@@ -344,7 +344,7 @@ describe("EditPortfolioTxnDialog", () => {
         const describedBy = fxInput.getAttribute("aria-describedby");
         expect(describedBy).toBeTruthy();
         expect(document.getElementById(describedBy!)).toHaveTextContent(
-            /FX rate must be above 0/i,
+            /exchange rate must be above 0/i,
         );
         await waitFor(() => expect(fxInput).toHaveFocus());
     });

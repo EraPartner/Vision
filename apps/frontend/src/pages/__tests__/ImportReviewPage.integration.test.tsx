@@ -75,7 +75,7 @@ describe("ImportReviewPage (integration)", () => {
         renderReviewPage();
         // MSW returns { groups: [] } → totalRows = 0 → "Approve & Import (0 rows)"
         expect(
-            await screen.findByRole("button", { name: /approve & import/i }),
+            await screen.findByRole("button", { name: /^import \d+ rows$/i }),
         ).toBeInTheDocument();
     });
 
@@ -146,7 +146,7 @@ describe("ImportReviewPage (integration)", () => {
         renderReviewPage();
         expect(
             await screen.findByRole("button", {
-                name: /approve & import \(0 rows\)/i,
+                name: /^import 0 rows$/i,
             }),
         ).toBeInTheDocument();
     });
@@ -263,7 +263,7 @@ describe("ImportReviewPage (integration)", () => {
         // totalRows = 4 + 2 = 6
         expect(
             await screen.findByRole("button", {
-                name: /approve & import \(6 rows\)/i,
+                name: /^import 6 rows$/i,
             }),
         ).toBeInTheDocument();
     });
@@ -287,7 +287,7 @@ describe("ImportReviewPage (integration)", () => {
         renderReviewPage();
 
         const approveBtn = await screen.findByRole("button", {
-            name: /approve & import/i,
+            name: /^import \d+ rows$/i,
         });
         await user.click(approveBtn);
 
@@ -327,7 +327,7 @@ describe("ImportReviewPage (integration)", () => {
         await waitFor(() => expect(batchGets).toBe(1));
         const before = batchGets;
         await user.click(
-            await screen.findByRole("button", { name: /approve & import/i }),
+            await screen.findByRole("button", { name: /^import \d+ rows$/i }),
         );
         await waitFor(() => expect(batchGets).toBeGreaterThan(before));
     });
@@ -377,7 +377,7 @@ describe("ImportReviewPage (integration)", () => {
             await screen.findByRole("link", { name: /start import review/i }),
         );
         await user.click(
-            await screen.findByRole("button", { name: /approve & import/i }),
+            await screen.findByRole("button", { name: /^import \d+ rows$/i }),
         );
 
         const receipt = await screen.findByRole("status");
@@ -427,7 +427,7 @@ describe("ImportReviewPage (integration)", () => {
         // fuzzy badge + count
         expect(await screen.findByText("Suggested match")).toBeInTheDocument();
         // new badge + count
-        expect(await screen.findByText("New recipient")).toBeInTheDocument();
+        expect(await screen.findByText("New payee")).toBeInTheDocument();
     });
 
     it("expands accordion group to show row details when trigger is clicked", async () => {
@@ -583,7 +583,7 @@ describe("ImportReviewPage (integration)", () => {
         expect(await screen.findByText(/^Category$/i)).toBeInTheDocument();
         // Persist-default checkbox visible (recipient has no current default).
         expect(
-            await screen.findByLabelText(/save as recipient default/i),
+            await screen.findByLabelText(/save as the payee's default/i),
         ).toBeInTheDocument();
     });
 
@@ -704,12 +704,12 @@ describe("ImportReviewPage (integration)", () => {
 
         await screen.findByText(/new account will be created/i);
         await user.click(
-            screen.getByRole("button", { name: /approve & import/i }),
+            screen.getByRole("button", { name: /^import \d+ rows$/i }),
         );
 
         await vi.waitFor(() =>
             expect(toastSpy).toHaveBeenCalledWith(
-                "This import created 1 new account(s)",
+                "This import created 1 new accounts",
                 expect.objectContaining({
                     action: expect.objectContaining({
                         label: "Review accounts",
@@ -745,7 +745,7 @@ describe("ImportReviewPage (integration)", () => {
 
         await screen.findByText("KBC");
         await user.click(
-            screen.getByRole("button", { name: /approve & import/i }),
+            screen.getByRole("button", { name: /^import \d+ rows$/i }),
         );
 
         // The plain success toast fires...
@@ -874,12 +874,12 @@ describe("ImportReviewPage (integration)", () => {
 
         const [trigger] = await findPickers();
         expect(
-            screen.queryByPlaceholderText(/search recipients/i),
+            screen.queryByPlaceholderText(/search payees/i),
         ).not.toBeInTheDocument();
 
         await user.click(trigger);
         expect(
-            await screen.findByPlaceholderText(/search recipients/i),
+            await screen.findByPlaceholderText(/search payees/i),
         ).toBeInTheDocument();
         // The page-level subscription warms the exact cache entry the popover
         // queries, so the list is populated on open — no empty-then-fill flash.
@@ -893,7 +893,7 @@ describe("ImportReviewPage (integration)", () => {
         await user.keyboard("{Escape}");
         await vi.waitFor(() =>
             expect(
-                screen.queryByPlaceholderText(/search recipients/i),
+                screen.queryByPlaceholderText(/search payees/i),
             ).not.toBeInTheDocument(),
         );
     });
@@ -933,7 +933,7 @@ describe("ImportReviewPage (integration)", () => {
         // The group header still names Netflix; only the picker falls back.
         expect(await screen.findByText("Netflix")).toBeInTheDocument();
         const [picker] = await findPickers();
-        expect(picker).toHaveTextContent(/select recipient/i);
+        expect(picker).toHaveTextContent(/select payee/i);
     });
 
     it("assigns a picked recipient to every row of its group", async () => {
@@ -1020,7 +1020,7 @@ describe("ImportReviewPage (integration)", () => {
 
         await user.keyboard("{Enter}");
         expect(
-            await screen.findByPlaceholderText(/search recipients/i),
+            await screen.findByPlaceholderText(/search payees/i),
         ).toBeInTheDocument();
     });
 

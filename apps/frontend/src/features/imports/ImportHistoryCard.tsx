@@ -85,10 +85,7 @@ function RollbackButton({
         try {
             const { deleted } = await apiClient.rollbackImportBatch(batch.id);
             toast.success(
-                t("importHistory.rollbackSuccess", {
-                    n: deleted,
-                    id: batch.id,
-                }),
+                t("importHistory.rollbackSuccess", { n: deleted }),
             );
             onRolledBack();
         } catch (err) {

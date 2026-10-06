@@ -65,11 +65,11 @@ function servePatternsAndCapturePost(direction: "income" | "expense") {
 
 async function clickTrack(user: ReturnType<typeof userEvent.setup>) {
     const toggle = await screen.findByRole("button", {
-        name: /review: detected recurring patterns/i,
+        name: /review: recurring payments found/i,
     });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
     await user.click(toggle);
-    expect(toggle).toHaveAccessibleName(/hide: detected recurring patterns/i);
+    expect(toggle).toHaveAccessibleName(/hide: recurring payments found/i);
     expect(toggle).toHaveAttribute("aria-expanded", "true");
     const trackBtn = await screen.findByRole("button", { name: /track/i });
     await user.click(trackBtn);
@@ -88,7 +88,7 @@ describe("RecurringDetectionPanel — detected sign carried into the planned pay
         const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
 
         expect(
-            await screen.findByText(/detected recurring patterns/i),
+            await screen.findByText(/recurring payments found/i),
         ).toBeInTheDocument();
         expect(screen.queryByText("Employer NV")).not.toBeInTheDocument();
         await clickTrack(user);
@@ -117,7 +117,7 @@ describe("RecurringDetectionPanel — detected sign carried into the planned pay
         renderWithApp(<RecurringDetectionPanel />);
 
         expect(
-            await screen.findByText(/detected recurring patterns/i),
+            await screen.findByText(/recurring payments found/i),
         ).toBeInTheDocument();
         expect(screen.queryByText("Landlord SA")).not.toBeInTheDocument();
         await clickTrack(user);
@@ -157,7 +157,7 @@ describe("RecurringDetectionPanel — detected sign carried into the planned pay
         renderWithApp(<RecurringDetectionPanel />);
 
         const toggle = await screen.findByRole("button", {
-            name: /review:.*amount changes/i,
+            name: /review:.*amounts that changed/i,
         });
         expect(toggle).toHaveAttribute("aria-expanded", "false");
         expect(screen.queryByText(/€100/)).not.toBeInTheDocument();
@@ -204,7 +204,7 @@ describe("RecurringDetectionPanel — detected sign carried into the planned pay
         renderWithApp(<RecurringDetectionPanel />);
         await user.click(
             await screen.findByRole("button", {
-                name: /review: detected recurring patterns/i,
+                name: /review: recurring payments found/i,
             }),
         );
         expect(await screen.findByText("SPECIAL:VALUE")).toBeInTheDocument();

@@ -161,11 +161,11 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         });
         const card = link.closest(".glass-thin") as HTMLElement;
         expect(
-            within(card).getByText(/converted total incomplete/i),
+            within(card).getByText(/converted total is incomplete/i),
         ).toBeInTheDocument();
         expect(card).toHaveTextContent("40,00");
         expect(
-            within(card).getByText(/excluded from the converted total/i),
+            within(card).getByText(/left out of the converted total/i),
         ).toBeInTheDocument();
         expect(
             screen.getByText(
@@ -179,7 +179,7 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         renderWithApp(<AccountsPage />);
 
         const cash = await screen.findByRole("region", {
-            name: "Cash & Savings",
+            name: "Cash & savings",
         });
         expect(
             screen.getByRole("region", { name: "Portfolio accounts" }),
@@ -204,7 +204,7 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
     it("replaces the Show-archived toggle with a collapsed Archived group", async () => {
         mockAccounts();
         renderWithApp(<AccountsPage />);
-        await screen.findByRole("region", { name: "Cash & Savings" });
+        await screen.findByRole("region", { name: "Cash & savings" });
 
         // The old toggle is gone.
         expect(
@@ -229,7 +229,7 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         renderWithApp(<AccountsPage />);
 
         const cash = await screen.findByRole("region", {
-            name: "Cash & Savings",
+            name: "Cash & savings",
         });
         // Default settings: EUR, 'eu' number format → de-DE (1.234,56 €).
         // Cash & Savings subtotal is the FULL group: 1000 + 500 + 999 = 2499.
@@ -286,7 +286,7 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
                 /1\.250,00/,
             ),
         );
-        const cash = screen.getByRole("region", { name: "Cash & Savings" });
+        const cash = screen.getByRole("region", { name: "Cash & savings" });
         expect(within(cash).getByText(/subtotal/i)).toHaveTextContent(
             /2\.499,00/,
         );
@@ -318,7 +318,7 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         ).toBeInTheDocument();
         expect(brokerCard).toHaveTextContent(/Cash.*75,00/s);
         expect(brokerCard).toHaveTextContent(
-            /as of 01\/09\/2026 bank statement/s,
+            /Statement of 01\/09\/2026/s,
         );
     });
 
@@ -465,7 +465,7 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         renderWithApp(<AccountsPage />);
 
         const cash = await screen.findByRole("region", {
-            name: "Cash & Savings",
+            name: "Cash & savings",
         });
         const excluded = within(cash)
             .getByRole("link", { name: "Partner Checking" })
@@ -515,7 +515,7 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         renderWithDetailRoute();
 
         const cash = await screen.findByRole("region", {
-            name: "Cash & Savings",
+            name: "Cash & savings",
         });
         const card = within(cash)
             .getByRole("link", { name: "KBC Checking" })
@@ -681,12 +681,12 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
     it("puts the statement date on the drift badge, sliced off its ISO timestamp", async () => {
         mockAccounts(DRIFT_FIXTURE);
         renderWithApp(<AccountsPage />);
-        await screen.findByRole("region", { name: "Cash & Savings" });
+        await screen.findByRole("region", { name: "Cash & savings" });
 
         const badge = driftBadgeFor("Fresh Drift");
-        expect(badge.textContent).toMatch(/^Drift \+/);
+        expect(badge.textContent).toMatch(/^\+/);
         expect(badge.textContent).toMatch(/15,50/);
-        expect(badge.textContent).toContain(`statement ${ddmmyyyy(FRESH_YMD)}`);
+        expect(badge.textContent).toContain(`statement of ${ddmmyyyy(FRESH_YMD)}`);
         // Never the raw timestamp.
         expect(badge.textContent).not.toMatch(/T00:00/);
     });
@@ -694,11 +694,11 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
     it("omits the date (but keeps the drift) when no statement date is stamped", async () => {
         mockAccounts(DRIFT_FIXTURE);
         renderWithApp(<AccountsPage />);
-        await screen.findByRole("region", { name: "Cash & Savings" });
+        await screen.findByRole("region", { name: "Cash & savings" });
 
         const badge = driftBadgeFor("No Stamp");
         expect(badge.textContent).toMatch(/12,40/);
-        expect(badge.textContent).not.toMatch(/statement/);
+        expect(badge.textContent).not.toMatch(/statement of/);
         expect(badge.className).toMatch(/text-destructive/);
     });
 
@@ -736,7 +736,7 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
     it("stamps the drift badge with reconcilable_currency, not the account's declared currency", async () => {
         mockAccounts(DRIFT_FIXTURE);
         renderWithApp(<AccountsPage />);
-        await screen.findByRole("region", { name: "Cash & Savings" });
+        await screen.findByRole("region", { name: "Cash & savings" });
 
         // `drift` is statement_balance − reconcilable_balance, denominated in
         // `reconcilable_currency` (USD here) — putting the declared EUR symbol

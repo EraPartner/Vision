@@ -163,7 +163,7 @@ describe("AnalysisMonitorsPage", () => {
         const user = userEvent.setup();
         renderWithApp(<AnalysisMonitorsPage />);
         expect(
-            await screen.findByRole("link", { name: "Open Analysis" }),
+            await screen.findByRole("link", { name: "Open analysis" }),
         ).toHaveAttribute("href", "/analysis");
         expect(
             screen.queryByLabelText("Numeric field"),

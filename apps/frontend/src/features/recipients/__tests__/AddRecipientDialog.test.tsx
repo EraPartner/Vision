@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { toast } from "sonner";
@@ -18,11 +18,13 @@ describe("AddRecipientDialog", () => {
         const user = userEvent.setup();
         renderWithApp(<AddRecipientDialog />);
         await user.click(
-            await screen.findByRole("button", { name: /add recipient/i }),
+            await screen.findByRole("button", { name: /add payee/i }),
         );
         const name = screen.getByLabelText(/^name$/i);
         await user.type(name, "   ");
-        await user.click(screen.getByRole("button", { name: /^create$/i }));
+        await user.click(within(screen.getByRole("dialog")).getByRole("button", {
+                name: /^add payee$/i,
+            }));
         expect(await screen.findByRole("alert")).toHaveTextContent(
             /enter a name/i,
         );
@@ -35,7 +37,7 @@ describe("AddRecipientDialog", () => {
     it("renders trigger button", async () => {
         renderWithApp(<AddRecipientDialog />);
         expect(
-            await screen.findByRole("button", { name: /add recipient/i }),
+            await screen.findByRole("button", { name: /add payee/i }),
         ).toBeInTheDocument();
     });
 
@@ -43,7 +45,7 @@ describe("AddRecipientDialog", () => {
         const user = userEvent.setup();
         renderWithApp(<AddRecipientDialog />);
         await user.click(
-            await screen.findByRole("button", { name: /add recipient/i }),
+            await screen.findByRole("button", { name: /add payee/i }),
         );
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
     });
@@ -52,7 +54,7 @@ describe("AddRecipientDialog", () => {
         const user = userEvent.setup();
         renderWithApp(<AddRecipientDialog />);
         await user.click(
-            await screen.findByRole("button", { name: /add recipient/i }),
+            await screen.findByRole("button", { name: /add payee/i }),
         );
         await screen.findByRole("dialog");
         expect(screen.getByLabelText(/^name$/i)).toBeInTheDocument();
@@ -65,7 +67,7 @@ describe("AddRecipientDialog", () => {
         const user = userEvent.setup();
         renderWithApp(<AddRecipientDialog />);
         await user.click(
-            await screen.findByRole("button", { name: /add recipient/i }),
+            await screen.findByRole("button", { name: /add payee/i }),
         );
         await screen.findByRole("dialog");
         await user.click(screen.getByRole("button", { name: /cancel/i }));
@@ -78,11 +80,13 @@ describe("AddRecipientDialog", () => {
         const user = userEvent.setup();
         renderWithApp(<AddRecipientDialog />);
         await user.click(
-            await screen.findByRole("button", { name: /add recipient/i }),
+            await screen.findByRole("button", { name: /add payee/i }),
         );
         await screen.findByRole("dialog");
         await user.type(screen.getByLabelText(/^name$/i), "Test Landlord");
-        await user.click(screen.getByRole("button", { name: /^create$/i }));
+        await user.click(within(screen.getByRole("dialog")).getByRole("button", {
+                name: /^add payee$/i,
+            }));
         await waitFor(() =>
             expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
         );
@@ -92,10 +96,12 @@ describe("AddRecipientDialog", () => {
         const user = userEvent.setup();
         renderWithApp(<AddRecipientDialog />);
         await user.click(
-            await screen.findByRole("button", { name: /add recipient/i }),
+            await screen.findByRole("button", { name: /add payee/i }),
         );
         await screen.findByRole("dialog");
-        await user.click(screen.getByRole("button", { name: /^create$/i }));
+        await user.click(within(screen.getByRole("dialog")).getByRole("button", {
+                name: /^add payee$/i,
+            }));
         // Dialog stays open — empty name guard blocked the submit
         expect(screen.getByRole("dialog")).toBeInTheDocument();
     });
@@ -104,7 +110,7 @@ describe("AddRecipientDialog", () => {
         const user = userEvent.setup();
         renderWithApp(<AddRecipientDialog />);
         await user.click(
-            await screen.findByRole("button", { name: /add recipient/i }),
+            await screen.findByRole("button", { name: /add payee/i }),
         );
         await screen.findByRole("dialog");
         await user.type(screen.getByLabelText(/^name$/i), "Landlord");
@@ -112,7 +118,9 @@ describe("AddRecipientDialog", () => {
             screen.getByLabelText(/notes \(optional\)/i),
             "Pays on 1st",
         );
-        await user.click(screen.getByRole("button", { name: /^create$/i }));
+        await user.click(within(screen.getByRole("dialog")).getByRole("button", {
+                name: /^add payee$/i,
+            }));
         await waitFor(() =>
             expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
         );
@@ -128,14 +136,16 @@ describe("AddRecipientDialog", () => {
         const user = userEvent.setup();
         renderWithApp(<AddRecipientDialog />);
         await user.click(
-            await screen.findByRole("button", { name: /add recipient/i }),
+            await screen.findByRole("button", { name: /add payee/i }),
         );
         await screen.findByRole("dialog");
         await user.type(screen.getByLabelText(/^name$/i), "Test Recipient");
-        await user.click(screen.getByRole("button", { name: /^create$/i }));
+        await user.click(within(screen.getByRole("dialog")).getByRole("button", {
+                name: /^add payee$/i,
+            }));
         await waitFor(() =>
             expect(toastSpy).toHaveBeenCalledWith(
-                expect.stringMatching(/failed to create recipient/i),
+                expect.stringMatching(/couldn't create the payee/i),
                 expect.anything(),
             ),
         );
@@ -147,7 +157,7 @@ describe("AddRecipientDialog", () => {
         const user = userEvent.setup();
         renderWithApp(<AddRecipientDialog />);
         await user.click(
-            await screen.findByRole("button", { name: /add recipient/i }),
+            await screen.findByRole("button", { name: /add payee/i }),
         );
         await screen.findByRole("dialog");
         await user.keyboard("{Escape}");
@@ -160,7 +170,7 @@ describe("AddRecipientDialog", () => {
         const user = userEvent.setup();
         renderWithApp(<AddRecipientDialog />);
         await user.click(
-            await screen.findByRole("button", { name: /add recipient/i }),
+            await screen.findByRole("button", { name: /add payee/i }),
         );
         const dialog = await screen.findByRole("dialog");
         expect(dialog).toHaveAttribute("data-state", "open");
@@ -170,7 +180,7 @@ describe("AddRecipientDialog", () => {
         const user = userEvent.setup();
         renderWithApp(<AddRecipientDialog />);
         await user.click(
-            await screen.findByRole("button", { name: /add recipient/i }),
+            await screen.findByRole("button", { name: /add payee/i }),
         );
         await screen.findByRole("dialog");
         const inputs = screen.getAllByRole("textbox");

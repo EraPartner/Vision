@@ -35,7 +35,7 @@ export function MergeRecipientsDialog({
     open,
     onOpenChange,
 }: MergeRecipientsDialogProps) {
-    const { t } = useLanguage();
+    const { t, tc } = useLanguage();
     const [primaryId, setPrimaryId] = useState<number | null>(null);
     const [aliasIds, setAliasIds] = useState<number[]>([]);
     useUnsavedChanges(primaryId !== null || aliasIds.length > 0);
@@ -288,9 +288,7 @@ export function MergeRecipientsDialog({
                     >
                         {mergeMutation.isPending
                             ? t("merge.merging")
-                            : t("merge.mergeCount", {
-                                  n: String(aliasIds.length),
-                              })}
+                            : tc("merge.mergeCount", aliasIds.length)}
                     </Button>
                 </DialogFooter>
             </DialogContent>

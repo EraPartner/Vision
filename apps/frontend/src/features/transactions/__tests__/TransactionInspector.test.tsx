@@ -134,7 +134,7 @@ describe("TransactionInspector", () => {
 
         await screen.findByRole("complementary");
         expect(
-            await screen.findByRole("combobox", { name: /^recipient$/i }),
+            await screen.findByRole("combobox", { name: /^payee$/i }),
         ).toHaveTextContent("Alice");
         await waitFor(() =>
             expect(
@@ -204,7 +204,7 @@ describe("TransactionInspector", () => {
 
         await user.click(screen.getByRole("button", { name: /^duplicate$/i }));
         expect(onDuplicate).toHaveBeenCalledWith(TX);
-        await user.click(screen.getByRole("button", { name: /mark as inactive/i }));
+        await user.click(screen.getByRole("button", { name: /exclude from totals/i }));
         expect(onToggleActive).toHaveBeenCalledWith(42, true);
         await user.click(screen.getByRole("button", { name: /show all from payee/i }));
         expect(onFilterByRecipient).toHaveBeenCalledWith(TX);
@@ -228,10 +228,10 @@ describe("TransactionInspector", () => {
         renderInspector({ transaction: inactiveTx });
 
         await screen.findByRole("complementary");
-        // txPage.statusInactive = "Inactive"
-        expect(screen.getByText(/· inactive$/i)).toBeInTheDocument();
+        // txPage.statusInactive = "Excluded"
+        expect(screen.getByText(/· excluded$/i)).toBeInTheDocument();
         expect(
-            screen.getByRole("button", { name: /mark as active/i }),
+            screen.getByRole("button", { name: /include in totals/i }),
         ).toBeInTheDocument();
     });
 
@@ -249,7 +249,7 @@ describe("TransactionInspector", () => {
             "Description",
             "Amount",
             "Currency",
-            "Bank Account",
+            "Account",
             "Comment",
         ]) {
             expect(
@@ -327,9 +327,9 @@ describe("TransactionInspector", () => {
         renderInspector({ onApplyLocal });
 
         await user.click(
-            await screen.findByRole("button", { name: "Edit Bank Account" }),
+            await screen.findByRole("button", { name: "Edit Account" }),
         );
-        await user.click(screen.getByLabelText("Bank Account"));
+        await user.click(screen.getByLabelText("Account"));
         await user.type(
             screen.getByPlaceholderText(/search accounts/i),
             "Main Checking",

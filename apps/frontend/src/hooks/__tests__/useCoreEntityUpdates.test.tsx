@@ -65,6 +65,6 @@ describe("core entity update receipts", () => {
         expect(invalidateSpy).toHaveBeenCalledWith({
             queryKey: ["recipients"],
         });
-        expect(toast.success).toHaveBeenCalledWith("Recipient updated");
+        expect(toast.success).toHaveBeenCalledWith("Payee updated");
     });
 });

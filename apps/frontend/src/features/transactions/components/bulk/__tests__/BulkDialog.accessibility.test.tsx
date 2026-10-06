@@ -18,8 +18,8 @@ describe("bulk action dialog field labels", () => {
             />,
         );
 
-        expect(await screen.findByText("Recipient", { selector: "label" })).toBeVisible();
-        expect(screen.getByRole("combobox", { name: "Recipient" })).toHaveAttribute(
+        expect(await screen.findByText("Payee", { selector: "label" })).toBeVisible();
+        expect(screen.getByRole("combobox", { name: "Payee" })).toHaveAttribute(
             "id",
             "bulk-recipient",
         );

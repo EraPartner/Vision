@@ -76,7 +76,7 @@ describe("AddAccountDialog (integration, WP-B5 §3 F4+F7)", () => {
         await openCreateDialog(user);
         await user.type(screen.getByLabelText(/^name$/i), "KBC Checking");
         await user.type(screen.getByLabelText(/opening balance/i), "123,45");
-        await user.click(screen.getByRole("button", { name: /create/i }));
+        await user.click(screen.getByRole("button", { name: /^add account$/i }));
 
         await waitFor(() => expect(calls.opening).toHaveLength(1));
         expect(calls.opening[0].id).toBe("77");
@@ -97,7 +97,7 @@ describe("AddAccountDialog (integration, WP-B5 §3 F4+F7)", () => {
 
         await openCreateDialog(user);
         await user.type(screen.getByLabelText(/^name$/i), "KBC Checking");
-        await user.click(screen.getByRole("button", { name: /create/i }));
+        await user.click(screen.getByRole("button", { name: /^add account$/i }));
 
         await waitFor(() => expect(calls.create).toHaveLength(1));
         expect(calls.opening).toHaveLength(0);
@@ -116,7 +116,7 @@ describe("AddAccountDialog (integration, WP-B5 §3 F4+F7)", () => {
         expect(
             screen.queryByLabelText(/opening balance/i),
         ).not.toBeInTheDocument();
-        await user.click(screen.getByRole("button", { name: /create/i }));
+        await user.click(screen.getByRole("button", { name: /^add account$/i }));
 
         await waitFor(() => expect(calls.create).toHaveLength(1));
         expect(calls.opening).toHaveLength(0);
@@ -240,7 +240,7 @@ describe("AddAccountDialog (integration, WP-B5 §3 F4+F7)", () => {
         expect(screen.queryByLabelText(/^as of$/i)).not.toBeInTheDocument();
 
         await user.type(screen.getByLabelText(/^name$/i), "KBC Checking");
-        await user.click(screen.getByRole("button", { name: /create/i }));
+        await user.click(screen.getByRole("button", { name: /^add account$/i }));
 
         await waitFor(() => expect(calls.create).toHaveLength(1));
         const body = calls.create[0] as Record<string, unknown>;
@@ -338,13 +338,13 @@ describe("AddAccountDialog (integration, WP-B5 §3 F4+F7)", () => {
             await user.type(screen.getByLabelText(/^name$/i), "Checking");
             const input = screen.getByLabelText(/opening balance/i);
             await user.type(input, "abc");
-            await user.click(screen.getByRole("button", { name: /create/i }));
+            await user.click(screen.getByRole("button", { name: /^add account$/i }));
             expect(input).toHaveFocus();
             expect(calls.create).toHaveLength(0);
             await user.clear(input);
             await user.type(input, value);
             expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-            await user.click(screen.getByRole("button", { name: /create/i }));
+            await user.click(screen.getByRole("button", { name: /^add account$/i }));
             await waitFor(() => expect(calls.opening).toHaveLength(1));
             expect(calls.opening[0].body).toEqual({
                 balance: value === "0" ? 0 : -125.5,

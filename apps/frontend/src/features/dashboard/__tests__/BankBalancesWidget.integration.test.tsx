@@ -183,14 +183,14 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
         expect(screen.queryByText("Hardware wallet")).not.toBeInTheDocument();
         expect(screen.queryByText("Crypto exchange")).not.toBeInTheDocument();
         const totalCard = screen
-            .getByText("Total Net Liquid Position")
+            .getByText("Cash")
             .closest(".glass-thin") as HTMLElement;
         expect(within(totalCard).getByText(/2\.650,75/)).toBeInTheDocument();
         expect(
-            within(totalCard).getByText("Across 2 account(s)"),
+            within(totalCard).getByText("Across 2 accounts"),
         ).toBeInTheDocument();
         const historyCard = screen
-            .getByText("Balance History")
+            .getByText("Balance history")
             .closest(".glass-thin") as HTMLElement;
         expect(
             within(historyCard).getByText("Ordinary broker"),
@@ -207,7 +207,7 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
         mockWidgetApi();
         renderWithApp(<BankBalancesWidget />);
 
-        const heading = await screen.findByText("Total Net Liquid Position");
+        const heading = await screen.findByText("Cash");
         const totalCard = heading.closest(".glass-thin") as HTMLElement;
 
         // The headline figure is the server's sum over its three payload rows.
@@ -226,10 +226,10 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
         // …so the count beside it must be 3, NOT the 2 balance cards rendered
         // below (the zero-balance account is summed but has no card).
         expect(
-            within(totalCard).getByText("Across 3 account(s)"),
+            within(totalCard).getByText("Across 3 accounts"),
         ).toBeInTheDocument();
         expect(
-            within(totalCard).queryByText("Across 2 account(s)"),
+            within(totalCard).queryByText("Across 2 accounts"),
         ).not.toBeInTheDocument();
 
         const links = screen.getAllByRole("link");
@@ -246,14 +246,14 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
         });
         renderWithApp(<BankBalancesWidget />);
 
-        const heading = await screen.findByText("Total Net Liquid Position");
+        const heading = await screen.findByText("Cash");
         const totalCard = heading.closest(".glass-thin") as HTMLElement;
         expect(within(totalCard).getByText(/2\.450,75/)).toBeInTheDocument();
         expect(
             within(totalCard).queryByTitle(/2\.450,75/),
         ).not.toBeInTheDocument();
         expect(
-            within(totalCard).getByText("Across 1 account(s)"),
+            within(totalCard).getByText("Across 1 account"),
         ).toBeInTheDocument();
     });
 
@@ -285,7 +285,7 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
             await screen.findByRole("link", { name: "KBC Checking" })
         ).closest(".glass-thin") as HTMLElement;
         // Same wording + statement date as the Accounts hub badge.
-        const chip = within(drifting).getByText(/^Drift/);
+        const chip = within(drifting).getByText(/off your statement/);
         expect(chip.textContent).toMatch(/-49,25/);
         expect(chip.textContent).toMatch(/statement/);
         // Fresh statement (10 days) → destructive tone, not the stale amber.
@@ -295,7 +295,7 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
         const clean = screen
             .getByRole("link", { name: "Argenta Savings" })
             .closest(".glass-thin") as HTMLElement;
-        expect(within(clean).queryByText(/^Drift/)).not.toBeInTheDocument();
+        expect(within(clean).queryByText(/off your statement/)).not.toBeInTheDocument();
     });
 
     // `computed_balance` is denominated in the ACCOUNT's currency (ADR-094), not
@@ -412,7 +412,7 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
         });
         renderWithApp(<BankBalancesWidget />);
 
-        const heading = await screen.findByText("Balance History");
+        const heading = await screen.findByText("Balance history");
         const historyCard = heading.closest(".glass-thin") as HTMLElement;
         expect(within(historyCard).getByText("KBC Daily")).toBeInTheDocument();
         expect(
@@ -455,7 +455,7 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
         const card = (
             await screen.findByRole("link", { name: "KBC Checking" })
         ).closest(".glass-thin") as HTMLElement;
-        const chip = within(card).getByText(/^Drift/);
+        const chip = within(card).getByText(/off your statement/);
         expect(chip.className).toMatch(
             /border-warning\/40 bg-warning\/15 text-warning/,
         );

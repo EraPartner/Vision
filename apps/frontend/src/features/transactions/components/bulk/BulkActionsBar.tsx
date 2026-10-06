@@ -108,9 +108,7 @@ export function BulkActionsBar({
                 title: t("txPage.bulk.confirmDeactivateTitle", {
                     n: effectiveCount,
                 }),
-                description: t("txPage.bulk.confirmDeactivateBody", {
-                    n: effectiveCount,
-                }),
+                description: t("txPage.bulk.confirmDeactivateBody"),
                 confirmLabel: t("txPage.bulk.deactivate"),
             });
             if (!ok) return;

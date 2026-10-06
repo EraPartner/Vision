@@ -45,7 +45,7 @@ describe("PortfolioOverviewPage (integration)", () => {
     it("renders page heading", async () => {
         renderWithApp(<PortfolioOverviewPage />);
         expect(
-            await screen.findByRole("heading", { name: /portfolio overview/i }),
+            await screen.findByRole("heading", { name: /^portfolio$/i, level: 1 }),
         ).toBeInTheDocument();
     });
 
@@ -75,7 +75,7 @@ describe("PortfolioOverviewPage (integration)", () => {
     it("shows Manage Widgets button", async () => {
         renderWithApp(<PortfolioOverviewPage />);
         expect(
-            await screen.findByRole("button", { name: /widgets/i }),
+            await screen.findByRole("button", { name: /customize/i }),
         ).toBeInTheDocument();
     });
 
@@ -114,12 +114,12 @@ describe("PortfolioOverviewPage (integration)", () => {
         renderWithApp(<PortfolioOverviewPage />);
 
         await user.click(
-            await screen.findByRole("button", { name: /widgets/i }),
+            await screen.findByRole("button", { name: /customize/i }),
         );
 
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
         expect(
-            await screen.findByRole("heading", { name: /manage widgets/i }),
+            await screen.findByRole("heading", { name: /customize this page/i }),
         ).toBeInTheDocument();
     });
 
@@ -128,7 +128,7 @@ describe("PortfolioOverviewPage (integration)", () => {
         renderWithApp(<PortfolioOverviewPage />);
 
         await user.click(
-            await screen.findByRole("button", { name: /widgets/i }),
+            await screen.findByRole("button", { name: /customize/i }),
         );
         await screen.findByRole("dialog");
 
@@ -222,7 +222,7 @@ describe("PortfolioOverviewPage (integration)", () => {
         );
         renderWithApp(<PortfolioOverviewPage />);
         expect(
-            await screen.findByRole("heading", { name: /portfolio overview/i }),
+            await screen.findByRole("heading", { name: /^portfolio$/i, level: 1 }),
         ).toBeInTheDocument();
         expect(await screen.findByText("Server error")).toBeVisible();
         expect(
@@ -470,7 +470,7 @@ describe("PortfolioOverviewPage (integration)", () => {
         renderWithApp(<PortfolioOverviewPage />);
 
         const investmentsCard = (
-            await screen.findByRole("heading", { name: "All Investments" })
+            await screen.findByRole("heading", { name: "All investments" })
         ).closest(".glass-thin") as HTMLElement;
         const listed = within(investmentsCard);
         expect(listed.getByText("Fund A")).toBeInTheDocument();
@@ -492,7 +492,7 @@ describe("PortfolioOverviewPage (integration)", () => {
             within(investmentsCard).getByText(/Holdings/).parentElement,
         ).toHaveTextContent(/700,00/);
         expect(
-            within(investmentsCard).getByText(/Profit\/loss/).parentElement,
+            within(investmentsCard).getByText(/Profit or loss/).parentElement,
         ).toHaveTextContent(/\+70,00/);
 
         await user.click(
@@ -509,7 +509,7 @@ describe("PortfolioOverviewPage (integration)", () => {
             within(investmentsCard).getByText(/Holdings/).parentElement,
         ).toHaveTextContent(/50,00/);
         expect(
-            within(investmentsCard).getByText(/Profit\/loss/).parentElement,
+            within(investmentsCard).getByText(/Profit or loss/).parentElement,
         ).toHaveTextContent(/\+10,00/);
 
         await user.click(
@@ -523,7 +523,7 @@ describe("PortfolioOverviewPage (integration)", () => {
             within(investmentsCard).getByText(/Holdings/).parentElement,
         ).toHaveTextContent(/25,00/);
         expect(
-            within(investmentsCard).getByText(/Profit\/loss/).parentElement,
+            within(investmentsCard).getByText(/Profit or loss/).parentElement,
         ).toHaveTextContent(/\+5,00/);
     });
 

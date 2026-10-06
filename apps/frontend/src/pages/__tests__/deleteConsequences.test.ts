@@ -13,15 +13,15 @@ describe("category and recipient delete consequences", () => {
 
     it("keeps target placeholders and consequences aligned in English and Dutch", () => {
         expect(english["categoriesPage.delete.desc"]).toContain("{name}");
-        expect(english["categoriesPage.delete.desc"]).toContain("become uncategorized");
-        expect(english["categoriesPage.delete.desc"]).toContain("default categories will be cleared");
+        expect(english["categoriesPage.delete.desc"]).toContain("lose their category");
+        expect(english["categoriesPage.delete.desc"]).toContain("lose that default");
         expect(english["recipientsPage.delete.desc"]).toContain("{name}");
-        expect(english["recipientsPage.delete.desc"]).toContain("bank account links cannot be deleted");
+        expect(english["recipientsPage.delete.desc"]).toContain("accounts cannot be deleted");
         expect(english["recipientsPage.delete.desc"]).toContain("Reassign or merge them first");
 
         expect(dutch["categoriesPage.delete.desc"]).toContain("{name}");
-        expect(dutch["categoriesPage.delete.desc"]).toContain("ongecategoriseerd");
+        expect(dutch["categoriesPage.delete.desc"]).toContain("verliezen hun categorie");
         expect(dutch["recipientsPage.delete.desc"]).toContain("{name}");
-        expect(dutch["recipientsPage.delete.desc"]).toContain("bankrekeningkoppelingen");
+        expect(dutch["recipientsPage.delete.desc"]).toContain("rekeningen");
     });
 });

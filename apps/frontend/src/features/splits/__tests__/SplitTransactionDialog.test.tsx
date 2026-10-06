@@ -78,7 +78,7 @@ describe("SplitTransactionDialog", () => {
         const user = userEvent.setup();
         renderDialog();
         await openDialog(user);
-        expect(await screen.findByText(/already split/i)).toBeInTheDocument();
+        expect(await screen.findByText(/this transaction already has 1 split/i)).toBeInTheDocument();
     });
 
     it("shows Equal Split and Custom Amounts toggle buttons", async () => {

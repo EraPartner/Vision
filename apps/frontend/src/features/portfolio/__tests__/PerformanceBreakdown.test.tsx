@@ -47,7 +47,7 @@ describe("PerformanceBreakdown", () => {
             />,
         );
         expect(
-            (await screen.findAllByText("Real Estate")).length,
+            (await screen.findAllByText("Real estate")).length,
         ).toBeGreaterThan(0);
         expect(screen.queryByText("real_estate")).not.toBeInTheDocument();
         expect(screen.queryByText("savings")).not.toBeInTheDocument();

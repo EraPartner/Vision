@@ -463,7 +463,7 @@ describe("AddPortfolioTxnDialog", () => {
 
         // Act 2 — fees valid again, but FX rate of 0 (backend rejects ≤ 0)
         fireEvent.change(feesInput, { target: { value: "1" } });
-        fireEvent.change(screen.getByLabelText(/fx rate to eur/i), {
+        fireEvent.change(screen.getByLabelText(/exchange rate to eur/i), {
             target: { value: "0" },
         });
         await user.click(screen.getByRole("button", { name: /record/i }));
@@ -571,7 +571,7 @@ describe("AddPortfolioTxnDialog", () => {
         await waitFor(() =>
             expect(feesInput).toHaveAttribute("aria-invalid", "true"),
         );
-        expect(describedError(feesInput)).toHaveTextContent(/valid numbers/i);
+        expect(describedError(feesInput)).toHaveTextContent(/exchange rate must be above 0/i);
         await waitFor(() => expect(feesInput).toHaveFocus());
         expect(toastSpy).not.toHaveBeenCalled();
     });

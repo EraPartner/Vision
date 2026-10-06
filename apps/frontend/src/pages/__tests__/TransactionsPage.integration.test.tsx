@@ -99,7 +99,7 @@ describe("TransactionsPage (integration)", () => {
         renderTransactionsPage();
 
         const errorBanner = await screen.findByText(
-            /error loading transactions/i,
+            /couldn't load transactions/i,
             {},
             {
                 timeout: 4000,
@@ -126,7 +126,7 @@ describe("TransactionsPage (integration)", () => {
         await userEvent.setup().click(retry);
         await waitFor(() => {
             expect(
-                screen.queryByText(/error loading transactions/i),
+                screen.queryByText(/couldn't load transactions/i),
             ).not.toBeInTheDocument();
         });
         expect(
@@ -182,7 +182,7 @@ describe("TransactionsPage (integration)", () => {
         await user.click(await screen.findByRole("button", { name: /^view$/i }));
         expect(
             await screen.findByRole("menuitemcheckbox", {
-                name: /include inactive/i,
+                name: /show excluded/i,
                 checked: false,
             }),
         ).toBeInTheDocument();
@@ -411,7 +411,7 @@ describe("TransactionsPage (integration)", () => {
         );
 
         // Select recipient (required by form guard).
-        await user.click(screen.getByRole("combobox", { name: /recipient/i }));
+        await user.click(screen.getByRole("combobox", { name: /payee/i }));
         await user.click(
             await screen.findByRole("option", { name: /test recipient/i }),
         );
@@ -437,7 +437,7 @@ describe("TransactionsPage (integration)", () => {
         await user.click(await screen.findByRole("button", { name: /^view$/i }));
         await user.click(
             await screen.findByRole("menuitemcheckbox", {
-                name: /include inactive/i,
+                name: /show excluded/i,
             }),
         );
 
@@ -447,7 +447,7 @@ describe("TransactionsPage (integration)", () => {
         await user.click(screen.getByRole("button", { name: /^view$/i }));
         expect(
             await screen.findByRole("menuitemcheckbox", {
-                name: /include inactive/i,
+                name: /show excluded/i,
                 checked: true,
             }),
         ).toBeInTheDocument();
@@ -530,10 +530,10 @@ describe("TransactionsPage (integration)", () => {
             await screen.findByRole("button", { name: /^export csv$/i }),
         );
 
-        // txPage.toast.exportFailed = "Failed to export transactions"
+        // txPage.toast.exportFailed = "Couldn't export transactions"
         await waitFor(() =>
             expect(toastSpy).toHaveBeenCalledWith(
-                "Failed to export transactions",
+                "Couldn't export transactions",
                 expect.anything(),
             ),
         );
@@ -597,10 +597,10 @@ describe("TransactionsPage (integration)", () => {
             await screen.findByRole("button", { name: /^export json$/i }),
         );
 
-        // txPage.toast.exportFailed = "Failed to export transactions"
+        // txPage.toast.exportFailed = "Couldn't export transactions"
         await waitFor(() =>
             expect(toastSpy).toHaveBeenCalledWith(
-                "Failed to export transactions",
+                "Couldn't export transactions",
                 expect.anything(),
             ),
         );
@@ -620,7 +620,7 @@ describe("TransactionsPage (integration)", () => {
 
         // FORBIDDEN is non-retryable — error surfaces quickly
         expect(
-            await screen.findByText(/error loading transactions/i),
+            await screen.findByText(/couldn't load transactions/i),
         ).toBeInTheDocument();
 
         errorSpy.mockRestore();
@@ -640,7 +640,7 @@ describe("TransactionsPage (integration)", () => {
         renderTransactionsPage();
         expect(
             await screen.findByText(
-                /error loading transactions/i,
+                /couldn't load transactions/i,
                 {},
                 { timeout: 4000 },
             ),
@@ -660,7 +660,7 @@ describe("TransactionsPage (integration)", () => {
         renderTransactionsPage();
         expect(
             await screen.findByText(
-                /error loading transactions/i,
+                /couldn't load transactions/i,
                 {},
                 { timeout: 4000 },
             ),
@@ -711,7 +711,7 @@ describe("TransactionsPage (integration)", () => {
             level: 1,
         });
         expect(
-            screen.queryByText(/error loading transactions/i),
+            screen.queryByText(/couldn't load transactions/i),
         ).not.toBeInTheDocument();
     });
 

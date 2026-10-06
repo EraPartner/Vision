@@ -42,7 +42,7 @@ async function pickRecipient(
     user: ReturnType<typeof userEvent.setup>,
     name: string,
 ) {
-    await user.click(screen.getByRole("combobox", { name: /recipient/i }));
+    await user.click(screen.getByRole("combobox", { name: /payee/i }));
     await user.click(await screen.findByRole("option", { name }));
 }
 
@@ -288,7 +288,7 @@ describe("AddTransactionSheet (integration)", () => {
 
         await waitFor(() =>
             expect(toastSpy).toHaveBeenCalledWith(
-                expect.stringMatching(/duplicate transaction detected/i),
+                expect.stringMatching(/matching transaction already exists/i),
             ),
         );
         expect(toastSpy).toHaveBeenCalledTimes(1);
@@ -370,7 +370,7 @@ describe("AddTransactionSheet (integration)", () => {
 
         await waitFor(() =>
             expect(toastSpy).toHaveBeenCalledWith(
-                expect.stringMatching(/failed to create transaction/i),
+                expect.stringMatching(/couldn't create the transaction/i),
                 expect.anything(),
             ),
         );
@@ -532,7 +532,7 @@ describe("AddTransactionSheet (integration)", () => {
         await waitFor(() => expect(amount).toHaveFocus());
         expect(describedError(amount)).toHaveTextContent(/required/i);
         // The still-empty recipient is flagged too, not just the focused field.
-        const recipient = screen.getByRole("combobox", { name: /recipient/i });
+        const recipient = screen.getByRole("combobox", { name: /payee/i });
         expect(recipient).toHaveAttribute("aria-invalid", "true");
     });
 
@@ -573,7 +573,7 @@ describe("AddTransactionSheet (integration)", () => {
         const bank = screen.getByLabelText(/bank account/i);
         expect(bank).toHaveAttribute("aria-invalid", "true");
         expect(describedError(bank)).toHaveTextContent(/select account/i);
-        const recipient = screen.getByRole("combobox", { name: /recipient/i });
+        const recipient = screen.getByRole("combobox", { name: /payee/i });
         expect(recipient).toHaveAttribute("aria-invalid", "true");
         expect(describedError(recipient)).toHaveTextContent(/required/i);
 
@@ -667,10 +667,10 @@ describe("AddTransactionSheet (integration)", () => {
         await pickBankAccount(user, "Main");
 
         await user.click(
-            screen.getByRole("combobox", { name: /^recipient$/i }),
+            screen.getByRole("combobox", { name: /^payee$/i }),
         );
         await user.type(
-            screen.getByPlaceholderText(/search recipients/i),
+            screen.getByPlaceholderText(/search payees/i),
             "Remote",
         );
         await user.click(

@@ -58,7 +58,7 @@ describe("CategoryPivotTable ordered hierarchy", () => {
             />,
         );
         const table = await screen.findByRole("table", {
-            name: "Category Pivot Table",
+            name: "Categories by month",
         });
         const rows = within(table).getAllByRole("row");
         expect(rows).toHaveLength(6); // header, root, depth 2/3/4, footer

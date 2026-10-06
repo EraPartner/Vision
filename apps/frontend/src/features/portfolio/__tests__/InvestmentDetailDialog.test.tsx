@@ -258,7 +258,7 @@ describe("InvestmentDetailDialog", () => {
         );
         expect(await screen.findByText(/^archived$/i)).toBeInTheDocument();
         expect(
-            screen.getByText(/excluded from current totals/i),
+            screen.getByText(/left out of current totals/i),
         ).toBeInTheDocument();
         expect(
             screen.queryByRole("button", { name: /^edit: MSCI World ETF$/i }),

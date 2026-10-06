@@ -112,7 +112,7 @@ describe("ExecutionHistoryDialog", () => {
 
         // Assert
         expect(
-            await screen.findByText(/no executed planned payments found yet/i),
+            await screen.findByText(/no payments marked as paid yet/i),
         ).toBeInTheDocument();
     });
 
@@ -140,7 +140,7 @@ describe("ExecutionHistoryDialog", () => {
         // Assert — history item appears once fetch resolves
         await waitFor(() => {
             expect(
-                screen.queryByText(/loading execution history/i),
+                screen.queryByText(/loading payment history/i),
             ).not.toBeInTheDocument();
         });
         expect(await screen.findByText("Gym Fee")).toBeInTheDocument();
@@ -196,7 +196,7 @@ describe("ExecutionHistoryDialog", () => {
         renderDialog(true, [EXECUTED_PAYMENT]);
         expect(await screen.findByRole("alert")).toBeInTheDocument();
         expect(
-            screen.queryByText(/no executed planned payments found yet/i),
+            screen.queryByText(/no payments marked as paid yet/i),
         ).not.toBeInTheDocument();
         stubGymTransaction();
         await userEvent
@@ -249,7 +249,7 @@ describe("ExecutionHistoryDialog", () => {
             />,
         );
         expect(
-            await screen.findByText(/no executed planned payments found yet/i),
+            await screen.findByText(/no payments marked as paid yet/i),
         ).toBeInTheDocument();
         await act(async () => {
             release(

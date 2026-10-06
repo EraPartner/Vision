@@ -201,7 +201,7 @@ export function AddCategoryDialog(props: AddCategoryDialogProps = {}) {
                         {isPending && (
                             <Loader2 className="h-4 w-4 animate-spin mr-1" />
                         )}
-                        {isEditMode ? t("common.save") : t("common.create")}
+                        {isEditMode ? t("common.save") : t("categories.createButton")}
                     </Button>
                 </DialogFooter>
             </form>

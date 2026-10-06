@@ -73,7 +73,7 @@ describe("DashboardSettingsDialog", () => {
             await screen.findByRole("tab", { name: /^statistics$/i }),
         );
 
-        expect(await screen.findAllByText(/exclusion scope/i)).not.toHaveLength(
+        expect(await screen.findAllByText(/where exclusions apply/i)).not.toHaveLength(
             0,
         );
     });

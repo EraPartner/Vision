@@ -136,7 +136,7 @@ describe("OnboardingWizard", () => {
         ).toBeInTheDocument();
         await waitFor(() =>
             expect(toast.error).toHaveBeenCalledWith(
-                "Could not load supported parsers.",
+                "Couldn't load the list of supported banks.",
             ),
         );
     });
@@ -390,7 +390,7 @@ describe("OnboardingWizard", () => {
             );
         }
         await user.click(
-            screen.getByRole("button", { name: /go to dashboard/i }),
+            screen.getByRole("button", { name: /go to home/i }),
         );
 
         expect(arrival).toHaveBeenCalledOnce();

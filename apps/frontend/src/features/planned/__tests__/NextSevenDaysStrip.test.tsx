@@ -47,7 +47,7 @@ describe("NextSevenDaysStrip currency totals", () => {
     );
 
     const notices = await screen.findAllByText(
-      "1 payment excluded: exchange rate unavailable",
+      "1 payment left out: exchange rate unavailable",
     );
     expect(notices).toHaveLength(2);
 
@@ -74,7 +74,7 @@ describe("NextSevenDaysStrip currency totals", () => {
     expect(loadingStatuses).toHaveLength(2);
     expect(loadingStatuses.every((status) => status.hasAttribute("aria-label"))).toBe(true);
     expect(
-      screen.queryByText("1 payment excluded: exchange rate unavailable"),
+      screen.queryByText("1 payment left out: exchange rate unavailable"),
     ).not.toBeInTheDocument();
   });
 });

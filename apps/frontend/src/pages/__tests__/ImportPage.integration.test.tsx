@@ -158,7 +158,7 @@ describe("ImportPage (integration)", () => {
         renderWithApp(<ImportPage />);
         await expandSetupReference();
         expect(
-            await screen.findByText(/recipients import/i),
+            await screen.findByText(/payees from csv/i),
         ).toBeInTheDocument();
     });
 
@@ -166,13 +166,15 @@ describe("ImportPage (integration)", () => {
         renderWithApp(<ImportPage />);
         await expandSetupReference();
         expect(
-            await screen.findByText(/categories import/i),
+            await screen.findByText(/categories from csv/i),
         ).toBeInTheDocument();
     });
 
     it("renders CSV Export card", async () => {
         renderWithApp(<ImportPage />);
-        expect(await screen.findByText(/csv export/i)).toBeInTheDocument();
+        expect(
+            await screen.findByRole("heading", { name: /export your data/i }),
+        ).toBeInTheDocument();
     });
 
     it("renders Import History card", async () => {
@@ -189,8 +191,10 @@ describe("ImportPage (integration)", () => {
     it("renders Supported Banks card heading", async () => {
         renderWithApp(<ImportPage />);
         await expandSetupReference();
-        // importPage.supportedBanks = "Supported Banks"
-        expect(await screen.findByText(/supported banks/i)).toBeInTheDocument();
+        // importPage.supportedBanks = "Supported banks" (exact: the section description also mentions supported banks)
+        expect(
+            await screen.findByText("Supported banks"),
+        ).toBeInTheDocument();
     });
 
     it("renders page subtitle text", async () => {
@@ -216,7 +220,7 @@ describe("ImportPage (integration)", () => {
         await expandSetupReference();
         // importPage.importRecipientsBtn = "Import Recipients"
         expect(
-            await screen.findByRole("button", { name: /import recipients/i }),
+            await screen.findByRole("button", { name: /import payees/i }),
         ).toBeInTheDocument();
     });
 
@@ -257,9 +261,9 @@ describe("ImportPage (integration)", () => {
     it("orders the recurring import task before history and export", async () => {
         renderWithApp(<ImportPage />);
 
-        const transactionImport = await screen.findByText("CSV Import");
+        const transactionImport = await screen.findByText("Import from your bank");
         const history = screen.getByText(/import history/i);
-        const exportCard = screen.getByText("CSV Export");
+        const exportCard = screen.getByText("Export your data");
         expect(
             transactionImport.compareDocumentPosition(history) &
                 Node.DOCUMENT_POSITION_FOLLOWING,
@@ -277,16 +281,16 @@ describe("ImportPage (integration)", () => {
             name: /toggle setup and reference/i,
         });
         expect(trigger).toHaveAttribute("aria-expanded", "false");
-        expect(screen.queryByText("Recipients Import")).not.toBeInTheDocument();
-        expect(screen.queryByText("Categories Import")).not.toBeInTheDocument();
-        expect(screen.queryByText("Supported Banks")).not.toBeInTheDocument();
+        expect(screen.queryByText("Payees from CSV")).not.toBeInTheDocument();
+        expect(screen.queryByText("Categories from CSV")).not.toBeInTheDocument();
+        expect(screen.queryByText("Supported banks")).not.toBeInTheDocument();
 
         await userEvent.click(trigger);
 
         expect(trigger).toHaveAttribute("aria-expanded", "true");
-        expect(screen.getByText("Recipients Import")).toBeInTheDocument();
-        expect(screen.getByText("Categories Import")).toBeInTheDocument();
-        expect(screen.getByText("Supported Banks")).toBeInTheDocument();
+        expect(screen.getByText("Payees from CSV")).toBeInTheDocument();
+        expect(screen.getByText("Categories from CSV")).toBeInTheDocument();
+        expect(screen.getByText("Supported banks")).toBeInTheDocument();
     });
 
     it("clicking Show Filters reveals export filter controls", async () => {
@@ -333,7 +337,7 @@ describe("ImportPage (integration)", () => {
 
         // Select "Custom / Other"
         await user.click(
-            await screen.findByRole("option", { name: /custom \/ other/i }),
+            await screen.findByRole("option", { name: /custom or other/i }),
         );
 
         // Custom bank name placeholder input and config section appear
@@ -341,7 +345,7 @@ describe("ImportPage (integration)", () => {
             screen.getByPlaceholderText(/e\.g\. argenta/i),
         ).toBeInTheDocument();
         expect(
-            screen.getByText(/custom csv configuration/i),
+            screen.getByText(/custom csv setup/i),
         ).toBeInTheDocument();
     });
 
@@ -397,7 +401,7 @@ describe("ImportPage (integration)", () => {
 
         await waitFor(() =>
             expect(toastSpy).toHaveBeenCalledWith(
-                expect.stringMatching(/failed to export transactions/i),
+                expect.stringMatching(/couldn't export transactions/i),
                 expect.anything(),
             ),
         );

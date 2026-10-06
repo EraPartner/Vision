@@ -23,19 +23,19 @@ describe("NotFound (integration)", () => {
         renderWithApp(<NotFound />);
         // Button renders as <a> via asChild + Link — role="link"
         expect(
-            await screen.findByRole("link", { name: /back to dashboard/i }),
+            await screen.findByRole("link", { name: /back to home/i }),
         ).toBeInTheDocument();
     });
 
     it("navigation links point to the dashboard, transactions, and import", async () => {
         renderWithApp(<NotFound />);
-        const link = await screen.findByRole("link", { name: /back to dashboard/i });
+        const link = await screen.findByRole("link", { name: /back to home/i });
         expect(link).toHaveAttribute("href", "/");
         expect(await screen.findByRole("link", { name: "Transactions" })).toHaveAttribute(
             "href",
             "/transactions",
         );
-        expect(await screen.findByRole("link", { name: "Import / Export" })).toHaveAttribute(
+        expect(await screen.findByRole("link", { name: "Import & Export" })).toHaveAttribute(
             "href",
             "/import",
         );

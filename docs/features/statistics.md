@@ -2,7 +2,7 @@
 title: Statistics Feature
 type: feature
 status: active
-date: 2026-09-27
+date: 2026-10-06
 updated: 2026-09-27
 last_modified: 2026-09-27
 tags:
@@ -277,7 +277,7 @@ Overview panels.
 
 - Category Spending Pie (donut chart, top 10, year-filterable)
 - Category Spending Trend (line chart, top 5 categories)
-- Category Pivot Table (ordered category paths at any depth, 4 value modes: absolute/net/income/expense)
+- Category Pivot Table, shown in the UI as "Categories by month" (ordered category paths at any depth, 4 value modes: absolute/net/income/expense)
 
 ### Recipients Tab
 
@@ -312,7 +312,7 @@ All charts use **Recharts** with consistent styling:
 
 ### Category Pivot Table
 
-The most complex widget — a hierarchical table showing categories × months with drillthrough to transactions:
+The most complex widget (titled "Categories by month" in the UI since the ADR-182 copy pass) — a hierarchical table showing categories × months with drillthrough to transactions:
 
 - **Hierarchy**: Groups exact-category rows under every ordered ancestor ID; path segments, not display-string splitting, define the tree
 - **Value modes**: Absolute (default), Net, Income-only, Expense-only

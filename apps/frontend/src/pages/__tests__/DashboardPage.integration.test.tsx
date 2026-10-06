@@ -91,7 +91,7 @@ describe("DashboardPage (integration)", () => {
 
         expect(await openCustomize(user)).toBeInTheDocument();
         expect(
-            await screen.findByRole("heading", { name: /manage widgets/i }),
+            await screen.findByRole("heading", { name: /customize this page/i }),
         ).toBeInTheDocument();
     });
 
@@ -170,9 +170,9 @@ describe("DashboardPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<DashboardPage />);
         await enableSummaryCards(user);
-        // dashboard.stat.totalTransactions = "Total Transactions"
+        // dashboard.stat.totalTransactions = "Transactions" (a stat-card link)
         expect(
-            await screen.findByText(/total transactions/i),
+            await screen.findByRole("link", { name: /^transactions$/i }),
         ).toBeInTheDocument();
     });
 
@@ -252,7 +252,7 @@ describe("DashboardPage (integration)", () => {
             "expense",
         );
         expect(
-            screen.getByRole("link", { name: /total transactions/i }),
+            screen.getByRole("link", { name: /^transactions$/i }),
         ).toHaveAttribute("href", "/transactions");
     });
 
@@ -347,7 +347,7 @@ describe("DashboardPage (integration)", () => {
         // dashboard.errorLoading = "Error loading dashboard: {msg}"
         expect(
             await screen.findByText(
-                /error loading dashboard/i,
+                /couldn't load home/i,
                 {},
                 { timeout: 5000 },
             ),
@@ -388,7 +388,7 @@ describe("DashboardPage (integration)", () => {
         // dashboard.partialDataWarning = "Some dashboard data could not be loaded..."
         expect(
             await screen.findByText(
-                /some dashboard data could not be loaded/i,
+                /some of home could not be loaded/i,
                 {},
                 { timeout: 5000 },
             ),

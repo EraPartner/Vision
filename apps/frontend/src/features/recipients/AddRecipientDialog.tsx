@@ -131,7 +131,7 @@ export function AddRecipientDialog() {
                             {createMutation.isPending && (
                                 <Loader2 className="h-4 w-4 animate-spin" />
                             )}
-                            {t("common.create")}
+                            {t("recipients.createButton")}
                         </Button>
                     </DialogFooter>
                 </form>

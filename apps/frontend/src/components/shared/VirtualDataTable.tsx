@@ -107,6 +107,8 @@ export interface VirtualTableServerMode {
         onChange: (query: string) => void;
         /** Controlled search value */
         value?: string;
+        /** Placeholder naming what the server search looks through. */
+        placeholder?: string;
         /**
          * Optional filter-suggestion dropdown rendered under the search input while
          * it is focused. Receives the live query and a `close()` to dismiss the
@@ -1283,7 +1285,8 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                     <Input
                         placeholder={
                             isServerSearch
-                                ? t("table.searchDatabase")
+                                ? (serverMode?.search?.placeholder ??
+                                  t("table.searchDatabase"))
                                 : t("table.searchAllColumns")
                         }
                         value={localSearchQuery}

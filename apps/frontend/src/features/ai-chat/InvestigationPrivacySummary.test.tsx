@@ -67,7 +67,7 @@ describe("InvestigationPrivacySummary", () => {
             screen.queryByText("Cloud plans · local answers"),
         ).not.toBeInTheDocument();
         expect(
-            screen.getByText(/OpenAI selected-evidence synthesis —/),
+            screen.getByText(/OpenAI selected-evidence synthesis\./),
         ).toBeInTheDocument();
     });
 });

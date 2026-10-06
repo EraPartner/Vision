@@ -13,7 +13,7 @@ const API_BASE = "http://localhost:3002";
 describe("TaxOverviewPage (integration)", () => {
     it("renders page heading", async () => {
         renderWithApp(<TaxOverviewPage />);
-        expect(await screen.findByRole("heading", { name: /belgian personal tax overview/i })).toBeInTheDocument();
+        expect(await screen.findByRole("heading", { name: /^taxes$/i })).toBeInTheDocument();
     });
 
     it("renders no-profile empty state when tax profile is unconfigured", async () => {
@@ -38,7 +38,7 @@ describe("TaxOverviewPage (integration)", () => {
 
         // Sheet header title "Belgian Tax Profile" appears
         expect(
-            await screen.findByText(/belgian tax profile/i),
+            await screen.findByText(/^tax profile$/i),
         ).toBeInTheDocument();
     });
 
@@ -62,7 +62,7 @@ describe("TaxOverviewPage (integration)", () => {
         const [setupBtn] = await screen.findAllByRole("button", { name: /set up tax profile/i });
         await user.click(setupBtn);
 
-        await screen.findByText(/belgian tax profile/i);
+        await screen.findByText(/^tax profile$/i);
         await user.keyboard("{Escape}");
 
         // Sheet dismisses — employment radios no longer in DOM
@@ -72,7 +72,7 @@ describe("TaxOverviewPage (integration)", () => {
     it("shows Widgets button in page header", async () => {
         renderWithApp(<TaxOverviewPage />);
         expect(
-            await screen.findByRole("button", { name: /widgets/i }),
+            await screen.findByRole("button", { name: /customize/i }),
         ).toBeInTheDocument();
     });
 
@@ -80,12 +80,12 @@ describe("TaxOverviewPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<TaxOverviewPage />);
 
-        const widgetsBtn = await screen.findByRole("button", { name: /widgets/i });
+        const widgetsBtn = await screen.findByRole("button", { name: /customize/i });
         await user.click(widgetsBtn);
 
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
         expect(
-            await screen.findByRole("heading", { name: /manage widgets/i }),
+            await screen.findByRole("heading", { name: /customize this page/i }),
         ).toBeInTheDocument();
     });
 
@@ -109,7 +109,7 @@ describe("TaxOverviewPage (integration)", () => {
         renderWithApp(<TaxOverviewPage />);
         // tax.page.subtitle = "Profile-driven PIT estimate with progressive brackets..."
         expect(
-            await screen.findByText(/profile-driven pit estimate/i),
+            await screen.findByText(/estimated belgian income tax for/i),
         ).toBeInTheDocument();
     });
 
@@ -160,7 +160,7 @@ describe("TaxOverviewPage (integration)", () => {
         renderWithApp(<TaxOverviewPage />);
         // tax.noProfile.desc = "Add your income and tax context to calculate Belgian PIT..."
         expect(
-            await screen.findByText(/add your income and tax context/i),
+            await screen.findByText(/add your income and tax details/i),
         ).toBeInTheDocument();
     });
 
@@ -168,7 +168,7 @@ describe("TaxOverviewPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<TaxOverviewPage />);
 
-        const widgetsBtn = await screen.findByRole("button", { name: /widgets/i });
+        const widgetsBtn = await screen.findByRole("button", { name: /customize/i });
         await user.click(widgetsBtn);
         await screen.findByRole("dialog");
 
@@ -184,7 +184,7 @@ describe("TaxOverviewPage (integration)", () => {
         );
         renderWithApp(<TaxOverviewPage />);
         expect(
-            await screen.findByRole("heading", { name: /belgian personal tax overview/i }),
+            await screen.findByRole("heading", { name: /^taxes$/i }),
         ).toBeInTheDocument();
         // apiRequest retries on 500 (MAX_RETRIES=2, ~1.5 s backoff) — needs extended timeout
         expect(
@@ -200,7 +200,7 @@ describe("TaxOverviewPage (integration)", () => {
         );
         renderWithApp(<TaxOverviewPage />);
         expect(
-            await screen.findByRole("heading", { name: /belgian personal tax overview/i }),
+            await screen.findByRole("heading", { name: /^taxes$/i }),
         ).toBeInTheDocument();
         expect(await screen.findByText(/no tax profile yet/i)).toBeInTheDocument();
         consoleSpy.mockRestore();
@@ -216,7 +216,7 @@ describe("TaxOverviewPage (integration)", () => {
         renderWithApp(<TaxOverviewPage />);
         // statsPage.error = "Failed to load statistics: {msg}"
         expect(
-            await screen.findByText(/failed to load statistics/i, {}, { timeout: 8000 }),
+            await screen.findByText(/couldn't load statistics/i, {}, { timeout: 8000 }),
         ).toBeInTheDocument();
         // A user without a profile must NOT be told to set one up on a fetch error
         expect(screen.queryByText(/no tax profile yet/i)).not.toBeInTheDocument();

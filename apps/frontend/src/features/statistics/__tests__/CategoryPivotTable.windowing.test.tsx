@@ -66,7 +66,7 @@ describe("CategoryPivotTable period windowing", () => {
     it("bounds mounted period columns while totals still cover the full history", async () => {
         const { container, data } = renderLongHistory();
         const table = await screen.findByRole("table", {
-            name: "Category Pivot Table",
+            name: "Categories by month",
         });
 
         expect(within(table).getAllByRole("columnheader")).toHaveLength(14);
@@ -125,7 +125,7 @@ describe("CategoryPivotTable period windowing", () => {
 
     it("keeps the category column sticky in every rendered row", async () => {
         const { container } = renderLongHistory();
-        await screen.findByRole("table", { name: "Category Pivot Table" });
+        await screen.findByRole("table", { name: "Categories by month" });
         const rows = screen.getAllByRole("row");
 
         for (const row of rows) {

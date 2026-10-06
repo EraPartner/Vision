@@ -3,7 +3,7 @@ title: Statistics Components
 type: component
 status: active
 date: 2026-04-24
-updated: 2026-09-08
+updated: 2026-10-06
 tags:
   [
     components,
@@ -155,7 +155,7 @@ interface MonthlyRhythmProps {
 | Headline                   | `monthlyData[i].net` for the scrubbed month (latest by default) | Compact + `RollingNumber`; `DeltaPill` vs the month before        |
 | Typical month in / out     | `averageMonthlyIncome` / `averageMonthlySpending`               | Exact (`Money`)                                                   |
 | Bar strip                  | `monthlyData[].net`, above/below a zero baseline                | Pointer hover + ←/→ · Home/End · Escape via `useChartKeyboardNav` |
-| Strongest / Toughest month | max / min `net` with its period label                           | Exact (`Money`)                                                   |
+| Best / Worst month         | max / min `net` with its period label                           | Exact (`Money`)                                                   |
 | Months in the black        | count of `net >= 0` over `monthlyData.length`                   | —                                                                 |
 
 Only the hero abbreviates; every detail figure renders exact.
