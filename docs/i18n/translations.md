@@ -2,8 +2,8 @@
 title: Translations & i18n
 type: i18n
 status: active
-date: 2026-04-27
-updated: 2026-09-11
+date: 2026-10-05
+updated: 2026-10-05
 tags: [i18n, translations, localization, internationalization, phase-6, phase-8, phase-f, phase-9, phase-c, phase-d, phase-2, splits, settlement, admin, observability, cash-flow-forecast, pdf-export, portfolio, tax, backup, encrypt, passphrase-modal, accessibility, aria-label, bug-hunt-2026-05-06, chart-aria, screen-reader, plural, tc, intl-plural-rules, planned-page, toast, electron-native, menu, system-accent, splash, upcoming-count, electron-error-page, backend-watchdog, visual-effects-tiers, auto-adapt-display, colorblind, gain-loss, june-2026, combobox-tags, tag-filter-combobox, validate-locales, source-key-usage, placeholder-bug-fix, url-state, destructive-confirm]
 description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report localization. Phase 8 adds 11 additional export.section.* keys for portfolio (6) and tax (7) report sections. Phase C adds 15 cash flow forecast keys. Phase F adds 60 admin observability keys. 2026-05-29 adds 16 chart.aria.* keys (localized chart screen-reader summaries) and 21 aria.* keys (localized icon-button aria-labels). June 2026 adds tc() plural mechanism and plannedPage error-toast keys. June 2026 (ADR-070) adds 5 commandPalette.* keys (en + nl) for the new ⌘K command palette. June 2026 Premium v3 (ADR-071) adds 8 keys: settings.general.enhancedEffects/Hint, shortcuts.title/showHelp/closeDialog/chartScrub, commandPalette.recent/searchTransactions. June 2026 Premium v3 V5-V7 adds 14 keys: contextMenu.* (8 keys), quickLook.* (2 keys), shortcuts table-interaction additions (4 keys). June 2026 V12 (ADR-072) adds 11 keys: menu.edit/file/go/importCsv/keyboardShortcuts/newTransaction/settings/toggleSidebar/view, settings.appearance.systemAccent/systemAccentHint. June 2026 V11 adds 4 keys: dashboard.suggestions, dashboard.widgetDescriptions.suggestions, suggestions.kicker, suggestions.review. June 2026 (startup/UI fixes) adds 5 splash.* keys (en + nl, Electron boot splash narration) + tc()-plural upcoming.count.one/.other; removes upcoming.countSingle/countPlural. 2026-06-11 adds 5 app.* keys (Electron error page + backend-lost watchdog, en + nl). 2026-06-12 (ADR-075) adds 7 settings.appearance.visualEffects*/autoAdaptDisplay* keys; removes settings.general.enhancedEffects + settings.general.enhancedEffectsHint. ADR-075 addendum (same day) adds 2 more contextual-note keys (visualEffectsAutoNote + visualEffectsOverrideNote). 2026-06-24 adds 5 Accessibility group keys (settings.group.accessibility, settings.appearance.gainLossColors, settings.appearance.gainLossColorsHint, settings.appearance.gainLossColors.colorblind, settings.appearance.gainLossColors.classic). 2026-06-26 adds 3 combobox.tags.* keys (combobox.tags.empty, combobox.tags.nSelected, combobox.tags.search) for TagFilterCombobox i18n (bulk-tag and filter-toolbar combobox). 2026-06-26 — validate-locales gains source key-usage checks (key-existence, dropped-vars, value-shape); closes 10 missing keys and fixes placeholder mismatches. 2026-08-10 (PR #156) adds 11 keys: txPage.loadMoreFailed/loadMoreFailedDesc/deleteAttachmentError (3), watchlist.removeTitle/removeDesc/removeConfirm (3), research.mapping.removeDesc, importReview.recipientPickerLabel, dbEditor.discardNewRow/nextPage/prevPage (3). Total key count last verified 2026-06-26 (3495); not re-verified since — run `bun run validate-locales` (see [[docs/reference/scripts|Scripts Reference]]) for a current count.
 aliases: [i18n, translations, localization, language, nl, en, dutch, english]
@@ -375,14 +375,14 @@ Code links: [[apps/frontend/src/features/settings/sections/AppearanceSection.tsx
 7 new keys, 2 removed. `bun run generate-locales` + `validate-locales` clean. Keys also flow to `packaging/electron/i18n/` via `generate-locales`.
 
 **Retired-history note:** this June 2026 batch originally added five splash keys. The former
-runtime-probe key was removed when ADR-133 made the product native-only. Current keys are:
+runtime-probe key was removed when ADR-133 made the product native-only, and the unused
+`splash.downloading` key was removed in the 2026-10-05 unused-key cleanup. Current keys are:
 
-| Key                       | EN                          |
-| ------------------------- | --------------------------- |
-| `splash.downloading`      | `Downloading components...` |
-| `splash.starting`         | `Starting Vision...`        |
-| `splash.startingServices` | `Starting services...`      |
-| `splash.waitingApp`       | `Almost ready...`           |
+| Key                       | EN                     |
+| ------------------------- | ---------------------- |
+| `splash.starting`         | `Starting Vision...`   |
+| `splash.startingServices` | `Starting services...` |
+| `splash.waitingApp`       | `Almost ready...`      |
 
 These are used only in the Electron main process (`setSplashStatus()`); they are not rendered inside React. They require the Electron i18n file to be regenerated via `generate-locales`.
 
@@ -589,6 +589,11 @@ Remediates audit findings [[docs/reference/codebase-audit-2026-05#ux.4|ux.4]] (c
 - `aria.removeEntry`, `aria.removeFromWatchlist`
 - `aria.dismiss`
 - `aria.toggleSidebar`, `aria.collapseSidebar`
+
+> [!note] 2026-10-05 — `aria.deleteRecipient` removed
+> The recipients table labels its delete button with the contextual `recipientsPage.deleteFor`
+> key, so the generic `aria.deleteRecipient` key had no consumer. It was removed in the unused-key
+> cleanup.
 
 > [!info] Key naming convention
 > `chart.aria.*` keys belong exclusively to the chart accessibility layer (`chartAria.ts`). `aria.*` keys are a flat namespace for icon-only interactive element labels across all surfaces. This separates charting-specific accessibility strings from the general interactive-element label set.

@@ -122,8 +122,12 @@ function normalizePermissions(root) {
   visit(root);
 }
 
-function prepareChromiumRuntime({ source, destination }) {
-  if (process.platform !== "darwin")
+function prepareChromiumRuntime({
+  source,
+  destination,
+  platform = process.platform,
+}) {
+  if (platform !== "darwin")
     throw new Error("The native Chromium payload must be prepared on macOS");
   const executable = findSourceExecutable(source);
   const versionText = verifyChromium(executable);

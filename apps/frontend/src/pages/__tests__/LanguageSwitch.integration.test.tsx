@@ -5,7 +5,7 @@ import { Route, Routes } from "react-router";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { ok } from "@/test/msw/handlers";
+import { ok, settingsWithBaselines } from "@/test/msw/handlers";
 import PlannedPaymentsPage from "@/pages/PlannedPaymentsPage";
 import TransactionsPage from "@/pages/TransactionsPage";
 import ImportPage from "@/pages/ImportPage";
@@ -39,7 +39,7 @@ beforeEach(() => {
 function useDutch() {
     server.use(
         http.get(`${API_BASE}/api/settings`, () =>
-            ok({ app_settings: { language: "nl" } }),
+            ok(settingsWithBaselines({ app_settings: { language: "nl" } })),
         ),
     );
 }

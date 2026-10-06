@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
-vi.mock("../src/database/connection.js", () => ({ query: vi.fn() }));
+import { mockConnection } from "./helpers/repoMocks.js";
+
+vi.mock("../src/database/connection.js", () => mockConnection());
 import {
   FINANCIAL_ANALYSIS_DATASETS,
   executeFinancialAnalysis,

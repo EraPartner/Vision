@@ -78,6 +78,22 @@ export function aggOk<T>(data: T, computedAt: string = AGG_COMPUTED_AT) {
 }
 
 /**
+ * `GET /api/settings?withBaselines=true` body (ADR-173): the stored values and
+ * the persisted baseline each one was read from.
+ */
+export function settingsWithBaselines(settings: Record<string, unknown>) {
+    return {
+        settings,
+        expected: Object.fromEntries(
+            Object.entries(settings).map(([key, value]) => [
+                key,
+                { exists: true, value },
+            ]),
+        ),
+    };
+}
+
+/**
  * Hard-delete stub: 204 No Content, no envelope.
  * See docs/reference/code-patterns.md, "DELETE responses".
  */

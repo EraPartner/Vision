@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { makePlannedTransactionRow } from "./builders/domainRows.js";
+import { mockTxConnection } from "./helpers/repoMocks.js";
 
 vi.mock("../src/services/plannedTransactionService.js", () => ({
   default: {
@@ -8,9 +9,7 @@ vi.mock("../src/services/plannedTransactionService.js", () => ({
     executeAndAdvance: vi.fn().mockResolvedValue({ duplicate: false }),
   },
 }));
-vi.mock("../src/database/connection.js", () => ({
-  withTransaction: vi.fn(async (fn) => fn()),
-}));
+vi.mock("../src/database/connection.js", () => mockTxConnection());
 
 import plannedTransactionService from "../src/services/plannedTransactionService.js";
 import { executePlanned } from "../src/services/plannedExecutionService.js";

@@ -572,6 +572,7 @@ describe("POST /csv/custom config-build pins", () => {
           bank_name: "My Bank",
           date_format: "%d/%m/%Y",
           encoding: "latin1",
+          number_format: "auto",
           separator: ";",
           skip_rows: 2,
           column_mapping: {

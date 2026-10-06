@@ -50,7 +50,9 @@ interface BackupStubOverrides {
     ) => Promise<{ success: boolean; available: boolean; error?: string }>;
     isEncrypted?: () => Promise<boolean>;
     restoreBackup?: () => Promise<RestoreResult>;
-    saveSettings?: (s: BackupSettings) => Promise<void>;
+    saveSettings?: (
+        s: BackupSettings,
+    ) => Promise<{ success: boolean; error?: string }>;
 }
 
 function installElectronStubs(
@@ -73,7 +75,7 @@ function installElectronStubs(
         isEncrypted: overrides.isEncrypted ?? vi.fn().mockResolvedValue(false),
         selectDir: overrides.selectDir ?? vi.fn().mockResolvedValue(null),
         saveSettings:
-            overrides.saveSettings ?? vi.fn().mockResolvedValue(undefined),
+            overrides.saveSettings ?? vi.fn().mockResolvedValue({ success: true }),
         loadSettings:
             overrides.loadSettings ?? vi.fn().mockResolvedValue(loadedSettings),
         getEncryptionStatus:

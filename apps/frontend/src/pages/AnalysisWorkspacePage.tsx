@@ -2056,7 +2056,7 @@ export default function AnalysisWorkspacePage() {
                                 {(queryOutdated || transformationsOutdated) && (
                                     <p
                                         role="status"
-                                        className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm"
+                                        className="rounded-md border border-warning/30 bg-warning/10 p-3 text-sm"
                                     >
                                         {t("analysis.resultsOutdated")}
                                     </p>
@@ -2065,7 +2065,7 @@ export default function AnalysisWorkspacePage() {
                             {!!displayedResult.formulaErrors?.length && (
                                 <div
                                     role="alert"
-                                    className="mx-6 mb-3 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm"
+                                    className="mx-6 mb-3 rounded-md border border-warning/30 bg-warning/10 p-3 text-sm"
                                 >
                                     <p>{t("analysis.formulaErrorsNotice")}</p>
                                     <ul className="mt-2 list-disc pl-5">
