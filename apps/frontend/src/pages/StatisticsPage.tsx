@@ -1,5 +1,5 @@
 import { PAGE_ICONS } from "@/lib/pageIcons";
-import { useCallback, useMemo, lazy, Suspense } from "react";
+import { useCallback, useMemo, useState, lazy, Suspense } from "react";
 import { Link, useSearchParams } from "react-router";
 import { useStatistics, type StatisticsWindow } from "@/hooks/useStatistics";
 import { Card, CardContent } from "@/components/ui/card";
@@ -7,10 +7,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { Button } from "@/components/ui/button";
-import { Import } from "lucide-react";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+    SegmentedControl,
+    SegmentedControlItem,
+} from "@/components/ui/segmented-control";
+import { FileDown, Import, LayoutGrid, MoreHorizontal } from "lucide-react";
 import { ExportDialog } from "@/features/reports/ExportDialog";
 import { PageHeader } from "@/components/shared/PageHeader";
-import { EmptyState } from "@/components/shared/EmptyState";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
 import { useWidgetVisibility } from "@/hooks/useWidgetVisibility";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
@@ -20,13 +29,6 @@ import { MonthlyRhythm } from "@/features/statistics/MonthlyRhythm";
 import { STATISTICS_WIDGETS } from "@/features/statistics/statisticsUtils";
 import { useTabParam } from "@/hooks/useTabParam";
 import { PageShell } from "@/components/shared/PageShell";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
 
 const STATISTICS_TABS = [
     "overview",
@@ -98,7 +100,8 @@ const ChartSkeleton = () => {
     return <Skeleton {...loadingSurfaceProps} className="h-[400px] w-full" />;
 };
 
-function StatisticsWindowSelect({
+/** The date window picker: a two-segment control bound to `?window`. */
+function InsightsWindowControl({
     value,
     onChange,
     label,
@@ -112,20 +115,15 @@ function StatisticsWindowSelect({
     allTimeLabel: string;
 }) {
     return (
-        <div className="flex items-center gap-2" data-print-actions>
-            <span className="text-sm text-muted-foreground">{label}</span>
-            <Select value={value} onValueChange={onChange}>
-                <SelectTrigger className="w-40" aria-label={label}>
-                    <SelectValue>
-                        {value === "all" ? allTimeLabel : rollingLabel}
-                    </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="24m">{rollingLabel}</SelectItem>
-                    <SelectItem value="all">{allTimeLabel}</SelectItem>
-                </SelectContent>
-            </Select>
-        </div>
+        <SegmentedControl
+            value={value}
+            onValueChange={(next) => onChange(next as StatisticsWindow)}
+            aria-label={label}
+            className="w-fit"
+        >
+            <SegmentedControlItem value="24m">{rollingLabel}</SegmentedControlItem>
+            <SegmentedControlItem value="all">{allTimeLabel}</SegmentedControlItem>
+        </SegmentedControl>
     );
 }
 
@@ -146,6 +144,8 @@ export default function StatisticsPage() {
     const { t } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const [activeTab, setActiveTab] = useTabParam(STATISTICS_TABS, "overview");
+    const [customizeOpen, setCustomizeOpen] = useState(false);
+    const [exportOpen, setExportOpen] = useState(false);
     const setStatisticsWindow = useCallback(
         (value: StatisticsWindow) => {
             const next = new URLSearchParams(searchParams);
@@ -154,15 +154,6 @@ export default function StatisticsPage() {
             setSearchParams(next, { replace: true });
         },
         [searchParams, setSearchParams],
-    );
-    const windowSelect = (
-        <StatisticsWindowSelect
-            value={statisticsWindow}
-            onChange={setStatisticsWindow}
-            label={t("statsPage.window.label")}
-            rollingLabel={t("statsPage.window.rolling24")}
-            allTimeLabel={t("statsPage.window.allTime")}
-        />
     );
     const {
         isVisible,
@@ -193,18 +184,76 @@ export default function StatisticsPage() {
         [getGraphData, graphExclusions, toggleGraphExclusion, exclusionsApply],
     );
 
+    const hasData = !!data && data.monthlyData.length > 0;
+
+    // The same header in every state: the window picker and the ••• menu
+    // (Export PDF… only once there is something to export, Customize… always).
+    const headerActions = (
+        <div className="flex flex-wrap items-center gap-2" data-print-actions>
+            <InsightsWindowControl
+                value={statisticsWindow}
+                onChange={setStatisticsWindow}
+                label={t("statsPage.window.label")}
+                rollingLabel={t("statsPage.window.rolling24")}
+                allTimeLabel={t("statsPage.window.allTime")}
+            />
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={t("statsPage.menu.label")}
+                    >
+                        <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                    {hasData && (
+                        <DropdownMenuItem onSelect={() => setExportOpen(true)}>
+                            <FileDown className="mr-2 h-4 w-4 text-label-secondary" />
+                            {t("statsPage.menu.exportPdf")}
+                        </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem onSelect={() => setCustomizeOpen(true)}>
+                        <LayoutGrid className="mr-2 h-4 w-4 text-label-secondary" />
+                        {t("statsPage.menu.customize")}
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
+            <WidgetVisibilityDialog
+                open={customizeOpen}
+                onOpenChange={setCustomizeOpen}
+                widgets={widgets}
+                isVisible={isVisible}
+                setWidgetVisible={setWidgetVisible}
+                setAllVisible={setAllVisible}
+                resetToDefaults={resetToDefaults}
+            />
+            {hasData && (
+                <ExportDialog
+                    trigger={null}
+                    open={exportOpen}
+                    onOpenChange={setExportOpen}
+                />
+            )}
+        </div>
+    );
+
+    const header = (
+        <PageHeader
+            title={t("statsPage.title")}
+            subtitle={t("statsPage.subtitle")}
+            icon={PAGE_ICONS["/statistics"]}
+            actions={headerActions}
+        />
+    );
+
     if (isLoading) {
         return (
             <PageShell {...loadingSurfaceProps} className="">
-                <div className="flex items-center justify-between gap-4">
-                    <PageHeader
-                        title={t("statsPage.title")}
-                        icon={PAGE_ICONS["/statistics"]}
-                    />
-                    {windowSelect}
-                </div>
+                {header}
                 {activeTab === "overview" && (
-                    <Card className="glass-elevated">
+                    <Card>
                         <CardContent variant="headerless" className="space-y-6">
                             <div className="grid gap-6 lg:grid-cols-[minmax(0,19rem)_minmax(0,1fr)] lg:gap-10">
                                 <div className="space-y-3">
@@ -230,16 +279,10 @@ export default function StatisticsPage() {
     if (isError) {
         return (
             <PageShell className="">
-                <div className="flex items-center justify-between gap-4">
-                    <PageHeader
-                        title={t("statsPage.title")}
-                        icon={PAGE_ICONS["/statistics"]}
-                    />
-                    {windowSelect}
-                </div>
+                {header}
                 <Card>
-                    <CardContent variant="headerless">
-                        <p className="text-destructive">
+                    <CardContent variant="state" className="text-center">
+                        <p className="type-callout text-label-secondary">
                             {t("statsPage.error", {
                                 msg: error?.message ?? "",
                             })}
@@ -250,64 +293,39 @@ export default function StatisticsPage() {
         );
     }
 
-    if (!data || data.monthlyData.length === 0) {
+    if (!hasData) {
         return (
             <PageShell className="">
-                <div className="flex items-center justify-between">
-                    <PageHeader
-                        title={t("statsPage.title")}
-                        subtitle={t("statsPage.subtitle")}
-                        icon={PAGE_ICONS["/statistics"]}
-                    />
-                    <WidgetVisibilityDialog
-                        widgets={widgets}
-                        isVisible={isVisible}
-                        setWidgetVisible={setWidgetVisible}
-                        setAllVisible={setAllVisible}
-                        resetToDefaults={resetToDefaults}
-                    />
-                </div>
-                {windowSelect}
-                <EmptyState
-                    icon={PAGE_ICONS["/statistics"]}
-                    title={t("statsPage.noDataTitle")}
-                    description={t("statsPage.noDataDesc")}
-                    action={
-                        <Button asChild size="sm">
+                {header}
+                <Card>
+                    <CardContent
+                        variant="state"
+                        className="flex flex-col items-center gap-3 text-center"
+                    >
+                        <h2 className="type-headline text-foreground">
+                            {t("statsPage.noDataTitle")}
+                        </h2>
+                        <p className="max-w-sm type-callout text-label-secondary">
+                            {t("statsPage.noDataDesc")}
+                        </p>
+                        <Button asChild>
                             <Link to="/import">
-                                <Import className="h-4 w-4 mr-2" />
+                                <Import
+                                    aria-hidden="true"
+                                    className="mr-2 h-4 w-4"
+                                />
                                 {t("statsPage.importBtn")}
                             </Link>
                         </Button>
-                    }
-                />
+                    </CardContent>
+                </Card>
             </PageShell>
         );
     }
 
     return (
         <PageShell className="" data-print-page="statistics">
-            <PageHeader
-                title={t("statsPage.title")}
-                subtitle={t("statsPage.subtitle")}
-                icon={PAGE_ICONS["/statistics"]}
-                actions={
-                    <div
-                        className="flex flex-wrap items-center gap-2"
-                        data-print-actions
-                    >
-                        {windowSelect}
-                        <ExportDialog />
-                        <WidgetVisibilityDialog
-                            widgets={widgets}
-                            isVisible={isVisible}
-                            setWidgetVisible={setWidgetVisible}
-                            setAllVisible={setAllVisible}
-                            resetToDefaults={resetToDefaults}
-                        />
-                    </div>
-                }
-            />
+            {header}
 
             <Tabs
                 value={activeTab}

@@ -2,8 +2,8 @@
 title: Net Worth Feature
 type: feature
 status: active
-date: 2026-10-04
-updated: 2026-10-04
+date: 2026-10-06
+updated: 2026-10-06
 tags:
   [
     feature,
@@ -36,7 +36,7 @@ aliases: [net worth, networth, wealth tracking, financial health]
 related_code:
   - apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx
   - apps/frontend/src/pages/portfolio/net-worth/NetWorthChart.tsx
-  - apps/frontend/src/pages/portfolio/net-worth/NetWorthByAccountTable.tsx
+  - apps/frontend/src/pages/portfolio/net-worth/NetWorthByAccountList.tsx
   - apps/frontend/src/pages/portfolio/net-worth/netWorthByAccount.ts
   - apps/frontend/src/components/charts/ChartCard.tsx
   - apps/frontend/src/components/charts/ChartPeriodSelector.tsx
@@ -260,34 +260,45 @@ domain recomputation — the visible window is whatever the period selector scop
 
 ## UI Components
 
-### Summary Cards
+### Hero
 
-The summary uses one neutral surface with two desktop columns separated by a fine divider.
-The left side centers the **Net Worth** total and monthly change within the shared height.
-The right side contains compact label/value rows:
+The page title is **Net worth** (sentence case, ADR-182). The page opens with one hero card on the
+design-system pattern shared with the Home month-to-date hero: an eyebrow, the net worth total in
+`type-large-title`, a callout line with this month's change (signed amount and percentage, toned
+gain/loss), the investment-price freshness caption, and the **All time** change (signed amount and
+percentage against the first snapshot) as a secondary figure.
 
-1. **Liquid**: Current non-liability bank balances with percentage of net worth
-2. **Investments**: Current portfolio value with percentage of net worth
-3. **Liabilities**: Current liability-account balance with percentage of net worth; hidden when zero
+Beside the number, two bars read as a subtraction:
 
-The breakdown no longer stacks three full-size cards beside one short headline. On smaller viewports, the headline and breakdown stack in reading order. Historical peak, low and day-count cards use compact secondary emphasis. See [[docs/adr/172-calm-information-hierarchy|ADR-172]].
+1. **Assets** = cash & savings + investments (`bg-gain`), with the cash and investment amounts
+   named in a caption under the bar
+2. **Debt** = the absolute liability balance (`bg-loss`)
 
-### Current By Account table
+Both bars share one scale. A zero value shows **—** instead of an empty bar. The former "% of net
+worth" shares and their explanation paragraph are gone.
 
-The **By Account** table is a current-point view, not historical per-broker reporting. It composes
-today's converted `in_net_worth` ledger cash with the live portfolio summary's `byAccount`
-partitions. Brokerage rows can therefore contain cash and holdings; wallet and crypto-exchange
-rows contain holdings only. The null-account partition is shown as localized **Unassigned**.
+### By account list
 
-The footer sums the amounts that are actually displayed and compares that total with the current
-Net Worth headline. A mismatch remains visible as a warning. This preserves the backend contract:
-current Net Worth equals current cash plus the same live portfolio total used by Dashboard and
-Performance.
+The **By account** card is a current-point view, not historical per-broker reporting. It is an
+inset `List` of `ListRow`s: the account name, the account type as subtitle (plus the cash and
+holdings split when a row carries both), and the converted balance trailing. It composes today's
+converted `in_net_worth` ledger cash with the live portfolio summary's `byAccount` partitions.
+Brokerage rows can therefore contain cash and holdings; wallet and crypto-exchange rows contain
+holdings only. The null-account partition is shown as localized **Unassigned** with an **Assign to
+an account** link to `/portfolio`, where each investment's unassigned lots are assigned.
+
+The closing row sums the amounts that are actually displayed and compares that total with the
+current net worth headline. A mismatch remains visible as a warning with a hint below the list.
+This preserves the backend contract: current net worth equals current cash plus the same live
+portfolio total used by Home and Performance.
 
 ### Chart Controls
 
-- **Period selector**: 1M/3M/6M/1Y/3Y/All segmented control (`ChartPeriodSelector`) in the card
-  header, scoping the visible window. All three series are always shown (no per-series toggle).
+- **Period selector**: 1M/3M/6M/1Y/3Y/All segmented control (`ChartPeriodSelector`, a
+  `SegmentedControl` radio group) in the card header, scoping the visible window. The page passes
+  it into `NetWorthChart` through its `actions` slot wrapped in `data-print-actions`, so the
+  control is hidden in the print report while the chart itself prints. All series are always
+  shown (no per-series toggle).
 
 ### Statistics Row
 
@@ -298,8 +309,8 @@ Three additional cards below the chart:
 - **Days Tracked**: Number of daily snapshots in the **currently selected chart period**
 
 These cards follow the period selector (1M/3M/6M/1Y/3Y/All) so the figures reflect the same
-date window as the chart. The **"ALL TIME" change badge** in the page header is unaffected -- it
-always compares the first and last snapshot in the full series.
+date window as the chart. The **All time** change in the hero is unaffected -- it always
+compares the first and last snapshot in the full series.
 
 Implementation note: When a brand-new user has no historical snapshots (or all data is filtered
 out by the period), the peak and trough calculations are seeded with `current.netWorth` instead
@@ -349,4 +360,4 @@ currently implemented.
 - [[docs/adr/100-net-worth-account-native-holdings|ADR-100]] — Historical per-account design, superseded by ADR-108
 - [[docs/adr/093-net-worth-sum-of-accounts|ADR-093]] — Net worth = Σ accounts definition
 
-The summary explains that liabilities reduce net worth, so asset shares can exceed 100%. Account reconciliation retains its exact difference warning and provides context when balances do not match.
+Account reconciliation retains its exact difference warning and provides context when balances do not match.

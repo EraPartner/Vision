@@ -1,21 +1,17 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import {
     AreaChart as VisxAreaChart,
     ChartCard,
-    ChartPeriodSelector,
     type AreaSeries,
     type ChartLegendItem,
-    type ChartPeriod,
 } from "@/components/charts";
 import { parseLocalDateFromYmd } from "@/lib/dateUtils";
 import { NetWorthSnapshot, normalizeYmd } from "./netWorthChartUtils";
 
 interface NetWorthChartProps {
     snapshots: NetWorthSnapshot[];
-    period: ChartPeriod;
-    periods: ReadonlyArray<ChartPeriod>;
-    periodLabels: Record<ChartPeriod, string>;
-    onPeriodChange: (period: ChartPeriod) => void;
+    /** Header controls (the period selector); kept out of print output by the page. */
+    actions?: ReactNode;
     fmt: (val: number) => string;
     xTickFormat: (value: Date) => string;
     tooltipLabelFormatter: (v: string) => string;
@@ -31,10 +27,7 @@ const LIABILITIES_COLOR = "hsl(var(--loss))";
 
 export function NetWorthChart({
     snapshots,
-    period,
-    periods,
-    periodLabels,
-    onPeriodChange,
+    actions,
     fmt,
     xTickFormat,
     tooltipLabelFormatter,
@@ -122,15 +115,7 @@ export function NetWorthChart({
             title={t("networth.overTime")}
             description={t("networth.chartDesc")}
             legend={legend}
-            actions={
-                <ChartPeriodSelector
-                    periods={periods}
-                    value={period}
-                    onChange={onPeriodChange}
-                    labels={periodLabels}
-                    size="sm"
-                />
-            }
+            actions={actions}
         >
             <VisxAreaChart
                 scrubbable

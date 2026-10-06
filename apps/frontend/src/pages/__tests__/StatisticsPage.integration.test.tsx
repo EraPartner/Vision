@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { useLocation } from "react-router";
@@ -49,16 +49,47 @@ function monthlySummaryWithData() {
     });
 }
 
+function emptyAggregation(data: Record<string, unknown>) {
+    return ok({
+        data,
+        meta: {
+            computedAt: "2025-04-01T00:00:00.000Z",
+            source: "live" as const,
+        },
+    });
+}
+
+/** Every aggregation endpoint answered, so each tab can render. */
+function useDataHandlers() {
+    server.use(
+        http.get(`${API_BASE}/api/aggregations/monthly-summary`, () =>
+            monthlySummaryWithData(),
+        ),
+        http.get(`${API_BASE}/api/aggregations/category-pivot`, () =>
+            emptyAggregation({ categoryPivot: {} }),
+        ),
+        http.get(`${API_BASE}/api/aggregations/recipient-insights`, () =>
+            emptyAggregation({ topMerchants: [], monthOverMonth: [] }),
+        ),
+        http.get(`${API_BASE}/api/aggregations/recipient-by-year`, () =>
+            emptyAggregation({ recipientsByYear: {} }),
+        ),
+    );
+}
+
+async function openMoreMenu(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(
+        await screen.findByRole("button", { name: /more actions/i }),
+    );
+    return screen.findByRole("menu");
+}
+
 describe("StatisticsPage (integration)", () => {
-    it("renders page heading", async () => {
+    it("renders the Insights page heading", async () => {
         renderWithApp(<StatisticsPage />);
-        await waitFor(
-            () =>
-                expect(
-                    screen.getByRole("heading", { name: /statistics/i }),
-                ).toBeInTheDocument(),
-            { timeout: 5000 },
-        );
+        expect(
+            await screen.findByRole("heading", { name: /^insights$/i, level: 1 }),
+        ).toBeInTheDocument();
     });
 
     it("shows the 24-month default and persists explicit All time in the URL", async () => {
@@ -72,16 +103,13 @@ describe("StatisticsPage (integration)", () => {
         );
 
         await screen.findByRole("heading", { name: /no data yet/i });
-        const range = screen.getByRole("combobox", {
-            name: /date range/i,
-        });
-        expect(range).toHaveTextContent("Last 24 months");
+        const range = screen.getByRole("radiogroup", { name: /date range/i });
+        expect(
+            within(range).getByRole("radio", { name: "Last 24 months" }),
+        ).toHaveAttribute("aria-checked", "true");
         expect(screen.getByTestId("location-search")).toHaveTextContent("");
 
-        await user.click(range);
-        await user.click(
-            await screen.findByRole("option", { name: "All time" }),
-        );
+        await user.click(within(range).getByRole("radio", { name: "All time" }));
 
         await waitFor(() =>
             expect(screen.getByTestId("location-search")).toHaveTextContent(
@@ -89,13 +117,13 @@ describe("StatisticsPage (integration)", () => {
             ),
         );
         expect(
-            screen.getByRole("combobox", { name: /date range/i }),
-        ).toHaveTextContent("All time");
+            screen.getByRole("radio", { name: "All time" }),
+        ).toHaveAttribute("aria-checked", "true");
     });
 
     it("renders without crashing with empty transaction data", async () => {
         renderWithApp(<StatisticsPage />);
-        await screen.findByRole("heading", { name: /statistics/i });
+        await screen.findByRole("heading", { name: /^insights$/i });
     });
 
     it("shows error state when the aggregation API fails", async () => {
@@ -112,7 +140,7 @@ describe("StatisticsPage (integration)", () => {
 
         expect(
             await screen.findByText(
-                /couldn't load statistics/i,
+                /couldn't load insights/i,
                 {},
                 { timeout: 5000 },
             ),
@@ -122,39 +150,7 @@ describe("StatisticsPage (integration)", () => {
     });
 
     it("shows tab triggers when data is available", async () => {
-        server.use(
-            http.get(`${API_BASE}/api/aggregations/monthly-summary`, () =>
-                monthlySummaryWithData(),
-            ),
-            http.get(`${API_BASE}/api/aggregations/category-pivot`, () =>
-                ok({
-                    data: { categoryPivot: {} },
-                    meta: {
-                        computedAt: "2025-04-01T00:00:00.000Z",
-                        source: "live" as const,
-                    },
-                }),
-            ),
-            http.get(`${API_BASE}/api/aggregations/recipient-insights`, () =>
-                ok({
-                    data: { topMerchants: [], monthOverMonth: [] },
-                    meta: {
-                        computedAt: "2025-04-01T00:00:00.000Z",
-                        source: "live" as const,
-                    },
-                }),
-            ),
-            http.get(`${API_BASE}/api/aggregations/recipient-by-year`, () =>
-                ok({
-                    data: { recipientsByYear: {} },
-                    meta: {
-                        computedAt: "2025-04-01T00:00:00.000Z",
-                        source: "live" as const,
-                    },
-                }),
-            ),
-        );
-
+        useDataHandlers();
         renderWithApp(<StatisticsPage />);
 
         // Tabs only render when monthlyData.length > 0
@@ -171,40 +167,7 @@ describe("StatisticsPage (integration)", () => {
 
     it("switches to Categories tab when clicked", async () => {
         const user = userEvent.setup();
-
-        server.use(
-            http.get(`${API_BASE}/api/aggregations/monthly-summary`, () =>
-                monthlySummaryWithData(),
-            ),
-            http.get(`${API_BASE}/api/aggregations/category-pivot`, () =>
-                ok({
-                    data: { categoryPivot: {} },
-                    meta: {
-                        computedAt: "2025-04-01T00:00:00.000Z",
-                        source: "live" as const,
-                    },
-                }),
-            ),
-            http.get(`${API_BASE}/api/aggregations/recipient-insights`, () =>
-                ok({
-                    data: { topMerchants: [], monthOverMonth: [] },
-                    meta: {
-                        computedAt: "2025-04-01T00:00:00.000Z",
-                        source: "live" as const,
-                    },
-                }),
-            ),
-            http.get(`${API_BASE}/api/aggregations/recipient-by-year`, () =>
-                ok({
-                    data: { recipientsByYear: {} },
-                    meta: {
-                        computedAt: "2025-04-01T00:00:00.000Z",
-                        source: "live" as const,
-                    },
-                }),
-            ),
-        );
-
+        useDataHandlers();
         renderWithApp(<StatisticsPage />);
 
         const categoriesTab = await screen.findByRole("tab", {
@@ -212,55 +175,27 @@ describe("StatisticsPage (integration)", () => {
         });
         await user.click(categoriesTab);
 
-        // After switching tabs, the Categories tab should be selected
         expect(categoriesTab).toHaveAttribute("aria-selected", "true");
     });
 
-    it("renders recipient insights through the live Statistics tab", async () => {
+    it("renders recipient insights through the live Payees tab", async () => {
         const user = userEvent.setup();
-
+        useDataHandlers();
         server.use(
-            http.get(`${API_BASE}/api/aggregations/monthly-summary`, () =>
-                monthlySummaryWithData(),
-            ),
-            http.get(`${API_BASE}/api/aggregations/category-pivot`, () =>
-                ok({
-                    data: { categoryPivot: {} },
-                    meta: {
-                        computedAt: "2025-04-01T00:00:00.000Z",
-                        source: "live" as const,
-                    },
-                }),
-            ),
             http.get(`${API_BASE}/api/aggregations/recipient-insights`, () =>
-                ok({
-                    data: {
-                        topMerchants: [
-                            {
-                                recipientId: 7,
-                                name: "Corner Shop",
-                                totalSpend: 42,
-                                transactionCount: 2,
-                                avgAmount: 21,
-                                firstSeen: "2025-02-01",
-                                lastSeen: "2025-03-01",
-                            },
-                        ],
-                        monthOverMonth: [],
-                    },
-                    meta: {
-                        computedAt: "2025-04-01T00:00:00.000Z",
-                        source: "live" as const,
-                    },
-                }),
-            ),
-            http.get(`${API_BASE}/api/aggregations/recipient-by-year`, () =>
-                ok({
-                    data: { recipientsByYear: {} },
-                    meta: {
-                        computedAt: "2025-04-01T00:00:00.000Z",
-                        source: "live" as const,
-                    },
+                emptyAggregation({
+                    topMerchants: [
+                        {
+                            recipientId: 7,
+                            name: "Corner Shop",
+                            totalSpend: 42,
+                            transactionCount: 2,
+                            avgAmount: 21,
+                            firstSeen: "2025-02-01",
+                            lastSeen: "2025-03-01",
+                        },
+                    ],
+                    monthOverMonth: [],
                 }),
             ),
         );
@@ -291,25 +226,48 @@ describe("StatisticsPage (integration)", () => {
         ).toBeInTheDocument();
     });
 
-    it("shows Widgets button in empty state", async () => {
+    it("offers Customize… from the ••• menu in the empty state, not Export PDF…", async () => {
+        const user = userEvent.setup();
         renderWithApp(<StatisticsPage />);
+        await screen.findByRole("heading", { name: /no data yet/i });
+
+        const menu = await openMoreMenu(user);
         expect(
-            await screen.findByRole("button", { name: /customize/i }),
+            within(menu).getByRole("menuitem", { name: /customize/i }),
         ).toBeInTheDocument();
+        expect(
+            within(menu).queryByRole("menuitem", { name: /export pdf/i }),
+        ).not.toBeInTheDocument();
     });
 
-    it("opens Manage Widgets dialog when Widgets button is clicked", async () => {
+    it("opens the Customize dialog from the ••• menu", async () => {
         const user = userEvent.setup();
         renderWithApp(<StatisticsPage />);
 
-        const widgetsBtn = await screen.findByRole("button", {
-            name: /customize/i,
-        });
-        await user.click(widgetsBtn);
+        const menu = await openMoreMenu(user);
+        await user.click(
+            within(menu).getByRole("menuitem", { name: /customize/i }),
+        );
 
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
         expect(
             await screen.findByRole("heading", { name: /customize this page/i }),
+        ).toBeInTheDocument();
+    });
+
+    it("opens the Export PDF dialog from the ••• menu once there is data", async () => {
+        const user = userEvent.setup();
+        useDataHandlers();
+        renderWithApp(<StatisticsPage />);
+        await screen.findByRole("tab", { name: /overview/i });
+
+        const menu = await openMoreMenu(user);
+        await user.click(
+            within(menu).getByRole("menuitem", { name: /export pdf/i }),
+        );
+
+        expect(
+            await screen.findByRole("heading", { name: /export pdf report/i }),
         ).toBeInTheDocument();
     });
 
@@ -325,22 +283,22 @@ describe("StatisticsPage (integration)", () => {
 
     it("shows empty state description text when no data", async () => {
         renderWithApp(<StatisticsPage />);
-        // statsPage.noDataDesc = "Import your bank transactions to see statistics."
+        // statsPage.noDataDesc = "Import your bank transactions to see insights."
         expect(
             await screen.findByText(
-                /import your bank transactions to see statistics/i,
+                /import your bank transactions to see insights/i,
             ),
         ).toBeInTheDocument();
     });
 
-    it("closes Manage Widgets dialog via Escape key", async () => {
+    it("closes the Customize dialog via Escape key", async () => {
         const user = userEvent.setup();
         renderWithApp(<StatisticsPage />);
 
-        const widgetsBtn = await screen.findByRole("button", {
-            name: /customize/i,
-        });
-        await user.click(widgetsBtn);
+        const menu = await openMoreMenu(user);
+        await user.click(
+            within(menu).getByRole("menuitem", { name: /customize/i }),
+        );
         await screen.findByRole("dialog");
 
         await user.keyboard("{Escape}");
@@ -350,40 +308,7 @@ describe("StatisticsPage (integration)", () => {
 
     it("switches to Yearly tab when clicked", async () => {
         const user = userEvent.setup();
-
-        server.use(
-            http.get(`${API_BASE}/api/aggregations/monthly-summary`, () =>
-                monthlySummaryWithData(),
-            ),
-            http.get(`${API_BASE}/api/aggregations/category-pivot`, () =>
-                ok({
-                    data: { categoryPivot: {} },
-                    meta: {
-                        computedAt: "2025-04-01T00:00:00.000Z",
-                        source: "live" as const,
-                    },
-                }),
-            ),
-            http.get(`${API_BASE}/api/aggregations/recipient-insights`, () =>
-                ok({
-                    data: { topMerchants: [], monthOverMonth: [] },
-                    meta: {
-                        computedAt: "2025-04-01T00:00:00.000Z",
-                        source: "live" as const,
-                    },
-                }),
-            ),
-            http.get(`${API_BASE}/api/aggregations/recipient-by-year`, () =>
-                ok({
-                    data: { recipientsByYear: {} },
-                    meta: {
-                        computedAt: "2025-04-01T00:00:00.000Z",
-                        source: "live" as const,
-                    },
-                }),
-            ),
-        );
-
+        useDataHandlers();
         renderWithApp(<StatisticsPage />);
 
         const yearlyTab = await screen.findByRole("tab", { name: /yearly/i });
@@ -418,10 +343,10 @@ describe("StatisticsPage (integration)", () => {
                 screen.queryByText(/No new insights right now/),
             ).not.toBeInTheDocument();
             expect(
-                screen.getByRole("combobox", { name: /date range/i }),
+                screen.getByRole("radiogroup", { name: /date range/i }),
             ).toBeInTheDocument();
             expect(
-                screen.getByRole("button", { name: /customize/i }),
+                screen.getByRole("button", { name: /more actions/i }),
             ).toBeInTheDocument();
 
             await user.click(screen.getByRole("tab", { name: /overview/i }));
@@ -453,8 +378,8 @@ describe("StatisticsPage (integration)", () => {
             screen.queryByText(/No new insights right now/),
         ).not.toBeInTheDocument();
         expect(
-            screen.getByRole("combobox", { name: /date range/i }),
-        ).toHaveTextContent("All time");
+            screen.getByRole("radio", { name: "All time" }),
+        ).toHaveAttribute("aria-checked", "true");
     });
 
     // ─── Edge cases ────────────────────────────────────────────────────────
@@ -468,9 +393,7 @@ describe("StatisticsPage (integration)", () => {
         );
         renderWithApp(<StatisticsPage />);
         expect(
-            await screen.findByRole("heading", {
-                name: /statistics|analytics/i,
-            }),
+            await screen.findByRole("heading", { name: /^insights$/i }),
         ).toBeInTheDocument();
         errSpy.mockRestore();
     });
@@ -478,9 +401,7 @@ describe("StatisticsPage (integration)", () => {
     it("renders heading when statistics endpoint returns empty data (Empty)", async () => {
         renderWithApp(<StatisticsPage />);
         expect(
-            await screen.findByRole("heading", {
-                name: /statistics|analytics/i,
-            }),
+            await screen.findByRole("heading", { name: /^insights$/i }),
         ).toBeInTheDocument();
     });
 
@@ -496,33 +417,15 @@ describe("StatisticsPage (integration)", () => {
             }),
             http.get(`${API_BASE}/api/aggregations/category-pivot`, () => {
                 track("category");
-                return ok({
-                    data: { categoryPivot: {} },
-                    meta: {
-                        computedAt: "2025-04-01T00:00:00.000Z",
-                        source: "live" as const,
-                    },
-                });
+                return emptyAggregation({ categoryPivot: {} });
             }),
             http.get(`${API_BASE}/api/aggregations/recipient-insights`, () => {
                 track("insights");
-                return ok({
-                    data: { topMerchants: [], monthOverMonth: [] },
-                    meta: {
-                        computedAt: "2025-04-01T00:00:00.000Z",
-                        source: "live" as const,
-                    },
-                });
+                return emptyAggregation({ topMerchants: [], monthOverMonth: [] });
             }),
             http.get(`${API_BASE}/api/aggregations/recipient-by-year`, () => {
                 track("by-year");
-                return ok({
-                    data: { recipientsByYear: {} },
-                    meta: {
-                        computedAt: "2025-04-01T00:00:00.000Z",
-                        source: "live" as const,
-                    },
-                });
+                return emptyAggregation({ recipientsByYear: {} });
             }),
         );
 
@@ -546,7 +449,7 @@ describe("StatisticsPage (integration)", () => {
         expect(hits).toBeGreaterThanOrEqual(2);
     });
 
-    it("changing year filter triggers monthly-summary refetch with new year param", async () => {
+    it("requests the monthly summary with a year param shape", async () => {
         const yearsSeen = new Set<string>();
         server.use(
             http.get(
@@ -559,40 +462,18 @@ describe("StatisticsPage (integration)", () => {
                 },
             ),
             http.get(`${API_BASE}/api/aggregations/category-pivot`, () =>
-                ok({
-                    data: { categoryPivot: {} },
-                    meta: {
-                        computedAt: "2025-04-01T00:00:00.000Z",
-                        source: "live" as const,
-                    },
-                }),
+                emptyAggregation({ categoryPivot: {} }),
             ),
             http.get(`${API_BASE}/api/aggregations/recipient-insights`, () =>
-                ok({
-                    data: { topMerchants: [], monthOverMonth: [] },
-                    meta: {
-                        computedAt: "2025-04-01T00:00:00.000Z",
-                        source: "live" as const,
-                    },
-                }),
+                emptyAggregation({ topMerchants: [], monthOverMonth: [] }),
             ),
             http.get(`${API_BASE}/api/aggregations/recipient-by-year`, () =>
-                ok({
-                    data: { recipientsByYear: {} },
-                    meta: {
-                        computedAt: "2025-04-01T00:00:00.000Z",
-                        source: "live" as const,
-                    },
-                }),
+                emptyAggregation({ recipientsByYear: {} }),
             ),
         );
 
         renderWithApp(<StatisticsPage />);
-        // Wait for at least one fetch to land
         await screen.findByRole("tab", { name: /overview/i });
         await waitFor(() => expect(yearsSeen.size).toBeGreaterThan(0));
-        // Test only verifies that monthly-summary handler was called with year param shape;
-        // changing year via UI requires year-selector wiring that may differ between builds.
-        // The presence of a year query param is the contract guarantee we care about.
     });
 });

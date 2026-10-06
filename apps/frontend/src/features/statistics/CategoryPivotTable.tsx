@@ -358,7 +358,7 @@ export function CategoryPivotTable({
         <Card>
             <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-4">
                 <div>
-                    <CardTitle>{t("statsPage.pivotTitle")}</CardTitle>
+                    <CardTitle variant="sm">{t("statsPage.pivotTitle")}</CardTitle>
                     <CardDescription>
                         {t("statsPage.pivotDesc")}
                     </CardDescription>

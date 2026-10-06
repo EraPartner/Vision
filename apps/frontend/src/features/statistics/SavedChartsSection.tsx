@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Plus, TrendingUp } from "lucide-react";
 import { useSavedCharts, useDeleteSavedChart } from "@/hooks/useSavedCharts";
 import type { SavedChart } from "@/types/apiClient";
@@ -72,11 +73,11 @@ export function SavedChartsSection({ data }: SavedChartsSectionProps) {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-lg font-semibold">
+                    <h2 className="type-title-3 text-foreground">
                         {t("customChart.tab")}
                     </h2>
                     {charts.length > 0 && (
-                        <p className="text-sm text-muted-foreground">
+                        <p className="type-footnote text-label-secondary">
                             {tc("customChart.savedCount", charts.length)}
                         </p>
                     )}
@@ -98,31 +99,34 @@ export function SavedChartsSection({ data }: SavedChartsSectionProps) {
             {isLoading ? (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {[0, 1].map((i) => (
-                        <Skeleton key={i} className="h-[420px] rounded-xl" />
+                        <Skeleton key={i} className="h-[420px] rounded-card" />
                     ))}
                 </div>
             ) : charts.length === 0 ? (
-                <div className="rounded-xl border border-dashed">
-                    <EmptyState
-                        headingLevel={3}
-                        size="compact"
-                        icon={TrendingUp}
-                        title={t("customChart.emptyTitle")}
-                        description={t("customChart.emptyDesc")}
-                        action={
-                            <Button
-                                onClick={(event) => {
-                                    builderOpener.current = event.currentTarget;
-                                    setEditChart(undefined);
-                                    setBuilderOpen(true);
-                                }}
-                            >
-                                <Plus className="h-4 w-4 mr-1" />
-                                {t("customChart.createFirst")}
-                            </Button>
-                        }
-                    />
-                </div>
+                <Card>
+                    <CardContent variant="state" className="py-2">
+                        <EmptyState
+                            headingLevel={3}
+                            size="compact"
+                            icon={TrendingUp}
+                            title={t("customChart.emptyTitle")}
+                            description={t("customChart.emptyDesc")}
+                            action={
+                                <Button
+                                    onClick={(event) => {
+                                        builderOpener.current =
+                                            event.currentTarget;
+                                        setEditChart(undefined);
+                                        setBuilderOpen(true);
+                                    }}
+                                >
+                                    <Plus className="mr-1 h-4 w-4" />
+                                    {t("customChart.createFirst")}
+                                </Button>
+                            }
+                        />
+                    </CardContent>
+                </Card>
             ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {charts.map((chart) => (

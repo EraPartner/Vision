@@ -77,7 +77,7 @@ export function SankeyTab({
             <CardHeader>
                 <div className="flex items-start justify-between gap-4">
                     <div>
-                        <CardTitle>{t("statsPage.sankey.title")}</CardTitle>
+                        <CardTitle variant="sm">{t("statsPage.sankey.title")}</CardTitle>
                         <CardDescription>
                             {t("statsPage.sankey.description", {
                                 year: selectedYear,
@@ -117,7 +117,7 @@ export function SankeyTab({
                     />
                 )}
                 {isError && (
-                    <div className="flex items-center justify-center h-40 text-sm text-destructive">
+                    <div className="flex h-40 items-center justify-center type-callout text-label-secondary">
                         {t("statsPage.sankey.noData")}
                     </div>
                 )}

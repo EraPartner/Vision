@@ -118,7 +118,7 @@ export function RecipientInsightsTab({
                     _isEditing: boolean,
                     index?: number,
                 ) => (
-                    <span className="font-medium text-muted-foreground">
+                    <span className="font-medium text-label-secondary">
                         {(index ?? 0) + 1}
                     </span>
                 ),
@@ -156,7 +156,7 @@ export function RecipientInsightsTab({
                 header: t("insights.col.firstSeen"),
                 className: "text-right",
                 render: (row: RecipientDetailRow) => (
-                    <span className="text-muted-foreground text-sm">
+                    <span className="type-footnote text-label-secondary">
                         {formatDateWithAppSettings(
                             parseISO(row.firstSeen),
                             appSettings.dateFormat,
@@ -169,7 +169,7 @@ export function RecipientInsightsTab({
                 header: t("insights.col.lastSeen"),
                 className: "text-right",
                 render: (row: RecipientDetailRow) => (
-                    <span className="text-muted-foreground text-sm">
+                    <span className="type-footnote text-label-secondary">
                         {formatDateWithAppSettings(
                             parseISO(row.lastSeen),
                             appSettings.dateFormat,
@@ -196,9 +196,13 @@ export function RecipientInsightsTab({
 
     if (isError || !filteredData) {
         return (
-            <p className="text-muted-foreground">
-                {t("insights.failedToLoad")}
-            </p>
+            <Card>
+                <CardContent variant="state" className="text-center">
+                    <p className="type-callout text-label-secondary">
+                        {t("insights.failedToLoad")}
+                    </p>
+                </CardContent>
+            </Card>
         );
     }
 
@@ -261,7 +265,7 @@ export function RecipientInsightsTab({
             {filteredData.monthOverMonth.length > 0 && (
                 <Card>
                     <CardHeader>
-                        <CardTitle>{t("insights.momChanges")}</CardTitle>
+                        <CardTitle variant="sm">{t("insights.momChanges")}</CardTitle>
                         <CardDescription>
                             {t("insights.momDesc")}
                         </CardDescription>
@@ -285,7 +289,7 @@ export function RecipientInsightsTab({
                                                     name: m.name,
                                                 })}
                                             </p>
-                                            <p className="text-xs text-muted-foreground">
+                                            <p className="type-caption text-label-secondary">
                                                 {formatCurrency(
                                                     m.previousSpend,
                                                     2,
@@ -321,7 +325,7 @@ export function RecipientInsightsTab({
                                                     name: m.name,
                                                 })}
                                             </p>
-                                            <p className="text-xs text-muted-foreground">
+                                            <p className="type-caption text-label-secondary">
                                                 {formatCurrency(
                                                     m.previousSpend,
                                                     2,
