@@ -55,9 +55,13 @@ const DIST_DIR = process.env.VISION_DIST_DIR
  * absorb routine dependency-lockfile churn without false alarms — tight
  * enough that a single mis-scoped import still trips it.
  *
- * Last measured (2026-09-24, production build with the current locked dependencies):
- *   boot-preload graph: 445.33 KB gz (49 files: entry + 48 modulepreloads)
- *   total (all routes): 1046.60 KB gz (163 JS/CSS assets)
+ * Last measured (2026-10-06, production build with the current locked dependencies):
+ *   boot-preload graph: 440.67 KB gz (49 files: entry + 48 modulepreloads)
+ *   total (all routes): 1117.21 KB gz (164 JS/CSS assets)
+ * The 2026-09-24 revision measured 445.33 KB / 1046.60 KB (163 assets). Since
+ * then locales, the analysis workbench, the lazy xlsx reader and portfolio
+ * import grew the total, all in lazy route or locale chunks; the owner approved
+ * the higher total budget in #212. The preload budget is unchanged.
  * The 2026-08-25 budget revision, built with the same local toolchain, measured
  * 399.96 KB / 914.30 KB. The intervening analysis, AI, category, planning,
  * and audit features account for the larger route set. Keep the new budgets
@@ -75,8 +79,8 @@ const DIST_DIR = process.env.VISION_DIST_DIR
 const BUDGETS_KB = {
     // 445.33 * 1.05 = 467.60, rounded up after measured feature growth.
     preload: 468,
-    // 1046.60 * 1.05 = 1098.93, rounded to the next 10 KB.
-    total: 1100,
+    // 1117.21 * 1.05 = 1173.07, rounded to the next 10 KB (was 1100).
+    total: 1180,
 };
 
 /** Parses dist/index.html for the entry module script and its modulepreload set. */
