@@ -2,13 +2,13 @@
 title: Feature - Portfolio & Investments
 type: feature
 status: active
-date: 2026-10-04
-last_modified: 2026-10-04
-updated: 2026-10-04
+date: 2026-10-06
+last_modified: 2026-10-06
+updated: 2026-10-06
 tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding, fx-attribution, asset-gain, fx-gain, purchase-date-rates, value-fx-neutral, adr-074, adr-091, adr-100, per-account, move-holding, close-account, brokerage-fanout, rebalancing, saved-plans, cash-aware, cross-workspace, adr-098, portfolio-ticker, marquee, live-quotes, ticker-manager, show-in-ticker, migration-0061, fx-aware-pnl, unified-detail-dialog, useFxAwarePnl]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: "Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections. 2026-05-29 adds historical FX in snapshots and loading/error states on all asset pages. June 2026 adds snapshotBuilder split/return_of_capital events, APP_TIMEZONE day-boundary fix, shared portfolioUnitMath.ts, and FX attribution UI (ADR-074): asset gain / FX effect decomposition on overview, performance, asset pages, and investment detail."
-related_code: ["apps/node-backend/src/routes/investments.js", "apps/node-backend/src/services/priceProviderService.js", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js", "apps/node-backend/src/services/info/performanceHelpers.js", "apps/node-backend/src/services/portfolio/portfolioSummaryService.js", "apps/node-backend/src/services/portfolio/rebalanceTargets.js", "apps/node-backend/src/routes/info/portfolioSummary.js", "apps/frontend/src/pages/portfolio/PerformancePage.tsx", "apps/frontend/src/pages/portfolio/MetalsPage.tsx", "apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx", "apps/frontend/src/hooks/portfolio/usePortfolioSummary.ts", "apps/frontend/src/hooks/usePortfolio.ts", "apps/frontend/src/lib/api.ts"]
+related_code: ["apps/node-backend/src/routes/investments.js", "apps/node-backend/src/services/priceProviderService.js", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js", "apps/node-backend/src/services/info/performanceHelpers.js", "apps/node-backend/src/services/portfolio/portfolioSummaryService.js", "apps/node-backend/src/services/portfolio/rebalanceTargets.js", "apps/node-backend/src/routes/info/portfolioSummary.js", "apps/frontend/src/pages/portfolio/PortfolioPage.tsx", "apps/frontend/src/pages/portfolio/MetalsPage.tsx", "apps/frontend/src/hooks/portfolio/usePortfolioSummary.ts", "apps/frontend/src/hooks/usePortfolio.ts", "apps/frontend/src/lib/api.ts"]
 ---
 
 # Feature: Portfolio & Investments
@@ -18,7 +18,7 @@ related_code: ["apps/node-backend/src/routes/investments.js", "apps/node-backend
 
 ## Shareable view state
 
-- Performance stores `period` and the non-default `fx_neutral=true` toggle in the URL.
+- The merged Portfolio page stores the hero `period` (`1m|3m|6m|1y|3y|all`, default omitted) and the non-default `fx_neutral=true` toggle in the URL. `/portfolio/performance` redirects to `/portfolio` and preserves the query string.
 - Rebalance stores the source model or plan plus the full custom draft in repeated `target=<sleeve>:<percentage>` params, with optional `name` and presence-based `cap`. Empty unfinished fields survive reload. Switching back to a model removes only rebalance-owned params.
 - URL drafts contain allocation inputs only. They do not include account data, holdings, transaction data, or credentials. They do expose the saved plan identifier, draft plan name, target percentages, and optional cash-cap value to browser history and anyone who receives the URL.
 
@@ -26,10 +26,48 @@ related_code: ["apps/node-backend/src/routes/investments.js", "apps/node-backend
 
 Vision's portfolio management tracks various investment types with live price updates and comprehensive transaction history.
 
+### Merged Portfolio page (2026-10-06)
+
+`/portfolio` renders one screen, `pages/portfolio/PortfolioPage.tsx`, which replaces the former
+`PortfolioOverviewPage` and `PerformancePage`. `/portfolio/performance` is a legacy redirect to
+`/portfolio` that keeps the query string, so saved `period`/`fx_neutral` links keep working. The
+Performance sidebar entry was removed.
+
+Layout, top to bottom:
+
+- **Header**: title "Portfolio", subtitle "{n} investments · prices as of {time}" (the second part
+  is omitted when no live quote timestamp exists), a Refresh prices icon button, a More-actions menu
+  (Export PDF…, Customize…, Import history) and the primary Add investment action. The
+  `StalePricesBanner` and the provisional-data note stay above the content.
+- **Value hero**: eyebrow "Value", the live total, the period gain in gain/loss colour with sign and
+  percentage, a 1M–All segmented period picker (URL `period`) and a scrubbable area chart of value
+  with invested capital as a dashed series. For "all" the gain is the live `totals.totalGainLoss` /
+  `totalReturnPct`; for a bounded period it is
+  `(value_end − value_start) − (invested_end − invested_start)` over the first snapshot value plus
+  net contributions.
+- **Return figures**: Total return (all-time), Per year (annualized since the first transaction
+  date), After inflation (`—` plus "Inflation data missing" when no inflation data) and Realized
+  (`—` plus "No sales yet" when nothing was sold). Each has an ⓘ disclosure.
+- **Holdings**: list rows with an asset-class glyph, name, "class · symbol", trailing value and
+  return. A Value | Return segmented sort and the broker filter sit in the header. Activating a row
+  opens the investment detail dialog; the row menu offers Details, Add transaction, Archive and
+  Delete (both confirmed). Oversold badges, the unassigned-lot nudge and the subtotal footer are kept.
+- **Asset allocation**: one horizontal stacked bar by asset class with a legend of amounts and
+  shares, plus a Rebalance link to `/portfolio/rebalance`.
+- **Widgets** (hideable via Customize…, page key `portfolio`): ticker, Gains, income and costs,
+  exposure, value by class chart with the FX-neutral toggle, value by broker, relative performance,
+  monthly returns and top performers, market news, and archived investments (with restore).
+
+When no snapshot history exists yet the hero chart slot shows "No performance history yet" with a
+Refresh prices action; when there are no investments at all the page shows the empty state with
+Add investment.
+
+Code links: [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]], [[apps/frontend/src/lib/routePreload.ts]], [[apps/frontend/src/pages/__tests__/portfolio/PortfolioPage.integration.test.tsx]]
+
 ### Live-price provenance (2026-08-27)
 
 Portfolio totals now show a compact `Prices as of …` caption even while quotes are still within the
-24-hour stale threshold. The Portfolio Overview total and the first summary card on Stocks, Crypto,
+24-hour stale threshold. The Portfolio page subtitle and the first summary card on Stocks, Crypto,
 and Metals use the oldest valid `price_updated_at` among their live-provider holdings. That minimum
 is the truthful lower bound for an aggregate value. Manual-provider holdings are excluded because
 their values do not depend on a remote quote. If any included live holding has no valid timestamp,
@@ -40,7 +78,7 @@ This frontend aggregate rule intentionally differs from the portfolio PDF cover.
 backend report-provenance contract based on `MAX(price_updated_at)`, which describes the latest
 recorded live update rather than the freshness lower bound of every holding in the visible total.
 
-Code links: [[apps/frontend/src/features/portfolio/PriceFreshnessCaption.tsx]], [[apps/frontend/src/utils/priceStaleness.ts]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]]
+Code links: [[apps/frontend/src/features/portfolio/PriceFreshnessCaption.tsx]], [[apps/frontend/src/utils/priceStaleness.ts]], [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]]
 
 Under the hood, portfolio storage uses the canonical flat `investments` and
 `portfolio_transactions` tables. Migration 0087 converted the former base/child inheritance shape
@@ -118,7 +156,7 @@ current portfolio. It sets `is_active=false`; it does not delete the investment 
 history. Active portfolio pages, current totals, ticker choices, and manual trade broker defaults
 exclude archived holdings.
 
-Portfolio Overview provides an **Archived investments** section. Archived rows are clearly marked,
+The Portfolio page provides an **Archived investments** widget. Archived rows are clearly marked,
 retain a read-only detail and transaction-history view, and can be restored. Restoring sets
 `is_active=true` and returns the holding to current views and totals. Archive, restore, and other
 investment mutations invalidate both the investment and portfolio-transaction query families.
@@ -343,7 +381,7 @@ Watchlist asset-class selection includes metals.
 - Add Investment actions are context-restricted: Stocks & ETFs page allows only stock/etf classes, and Crypto page allows only crypto class.
 - **Phase 3.5 Enhancement**: `MetalsPage.tsx` is now a thin DRY wrapper that passes configurable props to `StocksPage`: `assetClasses={["metals"]}`, `titleKey="metals.title"`, `emptyTitleKey="metals.noMetals"`, `emptyDescriptionKey="metals.noMetalsDesc"`, `allowedAddAssetClasses={["metals"]}`. FX-aware P&L is enabled by default. StocksPage handles all asset-class logic without code duplication.
 
-Code links: [[apps/frontend/src/pages/portfolio/MetalsPage.tsx]], [[apps/frontend/src/App.tsx]], [[apps/frontend/src/components/layout/AppSidebar.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]]
+Code links: [[apps/frontend/src/pages/portfolio/MetalsPage.tsx]], [[apps/frontend/src/App.tsx]], [[apps/frontend/src/components/layout/AppSidebar.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]]
 
 ## Backend Enablement (Metals)
 
@@ -413,7 +451,7 @@ Current behavior:
   - **Latest day**: always uses the `is_latest` rate so the headline snapshot value reconciles with `/portfolio-summary` (and the Net Worth "Investments" total remains consistent with Portfolio Overview).
 
   > [!info] Invested cost-basis — resolved by ADR-074 (2026-06-11)
-  > The snapshot `invested` column uses transaction-date FX rates. As of ADR-074, the live Portfolio Summary endpoint also converts invested capital at transaction-date rates (no longer at today's rate). Performance page "Total Invested" and Portfolio Overview "Total Invested" now use the same semantics — the prior divergence is closed.
+  > The snapshot `invested` column uses transaction-date FX rates. As of ADR-074, the live Portfolio Summary endpoint also converts invested capital at transaction-date rates (no longer at today's rate). The Portfolio page's period chart and "Total invested" breakdown row now use the same semantics — the prior divergence is closed.
 
 Code links: [[apps/node-backend/src/repositories/infoRepository.js]], [[apps/node-backend/tests/infoRepository.test.js]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/lib/api.ts]], [[apps/node-backend/src/services/portfolio/snapshotBuilder.js]], [[apps/node-backend/tests/portfolioPerformanceSnapshotService.test.js]]
 
@@ -442,7 +480,7 @@ Code links: [[apps/node-backend/src/repositories/infoRepository.js]], [[apps/nod
 - Relative chart scaling fix: chained performance index baseline is `1` (not `100`), and plotted percentage now uses `(index - 1) * 100`; this removes 10x/100x over-scaling (for example, `2000%` shown instead of `200%`).
 - Performance absolute chart now explicitly plots class lines for stocks+ETFs, crypto, and metals; stocks+ETFs line uses a red stroke for faster visual separation from total portfolio.
 - Relative performance chart keeps stocks+ETFs line in red to align class-color semantics between absolute and relative views.
-- Performance Portfolio Value Over Time legend de-duplicates Area series so each label appears once (Stocks & ETFs, Crypto, Metals, Portfolio Value) with no visual regression in plotted data ([[apps/frontend/src/pages/portfolio/PerformancePage.tsx]]).
+- Performance Portfolio Value Over Time legend de-duplicates Area series so each label appears once (Stocks & ETFs, Crypto, Metals, Portfolio Value) with no visual regression in plotted data ([[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]]).
 - Monthly heatmap remains **month-based** and represents relative monthly investment returns (%) (investment performance only; no liquid-cash component).
 - Monthly heatmap return formula: `monthlyReturn = (currValue - prevValue - netFlow) / denominator`, with `denominator = prevValue + netFlow / 2` and fallback `denominator = prevValue` when computed denominator `<= 0`.
 - Heatmap first month is now `null` (no data) instead of forced `0.00%`, so the first displayed month does not imply a measured return without a prior month anchor; YTD is compounded from available non-null monthly returns.
@@ -465,7 +503,7 @@ When internet is unavailable and the backend cannot reach live price providers, 
 
 - **WatchlistChartDialog**: Validates `target_price` against `Number.isFinite() && > 0` before rendering chart domain; falls back to `[0, 1]` when no valid prices exist; removed unsafe `priceDiff!` assertions to prevent NaN chart rendering.
 - **AddToWatchlistDialog**: Guards `quoteData.price` with `Number.isFinite() && > 0` before `.toFixed()` to prevent "undefined" string interpolation and divide-by-zero in percentage calculations.
-- **PortfolioOverviewPage**: Pre-computes `totalAllocation` to avoid O(N²) reduce calls inside legend `.map()`, improving render performance on large portfolios.
+- **PortfolioPage**: Pre-computes `totalAllocation` to avoid O(N²) reduce calls inside legend `.map()`, improving render performance on large portfolios.
 
 ### Stale Price Indicators
 
@@ -479,7 +517,7 @@ Holding names in Stocks, ETFs, Crypto, and Metals, watchlist names, and the Inve
 
 - Component `StalePricesBanner.tsx` appears above portfolio holdings tables (Stocks, ETFs, Metals, Crypto) when one or more holdings have stale prices.
 - Banner shows count of stale holdings and includes a "Refresh Prices" button that triggers `usePortfolio().refreshPrices` for explicit retry.
-- Wired in `StocksPage.tsx`, `MetalsPage.tsx` (via DRY props to `StocksPage`), `CryptoPage.tsx`, and `PortfolioOverviewPage.tsx`.
+- Wired in `StocksPage.tsx`, `MetalsPage.tsx` (via DRY props to `StocksPage`), `CryptoPage.tsx`, and `PortfolioPage.tsx`.
 
 ### News Feed Reconciliation (2026-04-28 Bug Fix)
 
@@ -488,7 +526,7 @@ Holding names in Stocks, ETFs, Crypto, and Metals, watchlist names, and the Inve
 
 ### Performance & Net Worth Empty States
 
-- `PerformancePage.tsx`: dedicated `<PerformanceEmptyState>` replaces spinner when snapshots are empty; shows "No performance history yet" + "Refresh Prices" CTA to trigger initial snapshot backfill.
+- `PortfolioPage.tsx`: the hero chart slot shows "No performance history yet" + a "Refresh prices" CTA when snapshots are empty, triggering the initial snapshot backfill.
 - `NetWorthPage.tsx`: added empty-state branch ("No net worth history yet" + refresh CTA) when snapshots are empty; wires `StalePricesBanner` above the chart.
 - Both pages show these states only when no snapshots have been recorded yet, allowing graceful display instead of indefinite spinners.
 
@@ -503,7 +541,7 @@ Holding names in Stocks, ETFs, Crypto, and Metals, watchlist names, and the Inve
 - If prices are >1 day old, age in days appears next to the date (e.g., "Prices as of 2026-04-25 (2 days old)").
 - If no live prices have ever been recorded, shows "No live prices recorded" to indicate data freshness uncertainty.
 
-Code links: [[apps/frontend/src/hooks/useOnlineStatus.ts]], [[apps/frontend/src/utils/priceStaleness.ts]], [[apps/frontend/src/features/portfolio/StalePriceIndicator.tsx]], [[apps/frontend/src/features/portfolio/StalePricesBanner.tsx]], [[apps/frontend/src/features/portfolio/PortfolioNewsFeed.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/hooks/portfolio/useInvestments.ts]], [[apps/node-backend/src/services/reports/index.js]], [[apps/node-backend/src/repositories/investmentRepository.js]]
+Code links: [[apps/frontend/src/hooks/useOnlineStatus.ts]], [[apps/frontend/src/utils/priceStaleness.ts]], [[apps/frontend/src/features/portfolio/StalePriceIndicator.tsx]], [[apps/frontend/src/features/portfolio/StalePricesBanner.tsx]], [[apps/frontend/src/features/portfolio/PortfolioNewsFeed.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/hooks/portfolio/useInvestments.ts]], [[apps/node-backend/src/services/reports/index.js]], [[apps/node-backend/src/repositories/investmentRepository.js]]
 
 ## Performance Page Rewrite (Server-Computed Response)
 
@@ -521,12 +559,12 @@ rounding. The writer copies account identity into the row so later retagging or 
 rewrite recorded history. It never backfills earlier dates and does not expose the dormant replay-based
 `portfolio_snapshot_accounts` table.
 
-`GET /api/info/portfolio-performance/by-broker` supplies the Performance page's per-broker area
-chart. A new install or upgraded database therefore shows the chart only from its first post-upgrade
+`GET /api/info/portfolio-performance/by-broker` supplies the Portfolio page's per-broker area
+chart (widget `brokerChart`, filtered client-side to the hero period). A new install or upgraded database therefore shows the chart only from its first post-upgrade
 snapshot day. The table is included in normal database backups. See
 [[docs/adr/143-forward-only-broker-performance-history|ADR-143]].
 
-The Performance page architecture was significantly refactored to move heavy computations from the client to the server:
+The performance architecture was significantly refactored to move heavy computations from the client to the server:
 
 **Backend enhancements (`/api/info/portfolio-performance`):**
 
@@ -545,7 +583,7 @@ The Performance page architecture was significantly refactored to move heavy com
 - New service: [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]] with functions: `computeMetrics(snapshots)`, `computeHeatmap(snapshots)`, `getBreakdownSummary(currency)`
 - Payload shaping: [[apps/node-backend/src/services/info/performanceHelpers.js]] filters the requested period and returns daily snapshots without downsampling
 
-**Frontend simplification (`PerformancePage.tsx`, `PerformanceBreakdown.tsx`):**
+**Frontend simplification (now `PortfolioPage.tsx`, `PerformanceBreakdown.tsx`):**
 
 - Removed 4 heavy useMemo blocks: `filteredSnapshots`, `downsampledSnapshots`, `overallMetrics`, `heatmapData`
 - Kept only 2 lightweight mapping transforms: `chartData`, `relativePerformanceData`
@@ -555,16 +593,12 @@ The Performance page architecture was significantly refactored to move heavy com
 - Removed `useQuery` for exchange rates in breakdown component
 - Removed `convertToTarget` helper (server now does all conversions)
 
-### Canonical portfolio-value hero (2026-08-27)
+### Canonical portfolio-value hero
 
-Portfolio Overview and Performance both render
-`features/portfolio/TotalValueCard.tsx` for the portfolio-value hero. The
-shared anatomy owns the headline, feature sheen, trend wash, sparkline, and
-asset-allocation treatment. Performance supplies its invested value, net P&L,
-and FX attribution through the component's `headlineDetails` slot, then keeps
-its three return facts beside the hero. It must not define a page-local
-`TotalValueCard`; this keeps the same financial concept visually stable across
-sibling portfolio routes.
+Since the 2026-10-06 merge the single Portfolio page owns the value hero (see
+"Merged Portfolio page" above). `features/portfolio/TotalValueCard.tsx` is no
+longer rendered by a page; it remains in the tree with its unit test until a
+follow-up removes it.
 
 **Performance impact:**
 
@@ -578,9 +612,9 @@ sibling portfolio routes.
 - **X-axis adaptive formatting**: For periods ≤ 6 months (5d, 1m, 3m, 6m), x-axis ticks use the shared `dayTick` role (day + month, e.g., "15 Jan"). Longer periods use `monthTick` (month + two-digit year, e.g., "Jan 26"). Detailed tooltips use `detail` (day + month + four-digit year). Locale-aware month names follow the app language.
 - **Y-axis adaptive domain**: For short periods (5d, 1m, 3m), the Y-axis uses `auto/auto` domain to zoom into the data range and highlight price fluctuations. For longer periods (≥ 6m), Y-axis uses `0/auto` domain to anchor at zero, showing full historical context.
 
-Code links: [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/features/portfolio/TotalValueCard.tsx]], [[apps/frontend/src/features/portfolio/PerformanceBreakdown.tsx]], [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]]
+Code links: [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]], [[apps/frontend/src/features/portfolio/PerformanceBreakdown.tsx]], [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]]
 
-Code links: [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]], [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/portfolio/MetalsPage.tsx]], [[apps/frontend/src/lib/api.ts]]
+Code links: [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]], [[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]], [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/portfolio/MetalsPage.tsx]], [[apps/frontend/src/lib/api.ts]]
 
 ## Portfolio Summary: Single Source of Truth (Phase 14)
 
@@ -589,7 +623,7 @@ Code links: [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[a
 Prior to Phase 14 (2026-04-29), dashboard and performance page displayed portfolio totals via two separate computation paths with different FX timing, causing visible divergence:
 
 - **Dashboard**: Client-side computation via loop over per-investment summaries; FX conversion applied at request time
-- **Performance page**: Server-side computation from pre-computed daily snapshots; FX rates embedded from snapshot creation time (potentially stale by days)
+- **Period chart and figures**: Server-side computation from pre-computed daily snapshots; FX rates embedded from snapshot creation time (potentially stale by days)
 
 Result: Same portfolio, same moment, different total values shown on two pages (e.g., EUR 100,000 vs EUR 99,999.50).
 
@@ -608,7 +642,7 @@ New realtime endpoint serves portfolio totals (currentValue, totalInvested, tota
 **Frontend:**
 
 - Dashboard headline cards now source from `usePortfolioSummaryQuery(displayCurrency)` instead of client-side FX loop
-- Performance page headline metrics overridden with realtime values from portfolio-summary endpoint
+- Portfolio page headline metrics overridden with realtime values from portfolio-summary endpoint
 - Snapshot timeseries (value-over-time chart) still uses historical performance snapshots; only headline totals come from realtime summary
 
 **Reconciliation invariant** (verified by test):
@@ -648,7 +682,7 @@ All invalidations cascade through `clearInvestmentsCaches()` → `invalidatePort
 - Startup/scheduled behavior: backend warms inflation cache at startup and refreshes together with exchange-rate refresh cadence.
 - New persistence table `belgian_inflation_rates` stores monthly values (`month_date`, `monthly_rate`, `source`, `fetched_at`, `updated_at`) for deterministic portfolio calculations and offline resilience.
 
-Code links: [[apps/node-backend/src/services/belgianInflationService.js]], [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/main.js]], [[apps/frontend/src/lib/api.ts]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]]
+Code links: [[apps/node-backend/src/services/belgianInflationService.js]], [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/main.js]], [[apps/frontend/src/lib/api.ts]], [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]]
 
 ### Performance Improvements (2026-05-08 Bug Hunt)
 
@@ -662,7 +696,7 @@ Code links: [[apps/node-backend/src/services/belgianInflationService.js]], [[app
 - Price history endpoint and portfolio calculations use read-through behavior: DB history first, provider fetch when needed, then DB upsert.
 - Startup backfill populates historical quotes for currently held unit-based assets (`stock`, `etf`, `crypto`, `metals`) from first transaction date.
 
-Code links: [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/main.js]], [[alembic/versions/0019_asset_price_history_cache.py]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]]
+Code links: [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/main.js]], [[alembic/versions/0019_asset_price_history_cache.py]], [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]]
 
 ## Cost Basis Methods (Phase 6)
 
@@ -810,9 +844,9 @@ Each investment can be individually included in or excluded from the ticker. The
 
 ### i18n keys
 
-### Placement in PortfolioOverviewPage
+### Placement in PortfolioPage
 
-The ticker is the **first widget** in `getPortfolioWidgets()` (id `ticker`, `defaultVisible: true`). It renders between `<StalePricesBanner>` and the summary cards grid — at the top of the overview content area, below the page header.
+The ticker is the **first widget** in `getPortfolioWidgets()` (id `ticker`, `defaultVisible: true`). It renders between `<StalePricesBanner>` and the value hero — at the top of the page content area, below the page header.
 
 Users can hide it from the widget visibility dialog (`portfolio.widget.ticker` i18n key).
 
@@ -832,7 +866,7 @@ Users can hide it from the widget visibility dialog (`portfolio.widget.ticker` i
 
 The ticker reuses the existing `/api/market/quote` batch endpoint and the existing `PATCH /api/investments/:id` endpoint (with the new `show_in_ticker` field). The `docs/reference/api-endpoint-matrix.md` count is unchanged.
 
-Code links: [[apps/frontend/src/features/portfolio/PortfolioTicker.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/index.css]], [[apps/frontend/src/hooks/useOnlineStatus.ts]], [[apps/frontend/src/lib/api.ts]]
+Code links: [[apps/frontend/src/features/portfolio/PortfolioTicker.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]], [[apps/frontend/src/index.css]], [[apps/frontend/src/hooks/useOnlineStatus.ts]], [[apps/frontend/src/lib/api.ts]]
 
 ## Per-Account Holdings (2026-06-18, ADR-091 / ADR-100)
 
@@ -869,7 +903,7 @@ Two ADR-108 semantic edges on fully-assigned multi-broker instruments matter: un
 
 Callers resolve names from the accounts list. See [[docs/api/portfolio-summary|Portfolio Summary API]] for the response shape and [[docs/adr/108-portfolio-accounts-v2-broker-tags|ADR-108]] for the model.
 
-The Portfolio Overview **All Investments** card exposes an All brokers, named-account, and
+The Portfolio page **Holdings** card exposes an All brokers, named-account, and
 Unassigned filter. Named and Unassigned views select investments from each summary's nested
 `byAccount` rows and show that selection's holdings, gross invested cost, profit/loss, and subtotal
 directly from the server partitions. Units and global income labels are hidden in a filtered view
@@ -892,7 +926,7 @@ account-local sell does not reduce an unrelated broker's holding.
 
 ### Unassigned-lot nudge
 
-The Portfolio Overview All Investments row shows one assignment nudge when an instrument has
+The Portfolio page Holdings list shows one assignment nudge when an instrument has
 unassigned lot-bearing rows (`buy`, `gift`, or `sell`). Unassigned dividends, fees, taxes, and
 adjustments do not trigger it because they do not affect `fullyAssigned`.
 
@@ -978,11 +1012,10 @@ Multi-currency portfolios now expose a decomposition of total gain into **asset 
 
 | Surface                                       | What is shown                                                                                                                       |
 | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| **Portfolio Overview — Total Gain/Loss card** | Subline: "Asset gain: X · FX effect: Y" beneath the headline gain/loss                                                              |
+| **Portfolio page — Gains, income and costs**  | "Asset gain" and "FX effect" rows beneath the unrealized gain                                                                       |
 | **Stocks & ETFs / Metals tables**             | FX P/L column — shown only when at least one holding is in a foreign currency                                                       |
 | **Crypto table**                              | FX P/L column — same condition                                                                                                      |
-| **Performance page — headline metrics**       | FX attribution line below Total Gain/Loss                                                                                           |
-| **Performance page — value-over-time chart**  | Optional FX-neutral toggle (dashed series) showing `value_fx_neutral` when migration 0039 has been applied and snapshots recomputed |
+| **Portfolio page — value by class chart**     | Optional FX-neutral toggle (dashed series) showing `value_fx_neutral` when migration 0039 has been applied and snapshots recomputed |
 | **Investment detail dialog**                  | FX Attribution card: shows `assetGain`, `fxGain`, `nativeCurrentValue`                                                              |
 
 ### Fallback rate disclosure
@@ -990,7 +1023,7 @@ Multi-currency portfolios now expose a decomposition of total gain into **asset 
 When a transaction lacked a transaction-date rate and the backend fell back to today's rate, the `usedFallbackRate` flag is `true` in the API response. The UI surfaces this as a small warning callout on the relevant card or row, indicating that the FX attribution figures may be approximate for that investment.
 
 > [!warning]
-> The FX-neutral chart toggle on the Performance page requires migration `0039_add_value_fx_neutral_to_snapshots` to be applied (`bun run db:upgrade`) and snapshots to be recomputed (happens automatically on next startup after migration). Until then, the toggle is hidden.
+> The FX-neutral chart toggle on the Portfolio page requires migration `0039_add_value_fx_neutral_to_snapshots` to be applied (`bun run db:upgrade`) and snapshots to be recomputed (happens automatically on next startup after migration). Until then, the toggle is hidden.
 
 ### Semantics of invested/gainLoss after ADR-074
 
@@ -1148,7 +1181,7 @@ See also: [[docs/api/settings|Settings API — `rebalance_plans` key]], [[docs/a
 
 ## Explicit look-through exposure (2026-09-14, ADR-150)
 
-The Portfolio Overview shows issuer, sector, and issuer-country exposure across direct positions
+The Portfolio page's exposure widget shows issuer, sector, and issuer-country exposure across direct positions
 and supported constituent rows from user-supplied fund-holdings documents. Source bundles use
 explicit investment or typed security identifiers. Fund attachments require an exact typed
 share-class identifier match; ticker, name, and currency guesses are not allowed.

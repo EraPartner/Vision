@@ -2,7 +2,7 @@
 title: Cash Flow Forecast
 type: feature
 status: active
-date: 2026-09-30
+date: 2026-10-06
 updated: 2026-09-25
 last_modified: 2026-09-05
 tags: [feature, cash-flow, forecast, planning, aggregations, phase-6, phase-10, phase-c, phase-d, phase-e, phase-g, planned-transactions, statistical-forecasting, ensemble-methods, ensemble-v2, empirical-bayes, frontend-visualization, multi-method-forecast, diagnostics-sheet, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience]
@@ -998,7 +998,7 @@ Walk-forward backtest is per-calendar-month: it iterates historical months and m
 ### Frontend wiring
 
 - `apps/frontend/src/features/dashboard/CashFlowForecastChart.tsx` owns `mode` and `rollingDays` state, passes it to `useCashflowForecastQueries` (which enables the matching query), and renders either `ForecastInner` or `ForecastInnerRolling`.
-- `apps/frontend/src/features/dashboard/ForecastInnerRolling.tsx` uses `LineChart` with `xIsDate` and a vertical reference line at `data.today`. X-axis month abbreviations use the app **language** setting (`language === "nl" ? "nl-NL" : "en-US"`), matching the canonical pattern from `NetWorthPage` and `PerformancePage`. The y-axis currency formatter independently uses `numberFormatToLocale(appSettings.numberFormat)`. See [[docs/components/dashboard#ForecastInnerRolling (Phase H)|ForecastInnerRolling component doc]] for the fix rationale.
+- `apps/frontend/src/features/dashboard/ForecastInnerRolling.tsx` uses `LineChart` with `xIsDate` and a vertical reference line at `data.today`. X-axis month abbreviations use the app **language** setting (`language === "nl" ? "nl-NL" : "en-US"`), matching the canonical pattern from `NetWorthPage` and `PortfolioPage`. The y-axis currency formatter independently uses `numberFormatToLocale(appSettings.numberFormat)`. See [[docs/components/dashboard#ForecastInnerRolling (Phase H)|ForecastInnerRolling component doc]] for the fix rationale.
 - `apps/frontend/src/utils/forecastMerge.ts` exports `mergeForViewRolling` that produces date-keyed `MergedDayDate[]` rows (with `t: Date`) instead of dayNum-keyed rows.
 - `apps/frontend/src/components/charts/LineChart.tsx` extends `LineReferenceLine` to support an optional `x: Date | number` field for vertical reference lines (backwards-compatible with existing `y` references).
 

@@ -81,15 +81,6 @@ describe("TotalValueCard", () => {
         expect(screen.getByText("Bond Fund")).toBeInTheDocument();
     });
 
-    it("keeps PerformancePage from defining a second TotalValueCard", () => {
-        const source = readFileSync(
-            join(process.cwd(), "src/pages/portfolio/PerformancePage.tsx"),
-            "utf8",
-        );
-        expect(source).not.toMatch(/function TotalValueCard\s*\(/);
-        expect(source).toContain('from "@/features/portfolio/TotalValueCard"');
-    });
-
     it("keeps the Net Worth total centered beside its breakdown on one surface", () => {
         const source = readFileSync(
             join(

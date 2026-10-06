@@ -400,7 +400,7 @@ server needed. Use the filesystem and Vitest collection for current totals.
    - `StatisticsPage.integration.test.tsx` (18 tests) — Analytics tabs, including live recipient-insights rendering
    - `AIChatPage.integration.test.tsx` (15 tests) — AI chat interface, message submission, error handling
    - `ImportReviewPage.integration.test.tsx` (14 tests) — Import staging, transaction preview, conflict resolution
-   - `PortfolioOverviewPage.integration.test.tsx` (14 tests) — Portfolio summary page rendering
+   - `PortfolioPage.integration.test.tsx` (26 tests) — merged portfolio overview and performance page
    - `MarketLookupPage.integration.test.tsx` (12 tests) — Market data lookup, quote search, news display
    - `DbMaintenancePage.integration.test.tsx` (12 tests) — Database operations, view refresh, cache clearing
    - `AddTransactionSheet.integration.test.tsx` (23 tests; originally `AddTransactionDialog.integration.test.tsx`) — Sheet open/close, form submission, kinds, duplicate detection

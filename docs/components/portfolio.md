@@ -2,8 +2,8 @@
 title: Portfolio Components
 type: component
 status: active
-date: 2026-06-24
-updated: 2026-08-31
+date: 2026-10-06
+updated: 2026-10-06
 tags:
   [
     components,
@@ -192,6 +192,13 @@ Shows detailed information about an investment.
 
 The FX-aware realized/unrealized rows are gated on `holding.currency !== targetCurrency`. EUR or base-currency holdings never show the FX rows.
 
+### Controlled open state (2026-10-06)
+
+`InvestmentDetailDialog` accepts optional `open` / `onOpenChange` props. When `open` is provided the
+dialog is controlled, renders no trigger, and mounts its nested dialogs as soon as it opens; this
+lets the merged Portfolio page open one page-level detail dialog from holdings-row activation and
+the row menu. Without the props the dialog keeps its original uncontrolled trigger behaviour.
+
 ```typescript
 // No longer accepted — these props are removed:
 // fxAwarePnl?: { realized: number; unrealized: number; unrealizedPercent: number }
@@ -356,7 +363,7 @@ Code links: [[apps/frontend/src/features/portfolio/AddInvestmentFromMarketDialog
 
 - Unit-based behavior now includes metals for add transaction, detail valuation, and performance/overview calculations.
 
-Code links: [[apps/frontend/src/features/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/features/portfolio/AddPortfolioTxnDialog.tsx]], [[apps/frontend/src/features/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/features/portfolio/AddInvestmentFromMarketDialog.tsx]], [[apps/frontend/src/hooks/usePortfolio.ts]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/features/portfolio/AddToWatchlistDialog.tsx]]
+Code links: [[apps/frontend/src/features/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/features/portfolio/AddPortfolioTxnDialog.tsx]], [[apps/frontend/src/features/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/features/portfolio/AddInvestmentFromMarketDialog.tsx]], [[apps/frontend/src/hooks/usePortfolio.ts]], [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]], [[apps/frontend/src/features/portfolio/AddToWatchlistDialog.tsx]]
 
 ---
 
@@ -406,11 +413,11 @@ The popover header shows a count badge: `portfolio.ticker.manageCount` with `{sh
 ```tsx
 import { PortfolioTicker } from "@/features/portfolio/PortfolioTicker";
 
-// In PortfolioOverviewPage — rendered when isVisible('ticker') is true:
+// In PortfolioPage — rendered when isVisible('ticker') is true:
 <PortfolioTicker items={summaries} />;
 ```
 
-Code links: [[apps/frontend/src/features/portfolio/PortfolioTicker.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/index.css]], [[apps/frontend/src/hooks/useOnlineStatus.ts]], [[apps/frontend/src/types/api.ts]], [[apps/frontend/src/types/portfolio.ts]]
+Code links: [[apps/frontend/src/features/portfolio/PortfolioTicker.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]], [[apps/frontend/src/index.css]], [[apps/frontend/src/hooks/useOnlineStatus.ts]], [[apps/frontend/src/types/api.ts]], [[apps/frontend/src/types/portfolio.ts]]
 
 ---
 
@@ -502,7 +509,7 @@ Code link: [[apps/frontend/src/pages/research/WatchlistPage.tsx]], [[apps/fronte
 - [[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx]] - Exchange-rate fetched-at/description timestamps use app date-time format
 - [[apps/frontend/src/pages/research/MarketLookupPage.tsx]] - Chart tooltip timestamps and analyst/news dates use app date-time/date format
 - [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]] - Month labels use app-language locale (`en-US`/`nl-NL`), while chart/table values use app settings; page includes Total/Investments/Liquid series toggle, daily-only timeline with per-day hover values, horizontal scroll/zoom controls, and a virtualized daily breakdown table
-- [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]] - Absolute and relative charts run on day-level timeline points (`YYYY-MM-DD`) for more realistic fluctuation shape; relative contribution adjustment uses day-keyed net flows (not month-bucket chart alignment); chart x-axis keys by day internally while rendering locale-formatted month-year ticks for readability; relative performance keeps chained index baseline `1` with display conversion `(index - 1) * 100`; monthly heatmap remains month-based and keeps Modified Dietz-style monthly return denominator `prevValue + netFlow / 2` (fallback `prevValue` when denominator <= 0); first heatmap month is rendered as no data (`null`) rather than forced `0%`; inflation adjustment compounds backend Belgian monthly rates (`/api/info/inflation-rates`) keyed by `YYYY-MM`; when DB-only historical quote cache is empty for an investment, the page now performs a non-DB fallback fetch once to hydrate and use provider history instead of flattening that asset line.
+- [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]] - Absolute and relative charts run on day-level timeline points (`YYYY-MM-DD`) for more realistic fluctuation shape; relative contribution adjustment uses day-keyed net flows (not month-bucket chart alignment); chart x-axis keys by day internally while rendering locale-formatted month-year ticks for readability; relative performance keeps chained index baseline `1` with display conversion `(index - 1) * 100`; monthly heatmap remains month-based and keeps Modified Dietz-style monthly return denominator `prevValue + netFlow / 2` (fallback `prevValue` when denominator <= 0); first heatmap month is rendered as no data (`null`) rather than forced `0%`; inflation adjustment compounds backend Belgian monthly rates (`/api/info/inflation-rates`) keyed by `YYYY-MM`; when DB-only historical quote cache is empty for an investment, the page now performs a non-DB fallback fetch once to hydrate and use provider history instead of flattening that asset line.
 - [[apps/frontend/src/pages/research/WatchlistPage.tsx]] - Phase 3.6 refactored to use `apiClient` watchlist methods (`getWatchlist()`, `getMarketQuotes()`, `deleteWatchlistItem()`) instead of raw fetch calls; 60s auto-refresh interval on market quotes via React Query
 
 - [[apps/frontend/src/lib/api.ts]] - Adds `getBelgianInflationRates({ start_month?, end_month? })` client helper for `GET /api/info/inflation-rates`; Phase 3.6 adds watchlist methods (`getWatchlist()`, `createWatchlistItem()`, `updateWatchlistItem()`, `deleteWatchlistItem()`) and market quotes method (`getMarketQuotes(symbols)`).

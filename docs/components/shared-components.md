@@ -631,8 +631,6 @@ The colours are toggle-reactive: they resolve from `--gain` and `--loss` tokens 
 | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `StatCard` (dashboard)                                                  | Derived from the existing `trend` prop: `"income"/"up"` → `gain`; `"expense"/"down"` → `loss`; `"neutral"` → `neutral` |
 | `TotalValueCard` (portfolio overview)                                   | `isGain` prop: `true` → `gain`, `false` → `loss`                                                                       |
-| `PortfolioOverviewPage` summary cards (gain/loss, realized, unrealized) | Sign of the card's value                                                                                               |
-| `PerformancePage` total-value card                                      | Sign of the return value                                                                                               |
 | `NetSummaryCard`                                                        | Sign of last month's net result                                                                                        |
 | `MonthlyRhythm`                                                         | Sign of the selected month's net result                                                                                |
 | `NextSevenDaysStrip`                                                    | Sign of the seven-day net total                                                                                        |
@@ -650,7 +648,7 @@ The following rule applies across all summary/stat cards:
 
 > [!info] The gain/loss BORDER that previously appeared on `PerformancePage` CompactReturnCard and TotalValueCard (via `liquid-glass-trend-up/down` CSS classes) was removed in this pass. The hue is retained via `<TrendHue>`; the border is gone for cross-app consistency. The `glass-trend-up / glass-trend-down / liquid-glass-trend-up / liquid-glass-trend-down` classes have been deleted from `index.css` as they are now orphaned.
 
-Code links: [[apps/frontend/src/components/shared/TrendHue.tsx]], [[apps/frontend/src/components/shared/StatCard.tsx]], [[apps/frontend/src/features/portfolio/TotalValueCard.tsx]], [[apps/frontend/src/features/dashboard/NetSummaryCard.tsx]], [[apps/frontend/src/features/statistics/MonthlyRhythm.tsx]], [[apps/frontend/src/features/planned/NextSevenDaysStrip.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]]
+Code links: [[apps/frontend/src/components/shared/TrendHue.tsx]], [[apps/frontend/src/components/shared/StatCard.tsx]], [[apps/frontend/src/features/portfolio/TotalValueCard.tsx]], [[apps/frontend/src/features/dashboard/NetSummaryCard.tsx]], [[apps/frontend/src/features/statistics/MonthlyRhythm.tsx]], [[apps/frontend/src/features/planned/NextSevenDaysStrip.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]]
 
 ---
 
@@ -754,7 +752,7 @@ The former `SuggestionCard` dashboard widget has been deleted. `UpcomingPayments
 `TextLink` is the canonical inline router link for entity names and numeric drill-downs. It supplies the shared underline decoration and `ring-ring/70` focus treatment. Use the primary tone for names, the inherited tone when the surrounding cell owns gain/loss colour, and the muted tone for secondary labels.
 
 Ordinary cross-page navigation must expose a real `href`. Recipient/category/account names, Owes transaction names, holding and watchlist names, database-table names, research results/tiles, and statistics pivot cells use links. Programmatic navigation remains appropriate for post-mutation redirects, startup normalization, command execution, and in-page selection state.
-| TrendHue | StatCard, TotalValueCard, NetSummaryCard, MonthlyRhythm, NextSevenDaysStrip, PortfolioOverviewPage summary cards, PerformancePage cards, NetWorthPage StatCard |
+| TrendHue | StatCard, TotalValueCard, NetSummaryCard, MonthlyRhythm, NextSevenDaysStrip, NetWorthPage StatCard |
 
 ### StateBlock
 

@@ -429,13 +429,12 @@ package "Budgeting" {
 }
 
 package "Portfolio" {
-  class PortfolioOverviewPage <<path: /portfolio>>
+  class PortfolioPage <<path: /portfolio>>
   class StocksPage <<path: /portfolio/stocks>>
   class CryptoPage <<path: /portfolio/crypto>>
   class MetalsPage <<path: /portfolio/metals>>
   class RealEstatePage <<path: /portfolio/real-estate>>
   class SavingsPage <<path: /portfolio/savings>>
-  class PerformancePage <<path: /portfolio/performance>>
   class NetWorthPage <<path: /portfolio/net-worth>>
   class PortfolioTaxPage <<path: /portfolio/tax>>
 }
@@ -466,15 +465,14 @@ AppLayout --> ImportPage
 AppLayout --> OwesPage
 AppLayout --> TaxOverviewPage
 
-AppLayout --> PortfolioOverviewPage
-PortfolioOverviewPage --> StocksPage
-PortfolioOverviewPage --> CryptoPage
-PortfolioOverviewPage --> MetalsPage
-PortfolioOverviewPage --> RealEstatePage
-PortfolioOverviewPage --> SavingsPage
-PortfolioOverviewPage --> PerformancePage
-PortfolioOverviewPage --> NetWorthPage
-PortfolioOverviewPage --> PortfolioTaxPage
+AppLayout --> PortfolioPage
+PortfolioPage --> StocksPage
+PortfolioPage --> CryptoPage
+PortfolioPage --> MetalsPage
+PortfolioPage --> RealEstatePage
+PortfolioPage --> SavingsPage
+PortfolioPage --> NetWorthPage
+PortfolioPage --> PortfolioTaxPage
 
 AppLayout --> ResearchHomePage
 ResearchHomePage --> MarketLookupPage
@@ -688,7 +686,7 @@ A second June 2026 batch with 18 items. See [[docs/adr/071-premium-v3-effects-to
 
 #### Chart Interactions (new)
 
-- **Scrub-to-compare**: `scrub.tsx` exports `useChartScrub` + `formatScrubDelta`. AreaChart/LineChart accept a `scrubbable` prop. Pointer-drag selects a range, shows an opaque Δ pill (abs + %), and suppresses the tooltip while scrubbing. Moving chart tooltips and delta pills avoid backdrop blur so pointer movement does not re-rasterize a thick glass surface. Enabled on: CashFlowComparisonChart, ForecastInner(+Rolling), BankBalancesWidget, PerformancePage (2×), NetWorthChart.
+- **Scrub-to-compare**: `scrub.tsx` exports `useChartScrub` + `formatScrubDelta`. AreaChart/LineChart accept a `scrubbable` prop. Pointer-drag selects a range, shows an opaque Δ pill (abs + %), and suppresses the tooltip while scrubbing. Moving chart tooltips and delta pills avoid backdrop blur so pointer movement does not re-rasterize a thick glass surface. Enabled on: CashFlowComparisonChart, ForecastInner(+Rolling), BankBalancesWidget, PortfolioPage (value hero and relative performance), NetWorthChart.
 - **Synced crosshairs**: `ChartSyncContext.tsx` exports `ChartSyncProvider` + `useChartSync`. Charts sharing a `syncId` under one provider mirror hover (nearest point, with a domain guard so disjoint timelines don't pin to edges). Dashboard time-series share `syncId="dashboard-timeline"`. `ChartSyncProvider` wraps `DashboardPage`. BarChart (MonthlyTrends) excluded — categorical band scale.
 - **Sweep reveal**: AreaChart animates a clipPath on mount.
 
@@ -1038,10 +1036,10 @@ Located in `apps/frontend/src/components/charts/`:
 
 - `AreaChart.tsx` — Stacked time-series areas (DashboardPage, StatisticsPage)
 - `BarChart.tsx` — Grouped or stacked bars (StatisticsPage, DashboardPage)
-- `StackedBarChart.tsx` — Multi-series bar stacks (PerformancePage)
+- `StackedBarChart.tsx` — Multi-series bar stacks (PortfolioPage)
 - `PieChart.tsx` — Basic pie distribution (StatisticsPage)
 - `DonutChart.tsx` — Donut/ring distribution (StatisticsPage)
-- `LineChart.tsx` — Multi-line trends (PerformancePage, WatchlistPage)
+- `LineChart.tsx` — Multi-line trends (PortfolioPage, WatchlistPage)
 - `Sparkline.tsx` — Mini inline sparklines (StatCard, tables)
 - `Candlestick.tsx` — OHLC price action (StocksPage, CryptoPage)
 - `TreemapChart.tsx` — Hierarchical spending breakdown (StatisticsPage)

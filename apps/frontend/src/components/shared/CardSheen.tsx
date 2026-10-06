@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
  * - `default` — the KPI/widget tier: 8rem, `--glass-highlight`, a light sheen
  *   in both modes. Opt in only for deliberately prominent surfaces.
  * - `feature` — a prominent in-page feature card: the same token and tone as
- *   `default`, at 10rem. Today this is PerformancePage's total-value card.
+ *   `default`, at 10rem. Today this is the portfolio TotalValueCard.
  * - `hero` — a page's single hero tile (today only the dashboard's
  *   NetSummaryCard): 12rem, `--background`, which inverts the tone by mode —
  *   pale wash in light, dark vignette in dark. Deliberate, not drift.

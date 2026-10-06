@@ -25,9 +25,8 @@ describe("currency icon semantics", () => {
             expect(source, file).toContain("Banknote");
         }
 
-        const performance = read("src/pages/portfolio/PerformancePage.tsx");
-        expect(performance).not.toContain("DollarSign");
-        expect(performance).toContain("<TotalValueCard");
+        const portfolio = read("src/pages/portfolio/PortfolioPage.tsx");
+        expect(portfolio).not.toContain("DollarSign");
     });
 
     it("uses the payment-specific icon for the owes action", () => {

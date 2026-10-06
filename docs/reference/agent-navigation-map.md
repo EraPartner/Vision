@@ -94,13 +94,12 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 
 | Layer              | Files                                                                                                                                                                                                    |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Overview Page      | [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]]                                                                                                                                          |
+| Portfolio Page     | [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]] (overview + performance)                                                                                                                 |
 | Stocks Page        | [[apps/frontend/src/pages/portfolio/StocksPage.tsx]]                                                                                                                                                     |
 | Crypto Page        | [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]]                                                                                                                                                     |
 | Metals Page        | [[apps/frontend/src/pages/portfolio/MetalsPage.tsx]]                                                                                                                                                     |
 | Real Estate Page   | [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]]                                                                                                                                                 |
 | Savings Page       | [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]]                                                                                                                                                    |
-| Performance Page   | [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]]                                                                                                                                                |
 | Net Worth Page     | [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]]                                                                                                                                         |
 | Watchlist Page     | [[apps/frontend/src/pages/research/WatchlistPage.tsx]]                                                                                                                                                   |
 | Hook               | [[apps/frontend/src/hooks/usePortfolio.ts]]                                                                                                                                                              |
@@ -204,13 +203,13 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | `/import`                | [[apps/frontend/src/pages/ImportPage.tsx]]                       |
 | `/owes`                  | [[apps/frontend/src/pages/OwesPage.tsx]]                         |
 | `/tax`                   | [[apps/frontend/src/pages/TaxOverviewPage.tsx]]                  |
-| `/portfolio`             | [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]]  |
+| `/portfolio`             | [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]]  |
 | `/portfolio/stocks`      | [[apps/frontend/src/pages/portfolio/StocksPage.tsx]]             |
 | `/portfolio/crypto`      | [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]]             |
 | `/portfolio/metals`      | [[apps/frontend/src/pages/portfolio/MetalsPage.tsx]]             |
 | `/portfolio/real-estate` | [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]]         |
 | `/portfolio/savings`     | [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]]            |
-| `/portfolio/performance` | [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]]        |
+| `/portfolio/performance` | redirect to `/portfolio` ([[apps/frontend/src/lib/routePreload.ts]] `legacyRouteRedirects`) |
 | `/portfolio/net-worth`   | [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]] |
 | `/admin/exchange-rates`  | [[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx]]          |
 | `/research/watchlist`    | [[apps/frontend/src/pages/research/WatchlistPage.tsx]]           |

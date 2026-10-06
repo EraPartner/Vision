@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { matchRoutes } from "react-router";
 import {
     appRouteManifest,
+    legacyRouteRedirects,
     routeLoaders,
     preloadRoute,
 } from "@/lib/routePreload";
@@ -34,7 +35,6 @@ const EXPECTED_PATHS = [
     "/portfolio/metals",
     "/portfolio/real-estate",
     "/portfolio/savings",
-    "/portfolio/performance",
     "/portfolio/net-worth",
     "/portfolio/import",
     "/portfolio/import/:batchId/review",
@@ -71,6 +71,16 @@ describe("routeLoaders map", () => {
         );
         for (const { path, loader } of appRouteManifest) {
             expect(routeLoaders[path]).toBe(loader);
+        }
+    });
+
+    it("redirects the retired Performance page into the merged Portfolio page", () => {
+        expect(legacyRouteRedirects).toEqual([
+            { from: "/portfolio/performance", to: "/portfolio" },
+        ]);
+        for (const { from, to } of legacyRouteRedirects) {
+            expect(routeLoaders[from]).toBeUndefined();
+            expect(typeof routeLoaders[to]).toBe("function");
         }
     });
 

@@ -27,7 +27,7 @@ export function usePortfolioPrefetch(_workspace?: string) {
   }, [queryClient, currency]);
 
   const prefetchPerformance = useCallback(() => {
-    // Same portfolioKeys.performance key PerformancePage reads, so the
+    // Same portfolioKeys.performance key PortfolioPage reads, so the
     // prefetch warms that exact cache entry.
     queryClient.prefetchQuery({
       queryKey: portfolioKeys.performance(currency, "all"),

@@ -365,7 +365,7 @@ and test totals; per-file counts here are updated only when that row is touched.
 | `apps/frontend/src/pages/__tests__/AddTransactionSheet.integration.test.tsx`      | Add Transaction sheet (Expense / Income / Transfer, validation, duplicate handling)         | 23    |
 | `apps/frontend/src/features/transactions/__tests__/TransactionInspector.test.tsx` | Transaction inspector (docked and sheet, field edit, row actions, tags, attachments)        | 26    |
 | `apps/frontend/src/pages/__tests__/PlannedPaymentsPage.integration.test.tsx`      | Planned Payments page                                                                       | 16    |
-| `apps/frontend/src/pages/__tests__/PortfolioOverviewPage.integration.test.tsx`    | Portfolio Overview page                                                                     | 14    |
+| `apps/frontend/src/pages/__tests__/portfolio/PortfolioPage.integration.test.tsx`    | Portfolio Overview page                                                                     | 14    |
 | `apps/frontend/src/pages/__tests__/OwesPage.integration.test.tsx`                 | Owes/Splits page (with export CSV tests)                                                    | 17    |
 | `apps/frontend/src/pages/__tests__/AdminPages.integration.test.tsx`               | Admin pages (dashboard, provider health, endpoint liveness)                                 | 25    |
 | `apps/frontend/src/pages/__tests__/CategoriesPage.integration.test.tsx`           | Categories management                                                                       | 18    |
@@ -445,9 +445,9 @@ await screen.findByRole("heading");
 
 **Why:** `findByRole(...)` waits for the element to appear and stabilize. Once it returns, the element is in a stable DOM state. The subsequent `toBeInTheDocument()` check is redundant (already confirmed by the successful find) and risks catching stale references if the component re-mounts during assertion.
 
-**Pattern:** Pages that load async data and render empty states (e.g., PerformancePage) are especially prone to this. Just `await findByRole(...)` is sufficient.
+**Pattern:** Pages that load async data and render empty states (e.g., PortfolioPage) are especially prone to this. Just `await findByRole(...)` is sufficient.
 
-**Example in code:** [[apps/frontend/src/pages/__tests__/portfolio/PortfolioPages.integration.test.tsx]] (PerformancePage) removed `.toBeInTheDocument()` after awaited `findByRole`.
+**Example in code:** [[apps/frontend/src/pages/__tests__/portfolio/PortfolioPage.integration.test.tsx]] removed `.toBeInTheDocument()` after awaited `findByRole`.
 
 ### Multiple Same Elements: Scope the Query or Fix Duplicate Semantics
 

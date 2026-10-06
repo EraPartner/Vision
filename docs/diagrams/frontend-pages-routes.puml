@@ -71,10 +71,12 @@ package "Budgeting Pages" {
 }
 
 package "Portfolio Pages" {
-  class PortfolioOverviewPage {
+  class PortfolioPage {
+    +Value Hero + Period Chart
+    +Return Figures
+    +Holdings
     +Asset Allocation
-    +Total Value
-    +Performance Summary
+    +Performance Widgets
   }
 
   class StocksPage {
@@ -101,12 +103,6 @@ package "Portfolio Pages" {
   class SavingsPage {
     +Savings Accounts
     +Interest Rates
-  }
-
-  class PerformancePage {
-    +Performance Charts
-    +Historical Returns
-    +Benchmark Comparison
   }
 
   class NetWorthPage <<ADR-093, ADR-100>> {
@@ -311,16 +307,15 @@ AppLayout --> OwesPage : "/owes"
 AppLayout --> TaxOverviewPage : "/tax"
 AppLayout --> AIChatPage : "/ai-chat"
 AppLayout --> AnalysisWorkspacePage : "/analysis"
-AppLayout --> PortfolioOverviewPage : "/portfolio"
-PortfolioOverviewPage --> StocksPage : "/portfolio/stocks"
-PortfolioOverviewPage --> CryptoPage : "/portfolio/crypto"
-PortfolioOverviewPage --> MetalsPage : "/portfolio/metals"
-PortfolioOverviewPage --> RealEstatePage : "/portfolio/real-estate"
-PortfolioOverviewPage --> SavingsPage : "/portfolio/savings"
-PortfolioOverviewPage --> PerformancePage : "/portfolio/performance"
-PortfolioOverviewPage --> NetWorthPage : "/portfolio/net-worth"
-PortfolioOverviewPage --> PortfolioTaxPage : "/portfolio/tax"
-PortfolioOverviewPage --> PortfolioImportPage : "/portfolio/import"
+AppLayout --> PortfolioPage : "/portfolio"
+PortfolioPage --> StocksPage : "/portfolio/stocks"
+PortfolioPage --> CryptoPage : "/portfolio/crypto"
+PortfolioPage --> MetalsPage : "/portfolio/metals"
+PortfolioPage --> RealEstatePage : "/portfolio/real-estate"
+PortfolioPage --> SavingsPage : "/portfolio/savings"
+PortfolioPage --> NetWorthPage : "/portfolio/net-worth"
+PortfolioPage --> PortfolioTaxPage : "/portfolio/tax"
+PortfolioPage --> PortfolioImportPage : "/portfolio/import"
 PortfolioImportPage --> PortfolioImportSession : owns multi-statement workflow
 PortfolioImportPage --> PortfolioImportReviewPage : "/portfolio/import/:batchId/review"
 

@@ -567,7 +567,7 @@ interface ForecastInnerRollingProps {
 - **Loading state** — Renders skeleton/spinner during API fetch
 
 > [!info] X-axis month-label locale
-> Month abbreviations on the rolling forecast x-axis follow the app **language** setting, not the number-format setting. The component derives `monthLabelLocale` through `appLanguageToLocale(language)` and uses the shared `CHART_DATE_PATTERNS.dayTick` role (`d MMM`). This matches the short-period axes on `NetWorthPage` and `PerformancePage`; Performance and Bank Balances use the full-year `detail` role for detailed tooltips. The y-axis currency formatter continues to use `numberFormatToLocale(appSettings.numberFormat)`.
+> Month abbreviations on the rolling forecast x-axis follow the app **language** setting, not the number-format setting. The component derives `monthLabelLocale` through `appLanguageToLocale(language)` and uses the shared `CHART_DATE_PATTERNS.dayTick` role (`d MMM`). This matches the short-period axes on `NetWorthPage` and `PortfolioPage`; Portfolio and Bank Balances use the full-year `detail` role for detailed tooltips. The y-axis currency formatter continues to use `numberFormatToLocale(appSettings.numberFormat)`.
 >
 > **Root cause (fixed):** Previously, `ForecastInnerRolling` passed the number-format locale to `formatDate` for `xTickFormat`. Because the default number format is `'eu'` (which maps to `'de-DE'`), the x-axis showed German month abbreviations regardless of the selected app language. Chart month-name call sites now use the app-language locale explicitly.
 
