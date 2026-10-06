@@ -39,6 +39,7 @@ export function ShortcutsOverlay({ open, onOpenChange }: ShortcutsOverlayProps) 
     const mod = IS_MAC ? "⌘" : "Ctrl";
     const general: Array<{ keys: React.ReactNode; label: string }> = [
         { keys: <><Key>{mod}</Key> <Key>K</Key></>, label: t("commandPalette.openLabel") },
+        { keys: <Key>N</Key>, label: t("shortcuts.newTransaction") },
         { keys: <><Key>{mod}</Key> <Key>,</Key></>, label: t("layout.settings") },
         { keys: <><Key>{mod}</Key> <Key>B</Key></>, label: t("aria.toggleSidebar") },
         { keys: <><Key>[</Key> <Key>]</Key></>, label: t("shortcuts.cycleSections") },

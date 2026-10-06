@@ -58,6 +58,7 @@ export const apiClient = {
     createTransaction: txn.createTransaction,
     updateTransaction: txn.updateTransaction,
     deleteTransaction: txn.deleteTransaction,
+    markTransfer: txn.markTransfer,
     bulkDeleteTransactions: txn.bulkDeleteTransactions,
     bulkUpdateTransactions: txn.bulkUpdateTransactions,
     bulkExportTransactions: txn.bulkExportTransactions,
@@ -250,6 +251,7 @@ export const apiClient = {
 
     // Aggregations
     getAggregationMonthlySummary: agg.getAggregationMonthlySummary,
+    getAggregationAverageVsCurrent: agg.getAggregationAverageVsCurrent,
     getAggregationRecipientInsights: agg.getAggregationRecipientInsights,
 
     // Tags

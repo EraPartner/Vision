@@ -9,7 +9,7 @@ import { useState, type Dispatch, type RefObject, type SetStateAction } from "re
  * typed field on a stray mis-click. These dialogs stay mounted while closed
  * (the trigger, or the parent, keeps them in the tree), so simply *not*
  * resetting on dismissal is enough for the input to still be there on reopen —
- * the same reason AddTransactionDialog and PlannedPaymentForm never lost work.
+ * the same reason AddTransactionSheet and PlannedPaymentForm never lost work.
  *
  * `reset()` is therefore reserved for the deliberate exits: a successful submit
  * and the Cancel button.

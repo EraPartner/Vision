@@ -122,6 +122,9 @@ export const monthlySummaryKeys = {
 export const dashboardKeys = {
     /** Invalidation prefix for the dashboard stat cards family. */
     filteredStatsAll: ["filteredDashboardStats"] as const,
+    /** Month-to-date spending pace for the Home hero (invalidated with the family). */
+    monthToDate: (currency: string) =>
+        ["filteredDashboardStats", "monthToDate", currency] as const,
     /** DB-total transaction count (filter/currency independent). */
     transactionCount: ["filteredDashboardStats", "transactionCount"] as const,
     /** Invalidation prefix for the recent-transactions widget. */
@@ -296,6 +299,9 @@ export const plannedKeys = {
     upcomingAll: ["upcomingPlannedPayments"] as const,
     upcoming: (dateYmd: string) =>
         ["upcomingPlannedPayments", dateYmd] as const,
+    /** Planned rows from today to the end of the calendar month (Home hero). */
+    restOfMonth: (dateYmd: string) =>
+        ["upcomingPlannedPayments", "restOfMonth", dateYmd] as const,
     /**
      * Invalidation prefix for usePlannedPayments' `['plannedTransactions',
      * showInactive]` caches (that hook still keys inline).

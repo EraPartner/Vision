@@ -11,8 +11,10 @@ interface FieldGridContract {
 
 const FIELD_GRID_CONTRACTS: FieldGridContract[] = [
     {
-        file: "src/features/transactions/components/AddTransactionDialog.tsx",
-        responsiveCount: 2,
+        // The sheet is a single column at every width (ADR-181); no field
+        // grid at all is the contract here.
+        file: "src/features/transactions/components/AddTransactionSheet.tsx",
+        responsiveCount: 0,
     },
     {
         file: "src/features/planned/PlannedPaymentForm.tsx",

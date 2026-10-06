@@ -21,7 +21,12 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover";
-import { useRecipient, useRecipients } from "@/hooks/useRecipients";
+import {
+    useCreateRecipient,
+    useRecipient,
+    useRecipients,
+} from "@/hooks/useRecipients";
+import { Plus } from "lucide-react";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useDebounce, SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
 import type { Recipient } from "@/types/api";
@@ -55,6 +60,12 @@ interface RecipientComboboxProps extends FieldErrorAria {
     active?: boolean;
     className?: string;
     portalContainer?: HTMLElement | null;
+    /**
+     * Offers "Add “name”" for a typed name that matches no recipient; the
+     * combobox creates (or reuses, when the server already has it) the
+     * recipient and selects it.
+     */
+    allowCreate?: boolean;
 }
 
 interface RecipientComboboxTriggerProps extends ComponentPropsWithoutRef<"button"> {
@@ -90,6 +101,8 @@ interface RecipientComboboxItemsProps {
     onSearchChange: (next: string) => void;
     /** Fires for both a recipient row and the "no recipient" row (null, null). */
     onPick: (recipientId: number | null, recipientName: string | null) => void;
+    /** When set, a typed name with no exact match offers to be created. */
+    onCreate?: (name: string) => void;
 }
 
 /**
@@ -103,8 +116,17 @@ function RecipientComboboxItems({
     search,
     onSearchChange,
     onPick,
+    onCreate,
 }: RecipientComboboxItemsProps) {
     const { t } = useLanguage();
+    const typed = search.trim();
+    const canCreate =
+        !!onCreate &&
+        typed.length > 0 &&
+        !recipients.some(
+            (recipient) =>
+                recipient.name.trim().toLowerCase() === typed.toLowerCase(),
+        );
 
     return (
         <Command shouldFilter={false}>
@@ -114,8 +136,21 @@ function RecipientComboboxItems({
                 onValueChange={onSearchChange}
             />
             <CommandList>
-                <CommandEmpty>{t("combobox.recipient.empty")}</CommandEmpty>
+                {!canCreate && (
+                    <CommandEmpty>{t("combobox.recipient.empty")}</CommandEmpty>
+                )}
                 <CommandGroup>
+                    {canCreate && (
+                        <CommandItem
+                            value={`__create__ ${typed}`}
+                            onSelect={() => onCreate?.(typed)}
+                        >
+                            <Plus className="mr-2 h-4 w-4 text-primary" />
+                            <span className="text-primary">
+                                {t("combobox.recipient.create", { name: typed })}
+                            </span>
+                        </CommandItem>
+                    )}
                     <CommandItem
                         value="__none__"
                         onSelect={() => onPick(null, null)}
@@ -187,10 +222,12 @@ export function RecipientCombobox({
     active = BASE_PAGE.active,
     className,
     portalContainer,
+    allowCreate = false,
 }: RecipientComboboxProps) {
     const { t } = useLanguage();
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState("");
+    const createRecipient = useCreateRecipient();
 
     const recipients = useSearchedRecipients(search, active);
     const { data: selectedRecipient } = useRecipient(value);
@@ -248,6 +285,28 @@ export function RecipientCombobox({
                         onSelect(recipientId, recipientName);
                         handleOpenChange(false);
                     }}
+                    onCreate={
+                        allowCreate
+                            ? (name) => {
+                                  handleOpenChange(false);
+                                  createRecipient.mutate(
+                                      { name },
+                                      {
+                                          onSuccess: ({ recipient }) => {
+                                              setPickedLabel({
+                                                  id: recipient.id,
+                                                  name: recipient.name,
+                                              });
+                                              onSelect(
+                                                  recipient.id,
+                                                  recipient.name,
+                                              );
+                                          },
+                                      },
+                                  );
+                              }
+                            : undefined
+                    }
                 />
             </PopoverContent>
         </Popover>

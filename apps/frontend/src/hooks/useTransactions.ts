@@ -75,7 +75,12 @@ export function useAccountLedger(
     return query;
 }
 
-export function useCreateTransaction() {
+export interface UseCreateTransactionOptions {
+    /** Skip the generic "created" toast; the caller shows its own (e.g. an undo toast). */
+    silent?: boolean;
+}
+
+export function useCreateTransaction(options: UseCreateTransactionOptions = {}) {
     const queryClient = useQueryClient();
     const { t } = useLanguage();
 
@@ -123,7 +128,7 @@ export function useCreateTransaction() {
                     },
                 );
             }
-            toast.success(t("transactions.created"));
+            if (!options.silent) toast.success(t("transactions.created"));
         },
         onError: (error: Error, _vars, context) => {
             if (context?.snapshot)

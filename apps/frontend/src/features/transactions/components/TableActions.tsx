@@ -1,6 +1,6 @@
 import { ListFilterToggle } from "@/components/shared/ListFilterToggle";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
-import { AddTransactionDialog } from "@/features/transactions/components/AddTransactionDialog";
+import { AddTransactionButton } from "@/features/transactions/components/AddTransactionSheet";
 
 interface TableActionsProps {
     showAll: boolean;
@@ -16,7 +16,7 @@ export function TableActions({ showAll, onToggleShowAll }: TableActionsProps) {
                 onCheckedChange={onToggleShowAll}
                 label={t("common.includeInactive")}
             />
-            <AddTransactionDialog />
+            <AddTransactionButton />
         </div>
     );
 }
