@@ -2,8 +2,8 @@
 title: Settings Feature
 type: feature
 status: active
-date: 2026-10-05
-updated: 2026-10-05
+date: 2026-10-06
+updated: 2026-10-06
 tags:
   [
     feature,
@@ -169,7 +169,7 @@ type StartupSection = "budgeting" | "portfolio" | "research" | "ai-chat";
 
 **Redirect behavior** is handled by `[[apps/frontend/src/components/shared/StartupRedirect.tsx]]`, mounted inside `<BrowserRouter>` in `App.tsx`. It fires once, after settings hydrate, and only when the app opened at the root path `/`. It calls `navigate(..., { replace: true })` so the redirect does not create a history entry. Deep links (any non-`/` initial path) and later in-app navigation back to `/` are unaffected.
 
-**UI:** a "Open app on" Select is located in the **Behavior** section of `DashboardSettingsDialog` (`[[apps/frontend/src/features/settings/sections/BehaviorSection.tsx]]`). The option labels reuse `nav.*` i18n keys. Two i18n keys cover the label and hint: `settings.general.startupSection`, `settings.general.startupSectionHint`.
+**UI:** a "Open app on" Select is located in the **Behavior** section of `DashboardSettingsDialog` (`[[apps/frontend/src/features/settings/sections/BehaviorSection.tsx]]`). The option labels reuse `nav.*` i18n keys; the stored value `'budgeting'` is labelled **Home** (`nav.home`) since ADR-180, with no change to the persisted value. Two i18n keys cover the label and hint: `settings.general.startupSection`, `settings.general.startupSectionHint`.
 
 The same section contains four active-category pickers for instrument-free brokerage cash rows: dividend, interest, fee, and tax. They hydrate and save one complete `brokerage_cash_category_ids` object. Controls are disabled while saving, and a failed save restores the last server value and shows an error toast. Clearing a picker stores `null`.
 
@@ -332,13 +332,13 @@ each tab controls the active tab panel, and Arrow keys plus Home/End move focus 
 | Section       | File                             | Contents                                                                                                                                                             |
 | ------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | General       | `sections/GeneralSection.tsx`    | Currency, number/decimal/date format, language, start of week, page size                                                                                             |
-| Appearance    | `sections/AppearanceSection.tsx` | Theme variant, color mode + schedule, macOS system accent, visual-effects tier, auto-adapt; **Accessibility** group: gain & loss colors (colorblind-safe vs classic) |
+| Appearance    | `sections/AppearanceSection.tsx` | Theme variant, color mode + schedule, macOS system accent, visual-effects tier, auto-adapt, **Sidebar** (Labels / Icons only, [[docs/adr/180-sidebar-sections-replace-workspaces\|ADR-180]]); **Accessibility** group: gain & loss colors (colorblind-safe vs classic) |
 | Statistics    | `sections/StatisticsSection.tsx` | Exclusion scope, exclude-hidden, internal transfers toggle, excluded categories/recipients (was "Dashboard" tab)                                                     |
 | Behavior      | `sections/BehaviorSection.tsx`   | Startup section, cost-basis method, auto-clear planned, brokerage cash category mappings, reset recurring dismissals                                                 |
 | AI & Research | `sections/AiSection.tsx`         | Analysis defaults, Ollama and OpenAI default models, AgentCloak Desktop status and protection control, and research provider keys                                    |
 
 | Backup | `sections/BackupSection.tsx` | Directory, backup-on-quit, passphrase, run/restore (Electron only) |
-| About & Maintenance | `sections/AboutSection.tsx` | Vision mark, canonical build version, AGPL-3.0-only identity, source/documentation links, app updates, restart onboarding, developer/admin mode, reset-all (danger zone) |
+| About & Maintenance | `sections/AboutSection.tsx` | Vision mark, canonical build version, AGPL-3.0-only identity, source/documentation links, app updates (shows the shared `useUpdateStatus` result and the install action), restart onboarding, developer/admin mode, reset-all (danger zone) |
 
 The AgentCloak Desktop group shows a fresh availability check, effective protection state, local
 reference-key state, and whether the OpenAI route is enabled. Check Again repeats the probe.

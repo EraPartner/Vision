@@ -2,8 +2,8 @@
 title: Form Dialogs
 type: component
 status: active
-date: 2026-10-05
-updated: 2026-10-05
+date: 2026-10-06
+updated: 2026-10-06
 tags: [components, forms, dialogs, settings, refactor, phase-3]
 description: Modal dialogs for adding, editing data, and configuring settings throughout the application
 aliases:
@@ -632,23 +632,11 @@ Two-step dialog for merging duplicate recipients.
 
 ---
 
-## UpdateNotification
+## UpdateNotification (removed)
 
-Polls for application updates and displays an install prompt.
+The update badge and dialog were removed by [[docs/adr/180-sidebar-sections-replace-workspaces|ADR-180]]; no dialog opens for updates any more. `useUpdateStatus` polls `apiClient.checkForUpdates()` every 5 minutes while the tab is visible and drives a dot on the sidebar's Settings row. Settings › About shows the version, release notes and the check / install actions (install with backup, download and restart phases, Electron only). See [[docs/features/application-updates|Application updates]].
 
-### Props
-
-No props.
-
-### Features
-
-- Polls `apiClient.checkForUpdates()` every 5 minutes
-- Skips polling when tab is hidden (Page Visibility API)
-- Shows amber badge when update is available
-- Dialog displays version info, release notes, and install button
-- Install calls `apiClient.installShellUpdate()` with phase tracking (pulling → restarting → done)
-
-**Code**: [[apps/frontend/src/components/notifications/UpdateNotification.tsx]]
+**Code**: [[apps/frontend/src/hooks/useUpdateStatus.ts]], [[apps/frontend/src/features/settings/sections/AboutSection.tsx]]
 
 ---
 

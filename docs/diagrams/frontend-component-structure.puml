@@ -71,11 +71,17 @@ package "Layout Components" {
     +Content: Outlet
   }
 
-  class AppSidebar {
-    +Navigation: nav items
-    +ActiveRail: framer layoutId
-    +Collapsible: boolean
+  class AppSidebar <<ADR-180>> {
+    +Sections: top / Money / Wealth / Research / Admin
+    +Hide/Show per section (localStorage)
+    +Collapsible: labels or icon rail (remembered)
+    +Settings row: update dot
     +RoutePreload: hover prefetch
+  }
+
+  class NavItemBadge <<ADR-180>> {
+    +needs-category / planned-due
+    +insights / monitors counts
   }
 
   class PageTransition {
@@ -86,9 +92,8 @@ package "Layout Components" {
 
   class CommandPalette {
     +trigger: ⌘K / Ctrl+K
-    +pages: all budgeting/portfolio
-    +theme: variant switch
-    +workspaceSync: boolean
+    +pages: Money / Wealth / Research groups
+    +theme modes: Light, Dark, System, Schedule
     +recents: localStorage
     +recipientSearch: debounced
   }
@@ -333,12 +338,23 @@ PortfolioImportSession --> PortfolioImportsApi : stage / preview / commit
 
 
 package "Feature Components - Notifications" {
-  class UpdateNotification
   class UpcomingPaymentsNotification {
     +stands down on / when suggestions widget visible
     +dock badge (non-dismissed count)
     +useUpcomingPlannedPayments
   }
+}
+
+package "Hooks - Sidebar and Updates" {
+  class useSidebarPreferences <<ADR-180>> {
+    +vision.sidebar.hiddenSections
+    +vision.sidebar.collapsed
+  }
+  class useUpdateStatus <<ADR-180>> {
+    +queryKey: "update-status"
+    +poll: 5 min while visible
+  }
+  class AboutSection
 }
 
 package "Hooks - Upcoming Payments" {
@@ -358,9 +374,6 @@ package "Feature Components - Research" {
   class AnalysisMonitorsPage {
     +rule editor and observation history
     +server-owned in-app inbox
-  }
-  class MonitorInboxBadge {
-    +unread count in navigation
   }
   class useMonitors {
     +paged rules, observations, and inbox
@@ -390,8 +403,12 @@ AppLayout --> PageTransition
 AppLayout --> ShaderAurora
 ResearchDossiersPage --> useDossiers
 AnalysisMonitorsPage --> useMonitors
-MonitorInboxBadge --> useMonitors
-AppSidebar --> MonitorInboxBadge
+NavItemBadge --> useMonitors : unread monitor count
+NavItemBadge --> useUpcomingPlannedPayments : planned due count
+AppSidebar --> NavItemBadge
+AppSidebar --> useSidebarPreferences : hidden sections
+AppSidebar --> useUpdateStatus : update dot
+AboutSection --> useUpdateStatus : version, notes, install
 
 AddTransactionDialog --> CategoryCombobox
 CategoriesPage --> CategoryNodeDialog

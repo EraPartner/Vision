@@ -4,8 +4,8 @@ type: endpoint
 method: GET, PUT, DELETE
 path: /api/settings
 description: User preferences and application settings
-date: 2026-09-30
-updated: 2026-09-20
+date: 2026-10-06
+updated: 2026-10-06
 tags: [api, settings, preferences, phase-3, auto-link, planned-match, june-2026]
 status: active
 aliases: [settings-api, preferences-api, user-settings, app-settings]
@@ -327,7 +327,7 @@ Code links: [[apps/frontend/src/features/planned/PlannedPaymentForm.tsx]], [[app
 
 Shared date utilities include app-settings-aware date-time helpers used by settings propagation across date/time labels.
 
-Code links: [[apps/frontend/src/lib/dateUtils.ts]], [[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx]], [[apps/frontend/src/components/notifications/UpdateNotification.tsx]], [[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx]], [[apps/frontend/src/pages/research/MarketLookupPage.tsx]]
+Code links: [[apps/frontend/src/lib/dateUtils.ts]], [[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx]], [[apps/frontend/src/features/settings/sections/AboutSection.tsx]], [[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx]], [[apps/frontend/src/pages/research/MarketLookupPage.tsx]]
 
 ## Conflict and writer policy
 

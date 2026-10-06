@@ -2,8 +2,8 @@
 title: AI Agent Codebase Navigation Map
 type: reference
 status: active
-date: 2026-09-11
-updated: 2026-09-11
+date: 2026-10-06
+updated: 2026-10-06
 tags:
   [
     ai-agent,
@@ -229,7 +229,8 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | Belgian tax profile | Zustand slice and hydration bridge | [[apps/frontend/src/stores/belgianTaxStore.ts]], [[apps/frontend/src/contexts/BelgianTaxProfileContext.tsx]] |
 | Page title          | React context                      | [[apps/frontend/src/contexts/PageTitleContext.tsx]]                                                          |
 | Unsaved changes     | React context                      | [[apps/frontend/src/contexts/UnsavedChangesContext.tsx]]                                                     |
-| Workspace           | Router-backed hook                 | [[apps/frontend/src/hooks/useWorkspace.ts]]                                                                  |
+| Sidebar preferences | `localStorage` external store      | [[apps/frontend/src/hooks/useSidebarPreferences.ts]]                                                         |
+| Update status       | React Query                        | [[apps/frontend/src/hooks/useUpdateStatus.ts]]                                                               |
 
 ### Frontend Types (4 files)
 

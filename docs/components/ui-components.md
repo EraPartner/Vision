@@ -163,7 +163,7 @@ primitives from the same change: `SegmentedControl`, `List`/`ListRow`, `Inspecto
 
 Dense table shells override the base material with an opaque surface. They do not add Card hover motion unless the table itself has a real activation affordance. VirtualDataTable also omits decorative corner sheen. Its header actions and search controls wrap within the available width, and search text reserves space for its clear action. PageHeader allows action groups to wrap below the title when space is limited; subtitles have a readable line length.
 
-`prefers-reduced-motion`: transitions/animations disabled; aurora drift paused; sidebar `ActiveRail` transitions are instant.
+`prefers-reduced-motion`: transitions/animations disabled; aurora drift paused; sidebar section expand/collapse transitions are instant.
 
 ### Canvas-Text Legibility Guarantee (June 2026)
 
@@ -236,10 +236,10 @@ Code links: [[apps/frontend/src/index.css]], [[apps/frontend/src/components/ui/b
 
 **AppLayout.tsx** — Main app container:
 
-- Renders a fixed `liquid-canvas` atmosphere layer (two aurora blobs + radial wash + SVG grain). Blobs animate via compositor-only `transform`; drift pauses under `prefers-reduced-motion`. Sets `data-workspace` on the liquid canvas for workspace-aware hue swaps (premium v3).
+- Renders a fixed `liquid-canvas` atmosphere layer (two aurora blobs + radial wash + SVG grain). Blobs animate via compositor-only `transform`; drift pauses under `prefers-reduced-motion`. Sets `data-tint` (`wealth` under `/portfolio`, otherwise `money`) on the liquid canvas for route-aware hue swaps ([[docs/adr/180-sidebar-sections-replace-workspaces|ADR-180]]).
 - Conditionally renders `ShaderAurora` inside the liquid canvas when the effective ADR-075 visual-effects tier is `enhanced`. After a drawable WebGL program exists, `ShaderAurora` adds `fx-webgl-live` and the CSS blobs remain visible underneath as a static fallback. Context loss or teardown removes the class immediately, so the CSS fallback resumes animating when WebGL is unavailable.
 - Scroll-linked topbar: material lives in a `::before` pseudo-element that fades in when `[data-scrolled]` is set; passive scroll listener sets the attribute. Also shows page title (from `PageTitleContext`) past 96px scroll (premium v3).
-- Mounts `CommandPalette` with topbar ⌘K trigger button.
+- Mounts `CommandPalette`; ⌘K is opened from the sidebar search field (and a topbar search button on narrow screens). The topbar no longer holds the theme dropdown or update badge (ADR-180).
 - Mounts `ShortcutsOverlay` (`?` key) alongside `CommandPalette` (premium v3).
 - Wraps child routes in `PageTransition` (enter-only spring).
 - Sidebar + chrome: `.glass-chrome` (24px blur, saturated).
@@ -247,8 +247,7 @@ Code links: [[apps/frontend/src/index.css]], [[apps/frontend/src/components/ui/b
 
 **AppSidebar.tsx** — Navigation chrome:
 
-- `.glass-chrome` with active-route accent rail.
-- Active rail is now a framer-motion `layoutId="active-rail"` element (`ActiveRail`) that animates between nav items on route change; instant under reduced motion.
+- `.glass-chrome`, 15rem labelled by default with a remembered icon-rail mode (`vision.sidebar.collapsed`); sections top / Money / Wealth / Research / Admin, each headed section hideable (`vision.sidebar.hiddenSections`); rows are 30px with a `primary` selection fill; live counts come from `NavItemBadge`; the Settings row shows an update dot. See [[docs/components/layout|Layout components]].
 - Item `onMouseEnter` triggers `routePreload(path)` via `lib/routePreload.ts` to warm route chunks before click.
 - `micro-lift` on hover.
 
@@ -261,8 +260,8 @@ Code links: [[apps/frontend/src/index.css]], [[apps/frontend/src/components/ui/b
 **CommandPalette.tsx** — New in June 2026:
 
 - ⌘K / Ctrl+K keyboard shortcut, also triggered by topbar button.
-- Built on `cmdk` library; covers all budgeting/portfolio/admin pages, theme variant switch, and settings navigation.
-- Cross-workspace jumps sync the sidebar workspace automatically.
+- Built on `cmdk` library; covers every page (grouped Money / Wealth / Research, plus admin pages in admin mode), theme modes (Light, Dark, System, Schedule), and settings navigation.
+- Navigation just navigates; a destination inside a hidden sidebar section shows that section.
 - 5 new i18n keys: `commandPalette.*` in en/nl.
 
 Code links: [[apps/frontend/src/components/layout/AppLayout.tsx]], [[apps/frontend/src/components/layout/AppSidebar.tsx]], [[apps/frontend/src/components/layout/PageTransition.tsx]], [[apps/frontend/src/components/shared/CommandPalette.tsx]], [[apps/frontend/src/lib/routePreload.ts]]

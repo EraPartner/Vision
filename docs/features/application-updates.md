@@ -2,7 +2,7 @@
 title: Application Updates
 type: feature
 status: active
-date: 2026-10-05
+date: 2026-10-06
 tags: [feature, updates, electron, native-runtime, backup, checksum, release]
 description: Native packaged and source-launcher update paths with backup, checksum verification, and rollback boundaries.
 aliases: [update system, application updater]
@@ -67,9 +67,15 @@ Electron binary installer explicitly when needed. It does not run a fetched shel
 
 ## Renderer behavior
 
-`UpdateNotification` displays availability, download, install, success, and failure states. It calls
-the Electron updater bridge only when that bridge exists. Web clients display operator guidance
-instead of an install control.
+The topbar update badge and its dialog (`UpdateNotification`) were removed by
+[[docs/adr/180-sidebar-sections-replace-workspaces|ADR-180]]. One shared query,
+`useUpdateStatus` (key `["update-status"]`, `GET /api/admin/update/check`), is polled every five
+minutes while the window is visible and refetched on window focus. The sidebar's Settings row shows
+a dot (with a screen-reader label) while it reports an update, and Settings › About reads the same
+status: it shows the latest version, publish date, release notes and release-page link, offers
+*Check for updates* (which refreshes the shared query), and, in Electron only, an *Install update*
+button that runs the backup, download, install and restart phases through the updater bridge.
+Web clients see the status and release link but no install control.
 
 The Electron inter-process communication surface includes mode lookup, update check, native/source
 installation, progress, and restart events. It does not expose an image-pull operation.
@@ -107,4 +113,6 @@ keeps the previous database until validation succeeds.
 - [[docs/guides/cicd-pipelines|CI/CD Pipelines]]
 - [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]]
 - [[docs/adr/133-native-only-runtime-and-delivery|ADR-133]]
+- [[docs/adr/180-sidebar-sections-replace-workspaces|ADR-180]] — update controls move to the sidebar dot and Settings › About
+- [[docs/components/layout|Layout components]]
 - [[docs/adr/168-github-release-trust-boundary|ADR-168]]

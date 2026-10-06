@@ -2,8 +2,8 @@
 title: How to Add a New Page
 type: guide
 status: active
-date: 2026-03-31
-updated: 2026-09-05
+date: 2026-10-06
+updated: 2026-10-06
 tags: [guide, frontend, react, page, how-to, tutorial, routing]
 description: Step-by-step guide for adding a new page to the Vision frontend
 aliases:
@@ -70,14 +70,15 @@ lazy component from this manifest. Set `admin: true` only when the whole route r
 
 ### 3. Add Sidebar Navigation
 
-Add a sidebar item to `apps/frontend/src/components/layout/AppSidebar.tsx`:
+Add one entry to the navigation registry, `apps/frontend/src/lib/navigation.ts`, in the section the page belongs to (`Money`, `Wealth`, `Research`, or `ADMIN_SECTION` for admin pages; see [[docs/adr/180-sidebar-sections-replace-workspaces|ADR-180]]). The sidebar, command palette, go-to keys and page titles all derive from it, and `lib/__tests__/navigation.test.ts` fails if a manifest route has no entry:
 
-```tsx
+```ts
 {
-  name: t('nav.<feature>'),
-  icon: <IconComponent />,
-  path: '/<feature>',
-  workspace: 'budgeting', // or 'portfolio'
+  titleKey: 'nav.<feature>',
+  url: '/<feature>',
+  icon: PAGE_ICONS['/<feature>'], // add the icon to lib/pageIcons.ts
+  // shortcutKey: 'x',  // optional `g` then key
+  // badge: 'insights', // optional live count id
 }
 ```
 
@@ -149,7 +150,7 @@ describe('<Feature>Page', () => {
 
 - [ ] Page component created with TypeScript types
 - [ ] Page route and admin flag added to `appRouteManifest`
-- [ ] Sidebar item added to `AppSidebar.tsx`
+- [ ] Navigation entry added to `lib/navigation.ts` (section, icon in `lib/pageIcons.ts`)
 - [ ] i18n keys added to `en.json` and `nl.json`
 - [ ] Locale bundles regenerated (`bun run build`)
 - [ ] Data hook created (if fetching data)

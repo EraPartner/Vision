@@ -2,10 +2,10 @@
 title: Frontend Routes Reference
 type: reference
 status: active
-date: 2026-09-13
-updated: 2026-09-13
-tags: [reference, frontend, routing, pages, react-router, admin, workspace]
-description: Complete reference of all frontend routes and their page components, including admin routes and workspace-aware navigation
+date: 2026-10-06
+updated: 2026-10-06
+tags: [reference, frontend, routing, pages, react-router, admin, sidebar-sections]
+description: Complete reference of all frontend routes and their page components, including admin routes and the sidebar sections that offer them
 aliases: [routes, pages, navigation, url paths, frontend routes, admin routes]
 ---
 
@@ -23,9 +23,9 @@ Portfolio Net Worth and Performance, Portfolio Rebalance, Planned Payments, Cate
 Settings remain a dialog rather than a page route, but its section is deep-linkable as `?settings=general|appearance|statistics|behavior|ai|backup|about`. Opening from the app adds one history entry so Back closes the dialog. Section switches replace that entry; closing a directly loaded deep link removes only `settings` and preserves other query parameters.
 
 > [!abstract] Overview
-> All frontend routes in the Vision application. Organized by workspace for easy navigation.
+> All frontend routes in the Vision application. Grouped by area; the sidebar shows them as sections ([[#Sidebar sections]]).
 
-## Budgeting Workspace
+## Budgeting Pages (top and Money sections)
 
 | Route                     | Component             | Layout    | Description                          | Code                                                                         |
 | ------------------------- | --------------------- | --------- | ------------------------------------ | ---------------------------------------------------------------------------- |
@@ -42,7 +42,7 @@ Settings remain a dialog rather than a page route, but its section is deep-linka
 | `/owes`                   | `OwesPage`            | AppLayout | Transaction splits and debt tracking | [[apps/frontend/src/pages/OwesPage.tsx\|OwesPage.tsx]]                       |
 | `/tax`                    | `TaxOverviewPage`     | AppLayout | Belgian tax overview                 | [[apps/frontend/src/pages/TaxOverviewPage.tsx\|TaxOverviewPage.tsx]]         |
 
-## Portfolio Workspace
+## Portfolio Pages (Wealth section)
 
 | Route                               | Component                   | Layout    | Description                             | Code                                                                                               |
 | ----------------------------------- | --------------------------- | --------- | --------------------------------------- | -------------------------------------------------------------------------------------------------- |
@@ -59,7 +59,7 @@ Settings remain a dialog rather than a page route, but its section is deep-linka
 | `/portfolio/tax`                    | `PortfolioTaxPage`          | AppLayout | Portfolio tax calculations              | [[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx\|PortfolioTaxPage.tsx]]               |
 | `/portfolio/rebalance`              | `RebalancePage`             | AppLayout | Portfolio allocation and rebalance plan | [[apps/frontend/src/pages/portfolio/RebalancePage.tsx\|RebalancePage.tsx]]                         |
 
-## Research Workspace
+## Research Pages (Research section)
 
 | Route                 | Component               | Layout    | Description                |
 | --------------------- | ----------------------- | --------- | -------------------------- |
@@ -73,7 +73,7 @@ Settings remain a dialog rather than a page route, but its section is deep-linka
 
 ## Admin Routes
 
-Admin routes are workspace-agnostic and preserve the active workspace when navigating between them.
+Admin routes appear in the sidebar's Admin section, shown only when admin mode is on.
 
 | Route                   | Component              | Layout                   | Description                                | Code                                                                                 |
 | ----------------------- | ---------------------- | ------------------------ | ------------------------------------------ | ------------------------------------------------------------------------------------ |
@@ -148,19 +148,19 @@ const lazyAppRoutes = appRouteManifest.map(({ path, loader, admin }) => ({
 }
 ```
 
-## Workspace Switching
+## Sidebar sections
 
-Workspace switching is handled by the [[apps/frontend/src/hooks/useWorkspace.ts\|useWorkspace]] hook, which derives the workspace from the current route path:
+The three sidebar workspaces and their switcher were replaced by one labelled sidebar
+([[docs/adr/180-sidebar-sections-replace-workspaces|ADR-180]]). `lib/navigation.ts` maps routes to sidebar sections: the top items (Home, Transactions, Accounts, Planned Payments), **Money**, **Wealth**, **Research** (hidden until the user shows it) and **Admin** (admin mode only). The route groups above are page groupings, not modes; no route derives or persists a workspace. A registry test (`lib/__tests__/navigation.test.ts`) asserts that every parameterless route in `appRouteManifest` has exactly one navigation entry and that admin routes appear only in the Admin section.
 
-- `/portfolio/*` → `"portfolio"` workspace
-- `/admin/*` → preserves the last active workspace from `sessionStorage` (workspace-agnostic routes)
-- Everything else → `"budgeting"` workspace
-
-**Admin Route Isolation:** When navigating to `/admin/*` pages from portfolio context, the sidebar retains the portfolio workspace and does not snap to "budgeting". The workspace switcher tabs remain functional — clicking a workspace tab navigates to the workspace root (`/portfolio` or `/`).
+- Landing on a page inside a hidden section shows that section and persists the choice (`vision.sidebar.hiddenSections`).
+- `G` then a key jumps to a page (Home is `G H`, previously `G D`); `[` and `]` cycle Home (`/`), Portfolio (`/portfolio`) and Research (`/research`).
+- `data-tint` on the canvas is `wealth` under `/portfolio`, otherwise `money`.
 
 ## Related
 
 - [[docs/features/views\|Views & Pages]] - Detailed page documentation
 - [[docs/components/layout\|Layout Components]] - AppLayout and AppSidebar
+- [[docs/adr/180-sidebar-sections-replace-workspaces\|ADR-180: Sidebar sections replace workspaces]]
 - [[docs/architecture/frontend-architecture\|Frontend Architecture]] - Routes diagram
 - [[docs/adr/136-same-release-http-import-and-navigation-contract\|ADR-136: Same-Release HTTP, Import, and Navigation Contract]]

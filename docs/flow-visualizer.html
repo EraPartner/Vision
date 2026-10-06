@@ -3671,13 +3671,13 @@
             "id": "app-update",
             "name": "Apply an in-app update",
             "category": "Updates",
-            "summary": "User accepts the update prompt; Electron creates a native backup and installs the verified native app or source update.",
+            "summary": "User sees the Settings update dot, installs from Settings \u203a About; Electron creates a native backup and installs the verified native app or source update.",
             "steps": [
               {
                 "from": "electron",
                 "to": "fe.pages",
-                "payload": "UpdateNotification  \u00b7  user clicks 'Update now'",
-                "annotation": "Notification shows when GitHub reports a newer Vision release."
+                "payload": "AboutSection  \u00b7  user clicks 'Install update'",
+                "annotation": "useUpdateStatus (hooks/useUpdateStatus.ts) polls /api/admin/update/check, which reports GitHub releases; the sidebar Settings dot flags a newer release and features/settings/sections/AboutSection.tsx offers the install."
               },
               {
                 "from": "fe.pages",

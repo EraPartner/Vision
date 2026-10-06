@@ -2,11 +2,11 @@
 title: Testing Documentation Index
 type: testing-index
 status: active
-date: 2026-09-24
-updated: 2026-09-24
-last-updated: 2026-09-24
-modified: 2026-09-24
-last_updated_timestamp: 2026-09-24T00:00:00Z
+date: 2026-10-06
+updated: 2026-10-06
+last-updated: 2026-10-06
+modified: 2026-10-06
+last_updated_timestamp: 2026-10-06T00:00:00Z
 added_phase_f1_backend_drift_detection: 2026-05-02
 added_phase_f2_stale_refetch: 2026-05-02
 added_phase_f3_dialog_completeness: 2026-05-02
@@ -469,9 +469,8 @@ Five context unit test files added to test React Context hooks and providers:
 | SettingsContexts         | 12    | useAppSettings (4), useSettings (4), useTheme (4) with Zustand store mutations |
 | LanguageHydration        | 6     | Hook guard, initial state, language switching behavior                         |
 | SettingsPreloadContext   | 5     | API fetch integration, loading state, settings load, MSW mocking               |
-| useWorkspace             | 6     | Hook guard, workspace state, switching behavior                                |
 
-**Total:** 5 files, 37 tests, all passing
+**Total:** 4 files, 31 tests, all passing
 
 **Key techniques:**
 
