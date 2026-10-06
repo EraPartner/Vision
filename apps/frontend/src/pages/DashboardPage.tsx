@@ -1,7 +1,7 @@
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useState, useCallback, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router";
 import { cn } from "@/lib/utils";
-import { parseISO } from "@/lib/dateUtils";
 import { StatCard } from "@/components/shared/StatCard";
 import { RollingNumber } from "@/components/shared/RollingNumber";
 import { NetSummaryCard } from "@/features/dashboard/NetSummaryCard";
@@ -9,11 +9,23 @@ import { MonthlyTrendsChart } from "@/features/dashboard/MonthlyTrendsChart";
 import { CashFlowForecastChart } from "@/features/dashboard/CashFlowForecastChart";
 import { CategoryPieChart } from "@/features/dashboard/CategoryPieChart";
 import { BankBalancesWidget } from "@/features/dashboard/BankBalancesWidget";
-import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
+import { MonthToDateHero } from "@/features/dashboard/MonthToDateHero";
+import { NeedsAttentionList } from "@/features/dashboard/NeedsAttentionList";
+import { NetWorthCard } from "@/features/dashboard/NetWorthCard";
+import { UpcomingPaymentsList } from "@/features/dashboard/UpcomingPaymentsList";
+import { AccountsList } from "@/features/dashboard/AccountsList";
+import { RecentTransactionsList } from "@/features/dashboard/RecentTransactionsList";
+import { AddTransactionButton } from "@/features/transactions/components/AddTransactionSheet";
 import { ExclusionToggle } from "@/components/shared/ExclusionToggle";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageError } from "@/components/shared/PageError";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
     Card,
     CardContent,
@@ -28,6 +40,8 @@ import {
     Receipt,
     TrendingDown,
     AlertTriangle,
+    MoreHorizontal,
+    LayoutGrid,
 } from "lucide-react";
 import { useTransactions } from "@/hooks/useTransactions";
 import {
@@ -36,9 +50,7 @@ import {
 } from "@/hooks/useFilteredDashboardStats";
 import { useExcludedIds } from "@/hooks/useExcludedIds";
 import { useDashboardRecentTransactions } from "@/features/dashboard/useDashboardQueries";
-import { getCategoryColor } from "@/utils/categoryColors";
 import { formatCurrencyCompact, numberFormatToLocale } from "@/utils/currency";
-import { Money } from "@/components/shared/Money";
 import { ChartSyncProvider } from "@/components/charts/ChartSyncContext";
 import { ChartSkeleton } from "@/components/charts/ChartSkeleton";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
@@ -48,7 +60,7 @@ import {
 } from "@/hooks/useWidgetVisibility";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
-import { formatDateWithAppSettings } from "@/lib/dateUtils";
+import { appLanguageToLocale } from "@/lib/dateUtils";
 import { parseCategoryName } from "@vision/shared-utils";
 import {
     claimDashboardArrival,
@@ -61,8 +73,10 @@ import { buildTransactionDrillUrl } from "@/lib/transactionDrillUrl";
 type GraphExclusions = Record<string, boolean>;
 
 export default function DashboardPage() {
-    const { t } = useLanguage();
+    const { t, language } = useLanguage();
+    const navigate = useNavigate();
     const loadingSurfaceProps = useLoadingSurfaceProps();
+    const [customizeOpen, setCustomizeOpen] = useState(false);
     const { appSettings } = useAppSettings();
     const targetCurrency = appSettings.defaultCurrency || "EUR";
     const locale = numberFormatToLocale(appSettings.numberFormat);
@@ -91,14 +105,43 @@ export default function DashboardPage() {
     const DASHBOARD_WIDGETS: WidgetDefinition[] = useMemo(
         () => [
             {
+                id: "hero",
+                label: t("dashboard.hero"),
+                description: t("dashboard.widgetDescriptions.hero"),
+            },
+            {
+                id: "attention",
+                label: t("dashboard.attention"),
+                description: t("dashboard.widgetDescriptions.attention"),
+            },
+            {
+                id: "netWorth",
+                label: t("dashboard.netWorth"),
+                description: t("dashboard.widgetDescriptions.netWorth"),
+            },
+            {
+                id: "upcoming",
+                label: t("dashboard.upcoming"),
+                description: t("dashboard.widgetDescriptions.upcoming"),
+            },
+            {
+                id: "accounts",
+                label: t("dashboard.accounts"),
+                description: t("dashboard.widgetDescriptions.accounts"),
+            },
+            // The hero covers last month's totals; the summary cards and the
+            // bank balances chart stay available for anyone who wants them.
+            {
                 id: "statCards",
                 label: t("dashboard.statCards"),
                 description: t("dashboard.widgetDescriptions.statCards"),
+                defaultVisible: false,
             },
             {
                 id: "bankBalances",
                 label: t("dashboard.bankBalances"),
                 description: t("dashboard.widgetDescriptions.bankBalances"),
+                defaultVisible: false,
             },
             {
                 id: "monthlyTrends",
@@ -396,72 +439,10 @@ export default function DashboardPage() {
                 amount: txn.amount,
                 currency: txn.currency || appSettings.defaultCurrency,
                 category: txn.category_name || t("txPage.field.uncategorized"),
+                categoryId: txn.category_id,
                 recipient: txn.recipient_name || t("txPage.field.unknown"),
-                bank: txn.bank_account,
             })),
         [recentTransactionsSource, t, appSettings.defaultCurrency],
-    );
-
-    const columns = useMemo(
-        () => [
-            {
-                key: "date",
-                header: t("txPage.col.date"),
-                render: (row: (typeof recentTransactions)[0]) => {
-                    if (!row.date) return <span>—</span>;
-                    try {
-                        const dateObj = parseISO(row.date);
-                        return (
-                            <span>
-                                {formatDateWithAppSettings(
-                                    dateObj,
-                                    appSettings.dateFormat,
-                                )}
-                            </span>
-                        );
-                    } catch {
-                        return <span>{row.date}</span>;
-                    }
-                },
-            },
-            { key: "description", header: t("txPage.field.description") },
-            {
-                key: "category",
-                header: t("txPage.col.category"),
-                render: (row: (typeof recentTransactions)[0]) => (
-                    <Badge
-                        variant="outline"
-                        className={cn(
-                            "font-medium",
-                            getCategoryColor(row.category),
-                        )}
-                    >
-                        {row.category}
-                    </Badge>
-                ),
-            },
-            { key: "recipient", header: t("txPage.col.recipient") },
-            {
-                key: "amount",
-                header: t("txPage.col.amount"),
-                className: "text-right",
-                render: (row: (typeof recentTransactions)[0]) => (
-                    <span
-                        className={cn(
-                            "font-semibold",
-                            row.amount >= 0 ? "text-gain" : "text-loss",
-                        )}
-                    >
-                        <Money
-                            signed
-                            amount={row.amount}
-                            currency={row.currency}
-                        />
-                    </span>
-                ),
-            },
-        ],
-        [t, appSettings.dateFormat],
     );
 
     // Per-widget hydration: each section renders its own skeleton while its
@@ -554,13 +535,17 @@ export default function DashboardPage() {
         );
     }
 
-    // Time-of-day greeting
+    // Time-of-day greeting over today's long date
     const greetingKey = (() => {
         const hour = new Date().getHours();
         if (hour < 12) return "dashboard.greetingMorning";
         if (hour < 18) return "dashboard.greetingAfternoon";
         return "dashboard.greetingEvening";
     })();
+    const todayLong = new Date().toLocaleDateString(
+        appLanguageToLocale(language),
+        { weekday: "long", day: "numeric", month: "long", year: "numeric" },
+    );
 
     const incomeCompact = formatCurrencyCompact(
         totalIncome,
@@ -581,16 +566,46 @@ export default function DashboardPage() {
                 {/* Page header */}
                 <PageHeader
                     title={t(greetingKey) || t("dashboard.title")}
-                    subtitle={t("dashboard.subtitle")}
+                    subtitle={todayLong}
                     icon={PAGE_ICONS["/"]}
                     actions={
-                        <WidgetVisibilityDialog
-                            widgets={widgetDefs}
-                            isVisible={isVisible}
-                            setWidgetVisible={setWidgetVisible}
-                            setAllVisible={setAllVisible}
-                            resetToDefaults={resetToDefaults}
-                        />
+                        <>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        size="icon"
+                                        aria-label={t("home.menu")}
+                                    >
+                                        <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                        onSelect={() => setCustomizeOpen(true)}
+                                    >
+                                        <LayoutGrid className="mr-2 h-4 w-4 text-label-secondary" />
+                                        {t("home.customize")}
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                            <WidgetVisibilityDialog
+                                open={customizeOpen}
+                                onOpenChange={setCustomizeOpen}
+                                widgets={widgetDefs}
+                                isVisible={isVisible}
+                                setWidgetVisible={setWidgetVisible}
+                                setAllVisible={setAllVisible}
+                                resetToDefaults={resetToDefaults}
+                            />
+                            <AddTransactionButton
+                                onCreated={(created) =>
+                                    navigate("/transactions", {
+                                        state: { selectTransactionId: created.id },
+                                    })
+                                }
+                            />
+                        </>
                     }
                 />
 
@@ -619,16 +634,24 @@ export default function DashboardPage() {
                 page (AppLayout → UpcomingPaymentsNotification), consistent with
                 every other page — no dashboard-specific card. */}
 
-                {/* Stats — bento: featured net-balance tile + secondary metrics */}
-                {isVisible("statCards") && statsLoading && statSkeleton}
+                <div
+                    key={arrivalRun}
+                    className={cn("space-y-6", playArrival && "animate-stagger")}
+                >
+                    {isVisible("hero") && (
+                        <MonthToDateHero currency={targetCurrency} />
+                    )}
+
+                    <div className="grid gap-6 lg:grid-cols-5">
+                        <div className="space-y-6 lg:col-span-3">
+                            {isVisible("attention") && (
+                                <NeedsAttentionList currency={targetCurrency} />
+                            )}
+
+                            {/* Summary cards (off by default since the hero): featured net tile + metrics */}
+                            {isVisible("statCards") && statsLoading && statSkeleton}
                 {isVisible("statCards") && !statsLoading && (
-                    <div
-                        key={arrivalRun}
-                        className={cn(
-                            "grid gap-4 sm:grid-cols-2 lg:grid-cols-6 lg:grid-rows-2",
-                            playArrival && "animate-stagger",
-                        )}
-                    >
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6 lg:grid-rows-2">
                         <div className="sm:col-span-2 lg:col-span-3 lg:row-span-2">
                             <NetSummaryCard
                                 netBalance={netBalance}
@@ -714,8 +737,35 @@ export default function DashboardPage() {
                     </div>
                 )}
 
-                {/* Bank Account Balances */}
-                {isVisible("bankBalances") && <BankBalancesWidget />}
+
+                            {/* Bank Account Balances */}
+                            {isVisible("bankBalances") && <BankBalancesWidget />}
+
+                            {/* Recent transactions */}
+                            {isVisible("recentTransactions") &&
+                                (transactionsLoading || recentTransactionsLoading) &&
+                                recentSkeleton}
+                            {isVisible("recentTransactions") &&
+                                !(transactionsLoading || recentTransactionsLoading) && (
+                                    <RecentTransactionsList
+                                        rows={recentTransactions}
+                                        exclusionsApply={exclusionsApply}
+                                        isFiltered={
+                                            graphExclusions["recentTransactions"] ?? true
+                                        }
+                                        onToggleExclusions={toggleGraphExclusion}
+                                    />
+                                )}
+                        </div>
+                        <div className="space-y-6 lg:col-span-2">
+                            {isVisible("netWorth") && (
+                                <NetWorthCard currency={targetCurrency} />
+                            )}
+                            {isVisible("upcoming") && <UpcomingPaymentsList />}
+                            {isVisible("accounts") && <AccountsList />}
+                        </div>
+                    </div>
+                </div>
 
                 {/* Charts — asymmetric bento: trends span 3 of 5 cols, category pie spans 2 */}
                 <div className="grid gap-6 lg:grid-cols-5 lg:[&>*:only-child]:col-span-5">
@@ -807,40 +857,6 @@ export default function DashboardPage() {
                     </div>
                 )}
 
-                {/* Recent transactions */}
-                {isVisible("recentTransactions") &&
-                    (transactionsLoading || recentTransactionsLoading) &&
-                    recentSkeleton}
-                {isVisible("recentTransactions") &&
-                    !(transactionsLoading || recentTransactionsLoading) && (
-                        <div className="cv-auto">
-                            <VirtualDataTable
-                                title={t("dashboard.recentTransactions")}
-                                subtitle={t(
-                                    "dashboard.recentTransactionsSubtitle",
-                                    { n: recentTransactions.length },
-                                )}
-                                columns={columns}
-                                data={recentTransactions}
-                                emptyIcon={Receipt}
-                                emptyMessage={t(
-                                    "dashboard.recentTransactions.empty",
-                                )}
-                                actions={
-                                    <ExclusionToggle
-                                        graphKey="recentTransactions"
-                                        isFiltered={
-                                            graphExclusions[
-                                                "recentTransactions"
-                                            ] ?? true
-                                        }
-                                        onToggle={toggleGraphExclusion}
-                                        exclusionsApply={exclusionsApply}
-                                    />
-                                }
-                            />
-                        </div>
-                    )}
             </PageShell>
         </ChartSyncProvider>
     );

@@ -14,6 +14,12 @@ interface WidgetVisibilityDialogProps {
     setWidgetVisible: (id: string, visible: boolean) => void;
     setAllVisible: (visible: boolean) => void;
     resetToDefaults: () => void;
+    /**
+     * Controlled mode: the page owns the open state and offers its own entry
+     * point (e.g. a menu item), so no trigger button is rendered.
+     */
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
 }
 export function WidgetVisibilityDialog({
                                            widgets,
@@ -21,20 +27,25 @@ export function WidgetVisibilityDialog({
                                            setWidgetVisible,
                                            setAllVisible,
                                            resetToDefaults,
+                                           open,
+                                           onOpenChange,
                                        }: WidgetVisibilityDialogProps) {
     const { t } = useLanguage();
     const visibleCount = widgets.filter((w) => isVisible(w.id)).length;
+    const controlled = open !== undefined;
     return (
-        <Dialog>
-            <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-2">
-                    <LayoutGrid className="h-4 w-4" />
-                    {t('widgets.button')}
-                    <span className="text-xs text-muted-foreground">
-            {visibleCount}/{widgets.length}
-          </span>
-                </Button>
-            </DialogTrigger>
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            {!controlled && (
+                <DialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-2">
+                        <LayoutGrid className="h-4 w-4" />
+                        {t('widgets.button')}
+                        <span className="text-xs text-muted-foreground">
+                            {visibleCount}/{widgets.length}
+                        </span>
+                    </Button>
+                </DialogTrigger>
+            )}
             <DialogContent className="max-w-md">
                 <DialogHeader>
                     <DialogTitle>{t('widgets.title')}</DialogTitle>
@@ -50,7 +61,7 @@ export function WidgetVisibilityDialog({
                         >
                             <div className="space-y-0.5">
                                 <Label htmlFor={`widget-${widget.id}`} className="text-sm font-medium cursor-pointer">
-                                    {widget.label}
+                                    {widget.labelKey ? t(widget.labelKey) : widget.label}
                                 </Label>
                                 {widget.description && (
                                     <p className="text-xs text-muted-foreground">{widget.description}</p>

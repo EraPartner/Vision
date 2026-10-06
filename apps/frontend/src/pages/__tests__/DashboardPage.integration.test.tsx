@@ -10,6 +10,25 @@ import DashboardPage from "@/pages/DashboardPage";
 
 const API_BASE = "http://localhost:3002";
 
+/** Opens Customize… from the header's more-actions menu. */
+async function openCustomize(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(await screen.findByRole("button", { name: /more actions/i }));
+    await user.click(await screen.findByRole("menuitem", { name: /customize/i }));
+    return screen.findByRole("dialog");
+}
+
+/**
+ * The summary cards are off by default since the hero took over last month's
+ * totals; switch them on through Customize… (the widget-visibility cache is
+ * module-level, so the switch is read before toggling to stay idempotent).
+ */
+async function enableSummaryCards(user: ReturnType<typeof userEvent.setup>) {
+    await openCustomize(user);
+    const toggle = await screen.findByRole("switch", { name: /summary cards/i });
+    if (toggle.getAttribute("aria-checked") !== "true") await user.click(toggle);
+    await user.keyboard("{Escape}");
+}
+
 describe("DashboardPage (integration)", () => {
     it("renders page heading", async () => {
         renderWithApp(<DashboardPage />);
@@ -21,17 +40,21 @@ describe("DashboardPage (integration)", () => {
         ).toBeInTheDocument();
     });
 
-    it("plays the full stat-card arrival only on the first dashboard visit", async () => {
+    it("plays the arrival animation only on the first dashboard visit", async () => {
         window.sessionStorage.clear();
         const first = renderWithApp(<DashboardPage />);
-        await screen.findByText(/latest month.*income/i);
+        await screen.findByRole("heading", {
+            name: /good\s+(morning|afternoon|evening)/i,
+        });
         expect(
             first.container.querySelector(".animate-stagger"),
         ).toBeInTheDocument();
 
         first.unmount();
         const returning = renderWithApp(<DashboardPage />);
-        await screen.findByText(/latest month.*income/i);
+        await screen.findByRole("heading", {
+            name: /good\s+(morning|afternoon|evening)/i,
+        });
         expect(
             returning.container.querySelector(".animate-stagger"),
         ).toBeNull();
@@ -52,23 +75,21 @@ describe("DashboardPage (integration)", () => {
         ).toBeInTheDocument();
     });
 
-    it("shows Widgets button in page header", async () => {
+    it("shows the more-actions menu and the Add transaction button in the header", async () => {
         renderWithApp(<DashboardPage />);
         expect(
-            await screen.findByRole("button", { name: /widgets/i }),
+            await screen.findByRole("button", { name: /more actions/i }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: /add transaction/i }),
         ).toBeInTheDocument();
     });
 
-    it("opens Manage Widgets dialog when Widgets button is clicked", async () => {
+    it("opens Manage Widgets from Customize… in the more-actions menu", async () => {
         const user = userEvent.setup();
         renderWithApp(<DashboardPage />);
 
-        const widgetsButton = await screen.findByRole("button", {
-            name: /widgets/i,
-        });
-        await user.click(widgetsButton);
-
-        expect(await screen.findByRole("dialog")).toBeInTheDocument();
+        expect(await openCustomize(user)).toBeInTheDocument();
         expect(
             await screen.findByRole("heading", { name: /manage widgets/i }),
         ).toBeInTheDocument();
@@ -82,31 +103,73 @@ describe("DashboardPage (integration)", () => {
         ).toBeInTheDocument();
     });
 
-    it("shows Latest Month Income stat card", async () => {
+    it("shows the month-to-date hero, needs attention, net worth, upcoming and accounts", async () => {
         renderWithApp(<DashboardPage />);
+        expect(
+            await screen.findByText(/spent in .* so far/i),
+        ).toBeInTheDocument();
+        expect(screen.getByText(/nothing spent yet this month/i)).toBeInTheDocument();
+        expect(
+            await screen.findByText(/nothing needs attention/i),
+        ).toBeInTheDocument();
+        expect(screen.getByText(/^net worth$/i)).toBeInTheDocument();
+        expect(
+            await screen.findByText(/nothing due in the next 7 days/i),
+        ).toBeInTheDocument();
+        expect(await screen.findByText(/no accounts yet/i)).toBeInTheDocument();
+        expect(screen.getByRole("link", { name: /all planned/i })).toHaveAttribute(
+            "href",
+            "/planned",
+        );
+        expect(screen.getByRole("link", { name: /^details$/i })).toHaveAttribute(
+            "href",
+            "/portfolio/net-worth",
+        );
+    });
+
+    it("lists what needs attention with a link to settle each item", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/transactions`, ({ request }) => {
+                const params = new URL(request.url).searchParams;
+                if (params.get("uncategorised") === "true")
+                    return ok({ items: [TRANSACTION_STUB], total: 12, limit: 1, offset: 0, links: [] });
+                return ok({ items: [], total: 0, limit: 50, offset: 0, links: [] });
+            }),
+        );
+        renderWithApp(<DashboardPage />);
+        const row = await screen.findByRole("link", {
+            name: /12 transactions need a category/i,
+        });
+        expect(row).toHaveAttribute("href", "/transactions?uncategorised=true");
+    });
+
+    it("shows the Latest Month stat cards once Summary cards are switched on", async () => {
+        const user = userEvent.setup();
+        renderWithApp(<DashboardPage />);
+        await enableSummaryCards(user);
         // dashboard.stat.lastMonthIncome = "Latest Month -- Income"
         expect(
             await screen.findByText(/latest month.*income/i),
         ).toBeInTheDocument();
-    });
-
-    it("shows Latest Month Spending stat card", async () => {
-        renderWithApp(<DashboardPage />);
-        // dashboard.stat.lastMonthSpending = "Latest Month -- Spending"
         expect(
             await screen.findByText(/latest month.*spending/i),
         ).toBeInTheDocument();
     });
 
-    it("shows Recent Transactions DataTable heading", async () => {
+    it("shows the Recent transactions list with a See all link", async () => {
         renderWithApp(<DashboardPage />);
-        // dashboard.recentTransactions widget — DataTable title is "Recent Transactions"
         const matches = await screen.findAllByText(/recent transactions/i);
         expect(matches.length).toBeGreaterThan(0);
+        expect(screen.getByRole("link", { name: /see all/i })).toHaveAttribute(
+            "href",
+            "/transactions",
+        );
     });
 
-    it("shows Total Transactions stat card", async () => {
+    it("shows Total Transactions stat card once Summary cards are switched on", async () => {
+        const user = userEvent.setup();
         renderWithApp(<DashboardPage />);
+        await enableSummaryCards(user);
         // dashboard.stat.totalTransactions = "Total Transactions"
         expect(
             await screen.findByText(/total transactions/i),
@@ -163,7 +226,9 @@ describe("DashboardPage (integration)", () => {
             ),
         );
 
+        const user = userEvent.setup();
         renderWithApp(<DashboardPage />);
+        await enableSummaryCards(user);
 
         const income = await screen.findByRole("link", {
             name: /latest month.*income/i,
@@ -191,26 +256,25 @@ describe("DashboardPage (integration)", () => {
         ).toHaveAttribute("href", "/transactions");
     });
 
-    it("shows subtitle text after full page load", async () => {
+    it("shows today's long date under the greeting", async () => {
         renderWithApp(<DashboardPage />);
-        // Wait for full load — greeting heading appears only after API + locale
         await screen.findByRole("heading", {
             name: /good\s+(morning|afternoon|evening)/i,
         });
-        // dashboard.subtitle describes the page's decision-support role.
-        expect(
-            screen.getByText(/see what changed, what needs attention/i),
-        ).toBeInTheDocument();
+        const expected = new Date().toLocaleDateString("en-US", {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+        });
+        expect(screen.getByText(expected)).toBeInTheDocument();
     });
 
     it("Manage Widgets dialog has Hide All button", async () => {
         const user = userEvent.setup();
         renderWithApp(<DashboardPage />);
 
-        await user.click(
-            await screen.findByRole("button", { name: /widgets/i }),
-        );
-        await screen.findByRole("dialog");
+        await openCustomize(user);
 
         // widgets.hideAll = "Hide All"
         expect(
@@ -222,10 +286,7 @@ describe("DashboardPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<DashboardPage />);
 
-        await user.click(
-            await screen.findByRole("button", { name: /widgets/i }),
-        );
-        await screen.findByRole("dialog");
+        await openCustomize(user);
 
         // widgets.showAll = "Show All"
         expect(
@@ -237,10 +298,7 @@ describe("DashboardPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<DashboardPage />);
 
-        await user.click(
-            await screen.findByRole("button", { name: /widgets/i }),
-        );
-        await screen.findByRole("dialog");
+        await openCustomize(user);
 
         // widgets.reset = "Reset"
         expect(
@@ -252,10 +310,7 @@ describe("DashboardPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<DashboardPage />);
 
-        await user.click(
-            await screen.findByRole("button", { name: /widgets/i }),
-        );
-        await screen.findByRole("dialog");
+        await openCustomize(user);
 
         await user.keyboard("{Escape}");
 
@@ -266,10 +321,7 @@ describe("DashboardPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<DashboardPage />);
 
-        await user.click(
-            await screen.findByRole("button", { name: /widgets/i }),
-        );
-        await screen.findByRole("dialog");
+        await openCustomize(user);
 
         // WidgetVisibilityDialog renders widgets as Switch toggles
         const switches = screen.getAllByRole("switch");
