@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { toast } from "sonner";
@@ -283,16 +283,21 @@ describe("OwesPage (integration)", () => {
         const record = await screen.findByRole("button", {
             name: /record payment: Dinner,/i,
         });
+        await user.click(
+            screen.getByRole("button", { name: /^actions for Dinner,/i }),
+        );
+        const menu = await screen.findByRole("menu");
         expect(
-            screen.getByRole("button", { name: /mark.*settled: Dinner,/i }),
+            within(menu).getByRole("menuitem", { name: /^mark as settled$/i }),
         ).toBeInTheDocument();
         expect(
-            screen.getByRole("button", { name: /delete split: Dinner,/i }),
+            within(menu).getByRole("menuitem", { name: /^delete split$/i }),
         ).toBeInTheDocument();
+        await user.keyboard("{Escape}");
+        await waitFor(() =>
+            expect(screen.queryByRole("menu")).not.toBeInTheDocument(),
+        );
         record.focus();
-        expect(
-            await screen.findByRole("tooltip", { name: /record payment/i }),
-        ).toBeInTheDocument();
         await user.keyboard("{Enter}");
         const amount = screen.getByRole("textbox", { name: /^amount$/i });
         await user.clear(amount);
@@ -372,9 +377,11 @@ describe("OwesPage (integration)", () => {
 
         await user.click(await screen.findByText("Alice"));
 
-        // owesPage.export.button = "Export CSV"
+        await user.click(
+            await screen.findByRole("button", { name: "More actions" }),
+        );
         expect(
-            await screen.findByRole("button", { name: /export csv/i }),
+            await screen.findByRole("menuitem", { name: /export csv/i }),
         ).toBeInTheDocument();
     });
 
@@ -507,9 +514,11 @@ describe("OwesPage (integration)", () => {
         // Navigate to recipient detail
         await user.click(await screen.findByText("Alice"));
 
-        // Click Export CSV
         await user.click(
-            await screen.findByRole("button", { name: /export csv/i }),
+            await screen.findByRole("button", { name: "More actions" }),
+        );
+        await user.click(
+            await screen.findByRole("menuitem", { name: /export csv/i }),
         );
 
         // owesPage.export.success = "CSV exported"
@@ -540,9 +549,11 @@ describe("OwesPage (integration)", () => {
         // Navigate to recipient detail
         await user.click(await screen.findByText("Alice"));
 
-        // Click Export CSV
         await user.click(
-            await screen.findByRole("button", { name: /export csv/i }),
+            await screen.findByRole("button", { name: "More actions" }),
+        );
+        await user.click(
+            await screen.findByRole("menuitem", { name: /export csv/i }),
         );
 
         // owesPage.export.failed = "Couldn't export CSV"

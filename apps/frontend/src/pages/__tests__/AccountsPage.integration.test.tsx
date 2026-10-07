@@ -90,7 +90,7 @@ function mockAccounts(items: unknown[] = FIXTURE) {
     );
 }
 
-describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
+describe("AccountsPage (integration, grouped list)", () => {
     it("keeps Reconcile reachable for a multi-currency account with no primary drift", async () => {
         mockAccounts([
             {
@@ -112,10 +112,10 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         renderWithApp(<AccountsPage />);
 
         const card = (await screen.findByText("Wise")).closest(
-            ".glass-thin",
+            "li",
         ) as HTMLElement;
         await userEvent.click(
-            within(card).getByRole("button", { name: "Account actions" }),
+            within(card).getByRole("button", { name: "Actions for Wise" }),
         );
         expect(
             await screen.findByRole("menuitem", { name: "Reconcile balance" }),
@@ -159,7 +159,7 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         const link = await screen.findByRole("link", {
             name: "Unsupported currency",
         });
-        const card = link.closest(".glass-thin") as HTMLElement;
+        const card = link.closest("li") as HTMLElement;
         expect(
             within(card).getByText(/converted total is incomplete/i),
         ).toBeInTheDocument();
@@ -174,7 +174,7 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         ).toBeInTheDocument();
     });
 
-    it("renders the four groups in deterministic order with label-sorted cards", async () => {
+    it("renders the four groups in deterministic order with label-sorted rows", async () => {
         mockAccounts();
         renderWithApp(<AccountsPage />);
 
@@ -194,7 +194,9 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         // Within Cash & Savings: sorted by display label (Argenta before KBC);
         // the not-in-net-worth checking account still renders in its type group.
         const accountLinks = within(cash).getAllByRole("link");
-        expect(accountLinks.map((link) => link.textContent)).toEqual([
+        expect(
+            accountLinks.map((link) => link.getAttribute("aria-label")),
+        ).toEqual([
             "Argenta Savings",
             "KBC Checking",
             "Partner Checking",
@@ -246,9 +248,7 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         // Net cash = in_net_worth-only Cash&Savings + Liabilities
         // (1000 + 500 − 300 = 1200) — excludes the not-in-net-worth account,
         // the archived account, and the portfolio-type ledger balance.
-        const netCashLabel = screen.getByText("Net cash");
-        const grandLine = netCashLabel.closest("div")
-            ?.parentElement as HTMLElement;
+        const grandLine = screen.getByRole("region", { name: "Net cash" });
         expect(grandLine).toHaveTextContent(/1\.200,00/);
     });
 
@@ -312,7 +312,7 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         });
         const brokerCard = within(portfolio)
             .getByRole("link", { name: "Degiro" })
-            .closest(".glass-thin") as HTMLElement;
+            .closest("li") as HTMLElement;
         expect(
             within(brokerCard).getByText(/no assigned holdings/i),
         ).toBeInTheDocument();
@@ -402,7 +402,7 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
 
         const card = (
             await screen.findByRole("link", { name: "Degiro" })
-        ).closest(".glass-thin") as HTMLElement;
+        ).closest("li") as HTMLElement;
         expect(within(card).getByText("Holdings value")).toBeVisible();
         expect(card).toHaveTextContent(/1\.250,00/);
         expect(card).toHaveTextContent(/Broker P&L.*\+250,00/s);
@@ -436,7 +436,7 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         });
         const card = within(portfolio)
             .getByRole("link", { name: "Cold storage" })
-            .closest(".glass-thin") as HTMLElement;
+            .closest("li") as HTMLElement;
         expect(within(card).getByText("Wallet")).toBeInTheDocument();
         expect(
             within(card).getByText(/no assigned holdings/i),
@@ -447,7 +447,9 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         ).not.toBeInTheDocument();
 
         await userEvent.click(
-            within(card).getByRole("button", { name: "Account actions" }),
+            within(card).getByRole("button", {
+                name: "Actions for Cold storage",
+            }),
         );
         expect(
             await screen.findByRole("menuitem", { name: /view details/i }),
@@ -469,14 +471,14 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         });
         const excluded = within(cash)
             .getByRole("link", { name: "Partner Checking" })
-            .closest(".glass-thin") as HTMLElement;
+            .closest("li") as HTMLElement;
         expect(
             within(excluded).getByText("not in net worth"),
         ).toBeInTheDocument();
 
         const included = within(cash)
             .getByRole("link", { name: "KBC Checking" })
-            .closest(".glass-thin") as HTMLElement;
+            .closest("li") as HTMLElement;
         expect(
             within(included).queryByText("not in net worth"),
         ).not.toBeInTheDocument();
@@ -510,7 +512,7 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         expect(await screen.findByText("detail route")).toBeInTheDocument();
     });
 
-    it("keeps the a11y dropdown with open + transactions, but without Edit/Merge/Close (moved to the detail header)", async () => {
+    it("keeps the row menu with open + transactions, but without Edit/Merge/Close (moved to the detail header)", async () => {
         mockAccounts();
         renderWithDetailRoute();
 
@@ -519,9 +521,11 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         });
         const card = within(cash)
             .getByRole("link", { name: "KBC Checking" })
-            .closest(".glass-thin") as HTMLElement;
+            .closest("li") as HTMLElement;
         await userEvent.click(
-            within(card).getByRole("button", { name: "Account actions" }),
+            within(card).getByRole("button", {
+                name: "Actions for KBC Checking",
+            }),
         );
 
         expect(
@@ -674,7 +678,7 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
     function driftBadgeFor(label: string): HTMLElement {
         const card = screen
             .getByRole("link", { name: label })
-            .closest(".glass-thin") as HTMLElement;
+            .closest("li") as HTMLElement;
         return within(card).getByRole("button", { name: "Reconcile balance" });
     }
 

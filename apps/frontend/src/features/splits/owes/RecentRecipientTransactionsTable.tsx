@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useRecentRecipientTransactions } from "@/features/splits/owes/useRecentRecipientTransactions";
+import { amountClass } from "@/features/transactions/amountClass";
 import { cn } from "@/lib/utils";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { HandCoins } from "lucide-react";
@@ -95,8 +96,8 @@ export function RecentRecipientTransactionsTable({
                 render: (row: RecentRecipientTransactionRow) => (
                     <span
                         className={cn(
-                            "whitespace-nowrap",
-                            row.amount >= 0 ? "text-gain" : "text-loss",
+                            "whitespace-nowrap tabular-nums",
+                            amountClass(row.amount),
                         )}
                     >
                         <Money

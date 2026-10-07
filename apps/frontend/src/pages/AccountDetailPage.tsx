@@ -23,6 +23,7 @@ import { useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { PageError } from "@/components/shared/PageError";
 import { SectionLoader } from "@/components/shared/SectionLoader";
 import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -56,7 +57,7 @@ import {
     Coins,
     DoorClosed,
     GitMerge,
-    MoreVertical,
+    MoreHorizontal,
     Pencil,
     Receipt,
     Scale,
@@ -103,6 +104,7 @@ import { useAccountPlannedTransactions } from "@/hooks/useAccountPlannedTransact
 import { usePortfolioSummaryQuery } from "@/hooks/portfolio/usePortfolioSummary";
 import { getBrokerAccountMetrics } from "@/features/accounts/brokerAccountMetrics";
 import { PortfolioOversoldBadge } from "@/features/portfolio/PortfolioOversoldBadge";
+import { amountClass } from "@/features/transactions/amountClass";
 
 // Same trend-color rule the AccountDetailSheet used.
 const SPARK_COLOR_POSITIVE = "hsl(var(--gain))";
@@ -324,9 +326,10 @@ export default function AccountDetailPage() {
     }
     if (isError) {
         return (
-            <p className="text-sm text-destructive">
-                {apiErrorToMessage(error, t)}
-            </p>
+            <PageError
+                message={apiErrorToMessage(error, t)}
+                onRetry={() => void refetch()}
+            />
         );
     }
     if (!account) {
@@ -340,7 +343,7 @@ export default function AccountDetailPage() {
                         variant="outline"
                         onClick={() => navigate("/accounts")}
                     >
-                        <ArrowLeft className="mr-2 h-4 w-4" />{" "}
+                        <ArrowLeft aria-hidden />
                         {t("accounts.detail.back")}
                     </Button>
                 }
@@ -392,10 +395,10 @@ export default function AccountDetailPage() {
             <Button
                 variant="ghost"
                 size="sm"
-                className="-ml-2 h-8 px-2 text-muted-foreground hover:text-foreground"
+                className="-ml-2 px-2 text-label-secondary hover:text-foreground"
                 onClick={() => navigate("/accounts")}
             >
-                <ArrowLeft className="mr-1.5 h-4 w-4" />{" "}
+                <ArrowLeft aria-hidden />
                 {t("accounts.detail.back")}
             </Button>
 
@@ -418,21 +421,27 @@ export default function AccountDetailPage() {
                                     size="icon"
                                     aria-label={t("accounts.actionsMenu")}
                                 >
-                                    <MoreVertical className="h-4 w-4" />
+                                    <MoreHorizontal aria-hidden />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                                 <DropdownMenuItem
                                     onClick={() => setEditing(true)}
                                 >
-                                    <Pencil className="mr-2 h-4 w-4" />{" "}
+                                    <Pencil
+                                        className="mr-2 h-4 w-4 text-label-secondary"
+                                        aria-hidden
+                                    />
                                     {t("common.edit")}
                                 </DropdownMenuItem>
                                 {!holdingsOnly && (
                                     <DropdownMenuItem
                                         onClick={() => setAnchoring(true)}
                                     >
-                                        <Coins className="mr-2 h-4 w-4" />{" "}
+                                        <Coins
+                                            className="mr-2 h-4 w-4 text-label-secondary"
+                                            aria-hidden
+                                        />
                                         {t("accounts.openingBalance.action")}
                                     </DropdownMenuItem>
                                 )}
@@ -442,7 +451,10 @@ export default function AccountDetailPage() {
                                             openAccountTransactions(a)
                                         }
                                     >
-                                        <Receipt className="mr-2 h-4 w-4" />{" "}
+                                        <Receipt
+                                            className="mr-2 h-4 w-4 text-label-secondary"
+                                            aria-hidden
+                                        />
                                         {t("accounts.openTransactions")}
                                     </DropdownMenuItem>
                                 )}
@@ -451,7 +463,10 @@ export default function AccountDetailPage() {
                                     <DropdownMenuItem
                                         onClick={() => setMerging(true)}
                                     >
-                                        <GitMerge className="mr-2 h-4 w-4" />{" "}
+                                        <GitMerge
+                                            className="mr-2 h-4 w-4 text-label-secondary"
+                                            aria-hidden
+                                        />
                                         {t("accounts.merge")}
                                     </DropdownMenuItem>
                                 )}
@@ -461,7 +476,10 @@ export default function AccountDetailPage() {
                                             setTransferringLots(true)
                                         }
                                     >
-                                        <ArrowRightLeft className="mr-2 h-4 w-4" />{" "}
+                                        <ArrowRightLeft
+                                            className="mr-2 h-4 w-4 text-label-secondary"
+                                            aria-hidden
+                                        />
                                         {t("portfolio.brokerTransfer.action")}
                                     </DropdownMenuItem>
                                 )}
@@ -471,12 +489,18 @@ export default function AccountDetailPage() {
                                     <DropdownMenuItem
                                         onClick={() => setClosing(true)}
                                     >
-                                        <DoorClosed className="mr-2 h-4 w-4" />{" "}
+                                        <DoorClosed
+                                            className="mr-2 h-4 w-4 text-label-secondary"
+                                            aria-hidden
+                                        />
                                         {t("accounts.close.action")}
                                     </DropdownMenuItem>
                                 ) : (
                                     <DropdownMenuItem onClick={() => reopen(a)}>
-                                        <ArchiveRestore className="mr-2 h-4 w-4" />{" "}
+                                        <ArchiveRestore
+                                            className="mr-2 h-4 w-4 text-label-secondary"
+                                            aria-hidden
+                                        />
                                         {t("accounts.restore")}
                                     </DropdownMenuItem>
                                 )}
@@ -487,15 +511,21 @@ export default function AccountDetailPage() {
                                         className="text-destructive focus:text-destructive"
                                         onClick={() => requestDelete(a)}
                                     >
-                                        <Trash2 className="mr-2 h-4 w-4" />{" "}
+                                        <Trash2
+                                            className="mr-2 h-4 w-4"
+                                            aria-hidden
+                                        />
                                         {t("common.delete")}
                                     </DropdownMenuItem>
                                 ) : (
                                     <DropdownMenuItem disabled>
-                                        <Trash2 className="mr-2 h-4 w-4" />
+                                        <Trash2
+                                            className="mr-2 h-4 w-4"
+                                            aria-hidden
+                                        />
                                         <span className="flex flex-col">
                                             <span>{t("common.delete")}</span>
-                                            <span className="text-xs text-muted-foreground">
+                                            <span className="type-footnote text-label-secondary">
                                                 {t(
                                                     "accounts.delete.hasTransactions",
                                                 )}
@@ -516,18 +546,18 @@ export default function AccountDetailPage() {
                     className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between"
                 >
                     <div className="min-w-0">
-                        <div className="eyebrow">
+                        <div className="type-footnote text-label-secondary">
                             {t("accounts.detail.balance")}
                         </div>
                         {holdingsOnly ? (
-                            <div className="mt-1 text-lg font-medium text-muted-foreground">
+                            <div className="mt-1 type-title-3 text-label-secondary">
                                 {t("accounts.trackedInPortfolio")}
                             </div>
                         ) : a.computed_balance != null ? (
                             <>
                                 <Tooltip>
                                     <TooltipTrigger asChild>
-                                        <div className="mt-1 text-3xl font-semibold tabular-nums">
+                                        <div className="mt-1 type-large-title tabular-nums text-foreground">
                                             <Money
                                                 amount={a.computed_balance}
                                                 currency={a.currency}
@@ -539,13 +569,13 @@ export default function AccountDetailPage() {
                                     </TooltipContent>
                                 </Tooltip>
                                 {provenanceText && (
-                                    <div className="mt-1 text-xs text-muted-foreground">
+                                    <div className="mt-1 type-footnote text-label-secondary">
                                         {provenanceText}
                                     </div>
                                 )}
                             </>
                         ) : (
-                            <div className="mt-1 text-sm text-muted-foreground">
+                            <div className="mt-1 type-callout text-label-secondary">
                                 {t("accounts.detail.noBalance")}
                             </div>
                         )}
@@ -555,7 +585,12 @@ export default function AccountDetailPage() {
                                 <TooltipTrigger asChild>
                                     <button
                                         type="button"
-                                        className={`${badgeVariants({ variant: drift.variant })} mt-3 cursor-pointer text-xs`}
+                                        className={cn(
+                                            badgeVariants({
+                                                variant: drift.variant,
+                                            }),
+                                            "mt-3",
+                                        )}
                                         aria-label={t(
                                             "accounts.reconcile.open",
                                         )}
@@ -574,7 +609,7 @@ export default function AccountDetailPage() {
                                 className="mt-3"
                                 onClick={() => setReconciling(true)}
                             >
-                                <Scale className="mr-2 h-4 w-4" />
+                                <Scale aria-hidden />
                                 {t("accounts.reconcile.open")}
                             </Button>
                         )}
@@ -612,19 +647,22 @@ export default function AccountDetailPage() {
                         {portfolioSummaryQuery.isLoading ? (
                             <SectionLoader />
                         ) : portfolioSummaryQuery.isError ? (
-                            <p className="text-sm text-destructive">
-                                {apiErrorToMessage(
+                            <PageError
+                                message={apiErrorToMessage(
                                     portfolioSummaryQuery.error,
                                     t,
                                 )}
-                            </p>
+                                onRetry={() =>
+                                    void portfolioSummaryQuery.refetch()
+                                }
+                            />
                         ) : portfolioMetrics?.hasPosition ? (
                             <div className="grid gap-4 sm:grid-cols-2">
                                 <div>
-                                    <div className="eyebrow">
+                                    <div className="type-footnote text-label-secondary">
                                         {t("accounts.portfolio.holdings")}
                                     </div>
-                                    <div className="mt-1 text-2xl font-semibold tabular-nums">
+                                    <div className="mt-1 type-title-1 tabular-nums text-foreground">
                                         <Money
                                             amount={
                                                 portfolioMetrics.holdingsValue
@@ -634,17 +672,17 @@ export default function AccountDetailPage() {
                                     </div>
                                 </div>
                                 <div>
-                                    <div className="eyebrow">
+                                    <div className="type-footnote text-label-secondary">
                                         {t("accounts.portfolio.pnl")}
                                     </div>
                                     <div
                                         className={cn(
-                                            "mt-1 text-2xl font-semibold tabular-nums",
+                                            "mt-1 type-title-1 tabular-nums",
                                             portfolioMetrics.gainLoss > 0
                                                 ? "text-gain"
                                                 : portfolioMetrics.gainLoss < 0
                                                   ? "text-loss"
-                                                  : "text-muted-foreground",
+                                                  : "text-label-secondary",
                                         )}
                                     >
                                         <Money
@@ -656,7 +694,7 @@ export default function AccountDetailPage() {
                                 </div>
                             </div>
                         ) : (
-                            <p className="text-sm text-muted-foreground">
+                            <p className="type-callout text-label-secondary">
                                 {t("accounts.portfolio.noAssignedHoldings")}
                             </p>
                         )}
@@ -680,7 +718,7 @@ export default function AccountDetailPage() {
                                 />
                                 {t("accounts.detail.upcomingPlanned")}
                             </CardTitle>
-                            <p className="text-xs text-muted-foreground">
+                            <p className="type-footnote text-label-secondary">
                                 {t("accounts.detail.upcomingPlannedHint")}
                             </p>
                         </CardHeader>
@@ -688,9 +726,13 @@ export default function AccountDetailPage() {
                             {plannedQuery.isLoading ? (
                                 <SectionLoader />
                             ) : plannedQuery.isError ? (
-                                <p className="text-sm text-destructive">
-                                    {apiErrorToMessage(plannedQuery.error, t)}
-                                </p>
+                                <PageError
+                                    message={apiErrorToMessage(
+                                        plannedQuery.error,
+                                        t,
+                                    )}
+                                    onRetry={() => void plannedQuery.refetch()}
+                                />
                             ) : (
                                 <>
                                     <Table>
@@ -712,7 +754,7 @@ export default function AccountDetailPage() {
                                         <TableBody>
                                             {upcomingPlanned.map((planned) => (
                                                 <TableRow key={planned.id}>
-                                                    <TableCell className="whitespace-nowrap tabular-nums text-muted-foreground">
+                                                    <TableCell className="whitespace-nowrap tabular-nums text-label-secondary">
                                                         {formatDateStringWithAppSettings(
                                                             planned.planned_date,
                                                             appSettings.dateFormat,
@@ -744,7 +786,7 @@ export default function AccountDetailPage() {
                                     </Table>
                                     {(plannedQuery.data?.total ?? 0) >
                                         upcomingPlanned.length && (
-                                        <p className="pt-2 text-xs text-muted-foreground">
+                                        <p className="pt-2 type-footnote text-label-secondary">
                                             {t(
                                                 "accounts.detail.upcomingPlannedTruncated",
                                                 {
@@ -771,7 +813,7 @@ export default function AccountDetailPage() {
                                 {t("accounts.detail.ledgerTitle")}
                             </CardTitle>
                             {canViewTransactions && total > 0 && (
-                                <span className="text-xs text-muted-foreground">
+                                <span className="type-footnote text-label-secondary">
                                     {tc("accounts.detail.ledgerCount", total)}
                                 </span>
                             )}
@@ -779,8 +821,8 @@ export default function AccountDetailPage() {
                     </CardHeader>
                     <CardContent className="space-y-3">
                         {since && (
-                            <div className="flex items-center gap-2 rounded-md border border-primary/20 bg-primary/10 px-3 py-2">
-                                <span className="text-sm text-foreground">
+                            <div className="flex items-center gap-2 rounded-control bg-primary/12 px-3 py-1.5">
+                                <span className="min-w-0 flex-1 truncate type-callout text-foreground">
                                     {t("accounts.detail.sinceBanner", {
                                         date: formatDateStringWithAppSettings(
                                             since,
@@ -791,29 +833,32 @@ export default function AccountDetailPage() {
                                 <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="ml-auto h-6 w-6"
+                                    className="h-7 w-7 shrink-0"
                                     onClick={clearSince}
                                     aria-label={t("aria.clearFilter")}
                                 >
-                                    <X className="h-3.5 w-3.5" />
+                                    <X className="h-3.5 w-3.5" aria-hidden />
                                 </Button>
                             </div>
                         )}
 
                         {!canViewTransactions ? (
-                            <p className="text-sm text-muted-foreground">
+                            <p className="type-callout text-label-secondary">
                                 {t("accounts.detail.noLedger")}
                             </p>
                         ) : txLoading ? (
                             <SectionLoader />
                         ) : txIsError ? (
-                            <p className="text-sm text-destructive">
-                                {apiErrorToMessage(txError, t)}
-                            </p>
+                            <PageError
+                                message={apiErrorToMessage(txError, t)}
+                            />
                         ) : visibleRows.length === 0 ? (
-                            <p className="py-4 text-sm text-muted-foreground">
-                                {t("accounts.detail.noTransactions")}
-                            </p>
+                            <EmptyState
+                                headingLevel={3}
+                                size="compact"
+                                icon={Receipt}
+                                title={t("accounts.detail.noTransactions")}
+                            />
                         ) : (
                             <>
                                 <Table>
@@ -843,7 +888,7 @@ export default function AccountDetailPage() {
                                     >
                                         {visibleRows.map((txn) => (
                                             <TableRow key={txn.id}>
-                                                <TableCell className="whitespace-nowrap tabular-nums text-muted-foreground">
+                                                <TableCell className="whitespace-nowrap tabular-nums text-label-secondary">
                                                     {formatDateStringWithAppSettings(
                                                         (
                                                             txn.transaction_date ??
@@ -862,20 +907,18 @@ export default function AccountDetailPage() {
                                                     </div>
                                                     {txn.recipient_name &&
                                                         txn.memo && (
-                                                            <div className="truncate text-xs text-muted-foreground">
+                                                            <div className="truncate type-footnote text-label-secondary">
                                                                 {txn.memo}
                                                             </div>
                                                         )}
                                                 </TableCell>
-                                                <TableCell className="hidden max-w-[10rem] truncate text-muted-foreground md:table-cell">
+                                                <TableCell className="hidden max-w-[10rem] truncate text-label-secondary md:table-cell">
                                                     {txn.category_name || "—"}
                                                 </TableCell>
                                                 <TableCell
                                                     className={cn(
-                                                        "whitespace-nowrap text-right tabular-nums",
-                                                        txn.amount >= 0
-                                                            ? "text-gain"
-                                                            : "text-loss",
+                                                        "whitespace-nowrap text-right font-medium tabular-nums",
+                                                        amountClass(txn.amount),
                                                     )}
                                                 >
                                                     <Money
@@ -887,7 +930,7 @@ export default function AccountDetailPage() {
                                                         signed
                                                     />
                                                 </TableCell>
-                                                <TableCell className="whitespace-nowrap text-right font-medium tabular-nums">
+                                                <TableCell className="whitespace-nowrap text-right tabular-nums text-label-secondary">
                                                     {txn.running_balance !=
                                                     null ? (
                                                         <Money
@@ -937,11 +980,15 @@ export default function AccountDetailPage() {
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4">
+                    <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
                         {metadata.map((m) => (
                             <div key={m.label} className="flex flex-col">
-                                <dt className="eyebrow">{m.label}</dt>
-                                <dd className="tabular-nums">{m.value}</dd>
+                                <dt className="type-footnote text-label-secondary">
+                                    {m.label}
+                                </dt>
+                                <dd className="type-body tabular-nums text-foreground">
+                                    {m.value}
+                                </dd>
                             </div>
                         ))}
                     </dl>

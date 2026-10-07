@@ -1,17 +1,17 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from "@/components/ui/dialog";
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetHeader,
+    SheetTitle,
+    SheetTrigger,
+} from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { List, ListRow } from "@/components/ui/list";
 import { Switch } from "@/components/ui/switch";
 import {
     Select,
@@ -79,7 +79,7 @@ const LIQUIDITY: AccountLiquidityClass[] = [
 // directly, a later type change must not clobber their choice — ADR-089
 // defaults are only suggestions for fields the user hasn't touched.
 // has_cash_sleeve/tax_wrapper stay listed although their inputs were removed
-// from the dialog (§3 F7, consumer-less): they can no longer be "touched", so
+// from the form (§3 F7, consumer-less): they can no longer be "touched", so
 // a type change always applies their type-driven payload defaults.
 const FLAG_KEYS = [
     "liquidity_class",
@@ -171,6 +171,12 @@ type AddAccountDialogProps =
           isSaving?: boolean;
       };
 
+/**
+ * Add / Edit account as a right-hand sheet (the long-form convention of the
+ * design system, cf. AddTransactionSheet). The create variant renders its own
+ * trigger button; the edit variant is controlled by the account detail page.
+ * The component keeps its historical name so consumers and docs stay stable.
+ */
 export function AddAccountDialog(props: AddAccountDialogProps = {}) {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
@@ -179,13 +185,13 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
     const editProps = isEditMode ? props : undefined;
 
     const [createOpen, setCreateOpen] = useState(false);
-    // In edit mode the account already has populated flags/statement fields, so
-    // the "Advanced" section starts expanded — don't hide the user's data behind
-    // a collapsed toggle. Create mode still starts collapsed for a lean form.
+    // In edit mode the account already has populated flags, so the "Advanced"
+    // section starts expanded — don't hide the user's data behind a collapsed
+    // toggle. Create mode still starts collapsed for a lean form.
     const [showAdvanced, setShowAdvanced] = useState(isEditMode);
     const createMutation = useCreateAccount();
 
-    // Initialized once on mount. Parents mount the edit dialog per target
+    // Initialized once on mount. Parents mount the edit sheet per target
     // (keyed by account id), so a target switch remounts with fresh values —
     // no sync effect, which would revert in-flight edits on parent re-renders.
     const [form, setForm] = useState<AccountFormValues>(
@@ -299,8 +305,6 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
         if (!parsed.success) {
             // Missing name: silent block, as always (the submit button is
             // disabled on it too — this is the keyboard-submit backstop).
-            if (parsed.error.issues.some((issue) => issue.path[0] === "name"))
-                return;
             return;
         }
 
@@ -362,282 +366,311 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
         (editProps?.onOpenChange ?? setCreateOpen)(nextOpen);
     };
     const isPending = editProps?.isSaving ?? createMutation.isPending;
+    const title = isEditMode ? t("accounts.editTitle") : t("accounts.addTitle");
 
     const switchRow = (
-        key: keyof AccountFormValues,
+        key: "spendable" | "in_net_worth",
         label: string,
         hint?: string,
     ) => (
-        <div className="py-1.5">
-            <div className="flex items-center justify-between">
+        <ListRow
+            title={
                 <Label htmlFor={`acct-${key}`} className="font-normal">
                     {label}
                 </Label>
+            }
+            subtitle={hint}
+            trailing={
                 <Switch
                     id={`acct-${key}`}
-                    checked={form[key] as boolean}
-                    onCheckedChange={(v) =>
-                        set(key, v as AccountFormValues[typeof key])
-                    }
+                    checked={form[key]}
+                    onCheckedChange={(v) => set(key, v)}
                 />
-            </div>
-            {hint && (
-                <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>
-            )}
-        </div>
+            }
+        />
     );
 
-    const dialogContent = (
-        <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
-            <DialogHeader>
-                <DialogTitle>
-                    {isEditMode
-                        ? t("accounts.editTitle")
-                        : t("accounts.addTitle")}
-                </DialogTitle>
-                <DialogDescription className="sr-only">
-                    {isEditMode
-                        ? t("accounts.editTitle")
-                        : t("accounts.addTitle")}
-                </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                    <Label htmlFor="acct-name">
-                        {t("accounts.field.name")}
-                    </Label>
-                    <Input
-                        id="acct-name"
-                        placeholder={t("accounts.field.namePlaceholder")}
-                        maxLength={200}
-                        value={form.name}
-                        onChange={(e) => onNameChange(e.target.value)}
-                        required
-                    />
-                    <p className="text-xs text-muted-foreground">
-                        {t("accounts.field.nameHint")}
-                    </p>
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor="acct-display">
-                        {t("accounts.field.displayName")}
-                    </Label>
-                    <Input
-                        id="acct-display"
-                        placeholder={t("accounts.field.displayNamePlaceholder")}
-                        maxLength={200}
-                        value={form.display_name}
-                        onChange={(e) => onDisplayNameChange(e.target.value)}
-                    />
-                </div>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    const fieldHint = (text: string) => (
+        <p className="type-footnote text-label-secondary">{text}</p>
+    );
+
+    const sheet = (
+        <SheetContent
+            side="right"
+            className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-[470px]"
+        >
+            <SheetHeader className="px-6 pt-6">
+                <SheetTitle>{title}</SheetTitle>
+                <SheetDescription className="sr-only">{title}</SheetDescription>
+            </SheetHeader>
+            <form
+                onSubmit={handleSubmit}
+                className="flex min-h-0 flex-1 flex-col"
+            >
+                <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
                     <div className="space-y-2">
-                        <Label htmlFor="acct-institution">
-                            {t("accounts.field.institution")}
+                        <Label htmlFor="acct-name">
+                            {t("accounts.field.name")}
                         </Label>
                         <Input
-                            id="acct-institution"
+                            id="acct-name"
+                            placeholder={t("accounts.field.namePlaceholder")}
                             maxLength={200}
-                            value={form.institution}
-                            onChange={(e) => set("institution", e.target.value)}
+                            value={form.name}
+                            onChange={(e) => onNameChange(e.target.value)}
+                            required
                         />
+                        {fieldHint(t("accounts.field.nameHint"))}
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="acct-currency">
-                            {t("accounts.field.currency")}
+                        <Label htmlFor="acct-display">
+                            {t("accounts.field.displayName")}
+                        </Label>
+                        <Input
+                            id="acct-display"
+                            placeholder={t(
+                                "accounts.field.displayNamePlaceholder",
+                            )}
+                            maxLength={200}
+                            value={form.display_name}
+                            onChange={(e) =>
+                                onDisplayNameChange(e.target.value)
+                            }
+                        />
+                    </div>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div className="space-y-2">
+                            <Label htmlFor="acct-institution">
+                                {t("accounts.field.institution")}
+                            </Label>
+                            <Input
+                                id="acct-institution"
+                                maxLength={200}
+                                value={form.institution}
+                                onChange={(e) =>
+                                    set("institution", e.target.value)
+                                }
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="acct-currency">
+                                {t("accounts.field.currency")}
+                            </Label>
+                            <Select
+                                value={form.currency}
+                                onValueChange={onCurrencyChange}
+                            >
+                                <SelectTrigger id="acct-currency">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {(CURRENCIES.includes(form.currency)
+                                        ? CURRENCIES
+                                        : [form.currency, ...CURRENCIES]
+                                    ).map((c) => (
+                                        <SelectItem key={c} value={c}>
+                                            {c}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="acct-type">
+                            {t("accounts.field.type")}
                         </Label>
                         <Select
-                            value={form.currency}
-                            onValueChange={onCurrencyChange}
+                            value={form.type}
+                            onValueChange={(v) =>
+                                onTypeChange(v as AccountType)
+                            }
                         >
-                            <SelectTrigger id="acct-currency">
+                            <SelectTrigger id="acct-type">
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                {(CURRENCIES.includes(form.currency)
-                                    ? CURRENCIES
-                                    : [form.currency, ...CURRENCIES]
-                                ).map((c) => (
-                                    <SelectItem key={c} value={c}>
-                                        {c}
+                                {ACCOUNT_TYPES.map((tp) => (
+                                    <SelectItem key={tp} value={tp}>
+                                        {t(`accounts.type.${tp}`)}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
                     </div>
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor="acct-type">
-                        {t("accounts.field.type")}
-                    </Label>
-                    <Select
-                        value={form.type}
-                        onValueChange={(v) => onTypeChange(v as AccountType)}
-                    >
-                        <SelectTrigger id="acct-type">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {ACCOUNT_TYPES.map((tp) => (
-                                <SelectItem key={tp} value={tp}>
-                                    {t(`accounts.type.${tp}`)}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
 
-                {/* Opening balance on create (§3 F4) — stamps the visible
-                    'opening' ledger row after creation. Liability accounts
-                    call it what it is: outstanding debt. */}
-                {!isEditMode && !isHoldingsOnlyPortfolioType(form.type) && (
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <div className="space-y-2">
-                            <Label htmlFor="acct-opening-balance">
-                                {form.type === "liability"
-                                    ? t(
-                                          "accounts.openingBalance.createDebtLabel",
-                                      )
-                                    : t("accounts.openingBalance.createLabel")}
-                            </Label>
-                            <Input
-                                id="acct-opening-balance"
-                                aria-invalid={
-                                    showOpeningBalanceError || undefined
-                                }
-                                aria-describedby={
-                                    showOpeningBalanceError
-                                        ? "acct-opening-balance-error"
-                                        : undefined
-                                }
-                                type="text"
-                                inputMode="decimal"
-                                placeholder={t(
-                                    "accounts.openingBalance.createPlaceholder",
+                    {/* Opening balance on create (§3 F4) — stamps the visible
+                        'opening' ledger row after creation. Liability accounts
+                        call it what it is: outstanding debt. */}
+                    {!isEditMode && !isHoldingsOnlyPortfolioType(form.type) && (
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <div className="space-y-2">
+                                <Label htmlFor="acct-opening-balance">
+                                    {form.type === "liability"
+                                        ? t(
+                                              "accounts.openingBalance.createDebtLabel",
+                                          )
+                                        : t(
+                                              "accounts.openingBalance.createLabel",
+                                          )}
+                                </Label>
+                                <Input
+                                    id="acct-opening-balance"
+                                    aria-invalid={
+                                        showOpeningBalanceError || undefined
+                                    }
+                                    aria-describedby={
+                                        showOpeningBalanceError
+                                            ? "acct-opening-balance-error"
+                                            : undefined
+                                    }
+                                    type="text"
+                                    inputMode="decimal"
+                                    placeholder={t(
+                                        "accounts.openingBalance.createPlaceholder",
+                                    )}
+                                    value={openingBalance}
+                                    onChange={(e) =>
+                                        setOpeningBalance(e.target.value)
+                                    }
+                                />
+                                {showOpeningBalanceError && (
+                                    <p
+                                        id="acct-opening-balance-error"
+                                        role="alert"
+                                        className="type-footnote text-destructive"
+                                    >
+                                        {t("accounts.openingBalance.invalid")}
+                                    </p>
                                 )}
-                                value={openingBalance}
-                                onChange={(e) =>
-                                    setOpeningBalance(e.target.value)
-                                }
-                            />
-                            {showOpeningBalanceError && (
-                                <p
-                                    id="acct-opening-balance-error"
-                                    role="alert"
-                                    className="text-sm text-destructive"
-                                >
-                                    {t("accounts.openingBalance.invalid")}
-                                </p>
-                            )}
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="acct-opening-date">
+                                    {t("accounts.openingBalance.dateLabel")}
+                                </Label>
+                                <Input
+                                    id="acct-opening-date"
+                                    type="date"
+                                    required={!!openingBalance.trim()}
+                                    value={openingBalanceDate}
+                                    onChange={(e) =>
+                                        setOpeningBalanceDate(e.target.value)
+                                    }
+                                />
+                            </div>
+                            <div className="-mt-2 sm:col-span-2">
+                                {fieldHint(
+                                    t("accounts.openingBalance.createHint"),
+                                )}
+                            </div>
                         </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="acct-opening-date">
-                                {t("accounts.openingBalance.dateLabel")}
-                            </Label>
-                            <Input
-                                id="acct-opening-date"
-                                type="date"
-                                required={!!openingBalance.trim()}
-                                value={openingBalanceDate}
-                                onChange={(e) =>
-                                    setOpeningBalanceDate(e.target.value)
-                                }
-                            />
-                        </div>
-                        <p className="-mt-1 text-xs text-muted-foreground sm:col-span-2">
-                            {t("accounts.openingBalance.createHint")}
-                        </p>
-                    </div>
-                )}
-
-                <button
-                    type="button"
-                    className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-                    onClick={() => setShowAdvanced((v) => !v)}
-                >
-                    {showAdvanced ? (
-                        <ChevronDown className="h-4 w-4" />
-                    ) : (
-                        <ChevronRight className="h-4 w-4" />
                     )}
-                    {t("accounts.advanced")}
-                </button>
 
-                {showAdvanced && (
-                    <div className="space-y-3 rounded-lg border border-border/50 p-3">
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                            <div className="space-y-2">
-                                <Label htmlFor="acct-owner">
-                                    {t("accounts.field.owner")}
-                                </Label>
-                                <Select
-                                    value={form.owner}
-                                    onValueChange={(v) =>
-                                        set("owner", v as AccountOwner)
-                                    }
-                                >
-                                    <SelectTrigger id="acct-owner">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {OWNERS.map((o) => (
-                                            <SelectItem key={o} value={o}>
-                                                {t(`accounts.owner.${o}`)}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <p className="text-xs text-muted-foreground">
-                                    {t("accounts.field.ownerHint")}
-                                </p>
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="acct-liquidity">
-                                    {t("accounts.field.liquidityClass")}
-                                </Label>
-                                <Select
-                                    value={form.liquidity_class}
-                                    onValueChange={(v) =>
-                                        set(
-                                            "liquidity_class",
-                                            v as AccountLiquidityClass,
-                                        )
-                                    }
-                                >
-                                    <SelectTrigger id="acct-liquidity">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {LIQUIDITY.map((l) => (
-                                            <SelectItem key={l} value={l}>
-                                                {t(`accounts.liquidity.${l}`)}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <p className="text-xs text-muted-foreground">
-                                    {t("accounts.field.liquidityHint")}
-                                </p>
-                            </div>
-                        </div>
-                        {/* tax_wrapper / has_cash_sleeve / multi_currency_cash inputs removed
-                            (§3 F7): nothing consumes them, so the dialog stops asking. The
-                            payload still carries their type-driven defaults untouched. */}
-                        <div className="divide-y divide-border/40">
-                            {switchRow(
-                                "spendable",
-                                t("accounts.field.spendable"),
-                                t("accounts.field.spendableHint"),
+                    <div className="space-y-3">
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="-ml-2 gap-1 text-label-secondary hover:text-foreground"
+                            aria-expanded={showAdvanced}
+                            onClick={() => setShowAdvanced((v) => !v)}
+                        >
+                            {showAdvanced ? (
+                                <ChevronDown aria-hidden />
+                            ) : (
+                                <ChevronRight aria-hidden />
                             )}
-                            {switchRow(
-                                "in_net_worth",
-                                t("accounts.field.inNetWorth"),
-                            )}
-                        </div>
+                            {t("accounts.advanced")}
+                        </Button>
+
+                        {showAdvanced && (
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="acct-owner">
+                                            {t("accounts.field.owner")}
+                                        </Label>
+                                        <Select
+                                            value={form.owner}
+                                            onValueChange={(v) =>
+                                                set("owner", v as AccountOwner)
+                                            }
+                                        >
+                                            <SelectTrigger id="acct-owner">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {OWNERS.map((o) => (
+                                                    <SelectItem
+                                                        key={o}
+                                                        value={o}
+                                                    >
+                                                        {t(
+                                                            `accounts.owner.${o}`,
+                                                        )}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        {fieldHint(
+                                            t("accounts.field.ownerHint"),
+                                        )}
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="acct-liquidity">
+                                            {t("accounts.field.liquidityClass")}
+                                        </Label>
+                                        <Select
+                                            value={form.liquidity_class}
+                                            onValueChange={(v) =>
+                                                set(
+                                                    "liquidity_class",
+                                                    v as AccountLiquidityClass,
+                                                )
+                                            }
+                                        >
+                                            <SelectTrigger id="acct-liquidity">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {LIQUIDITY.map((l) => (
+                                                    <SelectItem
+                                                        key={l}
+                                                        value={l}
+                                                    >
+                                                        {t(
+                                                            `accounts.liquidity.${l}`,
+                                                        )}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        {fieldHint(
+                                            t("accounts.field.liquidityHint"),
+                                        )}
+                                    </div>
+                                </div>
+                                {/* tax_wrapper / has_cash_sleeve / multi_currency_cash inputs
+                                    removed (§3 F7): nothing consumes them, so the form stops
+                                    asking. The payload still carries their type-driven
+                                    defaults untouched. */}
+                                <List>
+                                    {switchRow(
+                                        "spendable",
+                                        t("accounts.field.spendable"),
+                                        t("accounts.field.spendableHint"),
+                                    )}
+                                    {switchRow(
+                                        "in_net_worth",
+                                        t("accounts.field.inNetWorth"),
+                                    )}
+                                </List>
+                            </div>
+                        )}
                     </div>
-                )}
+                </div>
 
-                <DialogFooter className="pt-2">
+                <div className="flex items-center justify-end gap-3 border-t border-border/50 px-6 py-4">
                     <Button
                         type="button"
                         variant="outline"
@@ -650,31 +683,32 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
                         disabled={isPending || !form.name.trim()}
                     >
                         {isPending && (
-                            <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                            <Loader2 className="h-4 w-4 animate-spin" />
                         )}
                         {isEditMode ? t("common.save") : t("accounts.addTitle")}
                     </Button>
-                </DialogFooter>
+                </div>
             </form>
-        </DialogContent>
+        </SheetContent>
     );
 
     if (isEditMode) {
         return (
-            <Dialog open={open} onOpenChange={onOpenChange}>
-                {dialogContent}
-            </Dialog>
+            <Sheet open={open} onOpenChange={onOpenChange}>
+                {sheet}
+            </Sheet>
         );
     }
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogTrigger asChild>
-                <Button size="sm" className="gap-1.5">
-                    <Plus className="h-4 w-4" /> {t("accounts.addTitle")}
+        <Sheet open={open} onOpenChange={onOpenChange}>
+            <SheetTrigger asChild>
+                <Button>
+                    <Plus className="h-4 w-4" aria-hidden />
+                    {t("accounts.addTitle")}
                 </Button>
-            </DialogTrigger>
-            {dialogContent}
-        </Dialog>
+            </SheetTrigger>
+            {sheet}
+        </Sheet>
     );
 }

@@ -9,7 +9,15 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { useMergeCategoryNode } from "@/hooks/useCategories";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import type { CategoryNode } from "@/types/api";
@@ -67,41 +75,45 @@ export function CategoryMergeDialog({
                     </DialogDescription>
                 </DialogHeader>
                 <form className="space-y-4" onSubmit={submit}>
-                    <div className="rounded-md border bg-muted/30 p-3">
-                        <p className="text-xs text-muted-foreground">
-                            {t("categoriesPage.mergeSourceLabel")}
-                        </p>
-                        <p className="text-sm font-medium">
-                            {source.path.join(" / ")}
-                        </p>
-                    </div>
+                    <Card>
+                        <CardContent variant="compact">
+                            <p className="type-footnote text-label-secondary">
+                                {t("categoriesPage.mergeSourceLabel")}
+                            </p>
+                            <p className="type-body font-medium">
+                                {source.path.join(" / ")}
+                            </p>
+                        </CardContent>
+                    </Card>
                     <div className="space-y-2">
                         <Label htmlFor="category-merge-target">
                             {t("categoriesPage.mergeTarget")}
                         </Label>
-                        <select
-                            id="category-merge-target"
-                            className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                            value={targetId ?? ""}
-                            onChange={(event) =>
-                                setTargetId(
-                                    event.target.value
-                                        ? Number(event.target.value)
-                                        : null,
-                                )
+                        <Select
+                            value={
+                                targetId == null ? undefined : String(targetId)
                             }
-                            required
+                            onValueChange={(value) =>
+                                setTargetId(Number(value))
+                            }
                         >
-                            <option value="">—</option>
-                            {targets.map((node) => (
-                                <option key={node.id} value={node.id}>
-                                    {node.path.join(" / ")}
-                                </option>
-                            ))}
-                        </select>
+                            <SelectTrigger id="category-merge-target">
+                                <SelectValue placeholder="—" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {targets.map((node) => (
+                                    <SelectItem
+                                        key={node.id}
+                                        value={String(node.id)}
+                                    >
+                                        {node.path.join(" / ")}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
                     {target && (
-                        <p className="text-sm text-muted-foreground">
+                        <p className="type-callout text-label-secondary">
                             {t("categoriesPage.mergeSelectionSummary", {
                                 source: source.path.join(" / "),
                                 target: target.path.join(" / "),
@@ -121,7 +133,10 @@ export function CategoryMergeDialog({
                             disabled={merge.isPending || targetId == null}
                         >
                             {merge.isPending && (
-                                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                                <Loader2
+                                    className="animate-spin"
+                                    aria-hidden="true"
+                                />
                             )}
                             {t("categoriesPage.mergeConfirm")}
                         </Button>

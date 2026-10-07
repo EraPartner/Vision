@@ -2,9 +2,10 @@ import { PageError } from "@/components/shared/PageError";
 import { useId, useState, type FormEvent } from "react";
 import {
     ArrowLeft,
-    BanknoteCheck,
     Check,
+    Download,
     HandCoins,
+    MoreHorizontal,
     Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -15,7 +16,6 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { TextLink } from "@/components/shared/TextLink";
 import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import {
     Dialog,
     DialogContent,
@@ -24,11 +24,15 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import {
-    Tooltip,
-    TooltipTrigger,
-    TooltipContent,
-} from "@/components/ui/tooltip";
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { List, ListRow } from "@/components/ui/list";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
@@ -147,31 +151,62 @@ export function RecipientOwesDetail({
         }
     };
 
+    const handleDeleteSplit = async (splitId: number) => {
+        const shouldDelete = await confirm({
+            title: t("owesPage.deleteSplitConfirmTitle"),
+            description: t("owesPage.deleteSplitConfirmDescription"),
+            confirmLabel: t("common.delete"),
+            variant: "destructive",
+        });
+        if (shouldDelete) deleteSplit.mutate(splitId);
+    };
+
     return (
         <div className="space-y-6">
+            <div>
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className="-ml-2 text-label-secondary"
+                    onClick={onBack}
+                >
+                    <ArrowLeft aria-hidden />
+                    {t("common.back")}
+                </Button>
+            </div>
             <PageHeader
                 title={recipient.name}
                 subtitle={t("owesPage.outstandingSplits")}
                 icon={HandCoins}
                 actions={
                     <>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
                                 <Button
-                                    variant="ghost"
+                                    variant="outline"
                                     size="icon"
-                                    className="icon-touch-target"
-                                    onClick={onBack}
-                                    aria-label={t("common.back")}
+                                    aria-label={t("owesPage.menu")}
                                 >
-                                    <ArrowLeft className="h-5 w-5" />
+                                    <MoreHorizontal aria-hidden />
                                 </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>{t("common.back")}</TooltipContent>
-                        </Tooltip>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                    disabled={!items.length || isExportingCsv}
+                                    onSelect={() => void handleExportCsv()}
+                                >
+                                    <Download
+                                        className="mr-2 h-4 w-4 text-label-secondary"
+                                        aria-hidden
+                                    />
+                                    {isExportingCsv
+                                        ? t("owesPage.export.loading")
+                                        : t("owesPage.export.button")}
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                         <Button
-                            variant="outline"
-                            onClick={handleSettleAll}
+                            onClick={() => void handleSettleAll()}
                             disabled={
                                 !items.length ||
                                 settleAllSplitsByRecipient.isPending
@@ -180,15 +215,6 @@ export function RecipientOwesDetail({
                             {settleAllSplitsByRecipient.isPending
                                 ? t("owesPage.settleAll.loading")
                                 : t("owesPage.settleAll.button")}
-                        </Button>
-                        <Button
-                            variant="outline"
-                            onClick={handleExportCsv}
-                            disabled={!items.length || isExportingCsv}
-                        >
-                            {isExportingCsv
-                                ? t("owesPage.export.loading")
-                                : t("owesPage.export.button")}
                         </Button>
                     </>
                 }
@@ -206,16 +232,19 @@ export function RecipientOwesDetail({
                     onRetry={() => void refetch()}
                 />
             ) : isLoading ? (
-                <div {...loadingSurfaceProps} className="space-y-3">
+                <div {...loadingSurfaceProps} className="space-y-2">
                     {[...Array(3)].map((_, index) => (
-                        <Skeleton key={index} className="h-24" />
+                        <Skeleton
+                            key={index}
+                            className="h-16 rounded-card corner-continuous"
+                        />
                     ))}
                 </div>
             ) : items.length === 0 ? (
                 <EmptyState icon={Check} title={t("owesPage.allSettled")} />
             ) : (
                 <>
-                    <div className="space-y-3">
+                    <List>
                         {items.map((split) => {
                             const progress =
                                 split.amount > 0
@@ -228,187 +257,163 @@ export function RecipientOwesDetail({
                                 ]
                                     .filter(Boolean)
                                     .join(" - ") || t("owesPage.transaction");
-                            const splitContext = `${splitTitle}, ${formatDateStringWithAppSettings(split.transaction_date, appSettings.dateFormat)}`;
+                            const splitDate = formatDateStringWithAppSettings(
+                                split.transaction_date,
+                                appSettings.dateFormat,
+                            );
+                            const splitContext = `${splitTitle}, ${splitDate}`;
+                            const openPayDialog = () => {
+                                setPayDialog({
+                                    splitId: split.id,
+                                    remaining: split.remaining,
+                                });
+                                setPayAmount(
+                                    formatEditableNumber(
+                                        split.remaining,
+                                        appSettings.numberFormat,
+                                    ),
+                                );
+                            };
                             return (
-                                <Card key={split.id} variant="interactive">
-                                    <CardContent variant="row">
-                                        <div className="flex items-start justify-between gap-4">
-                                            <div className="flex-1 space-y-1">
-                                                <div className="flex items-center gap-2">
-                                                    <TextLink
-                                                        to={`/transactions?transaction_id=${split.transaction_id}&filter_label=${encodeURIComponent(splitTitle)}`}
-                                                        className="text-sm font-medium text-foreground"
-                                                    >
-                                                        {splitTitle}
-                                                    </TextLink>
-                                                    <span className="text-xs text-muted-foreground">
-                                                        {formatDateStringWithAppSettings(
-                                                            split.transaction_date,
-                                                            appSettings.dateFormat,
-                                                        )}
-                                                    </span>
-                                                </div>
-                                                <p className="text-xs text-muted-foreground">
-                                                    {t("owesPage.original", {
-                                                        amount: formatCurrency(
-                                                            Math.abs(
-                                                                split.transaction_amount,
-                                                            ),
-                                                            split.transaction_currency ||
-                                                                defaultCurrency,
-                                                            locale,
-                                                            appSettings.showDecimalPlaces ??
-                                                                2,
+                                <ListRow
+                                    key={split.id}
+                                    title={
+                                        <span className="inline-flex max-w-full items-baseline gap-2">
+                                            <TextLink
+                                                to={`/transactions?transaction_id=${split.transaction_id}&filter_label=${encodeURIComponent(splitTitle)}`}
+                                                tone="inherit"
+                                                className="truncate font-medium"
+                                            >
+                                                {splitTitle}
+                                            </TextLink>
+                                            <span className="shrink-0 type-footnote text-label-secondary">
+                                                {splitDate}
+                                            </span>
+                                        </span>
+                                    }
+                                    subtitle={
+                                        <span className="flex items-center gap-3">
+                                            <span className="shrink-0">
+                                                {t("owesPage.original", {
+                                                    amount: formatCurrency(
+                                                        Math.abs(
+                                                            split.transaction_amount,
                                                         ),
-                                                    })}
-                                                    {split.note &&
-                                                        ` · ${split.note}`}
-                                                </p>
-                                                <div className="flex items-center gap-3 mt-2">
-                                                    <Progress
-                                                        value={progress}
-                                                        className="h-1.5 flex-1"
+                                                        split.transaction_currency ||
+                                                            defaultCurrency,
+                                                        locale,
+                                                        appSettings.showDecimalPlaces ??
+                                                            2,
+                                                    ),
+                                                })}
+                                                {split.note &&
+                                                    ` · ${split.note}`}
+                                            </span>
+                                            <Progress
+                                                value={progress}
+                                                className="hidden h-1 w-24 sm:block"
+                                                aria-label={t(
+                                                    "owesPage.repaymentProgress",
+                                                    {
+                                                        recipient:
+                                                            recipient.name,
+                                                    },
+                                                )}
+                                            />
+                                            <span className="hidden shrink-0 whitespace-nowrap sm:inline">
+                                                <Money
+                                                    amount={split.amount_paid}
+                                                    currency={defaultCurrency}
+                                                />{" "}
+                                                /{" "}
+                                                <Money
+                                                    amount={split.amount}
+                                                    currency={defaultCurrency}
+                                                />
+                                            </span>
+                                        </span>
+                                    }
+                                    trailing={
+                                        <>
+                                            <span className="type-headline tabular-nums text-foreground">
+                                                <Money
+                                                    amount={split.remaining}
+                                                    currency={defaultCurrency}
+                                                />
+                                            </span>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                aria-label={`${t("owesPage.recordPayment")}: ${splitContext}`}
+                                                onClick={openPayDialog}
+                                            >
+                                                {t("owesPage.recordPayment")}
+                                            </Button>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-8 w-8 text-label-secondary"
                                                         aria-label={t(
-                                                            "owesPage.repaymentProgress",
+                                                            "owesPage.rowMenu",
                                                             {
-                                                                recipient:
-                                                                    recipient.name,
+                                                                name: splitContext,
                                                             },
                                                         )}
-                                                    />
-                                                    <span className="text-xs text-muted-foreground whitespace-nowrap">
-                                                        <Money
-                                                            amount={
-                                                                split.amount_paid
-                                                            }
-                                                            currency={
-                                                                defaultCurrency
-                                                            }
-                                                        />{" "}
-                                                        /{" "}
-                                                        <Money
-                                                            amount={
-                                                                split.amount
-                                                            }
-                                                            currency={
-                                                                defaultCurrency
-                                                            }
+                                                    >
+                                                        <MoreHorizontal
+                                                            aria-hidden
                                                         />
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-1 shrink-0">
-                                                <span className="text-sm font-semibold text-primary mr-2">
-                                                    <Money
-                                                        amount={split.remaining}
-                                                        currency={
-                                                            defaultCurrency
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuItem
+                                                        disabled={
+                                                            settleSplit.isPending
                                                         }
-                                                    />
-                                                </span>
-                                                <Tooltip>
-                                                    <TooltipTrigger asChild>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="icon-touch-target text-accent hover:text-accent"
-                                                            aria-label={`${t("owesPage.recordPayment")}: ${splitContext}`}
-                                                            onClick={() => {
-                                                                setPayDialog({
-                                                                    splitId:
-                                                                        split.id,
-                                                                    remaining:
-                                                                        split.remaining,
-                                                                });
-                                                                setPayAmount(
-                                                                    formatEditableNumber(
-                                                                        split.remaining,
-                                                                        appSettings.numberFormat,
-                                                                    ),
-                                                                );
-                                                            }}
-                                                        >
-                                                            <BanknoteCheck className="h-4 w-4" />
-                                                        </Button>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent>
-                                                        {t(
-                                                            "owesPage.recordPayment",
-                                                        )}
-                                                    </TooltipContent>
-                                                </Tooltip>
-                                                <Tooltip>
-                                                    <TooltipTrigger asChild>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="icon-touch-target text-muted-foreground hover:text-accent"
-                                                            aria-label={`${t("owesPage.markSettled")}: ${splitContext}`}
-                                                            onClick={() =>
-                                                                settleSplit.mutate(
-                                                                    split.id,
-                                                                )
-                                                            }
-                                                        >
-                                                            <Check className="h-4 w-4" />
-                                                        </Button>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent>
+                                                        onSelect={() =>
+                                                            settleSplit.mutate(
+                                                                split.id,
+                                                            )
+                                                        }
+                                                    >
+                                                        <Check
+                                                            className="mr-2 h-4 w-4 text-label-secondary"
+                                                            aria-hidden
+                                                        />
                                                         {t(
                                                             "owesPage.markSettled",
                                                         )}
-                                                    </TooltipContent>
-                                                </Tooltip>
-                                                <Tooltip>
-                                                    <TooltipTrigger asChild>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="icon-touch-target text-muted-foreground hover:text-destructive"
-                                                            aria-label={`${t("owesPage.deleteSplit")}: ${splitContext}`}
-                                                            onClick={async () => {
-                                                                const shouldDelete =
-                                                                    await confirm(
-                                                                        {
-                                                                            title: t(
-                                                                                "owesPage.deleteSplitConfirmTitle",
-                                                                            ),
-                                                                            description:
-                                                                                t(
-                                                                                    "owesPage.deleteSplitConfirmDescription",
-                                                                                ),
-                                                                            confirmLabel:
-                                                                                t(
-                                                                                    "common.delete",
-                                                                                ),
-                                                                            variant:
-                                                                                "destructive",
-                                                                        },
-                                                                    );
-                                                                if (
-                                                                    shouldDelete
-                                                                )
-                                                                    deleteSplit.mutate(
-                                                                        split.id,
-                                                                    );
-                                                            }}
-                                                        >
-                                                            <Trash2 className="h-4 w-4" />
-                                                        </Button>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent>
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuSeparator />
+                                                    <DropdownMenuItem
+                                                        className="text-destructive focus:text-destructive"
+                                                        disabled={
+                                                            deleteSplit.isPending
+                                                        }
+                                                        onSelect={() =>
+                                                            void handleDeleteSplit(
+                                                                split.id,
+                                                            )
+                                                        }
+                                                    >
+                                                        <Trash2
+                                                            className="mr-2 h-4 w-4"
+                                                            aria-hidden
+                                                        />
                                                         {t(
                                                             "owesPage.deleteSplit",
                                                         )}
-                                                    </TooltipContent>
-                                                </Tooltip>
-                                            </div>
-                                        </div>
-                                    </CardContent>
-                                </Card>
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </>
+                                    }
+                                />
                             );
                         })}
-                    </div>
+                    </List>
                     <RecentRecipientTransactionsTable
                         recipientId={recipient.id}
                         recipientName={recipient.name}
@@ -425,13 +430,10 @@ export function RecipientOwesDetail({
                     </DialogHeader>
                     <form onSubmit={handlePay} className="grid gap-5">
                         <div className="space-y-3">
-                            <div>
-                                <label
-                                    htmlFor={paymentId}
-                                    className="text-sm text-muted-foreground"
-                                >
+                            <div className="space-y-2">
+                                <Label htmlFor={paymentId}>
                                     {t("owesPage.recordDialog.amount")}
-                                </label>
+                                </Label>
                                 <Input
                                     id={paymentId}
                                     aria-describedby={`${paymentId}-remaining`}
@@ -448,7 +450,7 @@ export function RecipientOwesDetail({
                                 {payDialog && (
                                     <p
                                         id={`${paymentId}-remaining`}
-                                        className="text-xs text-muted-foreground mt-1"
+                                        className="type-footnote text-label-secondary"
                                     >
                                         {t("owesPage.recordDialog.remaining", {
                                             amount: formatCurrency(

@@ -55,7 +55,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Check, Coins, ListFilter, Loader2, Plus, Save } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import { ListFilter, Loader2 } from "lucide-react";
 import { apiClient } from "@/lib/api";
 import type { ReconcileMode } from "@/lib/api/accounts";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
@@ -330,15 +339,17 @@ export function ReconcileDialog({
     const ledgerSinceButton = (emphasized: boolean) => (
         <Button
             variant={emphasized ? "outline" : "ghost"}
-            className={
+            size={emphasized ? "default" : "sm"}
+            className={cn(
+                "w-full justify-start",
                 emphasized
-                    ? "mt-2 w-full justify-start border-warning/50 text-sm font-medium text-warning hover:bg-warning/10"
-                    : "w-full justify-start border-t border-border/50 pt-3 text-sm font-normal"
-            }
+                    ? "mt-3 border-warning/50 text-warning hover:bg-warning/10 hover:text-warning"
+                    : "-ml-2 font-normal text-label-secondary hover:text-foreground sm:w-auto",
+            )}
             disabled={busy}
             onClick={showLedgerSince}
         >
-            <ListFilter className="h-4 w-4 mr-1.5" />
+            <ListFilter aria-hidden />
             {t("accounts.reconcile.showSince", {
                 date: formatDateStringWithAppSettings(
                     sinceDate!,
@@ -361,236 +372,249 @@ export function ReconcileDialog({
                 </DialogHeader>
 
                 {/* Statement vs computed, a fresh-reading input, and the live delta */}
-                <div className="glass-thin rounded-xl p-4 text-sm">
-                    {account.multi_currency_cash &&
-                        availableCurrencies.length > 1 && (
-                            <div className="mb-3 space-y-1.5">
-                                <Label htmlFor="reconcile-currency">
-                                    {t("accounts.reconcile.currencyLabel")}
-                                </Label>
-                                <select
-                                    id="reconcile-currency"
-                                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                    value={selectedCurrency}
-                                    disabled={busy}
-                                    onChange={(event) => {
-                                        setSelectedCurrency(event.target.value);
-                                        setReading("");
-                                    }}
-                                >
-                                    {availableCurrencies.map((currency) => (
-                                        <option key={currency} value={currency}>
-                                            {currency}
-                                        </option>
-                                    ))}
-                                </select>
+                <Card>
+                    <CardContent variant="compact" className="type-body">
+                        {account.multi_currency_cash &&
+                            availableCurrencies.length > 1 && (
+                                <div className="mb-3 space-y-2">
+                                    <Label htmlFor="reconcile-currency">
+                                        {t("accounts.reconcile.currencyLabel")}
+                                    </Label>
+                                    <Select
+                                        value={selectedCurrency}
+                                        disabled={busy}
+                                        onValueChange={(value) => {
+                                            setSelectedCurrency(value);
+                                            setReading("");
+                                        }}
+                                    >
+                                        <SelectTrigger id="reconcile-currency">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {availableCurrencies.map(
+                                                (currency) => (
+                                                    <SelectItem
+                                                        key={currency}
+                                                        value={currency}
+                                                    >
+                                                        {currency}
+                                                    </SelectItem>
+                                                ),
+                                            )}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
+                        <dl>
+                            <div className="flex items-center justify-between py-1">
+                                <dt className="text-label-secondary">
+                                    {t("accounts.reconcile.statementLabel")}
+                                </dt>
+                                <dd className="tabular-nums font-medium">
+                                    {fmtCur(statement, {
+                                        currency: baseCurrency,
+                                    })}
+                                </dd>
                             </div>
-                        )}
-                    <dl>
-                        <div className="flex items-center justify-between py-1">
-                            <dt className="text-muted-foreground">
-                                {t("accounts.reconcile.statementLabel")}
-                            </dt>
-                            <dd className="tabular-nums font-medium">
-                                {fmtCur(statement, {
-                                    currency: baseCurrency,
-                                })}
-                            </dd>
-                        </div>
-                        <div className="flex items-center justify-between py-1">
-                            <dt className="text-muted-foreground">
-                                {t("accounts.reconcile.computedLabel")}
-                            </dt>
-                            <dd className="tabular-nums font-medium">
-                                {fmtCur(computed, {
-                                    currency: account.currency,
-                                })}
-                            </dd>
-                        </div>
-                        {/* The base the difference below is actually measured against.
+                            <div className="flex items-center justify-between py-1">
+                                <dt className="text-label-secondary">
+                                    {t("accounts.reconcile.computedLabel")}
+                                </dt>
+                                <dd className="tabular-nums font-medium">
+                                    {fmtCur(computed, {
+                                        currency: account.currency,
+                                    })}
+                                </dd>
+                            </div>
+                            {/* The base the difference below is actually measured against.
                 Rendered only when it differs from the computed balance — i.e.
                 only for a multi-currency (or mislabelled) account — so the
                 common single-currency dialog is unchanged. */}
+                            {!baseIsComputed && (
+                                <div className="flex items-center justify-between py-1">
+                                    <dt className="text-label-secondary">
+                                        {t(
+                                            "accounts.reconcile.reconcilableLabel",
+                                            {
+                                                currency: baseCurrency,
+                                            },
+                                        )}
+                                    </dt>
+                                    <dd
+                                        data-testid="reconcile-base"
+                                        className="tabular-nums font-medium"
+                                    >
+                                        {fmtCur(base, {
+                                            currency: baseCurrency,
+                                        })}
+                                    </dd>
+                                </div>
+                            )}
+                            {provenanceText && (
+                                <div className="pb-1 text-right type-footnote text-label-secondary">
+                                    {provenanceText}
+                                </div>
+                            )}
+                        </dl>
                         {!baseIsComputed && (
-                            <div className="flex items-center justify-between py-1">
-                                <dt className="text-muted-foreground">
-                                    {t("accounts.reconcile.reconcilableLabel", {
-                                        currency: baseCurrency,
-                                    })}
-                                </dt>
-                                <dd
-                                    data-testid="reconcile-base"
-                                    className="tabular-nums font-medium"
-                                >
-                                    {fmtCur(base, { currency: baseCurrency })}
-                                </dd>
-                            </div>
-                        )}
-                        {provenanceText && (
-                            <div className="pb-1 text-right text-xs text-muted-foreground">
-                                {provenanceText}
-                            </div>
-                        )}
-                    </dl>
-                    {!baseIsComputed && (
-                        <p className="mt-1 text-xs text-muted-foreground">
-                            {t("accounts.reconcile.reconcilableHint", {
-                                currency: baseCurrency,
-                            })}
-                        </p>
-                    )}
-
-                    {/* Recording a statement reading no longer means Edit → Advanced. */}
-                    <div className="mt-2 grid grid-cols-1 gap-3 border-t border-border/50 pt-3 sm:grid-cols-2">
-                        <div className="space-y-1.5">
-                            <Label htmlFor="reconcile-reading">
-                                {t("accounts.reconcile.readingLabel")}
-                            </Label>
-                            <Input
-                                id="reconcile-reading"
-                                type="text"
-                                inputMode="decimal"
-                                placeholder={fmtCur(statement, {
+                            <p className="mt-1 type-footnote text-label-secondary">
+                                {t("accounts.reconcile.reconcilableHint", {
                                     currency: baseCurrency,
                                 })}
-                                value={reading}
-                                disabled={busy}
-                                onChange={(e) => setReading(e.target.value)}
-                            />
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label htmlFor="reconcile-reading-date">
-                                {t("accounts.reconcile.readingDateLabel")}
-                            </Label>
-                            <Input
-                                id="reconcile-reading-date"
-                                type="date"
-                                value={readingDate}
-                                required={hasReading}
-                                disabled={busy}
-                                onChange={(e) => setReadingDate(e.target.value)}
-                            />
-                        </div>
-                    </div>
-                    <p className="mt-1.5 text-xs text-muted-foreground">
-                        {t("accounts.reconcile.readingHint")}
-                    </p>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        className="mt-2 w-full"
-                        disabled={busy || !canSaveReading}
-                        onClick={() => saveReading.mutate()}
-                    >
-                        {saveReading.isPending ? (
-                            <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                        ) : (
-                            <Save className="h-4 w-4 mr-1" />
+                            </p>
                         )}
-                        {t("accounts.reconcile.readingSubmit")}
-                    </Button>
 
-                    <div className="mt-3 flex items-center justify-between border-t border-border/50 pt-2">
-                        <span className="font-medium">
-                            {t("accounts.reconcile.deltaLabel")}
-                        </span>
-                        <span
-                            data-testid="reconcile-delta"
-                            className={cn(
-                                "tabular-nums font-semibold",
-                                previewIsZero
-                                    ? "text-muted-foreground"
-                                    : "text-destructive",
-                            )}
+                        {/* Recording a statement reading no longer means Edit → Advanced. */}
+                        <div className="mt-2 grid grid-cols-1 gap-3 border-t border-border/50 pt-3 sm:grid-cols-2">
+                            <div className="space-y-2">
+                                <Label htmlFor="reconcile-reading">
+                                    {t("accounts.reconcile.readingLabel")}
+                                </Label>
+                                <Input
+                                    id="reconcile-reading"
+                                    type="text"
+                                    inputMode="decimal"
+                                    placeholder={fmtCur(statement, {
+                                        currency: baseCurrency,
+                                    })}
+                                    value={reading}
+                                    disabled={busy}
+                                    onChange={(e) => setReading(e.target.value)}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="reconcile-reading-date">
+                                    {t("accounts.reconcile.readingDateLabel")}
+                                </Label>
+                                <Input
+                                    id="reconcile-reading-date"
+                                    type="date"
+                                    value={readingDate}
+                                    required={hasReading}
+                                    disabled={busy}
+                                    onChange={(e) =>
+                                        setReadingDate(e.target.value)
+                                    }
+                                />
+                            </div>
+                        </div>
+                        <p className="mt-2 type-footnote text-label-secondary">
+                            {t("accounts.reconcile.readingHint")}
+                        </p>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="mt-3 w-full"
+                            disabled={busy || !canSaveReading}
+                            onClick={() => saveReading.mutate()}
                         >
-                            {fmtCur(previewDrift, {
-                                currency: baseCurrency,
-                                signed: true,
-                            })}
-                        </span>
-                    </div>
-                    {hasReading && (
-                        <p className="mt-0.5 text-right text-xs text-muted-foreground">
-                            {t("accounts.reconcile.deltaPreview")}
-                        </p>
-                    )}
-                    {readingInvalid && (
-                        <p className="mt-1 text-xs text-warning">
-                            {t("accounts.reconcile.readingInvalid")}
-                        </p>
-                    )}
-                    {readingNeedsDate && (
-                        <p className="mt-1 text-xs text-warning">
-                            {t("accounts.reconcile.readingNeedsDate")}
-                        </p>
-                    )}
-                </div>
+                            {saveReading.isPending && (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                            )}
+                            {t("accounts.reconcile.readingSubmit")}
+                        </Button>
+
+                        <div className="mt-3 flex items-center justify-between border-t border-border/50 pt-2">
+                            <span className="font-medium">
+                                {t("accounts.reconcile.deltaLabel")}
+                            </span>
+                            <span
+                                data-testid="reconcile-delta"
+                                className={cn(
+                                    "type-headline tabular-nums",
+                                    previewIsZero
+                                        ? "text-label-secondary"
+                                        : "text-destructive",
+                                )}
+                            >
+                                {fmtCur(previewDrift, {
+                                    currency: baseCurrency,
+                                    signed: true,
+                                })}
+                            </span>
+                        </div>
+                        {hasReading && (
+                            <p className="mt-0.5 text-right type-footnote text-label-secondary">
+                                {t("accounts.reconcile.deltaPreview")}
+                            </p>
+                        )}
+                        {readingInvalid && (
+                            <p className="mt-1 type-footnote text-warning">
+                                {t("accounts.reconcile.readingInvalid")}
+                            </p>
+                        )}
+                        {readingNeedsDate && (
+                            <p className="mt-1 type-footnote text-warning">
+                                {t("accounts.reconcile.readingNeedsDate")}
+                            </p>
+                        )}
+                    </CardContent>
+                </Card>
 
                 {/* Backdated reading: the difference may be later activity, not an error.
             Resolving with an adjustment here would double-count it. */}
                 {readingIsBackdated && sinceDate && (
-                    <div className="rounded-lg border border-warning/40 bg-warning/5 px-3 py-2.5">
-                        <p className="text-xs text-warning">
-                            {t("accounts.reconcile.backdatedWarning", {
-                                date: formatDateStringWithAppSettings(
-                                    readingDate,
-                                    appSettings.dateFormat,
-                                ),
-                            })}
-                        </p>
-                        {ledgerSinceButton(true)}
-                    </div>
+                    <Alert variant="warning">
+                        <AlertDescription>
+                            <p className="type-footnote">
+                                {t("accounts.reconcile.backdatedWarning", {
+                                    date: formatDateStringWithAppSettings(
+                                        readingDate,
+                                        appSettings.dateFormat,
+                                    ),
+                                })}
+                            </p>
+                            {ledgerSinceButton(true)}
+                        </AlertDescription>
+                    </Alert>
                 )}
 
                 {/* Two explicit resolutions */}
-                <div className="space-y-3">
+                <div className="space-y-4">
                     <div className="space-y-1">
-                        <p className="text-sm font-medium">
+                        <h3 className="type-headline text-foreground">
                             {t("accounts.reconcile.acceptTitle")}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
+                        </h3>
+                        <p className="type-footnote text-label-secondary">
                             {t("accounts.reconcile.acceptDescription")}
                         </p>
                         <Button
                             variant="outline"
-                            className="mt-1 w-full"
+                            className="mt-2 w-full"
                             disabled={resolutionsBlocked}
                             onClick={() => reconcile.mutate("accept")}
                         >
-                            {busy && pendingMode === "accept" ? (
-                                <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                            ) : (
-                                <Check className="h-4 w-4 mr-1" />
+                            {busy && pendingMode === "accept" && (
+                                <Loader2 className="h-4 w-4 animate-spin" />
                             )}
                             {t("accounts.reconcile.acceptSubmit")}
                         </Button>
                     </div>
                     <div className="space-y-1">
-                        <p className="text-sm font-medium">
+                        <h3 className="type-headline text-foreground">
                             {t("accounts.reconcile.adjustTitle")}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
+                        </h3>
+                        <p className="type-footnote text-label-secondary">
                             {t("accounts.reconcile.adjustDescription")}
                         </p>
                         <Button
-                            className="mt-1 w-full"
+                            className="mt-2 w-full"
                             disabled={resolutionsBlocked}
                             onClick={() => reconcile.mutate("adjustment")}
                         >
-                            {busy && pendingMode === "adjustment" ? (
-                                <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                            ) : (
-                                <Plus className="h-4 w-4 mr-1" />
+                            {busy && pendingMode === "adjustment" && (
+                                <Loader2 className="h-4 w-4 animate-spin" />
                             )}
                             {t("accounts.reconcile.adjustSubmit")}
                         </Button>
                     </div>
                     {canBackfillOpening && (
                         <div className="space-y-1">
-                            <p className="text-sm font-medium">
+                            <h3 className="type-headline text-foreground">
                                 {t("accounts.reconcile.backfillTitle")}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
+                            </h3>
+                            <p className="type-footnote text-label-secondary">
                                 {t("accounts.reconcile.backfillDescription", {
                                     balance: fmtCur(backfillBalance, {
                                         currency: baseCurrency,
@@ -599,14 +623,12 @@ export function ReconcileDialog({
                             </p>
                             <Button
                                 variant="outline"
-                                className="mt-1 w-full"
+                                className="mt-2 w-full"
                                 disabled={busy}
                                 onClick={() => backfill.mutate()}
                             >
-                                {backfill.isPending ? (
-                                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                                ) : (
-                                    <Coins className="h-4 w-4 mr-1" />
+                                {backfill.isPending && (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
                                 )}
                                 {t("accounts.reconcile.backfillSubmit")}
                             </Button>

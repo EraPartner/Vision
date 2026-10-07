@@ -1,13 +1,14 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type MouseEvent, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Link } from "react-router";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageError } from "@/components/shared/PageError";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { SectionLoader } from "@/components/shared/SectionLoader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge, badgeVariants } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { List, ListRow } from "@/components/ui/list";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -25,12 +26,20 @@ import {
     CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import {
-    MoreVertical,
+    Bitcoin,
+    ChevronRight,
+    CreditCard,
+    Landmark,
+    MoreHorizontal,
+    PanelRight,
+    PiggyBank,
     Receipt,
     Scale,
-    ChevronRight,
-    PanelRight,
+    ShieldCheck,
+    TrendingUp,
+    Wallet,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
@@ -38,6 +47,7 @@ import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useBalanceProvenance } from "@/features/accounts/balanceProvenance";
 import { useDriftBadge } from "@/features/accounts/driftBadge";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
+import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import {
     groupAccounts,
     sumConvertedBalances,
@@ -49,15 +59,37 @@ import {
 import { AddAccountDialog } from "@/features/accounts/AddAccountDialog";
 import { ReconcileDialog } from "@/features/accounts/ReconcileDialog";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
-import type { Account } from "@/types/api";
+import type { Account, AccountType } from "@/types/api";
 import { Money } from "@/components/shared/Money";
 import { PageShell } from "@/components/shared/PageShell";
-import { TextLink } from "@/components/shared/TextLink";
 import { usePortfolioSummaryQuery } from "@/hooks/portfolio/usePortfolioSummary";
 import { getBrokerAccountMetrics } from "@/features/accounts/brokerAccountMetrics";
 
+const TYPE_ICON: Record<AccountType, LucideIcon> = {
+    checking: Landmark,
+    savings: PiggyBank,
+    brokerage: TrendingUp,
+    crypto_exchange: Bitcoin,
+    wallet: Wallet,
+    pension: ShieldCheck,
+    liability: CreditCard,
+};
+
+/** Keeps a control nested in the row link from activating the row. */
+const stopRowActivation = (event: MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+};
+
+/**
+ * Accounts (completeness sweep): one grouped list per account group with the
+ * whole row linking to the ledger, a row ••• menu for the secondary routes
+ * and the drift chip opening Reconcile in place. Net cash closes the page as
+ * its own card; Archived stays a collapsed group.
+ */
 export default function AccountsPage() {
     const { t } = useLanguage();
+    const loadingSurfaceProps = useLoadingSurfaceProps();
     // Archived is a (collapsed) group now, not a toggle (WP-B3) — always fetch
     // the full population.
     const { data, isLoading, isError, error, refetch } = useAccounts({
@@ -121,7 +153,8 @@ export default function AccountsPage() {
         return `/transactions?${params.toString()}`;
     };
 
-    const renderAccountCard = (a: Account) => {
+    const renderAccountRow = (a: Account) => {
+        const label = a.display_name || a.name;
         const holdingsOnly = isHoldingsOnlyPortfolioType(a.type);
         // Wallets and exchanges have no cash sleeve or ledger workflow. Broker
         // accounts can still expose imported cash transactions.
@@ -130,9 +163,9 @@ export default function AccountsPage() {
         // Provenance subline (WP-B2): where the computed balance comes
         // from — stamped statement anchor + entries since, or plain sum.
         const provenanceText = balanceProvenance(a);
-        // Portfolio-type cards have no real cash value until WP-C5's holdings
-        // land — a "€0,00" computed ledger balance is misleading, so show a
-        // placeholder instead (§3 F8).
+        // Portfolio-type rows have no real cash value until WP-C5's holdings
+        // land — a "€0,00" computed ledger balance is misleading, so show the
+        // holdings figure or a placeholder instead (§3 F8).
         const portfolioPlaceholder = isPortfolioType(a.type);
         const portfolioMetrics = portfolioPlaceholder
             ? getBrokerAccountMetrics(portfolioSummary, a.id)
@@ -142,248 +175,238 @@ export default function AccountsPage() {
         const drift = holdingsOnly ? undefined : driftBadge(a);
         const canReconcile =
             !holdingsOnly && (!!drift || a.multi_currency_cash);
-        return (
-            <Card
-                key={a.id}
-                className={cn(
-                    "transition-shadow hover:shadow-glass-soft",
-                    !a.is_active && "opacity-60",
-                )}
-            >
-                <CardContent
-                    variant="compact"
-                    className="flex items-start justify-between gap-3"
-                >
-                    <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                            <TextLink
-                                to={`/accounts/${a.id}`}
-                                className="truncate font-semibold tracking-tight"
-                            >
-                                {a.display_name || a.name}
-                            </TextLink>
-                            {!a.is_active && (
-                                <Badge variant="outline" className="text-xs">
-                                    {t("accounts.archived")}
-                                </Badge>
-                            )}
-                        </div>
-                        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                            <Badge
-                                variant={
-                                    a.type === "wallet"
-                                        ? "outline"
-                                        : "secondary"
-                                }
-                                className="text-xs"
-                            >
-                                {t(`accounts.type.${a.type}`)}
-                            </Badge>
-                            {!a.in_net_worth && (
-                                <Badge
-                                    variant="outline"
-                                    className="text-xs font-normal text-muted-foreground"
+        const Icon = TYPE_ICON[a.type] ?? Landmark;
+
+        const metaParts: ReactNode[] = [
+            <span key="type">{t(`accounts.type.${a.type}`)}</span>,
+            <span key="currency">{a.currency}</span>,
+        ];
+        if (a.institution)
+            metaParts.push(<span key="institution">{a.institution}</span>);
+
+        const subtitle = (
+            <>
+                <span className="block truncate">
+                    {metaParts.map((part, index) => (
+                        <span key={index}>
+                            {index > 0 && <span aria-hidden="true"> · </span>}
+                            {part}
+                        </span>
+                    ))}
+                </span>
+                {portfolioPlaceholder
+                    ? !holdingsOnly &&
+                      a.computed_balance != null && (
+                          <span className="block truncate">
+                              {t("accounts.portfolio.cash")}{" "}
+                              <Money
+                                  amount={a.computed_balance}
+                                  currency={a.currency}
+                              />
+                              {provenanceText && (
+                                  <span> · {provenanceText}</span>
+                              )}
+                          </span>
+                      )
+                    : a.computed_balance != null &&
+                      provenanceText && (
+                          <span className="block truncate">
+                              {provenanceText}
+                          </span>
+                      )}
+                {!portfolioPlaceholder && a.balance_incomplete && (
+                    <>
+                        <span className="block truncate text-warning">
+                            {t("accounts.balanceIncomplete")}
+                        </span>
+                        {a.balance_parts
+                            ?.filter((part) =>
+                                a.unconverted_currencies?.includes(
+                                    part.currency,
+                                ),
+                            )
+                            .map((part) => (
+                                <span
+                                    key={part.currency}
+                                    className="block truncate text-warning"
                                 >
-                                    {t("accounts.notInNetWorth")}
-                                </Badge>
+                                    <Money
+                                        amount={part.balance}
+                                        currency={part.currency}
+                                    />{" "}
+                                    {t("accounts.balanceExcluded")}
+                                </span>
+                            ))}
+                    </>
+                )}
+            </>
+        );
+
+        const value = portfolioPlaceholder ? (
+            <span className="flex flex-col items-end text-right">
+                {portfolioMetrics?.hasPosition ? (
+                    <>
+                        <span className="font-medium text-foreground">
+                            <Money
+                                amount={portfolioMetrics.holdingsValue}
+                                currency={displayCurrency}
+                            />
+                        </span>
+                        <span className="type-caption text-label-tertiary">
+                            {t("accounts.portfolio.holdings")}
+                        </span>
+                        <span
+                            className={cn(
+                                "type-footnote",
+                                portfolioMetrics.gainLoss > 0
+                                    ? "text-gain"
+                                    : portfolioMetrics.gainLoss < 0
+                                      ? "text-loss"
+                                      : "text-label-secondary",
                             )}
-                            <span>{a.currency}</span>
-                            {a.institution && <span>· {a.institution}</span>}
-                            {drift && (
-                                // Clicking the drift badge opens the reconcile dialog
-                                // (statement vs computed + delta → accept / adjust).
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <button
-                                            type="button"
-                                            // Kept as a template literal: badgeVariants sets text-2xs and the
-                                            // appended text-xs deliberately overrides it; cn()'s tailwind-merge
-                                            // would resolve the font-size differently, so preserve the raw join.
-                                            className={`${badgeVariants({ variant: drift.variant })} cursor-pointer text-xs`}
-                                            aria-label={t(
-                                                "accounts.reconcile.open",
-                                            )}
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setReconciling(a);
-                                            }}
-                                        >
-                                            {drift.label}
-                                        </button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                        {drift.tooltip}
-                                    </TooltipContent>
-                                </Tooltip>
-                            )}
-                        </div>
-                        {portfolioPlaceholder ? (
-                            <div className="mt-2 space-y-1">
-                                {portfolioMetrics?.hasPosition ? (
-                                    <>
-                                        <div className="text-lg font-semibold tabular-nums">
-                                            <Money
-                                                amount={
-                                                    portfolioMetrics.holdingsValue
-                                                }
-                                                currency={displayCurrency}
-                                            />
-                                        </div>
-                                        <div className="text-xs text-muted-foreground">
-                                            {t("accounts.portfolio.holdings")}
-                                        </div>
-                                        <div
-                                            className={cn(
-                                                "text-xs font-medium tabular-nums",
-                                                portfolioMetrics.gainLoss > 0
-                                                    ? "text-gain"
-                                                    : portfolioMetrics.gainLoss <
-                                                        0
-                                                      ? "text-loss"
-                                                      : "text-muted-foreground",
-                                            )}
-                                        >
-                                            {t("accounts.portfolio.pnl")}{" "}
-                                            <Money
-                                                amount={
-                                                    portfolioMetrics.gainLoss
-                                                }
-                                                currency={displayCurrency}
-                                                signed
-                                            />
-                                        </div>
-                                    </>
-                                ) : (
-                                    <div className="text-sm font-medium text-muted-foreground">
-                                        {portfolioMetrics
-                                            ? t(
-                                                  "accounts.portfolio.noAssignedHoldings",
-                                              )
-                                            : t("accounts.trackedInPortfolio")}
-                                    </div>
-                                )}
-                                {!holdingsOnly &&
-                                    a.computed_balance != null && (
-                                        <div className="text-xs text-muted-foreground">
-                                            {t("accounts.portfolio.cash")}{" "}
-                                            <Money
-                                                amount={a.computed_balance}
-                                                currency={a.currency}
-                                            />
-                                            {provenanceText && (
-                                                <span> · {provenanceText}</span>
-                                            )}
-                                        </div>
-                                    )}
-                            </div>
-                        ) : (
-                            <>
-                                {a.computed_balance != null && (
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <div className="mt-2 text-lg font-semibold tabular-nums">
-                                                <Money
-                                                    amount={a.computed_balance}
-                                                    currency={a.currency}
-                                                />
-                                            </div>
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                            {t("accounts.balanceTooltip")}
-                                        </TooltipContent>
-                                    </Tooltip>
-                                )}
-                                {a.computed_balance != null &&
-                                    provenanceText && (
-                                        <div className="mt-0.5 text-xs text-muted-foreground">
-                                            {provenanceText}
-                                        </div>
-                                    )}
-                                {a.balance_incomplete && (
-                                    <div className="mt-1 text-xs text-warning">
-                                        <div>
-                                            {t("accounts.balanceIncomplete")}
-                                        </div>
-                                        {a.balance_parts
-                                            ?.filter((part) =>
-                                                a.unconverted_currencies?.includes(
-                                                    part.currency,
-                                                ),
-                                            )
-                                            .map((part) => (
-                                                <div key={part.currency}>
-                                                    <Money
-                                                        amount={part.balance}
-                                                        currency={part.currency}
-                                                    />{" "}
-                                                    {t(
-                                                        "accounts.balanceExcluded",
-                                                    )}
-                                                </div>
-                                            ))}
-                                    </div>
-                                )}
-                            </>
-                        )}
-                    </div>
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 shrink-0"
-                                aria-label={t("accounts.actionsMenu")}
-                                onClick={(e) => e.stopPropagation()}
-                            >
-                                <MoreVertical className="h-4 w-4" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        {/* WP-B4: the hub card keeps explicit open + reconcile controls; Edit / Merge /
-                        Close (+ opening balance, archive, delete) live in the
-                        /accounts/:id header menu now. The menu stays as the
-                        keyboard/touch-accessible secondary route to the detail page. */}
-                        <DropdownMenuContent
-                            align="end"
-                            onClick={(e) => e.stopPropagation()}
                         >
-                            <DropdownMenuItem asChild>
-                                <Link to={`/accounts/${a.id}`}>
-                                    <PanelRight className="mr-2 h-4 w-4" />{" "}
-                                    {t("accounts.viewDetails")}
-                                </Link>
-                            </DropdownMenuItem>
-                            {canViewTransactions && (
+                            {t("accounts.portfolio.pnl")}{" "}
+                            <Money
+                                amount={portfolioMetrics.gainLoss}
+                                currency={displayCurrency}
+                                signed
+                            />
+                        </span>
+                    </>
+                ) : (
+                    <span className="type-footnote text-label-secondary">
+                        {portfolioMetrics
+                            ? t("accounts.portfolio.noAssignedHoldings")
+                            : t("accounts.trackedInPortfolio")}
+                    </span>
+                )}
+            </span>
+        ) : a.computed_balance != null ? (
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    <span className="font-medium text-foreground">
+                        <Money
+                            amount={a.computed_balance}
+                            currency={a.currency}
+                        />
+                    </span>
+                </TooltipTrigger>
+                <TooltipContent>{t("accounts.balanceTooltip")}</TooltipContent>
+            </Tooltip>
+        ) : null;
+
+        return (
+            <ListRow
+                key={a.id}
+                asChild
+                className={cn(!a.is_active && "opacity-60")}
+                leading={<Icon />}
+                title={
+                    <span className="inline-flex max-w-full items-center gap-2">
+                        <span className="truncate">{label}</span>
+                        {!a.is_active && (
+                            <Badge variant="outline" size="sm">
+                                {t("accounts.archived")}
+                            </Badge>
+                        )}
+                        {!a.in_net_worth && (
+                            <Badge
+                                variant="outline"
+                                size="sm"
+                                className="font-normal text-label-secondary"
+                            >
+                                {t("accounts.notInNetWorth")}
+                            </Badge>
+                        )}
+                    </span>
+                }
+                subtitle={subtitle}
+                trailing={
+                    <>
+                        {drift && (
+                            // Clicking the drift chip opens the reconcile dialog
+                            // (statement vs computed + delta → accept / adjust).
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <button
+                                        type="button"
+                                        className={badgeVariants({
+                                            variant: drift.variant,
+                                        })}
+                                        aria-label={t(
+                                            "accounts.reconcile.open",
+                                        )}
+                                        onClick={(event) => {
+                                            stopRowActivation(event);
+                                            setReconciling(a);
+                                        }}
+                                    >
+                                        {drift.label}
+                                    </button>
+                                </TooltipTrigger>
+                                <TooltipContent>{drift.tooltip}</TooltipContent>
+                            </Tooltip>
+                        )}
+                        {value}
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-label-secondary"
+                                    aria-label={t("accounts.rowMenu", {
+                                        name: label,
+                                    })}
+                                    onClick={stopRowActivation}
+                                >
+                                    <MoreHorizontal aria-hidden />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                                align="end"
+                                onClick={(event) => event.stopPropagation()}
+                            >
                                 <DropdownMenuItem asChild>
-                                    <Link to={accountTransactionsHref(a)}>
-                                        <Receipt className="mr-2 h-4 w-4" />{" "}
-                                        {t("accounts.openTransactions")}
+                                    <Link to={`/accounts/${a.id}`}>
+                                        <PanelRight className="mr-2 h-4 w-4 text-label-secondary" />
+                                        {t("accounts.viewDetails")}
                                     </Link>
                                 </DropdownMenuItem>
-                            )}
-                            {canReconcile && (
-                                <DropdownMenuItem
-                                    onClick={() => setReconciling(a)}
-                                >
-                                    <Scale className="mr-2 h-4 w-4" />{" "}
-                                    {t("accounts.reconcile.open")}
-                                </DropdownMenuItem>
-                            )}
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                </CardContent>
-            </Card>
+                                {canViewTransactions && (
+                                    <DropdownMenuItem asChild>
+                                        <Link to={accountTransactionsHref(a)}>
+                                            <Receipt className="mr-2 h-4 w-4 text-label-secondary" />
+                                            {t("accounts.openTransactions")}
+                                        </Link>
+                                    </DropdownMenuItem>
+                                )}
+                                {canReconcile && (
+                                    <DropdownMenuItem
+                                        onSelect={() => setReconciling(a)}
+                                    >
+                                        <Scale className="mr-2 h-4 w-4 text-label-secondary" />
+                                        {t("accounts.reconcile.open")}
+                                    </DropdownMenuItem>
+                                )}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </>
+                }
+                chevron
+            >
+                <Link to={`/accounts/${a.id}`} aria-label={label} />
+            </ListRow>
         );
     };
 
-    // Group header: label left, converted subtotal right — mirrors the muted
-    // section-header idiom used elsewhere; cards themselves are untouched.
+    // Group header: label left, converted subtotal right.
     const renderGroupSubtotal = (group: AccountGroup) => {
         const needsPortfolioSummary = group.accounts.some((account) =>
             isPortfolioType(account.type),
         );
         if (needsPortfolioSummary && portfolioSummaryQuery.isLoading) {
             return (
-                <p className="text-xs text-muted-foreground">
+                <p className="type-footnote text-label-secondary">
                     {t("accounts.group.subtotal")}{" "}
                     {t("accounts.group.subtotalPending")}
                 </p>
@@ -391,7 +414,7 @@ export default function AccountsPage() {
         }
         if (needsPortfolioSummary && portfolioSummaryQuery.isError) {
             return (
-                <p className="text-xs text-warning">
+                <p className="type-footnote text-warning">
                     {t("accounts.group.subtotal")}{" "}
                     {t("accounts.group.subtotalUnavailable")}
                 </p>
@@ -413,9 +436,9 @@ export default function AccountsPage() {
                 0,
             );
         return (
-            <p className="text-xs text-muted-foreground">
+            <p className="type-footnote text-label-secondary">
                 {t("accounts.group.subtotal")}{" "}
-                <span className="font-semibold tabular-nums text-foreground">
+                <span className="font-medium tabular-nums text-foreground">
                     <Money
                         amount={cash + holdings}
                         currency={displayCurrency}
@@ -434,6 +457,10 @@ export default function AccountsPage() {
         );
     };
 
+    const renderGroupList = (group: AccountGroup) => (
+        <List>{group.accounts.map(renderAccountRow)}</List>
+    );
+
     return (
         <PageShell className="">
             <PageHeader
@@ -443,7 +470,14 @@ export default function AccountsPage() {
                 actions={<AddAccountDialog />}
             />
 
-            {isLoading && <SectionLoader />}
+            {isLoading && (
+                <div {...loadingSurfaceProps} className="space-y-3">
+                    <Skeleton className="h-5 w-32" />
+                    <Skeleton className="h-[11.5rem] w-full rounded-card" />
+                    <Skeleton className="h-5 w-28" />
+                    <Skeleton className="h-[7.5rem] w-full rounded-card" />
+                </div>
+            )}
 
             {isError && (
                 <PageError
@@ -467,44 +501,49 @@ export default function AccountsPage() {
                         <section
                             key={group.id}
                             aria-label={t(`accounts.group.${group.id}`)}
-                            className="space-y-3"
+                            className="space-y-2"
                         >
-                            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                                <h2 className="text-sm font-semibold tracking-tight">
+                            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 px-1">
+                                <h2 className="type-headline text-foreground">
                                     {t(`accounts.group.${group.id}`)}
                                 </h2>
                                 {renderGroupSubtotal(group)}
                             </div>
-                            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                                {group.accounts.map(renderAccountCard)}
-                            </div>
+                            {renderGroupList(group)}
                         </section>
                     ))}
 
                     {/* Grand line: Net cash = Cash & Savings + Liabilities over
                         in_net_worth accounts only — the same population WP-A1's
                         net-worth Liquid + Liabilities figures sum over. */}
-                    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-t border-border/60 pt-4">
-                        <div>
-                            <h2 className="text-sm font-semibold tracking-tight">
-                                {t("accounts.netCash")}
-                            </h2>
-                            <p className="text-xs text-muted-foreground">
-                                {t("accounts.netCashHint")}
-                            </p>
-                            {netCashIncomplete && (
-                                <p className="text-xs text-warning">
-                                    {t("accounts.totalIncomplete")}
+                    <section aria-label={t("accounts.netCash")}>
+                        <Card>
+                            <CardContent
+                                variant="headerless"
+                                className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3"
+                            >
+                                <div className="min-w-0 max-w-prose">
+                                    <h2 className="type-headline text-foreground">
+                                        {t("accounts.netCash")}
+                                    </h2>
+                                    <p className="mt-0.5 type-footnote text-label-secondary">
+                                        {t("accounts.netCashHint")}
+                                    </p>
+                                    {netCashIncomplete && (
+                                        <p className="mt-1 type-footnote text-warning">
+                                            {t("accounts.totalIncomplete")}
+                                        </p>
+                                    )}
+                                </div>
+                                <p className="type-title-1 tabular-nums text-foreground">
+                                    <Money
+                                        amount={netCash}
+                                        currency={displayCurrency}
+                                    />
                                 </p>
-                            )}
-                        </div>
-                        <span className="text-lg font-semibold tabular-nums">
-                            <Money
-                                amount={netCash}
-                                currency={displayCurrency}
-                            />
-                        </span>
-                    </div>
+                            </CardContent>
+                        </Card>
+                    </section>
 
                     {archivedGroup && (
                         <Collapsible
@@ -513,29 +552,33 @@ export default function AccountsPage() {
                         >
                             <section
                                 aria-label={t("accounts.group.archived")}
-                                className="space-y-3"
+                                className="space-y-2"
                             >
-                                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                                    <CollapsibleTrigger className="flex items-center gap-1.5 text-sm font-semibold tracking-tight text-muted-foreground transition-colors hover:text-foreground">
-                                        <ChevronRight
-                                            className={cn(
-                                                "h-4 w-4 transition-transform",
-                                                archivedOpen && "rotate-90",
-                                            )}
-                                        />
-                                        {t("accounts.group.archived")}
-                                        <span className="font-normal">
-                                            ({archivedGroup.accounts.length})
-                                        </span>
+                                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-1">
+                                    <CollapsibleTrigger asChild>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="-ml-2 gap-1.5 text-label-secondary hover:text-foreground"
+                                        >
+                                            <ChevronRight
+                                                aria-hidden
+                                                className={cn(
+                                                    "h-4 w-4 transition-transform duration-fast ease-glide",
+                                                    archivedOpen && "rotate-90",
+                                                )}
+                                            />
+                                            {t("accounts.group.archived")}
+                                            <span className="font-normal">
+                                                ({archivedGroup.accounts.length}
+                                                )
+                                            </span>
+                                        </Button>
                                     </CollapsibleTrigger>
                                     {renderGroupSubtotal(archivedGroup)}
                                 </div>
                                 <CollapsibleContent>
-                                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                                        {archivedGroup.accounts.map(
-                                            renderAccountCard,
-                                        )}
-                                    </div>
+                                    {renderGroupList(archivedGroup)}
                                 </CollapsibleContent>
                             </section>
                         </Collapsible>

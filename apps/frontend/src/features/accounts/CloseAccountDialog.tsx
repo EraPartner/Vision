@@ -17,9 +17,12 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { AlertTriangle, DoorClosed, Loader2 } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { AlertTriangle, Loader2 } from "lucide-react";
 import { apiClient } from "@/lib/api";
 import { invalidateAccountRepoint } from "@/lib/queryKeys";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
@@ -206,71 +209,82 @@ export function CloseAccountDialog({
                 </DialogHeader>
 
                 {portfolioAccount && portfolioPreview.isLoading && (
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <div className="flex items-center gap-2 type-footnote text-label-secondary">
+                        <Loader2
+                            className="h-3.5 w-3.5 animate-spin"
+                            aria-hidden
+                        />
                         {t("accounts.close.portfolioLoading")}
                     </div>
                 )}
                 {portfolioAccount && portfolioPreview.isError && (
-                    <p className="text-xs text-warning" role="alert">
+                    <p className="type-footnote text-warning" role="alert">
                         {t("accounts.close.portfolioUnavailable")}
                     </p>
                 )}
                 {portfolioAccount &&
                     portfolioPreview.data &&
                     portfolioPreview.data.eligible_count > 0 && (
-                        <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-3">
-                            <PortfolioLotRetagChoice
-                                sourceAccountId={account.id}
-                                accounts={brokerAccounts}
-                                eligibleCount={
-                                    portfolioPreview.data.eligible_count
-                                }
-                                value={portfolioChoice}
-                                onValueChange={setPortfolioChoice}
-                                allowKeep
-                            />
-                            {portfolioPreview.data.eligible_count >
-                                portfolioPreview.data.limit && (
-                                <p className="mt-2 text-xs text-warning">
-                                    {t("accounts.close.portfolioOverLimit", {
-                                        limit: String(
-                                            portfolioPreview.data.limit,
-                                        ),
-                                    })}
-                                </p>
-                            )}
-                        </div>
+                        <Card>
+                            <CardContent variant="compact">
+                                <PortfolioLotRetagChoice
+                                    sourceAccountId={account.id}
+                                    accounts={brokerAccounts}
+                                    eligibleCount={
+                                        portfolioPreview.data.eligible_count
+                                    }
+                                    value={portfolioChoice}
+                                    onValueChange={setPortfolioChoice}
+                                    allowKeep
+                                />
+                                {portfolioPreview.data.eligible_count >
+                                    portfolioPreview.data.limit && (
+                                    <p className="mt-2 type-footnote text-warning">
+                                        {t(
+                                            "accounts.close.portfolioOverLimit",
+                                            {
+                                                limit: String(
+                                                    portfolioPreview.data.limit,
+                                                ),
+                                            },
+                                        )}
+                                    </p>
+                                )}
+                            </CardContent>
+                        </Card>
                     )}
 
                 {hasResidual && (
-                    <div className="space-y-3 rounded-md border border-warning/40 bg-warning/5 px-3 py-3 text-xs">
-                        <div className="flex items-start gap-2 text-warning">
-                            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                            <span>
+                    <Alert variant="warning">
+                        <AlertTriangle className="h-4 w-4" aria-hidden />
+                        <AlertDescription className="space-y-3">
+                            <p>
                                 {t("accounts.close.residual", {
                                     balance: residualLabel,
                                 })}
-                            </span>
-                        </div>
-                        <label className="flex cursor-pointer items-start gap-2 text-foreground">
-                            <Checkbox
-                                checked={zeroOut}
-                                onCheckedChange={(checked) =>
-                                    setZeroOut(checked === true)
-                                }
-                                aria-label={t("accounts.close.zeroOut")}
-                            />
-                            <span>
-                                <span className="font-medium">
+                            </p>
+                            <div className="flex items-start gap-2">
+                                <Checkbox
+                                    id="close-account-zero-out"
+                                    className="mt-0.5"
+                                    checked={zeroOut}
+                                    onCheckedChange={(checked) =>
+                                        setZeroOut(checked === true)
+                                    }
+                                    aria-label={t("accounts.close.zeroOut")}
+                                />
+                                <Label
+                                    htmlFor="close-account-zero-out"
+                                    className="cursor-pointer leading-snug"
+                                >
                                     {t("accounts.close.zeroOut")}
-                                </span>
-                                <span className="mt-0.5 block text-muted-foreground">
-                                    {t("accounts.close.zeroOutHint")}
-                                </span>
-                            </span>
-                        </label>
-                    </div>
+                                    <span className="mt-0.5 block type-footnote font-normal text-label-secondary">
+                                        {t("accounts.close.zeroOutHint")}
+                                    </span>
+                                </Label>
+                            </div>
+                        </AlertDescription>
+                    </Alert>
                 )}
 
                 <DialogFooter className="pt-2">
@@ -284,10 +298,8 @@ export function CloseAccountDialog({
                         disabled={close.isPending || retagUnavailable}
                         onClick={() => close.mutate()}
                     >
-                        {close.isPending ? (
-                            <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                        ) : (
-                            <DoorClosed className="h-4 w-4 mr-1" />
+                        {close.isPending && (
+                            <Loader2 className="h-4 w-4 animate-spin" />
                         )}
                         {t("accounts.close.confirm")}
                     </Button>
