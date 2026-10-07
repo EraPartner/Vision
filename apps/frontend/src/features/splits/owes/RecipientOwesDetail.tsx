@@ -2,6 +2,7 @@ import { PageError } from "@/components/shared/PageError";
 import { useId, useState, type FormEvent } from "react";
 import {
     ArrowLeft,
+    BanknoteCheck,
     Check,
     Download,
     HandCoins,
@@ -347,6 +348,7 @@ export function RecipientOwesDetail({
                                                 aria-label={`${t("owesPage.recordPayment")}: ${splitContext}`}
                                                 onClick={openPayDialog}
                                             >
+                                                <BanknoteCheck aria-hidden="true" />
                                                 {t("owesPage.recordPayment")}
                                             </Button>
                                             <DropdownMenu>

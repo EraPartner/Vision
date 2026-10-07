@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Database, Loader2, Play, Save, Square, Trash2 } from "lucide-react";
+import {
+    ArrowUpDown,
+    Database,
+    Loader2,
+    MoreHorizontal,
+    Play,
+    Save,
+    Square,
+    Trash2,
+} from "lucide-react";
 import { apiClient } from "@/lib/api";
 import type {
     AnalysisDataset,
@@ -15,14 +24,52 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { PageShell } from "@/components/shared/PageShell";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PAGE_ICONS } from "@/lib/pageIcons";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { List } from "@/components/ui/list";
+import {
+    SegmentedControl,
+    SegmentedControlItem,
+} from "@/components/ui/segmented-control";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import { cn } from "@/lib/utils";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
 import { useAnalysisWorkspaceQueries } from "@/hooks/useAnalysisQueries";
@@ -100,6 +147,19 @@ const OPERATORS = [
     "is-not-null",
 ];
 const requestId = () => `analysis-${crypto.randomUUID()}`;
+const DEFAULT_PREFERENCE = "__default__";
+const codeBlockClass =
+    "max-h-64 overflow-auto rounded-card corner-continuous border border-border/50 bg-background/60 p-3 type-footnote leading-snug text-foreground/80";
+const chipLabelClass =
+    "flex min-h-8 min-w-0 max-w-full items-center gap-2 rounded-chip border border-border/60 bg-card/70 px-3 type-footnote [overflow-wrap:anywhere]";
+const checkLabelClass = "flex items-center gap-2 type-callout";
+const legendClass = "type-callout font-medium";
+const helpClass = "type-footnote text-label-secondary";
+const insetSummaryClass =
+    "cursor-pointer rounded-card px-3 py-2.5 type-headline focus-ring";
+const insetDetailsClass =
+    "rounded-card corner-continuous border border-border/60 bg-background/40";
+const insetBodyClass = "space-y-2 px-3 pb-3";
 
 interface AnalysisExportContext {
     name: string;
@@ -263,20 +323,23 @@ function ResultTable({
         : result.columns.map((column) => column.id);
     return (
         <div
-            className="overflow-auto rounded-xl border border-border/70"
+            className="overflow-hidden rounded-card corner-continuous border border-border/60 focus-ring"
             tabIndex={0}
         >
-            <table className="w-full text-sm">
-                <thead className="bg-muted/60">
-                    <tr>
+            <Table>
+                <TableHeader className="bg-foreground/[0.03]">
+                    <TableRow>
                         {columns.map((column) => (
-                            <th
+                            <TableHead
                                 key={column}
                                 scope="col"
-                                className="px-3 py-2 text-left font-medium"
+                                className="px-2"
                             >
-                                <button
-                                    className="hover:text-primary"
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 gap-1 px-2 type-footnote font-medium text-label-secondary hover:text-foreground"
                                     onClick={() => onSort(column)}
                                 >
                                     {analysisColumnLabel(
@@ -285,16 +348,20 @@ function ResultTable({
                                         datasets,
                                         t,
                                     )}
-                                </button>
-                            </th>
+                                    <ArrowUpDown
+                                        aria-hidden="true"
+                                        className="h-3 w-3 opacity-60"
+                                    />
+                                </Button>
+                            </TableHead>
                         ))}
-                    </tr>
-                </thead>
-                <tbody>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
                     {result.rows.map((row, index) => (
-                        <tr
+                        <TableRow
                             key={index}
-                            className="border-t border-border/50 hover:bg-muted/30"
+                            className="focus-ring focus-visible:outline-offset-[-3px]"
                             onDoubleClick={() => onDrill?.(row)}
                             onKeyDown={(event) => {
                                 if (event.key === "Enter" && onDrill) {
@@ -304,9 +371,9 @@ function ResultTable({
                             tabIndex={onDrill ? 0 : undefined}
                         >
                             {columns.map((column) => (
-                                <td
+                                <TableCell
                                     key={column}
-                                    className="max-w-72 truncate px-3 py-2 font-mono text-xs"
+                                    className="max-w-72 truncate py-2 font-mono type-footnote"
                                 >
                                     {formatAnalysisValue(
                                         row[column],
@@ -314,12 +381,12 @@ function ResultTable({
                                         column,
                                         appSettings.numberFormat,
                                     )}
-                                </td>
+                                </TableCell>
                             ))}
-                        </tr>
+                        </TableRow>
                     ))}
-                </tbody>
-            </table>
+                </TableBody>
+            </Table>
         </div>
     );
 }
@@ -328,6 +395,7 @@ export default function AnalysisWorkspacePage() {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
     const queryClient = useQueryClient();
+    const { confirm, ConfirmDialog } = useConfirmDialog();
     const requestedSavedAnalysisId = useMemo(
         () =>
             typeof window === "undefined"
@@ -983,24 +1051,27 @@ export default function AnalysisWorkspacePage() {
                 className="mb-4 flex flex-wrap gap-2"
             >
                 {["data", "prepare", "calculate", "present"].map((step) => (
-                    <a
-                        key={step}
-                        className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted focus-ring"
-                        href={`#analysis-${step}`}
-                        onClick={() => {
-                            if (step === "prepare" || step === "calculate")
-                                setToolsOpen(true);
-                        }}
-                    >
-                        {t(`analysis.workflow.${step}`)}
-                    </a>
+                    <Button key={step} asChild variant="outline" size="sm">
+                        <a
+                            href={`#analysis-${step}`}
+                            onClick={() => {
+                                if (step === "prepare" || step === "calculate")
+                                    setToolsOpen(true);
+                            }}
+                        >
+                            {t(`analysis.workflow.${step}`)}
+                        </a>
+                    </Button>
                 ))}
             </nav>
             <div className="space-y-4">
                 <div className="min-w-0 space-y-4">
                     {dataset?.relation?.startsWith("service:") && (
                         <Card>
-                            <CardContent className="flex flex-wrap gap-3 pt-4">
+                            <CardContent
+                                variant="compact"
+                                className="grid gap-3 sm:grid-cols-3"
+                            >
                                 {(
                                     [
                                         "reportingCurrency",
@@ -1011,12 +1082,14 @@ export default function AnalysisWorkspacePage() {
                                         "costBasisMethod",
                                     ] as const
                                 ).map((key) => (
-                                    <label
-                                        key={key}
-                                        className="grid gap-1 text-sm"
-                                    >
-                                        {t(`analysis.ext.financial.${key}`)}
+                                    <div key={key} className="space-y-1.5">
+                                        <Label
+                                            htmlFor={`analysis-financial-${key}`}
+                                        >
+                                            {t(`analysis.ext.financial.${key}`)}
+                                        </Label>
                                         <Input
+                                            id={`analysis-financial-${key}`}
                                             type={
                                                 key === "from" || key === "to"
                                                     ? "date"
@@ -1032,7 +1105,7 @@ export default function AnalysisWorkspacePage() {
                                                 })
                                             }
                                         />
-                                    </label>
+                                    </div>
                                 ))}
                             </CardContent>
                         </Card>
@@ -1046,7 +1119,7 @@ export default function AnalysisWorkspacePage() {
                         >
                             <summary
                                 ref={templateSummaryRef}
-                                className="cursor-pointer rounded-lg p-4 text-sm font-medium focus-ring"
+                                className="cursor-pointer rounded-card px-6 py-4 type-headline focus-ring"
                             >
                                 {t(
                                     templatesOpen
@@ -1055,44 +1128,51 @@ export default function AnalysisWorkspacePage() {
                                 )}
                             </summary>
                             <CardContent className="space-y-3">
-                                <p className="max-w-prose text-sm text-muted-foreground">
+                                <p className="max-w-prose type-callout text-label-secondary">
                                     {t("analysis.taskStartHelp")}
                                 </p>
-                                <div className="grid gap-2 md:grid-cols-3">
+                                <div className="grid gap-3 md:grid-cols-3">
                                     {ANALYSIS_TEMPLATES.map((template) => (
-                                        <button
+                                        <Card
                                             key={template.id}
-                                            type="button"
-                                            className="rounded-lg border border-border bg-card/60 p-3 text-left hover:bg-muted focus-ring"
-                                            onClick={() => {
-                                                resetPendingDraft();
-                                                setTemplatesOpen(false);
-                                                setBuilderOpen(false);
-                                                builderSummaryRef.current?.focus();
-                                                setWorkspace(
-                                                    template.workspace,
-                                                );
-                                                setMode("visual");
-                                                setPlan(
-                                                    cloneAnalysisPlan(
-                                                        template.plan,
-                                                    ),
-                                                );
-                                                setName(t(template.titleKey));
-                                                setSelectedSaved(null);
-                                                setResult(null);
-                                                setLastUsableResult(null);
-                                                setExportContext(null);
-                                                setError(null);
-                                            }}
+                                            asChild
+                                            variant="interactive"
                                         >
-                                            <span className="block text-sm font-medium">
-                                                {t(template.titleKey)}
-                                            </span>
-                                            <span className="mt-1 block text-xs text-muted-foreground">
-                                                {t(template.descriptionKey)}
-                                            </span>
-                                        </button>
+                                            <button
+                                                type="button"
+                                                className="p-4 text-left focus-ring"
+                                                onClick={() => {
+                                                    resetPendingDraft();
+                                                    setTemplatesOpen(false);
+                                                    setBuilderOpen(false);
+                                                    builderSummaryRef.current?.focus();
+                                                    setWorkspace(
+                                                        template.workspace,
+                                                    );
+                                                    setMode("visual");
+                                                    setPlan(
+                                                        cloneAnalysisPlan(
+                                                            template.plan,
+                                                        ),
+                                                    );
+                                                    setName(
+                                                        t(template.titleKey),
+                                                    );
+                                                    setSelectedSaved(null);
+                                                    setResult(null);
+                                                    setLastUsableResult(null);
+                                                    setExportContext(null);
+                                                    setError(null);
+                                                }}
+                                            >
+                                                <span className="block type-headline">
+                                                    {t(template.titleKey)}
+                                                </span>
+                                                <span className="mt-1 block type-footnote text-label-secondary">
+                                                    {t(template.descriptionKey)}
+                                                </span>
+                                            </button>
+                                        </Card>
                                     ))}
                                 </div>
                                 <Button
@@ -1137,15 +1217,15 @@ export default function AnalysisWorkspacePage() {
                             >
                                 {t("analysis.workflow.data")}
                             </CardTitle>
-                            <p className="max-w-2xl text-sm text-muted-foreground">
+                            <CardDescription className="max-w-2xl">
                                 {t("analysis.buildHelp")}
-                            </p>
+                            </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             {!builderOpen && mode === "visual" && dataset && (
-                                <dl className="grid gap-3 text-sm sm:grid-cols-2">
+                                <dl className="grid gap-3 type-body sm:grid-cols-2">
                                     <div>
-                                        <dt className="text-xs text-muted-foreground">
+                                        <dt className={helpClass}>
                                             {t("analysis.dataset")}
                                         </dt>
                                         <dd className="mt-1">
@@ -1153,7 +1233,7 @@ export default function AnalysisWorkspacePage() {
                                         </dd>
                                     </div>
                                     <div>
-                                        <dt className="text-xs text-muted-foreground">
+                                        <dt className={helpClass}>
                                             {t("analysis.fields")}
                                         </dt>
                                         <dd className="mt-1">
@@ -1169,7 +1249,7 @@ export default function AnalysisWorkspacePage() {
                                         </dd>
                                     </div>
                                     <div>
-                                        <dt className="text-xs text-muted-foreground">
+                                        <dt className={helpClass}>
                                             {t("analysis.measures")}
                                         </dt>
                                         <dd className="mt-1">
@@ -1186,7 +1266,7 @@ export default function AnalysisWorkspacePage() {
                                         </dd>
                                     </div>
                                     <div>
-                                        <dt className="text-xs text-muted-foreground">
+                                        <dt className={helpClass}>
                                             {t("analysis.configurationScope")}
                                         </dt>
                                         <dd className="mt-1">
@@ -1210,131 +1290,148 @@ export default function AnalysisWorkspacePage() {
                             >
                                 <summary
                                     ref={builderSummaryRef}
-                                    className="cursor-pointer rounded-sm text-sm font-medium focus-ring"
+                                    className="cursor-pointer rounded-control type-headline focus-ring"
                                 >
                                     {t("analysis.editConfiguration")}
                                 </summary>
                                 <div className="mt-4 space-y-4">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <Button
-                                            variant={
-                                                mode === "visual"
-                                                    ? "default"
-                                                    : "outline"
-                                            }
-                                            aria-pressed={mode === "visual"}
-                                            onClick={() => setMode("visual")}
-                                        >
-                                            {t("analysis.visual")}
-                                        </Button>
-                                        <details
-                                            open={mode === "sql" || undefined}
-                                        >
-                                            <summary className="cursor-pointer rounded-lg border px-3 py-2 text-sm focus-ring">
-                                                {t("analysis.advanced")}
-                                            </summary>
-                                            <Button
-                                                className="mt-2"
-                                                aria-pressed={mode === "sql"}
-                                                variant={
-                                                    mode === "sql"
-                                                        ? "default"
-                                                        : "outline"
+                                    <div className="flex flex-wrap items-center gap-3">
+                                        <SegmentedControl
+                                            aria-label={t("analysis.mode")}
+                                            value={mode}
+                                            onValueChange={(next) => {
+                                                if (next === "visual") {
+                                                    setMode("visual");
+                                                    return;
                                                 }
-                                                onClick={() => {
-                                                    if (
-                                                        !sql &&
-                                                        result?.generatedSql
-                                                    )
-                                                        setSql(
-                                                            result.generatedSql,
-                                                        );
-                                                    setVisualOrigin(plan);
-                                                    setSqlDatasets([
-                                                        plan.datasetId,
-                                                        ...(plan.joins.length
-                                                            ? ["accounts"]
-                                                            : []),
-                                                    ]);
-                                                    setMode("sql");
-                                                }}
-                                            >
+                                                if (
+                                                    !sql &&
+                                                    result?.generatedSql
+                                                )
+                                                    setSql(result.generatedSql);
+                                                setVisualOrigin(plan);
+                                                setSqlDatasets([
+                                                    plan.datasetId,
+                                                    ...(plan.joins.length
+                                                        ? ["accounts"]
+                                                        : []),
+                                                ]);
+                                                setMode("sql");
+                                            }}
+                                        >
+                                            <SegmentedControlItem value="visual">
+                                                {t("analysis.visual")}
+                                            </SegmentedControlItem>
+                                            <SegmentedControlItem value="sql">
                                                 {t("analysis.sql")}
-                                            </Button>
-                                        </details>
-                                        <select
-                                            aria-label={t("analysis.workspace")}
+                                            </SegmentedControlItem>
+                                        </SegmentedControl>
+                                        <Select
                                             value={workspace}
-                                            onChange={(event) =>
+                                            onValueChange={(value) =>
                                                 setWorkspace(
-                                                    event.target
-                                                        .value as AnalysisWorkspace,
+                                                    value as AnalysisWorkspace,
                                                 )
                                             }
-                                            className="rounded-md border bg-background px-3 py-2 text-sm"
                                         >
-                                            {WORKSPACES.map((value) => (
-                                                <option
-                                                    key={value}
-                                                    value={value}
-                                                >
-                                                    {t(
-                                                        `analysis.workspace.${value}`,
-                                                    )}
-                                                </option>
-                                            ))}
-                                        </select>
+                                            <SelectTrigger
+                                                aria-label={t(
+                                                    "analysis.workspace",
+                                                )}
+                                                className="w-auto min-w-44"
+                                            >
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {WORKSPACES.map((value) => (
+                                                    <SelectItem
+                                                        key={value}
+                                                        value={value}
+                                                    >
+                                                        {t(
+                                                            `analysis.workspace.${value}`,
+                                                        )}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
                                     </div>
                                     {catalogQuery.isLoading ? (
-                                        <p role="status">
-                                            {t("analysis.catalogLoading")}
-                                        </p>
-                                    ) : catalogQuery.isError ? (
-                                        <p
-                                            role="alert"
-                                            className="text-destructive"
+                                        <div
+                                            role="status"
+                                            aria-busy="true"
+                                            aria-label={t(
+                                                "analysis.catalogLoading",
+                                            )}
+                                            className="space-y-2"
                                         >
-                                            {t("analysis.catalogError")}
-                                        </p>
+                                            <span className="sr-only">
+                                                {t("analysis.catalogLoading")}
+                                            </span>
+                                            <Skeleton className="h-9 w-full rounded-control" />
+                                            <Skeleton className="h-24 w-full rounded-card" />
+                                        </div>
+                                    ) : catalogQuery.isError ? (
+                                        <Alert variant="destructive">
+                                            <AlertDescription>
+                                                {t("analysis.catalogError")}
+                                            </AlertDescription>
+                                        </Alert>
                                     ) : localizedDatasets.length === 0 ? (
-                                        <p>{t("analysis.catalogEmpty")}</p>
+                                        <EmptyState
+                                            size="compact"
+                                            headingLevel={3}
+                                            icon={Database}
+                                            title={t("analysis.catalogEmpty")}
+                                        />
                                     ) : mode === "visual" && dataset ? (
                                         <>
-                                            <div>
+                                            <div className="space-y-1.5">
                                                 <Label htmlFor="analysis-dataset">
                                                     {t("analysis.dataset")}
                                                 </Label>
-                                                <select
-                                                    id="analysis-dataset"
+                                                <Select
                                                     value={plan.datasetId}
-                                                    onChange={(event) =>
+                                                    onValueChange={(value) =>
                                                         setPlan({
                                                             ...EMPTY_PLAN,
-                                                            datasetId:
-                                                                event.target
-                                                                    .value,
+                                                            datasetId: value,
                                                         })
                                                     }
-                                                    className="mt-1 w-full rounded-md border bg-background px-3 py-2"
                                                 >
-                                                    {localizedDatasets.map(
-                                                        (entry) => (
-                                                            <option
-                                                                key={entry.id}
-                                                                value={entry.id}
-                                                            >
-                                                                {entry.label}
-                                                            </option>
-                                                        ),
-                                                    )}
-                                                </select>
+                                                    <SelectTrigger id="analysis-dataset">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {localizedDatasets.map(
+                                                            (entry) => (
+                                                                <SelectItem
+                                                                    key={
+                                                                        entry.id
+                                                                    }
+                                                                    value={
+                                                                        entry.id
+                                                                    }
+                                                                >
+                                                                    {
+                                                                        entry.label
+                                                                    }
+                                                                </SelectItem>
+                                                            ),
+                                                        )}
+                                                    </SelectContent>
+                                                </Select>
                                             </div>
                                             <div className="grid gap-4 lg:grid-cols-2">
                                                 <fieldset>
-                                                    <legend className="text-sm font-medium">
+                                                    <legend
+                                                        className={legendClass}
+                                                    >
                                                         {t("analysis.fields")}
                                                     </legend>
-                                                    <p className="mt-1 text-xs text-muted-foreground">
+                                                    <p
+                                                        className={`mt-1 ${helpClass}`}
+                                                    >
                                                         {t(
                                                             "analysis.fieldsHelp",
                                                         )}
@@ -1346,7 +1443,9 @@ export default function AnalysisWorkspacePage() {
                                                                     key={
                                                                         field.id
                                                                     }
-                                                                    className="flex items-center gap-2 text-sm"
+                                                                    className={
+                                                                        checkLabelClass
+                                                                    }
                                                                 >
                                                                     <Checkbox
                                                                         checked={plan.fields.includes(
@@ -1394,10 +1493,14 @@ export default function AnalysisWorkspacePage() {
                                                     </div>
                                                 </fieldset>
                                                 <fieldset>
-                                                    <legend className="text-sm font-medium">
+                                                    <legend
+                                                        className={legendClass}
+                                                    >
                                                         {t("analysis.measures")}
                                                     </legend>
-                                                    <p className="mt-1 text-xs text-muted-foreground">
+                                                    <p
+                                                        className={`mt-1 ${helpClass}`}
+                                                    >
                                                         {t(
                                                             "analysis.measuresHelp",
                                                         )}
@@ -1409,7 +1512,9 @@ export default function AnalysisWorkspacePage() {
                                                                     key={
                                                                         measure.id
                                                                     }
-                                                                    className="flex items-center gap-2 text-sm"
+                                                                    className={
+                                                                        checkLabelClass
+                                                                    }
                                                                 >
                                                                     <Checkbox
                                                                         checked={plan.measures.includes(
@@ -1452,7 +1557,9 @@ export default function AnalysisWorkspacePage() {
                                                                     key={
                                                                         join.id
                                                                     }
-                                                                    className="flex items-center gap-2 text-sm"
+                                                                    className={
+                                                                        checkLabelClass
+                                                                    }
                                                                 >
                                                                     <Checkbox
                                                                         checked={plan.joins.includes(
@@ -1485,14 +1592,16 @@ export default function AnalysisWorkspacePage() {
                                                 </fieldset>
                                             </div>
                                             <div>
-                                                <p className="text-sm font-medium">
+                                                <p className={legendClass}>
                                                     {t("analysis.groups")}
                                                 </p>
                                                 <div className="mt-2 flex flex-wrap gap-2">
                                                     {plan.fields.map((id) => (
                                                         <label
                                                             key={id}
-                                                            className="flex items-center gap-2 rounded-md border px-2 py-1 text-xs"
+                                                            className={
+                                                                chipLabelClass
+                                                            }
                                                         >
                                                             <Checkbox
                                                                 checked={plan.groups.includes(
@@ -1533,7 +1642,9 @@ export default function AnalysisWorkspacePage() {
                                             </div>
                                             <div>
                                                 <div className="flex items-center justify-between">
-                                                    <span className="text-sm font-medium">
+                                                    <span
+                                                        className={legendClass}
+                                                    >
                                                         {t("analysis.filters")}
                                                     </span>
                                                     <Button
@@ -1571,20 +1682,12 @@ export default function AnalysisWorkspacePage() {
                                                                 key={index}
                                                                 className="grid gap-2 sm:grid-cols-[1fr_10rem_1fr_auto]"
                                                             >
-                                                                <select
-                                                                    aria-label={t(
-                                                                        "analysis.filterField",
-                                                                        {
-                                                                            number:
-                                                                                index +
-                                                                                1,
-                                                                        },
-                                                                    )}
+                                                                <Select
                                                                     value={
                                                                         filter.fieldId
                                                                     }
-                                                                    onChange={(
-                                                                        event,
+                                                                    onValueChange={(
+                                                                        value,
                                                                     ) =>
                                                                         setPlan(
                                                                             (
@@ -1602,60 +1705,53 @@ export default function AnalysisWorkspacePage() {
                                                                                                 ? {
                                                                                                       ...item,
                                                                                                       fieldId:
-                                                                                                          event
-                                                                                                              .target
-                                                                                                              .value,
+                                                                                                          value,
                                                                                                   }
                                                                                                 : item,
                                                                                     ),
                                                                             }),
                                                                         )
                                                                     }
-                                                                    className="rounded-md border bg-background px-2 py-1"
                                                                 >
-                                                                    {dataset.fields.map(
-                                                                        (
-                                                                            field,
-                                                                        ) => (
-                                                                            <option
-                                                                                key={
-                                                                                    field.id
-                                                                                }
-                                                                                value={
-                                                                                    field.id
-                                                                                }
-                                                                            >
-                                                                                {
-                                                                                    field.label
-                                                                                }
-                                                                            </option>
-                                                                        ),
-                                                                    )}
-                                                                </select>
-                                                                <select
-                                                                    aria-label={t(
-                                                                        "analysis.filterOperator",
-                                                                        {
-                                                                            number:
-                                                                                index +
-                                                                                1,
-                                                                            field:
-                                                                                dataset.fields.find(
-                                                                                    (
-                                                                                        field,
-                                                                                    ) =>
-                                                                                        field.id ===
-                                                                                        filter.fieldId,
-                                                                                )
-                                                                                    ?.label ??
-                                                                                filter.fieldId,
-                                                                        },
-                                                                    )}
+                                                                    <SelectTrigger
+                                                                        aria-label={t(
+                                                                            "analysis.filterField",
+                                                                            {
+                                                                                number:
+                                                                                    index +
+                                                                                    1,
+                                                                            },
+                                                                        )}
+                                                                    >
+                                                                        <SelectValue />
+                                                                    </SelectTrigger>
+                                                                    <SelectContent>
+                                                                        {dataset.fields.map(
+                                                                            (
+                                                                                field,
+                                                                            ) => (
+                                                                                <SelectItem
+                                                                                    key={
+                                                                                        field.id
+                                                                                    }
+                                                                                    value={
+                                                                                        field.id
+                                                                                    }
+                                                                                >
+                                                                                    {
+                                                                                        field.label
+                                                                                    }
+                                                                                </SelectItem>
+                                                                            ),
+                                                                        )}
+                                                                    </SelectContent>
+                                                                </Select>
+                                                                <Select
                                                                     value={
                                                                         filter.operator
                                                                     }
-                                                                    onChange={(
-                                                                        event,
+                                                                    onValueChange={(
+                                                                        value,
                                                                     ) =>
                                                                         setPlan(
                                                                             (
@@ -1673,36 +1769,57 @@ export default function AnalysisWorkspacePage() {
                                                                                                 ? {
                                                                                                       ...item,
                                                                                                       operator:
-                                                                                                          event
-                                                                                                              .target
-                                                                                                              .value,
+                                                                                                          value,
                                                                                                   }
                                                                                                 : item,
                                                                                     ),
                                                                             }),
                                                                         )
                                                                     }
-                                                                    className="rounded-md border bg-background px-2 py-1"
                                                                 >
-                                                                    {OPERATORS.map(
-                                                                        (
-                                                                            operator,
-                                                                        ) => (
-                                                                            <option
-                                                                                key={
-                                                                                    operator
-                                                                                }
-                                                                                value={
-                                                                                    operator
-                                                                                }
-                                                                            >
-                                                                                {t(
-                                                                                    `analysis.operator.${operator}`,
-                                                                                )}
-                                                                            </option>
-                                                                        ),
-                                                                    )}
-                                                                </select>
+                                                                    <SelectTrigger
+                                                                        aria-label={t(
+                                                                            "analysis.filterOperator",
+                                                                            {
+                                                                                number:
+                                                                                    index +
+                                                                                    1,
+                                                                                field:
+                                                                                    dataset.fields.find(
+                                                                                        (
+                                                                                            field,
+                                                                                        ) =>
+                                                                                            field.id ===
+                                                                                            filter.fieldId,
+                                                                                    )
+                                                                                        ?.label ??
+                                                                                    filter.fieldId,
+                                                                            },
+                                                                        )}
+                                                                    >
+                                                                        <SelectValue />
+                                                                    </SelectTrigger>
+                                                                    <SelectContent>
+                                                                        {OPERATORS.map(
+                                                                            (
+                                                                                operator,
+                                                                            ) => (
+                                                                                <SelectItem
+                                                                                    key={
+                                                                                        operator
+                                                                                    }
+                                                                                    value={
+                                                                                        operator
+                                                                                    }
+                                                                                >
+                                                                                    {t(
+                                                                                        `analysis.operator.${operator}`,
+                                                                                    )}
+                                                                                </SelectItem>
+                                                                            ),
+                                                                        )}
+                                                                    </SelectContent>
+                                                                </Select>
                                                                 <Input
                                                                     aria-label={t(
                                                                         "analysis.filterValue",
@@ -1836,25 +1953,29 @@ export default function AnalysisWorkspacePage() {
                                             </Label>
                                             <Textarea
                                                 id="analysis-sql"
-                                                className="min-h-56 font-mono text-xs"
+                                                className="min-h-56 font-mono type-footnote"
                                                 value={sql}
                                                 onChange={(event) =>
                                                     setSql(event.target.value)
                                                 }
                                                 spellCheck={false}
                                             />
-                                            <fieldset className="space-y-2 rounded-md border p-3">
-                                                <legend className="text-sm font-medium">
+                                            <fieldset className="space-y-2 rounded-card corner-continuous border border-border/60 p-3">
+                                                <legend
+                                                    className={`px-1 ${legendClass}`}
+                                                >
                                                     {t(
                                                         "analysis.approvedDatasets",
                                                     )}
                                                 </legend>
-                                                <div className="flex flex-wrap gap-3">
+                                                <div className="flex flex-wrap gap-2">
                                                     {localizedDatasets.map(
                                                         (entry) => (
                                                             <label
                                                                 key={entry.id}
-                                                                className="flex items-center gap-2 text-xs"
+                                                                className={
+                                                                    chipLabelClass
+                                                                }
                                                             >
                                                                 <Checkbox
                                                                     checked={sqlDatasets.includes(
@@ -1943,7 +2064,7 @@ export default function AnalysisWorkspacePage() {
                                                 </Label>
                                                 <Input
                                                     id="analysis-sql-values"
-                                                    className="font-mono text-xs"
+                                                    className="mt-1.5 font-mono type-footnote"
                                                     value={sqlValues}
                                                     onChange={(event) =>
                                                         setSqlValues(
@@ -1952,37 +2073,46 @@ export default function AnalysisWorkspacePage() {
                                                     }
                                                     placeholder='["2026-01-01", 100]'
                                                 />
-                                                <p className="mt-1 text-xs text-muted-foreground">
+                                                <p
+                                                    className={`mt-1 ${helpClass}`}
+                                                >
                                                     {t(
                                                         "analysis.sqlParametersHint",
                                                     )}
                                                 </p>
                                             </div>
-                                            <p className="text-xs text-muted-foreground">
+                                            <p className={helpClass}>
                                                 {t("analysis.sqlHint")}
                                             </p>
                                             {sqlHistory.length > 0 && (
                                                 <details>
-                                                    <summary className="cursor-pointer text-xs">
+                                                    <summary className="cursor-pointer rounded-control type-callout text-label-secondary focus-ring">
                                                         {t(
                                                             "analysis.queryHistory",
                                                         )}
                                                     </summary>
-                                                    {sqlHistory.map(
-                                                        (entry, index) => (
-                                                            <button
-                                                                key={index}
-                                                                className="block max-w-full truncate py-1 text-left font-mono text-xs text-muted-foreground"
-                                                                onClick={() =>
-                                                                    setSql(
-                                                                        entry,
-                                                                    )
-                                                                }
-                                                            >
-                                                                {entry}
-                                                            </button>
-                                                        ),
-                                                    )}
+                                                    <div className="mt-1 flex flex-col">
+                                                        {sqlHistory.map(
+                                                            (entry, index) => (
+                                                                <Button
+                                                                    key={index}
+                                                                    type="button"
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    className="h-auto max-w-full justify-start py-1 font-mono type-footnote font-normal text-label-secondary"
+                                                                    onClick={() =>
+                                                                        setSql(
+                                                                            entry,
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    <span className="truncate">
+                                                                        {entry}
+                                                                    </span>
+                                                                </Button>
+                                                            ),
+                                                        )}
+                                                    </div>
                                                 </details>
                                             )}
                                         </div>
@@ -2018,17 +2148,18 @@ export default function AnalysisWorkspacePage() {
                                 )}
                             </div>
                             {error && (
-                                <div
-                                    role="alert"
-                                    className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
-                                >
-                                    {error}
-                                    {lastUsableResult && (
-                                        <p className="mt-1 text-xs">
-                                            {t("analysis.lastResultPreserved")}
-                                        </p>
-                                    )}
-                                </div>
+                                <Alert variant="destructive">
+                                    <AlertDescription>
+                                        {error}
+                                        {lastUsableResult && (
+                                            <p className="mt-1 type-footnote">
+                                                {t(
+                                                    "analysis.lastResultPreserved",
+                                                )}
+                                            </p>
+                                        )}
+                                    </AlertDescription>
+                                </Alert>
                             )}
                         </CardContent>
                     </Card>
@@ -2042,49 +2173,55 @@ export default function AnalysisWorkspacePage() {
                                     tabIndex={-1}
                                     className="flex scroll-mt-4 flex-wrap items-center gap-2"
                                 >
-                                    <Database className="h-4 w-4" />
+                                    <Database
+                                        aria-hidden="true"
+                                        className="h-5 w-5 text-label-secondary"
+                                    />
                                     {t("analysis.workflow.present")}
                                     <Badge variant="secondary">
                                         {displayedResult.window.returnedRows}
                                     </Badge>
                                 </CardTitle>
-                                <p className="text-sm text-muted-foreground">
+                                <CardDescription>
                                     {t("analysis.resultsHelp")}
-                                </p>
+                                </CardDescription>
                             </CardHeader>
-                            <div className="px-6">
-                                {(queryOutdated || transformationsOutdated) && (
-                                    <p
-                                        role="status"
-                                        className="rounded-md border border-warning/30 bg-warning/10 p-3 text-sm"
-                                    >
-                                        {t("analysis.resultsOutdated")}
-                                    </p>
-                                )}
-                            </div>
-                            {!!displayedResult.formulaErrors?.length && (
-                                <div
-                                    role="alert"
-                                    className="mx-6 mb-3 rounded-md border border-warning/30 bg-warning/10 p-3 text-sm"
-                                >
-                                    <p>{t("analysis.formulaErrorsNotice")}</p>
-                                    <ul className="mt-2 list-disc pl-5">
-                                        {displayedResult.formulaErrors.map(
-                                            (issue, index) => (
-                                                <li
-                                                    key={`${issue.formulaId}-${issue.rowIndex ?? "summary"}-${index}`}
-                                                >
-                                                    {issue.formulaId}
-                                                    {issue.rowIndex ===
-                                                    undefined
-                                                        ? ""
-                                                        : ` (${t("analysis.formulaErrorRow", { row: issue.rowIndex + 1 })})`}
-                                                    : {issue.message}
-                                                </li>
-                                            ),
-                                        )}
-                                    </ul>
+                            {(queryOutdated || transformationsOutdated) && (
+                                <div className="px-6 pb-3">
+                                    <Alert variant="warning" role="status">
+                                        <AlertDescription>
+                                            {t("analysis.resultsOutdated")}
+                                        </AlertDescription>
+                                    </Alert>
                                 </div>
+                            )}
+                            {!!displayedResult.formulaErrors?.length && (
+                                <Alert
+                                    variant="warning"
+                                    className="mx-6 mb-3 w-auto"
+                                >
+                                    <AlertDescription>
+                                        <p>
+                                            {t("analysis.formulaErrorsNotice")}
+                                        </p>
+                                        <ul className="mt-2 list-disc pl-5">
+                                            {displayedResult.formulaErrors.map(
+                                                (issue, index) => (
+                                                    <li
+                                                        key={`${issue.formulaId}-${issue.rowIndex ?? "summary"}-${index}`}
+                                                    >
+                                                        {issue.formulaId}
+                                                        {issue.rowIndex ===
+                                                        undefined
+                                                            ? ""
+                                                            : ` (${t("analysis.formulaErrorRow", { row: issue.rowIndex + 1 })})`}
+                                                        : {issue.message}
+                                                    </li>
+                                                ),
+                                            )}
+                                        </ul>
+                                    </AlertDescription>
+                                </Alert>
                             )}
                             <Tabs defaultValue="table">
                                 <div className="px-6 pb-3">
@@ -2156,7 +2293,9 @@ export default function AnalysisWorkspacePage() {
                                                     : undefined
                                             }
                                         />
-                                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                        <div
+                                            className={`flex items-center justify-between ${helpClass}`}
+                                        >
                                             <span>
                                                 {displayedResult.window.kind ===
                                                 "truncated"
@@ -2205,10 +2344,12 @@ export default function AnalysisWorkspacePage() {
                                             </div>
                                         </div>
                                         <details>
-                                            <summary className="cursor-pointer text-sm font-medium">
+                                            <summary className="cursor-pointer rounded-control type-headline focus-ring">
                                                 {t("analysis.generatedSql")}
                                             </summary>
-                                            <pre className="mt-2 overflow-auto rounded-lg bg-muted p-3 text-xs">
+                                            <pre
+                                                className={`mt-2 ${codeBlockClass}`}
+                                            >
                                                 {displayedResult.generatedSql}
                                             </pre>
                                         </details>
@@ -2216,7 +2357,7 @@ export default function AnalysisWorkspacePage() {
                                 </TabsContent>
                                 {displayedResult.coverage && (
                                     <div
-                                        className="px-6 pb-3 text-xs text-muted-foreground"
+                                        className={`px-6 pb-3 ${helpClass}`}
                                         role="status"
                                     >
                                         {t("analysis.ext.financial.coverage", {
@@ -2230,8 +2371,10 @@ export default function AnalysisWorkspacePage() {
                                     </div>
                                 )}
                                 {displayedResult.provenance && (
-                                    <details className="px-6 pb-3 text-xs">
-                                        <summary>
+                                    <details
+                                        className={`px-6 pb-3 ${helpClass}`}
+                                    >
+                                        <summary className="cursor-pointer rounded-control focus-ring">
                                             {t(
                                                 "analysis.ext.financial.provenance",
                                             )}
@@ -2313,7 +2456,9 @@ export default function AnalysisWorkspacePage() {
                                                 }}
                                             />
                                         ) : (
-                                            <p>{t("analysis.pivotHelp")}</p>
+                                            <p className="type-callout text-label-secondary">
+                                                {t("analysis.pivotHelp")}
+                                            </p>
                                         )}
                                     </CardContent>
                                 </TabsContent>
@@ -2344,9 +2489,9 @@ export default function AnalysisWorkspacePage() {
                                 setToolsOpen(event.currentTarget.open)
                             }
                         >
-                            <summary className="cursor-pointer rounded-lg px-6 py-4 text-sm font-medium focus-ring">
+                            <summary className="cursor-pointer rounded-card px-6 py-4 type-headline focus-ring">
                                 {t("analysis.refineTitle")}
-                                <span className="mt-1 block max-w-2xl font-normal text-muted-foreground">
+                                <span className="mt-1 block max-w-2xl type-callout font-normal text-label-secondary">
                                     {t("analysis.refineHelp")}
                                 </span>
                             </summary>
@@ -2402,26 +2547,31 @@ export default function AnalysisWorkspacePage() {
                     {(savedAction ||
                         saveMutation.isPending ||
                         savedFeedback) && (
-                        <p
+                        <Alert
                             role={savedFeedback?.error ? "alert" : "status"}
-                            className="lg:col-span-2 rounded-lg border border-border px-4 py-3 text-sm break-words"
+                            variant={
+                                savedFeedback?.error ? "destructive" : "default"
+                            }
+                            className="break-words lg:col-span-2"
                         >
-                            {savedAction || saveMutation.isPending
-                                ? t("analysis.savedActionWorking")
-                                : savedFeedback?.message}
-                            {savedFeedback?.error && (
-                                <span className="mt-1 block text-muted-foreground">
-                                    {t("analysis.savedActionRetry")}
-                                </span>
-                            )}
-                        </p>
+                            <AlertDescription>
+                                {savedAction || saveMutation.isPending
+                                    ? t("analysis.savedActionWorking")
+                                    : savedFeedback?.message}
+                                {savedFeedback?.error && (
+                                    <span className="mt-1 block type-footnote opacity-80">
+                                        {t("analysis.savedActionRetry")}
+                                    </span>
+                                )}
+                            </AlertDescription>
+                        </Alert>
                     )}
                     <Card>
                         <CardHeader>
                             <CardTitle>{t("analysis.saveTitle")}</CardTitle>
-                            <p className="text-sm text-muted-foreground">
+                            <CardDescription>
                                 {t("analysis.saveHelp")}
-                            </p>
+                            </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-3">
                             <Label htmlFor="analysis-name">
@@ -2435,11 +2585,11 @@ export default function AnalysisWorkspacePage() {
                                 }
                                 placeholder={t("analysis.namePlaceholder")}
                             />
-                            <details className="rounded-lg border border-border/60 p-3">
-                                <summary className="cursor-pointer text-sm font-medium focus-ring rounded-sm">
+                            <details className={insetDetailsClass}>
+                                <summary className={insetSummaryClass}>
                                     {t("analysis.sourcesLabel")}
                                 </summary>
-                                <div className="pt-3 space-y-2">
+                                <div className={insetBodyClass}>
                                     <Label htmlFor="analysis-sources">
                                         {t("analysis.sourcesLabel")}
                                     </Label>
@@ -2457,132 +2607,162 @@ export default function AnalysisWorkspacePage() {
                                     />
                                 </div>
                             </details>
-                            <details>
-                                <summary className="cursor-pointer text-sm font-medium">
+                            <details className={insetDetailsClass}>
+                                <summary className={insetSummaryClass}>
                                     {t("analysis.runPreferences")}
                                 </summary>
-                                <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                                    <div>
-                                        <Label htmlFor="analysis-run-currency">
-                                            {t("analysis.reportingCurrency")}
-                                        </Label>
-                                        <Input
-                                            id="analysis-run-currency"
-                                            value={runCurrency}
-                                            maxLength={3}
-                                            placeholder={
-                                                effectivePreferences.currency
-                                            }
-                                            onChange={(event) =>
-                                                setRunCurrency(
-                                                    event.target.value.toUpperCase(),
-                                                )
-                                            }
-                                        />
-                                    </div>
-                                    <div>
-                                        <Label htmlFor="analysis-run-benchmark">
-                                            {t("analysis.benchmark")}
-                                        </Label>
-                                        <Input
-                                            id="analysis-run-benchmark"
-                                            value={runBenchmark}
-                                            disabled={runWithoutBenchmark}
-                                            maxLength={32}
-                                            placeholder={
-                                                effectivePreferences.benchmark ??
-                                                t("analysis.none")
-                                            }
-                                            onChange={(event) =>
-                                                setRunBenchmark(
-                                                    event.target.value.toUpperCase(),
-                                                )
-                                            }
-                                        />
-                                        <div className="mt-1 flex items-center gap-2">
-                                            <Checkbox
-                                                id="analysis-run-no-benchmark"
-                                                checked={runWithoutBenchmark}
-                                                onCheckedChange={(checked) =>
-                                                    setRunWithoutBenchmark(
-                                                        checked === true,
+                                <div className={insetBodyClass}>
+                                    <div className="grid gap-3 sm:grid-cols-2">
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor="analysis-run-currency">
+                                                {t(
+                                                    "analysis.reportingCurrency",
+                                                )}
+                                            </Label>
+                                            <Input
+                                                id="analysis-run-currency"
+                                                value={runCurrency}
+                                                maxLength={3}
+                                                placeholder={
+                                                    effectivePreferences.currency
+                                                }
+                                                onChange={(event) =>
+                                                    setRunCurrency(
+                                                        event.target.value.toUpperCase(),
                                                     )
                                                 }
                                             />
-                                            <Label htmlFor="analysis-run-no-benchmark">
-                                                {t(
-                                                    "analysis.noBenchmarkForRun",
-                                                )}
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor="analysis-run-benchmark">
+                                                {t("analysis.benchmark")}
                                             </Label>
+                                            <Input
+                                                id="analysis-run-benchmark"
+                                                value={runBenchmark}
+                                                disabled={runWithoutBenchmark}
+                                                maxLength={32}
+                                                placeholder={
+                                                    effectivePreferences.benchmark ??
+                                                    t("analysis.none")
+                                                }
+                                                onChange={(event) =>
+                                                    setRunBenchmark(
+                                                        event.target.value.toUpperCase(),
+                                                    )
+                                                }
+                                            />
+                                            <div className="mt-1 flex items-center gap-2">
+                                                <Checkbox
+                                                    id="analysis-run-no-benchmark"
+                                                    checked={
+                                                        runWithoutBenchmark
+                                                    }
+                                                    onCheckedChange={(
+                                                        checked,
+                                                    ) =>
+                                                        setRunWithoutBenchmark(
+                                                            checked === true,
+                                                        )
+                                                    }
+                                                />
+                                                <Label htmlFor="analysis-run-no-benchmark">
+                                                    {t(
+                                                        "analysis.noBenchmarkForRun",
+                                                    )}
+                                                </Label>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label id="analysis-run-depth-label">
+                                                {t("analysis.answerDepth")}
+                                            </Label>
+                                            <SegmentedControl
+                                                aria-labelledby="analysis-run-depth-label"
+                                                size="sm"
+                                                className="w-full"
+                                                value={
+                                                    runAnswerDepth ||
+                                                    DEFAULT_PREFERENCE
+                                                }
+                                                onValueChange={(value) =>
+                                                    setRunAnswerDepth(
+                                                        value ===
+                                                            DEFAULT_PREFERENCE
+                                                            ? ""
+                                                            : value,
+                                                    )
+                                                }
+                                            >
+                                                <SegmentedControlItem
+                                                    value={DEFAULT_PREFERENCE}
+                                                >
+                                                    {t("analysis.useDefault")}
+                                                </SegmentedControlItem>
+                                                <SegmentedControlItem value="quick">
+                                                    {t("aiResearch.quick")}
+                                                </SegmentedControlItem>
+                                                <SegmentedControlItem value="detailed">
+                                                    {t("aiResearch.detailed")}
+                                                </SegmentedControlItem>
+                                            </SegmentedControl>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label id="analysis-run-language-label">
+                                                {t("analysis.language")}
+                                            </Label>
+                                            <SegmentedControl
+                                                aria-labelledby="analysis-run-language-label"
+                                                size="sm"
+                                                className="w-full"
+                                                value={
+                                                    runLanguage ||
+                                                    DEFAULT_PREFERENCE
+                                                }
+                                                onValueChange={(value) =>
+                                                    setRunLanguage(
+                                                        value ===
+                                                            DEFAULT_PREFERENCE
+                                                            ? ""
+                                                            : value,
+                                                    )
+                                                }
+                                            >
+                                                <SegmentedControlItem
+                                                    value={DEFAULT_PREFERENCE}
+                                                >
+                                                    {t("analysis.useDefault")}
+                                                </SegmentedControlItem>
+                                                <SegmentedControlItem value="en">
+                                                    {t(
+                                                        "settings.general.lang.en",
+                                                    )}
+                                                </SegmentedControlItem>
+                                                <SegmentedControlItem value="nl">
+                                                    {t(
+                                                        "settings.general.lang.nl",
+                                                    )}
+                                                </SegmentedControlItem>
+                                            </SegmentedControl>
                                         </div>
                                     </div>
-                                    <div>
-                                        <Label htmlFor="analysis-run-depth">
-                                            {t("analysis.answerDepth")}
-                                        </Label>
-                                        <select
-                                            id="analysis-run-depth"
-                                            value={runAnswerDepth}
-                                            onChange={(event) =>
-                                                setRunAnswerDepth(
-                                                    event.target.value,
-                                                )
-                                            }
-                                            className="w-full rounded-md border bg-background px-3 py-2"
-                                        >
-                                            <option value="">
-                                                {t("analysis.useDefault")}
-                                            </option>
-                                            <option value="quick">
-                                                {t("aiResearch.quick")}
-                                            </option>
-                                            <option value="detailed">
-                                                {t("aiResearch.detailed")}
-                                            </option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <Label htmlFor="analysis-run-language">
-                                            {t("analysis.language")}
-                                        </Label>
-                                        <select
-                                            id="analysis-run-language"
-                                            value={runLanguage}
-                                            onChange={(event) =>
-                                                setRunLanguage(
-                                                    event.target.value,
-                                                )
-                                            }
-                                            className="w-full rounded-md border bg-background px-3 py-2"
-                                        >
-                                            <option value="">
-                                                {t("analysis.useDefault")}
-                                            </option>
-                                            <option value="en">
-                                                {t("settings.general.lang.en")}
-                                            </option>
-                                            <option value="nl">
-                                                {t("settings.general.lang.nl")}
-                                            </option>
-                                        </select>
-                                    </div>
+                                    <p className={helpClass}>
+                                        {t("analysis.preferencePrecedence")}
+                                    </p>
                                 </div>
-                                <p className="mt-2 text-xs text-muted-foreground">
-                                    {t("analysis.preferencePrecedence")}
-                                </p>
                             </details>
-                            <details>
-                                <summary className="cursor-pointer rounded-sm text-sm font-medium focus-ring">
+                            <details className={insetDetailsClass}>
+                                <summary className={insetSummaryClass}>
                                     {t("analysis.filesAndScenarios")}
                                 </summary>
-                                <div className="mt-3">
+                                <div className={insetBodyClass}>
                                     {displayedResult &&
                                         (!exportInputsKnown ||
                                             queryOutdated ||
                                             transformationsOutdated) && (
                                             <p
                                                 role="status"
-                                                className="mb-3 text-sm text-muted-foreground"
+                                                className="type-callout text-label-secondary"
                                             >
                                                 {t("analysis.exportNeedsRun")}
                                             </p>
@@ -2635,7 +2815,6 @@ export default function AnalysisWorkspacePage() {
                             </details>
                             <Button
                                 className="w-full"
-                                variant="outline"
                                 onClick={() => saveMutation.mutate()}
                                 disabled={
                                     !displayedResult ||
@@ -2650,7 +2829,7 @@ export default function AnalysisWorkspacePage() {
                             </Button>
                             {selectedSaved && (
                                 <div className="space-y-2">
-                                    <p className="text-xs text-muted-foreground">
+                                    <p className={helpClass}>
                                         {t("analysis.version", {
                                             version: selectedSaved.version,
                                         })}
@@ -2710,7 +2889,7 @@ export default function AnalysisWorkspacePage() {
                                         ) && (
                                             <p
                                                 role="status"
-                                                className="text-sm text-muted-foreground"
+                                                className="type-callout text-label-secondary"
                                             >
                                                 {t(
                                                     "analysis.noEarlierVersions",
@@ -2768,70 +2947,45 @@ export default function AnalysisWorkspacePage() {
                                 </div>
                             )}
                             {selectedSaved && (
-                                <details>
-                                    <summary className="cursor-pointer text-sm font-medium">
+                                <details className={insetDetailsClass}>
+                                    <summary className={insetSummaryClass}>
                                         {t("analysis.aiEditProposal")}
                                     </summary>
-                                    <Textarea
-                                        className="mt-2 font-mono text-xs"
-                                        value={proposalJson}
-                                        onChange={(event) => {
-                                            setProposalJson(event.target.value);
-                                            setProposalPreview(null);
-                                        }}
-                                        placeholder={t(
-                                            "analysis.aiEditProposalPlaceholder",
-                                        )}
-                                    />
-                                    <div className="mt-2 flex gap-2">
-                                        <Button
-                                            size="sm"
-                                            onClick={() =>
-                                                void apiClient
-                                                    .generateAnalysisProposal(
-                                                        selectedSaved.id,
-                                                        proposalJson,
-                                                    )
-                                                    .then((value) => {
-                                                        setProposalPreview(
-                                                            value,
-                                                        );
-                                                        setProposalJson(
-                                                            JSON.stringify(
-                                                                value.proposal,
-                                                                null,
-                                                                2,
-                                                            ),
-                                                        );
-                                                    })
-                                                    .catch((cause) =>
-                                                        setError(
-                                                            apiErrorToMessage(
-                                                                cause,
-                                                                t,
-                                                            ),
-                                                        ),
-                                                    )
-                                            }
-                                            disabled={!proposalJson.trim()}
-                                        >
-                                            {t("analysis.generateProposal")}
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => {
-                                                try {
-                                                    const proposal = JSON.parse(
-                                                        proposalJson,
-                                                    ) as AnalysisEditProposal;
+                                    <div className={insetBodyClass}>
+                                        <Textarea
+                                            className="font-mono type-footnote"
+                                            value={proposalJson}
+                                            onChange={(event) => {
+                                                setProposalJson(
+                                                    event.target.value,
+                                                );
+                                                setProposalPreview(null);
+                                            }}
+                                            placeholder={t(
+                                                "analysis.aiEditProposalPlaceholder",
+                                            )}
+                                        />
+                                        <div className="flex flex-wrap gap-2">
+                                            <Button
+                                                size="sm"
+                                                onClick={() =>
                                                     void apiClient
-                                                        .previewAnalysisProposal(
-                                                            proposal,
+                                                        .generateAnalysisProposal(
+                                                            selectedSaved.id,
+                                                            proposalJson,
                                                         )
-                                                        .then(
-                                                            setProposalPreview,
-                                                        )
+                                                        .then((value) => {
+                                                            setProposalPreview(
+                                                                value,
+                                                            );
+                                                            setProposalJson(
+                                                                JSON.stringify(
+                                                                    value.proposal,
+                                                                    null,
+                                                                    2,
+                                                                ),
+                                                            );
+                                                        })
                                                         .catch((cause) =>
                                                             setError(
                                                                 apiErrorToMessage(
@@ -2839,69 +2993,105 @@ export default function AnalysisWorkspacePage() {
                                                                     t,
                                                                 ),
                                                             ),
-                                                        );
-                                                } catch (cause) {
-                                                    setError(
-                                                        cause instanceof Error
-                                                            ? cause.message
-                                                            : t(
-                                                                  "analysis.proposalInvalid",
-                                                              ),
-                                                    );
+                                                        )
                                                 }
-                                            }}
-                                        >
-                                            {t("analysis.revalidateProposal")}
-                                        </Button>
-                                        {proposalPreview && (
+                                                disabled={!proposalJson.trim()}
+                                            >
+                                                {t("analysis.generateProposal")}
+                                            </Button>
                                             <Button
                                                 size="sm"
-                                                disabled={
-                                                    savedAction ||
-                                                    saveMutation.isPending
-                                                }
-                                                onClick={() =>
-                                                    void savedOperation(
-                                                        async (
-                                                            _epoch,
-                                                            canApply,
-                                                        ) => {
-                                                            const applied =
-                                                                await apiClient.applyAnalysisProposal(
-                                                                    proposalPreview.proposal,
-                                                                );
-                                                            if (canApply())
-                                                                loadSaved(
-                                                                    applied,
-                                                                );
-                                                            queryClient.invalidateQueries(
-                                                                {
-                                                                    queryKey: [
-                                                                        "analysis",
-                                                                        "saved",
-                                                                    ],
-                                                                },
+                                                variant="outline"
+                                                onClick={() => {
+                                                    try {
+                                                        const proposal =
+                                                            JSON.parse(
+                                                                proposalJson,
+                                                            ) as AnalysisEditProposal;
+                                                        void apiClient
+                                                            .previewAnalysisProposal(
+                                                                proposal,
+                                                            )
+                                                            .then(
+                                                                setProposalPreview,
+                                                            )
+                                                            .catch((cause) =>
+                                                                setError(
+                                                                    apiErrorToMessage(
+                                                                        cause,
+                                                                        t,
+                                                                    ),
+                                                                ),
                                                             );
-                                                        },
-                                                    )
-                                                }
+                                                    } catch (cause) {
+                                                        setError(
+                                                            cause instanceof
+                                                                Error
+                                                                ? cause.message
+                                                                : t(
+                                                                      "analysis.proposalInvalid",
+                                                                  ),
+                                                        );
+                                                    }
+                                                }}
                                             >
-                                                {t("analysis.applyProposal")}
+                                                {t(
+                                                    "analysis.revalidateProposal",
+                                                )}
                                             </Button>
+                                            {proposalPreview && (
+                                                <Button
+                                                    size="sm"
+                                                    disabled={
+                                                        savedAction ||
+                                                        saveMutation.isPending
+                                                    }
+                                                    onClick={() =>
+                                                        void savedOperation(
+                                                            async (
+                                                                _epoch,
+                                                                canApply,
+                                                            ) => {
+                                                                const applied =
+                                                                    await apiClient.applyAnalysisProposal(
+                                                                        proposalPreview.proposal,
+                                                                    );
+                                                                if (canApply())
+                                                                    loadSaved(
+                                                                        applied,
+                                                                    );
+                                                                queryClient.invalidateQueries(
+                                                                    {
+                                                                        queryKey:
+                                                                            [
+                                                                                "analysis",
+                                                                                "saved",
+                                                                            ],
+                                                                    },
+                                                                );
+                                                            },
+                                                        )
+                                                    }
+                                                >
+                                                    {t(
+                                                        "analysis.applyProposal",
+                                                    )}
+                                                </Button>
+                                            )}
+                                        </div>
+                                        {proposalPreview && (
+                                            <pre className={codeBlockClass}>
+                                                {JSON.stringify(
+                                                    {
+                                                        before: proposalPreview.before,
+                                                        after: proposalPreview.after,
+                                                    },
+                                                    null,
+                                                    2,
+                                                )}
+                                            </pre>
                                         )}
                                     </div>
-                                    {proposalPreview && (
-                                        <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-muted p-2 text-xs">
-                                            {JSON.stringify(
-                                                {
-                                                    before: proposalPreview.before,
-                                                    after: proposalPreview.after,
-                                                },
-                                                null,
-                                                2,
-                                            )}
-                                        </pre>
-                                    )}
                                 </details>
                             )}
                         </CardContent>
@@ -2911,116 +3101,210 @@ export default function AnalysisWorkspacePage() {
                             <CardTitle>{t("analysis.savedTitle")}</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-2">
-                            {savedQuery.data?.map((saved) => (
-                                <div
-                                    key={saved.id}
-                                    className="rounded-lg border p-3"
-                                >
-                                    <button
-                                        className="w-full break-words text-left font-medium hover:text-primary focus-ring"
-                                        onClick={() => loadSaved(saved)}
-                                    >
-                                        {saved.name}
-                                    </button>
-                                    <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
-                                        <span>
-                                            v{saved.version} ·{" "}
-                                            {saved.refreshStatus}
-                                        </span>
-                                        <div>
-                                            <Button
-                                                size="icon"
-                                                variant="ghost"
-                                                aria-label={t(
-                                                    "analysis.refresh",
+                            {!!savedQuery.data?.length && (
+                                <List>
+                                    {savedQuery.data?.map((saved) => {
+                                        const active =
+                                            selectedSaved?.id === saved.id;
+                                        return (
+                                            <li
+                                                key={saved.id}
+                                                className={cn(
+                                                    "flex min-h-11 items-center gap-1 pr-2",
+                                                    active &&
+                                                        "bg-primary/[0.08]",
                                                 )}
-                                                disabled={
-                                                    savedAction ||
-                                                    saveMutation.isPending
-                                                }
-                                                onClick={() =>
-                                                    void savedOperation(
-                                                        async (
-                                                            _epoch,
-                                                            canApply,
-                                                        ) => {
-                                                            const refreshed =
-                                                                await apiClient.runSavedAnalysis(
-                                                                    saved.id,
-                                                                );
-                                                            if (canApply())
-                                                                loadSaved(
-                                                                    refreshed,
-                                                                );
-                                                            queryClient.invalidateQueries(
-                                                                {
-                                                                    queryKey: [
-                                                                        "analysis",
-                                                                        "saved",
-                                                                    ],
-                                                                },
-                                                            );
-                                                        },
-                                                    )
+                                                aria-current={
+                                                    active ? "true" : undefined
                                                 }
                                             >
-                                                <Play className="h-3.5 w-3.5" />
-                                            </Button>
-                                            <Button
-                                                size="icon"
-                                                variant="ghost"
-                                                aria-label={t(
-                                                    "analysis.delete",
-                                                )}
-                                                disabled={
-                                                    savedAction ||
-                                                    saveMutation.isPending
-                                                }
-                                                onClick={() =>
-                                                    void savedOperation(
-                                                        async () => {
-                                                            await apiClient.deleteSavedAnalysis(
-                                                                saved.id,
-                                                            );
-                                                            setSelectedSaved(
-                                                                (current) =>
-                                                                    current?.id ===
-                                                                    saved.id
-                                                                        ? null
-                                                                        : current,
-                                                            );
-                                                            queryClient.invalidateQueries(
+                                                <div className="flex min-w-0 flex-1 flex-col py-1.5 pl-2">
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        className={cn(
+                                                            "h-auto min-h-8 w-full justify-start whitespace-normal break-words px-2 py-1 text-left",
+                                                            active
+                                                                ? "font-medium text-foreground"
+                                                                : "font-normal",
+                                                        )}
+                                                        onClick={() =>
+                                                            loadSaved(saved)
+                                                        }
+                                                    >
+                                                        {saved.name}
+                                                    </Button>
+                                                    <span
+                                                        className={`px-2 ${helpClass}`}
+                                                    >
+                                                        v{saved.version} ·{" "}
+                                                        {saved.refreshStatus}
+                                                    </span>
+                                                    {saved.lastError && (
+                                                        <p className="px-2 type-footnote text-destructive">
+                                                            {
+                                                                saved.lastError
+                                                                    .message
+                                                            }
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger
+                                                        asChild
+                                                    >
+                                                        <Button
+                                                            type="button"
+                                                            size="icon"
+                                                            variant="ghost"
+                                                            aria-label={t(
+                                                                "analysis.rowMenu",
                                                                 {
-                                                                    queryKey: [
-                                                                        "analysis",
-                                                                        "saved",
-                                                                    ],
+                                                                    name: saved.name,
                                                                 },
-                                                            );
-                                                        },
-                                                    )
-                                                }
-                                            >
-                                                <Trash2 className="h-3.5 w-3.5" />
-                                            </Button>
-                                        </div>
-                                    </div>
-                                    {saved.lastError && (
-                                        <p className="mt-1 text-xs text-destructive">
-                                            {saved.lastError.message}
-                                        </p>
-                                    )}
-                                </div>
-                            ))}
+                                                            )}
+                                                            className="icon-touch-target h-8 w-8 shrink-0"
+                                                        >
+                                                            <MoreHorizontal className="h-4 w-4" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuItem
+                                                            disabled={
+                                                                savedAction ||
+                                                                saveMutation.isPending
+                                                            }
+                                                            onSelect={() =>
+                                                                void savedOperation(
+                                                                    async (
+                                                                        _epoch,
+                                                                        canApply,
+                                                                    ) => {
+                                                                        const refreshed =
+                                                                            await apiClient.runSavedAnalysis(
+                                                                                saved.id,
+                                                                            );
+                                                                        if (
+                                                                            canApply()
+                                                                        )
+                                                                            loadSaved(
+                                                                                refreshed,
+                                                                            );
+                                                                        queryClient.invalidateQueries(
+                                                                            {
+                                                                                queryKey:
+                                                                                    [
+                                                                                        "analysis",
+                                                                                        "saved",
+                                                                                    ],
+                                                                            },
+                                                                        );
+                                                                    },
+                                                                )
+                                                            }
+                                                        >
+                                                            <Play
+                                                                aria-hidden="true"
+                                                                className="mr-2 h-4 w-4 text-label-secondary"
+                                                            />
+                                                            {t(
+                                                                "analysis.refresh",
+                                                            )}
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuSeparator />
+                                                        <DropdownMenuItem
+                                                            className="text-destructive focus:text-destructive"
+                                                            disabled={
+                                                                savedAction ||
+                                                                saveMutation.isPending
+                                                            }
+                                                            onSelect={() =>
+                                                                void (async () => {
+                                                                    const accepted =
+                                                                        await confirm(
+                                                                            {
+                                                                                title: t(
+                                                                                    "analysis.deleteConfirmTitle",
+                                                                                ),
+                                                                                description:
+                                                                                    t(
+                                                                                        "analysis.deleteConfirm",
+                                                                                        {
+                                                                                            name: saved.name,
+                                                                                        },
+                                                                                    ),
+                                                                                confirmLabel:
+                                                                                    t(
+                                                                                        "common.delete",
+                                                                                    ),
+                                                                                cancelLabel:
+                                                                                    t(
+                                                                                        "common.cancel",
+                                                                                    ),
+                                                                                variant:
+                                                                                    "destructive",
+                                                                            },
+                                                                        );
+                                                                    if (
+                                                                        !accepted
+                                                                    )
+                                                                        return;
+                                                                    await savedOperation(
+                                                                        async () => {
+                                                                            await apiClient.deleteSavedAnalysis(
+                                                                                saved.id,
+                                                                            );
+                                                                            setSelectedSaved(
+                                                                                (
+                                                                                    current,
+                                                                                ) =>
+                                                                                    current?.id ===
+                                                                                    saved.id
+                                                                                        ? null
+                                                                                        : current,
+                                                                            );
+                                                                            queryClient.invalidateQueries(
+                                                                                {
+                                                                                    queryKey:
+                                                                                        [
+                                                                                            "analysis",
+                                                                                            "saved",
+                                                                                        ],
+                                                                                },
+                                                                            );
+                                                                        },
+                                                                    );
+                                                                })()
+                                                            }
+                                                        >
+                                                            <Trash2
+                                                                aria-hidden="true"
+                                                                className="mr-2 h-4 w-4"
+                                                            />
+                                                            {t(
+                                                                "analysis.delete",
+                                                            )}
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </li>
+                                        );
+                                    })}
+                                </List>
+                            )}
                             {savedQuery.data?.length === 0 && (
-                                <p className="text-sm text-muted-foreground">
-                                    {t("analysis.noneSaved")}
-                                </p>
+                                <EmptyState
+                                    size="compact"
+                                    headingLevel={3}
+                                    icon={Save}
+                                    title={t("analysis.noneSaved")}
+                                />
                             )}
                         </CardContent>
                     </Card>
                 </aside>
             </div>
+            <ConfirmDialog />
         </PageShell>
     );
 }

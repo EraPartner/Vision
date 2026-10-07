@@ -125,16 +125,13 @@ describe("AnalysisMonitorsPage", () => {
                 /first valid check establishes a baseline/i,
             ),
         ).toBeInTheDocument();
-        await screen.findByRole("option", { name: "Cash flow" });
-        await user.selectOptions(
-            screen.getByLabelText("Saved analysis"),
-            "a-1",
+        await user.click(await screen.findByLabelText("Saved analysis"));
+        await user.click(
+            await screen.findByRole("option", { name: "Cash flow" }),
         );
         await user.type(screen.getByLabelText("Title"), "Cash threshold");
-        await user.selectOptions(
-            screen.getByLabelText("Numeric field"),
-            "amount",
-        );
+        await user.click(screen.getByLabelText("Numeric field"));
+        await user.click(await screen.findByRole("option", { name: "amount" }));
         await user.type(screen.getByLabelText("Threshold"), "100.00000001");
         expect(posted).toBeNull();
         await user.click(
@@ -172,9 +169,8 @@ describe("AnalysisMonitorsPage", () => {
         expect(
             screen.queryByRole("button", { name: /create monitor/i }),
         ).not.toBeInTheDocument();
-        await user.selectOptions(
-            screen.getByLabelText("Condition type"),
-            "dossier-evidence",
+        await user.click(
+            screen.getByRole("radio", { name: "Dossier evidence change" }),
         );
         expect(
             await screen.findByRole("link", { name: "Open dossiers" }),
@@ -201,14 +197,14 @@ describe("AnalysisMonitorsPage", () => {
         );
         const user = userEvent.setup();
         renderWithApp(<AnalysisMonitorsPage />);
-        await user.selectOptions(
-            screen.getByLabelText("Condition type"),
-            "dossier-evidence",
+        await user.click(
+            await screen.findByRole("radio", {
+                name: "Dossier evidence change",
+            }),
         );
-        await screen.findByRole("option", { name: "Research" });
-        await user.selectOptions(
-            screen.getByLabelText("Research dossier"),
-            "d-1",
+        await user.click(screen.getByLabelText("Research dossier"));
+        await user.click(
+            await screen.findByRole("option", { name: "Research" }),
         );
         await user.type(screen.getByLabelText("Title"), "Evidence changes");
         expect(screen.queryByLabelText("Threshold")).not.toBeInTheDocument();
@@ -354,5 +350,72 @@ describe("AnalysisMonitorsPage", () => {
             "Notification marked as read",
         );
         expect(reads).toBe(1);
+    });
+
+    it("deletes a monitor from its row menu only after confirmation", async () => {
+        let deletes = 0;
+        const monitor = {
+            id: "m-1",
+            kind: "dossier-evidence",
+            title: "Evidence watch",
+            enabled: true,
+            savedAnalysisId: null,
+            dossierId: "d-1",
+            targetLabel: "Research",
+            fieldId: null,
+            operator: null,
+            threshold: null,
+            intervalMinutes: 1440,
+            cooldownMinutes: 1440,
+            nextDueAt: null,
+            lastCheckedAt: null,
+            lastStatus: null,
+            lastObservation: null,
+            createdAt: "2026-09-19T00:00:00Z",
+            updatedAt: "2026-09-19T00:00:00Z",
+        };
+        server.use(
+            http.get(`${api}/analysis/monitors`, () =>
+                ok({ items: [monitor], total: 1, limit: 200, offset: 0 }),
+            ),
+            http.get(`${api}/analysis/saved`, () => ok({ items: [] })),
+            http.get(`${api}/research-dossiers`, () =>
+                ok({ items: [], total: 0, limit: 500, offset: 0 }),
+            ),
+            http.delete(`${api}/analysis/monitors/m-1`, () => {
+                deletes += 1;
+                return ok({ id: "m-1" });
+            }),
+        );
+        const user = userEvent.setup();
+        renderWithApp(<AnalysisMonitorsPage />);
+        await user.click(
+            await screen.findByRole("button", {
+                name: "Actions for Evidence watch",
+            }),
+        );
+        await user.click(
+            await screen.findByRole("menuitem", { name: "Delete monitor" }),
+        );
+        const dialog = await screen.findByRole("alertdialog");
+        await user.click(
+            within(dialog).getByRole("button", { name: "Cancel" }),
+        );
+        expect(deletes).toBe(0);
+        await user.click(
+            screen.getByRole("button", { name: "Actions for Evidence watch" }),
+        );
+        await user.click(
+            await screen.findByRole("menuitem", { name: "Delete monitor" }),
+        );
+        await user.click(
+            within(await screen.findByRole("alertdialog")).getByRole("button", {
+                name: "Delete",
+            }),
+        );
+        expect(await screen.findByRole("status")).toHaveTextContent(
+            "Monitor deleted",
+        );
+        expect(deletes).toBe(1);
     });
 });

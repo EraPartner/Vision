@@ -1,10 +1,29 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+    type FormEvent,
+    type ReactNode,
+} from "react";
 import { Link } from "react-router";
-import { Play, Plus, Save, Trash2 } from "lucide-react";
+import {
+    Activity,
+    Bell,
+    ListChecks,
+    MoreHorizontal,
+    Pause,
+    Play,
+    Plus,
+    Save,
+    Trash2,
+} from "lucide-react";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { PAGE_ICONS } from "@/lib/pageIcons";
+import { cn } from "@/lib/utils";
 import type { SavedAnalysis } from "@/lib/api/analysis";
 import type {
+    AnalysisMonitor,
     MonitorCreate,
     MonitorKind,
     MonitorOperator,
@@ -18,12 +37,44 @@ import {
     useMonitors,
     useMonitorTargets,
 } from "@/hooks/useMonitors";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageShell } from "@/components/shared/PageShell";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { List } from "@/components/ui/list";
+import {
+    SegmentedControl,
+    SegmentedControlItem,
+} from "@/components/ui/segmented-control";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 
 const decimal = /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/;
 const numericType = /^(?:decimal|number|integer|currency)$/;
@@ -93,19 +144,242 @@ function dateTime(value: string | null) {
     return value ? new Date(value).toLocaleString() : "—";
 }
 
-function Observation({ item }: { item: MonitorObservation }) {
+const statusTone: Record<string, BadgeProps["variant"]> = {
+    triggered: "warning",
+    failed: "destructive",
+    partial: "warning",
+    stale: "warning",
+    "cooldown-pending": "secondary",
+    baseline: "secondary",
+    unchanged: "muted",
+    never: "muted",
+};
+
+function StatusBadge({ status }: { status: string | null | undefined }) {
+    const { t } = useLanguage();
+    const key = status ?? "never";
+    return (
+        <Badge variant={statusTone[key] ?? "muted"} size="sm">
+            {t(`monitors.status.${key}`)}
+        </Badge>
+    );
+}
+
+const PAGE_SIZE = 200;
+const TARGET_PAGE_SIZE = 500;
+
+function Pager({
+    offset,
+    total,
+    pageSize,
+    onChange,
+    showRange = true,
+}: {
+    offset: number;
+    total: number;
+    pageSize: number;
+    onChange: (offset: number) => void;
+    showRange?: boolean;
+}) {
     const { t } = useLanguage();
     return (
-        <li className="rounded-lg border p-3 text-sm space-y-1">
-            <p className="font-medium">
-                {t(`monitors.status.${item.status}`)} ·{" "}
-                {dateTime(item.checkedAt)}
-            </p>
-            {reasonLabel(item.reasonCode, item.reason, t) && (
-                <p>{reasonLabel(item.reasonCode, item.reason, t)}</p>
+        <div className="flex flex-wrap items-center gap-2">
+            <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={offset === 0}
+                onClick={() => onChange(Math.max(0, offset - pageSize))}
+            >
+                {t("monitors.previous")}
+            </Button>
+            {showRange && (
+                <span className="type-footnote text-label-secondary tabular-nums">
+                    {t("monitors.pageRange", {
+                        first: offset + 1,
+                        last: Math.min(offset + pageSize, total),
+                        total,
+                    })}
+                </span>
             )}
+            <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={offset + pageSize >= total}
+                onClick={() => onChange(offset + pageSize)}
+            >
+                {t("monitors.next")}
+            </Button>
+        </div>
+    );
+}
+
+function LoadingRows({ label, rows = 3 }: { label: string; rows?: number }) {
+    const { t } = useLanguage();
+    return (
+        <div
+            role="status"
+            aria-busy="true"
+            aria-label={label}
+            className="space-y-2"
+        >
+            <span className="sr-only">{t("common.loading")}</span>
+            {Array.from({ length: rows }, (_, index) => (
+                <Skeleton key={index} className="h-11 w-full rounded-card" />
+            ))}
+        </div>
+    );
+}
+
+function RetryAlert({
+    message,
+    pending,
+    onRetry,
+}: {
+    message: string;
+    pending: boolean;
+    onRetry: () => void;
+}) {
+    const { t } = useLanguage();
+    return (
+        <Alert variant="destructive">
+            <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+                <p>{message}</p>
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={pending}
+                    onClick={onRetry}
+                >
+                    {t("common.retry")}
+                </Button>
+            </AlertDescription>
+        </Alert>
+    );
+}
+
+function Field({
+    id,
+    label,
+    children,
+    className,
+}: {
+    id: string;
+    label: ReactNode;
+    children: ReactNode;
+    className?: string;
+}) {
+    return (
+        <div className={cn("space-y-1.5", className)}>
+            <Label htmlFor={id}>{label}</Label>
+            {children}
+        </div>
+    );
+}
+
+function ScheduleFields({
+    idPrefix,
+    interval,
+    cooldown,
+    onInterval,
+    onCooldown,
+}: {
+    idPrefix: string;
+    interval: number;
+    cooldown: number;
+    onInterval: (value: number) => void;
+    onCooldown: (value: number) => void;
+}) {
+    const { t } = useLanguage();
+    return (
+        <Card asChild>
+            <details onInvalidCapture={revealInvalidSchedule}>
+                <summary className="flex cursor-pointer items-center rounded-card px-4 py-3 type-headline focus-ring">
+                    {t("monitors.schedule")}
+                </summary>
+                <div className="grid grid-cols-2 gap-3 px-4 pb-4">
+                    <Field
+                        id={`${idPrefix}-interval`}
+                        label={t("monitors.interval")}
+                    >
+                        <Input
+                            id={`${idPrefix}-interval`}
+                            type="number"
+                            min={15}
+                            max={10080}
+                            value={interval}
+                            onChange={(event) =>
+                                onInterval(Number(event.target.value))
+                            }
+                        />
+                    </Field>
+                    <Field
+                        id={`${idPrefix}-cooldown`}
+                        label={t("monitors.cooldown")}
+                    >
+                        <Input
+                            id={`${idPrefix}-cooldown`}
+                            type="number"
+                            min={0}
+                            max={10080}
+                            value={cooldown}
+                            onChange={(event) =>
+                                onCooldown(Number(event.target.value))
+                            }
+                        />
+                    </Field>
+                </div>
+            </details>
+        </Card>
+    );
+}
+
+function OperatorControl({
+    labelId,
+    value,
+    onChange,
+}: {
+    labelId: string;
+    value: MonitorOperator;
+    onChange: (value: MonitorOperator) => void;
+}) {
+    const { t } = useLanguage();
+    return (
+        <div className="space-y-1.5">
+            <Label id={labelId}>{t("monitors.operator")}</Label>
+            <SegmentedControl
+                aria-labelledby={labelId}
+                value={value}
+                onValueChange={(next) => onChange(next as MonitorOperator)}
+                className="w-full"
+            >
+                <SegmentedControlItem value="above">
+                    {t("monitors.above")}
+                </SegmentedControlItem>
+                <SegmentedControlItem value="below">
+                    {t("monitors.below")}
+                </SegmentedControlItem>
+            </SegmentedControl>
+        </div>
+    );
+}
+
+function Observation({ item }: { item: MonitorObservation }) {
+    const { t } = useLanguage();
+    const reason = reasonLabel(item.reasonCode, item.reason, t);
+    return (
+        <li className="space-y-1 px-4 py-3 type-body">
+            <div className="flex flex-wrap items-center gap-2">
+                <StatusBadge status={item.status} />
+                <span className="type-footnote text-label-secondary tabular-nums">
+                    {dateTime(item.checkedAt)}
+                </span>
+            </div>
+            {reason && <p>{reason}</p>}
             {(item.previousValue !== null || item.currentValue !== null) && (
-                <p>
+                <p className="tabular-nums">
                     {t("monitors.valueChange", {
                         previous: item.previousValue ?? "—",
                         current: item.currentValue ?? "—",
@@ -114,7 +388,7 @@ function Observation({ item }: { item: MonitorObservation }) {
             )}
             {(item.previousEvidenceVersion !== null ||
                 item.currentEvidenceVersion !== null) && (
-                <p>
+                <p className="tabular-nums">
                     {t("monitors.evidenceChange", {
                         previous: item.previousEvidenceVersion ?? "—",
                         current: item.currentEvidenceVersion ?? "—",
@@ -122,7 +396,7 @@ function Observation({ item }: { item: MonitorObservation }) {
                 </p>
             )}
             {item.coverage?.status === "unknown" && (
-                <p className="text-muted-foreground">
+                <p className="type-footnote text-label-secondary">
                     {t("monitors.coverage")}
                 </p>
             )}
@@ -169,6 +443,7 @@ export default function AnalysisMonitorsPage() {
     const notifications = useMonitorNotifications(notificationOffset);
     const targets = useMonitorTargets(targetDossierOffset);
     const actions = useMonitorActions();
+    const { confirm, ConfirmDialog } = useConfirmDialog();
     const selected =
         monitors.data?.items.find((item) => item.id === selectedId) ?? null;
     const eligible = useMemo(
@@ -305,18 +580,23 @@ export default function AnalysisMonitorsPage() {
             await actions.update.mutateAsync({ id: selected.id, patch: edit });
             setNotice(t("monitors.saved"));
         });
-    const remove = () =>
+    const remove = (monitor: AnalysisMonitor) =>
         run(async () => {
-            if (!selected || !window.confirm(t("monitors.deleteConfirm")))
-                return;
-            await actions.remove.mutateAsync(selected.id);
-            setSelectedId(null);
+            const accepted = await confirm({
+                title: t("monitors.deleteTitle"),
+                description: t("monitors.deleteConfirm"),
+                confirmLabel: t("common.delete"),
+                cancelLabel: t("common.cancel"),
+                variant: "destructive",
+            });
+            if (!accepted) return;
+            await actions.remove.mutateAsync(monitor.id);
+            if (monitor.id === selectedId) setSelectedId(null);
             setNotice(t("monitors.deleted"));
         });
-    const check = () =>
+    const check = (monitor: AnalysisMonitor) =>
         run(async () => {
-            if (!selected) return;
-            const result = await actions.check.mutateAsync(selected.id);
+            const result = await actions.check.mutateAsync(monitor.id);
             setObservationOffset(0);
             setNotice(
                 t("monitors.checkResult", {
@@ -324,11 +604,24 @@ export default function AnalysisMonitorsPage() {
                 }),
             );
         });
+    const toggleEnabled = (monitor: AnalysisMonitor) =>
+        run(async () => {
+            await actions.update.mutateAsync({
+                id: monitor.id,
+                patch: { enabled: !monitor.enabled },
+            });
+            setNotice(t("monitors.saved"));
+        });
     const markRead = (id: string) =>
         run(async () => {
             await actions.read.mutateAsync(id);
             setNotice(t("monitors.markedRead"));
         });
+
+    const selectMonitor = (id: string) => {
+        setSelectedId(id);
+        setObservationOffset(0);
+    };
 
     return (
         <PageShell>
@@ -338,1005 +631,1071 @@ export default function AnalysisMonitorsPage() {
                 icon={PAGE_ICONS["/analysis/monitors"]}
             />
             {error && (
-                <p
-                    role="alert"
-                    className="rounded-lg border border-destructive p-3 text-destructive"
-                >
-                    {error}
-                </p>
+                <Alert variant="destructive">
+                    <AlertDescription>{error}</AlertDescription>
+                </Alert>
             )}
             {notice && (
-                <p role="status" className="rounded-lg border p-3">
-                    {notice}
-                </p>
+                <Alert role="status">
+                    <AlertDescription>{notice}</AlertDescription>
+                </Alert>
             )}
             <div className="grid gap-6 xl:grid-cols-[minmax(19rem,23rem)_1fr]">
                 <div className="space-y-6">
-                    <form
-                        className="space-y-3 rounded-xl border p-4"
-                        onSubmit={(event) => {
-                            event.preventDefault();
-                            void create();
-                        }}
-                    >
-                        <h2 className="text-lg font-semibold">
-                            {t("monitors.newRule")}
-                        </h2>
-                        <div className="space-y-1">
-                            <Label htmlFor="monitor-kind">
-                                {t("monitors.kind")}
-                            </Label>
-                            <select
-                                id="monitor-kind"
-                                className="h-9 w-full rounded-control border bg-background px-3"
-                                value={form.kind}
-                                onChange={(event) =>
-                                    setForm({
-                                        ...blank,
-                                        kind: event.target
-                                            .value as typeof form.kind,
-                                    })
-                                }
+                    <Card>
+                        <CardHeader>
+                            <CardTitle variant="sm">
+                                {t("monitors.newRule")}
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <form
+                                className="space-y-4"
+                                onSubmit={(event) => {
+                                    event.preventDefault();
+                                    void create();
+                                }}
                             >
-                                <option value="analysis-threshold">
-                                    {t("monitors.kind.threshold")}
-                                </option>
-                                <option value="dossier-evidence">
-                                    {t("monitors.kind.evidence")}
-                                </option>
-                            </select>
-                        </div>
-                        {form.kind === "analysis-threshold" ? (
-                            <>
-                                <div className="space-y-1">
-                                    <Label htmlFor="monitor-analysis">
-                                        {t("monitors.analysis")}
+                                <div className="space-y-1.5">
+                                    <Label id="monitor-kind-label">
+                                        {t("monitors.kind")}
                                     </Label>
-                                    <select
-                                        id="monitor-analysis"
-                                        className="h-9 w-full rounded-control border bg-background px-3"
-                                        value={form.savedAnalysisId}
-                                        onChange={(event) =>
-                                            setForm((current) => ({
-                                                ...current,
-                                                savedAnalysisId:
-                                                    event.target.value,
-                                                fieldId: "",
-                                            }))
+                                    <SegmentedControl
+                                        aria-labelledby="monitor-kind-label"
+                                        value={form.kind}
+                                        onValueChange={(next) =>
+                                            setForm({
+                                                ...blank,
+                                                kind: next as MonitorKind,
+                                            })
                                         }
+                                        className="w-full"
                                     >
-                                        <option value="">
-                                            {t("monitors.selectAnalysis")}
-                                        </option>
-                                        {eligible.map((analysis) => (
-                                            <option
-                                                key={analysis.id}
-                                                value={analysis.id}
+                                        <SegmentedControlItem value="analysis-threshold">
+                                            {t("monitors.kind.threshold")}
+                                        </SegmentedControlItem>
+                                        <SegmentedControlItem value="dossier-evidence">
+                                            {t("monitors.kind.evidence")}
+                                        </SegmentedControlItem>
+                                    </SegmentedControl>
+                                </div>
+                                {form.kind === "analysis-threshold" ? (
+                                    <>
+                                        <div className="space-y-2">
+                                            <Field
+                                                id="monitor-analysis"
+                                                label={t("monitors.analysis")}
                                             >
-                                                {analysis.name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    {targets.analyses.isError && (
-                                        <div
-                                            role="alert"
-                                            className="space-y-2 text-sm"
-                                        >
-                                            <p>{t("monitors.targetsFailed")}</p>
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                size="sm"
-                                                disabled={
-                                                    targets.analyses.isFetching
-                                                }
-                                                onClick={() =>
-                                                    void targets.analyses.refetch()
-                                                }
-                                            >
-                                                {t("common.retry")}
-                                            </Button>
-                                        </div>
-                                    )}
-                                    {targets.analyses.isLoading && (
-                                        <p>{t("monitors.targetsLoading")}</p>
-                                    )}
-                                    {!targets.analyses.isLoading &&
-                                        !targets.analyses.isError &&
-                                        eligible.length === 0 && (
-                                            <div className="rounded-lg bg-muted/40 p-3 space-y-2 text-sm">
-                                                <p>
-                                                    {t(
-                                                        "monitors.noEligibleAnalyses",
-                                                    )}
-                                                </p>
-                                                <Button
-                                                    asChild
-                                                    variant="outline"
-                                                    size="sm"
+                                                <Select
+                                                    value={form.savedAnalysisId}
+                                                    onValueChange={(value) =>
+                                                        setForm((current) => ({
+                                                            ...current,
+                                                            savedAnalysisId:
+                                                                value,
+                                                            fieldId: "",
+                                                        }))
+                                                    }
                                                 >
-                                                    <Link to="/analysis">
-                                                        {t(
-                                                            "monitors.openAnalysis",
+                                                    <SelectTrigger id="monitor-analysis">
+                                                        <SelectValue
+                                                            placeholder={t(
+                                                                "monitors.selectAnalysis",
+                                                            )}
+                                                        />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {eligible.map(
+                                                            (analysis) => (
+                                                                <SelectItem
+                                                                    key={
+                                                                        analysis.id
+                                                                    }
+                                                                    value={
+                                                                        analysis.id
+                                                                    }
+                                                                >
+                                                                    {
+                                                                        analysis.name
+                                                                    }
+                                                                </SelectItem>
+                                                            ),
                                                         )}
-                                                    </Link>
-                                                </Button>
+                                                    </SelectContent>
+                                                </Select>
+                                            </Field>
+                                            {targets.analyses.isError && (
+                                                <RetryAlert
+                                                    message={t(
+                                                        "monitors.targetsFailed",
+                                                    )}
+                                                    pending={
+                                                        targets.analyses
+                                                            .isFetching
+                                                    }
+                                                    onRetry={() =>
+                                                        void targets.analyses.refetch()
+                                                    }
+                                                />
+                                            )}
+                                            {targets.analyses.isLoading && (
+                                                <div
+                                                    role="status"
+                                                    aria-busy="true"
+                                                    aria-label={t(
+                                                        "monitors.analysis",
+                                                    )}
+                                                >
+                                                    <span className="sr-only">
+                                                        {t(
+                                                            "monitors.targetsLoading",
+                                                        )}
+                                                    </span>
+                                                    <Skeleton className="h-9 w-full rounded-control" />
+                                                </div>
+                                            )}
+                                            {!targets.analyses.isLoading &&
+                                                !targets.analyses.isError &&
+                                                eligible.length === 0 && (
+                                                    <Alert>
+                                                        <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+                                                            <p>
+                                                                {t(
+                                                                    "monitors.noEligibleAnalyses",
+                                                                )}
+                                                            </p>
+                                                            <Button
+                                                                asChild
+                                                                variant="outline"
+                                                                size="sm"
+                                                            >
+                                                                <Link to="/analysis">
+                                                                    {t(
+                                                                        "monitors.openAnalysis",
+                                                                    )}
+                                                                </Link>
+                                                            </Button>
+                                                        </AlertDescription>
+                                                    </Alert>
+                                                )}
+                                            <details className="type-footnote text-label-secondary">
+                                                <summary className="cursor-pointer rounded-control focus-ring">
+                                                    {t(
+                                                        "monitors.howAlertsWork",
+                                                    )}
+                                                </summary>
+                                                <p className="pt-2">
+                                                    {t("monitors.analysisHint")}
+                                                </p>
+                                            </details>
+                                        </div>
+                                        {chosenAnalysis && (
+                                            <>
+                                                <Field
+                                                    id="monitor-field"
+                                                    label={t("monitors.field")}
+                                                >
+                                                    <Select
+                                                        value={form.fieldId}
+                                                        onValueChange={(
+                                                            value,
+                                                        ) =>
+                                                            setForm(
+                                                                (current) => ({
+                                                                    ...current,
+                                                                    fieldId:
+                                                                        value,
+                                                                }),
+                                                            )
+                                                        }
+                                                    >
+                                                        <SelectTrigger id="monitor-field">
+                                                            <SelectValue
+                                                                placeholder={t(
+                                                                    "monitors.selectField",
+                                                                )}
+                                                            />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {columns.map(
+                                                                (column) => (
+                                                                    <SelectItem
+                                                                        key={
+                                                                            column.id
+                                                                        }
+                                                                        value={
+                                                                            column.id
+                                                                        }
+                                                                    >
+                                                                        {
+                                                                            column.id
+                                                                        }
+                                                                    </SelectItem>
+                                                                ),
+                                                            )}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </Field>
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <OperatorControl
+                                                        labelId="monitor-operator-label"
+                                                        value={form.operator}
+                                                        onChange={(operator) =>
+                                                            setForm(
+                                                                (current) => ({
+                                                                    ...current,
+                                                                    operator,
+                                                                }),
+                                                            )
+                                                        }
+                                                    />
+                                                    <Field
+                                                        id="monitor-threshold"
+                                                        label={t(
+                                                            "monitors.threshold",
+                                                        )}
+                                                    >
+                                                        <Input
+                                                            id="monitor-threshold"
+                                                            inputMode="decimal"
+                                                            value={
+                                                                form.threshold
+                                                            }
+                                                            onChange={(event) =>
+                                                                setForm(
+                                                                    (
+                                                                        current,
+                                                                    ) => ({
+                                                                        ...current,
+                                                                        threshold:
+                                                                            event
+                                                                                .target
+                                                                                .value,
+                                                                    }),
+                                                                )
+                                                            }
+                                                        />
+                                                    </Field>
+                                                </div>
+                                            </>
+                                        )}
+                                    </>
+                                ) : (
+                                    <div className="space-y-2">
+                                        <Field
+                                            id="monitor-dossier"
+                                            label={t("monitors.dossier")}
+                                        >
+                                            <Select
+                                                value={form.dossierId}
+                                                onValueChange={(value) =>
+                                                    setForm((current) => ({
+                                                        ...current,
+                                                        dossierId: value,
+                                                    }))
+                                                }
+                                            >
+                                                <SelectTrigger id="monitor-dossier">
+                                                    <SelectValue
+                                                        placeholder={t(
+                                                            "monitors.selectDossier",
+                                                        )}
+                                                    />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {targets.dossiers.data?.items.map(
+                                                        (dossier) => (
+                                                            <SelectItem
+                                                                key={dossier.id}
+                                                                value={
+                                                                    dossier.id
+                                                                }
+                                                            >
+                                                                {dossier.title}
+                                                            </SelectItem>
+                                                        ),
+                                                    )}
+                                                </SelectContent>
+                                            </Select>
+                                        </Field>
+                                        {targets.dossiers.isError && (
+                                            <RetryAlert
+                                                message={t(
+                                                    "monitors.targetsFailed",
+                                                )}
+                                                pending={
+                                                    targets.dossiers.isFetching
+                                                }
+                                                onRetry={() =>
+                                                    void targets.dossiers.refetch()
+                                                }
+                                            />
+                                        )}
+                                        {targets.dossiers.isLoading && (
+                                            <div
+                                                role="status"
+                                                aria-busy="true"
+                                                aria-label={t(
+                                                    "monitors.dossier",
+                                                )}
+                                            >
+                                                <span className="sr-only">
+                                                    {t(
+                                                        "monitors.targetsLoading",
+                                                    )}
+                                                </span>
+                                                <Skeleton className="h-9 w-full rounded-control" />
                                             </div>
                                         )}
-                                    <details className="text-xs text-muted-foreground">
-                                        <summary className="cursor-pointer">
-                                            {t("monitors.howAlertsWork")}
-                                        </summary>
-                                        <p className="pt-2">
-                                            {t("monitors.analysisHint")}
-                                        </p>
-                                    </details>
-                                </div>
-                                {chosenAnalysis && (
+                                        {!targets.dossiers.isLoading &&
+                                            !targets.dossiers.isError &&
+                                            targets.dossiers.data?.total ===
+                                                0 && (
+                                                <Alert>
+                                                    <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+                                                        <p>
+                                                            {t(
+                                                                "monitors.noDossiers",
+                                                            )}
+                                                        </p>
+                                                        <Button
+                                                            asChild
+                                                            variant="outline"
+                                                            size="sm"
+                                                        >
+                                                            <Link to="/research/dossiers">
+                                                                {t(
+                                                                    "monitors.openDossiers",
+                                                                )}
+                                                            </Link>
+                                                        </Button>
+                                                    </AlertDescription>
+                                                </Alert>
+                                            )}
+                                        {(targets.dossiers.data?.total ?? 0) >
+                                            TARGET_PAGE_SIZE && (
+                                            <Pager
+                                                offset={targetDossierOffset}
+                                                total={
+                                                    targets.dossiers.data!.total
+                                                }
+                                                pageSize={TARGET_PAGE_SIZE}
+                                                onChange={(offset) => {
+                                                    setTargetDossierOffset(
+                                                        offset,
+                                                    );
+                                                    setForm((current) => ({
+                                                        ...current,
+                                                        dossierId: "",
+                                                    }));
+                                                }}
+                                            />
+                                        )}
+                                    </div>
+                                )}
+                                {hasTarget && (
                                     <>
-                                        <div className="space-y-1">
-                                            <Label htmlFor="monitor-field">
-                                                {t("monitors.field")}
-                                            </Label>
-                                            <select
-                                                id="monitor-field"
-                                                className="h-9 w-full rounded-control border bg-background px-3"
-                                                value={form.fieldId}
+                                        <Field
+                                            id="monitor-title"
+                                            label={t("monitors.ruleTitle")}
+                                        >
+                                            <Input
+                                                id="monitor-title"
+                                                required
+                                                value={form.title}
                                                 onChange={(event) =>
                                                     setForm((current) => ({
                                                         ...current,
-                                                        fieldId:
-                                                            event.target.value,
+                                                        title: event.target
+                                                            .value,
                                                     }))
                                                 }
-                                            >
-                                                <option value="">
-                                                    {t("monitors.selectField")}
-                                                </option>
-                                                {columns.map((column) => (
-                                                    <option
-                                                        key={column.id}
-                                                        value={column.id}
-                                                    >
-                                                        {column.id}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <div className="space-y-1">
-                                                <Label htmlFor="monitor-operator">
-                                                    {t("monitors.operator")}
-                                                </Label>
-                                                <select
-                                                    id="monitor-operator"
-                                                    className="h-9 w-full rounded-control border bg-background px-3"
-                                                    value={form.operator}
-                                                    onChange={(event) =>
-                                                        setForm((current) => ({
-                                                            ...current,
-                                                            operator: event
-                                                                .target
-                                                                .value as MonitorOperator,
-                                                        }))
-                                                    }
-                                                >
-                                                    <option value="above">
-                                                        {t("monitors.above")}
-                                                    </option>
-                                                    <option value="below">
-                                                        {t("monitors.below")}
-                                                    </option>
-                                                </select>
-                                            </div>
-                                            <div className="space-y-1">
-                                                <Label htmlFor="monitor-threshold">
-                                                    {t("monitors.threshold")}
-                                                </Label>
-                                                <Input
-                                                    id="monitor-threshold"
-                                                    inputMode="decimal"
-                                                    value={form.threshold}
-                                                    onChange={(event) =>
-                                                        setForm((current) => ({
-                                                            ...current,
-                                                            threshold:
-                                                                event.target
-                                                                    .value,
-                                                        }))
-                                                    }
-                                                />
-                                            </div>
-                                        </div>
+                                            />
+                                        </Field>
+                                        <p className="type-footnote text-label-secondary">
+                                            {t("monitors.baselineHint")}
+                                        </p>
+                                        <ScheduleFields
+                                            idPrefix="monitor"
+                                            interval={form.intervalMinutes}
+                                            cooldown={form.cooldownMinutes}
+                                            onInterval={(intervalMinutes) =>
+                                                setForm((current) => ({
+                                                    ...current,
+                                                    intervalMinutes,
+                                                }))
+                                            }
+                                            onCooldown={(cooldownMinutes) =>
+                                                setForm((current) => ({
+                                                    ...current,
+                                                    cooldownMinutes,
+                                                }))
+                                            }
+                                        />
+                                        <p className="type-footnote text-label-secondary">
+                                            {cadence(
+                                                form.intervalMinutes,
+                                                form.cooldownMinutes,
+                                            )}
+                                        </p>
+                                        <Button type="submit" disabled={busy}>
+                                            <Plus className="mr-2 size-4" />
+                                            {t("monitors.create")}
+                                        </Button>
                                     </>
                                 )}
-                            </>
-                        ) : (
-                            <div className="space-y-1">
-                                <Label htmlFor="monitor-dossier">
-                                    {t("monitors.dossier")}
-                                </Label>
-                                <select
-                                    id="monitor-dossier"
-                                    className="h-9 w-full rounded-control border bg-background px-3"
-                                    value={form.dossierId}
-                                    onChange={(event) =>
-                                        setForm((current) => ({
-                                            ...current,
-                                            dossierId: event.target.value,
-                                        }))
-                                    }
-                                >
-                                    <option value="">
-                                        {t("monitors.selectDossier")}
-                                    </option>
-                                    {targets.dossiers.data?.items.map(
-                                        (dossier) => (
-                                            <option
-                                                key={dossier.id}
-                                                value={dossier.id}
-                                            >
-                                                {dossier.title}
-                                            </option>
-                                        ),
-                                    )}
-                                </select>
-                                {targets.dossiers.isError && (
-                                    <div
-                                        role="alert"
-                                        className="space-y-2 text-sm"
-                                    >
-                                        <p>{t("monitors.targetsFailed")}</p>
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            disabled={
-                                                targets.dossiers.isFetching
-                                            }
-                                            onClick={() =>
-                                                void targets.dossiers.refetch()
-                                            }
-                                        >
-                                            {t("common.retry")}
-                                        </Button>
-                                    </div>
-                                )}
-                                {targets.dossiers.isLoading && (
-                                    <p>{t("monitors.targetsLoading")}</p>
-                                )}
-                                {!targets.dossiers.isLoading &&
-                                    !targets.dossiers.isError &&
-                                    targets.dossiers.data?.total === 0 && (
-                                        <div className="rounded-lg bg-muted/40 p-3 space-y-2 text-sm">
-                                            <p>{t("monitors.noDossiers")}</p>
-                                            <Button
-                                                asChild
-                                                variant="outline"
-                                                size="sm"
-                                            >
-                                                <Link to="/research/dossiers">
-                                                    {t("monitors.openDossiers")}
-                                                </Link>
-                                            </Button>
-                                        </div>
-                                    )}
-                                {(targets.dossiers.data?.total ?? 0) > 500 && (
-                                    <div className="flex items-center gap-2 text-xs">
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            disabled={targetDossierOffset === 0}
-                                            onClick={() => {
-                                                setTargetDossierOffset(
-                                                    Math.max(
-                                                        0,
-                                                        targetDossierOffset -
-                                                            500,
-                                                    ),
-                                                );
-                                                setForm((current) => ({
-                                                    ...current,
-                                                    dossierId: "",
-                                                }));
-                                            }}
-                                        >
-                                            {t("monitors.previous")}
-                                        </Button>
-                                        <span>
-                                            {t("monitors.pageRange", {
-                                                first: targetDossierOffset + 1,
-                                                last: Math.min(
-                                                    targetDossierOffset + 500,
-                                                    targets.dossiers.data!
-                                                        .total,
-                                                ),
-                                                total: targets.dossiers.data!
-                                                    .total,
-                                            })}
-                                        </span>
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            disabled={
-                                                targetDossierOffset + 500 >=
-                                                targets.dossiers.data!.total
-                                            }
-                                            onClick={() => {
-                                                setTargetDossierOffset(
-                                                    targetDossierOffset + 500,
-                                                );
-                                                setForm((current) => ({
-                                                    ...current,
-                                                    dossierId: "",
-                                                }));
-                                            }}
-                                        >
-                                            {t("monitors.next")}
-                                        </Button>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                        {hasTarget && (
-                            <>
-                                <div className="space-y-1">
-                                    <Label htmlFor="monitor-title">
-                                        {t("monitors.ruleTitle")}
-                                    </Label>
-                                    <Input
-                                        id="monitor-title"
-                                        required
-                                        value={form.title}
-                                        onChange={(event) =>
-                                            setForm((current) => ({
-                                                ...current,
-                                                title: event.target.value,
-                                            }))
-                                        }
-                                    />
-                                </div>
-                                <p className="text-xs text-muted-foreground">
-                                    {t("monitors.baselineHint")}
-                                </p>
-                                <details
-                                    className="rounded-lg border p-3"
-                                    onInvalidCapture={revealInvalidSchedule}
-                                >
-                                    <summary className="cursor-pointer text-sm font-medium">
-                                        {t("monitors.schedule")}
-                                    </summary>
-                                    <div className="pt-3">
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <div className="space-y-1">
-                                                <Label htmlFor="monitor-interval">
-                                                    {t("monitors.interval")}
-                                                </Label>
-                                                <Input
-                                                    id="monitor-interval"
-                                                    type="number"
-                                                    min={15}
-                                                    max={10080}
-                                                    value={form.intervalMinutes}
-                                                    onChange={(event) =>
-                                                        setForm((current) => ({
-                                                            ...current,
-                                                            intervalMinutes:
-                                                                Number(
-                                                                    event.target
-                                                                        .value,
-                                                                ),
-                                                        }))
-                                                    }
-                                                />
-                                            </div>
-                                            <div className="space-y-1">
-                                                <Label htmlFor="monitor-cooldown">
-                                                    {t("monitors.cooldown")}
-                                                </Label>
-                                                <Input
-                                                    id="monitor-cooldown"
-                                                    type="number"
-                                                    min={0}
-                                                    max={10080}
-                                                    value={form.cooldownMinutes}
-                                                    onChange={(event) =>
-                                                        setForm((current) => ({
-                                                            ...current,
-                                                            cooldownMinutes:
-                                                                Number(
-                                                                    event.target
-                                                                        .value,
-                                                                ),
-                                                        }))
-                                                    }
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                </details>
-                                <p className="text-xs text-muted-foreground">
-                                    {cadence(
-                                        form.intervalMinutes,
-                                        form.cooldownMinutes,
-                                    )}
-                                </p>
-                                <Button type="submit" disabled={busy}>
-                                    <Plus className="mr-2 size-4" />
-                                    {t("monitors.create")}
-                                </Button>
-                            </>
-                        )}
-                    </form>
-                    <section className="space-y-2">
-                        <h2 className="text-lg font-semibold">
-                            {t("monitors.rules")}
-                        </h2>
-                        {monitors.isLoading && (
-                            <p
-                                role="status"
-                                aria-label={t("monitors.rules")}
-                                className="text-sm text-muted-foreground"
-                            >
-                                {t("common.loading")}
-                            </p>
-                        )}
-                        {monitors.isError && (
-                            <div role="alert" className="space-y-2 text-sm">
-                                <p>{t("monitors.loadFailed")}</p>
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    disabled={monitors.isFetching}
-                                    onClick={() => void monitors.refetch()}
-                                >
-                                    {t("common.retry")}
-                                </Button>
-                            </div>
-                        )}
-                        {!monitors.isLoading &&
-                            !monitors.isError &&
-                            !monitors.data?.items.length && (
-                                <p>{t("monitors.empty")}</p>
+                            </form>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader>
+                            <CardTitle variant="sm">
+                                {t("monitors.rules")}
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            {monitors.isLoading && (
+                                <LoadingRows label={t("monitors.rules")} />
                             )}
-                        {monitors.data?.items.map((monitor) => (
-                            <button
-                                key={monitor.id}
-                                type="button"
-                                aria-current={
-                                    monitor.id === selectedId
-                                        ? "page"
-                                        : undefined
-                                }
-                                onClick={() => {
-                                    setSelectedId(monitor.id);
-                                    setObservationOffset(0);
-                                }}
-                                className="w-full rounded-lg border p-3 text-left hover:bg-accent aria-[current=page]:border-primary"
-                            >
-                                <span className="block font-medium">
-                                    {monitor.title}
-                                </span>
-                                <span className="block text-xs text-muted-foreground">
-                                    {monitor.targetLabel} ·{" "}
-                                    {t(
-                                        `monitors.status.${monitor.lastStatus ?? "never"}`,
-                                    )}{" "}
-                                    ·{" "}
-                                    {monitor.enabled
-                                        ? t("monitors.enabled")
-                                        : t("monitors.disabled")}
-                                </span>
-                            </button>
-                        ))}
-                        {monitors.data && monitors.data.total > 200 && (
-                            <div className="flex items-center gap-2">
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    disabled={monitorOffset === 0}
-                                    onClick={() =>
-                                        setMonitorOffset(
-                                            Math.max(0, monitorOffset - 200),
-                                        )
-                                    }
-                                >
-                                    {t("monitors.previous")}
-                                </Button>
-                                <span>
-                                    {t("monitors.pageRange", {
-                                        first: monitorOffset + 1,
-                                        last: Math.min(
-                                            monitorOffset + 200,
-                                            monitors.data.total,
-                                        ),
-                                        total: monitors.data.total,
-                                    })}
-                                </span>
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    disabled={
-                                        monitorOffset + 200 >=
-                                        monitors.data.total
-                                    }
-                                    onClick={() =>
-                                        setMonitorOffset(monitorOffset + 200)
-                                    }
-                                >
-                                    {t("monitors.next")}
-                                </Button>
-                            </div>
-                        )}
-                    </section>
+                            {monitors.isError && (
+                                <RetryAlert
+                                    message={t("monitors.loadFailed")}
+                                    pending={monitors.isFetching}
+                                    onRetry={() => void monitors.refetch()}
+                                />
+                            )}
+                            {!monitors.isLoading &&
+                                !monitors.isError &&
+                                !monitors.data?.items.length && (
+                                    <EmptyState
+                                        size="compact"
+                                        headingLevel={3}
+                                        icon={ListChecks}
+                                        title={t("monitors.empty")}
+                                    />
+                                )}
+                            {monitors.data &&
+                                monitors.data.items.length > 0 && (
+                                    <List>
+                                        {monitors.data.items.map((monitor) => {
+                                            const active =
+                                                monitor.id === selectedId;
+                                            return (
+                                                <li
+                                                    key={monitor.id}
+                                                    className={cn(
+                                                        "group flex min-h-11 items-center gap-1 pr-2",
+                                                        active &&
+                                                            "bg-primary/[0.08]",
+                                                    )}
+                                                    aria-current={
+                                                        active
+                                                            ? "page"
+                                                            : undefined
+                                                    }
+                                                >
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            selectMonitor(
+                                                                monitor.id,
+                                                            )
+                                                        }
+                                                        className="flex min-w-0 flex-1 flex-col items-start gap-0.5 px-4 py-2.5 text-left type-body text-foreground transition-[background-color] duration-fast ease-glide hover:bg-foreground/[0.04] focus-ring focus-visible:outline-offset-[-3px]"
+                                                    >
+                                                        <span
+                                                            className={cn(
+                                                                "w-full truncate",
+                                                                active &&
+                                                                    "font-medium",
+                                                            )}
+                                                        >
+                                                            {monitor.title}
+                                                        </span>
+                                                        <span className="w-full truncate type-footnote text-label-secondary">
+                                                            {
+                                                                monitor.targetLabel
+                                                            }{" "}
+                                                            ·{" "}
+                                                            {t(
+                                                                `monitors.status.${monitor.lastStatus ?? "never"}`,
+                                                            )}{" "}
+                                                            ·{" "}
+                                                            {monitor.enabled
+                                                                ? t(
+                                                                      "monitors.enabled",
+                                                                  )
+                                                                : t(
+                                                                      "monitors.disabled",
+                                                                  )}
+                                                        </span>
+                                                    </button>
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger
+                                                            asChild
+                                                        >
+                                                            <Button
+                                                                type="button"
+                                                                size="icon"
+                                                                variant="ghost"
+                                                                disabled={busy}
+                                                                aria-label={t(
+                                                                    "monitors.rowMenu",
+                                                                    {
+                                                                        name: monitor.title,
+                                                                    },
+                                                                )}
+                                                                className="icon-touch-target h-8 w-8 shrink-0"
+                                                            >
+                                                                <MoreHorizontal className="h-4 w-4" />
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end">
+                                                            <DropdownMenuItem
+                                                                onSelect={() =>
+                                                                    void check(
+                                                                        monitor,
+                                                                    )
+                                                                }
+                                                            >
+                                                                <Play
+                                                                    className="mr-2 h-4 w-4 text-label-secondary"
+                                                                    aria-hidden="true"
+                                                                />
+                                                                {t(
+                                                                    "monitors.checkNow",
+                                                                )}
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem
+                                                                onSelect={() =>
+                                                                    void toggleEnabled(
+                                                                        monitor,
+                                                                    )
+                                                                }
+                                                            >
+                                                                {monitor.enabled ? (
+                                                                    <Pause
+                                                                        className="mr-2 h-4 w-4 text-label-secondary"
+                                                                        aria-hidden="true"
+                                                                    />
+                                                                ) : (
+                                                                    <Play
+                                                                        className="mr-2 h-4 w-4 text-label-secondary"
+                                                                        aria-hidden="true"
+                                                                    />
+                                                                )}
+                                                                {monitor.enabled
+                                                                    ? t(
+                                                                          "monitors.disable",
+                                                                      )
+                                                                    : t(
+                                                                          "monitors.enable",
+                                                                      )}
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuSeparator />
+                                                            <DropdownMenuItem
+                                                                onSelect={() =>
+                                                                    void remove(
+                                                                        monitor,
+                                                                    )
+                                                                }
+                                                                className="text-destructive focus:text-destructive"
+                                                            >
+                                                                <Trash2
+                                                                    className="mr-2 h-4 w-4"
+                                                                    aria-hidden="true"
+                                                                />
+                                                                {t(
+                                                                    "monitors.delete",
+                                                                )}
+                                                            </DropdownMenuItem>
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
+                                                </li>
+                                            );
+                                        })}
+                                    </List>
+                                )}
+                            {monitors.data &&
+                                monitors.data.total > PAGE_SIZE && (
+                                    <Pager
+                                        offset={monitorOffset}
+                                        total={monitors.data.total}
+                                        pageSize={PAGE_SIZE}
+                                        onChange={setMonitorOffset}
+                                    />
+                                )}
+                        </CardContent>
+                    </Card>
                 </div>
                 <div className="space-y-6">
                     {selected && edit && (
-                        <section className="space-y-4 rounded-xl border p-4">
-                            <h2 className="text-lg font-semibold">
-                                {t("monitors.ruleDetails")}
-                            </h2>
-                            <p className="text-sm text-muted-foreground">
-                                {t(
-                                    `monitors.kind.${selected.kind === "analysis-threshold" ? "threshold" : "evidence"}`,
-                                )}{" "}
-                                · {selected.targetLabel}
-                            </p>
-                            <div className="flex flex-wrap gap-2">
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    disabled={busy}
-                                    onClick={() => void check()}
-                                >
-                                    <Play className="mr-2 size-4" />
-                                    {t("monitors.checkNow")}
-                                </Button>
-                                <Button
-                                    type="button"
-                                    variant="destructive"
-                                    disabled={busy}
-                                    onClick={() => void remove()}
-                                >
-                                    <Trash2 className="mr-2 size-4" />
-                                    {t("monitors.delete")}
-                                </Button>
-                            </div>
-                            <form
-                                className="space-y-3"
-                                onSubmit={(event) => {
-                                    event.preventDefault();
-                                    void save();
-                                }}
-                            >
-                                <div className="space-y-1">
-                                    <Label htmlFor="edit-title">
-                                        {t("monitors.ruleTitle")}
-                                    </Label>
-                                    <Input
-                                        id="edit-title"
-                                        value={edit.title ?? ""}
-                                        onChange={(event) =>
-                                            setEdit((current) => ({
-                                                ...current,
-                                                title: event.target.value,
-                                            }))
-                                        }
-                                    />
+                        <Card>
+                            <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between sm:space-y-0">
+                                <div className="space-y-1.5">
+                                    <CardTitle variant="sm">
+                                        {t("monitors.ruleDetails")}
+                                    </CardTitle>
+                                    <CardDescription>
+                                        {t(
+                                            `monitors.kind.${selected.kind === "analysis-threshold" ? "threshold" : "evidence"}`,
+                                        )}{" "}
+                                        · {selected.targetLabel}
+                                    </CardDescription>
                                 </div>
-                                <label className="flex items-center gap-2">
-                                    <input
-                                        type="checkbox"
-                                        checked={edit.enabled ?? false}
-                                        onChange={(event) =>
-                                            setEdit((current) => ({
-                                                ...current,
-                                                enabled: event.target.checked,
-                                            }))
-                                        }
-                                    />
-                                    {t("monitors.enabled")}
-                                </label>
-                                {selected.kind === "analysis-threshold" && (
-                                    <>
-                                        <div className="space-y-1">
-                                            <Label htmlFor="edit-field">
-                                                {t("monitors.field")}
-                                            </Label>
-                                            <select
+                                <div className="flex flex-wrap gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={busy}
+                                        onClick={() => void check(selected)}
+                                    >
+                                        <Play className="mr-2 size-4" />
+                                        {t("monitors.checkNow")}
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        disabled={busy}
+                                        onClick={() => void remove(selected)}
+                                        className="text-destructive hover:text-destructive"
+                                    >
+                                        <Trash2 className="mr-2 size-4" />
+                                        {t("monitors.delete")}
+                                    </Button>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="space-y-5">
+                                <form
+                                    className="space-y-4"
+                                    onSubmit={(event) => {
+                                        event.preventDefault();
+                                        void save();
+                                    }}
+                                >
+                                    <Field
+                                        id="edit-title"
+                                        label={t("monitors.ruleTitle")}
+                                    >
+                                        <Input
+                                            id="edit-title"
+                                            value={edit.title ?? ""}
+                                            onChange={(event) =>
+                                                setEdit((current) => ({
+                                                    ...current,
+                                                    title: event.target.value,
+                                                }))
+                                            }
+                                        />
+                                    </Field>
+                                    <div className="flex items-center justify-between gap-3 rounded-card corner-continuous border border-border/60 px-4 py-2.5">
+                                        <Label htmlFor="edit-enabled">
+                                            {t("monitors.enabled")}
+                                        </Label>
+                                        <Switch
+                                            id="edit-enabled"
+                                            checked={edit.enabled ?? false}
+                                            onCheckedChange={(enabled) =>
+                                                setEdit((current) => ({
+                                                    ...current,
+                                                    enabled,
+                                                }))
+                                            }
+                                        />
+                                    </div>
+                                    {selected.kind === "analysis-threshold" && (
+                                        <>
+                                            <Field
                                                 id="edit-field"
-                                                className="h-9 w-full rounded-control border bg-background px-3"
-                                                value={edit.fieldId ?? ""}
-                                                onChange={(event) =>
-                                                    setEdit((current) => ({
-                                                        ...current,
-                                                        fieldId:
-                                                            event.target.value,
-                                                    }))
-                                                }
+                                                label={t("monitors.field")}
                                             >
-                                                {editColumns.map((column) => (
-                                                    <option
-                                                        key={column.id}
-                                                        value={column.id}
-                                                    >
-                                                        {column.id}
-                                                    </option>
-                                                ))}
-                                                {edit.fieldId &&
-                                                    !editColumns.some(
-                                                        (column) =>
-                                                            column.id ===
-                                                            edit.fieldId,
-                                                    ) && (
-                                                        <option
-                                                            value={edit.fieldId}
-                                                        >
-                                                            {edit.fieldId}
-                                                        </option>
-                                                    )}
-                                            </select>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <div className="space-y-1">
-                                                <Label htmlFor="edit-operator">
-                                                    {t("monitors.operator")}
-                                                </Label>
-                                                <select
-                                                    id="edit-operator"
-                                                    className="h-9 w-full rounded-control border bg-background px-3"
-                                                    value={
-                                                        edit.operator ?? "above"
-                                                    }
-                                                    onChange={(event) =>
+                                                <Select
+                                                    value={edit.fieldId ?? ""}
+                                                    onValueChange={(value) =>
                                                         setEdit((current) => ({
                                                             ...current,
-                                                            operator: event
-                                                                .target
-                                                                .value as MonitorOperator,
+                                                            fieldId: value,
                                                         }))
                                                     }
                                                 >
-                                                    <option value="above">
-                                                        {t("monitors.above")}
-                                                    </option>
-                                                    <option value="below">
-                                                        {t("monitors.below")}
-                                                    </option>
-                                                </select>
-                                            </div>
-                                            <div className="space-y-1">
-                                                <Label htmlFor="edit-threshold">
-                                                    {t("monitors.threshold")}
-                                                </Label>
-                                                <Input
+                                                    <SelectTrigger id="edit-field">
+                                                        <SelectValue
+                                                            placeholder={t(
+                                                                "monitors.selectField",
+                                                            )}
+                                                        />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {editColumns.map(
+                                                            (column) => (
+                                                                <SelectItem
+                                                                    key={
+                                                                        column.id
+                                                                    }
+                                                                    value={
+                                                                        column.id
+                                                                    }
+                                                                >
+                                                                    {column.id}
+                                                                </SelectItem>
+                                                            ),
+                                                        )}
+                                                        {edit.fieldId &&
+                                                            !editColumns.some(
+                                                                (column) =>
+                                                                    column.id ===
+                                                                    edit.fieldId,
+                                                            ) && (
+                                                                <SelectItem
+                                                                    value={
+                                                                        edit.fieldId
+                                                                    }
+                                                                >
+                                                                    {
+                                                                        edit.fieldId
+                                                                    }
+                                                                </SelectItem>
+                                                            )}
+                                                    </SelectContent>
+                                                </Select>
+                                            </Field>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <OperatorControl
+                                                    labelId="edit-operator-label"
+                                                    value={
+                                                        edit.operator ?? "above"
+                                                    }
+                                                    onChange={(operator) =>
+                                                        setEdit((current) => ({
+                                                            ...current,
+                                                            operator,
+                                                        }))
+                                                    }
+                                                />
+                                                <Field
                                                     id="edit-threshold"
-                                                    inputMode="decimal"
-                                                    value={edit.threshold ?? ""}
-                                                    onChange={(event) =>
-                                                        setEdit((current) => ({
-                                                            ...current,
-                                                            threshold:
-                                                                event.target
-                                                                    .value,
-                                                        }))
-                                                    }
-                                                />
+                                                    label={t(
+                                                        "monitors.threshold",
+                                                    )}
+                                                >
+                                                    <Input
+                                                        id="edit-threshold"
+                                                        inputMode="decimal"
+                                                        value={
+                                                            edit.threshold ?? ""
+                                                        }
+                                                        onChange={(event) =>
+                                                            setEdit(
+                                                                (current) => ({
+                                                                    ...current,
+                                                                    threshold:
+                                                                        event
+                                                                            .target
+                                                                            .value,
+                                                                }),
+                                                            )
+                                                        }
+                                                    />
+                                                </Field>
                                             </div>
-                                        </div>
-                                    </>
-                                )}
-                                <details
-                                    className="rounded-lg border p-3"
-                                    onInvalidCapture={revealInvalidSchedule}
-                                >
-                                    <summary className="cursor-pointer text-sm font-medium">
-                                        {t("monitors.schedule")}
-                                    </summary>
-                                    <div className="pt-3">
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <div className="space-y-1">
-                                                <Label htmlFor="edit-interval">
-                                                    {t("monitors.interval")}
-                                                </Label>
-                                                <Input
-                                                    id="edit-interval"
-                                                    type="number"
-                                                    min={15}
-                                                    max={10080}
-                                                    value={
-                                                        edit.intervalMinutes ??
-                                                        1440
-                                                    }
-                                                    onChange={(event) =>
-                                                        setEdit((current) => ({
-                                                            ...current,
-                                                            intervalMinutes:
-                                                                Number(
-                                                                    event.target
-                                                                        .value,
-                                                                ),
-                                                        }))
-                                                    }
-                                                />
-                                            </div>
-                                            <div className="space-y-1">
-                                                <Label htmlFor="edit-cooldown">
-                                                    {t("monitors.cooldown")}
-                                                </Label>
-                                                <Input
-                                                    id="edit-cooldown"
-                                                    type="number"
-                                                    min={0}
-                                                    max={10080}
-                                                    value={
-                                                        edit.cooldownMinutes ??
-                                                        1440
-                                                    }
-                                                    onChange={(event) =>
-                                                        setEdit((current) => ({
-                                                            ...current,
-                                                            cooldownMinutes:
-                                                                Number(
-                                                                    event.target
-                                                                        .value,
-                                                                ),
-                                                        }))
-                                                    }
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                </details>
-                                <p className="text-xs text-muted-foreground">
-                                    {cadence(
-                                        edit.intervalMinutes ?? 1440,
-                                        edit.cooldownMinutes ?? 1440,
+                                        </>
                                     )}
-                                </p>
-                                <Button type="submit" disabled={busy}>
-                                    <Save className="mr-2 size-4" />
-                                    {t("monitors.save")}
-                                </Button>
-                            </form>
-                            <div className="grid gap-2 text-sm md:grid-cols-2">
-                                <p>
-                                    {t("monitors.nextDue")}:{" "}
-                                    {dateTime(selected.nextDueAt)}
-                                </p>
-                                <p>
-                                    {t("monitors.lastChecked")}:{" "}
-                                    {dateTime(selected.lastCheckedAt)}
-                                </p>
-                                <p>
-                                    {t("monitors.lastStatus")}:{" "}
-                                    {t(
-                                        `monitors.status.${selected.lastStatus ?? "never"}`,
-                                    )}
-                                </p>
-                            </div>
-                            {selected.lastObservation && (
-                                <ul>
-                                    <Observation
-                                        item={selected.lastObservation}
+                                    <ScheduleFields
+                                        idPrefix="edit"
+                                        interval={edit.intervalMinutes ?? 1440}
+                                        cooldown={edit.cooldownMinutes ?? 1440}
+                                        onInterval={(intervalMinutes) =>
+                                            setEdit((current) => ({
+                                                ...current,
+                                                intervalMinutes,
+                                            }))
+                                        }
+                                        onCooldown={(cooldownMinutes) =>
+                                            setEdit((current) => ({
+                                                ...current,
+                                                cooldownMinutes,
+                                            }))
+                                        }
                                     />
-                                </ul>
-                            )}
-                        </section>
-                    )}
-                    <section className="space-y-2">
-                        <h2 className="text-lg font-semibold">
-                            {t("monitors.observations")}
-                        </h2>
-                        {selectedId ? (
-                            <>
-                                {observations.isLoading && (
-                                    <p
-                                        role="status"
-                                        aria-label={t("monitors.observations")}
-                                        className="text-sm text-muted-foreground"
-                                    >
-                                        {t("common.loading")}
+                                    <p className="type-footnote text-label-secondary">
+                                        {cadence(
+                                            edit.intervalMinutes ?? 1440,
+                                            edit.cooldownMinutes ?? 1440,
+                                        )}
                                     </p>
+                                    <Button type="submit" disabled={busy}>
+                                        <Save className="mr-2 size-4" />
+                                        {t("monitors.save")}
+                                    </Button>
+                                </form>
+                                <dl className="grid gap-x-6 gap-y-2 type-footnote md:grid-cols-3">
+                                    <div>
+                                        <dt className="text-label-secondary">
+                                            {t("monitors.nextDue")}
+                                        </dt>
+                                        <dd className="tabular-nums">
+                                            {dateTime(selected.nextDueAt)}
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-label-secondary">
+                                            {t("monitors.lastChecked")}
+                                        </dt>
+                                        <dd className="tabular-nums">
+                                            {dateTime(selected.lastCheckedAt)}
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-label-secondary">
+                                            {t("monitors.lastStatus")}
+                                        </dt>
+                                        <dd>
+                                            <StatusBadge
+                                                status={selected.lastStatus}
+                                            />
+                                        </dd>
+                                    </div>
+                                </dl>
+                                {selected.lastObservation && (
+                                    <List>
+                                        <Observation
+                                            item={selected.lastObservation}
+                                        />
+                                    </List>
                                 )}
-                                {observations.isError && (
-                                    <div
-                                        role="alert"
-                                        className="space-y-2 text-sm"
-                                    >
-                                        <p>
-                                            {t("monitors.observationsFailed")}
-                                        </p>
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            disabled={observations.isFetching}
-                                            onClick={() =>
+                            </CardContent>
+                        </Card>
+                    )}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle variant="sm">
+                                {t("monitors.observations")}
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            {selectedId ? (
+                                <>
+                                    {observations.isLoading && (
+                                        <LoadingRows
+                                            label={t("monitors.observations")}
+                                        />
+                                    )}
+                                    {observations.isError && (
+                                        <RetryAlert
+                                            message={t(
+                                                "monitors.observationsFailed",
+                                            )}
+                                            pending={observations.isFetching}
+                                            onRetry={() =>
                                                 void observations.refetch()
                                             }
-                                        >
-                                            {t("common.retry")}
-                                        </Button>
-                                    </div>
-                                )}
-                                {!observations.isError &&
-                                    observations.data &&
-                                    !observations.data.items.length && (
-                                        <p>{t("monitors.noObservations")}</p>
-                                    )}
-                                <ul className="space-y-2">
-                                    {observations.data?.items.map((item) => (
-                                        <Observation
-                                            key={item.id}
-                                            item={item}
                                         />
-                                    ))}
-                                </ul>
-                                {!observations.isError &&
-                                    observations.data &&
-                                    observations.data.total > 200 && (
-                                        <div className="flex gap-2">
-                                            <Button
-                                                variant="outline"
-                                                disabled={
-                                                    observationOffset === 0
-                                                }
-                                                onClick={() =>
-                                                    setObservationOffset(
-                                                        Math.max(
-                                                            0,
-                                                            observationOffset -
-                                                                200,
-                                                        ),
-                                                    )
-                                                }
-                                            >
-                                                {t("monitors.previous")}
-                                            </Button>
-                                            <Button
-                                                variant="outline"
-                                                disabled={
-                                                    observationOffset + 200 >=
-                                                    observations.data.total
-                                                }
-                                                onClick={() =>
-                                                    setObservationOffset(
-                                                        observationOffset + 200,
-                                                    )
-                                                }
-                                            >
-                                                {t("monitors.next")}
-                                            </Button>
-                                        </div>
                                     )}
-                            </>
-                        ) : (
-                            <p className="text-muted-foreground">
-                                {t("monitors.selectRule")}
-                            </p>
-                        )}
-                    </section>
-                    <section className="space-y-2">
-                        <h2 className="text-lg font-semibold">
-                            {t("monitors.inbox")}
-                        </h2>
-                        {notifications.isLoading && (
-                            <p
-                                role="status"
-                                aria-label={t("monitors.inbox")}
-                                className="text-sm text-muted-foreground"
-                            >
-                                {t("common.loading")}
-                            </p>
-                        )}
-                        {notifications.isError && (
-                            <div role="alert" className="space-y-2 text-sm">
-                                <p>{t("monitors.inboxFailed")}</p>
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    disabled={notifications.isFetching}
-                                    onClick={() => void notifications.refetch()}
-                                >
-                                    {t("common.retry")}
-                                </Button>
-                            </div>
-                        )}
-                        {!notifications.isError &&
-                            notifications.data &&
-                            !notifications.data.items.length && (
-                                <p>{t("monitors.noNotifications")}</p>
-                            )}
-                        <ul className="space-y-2">
-                            {notifications.data?.items.map((item) => (
-                                <li
-                                    key={item.id}
-                                    className="flex flex-wrap items-start justify-between gap-3 rounded-lg border p-3 text-sm"
-                                >
-                                    <div>
-                                        <p className="font-medium">
-                                            {item.title} ·{" "}
-                                            {dateTime(item.createdAt)}
-                                        </p>
-                                        <p>
-                                            {reasonLabel(
-                                                item.reasonCode,
-                                                item.reason,
-                                                t,
-                                            ) ??
-                                                t(
-                                                    "monitors.notificationReasonUnknown",
+                                    {!observations.isError &&
+                                        observations.data &&
+                                        !observations.data.items.length && (
+                                            <EmptyState
+                                                size="compact"
+                                                headingLevel={3}
+                                                icon={Activity}
+                                                title={t(
+                                                    "monitors.noObservations",
                                                 )}
-                                        </p>
-                                        {(item.previousValue !== null ||
-                                            item.currentValue !== null) && (
-                                            <p>
-                                                {t("monitors.valueChange", {
-                                                    previous:
-                                                        item.previousValue ??
-                                                        "—",
-                                                    current:
-                                                        item.currentValue ??
-                                                        "—",
-                                                })}
-                                            </p>
+                                            />
                                         )}
-                                    </div>
-                                    {!item.readAt && (
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            disabled={busy}
-                                            onClick={() =>
-                                                void markRead(item.id)
-                                            }
-                                        >
-                                            {t("monitors.markRead")}
-                                        </Button>
-                                    )}
-                                </li>
-                            ))}
-                        </ul>
-                        {!notifications.isError &&
-                            notifications.data &&
-                            notifications.data.total > 200 && (
-                                <div className="flex gap-2">
-                                    <Button
-                                        variant="outline"
-                                        disabled={notificationOffset === 0}
-                                        onClick={() =>
-                                            setNotificationOffset(
-                                                Math.max(
-                                                    0,
-                                                    notificationOffset - 200,
-                                                ),
-                                            )
-                                        }
-                                    >
-                                        {t("monitors.previous")}
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        disabled={
-                                            notificationOffset + 200 >=
-                                            notifications.data.total
-                                        }
-                                        onClick={() =>
-                                            setNotificationOffset(
-                                                notificationOffset + 200,
-                                            )
-                                        }
-                                    >
-                                        {t("monitors.next")}
-                                    </Button>
-                                </div>
+                                    {observations.data &&
+                                        observations.data.items.length > 0 && (
+                                            <List>
+                                                {observations.data.items.map(
+                                                    (item) => (
+                                                        <Observation
+                                                            key={item.id}
+                                                            item={item}
+                                                        />
+                                                    ),
+                                                )}
+                                            </List>
+                                        )}
+                                    {!observations.isError &&
+                                        observations.data &&
+                                        observations.data.total > PAGE_SIZE && (
+                                            <Pager
+                                                offset={observationOffset}
+                                                total={observations.data.total}
+                                                pageSize={PAGE_SIZE}
+                                                onChange={setObservationOffset}
+                                                showRange={false}
+                                            />
+                                        )}
+                                </>
+                            ) : (
+                                <EmptyState
+                                    size="compact"
+                                    headingLevel={3}
+                                    icon={Activity}
+                                    title={t("monitors.selectRule")}
+                                />
                             )}
-                    </section>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader>
+                            <CardTitle variant="sm">
+                                {t("monitors.inbox")}
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            {notifications.isLoading && (
+                                <LoadingRows label={t("monitors.inbox")} />
+                            )}
+                            {notifications.isError && (
+                                <RetryAlert
+                                    message={t("monitors.inboxFailed")}
+                                    pending={notifications.isFetching}
+                                    onRetry={() => void notifications.refetch()}
+                                />
+                            )}
+                            {!notifications.isError &&
+                                notifications.data &&
+                                !notifications.data.items.length && (
+                                    <EmptyState
+                                        size="compact"
+                                        headingLevel={3}
+                                        icon={Bell}
+                                        title={t("monitors.noNotifications")}
+                                    />
+                                )}
+                            {notifications.data &&
+                                notifications.data.items.length > 0 && (
+                                    <List>
+                                        {notifications.data.items.map(
+                                            (item) => {
+                                                const unread = !item.readAt;
+                                                return (
+                                                    <li
+                                                        key={item.id}
+                                                        className={cn(
+                                                            "flex flex-wrap items-start justify-between gap-3 px-4 py-3 type-body",
+                                                            unread &&
+                                                                "bg-primary/[0.04]",
+                                                        )}
+                                                    >
+                                                        <div className="flex min-w-0 flex-1 gap-3">
+                                                            <span
+                                                                aria-hidden={
+                                                                    unread
+                                                                        ? undefined
+                                                                        : "true"
+                                                                }
+                                                                role={
+                                                                    unread
+                                                                        ? "img"
+                                                                        : undefined
+                                                                }
+                                                                aria-label={
+                                                                    unread
+                                                                        ? t(
+                                                                              "monitors.unread",
+                                                                          )
+                                                                        : undefined
+                                                                }
+                                                                className={cn(
+                                                                    "mt-2 inline-flex h-2 w-2 shrink-0 rounded-full",
+                                                                    unread
+                                                                        ? "bg-primary"
+                                                                        : "bg-transparent",
+                                                                )}
+                                                            />
+                                                            <div className="min-w-0 space-y-0.5">
+                                                                <p
+                                                                    className={cn(
+                                                                        "flex flex-wrap items-baseline gap-x-2",
+                                                                        unread &&
+                                                                            "font-medium",
+                                                                    )}
+                                                                >
+                                                                    <span className="truncate">
+                                                                        {
+                                                                            item.title
+                                                                        }
+                                                                    </span>
+                                                                    <span className="type-footnote font-normal text-label-secondary tabular-nums">
+                                                                        {dateTime(
+                                                                            item.createdAt,
+                                                                        )}
+                                                                    </span>
+                                                                </p>
+                                                                <p>
+                                                                    {reasonLabel(
+                                                                        item.reasonCode,
+                                                                        item.reason,
+                                                                        t,
+                                                                    ) ??
+                                                                        t(
+                                                                            "monitors.notificationReasonUnknown",
+                                                                        )}
+                                                                </p>
+                                                                {(item.previousValue !==
+                                                                    null ||
+                                                                    item.currentValue !==
+                                                                        null) && (
+                                                                    <p className="type-footnote text-label-secondary tabular-nums">
+                                                                        {t(
+                                                                            "monitors.valueChange",
+                                                                            {
+                                                                                previous:
+                                                                                    item.previousValue ??
+                                                                                    "—",
+                                                                                current:
+                                                                                    item.currentValue ??
+                                                                                    "—",
+                                                                            },
+                                                                        )}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        {unread && (
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                size="sm"
+                                                                disabled={busy}
+                                                                onClick={() =>
+                                                                    void markRead(
+                                                                        item.id,
+                                                                    )
+                                                                }
+                                                            >
+                                                                {t(
+                                                                    "monitors.markRead",
+                                                                )}
+                                                            </Button>
+                                                        )}
+                                                    </li>
+                                                );
+                                            },
+                                        )}
+                                    </List>
+                                )}
+                            {!notifications.isError &&
+                                notifications.data &&
+                                notifications.data.total > PAGE_SIZE && (
+                                    <Pager
+                                        offset={notificationOffset}
+                                        total={notifications.data.total}
+                                        pageSize={PAGE_SIZE}
+                                        onChange={setNotificationOffset}
+                                        showRange={false}
+                                    />
+                                )}
+                        </CardContent>
+                    </Card>
                 </div>
             </div>
+            <ConfirmDialog />
         </PageShell>
     );
 }

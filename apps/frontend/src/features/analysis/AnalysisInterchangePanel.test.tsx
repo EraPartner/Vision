@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach } from "vitest";
 import { AnalysisInterchangePanel } from "./AnalysisInterchangePanel";
 import type { AnalysisResult } from "@/lib/api/analysis";
@@ -54,30 +55,23 @@ describe("Analysis import matching", () => {
     it("shows the saved match in visibly labelled fields and preserves it on update", () => {
         const onChange = setup();
         expect(
-            (
-                screen.getByLabelText(
-                    "analysis.interchange.resultField",
-                ) as HTMLSelectElement
-            ).value,
-        ).toBe("symbol");
+            screen.getByLabelText("analysis.interchange.resultField"),
+        ).toHaveTextContent("symbol");
         expect(
-            (
-                screen.getByLabelText(
-                    "analysis.interchange.importedField",
-                ) as HTMLSelectElement
-            ).value,
-        ).toBe("ticker");
+            screen.getByLabelText("analysis.interchange.importedField"),
+        ).toHaveTextContent("Ticker");
         fireEvent.click(
             screen.getByRole("button", { name: "analysis.updateScenarioJoin" }),
         );
         expect(onChange).toHaveBeenCalledWith(model);
     });
-    it("updates a selected match and removes its attachment and join together", () => {
+    it("updates a selected match and removes its attachment and join together", async () => {
+        const user = userEvent.setup();
         const onChange = setup();
-        fireEvent.change(
+        await user.click(
             screen.getByLabelText("analysis.interchange.resultField"),
-            { target: { value: "amount" } },
         );
+        await user.click(await screen.findByRole("option", { name: "amount" }));
         fireEvent.click(
             screen.getByRole("button", { name: "analysis.updateScenarioJoin" }),
         );

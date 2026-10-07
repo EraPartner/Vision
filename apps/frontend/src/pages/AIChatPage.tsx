@@ -28,7 +28,6 @@ import {
     SheetTitle,
     SheetTrigger,
 } from "@/components/ui/sheet";
-import { Tabs, TabsContent } from "@/components/ui/tabs";
 import type { ChatMessage } from "@/types/aiChat";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -42,9 +41,9 @@ const AI_MODES = ["chat", "investigation"] as const;
 
 /**
  * AI page: a conversation rail beside the transcript, with Chat and
- * Investigation as one segmented view-mode control (URL `mode`). The
- * investigation panel stays mounted while hidden so a running job keeps
- * polling, and the transcript stays mounted so its scroll position survives.
+ * Investigation as one segmented view-mode control (URL `mode`). Both regions
+ * stay mounted while hidden so a running investigation keeps polling and the
+ * transcript keeps its scroll position and unsent draft.
  */
 export default function AIChatPage() {
     const { t } = useLanguage();
@@ -308,52 +307,44 @@ export default function AIChatPage() {
                             isLoading={statusLoading}
                         />
 
-                        <Tabs
-                            value={mode}
-                            onValueChange={setMode}
+                        <div
+                            role="region"
+                            aria-label={t("aiChat.mode.investigation")}
+                            hidden={mode !== "investigation"}
+                            className="min-h-0 flex-1 overflow-y-auto"
+                        >
+                            <AIInvestigationPanel />
+                        </div>
+                        <div
+                            role="region"
+                            aria-label={t("aiChat.mode.chat")}
+                            hidden={mode !== "chat"}
                             className="flex min-h-0 flex-1 flex-col"
                         >
-                            <TabsContent
-                                value="investigation"
-                                forceMount
-                                hidden={mode !== "investigation"}
-                                className="m-0 min-h-0 flex-1 overflow-y-auto data-[state=inactive]:hidden"
-                            >
-                                <AIInvestigationPanel />
-                            </TabsContent>
-                            <TabsContent
-                                value="chat"
-                                forceMount
-                                hidden={mode !== "chat"}
-                                className="m-0 flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden"
-                            >
-                                <ChatMessageList
-                                    isVisible={mode === "chat"}
-                                    conversationId={selectedId}
-                                    messages={messages}
-                                    streamingUserMessage={streamingUserMessage}
-                                    streamingToolMessages={
-                                        streamingToolMessages
-                                    }
-                                    assistantDraft={assistantDraft}
-                                    isStreaming={isStreaming}
-                                    streamStatus={streamStatus}
-                                    onRetry={lastRequest ? handleRetry : undefined}
-                                    emptyState={emptyState}
-                                />
+                            <ChatMessageList
+                                isVisible={mode === "chat"}
+                                conversationId={selectedId}
+                                messages={messages}
+                                streamingUserMessage={streamingUserMessage}
+                                streamingToolMessages={streamingToolMessages}
+                                assistantDraft={assistantDraft}
+                                isStreaming={isStreaming}
+                                streamStatus={streamStatus}
+                                onRetry={lastRequest ? handleRetry : undefined}
+                                emptyState={emptyState}
+                            />
 
-                                <ChatComposer
-                                    onSend={handleSend}
-                                    onCancel={cancel}
-                                    isStreaming={isStreaming}
-                                    disabled={composerDisabled}
-                                    model={activeModel}
-                                    onModelChange={setModelOverride}
-                                    useTools={useTools}
-                                    onUseToolsChange={setUseTools}
-                                />
-                            </TabsContent>
-                        </Tabs>
+                            <ChatComposer
+                                onSend={handleSend}
+                                onCancel={cancel}
+                                isStreaming={isStreaming}
+                                disabled={composerDisabled}
+                                model={activeModel}
+                                onModelChange={setModelOverride}
+                                useTools={useTools}
+                                onUseToolsChange={setUseTools}
+                            />
+                        </div>
                     </main>
                 </Card>
             </div>

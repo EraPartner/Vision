@@ -1,6 +1,25 @@
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
+import { ChevronDown, ChevronUp, Minus, Plus, X } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Label } from "@/components/ui/label";
+import { List } from "@/components/ui/list";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import {
     executeAnalysisPivot,
@@ -28,6 +47,8 @@ export function AnalysisPivotPanel({
     onDrill: (groups: string[], row: Record<string, AnalysisValue>) => void;
 }) {
     const { t } = useLanguage();
+    const filterFieldId = useId();
+    const shareId = useId();
     const [addingAxis, setAddingAxis] = useState<string | null>(null);
     const [fieldSearch, setFieldSearch] = useState("");
     const addButtons = useRef<Record<string, HTMLButtonElement | null>>({});
@@ -209,13 +230,13 @@ export function AnalysisPivotPanel({
             <div className="grid gap-4 xl:grid-cols-3">
                 {(["rows", "columns", "values"] as const).map((axis) => (
                     <fieldset key={axis} className="min-w-0">
-                        <legend className="font-medium">
+                        <legend className="type-headline">
                             {t(`analysis.ext.pivot.${axis}`)}
                         </legend>
-                        <p className="mt-1 text-xs text-muted-foreground">
+                        <p className="mt-1 type-footnote text-label-secondary">
                             {t(`analysis.ext.pivot.${axis}Help`)}
                         </p>
-                        <ol className="my-2 space-y-1">
+                        <List className="my-2">
                             {config[axis].map((id, index) => {
                                 const field =
                                     [
@@ -226,15 +247,16 @@ export function AnalysisPivotPanel({
                                 return (
                                     <li
                                         key={id}
-                                        className="flex items-center gap-1 rounded-md bg-muted/30 px-2 py-1 text-sm"
+                                        className="flex min-h-10 items-center gap-0.5 py-1 pl-3 pr-1 type-callout"
                                     >
                                         <span className="min-w-0 flex-1 break-words">
                                             {index + 1}. {field}
                                         </span>
                                         <Button
+                                            type="button"
                                             variant="ghost"
-                                            size="sm"
-                                            className="w-9 shrink-0 px-0"
+                                            size="icon"
+                                            className="icon-touch-target h-8 w-8 shrink-0"
                                             disabled={index === 0}
                                             aria-label={t(
                                                 "analysis.ext.pivot.moveUp",
@@ -244,12 +266,13 @@ export function AnalysisPivotPanel({
                                                 move(axis, index, -1)
                                             }
                                         >
-                                            ↑
+                                            <ChevronUp className="h-4 w-4" />
                                         </Button>
                                         <Button
+                                            type="button"
                                             variant="ghost"
-                                            size="sm"
-                                            className="w-9 shrink-0 px-0"
+                                            size="icon"
+                                            className="icon-touch-target h-8 w-8 shrink-0"
                                             disabled={
                                                 index ===
                                                 config[axis].length - 1
@@ -260,12 +283,13 @@ export function AnalysisPivotPanel({
                                             )}
                                             onClick={() => move(axis, index, 1)}
                                         >
-                                            ↓
+                                            <ChevronDown className="h-4 w-4" />
                                         </Button>
                                         <Button
+                                            type="button"
                                             variant="ghost"
-                                            size="sm"
-                                            className="w-9 shrink-0 px-0"
+                                            size="icon"
+                                            className="icon-touch-target h-8 w-8 shrink-0"
                                             aria-label={t(
                                                 "analysis.ext.pivot.removeField",
                                                 { field },
@@ -274,16 +298,17 @@ export function AnalysisPivotPanel({
                                                 choose(axis, id, false)
                                             }
                                         >
-                                            ×
+                                            <X className="h-4 w-4" />
                                         </Button>
                                     </li>
                                 );
                             })}
-                        </ol>
+                        </List>
                         <Button
                             ref={(node) => {
                                 addButtons.current[axis] = node;
                             }}
+                            type="button"
                             variant="outline"
                             size="sm"
                             aria-expanded={addingAxis === axis}
@@ -298,7 +323,7 @@ export function AnalysisPivotPanel({
                         </Button>
                         {addingAxis === axis && (
                             <div
-                                className="mt-2 space-y-2 rounded-lg border p-2"
+                                className="mt-2 space-y-2 rounded-card corner-continuous border border-border/60 bg-card/70 p-2"
                                 onKeyDown={(event) => {
                                     if (event.key === "Escape") {
                                         event.preventDefault();
@@ -339,8 +364,9 @@ export function AnalysisPivotPanel({
                                         .map((field) => (
                                             <Button
                                                 key={field.id}
+                                                type="button"
                                                 variant="ghost"
-                                                className="h-auto min-h-9 w-full justify-start whitespace-normal text-left"
+                                                className="h-auto min-h-9 w-full justify-start whitespace-normal text-left font-normal"
                                                 onClick={() => {
                                                     choose(
                                                         axis,
@@ -368,7 +394,7 @@ export function AnalysisPivotPanel({
                                     ) && (
                                         <p
                                             role="status"
-                                            className="p-2 text-sm text-muted-foreground"
+                                            className="p-2 type-callout text-label-secondary"
                                         >
                                             {t("analysis.ext.pivot.noFields")}
                                         </p>
@@ -379,23 +405,24 @@ export function AnalysisPivotPanel({
                     </fieldset>
                 ))}
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="type-footnote text-label-secondary">
                 {t("analysis.ext.pivot.filtersHelp")}
             </p>
-            <div className="flex flex-wrap gap-3">
-                <label className="grid min-w-0 max-w-full gap-2 text-sm">
-                    {t("analysis.ext.pivot.filterField")}
-                    <select
-                        className="h-9 w-full min-w-0 rounded-control border border-input bg-background px-3 focus-ring"
+            <div className="flex flex-wrap items-end gap-3">
+                <div className="grid min-w-0 max-w-full gap-1.5">
+                    <Label htmlFor={filterFieldId}>
+                        {t("analysis.ext.pivot.filterField")}
+                    </Label>
+                    <Select
                         value=""
-                        onChange={(e) =>
-                            e.target.value &&
+                        onValueChange={(value) =>
+                            value &&
                             onChange({
                                 ...config,
                                 filters: [
                                     ...config.filters,
                                     {
-                                        fieldId: e.target.value,
+                                        fieldId: value,
                                         operator: "eq",
                                         value: "",
                                     },
@@ -403,66 +430,81 @@ export function AnalysisPivotPanel({
                             })
                         }
                     >
-                        <option value="">—</option>
-                        {dataset.fields.map((f) => (
-                            <option key={f.id} value={f.id}>
-                                {f.label}
-                            </option>
-                        ))}
-                    </select>
-                </label>
-                {config.filters.map((filter, i) => (
-                    <label
-                        key={i}
-                        className="flex flex-wrap items-center gap-2 text-sm"
-                    >
-                        {dataset.fields.find(
-                            (field) => field.id === filter.fieldId,
-                        )?.label ?? filter.fieldId}
-                        <Input
-                            className="w-40"
-                            value={String(filter.value ?? "")}
-                            onChange={(e) =>
-                                onChange({
-                                    ...config,
-                                    filters: config.filters.map((f, index) =>
-                                        index === i
-                                            ? {
-                                                  ...f,
-                                                  value:
-                                                      dataset.fields.find(
-                                                          (field) =>
-                                                              field.id ===
-                                                              f.fieldId,
-                                                      )?.type === "boolean"
-                                                          ? e.target.value ===
-                                                            "true"
-                                                          : e.target.value,
-                                              }
-                                            : f,
-                                    ),
-                                })
-                            }
-                        />
-                        <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() =>
-                                onChange({
-                                    ...config,
-                                    filters: config.filters.filter(
-                                        (_, index) => index !== i,
-                                    ),
-                                })
-                            }
+                        <SelectTrigger
+                            id={filterFieldId}
+                            className="w-auto min-w-40"
                         >
-                            {t("analysis.ext.remove")}
-                        </Button>
-                    </label>
+                            <SelectValue placeholder="—" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {dataset.fields.map((f) => (
+                                <SelectItem key={f.id} value={f.id}>
+                                    {f.label}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+                {config.filters.map((filter, i) => (
+                    <div key={i} className="grid min-w-0 gap-1.5">
+                        <Label htmlFor={`${filterFieldId}-${i}`}>
+                            {dataset.fields.find(
+                                (field) => field.id === filter.fieldId,
+                            )?.label ?? filter.fieldId}
+                        </Label>
+                        <div className="flex items-center gap-1">
+                            <Input
+                                id={`${filterFieldId}-${i}`}
+                                className="w-40"
+                                value={String(filter.value ?? "")}
+                                onChange={(e) =>
+                                    onChange({
+                                        ...config,
+                                        filters: config.filters.map(
+                                            (f, index) =>
+                                                index === i
+                                                    ? {
+                                                          ...f,
+                                                          value:
+                                                              dataset.fields.find(
+                                                                  (field) =>
+                                                                      field.id ===
+                                                                      f.fieldId,
+                                                              )?.type ===
+                                                              "boolean"
+                                                                  ? e.target
+                                                                        .value ===
+                                                                    "true"
+                                                                  : e.target
+                                                                        .value,
+                                                      }
+                                                    : f,
+                                        ),
+                                    })
+                                }
+                            />
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                onClick={() =>
+                                    onChange({
+                                        ...config,
+                                        filters: config.filters.filter(
+                                            (_, index) => index !== i,
+                                        ),
+                                    })
+                                }
+                            >
+                                {t("analysis.ext.remove")}
+                            </Button>
+                        </div>
+                    </div>
                 ))}
             </div>
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-4">
                 <Button
+                    type="button"
                     disabled={busy || !config.values.length}
                     onClick={async () => {
                         setBusy(true);
@@ -492,32 +534,32 @@ export function AnalysisPivotPanel({
                             : "analysis.ext.pivot.run",
                     )}
                 </Button>
-                <label className="flex items-center gap-2 text-sm">
-                    <Checkbox
+                <div className="flex items-center gap-2">
+                    <Switch
+                        id={shareId}
                         checked={share}
-                        onCheckedChange={(checked) =>
-                            setShare(checked === true)
-                        }
+                        onCheckedChange={setShare}
                     />
-                    {t("analysis.ext.pivot.share")}
-                </label>
+                    <Label htmlFor={shareId} className="font-normal">
+                        {t("analysis.ext.pivot.share")}
+                    </Label>
+                </div>
             </div>
             {error && (
-                <div
-                    role="alert"
-                    className="rounded-lg border border-destructive/30 p-3 text-sm"
-                >
-                    <p>{t("analysis.ext.pivot.failed")}</p>
-                    <details className="mt-2 text-muted-foreground">
-                        <summary className="cursor-pointer">
-                            {t("analysis.ext.pivot.errorDetails")}
-                        </summary>
-                        <p className="mt-2 break-words">{error}</p>
-                    </details>
-                </div>
+                <Alert variant="destructive">
+                    <AlertDescription>
+                        <p>{t("analysis.ext.pivot.failed")}</p>
+                        <details className="mt-2">
+                            <summary className="cursor-pointer rounded-control focus-ring">
+                                {t("analysis.ext.pivot.errorDetails")}
+                            </summary>
+                            <p className="mt-2 break-words">{error}</p>
+                        </details>
+                    </AlertDescription>
+                </Alert>
             )}
             {!busy && !error && !currentResult && (
-                <p role="status" className="text-sm text-muted-foreground">
+                <p role="status" className="type-callout text-label-secondary">
                     {t(
                         !config.values.length
                             ? "analysis.ext.pivot.chooseValue"
@@ -528,48 +570,50 @@ export function AnalysisPivotPanel({
                 </p>
             )}
             {currentResult && !visibleRows.length && (
-                <p
-                    role="status"
-                    className="rounded-lg bg-muted/30 p-4 text-sm text-muted-foreground"
-                >
-                    {t("analysis.ext.pivot.empty")}
-                </p>
+                <Alert role="status">
+                    <AlertDescription>
+                        {t("analysis.ext.pivot.empty")}
+                    </AlertDescription>
+                </Alert>
             )}
             {currentResult?.coverage.financialComplete === false && (
-                <p role="status">
+                <p role="status" className="type-callout text-warning">
                     {t("analysis.ext.pivot.partial", {
                         missing: currentResult.coverage.unavailableRows ?? 0,
                     })}
                 </p>
             )}
             {currentResult && (
-                <p className="text-xs text-muted-foreground">
+                <p className="type-footnote text-label-secondary">
                     {t("analysis.ext.pivot.complete", {
                         rows: currentResult.coverage.rows,
                     })}
                 </p>
             )}
             {level && (
-                <div className="max-w-full overflow-auto">
-                    <table className="w-full text-sm">
-                        <thead>
-                            <tr>
+                <div className="max-w-full overflow-hidden rounded-card corner-continuous border border-border/60">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
                                 {displayRowIds.map((id) => (
-                                    <th key={id} className="p-2 text-left">
+                                    <TableHead key={id}>
                                         {dataset.fields.find((f) => f.id === id)
                                             ?.label ?? id}
-                                    </th>
+                                    </TableHead>
                                 ))}
                                 {matrixColumns.flatMap(
                                     ({ column, columnLevel }) =>
                                         config.values.map((id) => (
-                                            <th
+                                            <TableHead
                                                 key={`${columnKey(column, columnLevel)}:${id}`}
-                                                className="p-2 text-right"
+                                                className="text-right"
                                             >
                                                 {columnLevel <
                                                     config.columns.length && (
-                                                    <button
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
                                                         aria-expanded={expandedColumns.has(
                                                             current +
                                                                 columnKey(
@@ -607,7 +651,7 @@ export function AnalysisPivotPanel({
                                                                     ),
                                                             },
                                                         )}
-                                                        className="mr-2 rounded px-1 focus-ring"
+                                                        className="mr-1 h-6 w-6"
                                                         onClick={() =>
                                                             setExpandedColumns(
                                                                 (previous) => {
@@ -644,10 +688,12 @@ export function AnalysisPivotPanel({
                                                                     column,
                                                                     columnLevel,
                                                                 ),
-                                                        )
-                                                            ? "−"
-                                                            : "+"}
-                                                    </button>
+                                                        ) ? (
+                                                            <Minus className="h-3.5 w-3.5" />
+                                                        ) : (
+                                                            <Plus className="h-3.5 w-3.5" />
+                                                        )}
+                                                    </Button>
                                                 )}
                                                 {config.columns
                                                     .slice(0, columnLevel)
@@ -661,24 +707,24 @@ export function AnalysisPivotPanel({
                                                 {dataset.measures.find(
                                                     (f) => f.id === id,
                                                 )?.label ?? id}
-                                            </th>
+                                            </TableHead>
                                         )),
                                 )}
                                 {columnIds.length > 0 &&
                                     config.values.map((id) => (
-                                        <th
+                                        <TableHead
                                             key={`total:${id}`}
-                                            className="p-2 text-right"
+                                            className="text-right"
                                         >
                                             {t("analysis.ext.pivot.total")} ·{" "}
                                             {dataset.measures.find(
                                                 (f) => f.id === id,
                                             )?.label ?? id}
-                                        </th>
+                                        </TableHead>
                                     ))}
-                            </tr>
-                        </thead>
-                        <tbody>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
                             {visibleRows.map(({ row, depth }) => {
                                 const ids = [
                                     ...new Set([
@@ -695,25 +741,28 @@ export function AnalysisPivotPanel({
                                     item: Record<string, unknown>,
                                 ) => ids.every((id) => item[id] === row[id]);
                                 return (
-                                    <tr
+                                    <TableRow
                                         key={groupKey(row, depth)}
                                         className={
                                             depth < config.rows.length
-                                                ? "bg-muted/30"
+                                                ? "bg-foreground/[0.03] font-medium"
                                                 : ""
                                         }
                                     >
                                         {displayRowIds.map((id) => (
-                                            <th
+                                            <TableHead
                                                 key={id}
-                                                className="p-2 text-left font-normal"
+                                                className="h-auto py-2 type-body font-normal text-foreground"
                                                 scope="row"
                                             >
                                                 {id ===
                                                     config.rows[depth - 1] &&
                                                     depth <
                                                         config.rows.length && (
-                                                        <button
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="icon"
                                                             aria-expanded={expanded.has(
                                                                 groupKey(
                                                                     row,
@@ -738,7 +787,7 @@ export function AnalysisPivotPanel({
                                                                     ),
                                                                 },
                                                             )}
-                                                            className="mr-2 rounded px-1 focus-ring"
+                                                            className="mr-1 h-6 w-6"
                                                             onClick={() =>
                                                                 setExpanded(
                                                                     (
@@ -775,10 +824,12 @@ export function AnalysisPivotPanel({
                                                                     row,
                                                                     depth,
                                                                 ),
-                                                            )
-                                                                ? "−"
-                                                                : "+"}
-                                                        </button>
+                                                            ) ? (
+                                                                <Minus className="h-3.5 w-3.5" />
+                                                            ) : (
+                                                                <Plus className="h-3.5 w-3.5" />
+                                                            )}
+                                                        </Button>
                                                     )}
                                                 {depth === 0 &&
                                                 id === config.rows[0]
@@ -786,7 +837,7 @@ export function AnalysisPivotPanel({
                                                           "analysis.ext.pivot.total",
                                                       )
                                                     : String(row[id] ?? "—")}
-                                            </th>
+                                            </TableHead>
                                         ))}
                                         {matrixColumns.flatMap(
                                             ({ column, columnLevel }) =>
@@ -813,12 +864,15 @@ export function AnalysisPivotPanel({
                                                                     ),
                                                         );
                                                     return (
-                                                        <td
+                                                        <TableCell
                                                             key={`${columnKey(column, columnLevel)}:${id}`}
-                                                            className="p-2 text-right tabular-nums"
+                                                            className="py-1.5 text-right tabular-nums"
                                                         >
-                                                            <button
-                                                                className="rounded px-1 underline-offset-2 hover:underline focus-ring"
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="h-7 px-1.5 font-normal tabular-nums"
                                                                 title={t(
                                                                     "analysis.ext.pivot.drill",
                                                                 )}
@@ -847,16 +901,16 @@ export function AnalysisPivotPanel({
                                                                     cell,
                                                                     id,
                                                                 )}
-                                                            </button>
-                                                        </td>
+                                                            </Button>
+                                                        </TableCell>
                                                     );
                                                 }),
                                         )}
                                         {columnIds.length > 0 &&
                                             config.values.map((id) => (
-                                                <td
+                                                <TableCell
                                                     key={`total:${id}`}
-                                                    className="p-2 text-right font-medium"
+                                                    className="py-1.5 text-right font-medium tabular-nums"
                                                 >
                                                     {displayCell(
                                                         totals?.rows.find(
@@ -864,13 +918,13 @@ export function AnalysisPivotPanel({
                                                         ),
                                                         id,
                                                     )}
-                                                </td>
+                                                </TableCell>
                                             ))}
-                                    </tr>
+                                    </TableRow>
                                 );
                             })}
-                        </tbody>
-                    </table>
+                        </TableBody>
+                    </Table>
                 </div>
             )}
         </div>

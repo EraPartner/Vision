@@ -185,7 +185,7 @@ export function ChatConversationList({
                                                 aria-label={t(
                                                     "aiChat.conversationActions",
                                                 )}
-                                                className="h-8 w-8 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 [@media(pointer:coarse)]:opacity-100"
+                                                className="icon-touch-target h-8 w-8 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 [@media(pointer:coarse)]:opacity-100"
                                             >
                                                 <MoreHorizontal className="h-4 w-4" />
                                             </Button>
