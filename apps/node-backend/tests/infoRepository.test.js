@@ -843,7 +843,7 @@ describe("InfoRepository", () => {
 
     it("should return empty arrays when no transactions", async () => {
       query.mockImplementation(async (sql) =>
-        sql.includes("TO_CHAR(CURRENT_DATE")
+        sql.includes("AS current_period")
           ? { rows: [{ current_period: "2026-01", prev_period: "2025-12" }] }
           : { rows: [] },
       );

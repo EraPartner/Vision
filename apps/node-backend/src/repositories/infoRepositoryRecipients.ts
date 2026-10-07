@@ -15,6 +15,7 @@ import {
   roundMoney as roundToCents,
 } from "../lib/money.ts";
 import { toWireDate } from "../lib/dateFormat.ts";
+import { todayAppDateString } from "../lib/timezone.ts";
 import {
   buildExclusionClauses,
   validateInt4Ids,
@@ -212,6 +213,12 @@ export const recipientInsightsRepository = {
     // distributes over the same-sign SUM and SUM-then-convert per date is
     // identical to converting each row; the per-(recipient, period) totals are
     // re-reduced in JS below.
+    // The single clock for the month-over-month card (ADR-009): the
+    // APP_TIMEZONE calendar day, bound once and reused for the period keys
+    // below, as the forecast, monthly and average-vs-current cards do.
+    const todayYmd = todayAppDateString();
+    const momParams = [...params, todayYmd];
+    const today = `$${momParams.length}::date`;
     const momRawResult = await query(
       `
       SELECT
@@ -227,20 +234,20 @@ export const recipientInsightsRepository = {
       WHERE t.amount < 0
         AND t.is_active = true
         AND t.is_transfer = false
-        AND t.date >= (DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month')
+        AND t.date >= (DATE_TRUNC('month', ${today}) - INTERVAL '1 month')
         -- Like-for-like windows: the current month is month-to-date, so cap the
         -- previous month at the SAME day-of-month. Otherwise (partial current vs
         -- full previous) every recipient shows a spurious decrease early in the month.
         AND (
-          t.date >= DATE_TRUNC('month', CURRENT_DATE)
-          OR t.date <= (DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month')::date
-                       + (CURRENT_DATE - DATE_TRUNC('month', CURRENT_DATE)::date)
+          t.date >= DATE_TRUNC('month', ${today})
+          OR t.date <= (DATE_TRUNC('month', ${today}) - INTERVAL '1 month')::date
+                       + (${today} - DATE_TRUNC('month', ${today})::date)
         )
         ${exclusionWhere}
         ${dateWhere}
       GROUP BY COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), TO_CHAR(t.date, 'YYYY-MM'), t.date, t.currency
     `,
-      params,
+      momParams,
     );
 
     // Historical per-date rates, matching top merchants / by-year / pivot.
@@ -250,14 +257,16 @@ export const recipientInsightsRepository = {
       { useHistoricalRatesByDate: true, dateField: "date" },
     );
 
-    // Derive the current / previous month keys in the database so they match
-    // the `TO_CHAR(t.date, 'YYYY-MM')` buckets and the `CURRENT_DATE` window
-    // above. Computing them from a server-local `new Date()` could pick a
-    // different month near a month boundary, yielding an empty MoM result.
-    const periodResult = await query(`
-      SELECT TO_CHAR(CURRENT_DATE, 'YYYY-MM') AS current_period,
-             TO_CHAR(CURRENT_DATE - INTERVAL '1 month', 'YYYY-MM') AS prev_period
-    `);
+    // Derive the current / previous month keys in the database from the same
+    // bound day as the window above, so they match the
+    // `TO_CHAR(t.date, 'YYYY-MM')` buckets even at a month boundary.
+    const periodResult = await query(
+      `
+      SELECT TO_CHAR($1::date, 'YYYY-MM') AS current_period,
+             TO_CHAR($1::date - INTERVAL '1 month', 'YYYY-MM') AS prev_period
+    `,
+      [todayYmd],
+    );
     const currentPeriod = periodResult.rows[0].current_period;
     const prevPeriod = periodResult.rows[0].prev_period;
 
