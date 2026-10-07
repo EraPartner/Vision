@@ -6,7 +6,7 @@
  * as one family regardless of which primitive (Area/Bar/Line/…) they render.
  *
  * Conventions enforced here so individual pages don't re-decide them:
- *  - title sizing/typography (font-display, text-lg)
+ *  - title typography (CardTitle variant "sm", the type-title-3 role)
  *  - description tone + spacing
  *  - right-aligned controls slot (period selector, series toggles, …)
  *  - legend rendered with the shared ChartLegend, below the chart

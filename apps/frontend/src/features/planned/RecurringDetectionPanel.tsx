@@ -337,7 +337,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                             className="flex items-center justify-between gap-3 px-4 py-3"
                                         >
                                             <div className="min-w-0 flex-1">
-                                                <p className="truncate type-body font-semibold text-foreground">
+                                                <p className="truncate type-headline text-foreground">
                                                     {pattern.recipientName}
                                                 </p>
                                                 <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -355,7 +355,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                                     </span>
                                                     <span
                                                         className={cn(
-                                                            "type-footnote font-semibold",
+                                                            "type-footnote font-medium",
                                                             lastChange.direction ===
                                                                 "increased"
                                                                 ? "text-loss"
@@ -372,8 +372,8 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                                     </span>
                                                     <Badge
                                                         variant="outline"
+                                                        size="sm"
                                                         className={cn(
-                                                            "type-footnote",
                                                             lastChange.direction ===
                                                                 "increased"
                                                                 ? "text-loss border-loss/30"
@@ -489,7 +489,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
 
                                         <div className="min-w-0 flex-1">
                                             <div className="flex items-center gap-2">
-                                                <p className="truncate type-body font-semibold text-foreground">
+                                                <p className="truncate type-headline text-foreground">
                                                     {pattern.recipientName}
                                                 </p>
                                                 <ConfidenceBadge
@@ -537,7 +537,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                         </div>
 
                                         <div className="flex shrink-0 flex-col items-end gap-1.5 text-right">
-                                            <span className="type-body font-semibold tabular-nums text-foreground">
+                                            <span className="type-headline tabular-nums text-foreground">
                                                 {formatCurrency(
                                                     pattern.latestAmount,
                                                     {
@@ -550,7 +550,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                                 <Button
                                                     size="sm"
                                                     variant="default"
-                                                    className="h-7 gap-1 type-footnote"
+                                                    className="gap-1"
                                                     onClick={() =>
                                                         handleCreatePlanned(
                                                             pattern,
@@ -563,7 +563,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                                 <Button
                                                     size="sm"
                                                     variant="ghost"
-                                                    className="h-7 type-footnote text-label-secondary"
+                                                    className="text-label-secondary"
                                                     onClick={() =>
                                                         dismiss(
                                                             pattern.recipientId,
@@ -592,19 +592,19 @@ function ConfidenceBadge({
     confidence: number;
     t: (key: string) => string;
 }) {
-    let color = "text-label-secondary border-border";
+    let variant: "outline" | "success" | "warning" = "outline";
     let label = t("recurring.confidence.low");
 
     if (confidence >= 80) {
-        color = "text-success border-success/30 bg-success/10";
+        variant = "success";
         label = t("recurring.confidence.high");
     } else if (confidence >= 60) {
-        color = "text-warning border-warning/30 bg-warning/10";
+        variant = "warning";
         label = t("recurring.confidence.medium");
     }
 
     return (
-        <Badge variant="outline" size="sm" className={cn(color)}>
+        <Badge variant={variant} size="sm">
             {confidence}% {label}
         </Badge>
     );

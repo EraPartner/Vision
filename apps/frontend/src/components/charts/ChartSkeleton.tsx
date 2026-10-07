@@ -14,7 +14,7 @@ export function ChartSkeleton({ height = 280, className }: ChartSkeletonProps) {
     return (
         <div
             aria-hidden="true"
-            className={cn("relative w-full overflow-hidden rounded-xl", className)}
+            className={cn("relative w-full overflow-hidden rounded-card corner-continuous", className)}
             style={{ height }}
         >
             <svg

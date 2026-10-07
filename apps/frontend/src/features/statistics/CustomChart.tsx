@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import {
     Card,
     CardContent,
@@ -7,14 +7,17 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import {
-    Tooltip,
-    TooltipContent,
-    TooltipTrigger,
-} from "@/components/ui/tooltip";
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
-import { Pencil, Trash2, TrendingUp } from "lucide-react";
+import { MoreHorizontal, Pencil, Trash2, TrendingUp } from "lucide-react";
 import {
     LineChart,
     type LineSeries,
@@ -334,6 +337,7 @@ export function CustomChart({
             monthLabelLocale,
         );
 
+    const menuTriggerRef = useRef<HTMLButtonElement>(null);
     const isEmpty = seriesMeta.length === 0;
     const isLoading =
         (hasRecipients && recipientLoading) || (hasTags && tagLoading);
@@ -361,64 +365,59 @@ export function CustomChart({
                     </CardDescription>
                 </div>
                 {(onEdit || onDelete) && (
-                    <div className="flex items-center gap-1 shrink-0">
-                        {onEdit && (
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button
-                                        aria-label={t(
-                                            "customChart.editAction",
-                                            { name: savedChart.name },
-                                        )}
-                                        variant="ghost"
-                                        size="sm"
-                                        className="text-muted-foreground hover:text-foreground"
-                                        onClick={(event) =>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                ref={menuTriggerRef}
+                                variant="ghost"
+                                size="icon"
+                                className="shrink-0 text-label-secondary"
+                                aria-label={t("customChart.menu", {
+                                    name: savedChart.name,
+                                })}
+                            >
+                                <MoreHorizontal />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            {onEdit && (
+                                <DropdownMenuItem
+                                    aria-label={t("customChart.editAction", {
+                                        name: savedChart.name,
+                                    })}
+                                    onSelect={() => {
+                                        if (menuTriggerRef.current)
                                             onEdit(
                                                 savedChart,
-                                                event.currentTarget,
-                                            )
-                                        }
-                                    >
-                                        <Pencil className="h-4 w-4" />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                    {t("customChart.editAction", {
+                                                menuTriggerRef.current,
+                                            );
+                                    }}
+                                >
+                                    <Pencil />
+                                    {t("common.edit")}
+                                </DropdownMenuItem>
+                            )}
+                            {onEdit && onDelete && <DropdownMenuSeparator />}
+                            {onDelete && (
+                                <DropdownMenuItem
+                                    aria-label={t("customChart.deleteAction", {
                                         name: savedChart.name,
                                     })}
-                                </TooltipContent>
-                            </Tooltip>
-                        )}
-                        {onDelete && (
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button
-                                        aria-label={t(
-                                            "customChart.deleteAction",
-                                            { name: savedChart.name },
-                                        )}
-                                        variant="ghost"
-                                        size="sm"
-                                        className="text-muted-foreground hover:text-destructive"
-                                        onClick={(event) =>
+                                    className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                                    onSelect={() => {
+                                        if (menuTriggerRef.current)
                                             onDelete(
                                                 savedChart,
-                                                event.currentTarget,
-                                            )
-                                        }
-                                    >
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                    {t("customChart.deleteAction", {
-                                        name: savedChart.name,
-                                    })}
-                                </TooltipContent>
-                            </Tooltip>
-                        )}
-                    </div>
+                                                menuTriggerRef.current,
+                                            );
+                                    }}
+                                >
+                                    <Trash2 />
+                                    {t("common.delete")}
+                                </DropdownMenuItem>
+                            )}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 )}
             </CardHeader>
 
@@ -430,13 +429,13 @@ export function CustomChart({
                         className="h-[350px] w-full"
                     />
                 ) : isEmpty ? (
-                    <div className="flex items-center justify-center h-[300px] text-muted-foreground">
-                        <div className="text-center space-y-2">
-                            <TrendingUp className="h-8 w-8 mx-auto opacity-40" />
-                            <p className="text-sm">
-                                {t("customChart.noSeriesPrompt")}
-                            </p>
-                        </div>
+                    <div className="flex h-[300px] items-center justify-center">
+                        <EmptyState
+                            headingLevel={4}
+                            size="compact"
+                            icon={TrendingUp}
+                            title={t("customChart.noSeriesPrompt")}
+                        />
                     </div>
                 ) : (
                     <div className="space-y-3">

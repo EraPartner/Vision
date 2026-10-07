@@ -364,7 +364,8 @@ export function TransactionsTable({
                             {tags.length > 3 && (
                                 <Badge
                                     variant="outline"
-                                    className="h-5 px-1.5 py-0 text-xs text-muted-foreground"
+                                    size="sm"
+                                    className="text-label-secondary"
                                 >
                                     +{tags.length - 3}
                                 </Badge>

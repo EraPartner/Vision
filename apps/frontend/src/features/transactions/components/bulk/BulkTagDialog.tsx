@@ -94,7 +94,7 @@ export function BulkTagDialog({
                     <DialogFooter>
                         <Button
                             type="button"
-                            variant="ghost"
+                            variant="outline"
                             onClick={() => {
                                 reset();
                                 onOpenChange(false);

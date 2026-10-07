@@ -6,7 +6,7 @@ import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 import { formatPeriodShort } from "./statisticsUtils";
 import { computeRollingAverage } from "@/utils/rollingAverage";
 import type { StatisticsData } from "@/hooks/useStatistics";
-import { cn } from "@/lib/utils";
+import { Toggle } from "@/components/ui/toggle";
 
 const ROLLING_WINDOW = 3;
 
@@ -75,17 +75,14 @@ export const MonthlyChart = memo(function MonthlyChart({ data }: MonthlyChartPro
   return (
     <div className="space-y-2">
       <div className="flex justify-end">
-        <button
-          onClick={() => setShowOverlay((v) => !v)}
-          className={cn(
-            "text-xs px-2 py-1 rounded-md border transition-colors",
-            showOverlay
-              ? "bg-primary/10 border-primary/30 text-primary"
-              : "border-border text-muted-foreground hover:text-foreground hover:border-border/80"
-          )}
+        <Toggle
+          size="sm"
+          pressed={showOverlay}
+          onPressedChange={setShowOverlay}
+          className="type-footnote text-label-secondary"
         >
           {t("statsPage.toggleRollingAvg", { n: ROLLING_WINDOW })}
-        </button>
+        </Toggle>
       </div>
       <BarChart<IncomeSpendingDatum>
         data={chartData}

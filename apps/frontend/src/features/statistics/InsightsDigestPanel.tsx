@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
     AlertTriangle,
     CheckCircle2,
@@ -398,25 +399,19 @@ export function InsightsDigestPanel() {
                         <SectionLabel>
                             {t("insights.panel.cashForecast")}
                         </SectionLabel>
-                        <div
-                            className={cn(
-                                "flex items-center gap-3 rounded-card corner-continuous border p-3",
-                                forecastAlert
-                                    ? "border-destructive/40 bg-destructive/5"
-                                    : "border-border/60 bg-card/70",
-                            )}
+                        <Alert
+                            variant={forecastAlert ? "destructive" : "default"}
                         >
                             {forecastAlert ? (
-                                <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
+                                <AlertTriangle className="h-4 w-4" />
                             ) : (
-                                <Wallet className="h-4 w-4 shrink-0 text-label-secondary" />
+                                <Wallet className="h-4 w-4" />
                             )}
-                            <div className="min-w-0 flex-1">
+                            <AlertDescription>
                                 <p
                                     className={cn(
-                                        "type-body",
                                         forecastAlert
-                                            ? "font-medium text-foreground"
+                                            ? "font-medium"
                                             : "text-label-secondary",
                                     )}
                                 >
@@ -430,12 +425,12 @@ export function InsightsDigestPanel() {
                                     })}
                                 </p>
                                 {cashForecast.movedSignificantly && (
-                                    <p className="mt-0.5 type-footnote text-destructive">
+                                    <p className="mt-0.5 type-footnote">
                                         {t("insights.panel.significantMove")}
                                     </p>
                                 )}
-                            </div>
-                        </div>
+                            </AlertDescription>
+                        </Alert>
                     </section>
                 )}
             </CardContent>

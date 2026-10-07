@@ -72,7 +72,7 @@ export function BulkRecategorizeDialog({
                     <DialogFooter>
                         <Button
                             type="button"
-                            variant="ghost"
+                            variant="outline"
                             onClick={() => onOpenChange(false)}
                             disabled={pending}
                         >

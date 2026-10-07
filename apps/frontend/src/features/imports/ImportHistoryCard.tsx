@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { List } from "@/components/ui/list";
+import { List, ListRow } from "@/components/ui/list";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { FileSearch, Loader2, RefreshCw, Undo2, History } from "lucide-react";
 import type { ImportBatch } from "@/types/apiClient";
@@ -46,10 +46,23 @@ const STATUS_VARIANT: Record<
     aborted: "outline",
 };
 
+const STATUS_LABEL_KEY: Record<ImportBatch["status"], string> = {
+    pending: "importHistory.status.pending",
+    staging: "importHistory.status.staging",
+    validating: "importHistory.status.validating",
+    matching: "importHistory.status.matching",
+    awaiting_review: "importHistory.status.awaiting_review",
+    committing: "importHistory.status.committing",
+    complete: "importHistory.status.complete",
+    failed: "importHistory.status.failed",
+    aborted: "importHistory.status.aborted",
+};
+
 function BatchStatusBadge({ status }: { status: ImportBatch["status"] }) {
+    const { t } = useLanguage();
     return (
         <Badge variant={STATUS_VARIANT[status]} size="sm">
-            {status}
+            {t(STATUS_LABEL_KEY[status])}
         </Badge>
     );
 }
@@ -75,7 +88,9 @@ function RollbackButton({
             title: t("importHistory.rollbackTitle"),
             description: t("importHistory.rollbackDesc", {
                 n: batch.transactions_remaining,
-                file: batch.source_filename ?? `batch #${batch.id}`,
+                file:
+                    batch.source_filename ??
+                    t("importHistory.batchFallback", { id: batch.id }),
             }),
             confirmLabel: t("importHistory.rollbackConfirm"),
             cancelLabel: t("common.cancel"),
@@ -124,58 +139,74 @@ function BatchRow({
     const { t } = useLanguage();
     const started = formatDate(parseISO(batch.started_at), "yyyy-MM-dd HH:mm");
     return (
-        <li className="flex items-start justify-between gap-4 px-4 py-3">
-            <div className="min-w-0 flex-1 space-y-0.5">
-                <div className="flex items-center gap-2 flex-wrap">
-                    <span className="truncate type-body font-medium text-foreground">
-                        {batch.source_filename ?? `Batch #${batch.id}`}
+        <ListRow
+            className="[&>div]:items-start [&>div]:py-3"
+            title={
+                <span className="flex flex-wrap items-center gap-2">
+                    <span className="truncate font-medium">
+                        {batch.source_filename ??
+                            t("importHistory.batchFallback", { id: batch.id })}
                     </span>
                     <BatchStatusBadge status={batch.status} />
-                </div>
-                <div className="flex flex-wrap items-center gap-3 type-footnote text-label-secondary">
-                    <span>{batch.adapter_name}</span>
-                    <span>{started}</span>
-                    {batch.rows_imported != null && (
-                        <>
-                            <span className="text-success">
-                                +{batch.rows_imported}
+                </span>
+            }
+            subtitle={
+                <span className="block whitespace-normal">
+                    <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                        <span>{batch.adapter_name}</span>
+                        <span>{started}</span>
+                        {batch.rows_imported != null && (
+                            <>
+                                <span className="text-success">
+                                    {t("importPage.imported", {
+                                        n: batch.rows_imported,
+                                    })}
+                                </span>
+                                {(batch.rows_duplicate ?? 0) > 0 && (
+                                    <span className="text-warning">
+                                        {t("importPage.duplicates", {
+                                            n: batch.rows_duplicate,
+                                        })}
+                                    </span>
+                                )}
+                                {(batch.rows_error ?? 0) > 0 && (
+                                    <span className="text-destructive">
+                                        {t("importPage.errors", {
+                                            n: batch.rows_error,
+                                        })}
+                                    </span>
+                                )}
+                            </>
+                        )}
+                        {batch.transactions_remaining > 0 && (
+                            <span>
+                                {t("importHistory.remaining", {
+                                    n: batch.transactions_remaining,
+                                })}
                             </span>
-                            {(batch.rows_duplicate ?? 0) > 0 && (
-                                <span className="text-warning">
-                                    {batch.rows_duplicate} dup
-                                </span>
-                            )}
-                            {(batch.rows_error ?? 0) > 0 && (
-                                <span className="text-destructive">
-                                    {batch.rows_error} err
-                                </span>
-                            )}
-                        </>
-                    )}
-                    {batch.transactions_remaining > 0 && (
-                        <span className="text-muted-foreground">
-                            {batch.transactions_remaining} remaining
+                        )}
+                    </span>
+                    {batch.error_summary && (
+                        <span className="block max-w-xs truncate text-destructive">
+                            {batch.error_summary}
                         </span>
                     )}
-                </div>
-                {batch.error_summary && (
-                    <p className="max-w-xs truncate type-footnote text-destructive">
-                        {batch.error_summary}
-                    </p>
-                )}
-            </div>
-            <div className="flex shrink-0 items-center gap-1">
-                {batch.status === "awaiting_review" && (
-                    <Button variant="ghost" size="sm" asChild>
-                        <Link to={`/import/${batch.id}/review`}>
-                            <FileSearch />
-                            {t("importHistory.resumeReview")}
-                        </Link>
-                    </Button>
-                )}
-                <RollbackButton batch={batch} onRolledBack={onRolledBack} />
-            </div>
-        </li>
+                </span>
+            }
+            trailing={
+                <>
+                    {batch.status === "awaiting_review" && (
+                        <Button variant="ghost" size="sm" asChild>
+                            <Link to={`/import/${batch.id}/review`}>
+                                <FileSearch />
+                                {t("importHistory.resumeReview")}
+                            </Link>
+                        </Button>
+                    )}
+                    <RollbackButton batch={batch} onRolledBack={onRolledBack} />
+                </>
+            }
+        />
     );
 }
 

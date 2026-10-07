@@ -22,6 +22,7 @@ import {
 import { parseISO } from "@/lib/dateUtils";
 import { useExcludedIds } from "@/hooks/useExcludedIds";
 import { Badge } from "@/components/ui/badge";
+import { List, ListRow } from "@/components/ui/list";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import {
@@ -272,24 +273,22 @@ export function RecipientInsightsTab({
                     </CardHeader>
                     <CardContent className="space-y-3">
                         {increases.length > 0 && (
-                            <div className="space-y-2">
+                            <List>
                                 {increases.map((m) => (
-                                    <div
+                                    <ListRow
                                         key={m.recipientId}
-                                        className="flex items-center gap-3 rounded-lg border border-destructive/20 bg-destructive/5 p-3"
-                                    >
-                                        <TrendingUp className="h-5 w-5 text-destructive shrink-0" />
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-medium truncate">
-                                                {t("insights.spentMoreAt", {
-                                                    n: formatPercent(
-                                                        m.changePercent,
-                                                        { digits: 1 },
-                                                    ),
-                                                    name: m.name,
-                                                })}
-                                            </p>
-                                            <p className="type-caption text-label-secondary">
+                                        leading={
+                                            <TrendingUp className="text-loss" />
+                                        }
+                                        title={t("insights.spentMoreAt", {
+                                            n: formatPercent(
+                                                m.changePercent,
+                                                { digits: 1 },
+                                            ),
+                                            name: m.name,
+                                        })}
+                                        subtitle={
+                                            <>
                                                 {formatCurrency(
                                                     m.previousSpend,
                                                     2,
@@ -299,33 +298,29 @@ export function RecipientInsightsTab({
                                                     m.currentSpend,
                                                     2,
                                                 )}
-                                            </p>
-                                        </div>
-                                    </div>
+                                            </>
+                                        }
+                                    />
                                 ))}
-                            </div>
+                            </List>
                         )}
                         {decreases.length > 0 && (
-                            <div className="space-y-2">
+                            <List>
                                 {decreases.map((m) => (
-                                    <div
+                                    <ListRow
                                         key={m.recipientId}
-                                        className="flex items-center gap-3 rounded-lg border border-primary/20 bg-primary/5 p-3"
-                                    >
-                                        <TrendingDown className="h-5 w-5 text-primary shrink-0" />
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-medium truncate">
-                                                {t("insights.spentLessAt", {
-                                                    n: formatPercent(
-                                                        Math.abs(
-                                                            m.changePercent,
-                                                        ),
-                                                        { digits: 1 },
-                                                    ),
-                                                    name: m.name,
-                                                })}
-                                            </p>
-                                            <p className="type-caption text-label-secondary">
+                                        leading={
+                                            <TrendingDown className="text-gain" />
+                                        }
+                                        title={t("insights.spentLessAt", {
+                                            n: formatPercent(
+                                                Math.abs(m.changePercent),
+                                                { digits: 1 },
+                                            ),
+                                            name: m.name,
+                                        })}
+                                        subtitle={
+                                            <>
                                                 {formatCurrency(
                                                     m.previousSpend,
                                                     2,
@@ -335,11 +330,11 @@ export function RecipientInsightsTab({
                                                     m.currentSpend,
                                                     2,
                                                 )}
-                                            </p>
-                                        </div>
-                                    </div>
+                                            </>
+                                        }
+                                    />
                                 ))}
-                            </div>
+                            </List>
                         )}
                     </CardContent>
                 </Card>

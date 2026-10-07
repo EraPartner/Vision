@@ -235,8 +235,7 @@ export function ChartTooltip({
                             ease: easings.outExpo,
                         }}
                         className={cn(
-                            "min-w-[140px] max-w-[260px] rounded-xl border border-border/60 bg-popover px-3 py-2 text-xs shadow-lg",
-                            "ring-1 ring-inset ring-white/10",
+                            "min-w-[140px] max-w-[260px] rounded-card corner-continuous border border-border/60 bg-popover px-3 py-2 type-footnote text-popover-foreground shadow-elevation-3",
                             className,
                         )}
                     >

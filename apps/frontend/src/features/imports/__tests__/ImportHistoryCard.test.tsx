@@ -74,7 +74,7 @@ describe("ImportHistoryCard", () => {
         expect(await screen.findByText("kbc")).toBeInTheDocument();
         expect(await screen.findByText("ing")).toBeInTheDocument();
         expect(await screen.findByText("belfius")).toBeInTheDocument();
-        expect(await screen.findByText("awaiting_review")).toBeInTheDocument();
+        expect(await screen.findByText("Awaiting review")).toBeInTheDocument();
         expect(
             screen.getByRole("link", { name: /resume review/i }),
         ).toHaveAttribute("href", "/import/3/review");

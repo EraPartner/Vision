@@ -214,7 +214,7 @@ function Inner({
                     >
                         {hover ? (
                             <div>
-                                <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+                                <div className="flex items-center justify-center gap-1.5 type-footnote text-label-secondary">
                                     <span
                                         aria-hidden="true"
                                         className="inline-block h-2 w-2 shrink-0 rounded-full"
@@ -227,7 +227,7 @@ function Inner({
                                         {hover.name}
                                     </span>
                                 </div>
-                                <div className="font-display text-lg font-semibold tabular-nums text-foreground">
+                                <div className="type-title-3 tabular-nums text-foreground">
                                     {formatValue(hover.value)}
                                 </div>
                             </div>

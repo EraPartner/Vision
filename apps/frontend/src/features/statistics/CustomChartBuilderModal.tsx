@@ -17,6 +17,12 @@ import {
     PopoverTrigger,
 } from "@/components/ui/popover";
 import {
+    SegmentedControl,
+    SegmentedControlItem,
+} from "@/components/ui/segmented-control";
+import { DatePicker } from "@/components/shared/DatePicker";
+import { parseLocalDateFromYmd, toYmd } from "@/lib/dateUtils";
+import {
     Command,
     CommandEmpty,
     CommandGroup,
@@ -283,7 +289,7 @@ export function CustomChartBuilderModal({
                     </DialogDescription>
                 </DialogHeader>
 
-                {/* Real <form> so Enter in the name/date fields saves. grid gap-5 mirrors
+                {/* Real <form> so Enter in the name field saves. grid gap-5 mirrors
             DialogContent's layout, so the wrapper is layout-neutral. */}
                 <form onSubmit={handleSave} className="grid gap-5">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 py-2">
@@ -344,10 +350,14 @@ export function CustomChartBuilderModal({
                             {/* Time bucket — irrelevant for ranked (totals over the whole range) */}
                             {state.chartVariant !== "ranked" && (
                                 <div className="space-y-1">
-                                    <Label htmlFor={`${fieldId}-bucket`}>
+                                    <span
+                                        id={`${fieldId}-bucket-label`}
+                                        className="type-body font-medium text-foreground"
+                                    >
                                         {t("customChart.timeBucket")}
-                                    </Label>
-                                    <Select
+                                    </span>
+                                    <SegmentedControl
+                                        aria-labelledby={`${fieldId}-bucket-label`}
                                         value={state.timeBucket}
                                         onValueChange={(v) =>
                                             update(
@@ -355,22 +365,15 @@ export function CustomChartBuilderModal({
                                                 v as TimeBucket,
                                             )
                                         }
+                                        className="w-full"
                                     >
-                                        <SelectTrigger
-                                            id={`${fieldId}-bucket`}
-                                            className="w-full"
-                                        >
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="monthly">
-                                                {t("customChart.monthly")}
-                                            </SelectItem>
-                                            <SelectItem value="yearly">
-                                                {t("customChart.yearly")}
-                                            </SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                        <SegmentedControlItem value="monthly">
+                                            {t("customChart.monthly")}
+                                        </SegmentedControlItem>
+                                        <SegmentedControlItem value="yearly">
+                                            {t("customChart.yearly")}
+                                        </SegmentedControlItem>
+                                    </SegmentedControl>
                                 </div>
                             )}
 
@@ -380,32 +383,48 @@ export function CustomChartBuilderModal({
                                     <Label htmlFor={`${fieldId}-from`}>
                                         {t("customChart.dateFrom")}
                                     </Label>
-                                    <Input
+                                    <DatePicker
                                         id={`${fieldId}-from`}
-                                        type="date"
-                                        value={state.dateRangeStart}
-                                        onChange={(e) =>
+                                        value={
+                                            state.dateRangeStart
+                                                ? parseLocalDateFromYmd(
+                                                      state.dateRangeStart,
+                                                  )
+                                                : undefined
+                                        }
+                                        onChange={(d) =>
                                             update(
                                                 "dateRangeStart",
-                                                e.target.value,
+                                                d ? toYmd(d) : "",
                                             )
                                         }
+                                        placeholder={t("customChart.dateFrom")}
+                                        allowClear
+                                        clearLabel={t("common.clear")}
                                     />
                                 </div>
                                 <div className="space-y-1">
                                     <Label htmlFor={`${fieldId}-to`}>
                                         {t("customChart.dateTo")}
                                     </Label>
-                                    <Input
+                                    <DatePicker
                                         id={`${fieldId}-to`}
-                                        type="date"
-                                        value={state.dateRangeEnd}
-                                        onChange={(e) =>
+                                        value={
+                                            state.dateRangeEnd
+                                                ? parseLocalDateFromYmd(
+                                                      state.dateRangeEnd,
+                                                  )
+                                                : undefined
+                                        }
+                                        onChange={(d) =>
                                             update(
                                                 "dateRangeEnd",
-                                                e.target.value,
+                                                d ? toYmd(d) : "",
                                             )
                                         }
+                                        placeholder={t("customChart.dateTo")}
+                                        allowClear
+                                        clearLabel={t("common.clear")}
                                     />
                                 </div>
                             </div>
@@ -446,6 +465,9 @@ export function CustomChartBuilderModal({
                                                 <Button
                                                     variant="outline"
                                                     role="combobox"
+                                                    aria-label={t(
+                                                        "customChart.addCategory",
+                                                    )}
                                                     aria-expanded={catOpen}
                                                     className="w-full justify-between font-normal"
                                                 >
@@ -600,6 +622,9 @@ export function CustomChartBuilderModal({
                                                 <Button
                                                     variant="outline"
                                                     role="combobox"
+                                                    aria-label={t(
+                                                        "customChart.addRecipient",
+                                                    )}
                                                     aria-expanded={recOpen}
                                                     className="w-full justify-between font-normal"
                                                 >
@@ -750,6 +775,9 @@ export function CustomChartBuilderModal({
                                                 <Button
                                                     variant="outline"
                                                     role="combobox"
+                                                    aria-label={t(
+                                                        "customChart.addTag",
+                                                    )}
                                                     aria-expanded={tagOpen}
                                                     className="w-full justify-between font-normal"
                                                 >

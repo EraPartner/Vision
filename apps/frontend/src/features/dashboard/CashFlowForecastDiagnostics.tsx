@@ -328,7 +328,7 @@ export function CashFlowForecastDiagnostics({
                                             <span className="w-44 truncate type-footnote">
                                                 {e.label}
                                             </span>
-                                            <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                                            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-foreground/[0.08]">
                                                 <div
                                                     className="h-full rounded-full transition-[width] duration-normal"
                                                     style={{

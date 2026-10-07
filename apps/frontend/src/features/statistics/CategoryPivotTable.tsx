@@ -442,7 +442,7 @@ export function CategoryPivotTable({
                             {t("common.previous")}
                         </Button>
                         <span
-                            className="min-w-32 text-center text-sm text-muted-foreground"
+                            className="min-w-32 text-center type-footnote tabular-nums text-label-secondary"
                             aria-live="polite"
                         >
                             {visiblePeriods.length > 0
@@ -469,14 +469,14 @@ export function CategoryPivotTable({
                 <ScrollArea className="w-full">
                     <div className="min-w-[800px]">
                         <table
-                            className="w-full text-sm"
+                            className="w-full type-body"
                             aria-label={t("statsPage.pivotTitle")}
                         >
                             <thead>
                                 <tr className="border-b border-border">
                                     <th
                                         scope="col"
-                                        className="text-left py-2 px-3 font-medium text-muted-foreground sticky left-0 table-sticky-col z-10"
+                                        className="text-left py-2 px-3 type-footnote font-medium text-label-secondary sticky left-0 table-sticky-col z-10"
                                     >
                                         {t("statsPage.category")}
                                     </th>
@@ -485,7 +485,7 @@ export function CategoryPivotTable({
                                             key={p}
                                             scope="col"
                                             data-pivot-period={p}
-                                            className="text-right py-2 px-3 font-medium text-muted-foreground whitespace-nowrap"
+                                            className="text-right py-2 px-3 type-footnote font-medium text-label-secondary whitespace-nowrap"
                                         >
                                             {formatPeriodShort(
                                                 p,
@@ -495,7 +495,7 @@ export function CategoryPivotTable({
                                     ))}
                                     <th
                                         scope="col"
-                                        className="text-right py-2 px-3 font-bold text-foreground"
+                                        className="text-right py-2 px-3 type-footnote font-medium text-foreground"
                                     >
                                         {t("statsPage.total")}
                                     </th>
@@ -520,8 +520,8 @@ export function CategoryPivotTable({
                                             <Fragment
                                                 key={`group-${group.general}`}
                                             >
-                                                <tr className="border-b border-border/50 bg-muted/30">
-                                                    <td className="py-2 px-3 font-semibold sticky left-0 table-sticky-col z-10 whitespace-nowrap">
+                                                <tr className="border-b border-border/50 bg-foreground/[0.03]">
+                                                    <td className="py-2 px-3 type-headline sticky left-0 table-sticky-col z-10 whitespace-nowrap">
                                                         {expandable ? (
                                                             <button
                                                                 type="button"
@@ -551,7 +551,7 @@ export function CategoryPivotTable({
                                                                               },
                                                                           )
                                                                 }
-                                                                className="inline-flex items-center gap-1 hover:text-primary focus-ring rounded"
+                                                                className="-ml-1.5 inline-flex h-7 items-center gap-1 rounded-chip px-1.5 transition-[background-color,color] duration-fast ease-glide hover:bg-foreground/[0.06] hover:text-primary focus-ring"
                                                             >
                                                                 {isCollapsed ? (
                                                                     <ChevronRight className="h-4 w-4" />
@@ -594,7 +594,7 @@ export function CategoryPivotTable({
                                                                     p
                                                                 }
                                                                 className={cn(
-                                                                    "text-right py-2 px-3 tabular-nums font-semibold",
+                                                                    "text-right py-2 px-3 tabular-nums type-headline",
                                                                     val === 0 &&
                                                                         "text-muted-foreground/40",
                                                                     val < 0 &&
@@ -651,7 +651,7 @@ export function CategoryPivotTable({
                                                         return (
                                                             <td
                                                                 className={cn(
-                                                                    "text-right py-2 px-3 font-bold tabular-nums",
+                                                                    "text-right py-2 px-3 type-headline tabular-nums",
                                                                     group.total <
                                                                         0 &&
                                                                         "text-loss",
@@ -877,7 +877,7 @@ export function CategoryPivotTable({
                                 )}
                             </tbody>
                             <tfoot>
-                                <tr className="border-t-2 border-border font-bold">
+                                <tr className="border-t-2 border-border type-headline">
                                     <td className="py-2 px-3 sticky left-0 table-sticky-col z-10">
                                         {t("statsPage.total")}
                                     </td>

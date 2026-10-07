@@ -8,8 +8,10 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
+    SegmentedControl,
+    SegmentedControlItem,
+} from "@/components/ui/segmented-control";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 
 type ExportFormat = "csv" | "json";
@@ -48,39 +50,35 @@ export function BulkExportDialog({
                         {t("txPage.bulk.exportDesc")}
                     </DialogDescription>
                 </DialogHeader>
-                {/* Real <form> so Enter (e.g. with a format radio focused) exports.
+                {/* Real <form> so Enter (e.g. with a format segment focused) exports.
                     grid gap-5 mirrors DialogContent's layout, so the wrapper is
                     layout-neutral. */}
                 <form onSubmit={handleApply} className="grid gap-5">
-                    <div className="py-2">
-                        <RadioGroup
+                    <div className="grid gap-2 py-2">
+                        <span
+                            id="bulk-export-format-label"
+                            className="type-headline text-foreground"
+                        >
+                            {t("txPage.bulk.exportFormat")}
+                        </span>
+                        <SegmentedControl
+                            aria-labelledby="bulk-export-format-label"
                             value={format}
                             onValueChange={(v) => setFormat(v as ExportFormat)}
+                            className="w-full"
                         >
-                            <div className="flex items-center gap-2">
-                                <RadioGroupItem
-                                    value="csv"
-                                    id="bulk-export-csv"
-                                />
-                                <Label htmlFor="bulk-export-csv">
-                                    {t("txPage.bulk.exportFormatCsv")}
-                                </Label>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <RadioGroupItem
-                                    value="json"
-                                    id="bulk-export-json"
-                                />
-                                <Label htmlFor="bulk-export-json">
-                                    {t("txPage.bulk.exportFormatJson")}
-                                </Label>
-                            </div>
-                        </RadioGroup>
+                            <SegmentedControlItem value="csv">
+                                {t("txPage.bulk.exportFormatCsv")}
+                            </SegmentedControlItem>
+                            <SegmentedControlItem value="json">
+                                {t("txPage.bulk.exportFormatJson")}
+                            </SegmentedControlItem>
+                        </SegmentedControl>
                     </div>
                     <DialogFooter>
                         <Button
                             type="button"
-                            variant="ghost"
+                            variant="outline"
                             onClick={() => onOpenChange(false)}
                             disabled={pending}
                         >

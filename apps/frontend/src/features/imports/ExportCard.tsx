@@ -212,7 +212,7 @@ export function ExportCard() {
                             onClick={() => handleExport(format)}
                             disabled={exportingFormat !== null}
                             variant="outline"
-                            className="flex-1 h-11"
+                            className="flex-1"
                             size="lg"
                         >
                             {exportingFormat === format ? (

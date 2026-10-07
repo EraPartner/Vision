@@ -129,13 +129,16 @@ export function MonthlyTrendsChart({
             </div>
 
             <div className="mt-6 grid grid-cols-2 gap-3">
-                <div className="flex items-center gap-2 p-3 rounded-lg bg-gain/10 border border-gain/30">
-                    <div className="w-3 h-3 rounded-full flex-shrink-0 bg-gain"></div>
-                    <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-gain">
+                <div className="flex items-center gap-3 rounded-card corner-continuous bg-gain/10 p-3">
+                    <span
+                        aria-hidden="true"
+                        className="h-2.5 w-2.5 shrink-0 rounded-full bg-gain"
+                    />
+                    <div className="min-w-0 flex-1">
+                        <p className="type-footnote text-label-secondary">
                             {t("monthlyTrends.totalIncome")}
                         </p>
-                        <p className="text-sm font-bold text-gain">
+                        <p className="type-headline tabular-nums text-gain">
                             <Money
                                 amount={totalIncome}
                                 currency={defaultCurrency}
@@ -143,13 +146,16 @@ export function MonthlyTrendsChart({
                         </p>
                     </div>
                 </div>
-                <div className="flex items-center gap-2 p-3 rounded-lg bg-loss/10 border border-loss/30">
-                    <div className="w-3 h-3 rounded-full flex-shrink-0 bg-loss"></div>
-                    <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-loss">
+                <div className="flex items-center gap-3 rounded-card corner-continuous bg-loss/10 p-3">
+                    <span
+                        aria-hidden="true"
+                        className="h-2.5 w-2.5 shrink-0 rounded-full bg-loss"
+                    />
+                    <div className="min-w-0 flex-1">
+                        <p className="type-footnote text-label-secondary">
                             {t("monthlyTrends.totalSpending")}
                         </p>
-                        <p className="text-sm font-bold text-loss">
+                        <p className="type-headline tabular-nums text-loss">
                             <Money
                                 amount={totalSpending}
                                 currency={defaultCurrency}
@@ -172,7 +178,7 @@ export function MonthlyTrendsChart({
                     <CardTitle variant="sm">
                         {t("monthlyTrends.title")}
                     </CardTitle>
-                    <CardDescription className="text-base">
+                    <CardDescription>
                         {t("monthlyTrends.desc")}
                     </CardDescription>
                 </div>

@@ -177,7 +177,7 @@ export function NetSummaryCard({
                     <div
                         role="img"
                         aria-label={splitBarLabel}
-                        className="h-2.5 w-full overflow-hidden rounded-full bg-muted/50 flex"
+                        className="flex h-2.5 w-full overflow-hidden rounded-full bg-foreground/[0.08]"
                     >
                         <div
                             aria-hidden="true"
