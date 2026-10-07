@@ -2,7 +2,7 @@
 title: DashboardSettingsDialog
 type: component
 status: active
-date: 2026-10-06
+date: 2026-10-07
 updated: 2026-10-06
 tags:
   [
@@ -399,4 +399,4 @@ ADR-183 removed `settings.done`, `settings.description`, `settings.saveHint`, `s
 - Settings Context: `[[apps/frontend/src/stores/hydration/SettingsHydration.tsx]]`
 - App Settings Context: `[[apps/frontend/src/stores/hydration/AppSettingsHydration.tsx]]`
 - API Client: `[[apps/frontend/src/lib/api.ts]]`
-- Settings API: `[[apps/node-backend/src/routes/settings.js]]`
+- Settings API: `[[apps/node-backend/src/routes/settings.ts]]`

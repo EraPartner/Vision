@@ -50,7 +50,7 @@ import { attachmentRepository } from '../../src/services/attachmentRecordService
 import { storeAttachment, removeAttachmentFile, verifyAttachmentContent } from '../../src/services/attachmentService.js';
 import { logger } from '../../src/config/logger.ts';
 
-const { default: attachmentsRouter } = await import('../../src/routes/attachments.js');
+const { default: attachmentsRouter } = await import('../../src/routes/attachments.ts');
 
 const api = routeAgent(attachmentsRouter, { mountPath: '/api/attachments' });
 const BASE = '/api/attachments';

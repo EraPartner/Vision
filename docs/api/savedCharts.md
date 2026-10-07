@@ -18,7 +18,7 @@ aliases:
   - chart-config
   - analytics-saved
 related_code:
-  - apps/node-backend/src/routes/savedCharts.js
+  - apps/node-backend/src/routes/savedCharts.ts
   - apps/node-backend/src/repositories/savedChartsRepository.ts
   - alembic/versions/0096_normalize_saved_chart_filters.py
 ---

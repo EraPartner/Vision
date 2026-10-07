@@ -59,7 +59,7 @@ import {
 } from "../../src/services/recipientPatternService.js";
 
 const { default: recipientsRouter } =
-  await import("../../src/routes/recipients.js");
+  await import("../../src/routes/recipients.ts");
 
 const api = routeAgent(recipientsRouter, { mountPath: "/api/recipients" });
 const BASE = "/api/recipients";

@@ -43,7 +43,7 @@ vi.mock("../../src/config/logger.ts", () => ({ logger: mockLogger() }));
 
 import { runPortfolioImportPipeline } from "../../src/services/portfolioImportPipeline/index.js";
 import accountService from "../../src/services/accountService.js";
-import router from "../../src/routes/portfolioImportRoutes.js";
+import router from "../../src/routes/portfolioImportRoutes.ts";
 const BASE = "/api/portfolio/import";
 const api = routeAgent(router, { mountPath: BASE });
 const MIME =

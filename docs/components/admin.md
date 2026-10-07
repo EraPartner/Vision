@@ -2,7 +2,7 @@
 title: Admin Pages
 type: component
 status: active
-date: 2026-04-25
+date: 2026-10-07
 updated: 2026-04-24
 tags: [component, admin, observability, dashboard, provider-health, endpoint-liveness, phase-f]
 description: System observability dashboard components (Phase F) - AdminOverviewPage, ProviderHealthPage, EndpointLivenessPage
@@ -12,7 +12,7 @@ related_code:
   - apps/frontend/src/pages/admin/ProviderHealthPage.tsx
   - apps/frontend/src/pages/admin/EndpointLivenessPage.tsx
   - apps/frontend/src/lib/api/admin.ts
-  - apps/node-backend/src/routes/admin.js
+  - apps/node-backend/src/routes/admin.ts
 ---
 
 # Admin Pages

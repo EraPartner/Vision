@@ -9,7 +9,7 @@ updated: 2026-09-19
 tags: [api, categories, organization, GENERAL-DETAIL, atomic, phase-6]
 status: active
 aliases: [categories-api, category-management, labels, tags, GENERAL-DETAIL]
-related_code: [[apps/node-backend/src/routes/categories.js]], [[apps/node-backend/src/repositories/categoryRepository.ts]], [[apps/node-backend/src/repositories/categoryHierarchyRepository.ts]]
+related_code: [[apps/node-backend/src/routes/categories.ts]], [[apps/node-backend/src/repositories/categoryRepository.ts]], [[apps/node-backend/src/repositories/categoryHierarchyRepository.ts]]
 ---
 
 # Categories API
@@ -101,7 +101,7 @@ When the request paginates (explicit `limit`/`offset`), the body additionally ca
 
 Implementation note:
 
-- Unpaginated requests skip the `COUNT(*)` round-trip entirely (`total` = row count); paginated requests fetch the page and the count ([[apps/node-backend/src/routes/categories.js]]).
+- Unpaginated requests skip the `COUNT(*)` round-trip entirely (`total` = row count); paginated requests fetch the page and the count ([[apps/node-backend/src/routes/categories.ts]]).
 
 ### POST /api/categories
 

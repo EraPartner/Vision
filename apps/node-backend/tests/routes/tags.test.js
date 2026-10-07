@@ -21,7 +21,7 @@ vi.mock("../../src/repositories/tagRepository.ts", () => ({
 
 import tagRepository from "../../src/repositories/tagRepository.ts";
 
-const { default: tagsRouter } = await import("../../src/routes/tags.js");
+const { default: tagsRouter } = await import("../../src/routes/tags.ts");
 
 const api = routeAgent(tagsRouter, { mountPath: "/api/tags" });
 const BASE = "/api/tags";

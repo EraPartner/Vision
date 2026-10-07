@@ -31,7 +31,7 @@ aliases:
   - research-endpoints
   - multi-provider-research
 related_code:
-  - apps/node-backend/src/routes/research.js
+  - apps/node-backend/src/routes/research.ts
   - apps/node-backend/src/services/research/researchAggregator.js
   - apps/node-backend/src/services/research/capabilityMap.js
   - apps/node-backend/src/services/research/quotaGovernor.js

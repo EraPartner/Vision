@@ -76,7 +76,7 @@ import { query as dbQuery } from "../../src/database/connection.ts";
 import { generateLoanRepaymentSchedule } from "../../src/services/calculations/loanSchedule.js";
 
 const { default: plannedRouter } =
-  await import("../../src/routes/plannedTransactions.js");
+  await import("../../src/routes/plannedTransactions.ts");
 
 // Historical assertion alias: every method below is the independently mocked
 // service surface used by the real router.
@@ -334,6 +334,17 @@ describe("Planned Transaction Routes", () => {
         amount: 50,
         is_recurring: true,
         recurrence_pattern: "fortnightly",
+      }).expect(400);
+      expect(plannedTransactionRepository.create).not.toHaveBeenCalled();
+    });
+
+    it("rejects a non-string recurrence_pattern with a 400, not a 500", async () => {
+      await post({
+        planned_date: "2026-03-15",
+        account_id: 7,
+        amount: 50,
+        is_recurring: true,
+        recurrence_pattern: 5,
       }).expect(400);
       expect(plannedTransactionRepository.create).not.toHaveBeenCalled();
     });
@@ -653,6 +664,7 @@ describe("Planned Transaction Routes", () => {
         { recurrence_end_date: "banana" },
         { tags: "nope" },
         { recurrence_pattern: "fortnightly" },
+        { recurrence_pattern: true },
       ]) {
         await patch(1, body).expect(400);
       }

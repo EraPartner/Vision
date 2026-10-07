@@ -39,7 +39,7 @@ related_code:
   - apps/frontend/src/hooks/useSavedCharts.ts
   - apps/node-backend/src/services/categoryOutlierService.js
   - apps/node-backend/src/services/cashForecastInsightService.js
-  - apps/node-backend/src/routes/info.js
+  - apps/node-backend/src/routes/info.ts
   - apps/node-backend/src/repositories/infoRepository.ts
 ---
 
@@ -423,14 +423,14 @@ The statistics feature relies on these backend endpoints:
 
 | Endpoint                                   | Purpose                                                                                                            | Location                                         |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------ |
-| `GET /api/transactions`                    | Fetch all transactions (paginated, with currency conversion)                                                       | [[apps/node-backend/src/routes/transactions.js]] |
-| `GET /api/categories`                      | Fetch all categories                                                                                               | [[apps/node-backend/src/routes/categories.js]]   |
-| `GET /api/info/recurring-patterns`         | Recurring pattern detection (used in Planned Payments)                                                             | [[apps/node-backend/src/routes/info.js]]         |
-| `GET /api/info/insights-digest`            | Server-filtered Smart Insights findings, including zero-based month-end net cash flow                              | [[apps/node-backend/src/routes/info.js]]         |
-| `GET /api/info/insights-count`             | Cheap versioned undismissed-count projection for navigation                                                        | [[apps/node-backend/src/routes/info.js]]         |
-| `PUT /api/info/insight-dismissals`         | Persist a strict subscription or category-outlier dismissal                                                        | [[apps/node-backend/src/routes/info.js]]         |
-| `GET /api/aggregations/recipient-insights` | Merchant spending insights; now accepts `excluded_category_ids[]` / `excluded_recipient_ids[]` (June 2026 bug fix) | [[apps/node-backend/src/routes/aggregations.js]] |
-| `GET /api/info/exchange-rates`             | Exchange rates for currency normalization                                                                          | [[apps/node-backend/src/routes/info.js]]         |
+| `GET /api/transactions`                    | Fetch all transactions (paginated, with currency conversion)                                                       | [[apps/node-backend/src/routes/transactions.ts]] |
+| `GET /api/categories`                      | Fetch all categories                                                                                               | [[apps/node-backend/src/routes/categories.ts]]   |
+| `GET /api/info/recurring-patterns`         | Recurring pattern detection (used in Planned Payments)                                                             | [[apps/node-backend/src/routes/info.ts]]         |
+| `GET /api/info/insights-digest`            | Server-filtered Smart Insights findings, including zero-based month-end net cash flow                              | [[apps/node-backend/src/routes/info.ts]]         |
+| `GET /api/info/insights-count`             | Cheap versioned undismissed-count projection for navigation                                                        | [[apps/node-backend/src/routes/info.ts]]         |
+| `PUT /api/info/insight-dismissals`         | Persist a strict subscription or category-outlier dismissal                                                        | [[apps/node-backend/src/routes/info.ts]]         |
+| `GET /api/aggregations/recipient-insights` | Merchant spending insights; now accepts `excluded_category_ids[]` / `excluded_recipient_ids[]` (June 2026 bug fix) | [[apps/node-backend/src/routes/aggregations.ts]] |
+| `GET /api/info/exchange-rates`             | Exchange rates for currency normalization                                                                          | [[apps/node-backend/src/routes/info.ts]]         |
 
 **Phase G Migration (April 2026):** Recipient insights now use the aggregations endpoint. The apiClient method `getRecipientInsights()` transparently unwraps the aggregation envelope to maintain compatibility.
 
@@ -462,7 +462,7 @@ Two new query parameters added to `GET /api/transactions`:
 **Backend Implementation:**
 
 - `[[apps/node-backend/src/lib/filterBuilder.ts]]` — `buildTransactionWhere()` now accepts `categoryIds` and `transactionType` params
-- `[[apps/node-backend/src/routes/transactions.js]]` — `parseTransactionListQuery()` parses comma-separated `category_ids` and `transaction_type` from query string
+- `[[apps/node-backend/src/routes/transactions.ts]]` — `parseTransactionListQuery()` parses comma-separated `category_ids` and `transaction_type` from query string
 - `[[apps/node-backend/src/repositories/transactionRepository.ts]]` — `getAllWithCount()` destructures and forwards filter params to service layer
 
 ### Frontend Drillthrough Implementation

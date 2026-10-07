@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { parseBooleanQueryParam } from "../src/lib/httpParams.ts";
+import {
+  optionalQueryString,
+  parseBooleanQueryParam,
+} from "../src/lib/httpParams.ts";
+import { ValidationError } from "../src/middleware/errorHandler.ts";
 import { withCreateOutcome } from "../src/lib/createOutcome.ts";
 
 describe("parseBooleanQueryParam", () => {
@@ -41,4 +45,21 @@ describe("withCreateOutcome", () => {
       });
     },
   );
+});
+
+describe("optionalQueryString", () => {
+  it("returns a single string value and undefined when absent", () => {
+    expect(optionalQueryString({ q: "abc" }, "q")).toBe("abc");
+    expect(optionalQueryString({ q: "" }, "q")).toBe("");
+    expect(optionalQueryString({}, "q")).toBeUndefined();
+  });
+
+  it("rejects repeated and bracketed keys with a validation error", () => {
+    expect(() => optionalQueryString({ q: ["a", "b"] }, "q")).toThrow(
+      ValidationError,
+    );
+    expect(() => optionalQueryString({ q: { x: "1" } }, "q")).toThrow(
+      "q must be a single value",
+    );
+  });
 });

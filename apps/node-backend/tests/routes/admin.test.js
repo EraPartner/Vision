@@ -69,7 +69,7 @@ import { listProviderHealth } from "../../src/services/providerHealthService.js"
 import { getRouteManifest } from "../../src/services/routeManifest.js";
 import https from "https";
 
-const { default: adminRouter } = await import("../../src/routes/admin.js");
+const { default: adminRouter } = await import("../../src/routes/admin.ts");
 
 // Mirrors main.js:31 exactly — a per-request getter so a test can flip
 // settings.admin.authToken between calls and see the guard react.
@@ -315,6 +315,22 @@ describe("Admin Routes", () => {
 
     it("should return no-release payload when GitHub returns not found", async () => {
       mockGitHubReleaseBody(JSON.stringify({ message: "Not Found" }));
+
+      const res = await api.get(`${BASE}/update/check`).expect(200);
+
+      expect(res.body).toEqual(
+        okEnvelope({
+          up_to_date: true,
+          current_version: "unknown",
+          error: "No published releases found",
+          latest_version: null,
+          update_mode: "source",
+        }),
+      );
+    });
+
+    it("should return no-release payload when GitHub returns a null JSON body", async () => {
+      mockGitHubReleaseBody("null");
 
       const res = await api.get(`${BASE}/update/check`).expect(200);
 

@@ -77,8 +77,8 @@ related_code:
     "apps/node-backend/src/services/dataImportService.js",
     "apps/node-backend/src/services/deduplication.js",
     "apps/node-backend/src/lib/textNormalization.ts",
-    "apps/node-backend/src/routes/importRoutes.js",
-    "apps/node-backend/src/routes/importBatchRoutes.js",
+    "apps/node-backend/src/routes/importRoutes.ts",
+    "apps/node-backend/src/routes/importBatchRoutes.ts",
     "apps/node-backend/src/lib/sse.ts",
     "apps/node-backend/src/repositories/importBatchRepository.ts",
     "apps/node-backend/src/repositories/customParserConfigRepository.ts",
@@ -499,7 +499,7 @@ Field-based deduplication for transactions. Uses SHA-256 hash of `date|amount|re
   malformed values use `EUR`; Vision applies that default in its adapter, while the other six stage
   `NULL` for the commit boundary to default. SABB derives a fixed or embedded code; Wise retains its
   separate source/target currency parsing.
-- Temporary upload-file cleanup in import routes now uses non-blocking async unlink to avoid request-path synchronous filesystem blocking while keeping ignore-on-missing behavior ([[apps/node-backend/src/routes/importRoutes.js]]).
+- Temporary upload-file cleanup in import routes now uses non-blocking async unlink to avoid request-path synchronous filesystem blocking while keeping ignore-on-missing behavior ([[apps/node-backend/src/routes/importRoutes.ts]]).
 
 ### 3. Deduplication
 
@@ -798,7 +798,7 @@ The streaming endpoint uses `createSseWriter(req, res)` ([[apps/node-backend/src
 Import routes sanitize error details to prevent exposure of internal exception messages:
 
 - JSON responses return generic `"Import failed"` message
-- SSE error events also sanitized (see [[apps/node-backend/src/routes/importRoutes.js]])
+- SSE error events also sanitized (see [[apps/node-backend/src/routes/importRoutes.ts]])
 - Batch status marked as `'failed'` with truncated error summary (2000 chars max) stored in database
 
 ## Raw Transaction Storage
@@ -887,7 +887,7 @@ The `ExportCard` component now provides multi-select pickers for bank accounts a
 
 #### buildExportFilters
 
-**File:** `[[apps/node-backend/src/routes/transactions.js]]`
+**File:** `[[apps/node-backend/src/routes/transactions.ts]]`
 
 - **Purpose:** Construct precise SQL filters for `bank_accounts` and `category_ids` query params
 - **Precedence:** Plural params (`bank_accounts`, `category_ids`) take precedence over singular params (`bank_account`, `category_id`)
@@ -952,7 +952,7 @@ Vision supports receipt and document attachments for transactions via the attach
 - [[apps/node-backend/src/middleware/attachmentUpload.ts]]: Multipart memory buffering, declared MIME prefilter, and upload-size limit
 - [[apps/node-backend/src/services/attachmentService.js]]: Content verification, file storage, path resolution, and removal
 - [[apps/node-backend/src/repositories/attachmentRepository.ts]]: Database operations (CRUD)
-- [[apps/node-backend/src/routes/attachments.js]]: Four REST endpoints for attachment management
+- [[apps/node-backend/src/routes/attachments.ts]]: Four REST endpoints for attachment management
 - Database migration `0004_attachments.py`: Schema with transaction FK, stored_path, mime_type, size_bytes
 
 ### Frontend Components

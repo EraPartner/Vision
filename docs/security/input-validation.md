@@ -36,14 +36,14 @@ related_code:
     "apps/node-backend/src/lib/validation.ts",
     "apps/node-backend/src/middleware/validation.ts",
     "apps/node-backend/src/lib/importBatchIds.ts",
-    "apps/node-backend/src/routes/parserConfigRoutes.js",
-    "apps/node-backend/src/routes/importRoutes.js",
-    "apps/node-backend/src/routes/portfolioImportRoutes.js",
-    "apps/node-backend/src/routes/investments.js",
+    "apps/node-backend/src/routes/parserConfigRoutes.ts",
+    "apps/node-backend/src/routes/importRoutes.ts",
+    "apps/node-backend/src/routes/portfolioImportRoutes.ts",
+    "apps/node-backend/src/routes/investments.ts",
     "apps/node-backend/src/services/accountService.js",
     "apps/node-backend/src/lib/filterBuilder.ts",
-    "apps/node-backend/src/routes/aggregations.js",
-    "apps/node-backend/src/routes/transactions.js",
+    "apps/node-backend/src/routes/aggregations.ts",
+    "apps/node-backend/src/routes/transactions.ts",
     "apps/node-backend/src/services/aiChat/tools/_validate.js",
     "apps/node-backend/src/lib/csv.ts",
     "apps/node-backend/src/lib/urlSafety.ts",
@@ -133,7 +133,7 @@ const accountId = assertOptionalId(req.query.account_id, "account_id");
 - Anything else must satisfy `validateId`; otherwise a `ValidationError` (400) is raised **before** the value reaches the database layer
 - This is what keeps `?account_id=abc` a 400 rather than a `NaN` parameter that Postgres rejects with `22P02` as a 500
 
-**Call sites:** `routes/transactions.js` (export filters), `routes/info/statistics.js`.
+**Call sites:** `routes/transactions.ts` (export filters), `routes/info/statistics.ts`.
 
 ---
 
@@ -166,8 +166,8 @@ validateIntArray(values, (fieldName = "ids"));
 - **Every element goes through `validateId`**, so the per-element accept set is exactly the one documented above (plain base-10 digit string or integer `number`, 1..2,147,483,647)
 - One bad element rejects the **whole** array — `ValidationError` with `"<field> contains invalid value: <value>"`. No partial or filtered set ever reaches the query
 
-**Call sites — bodies:** `routes/savedCharts.js` (`categoryIds`, `recipientIds`, `tagIds`), `routes/settings.js` (`dashboard_settings.excludedCategoryIds` / `.excludedRecipientIds`).
-**Call sites — query strings:** `routes/aggregations.js` via `parseIdArrayQueryParam` (see below).
+**Call sites — bodies:** `routes/savedCharts.ts` (`categoryIds`, `recipientIds`, `tagIds`), `routes/settings.ts` (`dashboard_settings.excludedCategoryIds` / `.excludedRecipientIds`).
+**Call sites — query strings:** `routes/aggregations.ts` via `parseIdArrayQueryParam` (see below).
 
 > [!warning] Breaking change (2026-08-11) — `["12abc"]` no longer becomes `[12]`
 > The element parse was `parseInt`, the same truncation the `:id` params lost the same day, and here it was worse. These arrays feed **exclusion and filter sets**, not a single-record lookup, so a truncated element did not 404 — it quietly changed which rows an aggregation or saved chart covered, and no error surfaced to anyone. `["12abc"]` silently became category `[12]`; `["12.5"]` and `["1e3"]` likewise became `[12]` and `[1]`.
@@ -185,9 +185,15 @@ regression test. Route handlers must not use this helper.
 
 ---
 
+### Single-Valued Query Params
+
+Express's default query parser turns a repeated key (`?search=a&search=b`) into an array and a bracketed key (`?search[x]=1`) into an object. A route that expects one string reads it with `optionalQueryString(req.query, "<name>")` from `lib/httpParams.ts`. The helper returns the string, returns `undefined` when the key is absent, and otherwise raises `ValidationError` → **400 `VALIDATION_ERROR`** (`"<name> must be a single value"`).
+
+Before 2026-10-07 these values reached string methods, SQL parameters or cache keys unchecked, which answered 500 or quietly used one of the values. Query params whose parser already accepts any shape (boolean flags, pagination, the repeatable id lists below) do not use it.
+
 ### Repeatable ID Query Params (aggregations)
 
-The aggregation endpoints take their id lists in the query string, one occurrence per id (`?excluded_category_ids=5&excluded_category_ids=9`). They go through `parseIdArrayQueryParam` in `routes/aggregations.js`, a thin throwing wrapper around `validateIntArray` — so the per-element accept set is the same one documented under [[docs/security/input-validation#ID Validation|ID Validation]], not a second rule.
+The aggregation endpoints take their id lists in the query string, one occurrence per id (`?excluded_category_ids=5&excluded_category_ids=9`). They go through `parseIdArrayQueryParam` in `routes/aggregations.ts`, a thin throwing wrapper around `validateIntArray` — so the per-element accept set is the same one documented under [[docs/security/input-validation#ID Validation|ID Validation]], not a second rule.
 
 ```javascript
 parseIdArrayQueryParam(
@@ -218,7 +224,7 @@ parseIdArrayQueryParam(
 The transactions list and the two streamed export endpoints take their id lists comma-separated
 (`?category_ids=5,7,12`, `?account_ids=3,9`) rather than one occurrence per id, because that is the
 shape their `ids.join(',')` frontend builders emit. They go through `parseIdListQueryParam` in
-`routes/transactions.js` — a thin throwing wrapper around `validateIntArray`, so the per-element
+`routes/transactions.ts` — a thin throwing wrapper around `validateIntArray`, so the per-element
 accept set is the same one under [[docs/security/input-validation#ID Validation|ID Validation]],
 not a third rule. Repeated occurrences work too: Express hands back an array and `String([...])`
 re-joins it with commas.
@@ -418,11 +424,11 @@ The last `parseInt`-based id parsers outside the transactions routes, converged 
 
 | Site                                            | Param                         | Was                                       |
 | ----------------------------------------------- | ----------------------------- | ----------------------------------------- |
-| `routes/plannedTransactions.js` (`GET /`)       | `category_id`, `recipient_id` | `x ? parseInt(x) : null`                  |
-| `routes/recipients.js` (`GET /`)                | `default_category_id`         | `x ? parseInt(x) : null`                  |
-| `routes/research.js` (`POST /mappings/resolve`) | `investment_id`               | `Number.parseInt`, `undefined` on failure |
-| `routes/accounts.js` (`POST /:id/merge`)        | `source_ids[]`                | `parseInt` + `Number.isInteger`           |
-| `routes/accounts.js` (`GET /:id/merge-preview`) | `?into=`                      | `Number(...)`                             |
+| `routes/plannedTransactions.ts` (`GET /`)       | `category_id`, `recipient_id` | `x ? parseInt(x) : null`                  |
+| `routes/recipients.ts` (`GET /`)                | `default_category_id`         | `x ? parseInt(x) : null`                  |
+| `routes/research.ts` (`POST /mappings/resolve`) | `investment_id`               | `Number.parseInt`, `undefined` on failure |
+| `routes/accounts.ts` (`POST /:id/merge`)        | `source_ids[]`                | `parseInt` + `Number.isInteger`           |
+| `routes/accounts.ts` (`GET /:id/merge-preview`) | `?into=`                      | `Number(...)`                             |
 
 > [!warning] Breaking change (2026-08-11) — malformed ids on these five sites
 > Same two failure modes as everywhere else in this family. **Retarget:**
@@ -545,7 +551,7 @@ router.get("/:id", validateIdParam, async (req, res) => {
 });
 ```
 
-Applied in 14 routers: `accounts`, `attachments`, `categories`, `investments`, `plannedTransactions`, `recipientBankAccounts`, `recipients`, `research`, `savedCharts`, `splits`, `tags`, `transactions`, `watchlist`, plus the two import routers via the shared `registerParserRoutes` (`routes/parserConfigRoutes.js`, which registers the four saved-parser-config PATCH/DELETE operations on both).
+Applied in 14 routers: `accounts`, `attachments`, `categories`, `investments`, `plannedTransactions`, `recipientBankAccounts`, `recipients`, `research`, `savedCharts`, `splits`, `tags`, `transactions`, `watchlist`, plus the two import routers via the shared `registerParserRoutes` (`routes/parserConfigRoutes.ts`, which registers the four saved-parser-config PATCH/DELETE operations on both).
 
 ### validateIntParam
 
@@ -747,8 +753,8 @@ const csv = cols.map(escapeCsvValue).join(",");
 
 ### Compliance
 
-- [[apps/node-backend/src/routes/transactions.js]] — `GET /api/transactions/export/csv` ✓
-- [[apps/node-backend/src/routes/splits.js]] — `GET /api/splits/owed/:id/export/csv` ✓
+- [[apps/node-backend/src/routes/transactions.ts]] — `GET /api/transactions/export/csv` ✓
+- [[apps/node-backend/src/routes/splits.ts]] — `GET /api/splits/owed/:id/export/csv` ✓
 
 ---
 

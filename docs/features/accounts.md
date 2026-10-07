@@ -31,8 +31,8 @@ related_code:
     "apps/frontend/src/pages/AccountDetailPage.tsx",
     "apps/frontend/src/features/accounts/",
     "apps/frontend/src/hooks/useAccounts.ts",
-    "apps/node-backend/src/routes/accounts.js",
-    "apps/node-backend/src/routes/transactions.js",
+    "apps/node-backend/src/routes/accounts.ts",
+    "apps/node-backend/src/routes/transactions.ts",
     "apps/node-backend/src/repositories/transactionRepository.ts",
     "apps/node-backend/src/lib/accountBalanceSql.js",
   ]

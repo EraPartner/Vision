@@ -1007,14 +1007,14 @@ bun vitest run --test-name-pattern="testName"
 
 Validation runs (passed): `bun vitest run tests/currencyConversionService.test.js tests/routes/plannedTransactions.test.js tests/routes/transactions.test.js`; `npm test -- --coverage`
 
-Related code: [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/routes/plannedTransactions.js]], [[apps/node-backend/src/routes/transactions.js]]
+Related code: [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/routes/plannedTransactions.ts]], [[apps/node-backend/src/routes/transactions.ts]]
 
 ### Test Updates (2026-04-22)
 
 | File                                              | Area       | Changes                                                                                                                                                                                                                      |
 | ------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [[apps/node-backend/tests/routes/import.test.js]] | Import API | Updated to ADR-026 envelope pattern — validation errors assert `.rejects.toBeInstanceOf(ValidationError)`, success responses check `body.data.xxx` instead of `body.xxx`, mock response includes `res.ok(data, meta)` method |
-| [[apps/node-backend/src/routes/marketLookup.js]]  | Market API | `symbols.split()` operation moved inside try-catch block (line 86), so malformed string parameters now throw `AppError(502)` instead of raw TypeError                                                                        |
+| [[apps/node-backend/src/routes/marketLookup.ts]]  | Market API | `symbols.split()` operation moved inside try-catch block (line 86), so malformed string parameters now throw `AppError(502)` instead of raw TypeError                                                                        |
 
 Related docs: [[docs/adr/026-unified-api-response-envelope|ADR-026]], [[docs/testing/testing#Envelope-Aware Route Testing (ADR-026)|Envelope-Aware Route Testing pattern]]
 
@@ -1083,9 +1083,9 @@ Validation runs (passed):
 - `bun vitest run tests/routes/info.test.js`
 - `npm test -- --coverage`
 
-Coverage snapshot after this update: overall `81.12/66.86/84.49/84.53` and [[apps/node-backend/src/routes/info.js]] `93.62/78.72/100/94.58` (statements/branches/functions/lines).
+Coverage snapshot after this update: overall `81.12/66.86/84.49/84.53` and [[apps/node-backend/src/routes/info.ts]] `93.62/78.72/100/94.58` (statements/branches/functions/lines).
 
-Related source links: [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/database/connection.ts]], [[apps/node-backend/src/services/recurringDetectionService.js]], [[apps/node-backend/src/services/materializedViewService.js]], [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]], [[docs/testing/testing|Testing Documentation]]
+Related source links: [[apps/node-backend/src/routes/info.ts]], [[apps/node-backend/src/database/connection.ts]], [[apps/node-backend/src/services/recurringDetectionService.js]], [[apps/node-backend/src/services/materializedViewService.js]], [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]], [[docs/testing/testing|Testing Documentation]]
 
 ### Backend coverage addendum (2026-04-11, portfolio transaction repository)
 

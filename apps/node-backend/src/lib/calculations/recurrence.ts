@@ -164,8 +164,10 @@ export function calculateNextDate(
     : addMonthsClampedInAppTz(currentDate, step.amount);
 }
 
-export function isValidPattern(pattern: string | null | undefined): boolean {
-  if (!pattern) return false;
+export function isValidPattern(pattern: unknown): boolean {
+  // Request bodies reach this unparsed, so a number or boolean is rejected
+  // here rather than throwing on `toLowerCase`.
+  if (typeof pattern !== "string" || !pattern) return false;
   // A pattern is valid iff the shared grammar can advance it — the same
   // "every N days", N >= 1 rule calculateNextDate applies. (The old version
   // rejected the custom form, so it was useless as a guard and no caller used

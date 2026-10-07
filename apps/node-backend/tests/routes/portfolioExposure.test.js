@@ -31,7 +31,7 @@ vi.mock("../../src/services/investmentService.js", () =>
   ),
 );
 
-const { default: router } = await import("../../src/routes/investments.js");
+const { default: router } = await import("../../src/routes/investments.ts");
 const routeHandler = (method, path) =>
   router.stack
     .find((layer) => layer.route?.path === path && layer.route.methods[method])

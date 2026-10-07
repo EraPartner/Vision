@@ -30,7 +30,7 @@ aliases:
   ]
 related_code:
   [
-    "apps/node-backend/src/routes/ai.js",
+    "apps/node-backend/src/routes/ai.ts",
     "apps/node-backend/src/services/aiChatService.js",
     "apps/node-backend/src/repositories/aiChatRepository.ts",
     "apps/node-backend/src/integrations/ollama/client.ts",
@@ -215,7 +215,7 @@ Frontend /ai-chat
   └── OllamaStatusBanner        (shown when unreachable)
 
 Backend /api/ai
-  ├── routes/ai.js             (SSE pass-through + CRUD + terminal events)
+  ├── routes/ai.ts             (SSE pass-through + CRUD + terminal events)
   ├── services/aiChatService.js (orchestrator; emits public stream events)
   ├── integrations/ollama/client.ts (HTTP wrapper, stream)
   └── services/aiChat/tools/*  (registry → existing repositories)
@@ -450,7 +450,7 @@ Enable via browser DevTools (Console tab) or server-side log aggregation.
 - **Audit log** — every `tool_call` + `tool_result` persisted in `ai_messages`.
 - **Input validation** — Zod on the chat message body; `tools/_validate.js` on tool args, with ids on the shared `validateId` accept set.
 - **Rate limiting** — 30 req/min on `/api/ai/chat`.
-- **Message length limit** — 4000 characters enforced both in frontend (`ChatComposer.tsx`) and backend (routes/ai.js).
+- **Message length limit** — 4000 characters enforced both in frontend (`ChatComposer.tsx`) and backend (routes/ai.ts).
 - **Tools opt-out** — frontend `useTools` toggle allows users to disable tool-calling per-message; when `false`, backend skips tool schemas and returns text-only responses.
 
 See [[docs/security/ai-data-access|AI Data Access Policy]] for the full security posture.

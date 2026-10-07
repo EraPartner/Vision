@@ -36,7 +36,7 @@ vi.mock("../../src/config/logger.ts", () => ({
 import categoryRepository from "../../src/repositories/categoryRepository.ts";
 
 const { default: categoriesRouter } =
-  await import("../../src/routes/categories.js");
+  await import("../../src/routes/categories.ts");
 
 const api = routeAgent(categoriesRouter, { mountPath: "/api/categories" });
 const BASE = "/api/categories";

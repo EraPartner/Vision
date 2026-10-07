@@ -51,7 +51,7 @@ vi.mock("../../src/services/calculations/forecast/index.js", () => ({
 }));
 
 const { default: aggregationsRouter } =
-  await import("../../src/routes/aggregations.js");
+  await import("../../src/routes/aggregations.ts");
 
 const api = routeAgent(aggregationsRouter, { mountPath: "/api/aggregations" });
 

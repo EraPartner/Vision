@@ -669,7 +669,7 @@ Two new test cases in `timezone.test.js`:
 
 ## Backend Route Pattern
 
-**Source:** [[apps/node-backend/src/routes/transactions.js|transactions.js]], [[apps/node-backend/src/routes/splits.js|splits.js]], [[apps/node-backend/src/routes/categories.js|categories.js]], [[apps/node-backend/src/routes/plannedTransactions.js|plannedTransactions.js]]
+**Source:** [[apps/node-backend/src/routes/transactions.ts|transactions.js]], [[apps/node-backend/src/routes/splits.ts|splits.js]], [[apps/node-backend/src/routes/categories.ts|categories.js]], [[apps/node-backend/src/routes/plannedTransactions.ts|plannedTransactions.js]]
 
 Per [[docs/adr/026-unified-api-response-envelope|ADR-026]], all routes return `{ ok: true, data, meta? }` via `res.ok()` middleware. PATCH handlers must sanitize read-only fields immutably:
 
@@ -770,7 +770,7 @@ action and an equivalent collection action. Category assignment uses only the ca
 
 ## List Response Envelope Pattern (ADR-026 Compliance)
 
-**Source:** [[apps/node-backend/src/routes/splits.js|splits.js]], [[apps/node-backend/src/routes/attachments.js|attachments.js]], test suite
+**Source:** [[apps/node-backend/src/routes/splits.ts|splits.js]], [[apps/node-backend/src/routes/attachments.ts|attachments.js]], test suite
 
 All list/paginated endpoints return a consistent envelope shape per [[docs/adr/026-unified-api-response-envelope|ADR-026]]:
 
@@ -862,7 +862,7 @@ items.forEach((item) => console.log(item)); // items is already the array
 
 ## DELETE Response Pattern
 
-**Source:** [[apps/node-backend/src/routes/categories.js|categories.js]], [[apps/node-backend/src/routes/tags.js|tags.js]], [[apps/node-backend/src/routes/importRoutes.js|importRoutes.js]]
+**Source:** [[apps/node-backend/src/routes/categories.ts|categories.js]], [[apps/node-backend/src/routes/tags.ts|tags.js]], [[apps/node-backend/src/routes/importRoutes.ts|importRoutes.js]]
 
 DELETE success responses previously used six different shapes (`204` empty, `{message}`, `{deleted:true}`, `{removed}`, `{ok:true}`, `{patternId}`), which made a generic delete-mutation hook impossible. One rule now applies:
 
@@ -923,7 +923,7 @@ Side-effect-count bodies keep their existing key names; unifying response keys a
 
 ## Wire Casing Convention (snake_case bodies)
 
-**Source:** [[apps/node-backend/src/routes/transactions.js|transactions.js]], [[apps/node-backend/src/routes/recipients.js|recipients.js]], [[apps/node-backend/src/routes/research.js|research.js]]
+**Source:** [[apps/node-backend/src/routes/transactions.ts|transactions.js]], [[apps/node-backend/src/routes/recipients.ts|recipients.js]], [[apps/node-backend/src/routes/research.ts|research.js]]
 
 Request and response bodies were split by router: the domain API speaks snake_case (`transaction_ids`, `alias_ids`, `instrument_key`) while a handful of later routers speak camelCase (`conversationId`, `chartType`, `targetWeights`). One rule now applies:
 
@@ -969,13 +969,13 @@ These predate the rule and keep camelCase — including **new endpoints added to
 
 | Surface                                                 | camelCase keys                           | Direction                                                                     |
 | ------------------------------------------------------- | ---------------------------------------- | ----------------------------------------------------------------------------- |
-| [[apps/node-backend/src/routes/ai.js                    | ai.js]]                                  | `conversationId`, `useTools`                                                  | request + response                                         |
-| [[apps/node-backend/src/routes/savedCharts.js           | savedCharts.js]]                         | `chartType`, `chartVariant`, `timeBucket`, `categoryIds`, `dateRangeStart`, … | request + response                                         |
-| [[apps/node-backend/src/routes/crossWorkspace.js        | crossWorkspace.js]]                      | `targetWeights`, `availableCash`                                              | request + response                                         |
-| [[apps/node-backend/src/routes/admin.js                 | admin.js]] DB-editor routes              | `changes`, `dryRun`, `orderBy` ([[docs/adr/101-db-data-editor                 | ADR-101]])                                                 | request |
-| [[apps/node-backend/src/routes/marketLookup.js          | marketLookup.js]]                        | `changePercent`, `dayHigh`, `prevClose`, `publishedAt`, …                     | response only — passthrough of the upstream provider shape |
-| [[apps/node-backend/src/routes/importRoutes.js          | importRoutes.js]] rollback body          | `{ deleted, recipientsRemoved }` on `DELETE /api/import/batches/:id`          | response only                                              |
-| [[apps/node-backend/src/routes/portfolioImportRoutes.js | portfolioImportRoutes.js]] rollback body | `{ deleted }` on `DELETE /api/portfolio/import/batches/:id`                   | response only                                              |
+| [[apps/node-backend/src/routes/ai.ts                    | ai.js]]                                  | `conversationId`, `useTools`                                                  | request + response                                         |
+| [[apps/node-backend/src/routes/savedCharts.ts           | savedCharts.js]]                         | `chartType`, `chartVariant`, `timeBucket`, `categoryIds`, `dateRangeStart`, … | request + response                                         |
+| [[apps/node-backend/src/routes/crossWorkspace.ts        | crossWorkspace.js]]                      | `targetWeights`, `availableCash`                                              | request + response                                         |
+| [[apps/node-backend/src/routes/admin.ts                 | admin.js]] DB-editor routes              | `changes`, `dryRun`, `orderBy` ([[docs/adr/101-db-data-editor                 | ADR-101]])                                                 | request |
+| [[apps/node-backend/src/routes/marketLookup.ts          | marketLookup.js]]                        | `changePercent`, `dayHigh`, `prevClose`, `publishedAt`, …                     | response only — passthrough of the upstream provider shape |
+| [[apps/node-backend/src/routes/importRoutes.ts          | importRoutes.js]] rollback body          | `{ deleted, recipientsRemoved }` on `DELETE /api/import/batches/:id`          | response only                                              |
+| [[apps/node-backend/src/routes/portfolioImportRoutes.ts | portfolioImportRoutes.js]] rollback body | `{ deleted }` on `DELETE /api/portfolio/import/batches/:id`                   | response only                                              |
 
 Everything else in the import routers is snake_case (`auto_linked_count`); only the two rollback bodies are grandfathered.
 
@@ -1241,7 +1241,7 @@ export const apiClient = new ApiClient();
 
 ## HTTP Request Parameter Parsing Pattern (Phase 10)
 
-**Source:** [[apps/node-backend/src/routes/aggregations.js|aggregations.js]], [[apps/node-backend/src/routes/info.js|info.js]]
+**Source:** [[apps/node-backend/src/routes/aggregations.ts|aggregations.js]], [[apps/node-backend/src/routes/info.ts|info.js]]
 
 Query parameters from `req.query.*` are always strings (or string arrays if multi-valued). Safe parsing requires explicit validation, bounds checking, and fallback defaults to prevent type coercion bugs.
 
@@ -1738,7 +1738,7 @@ As of Phase 3, business logic for non-trivial calculations has been extracted in
 - `applyEventToLots()` returns an object with mapped lot arrays (never mutations), supporting corporate actions (splits, return_of_capital) with immutable lot transformations.
 - Shared cost-basis calculations avoid in-place mutations, enabling safe concurrent processing and eliminating hidden side effects.
 
-**Migration Status:** Complete. The old `services/loanRepaymentService.js` and `services/recurrenceService.js` shims have been removed; `routes/plannedTransactions.js` now uses the canonical `services/calculations/` modules directly.
+**Migration Status:** Complete. The old `services/loanRepaymentService.js` and `services/recurrenceService.js` shims have been removed; `routes/plannedTransactions.ts` now uses the canonical `services/calculations/` modules directly.
 
 ---
 
@@ -1837,7 +1837,7 @@ See [[docs/testing/testing#Property Test Pattern (Phase 8)|Property Test Pattern
 
 ## Aggregation Envelope Pattern (Phase 2, Updated Phase 1)
 
-**Source:** [[apps/node-backend/src/services/calculations/aggregation/_envelope.js|_envelope.js]], [[apps/node-backend/src/routes/aggregations.js|aggregations.js]]
+**Source:** [[apps/node-backend/src/services/calculations/aggregation/_envelope.js|_envelope.js]], [[apps/node-backend/src/routes/aggregations.ts|aggregations.js]]
 
 All `/api/aggregations/*` endpoints follow the unified transport envelope (ADR-026) with a nested aggregation domain envelope. Calculation modules return `{ data, meta: { source, computedAt } }`, and routes pass this directly to `res.ok()`.
 
@@ -2227,7 +2227,7 @@ const result = await query("SELECT ... FROM mv_category_totals LIMIT 500");
 ## Safe CSV Export Pattern (Phase 5+)
 
 **Source:** [[apps/node-backend/src/lib/csv.ts|csv.js]] — Shared utility with formula injection guard
-**Used in:** [[apps/node-backend/src/routes/transactions.js|transactions.js]], [[apps/node-backend/src/routes/splits.js|splits.js]]
+**Used in:** [[apps/node-backend/src/routes/transactions.ts|transactions.js]], [[apps/node-backend/src/routes/splits.ts|splits.js]]
 
 CSV exports must escape field values to prevent formula injection (CWE-1236). A centralized utility ensures all exports are protected.
 
@@ -2660,7 +2660,7 @@ Successful long-running streams use `complete` as the terminal event. Error even
 `{ detail, code }`. Payload field casing remains endpoint-local during this
 migration: import events are snake_case, while the grandfathered AI router remains camelCase.
 
-**Source:** [[apps/node-backend/src/lib/sse.ts|sse.js]], [[apps/node-backend/src/routes/ai.js|ai.js]], [[apps/node-backend/src/routes/importRoutes.js|importRoutes.js]]
+**Source:** [[apps/node-backend/src/lib/sse.ts|sse.js]], [[apps/node-backend/src/routes/ai.ts|ai.js]], [[apps/node-backend/src/routes/importRoutes.ts|importRoutes.js]]
 
 For long-running streaming responses (AI chat, CSV import progress), propagate TCP backpressure from the HTTP client into the server's event-generation loop to prevent unbounded write buffer growth and memory exhaustion.
 

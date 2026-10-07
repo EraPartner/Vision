@@ -20,12 +20,12 @@ aliases:
   - throttling
 related_code:
   - apps/node-backend/src/middleware/rateLimiter.ts
-  - apps/node-backend/src/routes/info.js
-  - apps/node-backend/src/routes/transactions.js
-  - apps/node-backend/src/routes/reports.js
-  - apps/node-backend/src/routes/marketLookup.js
-  - apps/node-backend/src/routes/investments.js
-  - apps/node-backend/src/routes/aggregations.js
+  - apps/node-backend/src/routes/info.ts
+  - apps/node-backend/src/routes/transactions.ts
+  - apps/node-backend/src/routes/reports.ts
+  - apps/node-backend/src/routes/marketLookup.ts
+  - apps/node-backend/src/routes/investments.ts
+  - apps/node-backend/src/routes/aggregations.ts
   - apps/node-backend/src/config/config.ts
   - apps/node-backend/src/config/env.ts
 ---

@@ -402,7 +402,7 @@
       "classification": "historical-record-only",
       "disposition": "Removed after the explicit client/server compatibility cutoff; complete is the sole terminal success event.",
       "paths": [
-        "apps/node-backend/src/routes/ai.js",
+        "apps/node-backend/src/routes/ai.ts",
         "packages/types/src/aiChat.ts",
         "apps/frontend/src/lib/api/ai.ts",
         "openapi.yaml"
@@ -423,7 +423,7 @@
       "classification": "historical-record-only",
       "disposition": "Removed after the explicit external-client cutoff; assignment uses the category-id resource action.",
       "paths": [
-        "apps/node-backend/src/routes/categories.js",
+        "apps/node-backend/src/routes/categories.ts",
         "apps/frontend/src/test/msw/handlers.ts",
         "openapi.yaml"
       ],
@@ -444,7 +444,7 @@
       "disposition": "Removed after the explicit external-client cutoff; stale aliases now fail validation instead of widening results.",
       "paths": [
         "apps/node-backend/src/lib/aggregationDateRange.ts",
-        "apps/node-backend/src/routes/aggregations.js",
+        "apps/node-backend/src/routes/aggregations.ts",
         "apps/frontend/src/lib/api/aggregations.ts",
         "openapi.yaml"
       ],
@@ -464,7 +464,7 @@
       "classification": "historical-record-only",
       "disposition": "Removed under accepted ADR-136's explicit same-release client cutoff. Budgeting and portfolio imports now accept upload options only as multipart fields.",
       "paths": [
-        "apps/node-backend/src/routes/importRoutes.js",
+        "apps/node-backend/src/routes/importRoutes.ts",
         "apps/frontend/src/lib/api/imports.ts",
         "apps/frontend/src/lib/api/portfolioImports.ts",
         "openapi.yaml"
@@ -485,7 +485,7 @@
       "classification": "historical-record-only",
       "disposition": "Removed after the explicit admin-client cutoff; reset confirmation accepts only the required JSON boolean body field.",
       "paths": [
-        "apps/node-backend/src/routes/admin.js",
+        "apps/node-backend/src/routes/admin.ts",
         "apps/node-backend/tests/routes/admin.test.js",
         "apps/frontend/src/types/generated.ts",
         "openapi.yaml"
@@ -506,7 +506,7 @@
       "classification": "historical-record-only",
       "disposition": "Removed after the explicit external-client cutoff; omitted pagination now returns the bounded default page.",
       "paths": [
-        "apps/node-backend/src/routes/ai.js",
+        "apps/node-backend/src/routes/ai.ts",
         "apps/frontend/src/lib/api/ai.ts",
         "openapi.yaml"
       ],
@@ -547,7 +547,7 @@
       "paths": [
         "apps/frontend/src/lib/api/transactions.ts",
         "apps/frontend/src/lib/api/__tests__/transactions.test.ts",
-        "apps/node-backend/src/routes/transactions.js",
+        "apps/node-backend/src/routes/transactions.ts",
         "openapi.yaml"
       ],
       "readers": "Current clients read transaction_date directly.",
@@ -805,7 +805,7 @@
         "apps/frontend/src/lib/belgianTax/types.ts",
         "apps/frontend/src/lib/belgianTax/pit.ts",
         "alembic/versions/0106_remove_federal_pit_total_alias.py",
-        "apps/node-backend/src/routes/settings.js"
+        "apps/node-backend/src/routes/settings.ts"
       ],
       "readers": "Current code reads only federalPITBeforeExemption.",
       "writers": "Current calculation output and settings validation accept only the canonical field.",

@@ -11,7 +11,7 @@ tags: [endpoint, api, aggregations, backend, phase-2, phase-6, phase-9, phase-10
 description: Server-computed transaction aggregations with materialized-view source distinction; includes planned cash flow forecast (Phase 6), 8-method statistical forecast with empirical-Bayes ensemble v2 (Phase 10 + F), persisted accuracy metrics with fallback-to-memory resilience (Phase D), nightly cache materialization (Phase E), per-category breakdown with reconciliation (Phase G), rolling-window cash flow forecast (Phase H), per-recipient spending pivot for custom charts (April 2026), and per-tag spending pivot for custom charts (June 2026). June 2026: recipient-insights endpoint accepts exclusion params; ensemble weighting upgraded to v2 (sample-size-shrunk RMSE + uniform-blend floor); bank-balances history changed from monthly to daily points (YYYY-MM-DD date field replaces month field); tag-pivot endpoint added.
 aliases: [aggregations, stats aggregation, computed stats, aggregation endpoints, cashflow-forecast, cash-flow-forecast, multi-method-forecast]
 related_code:
-  - apps/node-backend/src/routes/aggregations.js
+  - apps/node-backend/src/routes/aggregations.ts
   - apps/node-backend/src/services/calculations/aggregation/
   - apps/node-backend/src/services/calculations/aggregation/recipient.js
   - apps/node-backend/src/services/calculations/aggregation/recipientPivot.js
@@ -592,7 +592,7 @@ const allTagsEnvelope = await getAggregationTagPivot({
 
 - Repository: `apps/node-backend/src/repositories/infoRepositoryTags.ts` — `tagInsightsRepository.getTagPivot`; when `allTags=true`, the tag-id filter is dropped and the short-circuit is bypassed, returning all active tags.
 - Service: `apps/node-backend/src/services/calculations/aggregation/tagPivot.js` — `computeTagPivot`; passes `allTags` flag through to the repository.
-- Route: wired in `apps/node-backend/src/routes/aggregations.js`; accepts the `all` query parameter and rejects the retired `all_tags` alias.
+- Route: wired in `apps/node-backend/src/routes/aggregations.ts`; accepts the `all` query parameter and rejects the retired `all_tags` alias.
 - Frontend hook: `apps/frontend/src/hooks/useTagPivot.ts`; enabled when `tag_ids.length > 0` **or** `all_tags = true`; cache key includes `'all'` token when all-flag is active.
 - Frontend API client: `getAggregationTagPivot` in `apps/frontend/src/lib/api/aggregations.ts`; when `all=true`, omits `tag_ids` from the request; `TagPivotItem` type in `apps/frontend/src/lib/api/types.ts`.
 

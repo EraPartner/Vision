@@ -56,7 +56,7 @@ Top-level modules such as `priceProviderService`, `providerHealthService`, `quot
 > `priceProviderService.js`) use them; research adapters and import still `throw new Error(...)`
 > in places — convert as you touch them.
 >
-> `AiChatServiceError` extends `AppError` and passes through `routes/ai.js` to the middleware
+> `AiChatServiceError` extends `AppError` and passes through `routes/ai.ts` to the middleware
 > untranslated (no per-route shim). `ToolValidationError` (`services/aiChat/tools/_validate.js`)
 > deliberately stays **outside** `AppError`: it is an in-band tool-result error — `dispatchTool`
 > catches it and feeds `{ok: false, error}` back to the model for retry; it never maps to an HTTP
@@ -994,7 +994,7 @@ All 15 Express route files now import **only** from `services/<domain>Service.js
 | `attachmentRecordService.js`               | `attachments.js`                                 | Attachment metadata (complements `attachmentService.js`)                                                        |
 | `importBatchService.js`                    | `importRoutes.js`                                | Batch management plus transaction-preview grouping and totals                                                   |
 | `portfolioImportBatchService.js`           | `portfolioImportRoutes.js`                       | Portfolio batch coordination plus investment/raw/cash preview grouping and totals                               |
-| `routes/importBatchRoutes.js`              | Both import routers                              | Shared batch list/detail/status-guard/rollback route registration; each router supplies its own rollback policy |
+| `routes/importBatchRoutes.ts`              | Both import routers                              | Shared batch list/detail/status-guard/rollback route registration; each router supplies its own rollback policy |
 | `customParserConfigService.js`             | `importRoutes.js`                                | Named parser CRUD                                                                                               |
 | `investmentService.js`                     | `investments.js` route                           | Investment endpoint validation, response shaping, caching, and repository coordination                          |
 | `portfolio/portfolioTransactionService.js` | Investment service and portfolio import pipeline | Portfolio transaction create/update orchestration; delegates normalized persistence to the repository           |
@@ -1008,11 +1008,11 @@ Portfolio transaction domain rules are kept beside the orchestrator in [[apps/no
 ### What the Rule Enforces
 
 ```javascript
-// routes/transactions.js
+// routes/transactions.ts
 // ✅ Allowed — import from service seam
 import { createTransaction } from "../services/transactionService.js";
 
-// routes/transactions.js
+// routes/transactions.ts
 // ESLint ERROR — no-repo-direct-from-route
 import { insertTransaction } from "../repositories/transactionRepository.ts";
 ```

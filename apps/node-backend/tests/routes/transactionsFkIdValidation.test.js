@@ -50,7 +50,7 @@ vi.mock('../../src/services/plannedMatchService.js', () => ({
 import transactionRepository from '../../src/repositories/transactionRepository.ts';
 import { isManualDuplicate } from '../../src/services/deduplication.js';
 
-const { default: transactionsRouter } = await import('../../src/routes/transactions.js');
+const { default: transactionsRouter } = await import('../../src/routes/transactions.ts');
 
 const api = routeAgent(transactionsRouter, { mountPath: '/api/transactions' });
 

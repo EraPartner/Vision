@@ -287,7 +287,7 @@ data: {
 | `retryLastTurn`  | optional boolean (default `false`); requires `conversationId` and an incomplete latest user turn |
 | `title` (CRUD)   | non-empty string (PATCH), ≤200 chars                                                             |
 
-`MAX_MESSAGE_LENGTH = 4000`, `MAX_TITLE_LENGTH = 200` — hardcoded in [[apps/node-backend/src/routes/ai.js|routes/ai.js]].
+`MAX_MESSAGE_LENGTH = 4000`, `MAX_TITLE_LENGTH = 200` — hardcoded in [[apps/node-backend/src/routes/ai.ts|routes/ai.ts]].
 
 ## Rate Limiting
 

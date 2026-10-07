@@ -26,7 +26,7 @@ vi.mock('../../src/services/currency/currencyConversionService.js', () => mockCu
 
 vi.mock('../../src/database/connection.ts', () => mockPooledTxConnection());
 
-const { default: transactionsRouter } = await import('../../src/routes/transactions.js');
+const { default: transactionsRouter } = await import('../../src/routes/transactions.ts');
 
 import { getClient, query as dbQuery } from '../../src/database/connection.ts';
 import { scheduleReconcile } from '../../src/services/transferReconciliationService.js';

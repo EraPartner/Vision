@@ -44,6 +44,6 @@ describe("response envelope writer convention", () => {
       calls
         .filter(({ method, argument }) => method === "send" && argument)
         .map(({ file, argument }) => ({ file, argument })),
-    ).toEqual([{ file: "routes/splits.js", argument: "csv" }]);
+    ).toEqual([{ file: "routes/splits.ts", argument: "csv" }]);
   });
 });

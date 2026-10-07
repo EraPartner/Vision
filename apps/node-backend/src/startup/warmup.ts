@@ -39,7 +39,7 @@ import {
   refreshActiveHoldingQuotes,
   backfillHoldingGaps,
 } from "../services/quoteBackfillService.js";
-import { warmInfoCaches } from "../routes/info.js";
+import { warmInfoCaches } from "../routes/info.ts";
 import { backfillTransfersOnce } from "../services/transferReconciliationService.js";
 import { refreshCashflowForecastMc } from "../jobs/refreshCashflowForecastMc.ts";
 import * as researchProviderKeyService from "../services/research/researchProviderKeyService.js";

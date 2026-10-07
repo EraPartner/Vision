@@ -2,7 +2,7 @@
 title: Reports API
 type: endpoint
 status: active
-date: 2026-04-27
+date: 2026-10-07
 updated: 2026-08-26
 tags:
   - api
@@ -36,7 +36,7 @@ related_code:
   - apps/node-backend/src/services/reports/dataFetcher.js
   - apps/node-backend/src/services/reports/sections/
   - apps/node-backend/src/services/reports/puppeteerRenderer.js
-  - apps/node-backend/src/routes/reports.js
+  - apps/node-backend/src/routes/reports.ts
   - apps/frontend/src/lib/api/reports.ts
   - apps/frontend/src/lib/themeTokens.ts
 ---
@@ -405,7 +405,7 @@ No `apiRequest` wrapper is used because the response is a binary stream.
 ### Architecture
 
 - **Dispatcher** (`apps/node-backend/src/services/reports/index.js`): Routes by report type, builds HTML, invokes Puppeteer
-- **HTTP route** (`apps/node-backend/src/routes/reports.js`): Receives `{ pdf, filename }` from the dispatcher and owns the binary download headers and response body
+- **HTTP route** (`apps/node-backend/src/routes/reports.ts`): Receives `{ pdf, filename }` from the dispatcher and owns the binary download headers and response body
 - **Data fetcher** (`apps/node-backend/src/services/reports/dataFetcher.js`): Parallel Promise.allSettled loads all data; graceful degradation
 - **Section renderers** (`apps/node-backend/src/services/reports/sections/`): Pure functions; each section independent
 - **Theme system** (`themeCss.js` + `sectionHelpers.js`): CSS tokens, formatters, SVG chart builders

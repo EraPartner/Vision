@@ -5,7 +5,7 @@ vi.mock("../src/services/accountService.js", () => ({
 }));
 
 import accountService from "../src/services/accountService.js";
-import { __normalizePortfolioParserConfig as normalizePortfolioParserConfig } from "../src/routes/portfolioImportRoutes.js";
+import { __normalizePortfolioParserConfig as normalizePortfolioParserConfig } from "../src/routes/portfolioImportRoutes.ts";
 import {
   assertPortfolioImportAccount,
   buildPortfolioImportPreviewRouting as buildPreviewRouting,

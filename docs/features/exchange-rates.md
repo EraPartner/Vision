@@ -2,7 +2,7 @@
 title: Exchange Rates Feature
 type: feature
 status: active
-date: 2026-04-02
+date: 2026-10-07
 updated: 2026-09-11
 tags:
   [feature, exchange-rates, currency, frontend, backend, ECB, admin, url-state]
@@ -11,7 +11,7 @@ aliases: [FX rates, currency rates, exchange rates page]
 related_code:
   - apps/frontend/src/pages/admin/ExchangeRatesPage.tsx
   - apps/frontend/src/components/notifications/FxStatusBanner.tsx
-  - apps/node-backend/src/routes/info.js
+  - apps/node-backend/src/routes/info.ts
   - apps/node-backend/src/services/currency/currencyConversionService.js
 ---
 
@@ -59,7 +59,7 @@ Triggers `POST /api/info/exchange-rates/refresh` to fetch fresh rates from ECB.
 
 ### Backend Endpoints
 
-Located in `[[apps/node-backend/src/routes/info.js]]`:
+Located in `[[apps/node-backend/src/routes/info.ts]]`:
 
 #### GET /api/info/exchange-rates
 

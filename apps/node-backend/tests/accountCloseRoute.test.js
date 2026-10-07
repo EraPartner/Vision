@@ -32,7 +32,7 @@ import {
 import { scheduleAggregationRefresh } from "../src/services/aggregationRefresh.js";
 import { invalidatePortfolioCaches } from "../src/services/info/cache.js";
 
-const { default: accountsRouter } = await import("../src/routes/accounts.js");
+const { default: accountsRouter } = await import("../src/routes/accounts.ts");
 
 function closeRouteHandler() {
   const layer = accountsRouter.stack.find(

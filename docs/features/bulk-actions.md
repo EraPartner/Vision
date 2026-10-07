@@ -2,7 +2,7 @@
 title: Bulk Transaction Actions
 type: feature
 status: active
-date: 2026-08-30
+date: 2026-10-07
 updated: 2026-08-28
 tags: [feature, transactions, bulk, productivity]
 description: Multi-row checkbox selection drives delete, recategorize, recipient reassignment, activate/deactivate, export, and tag operations across many transactions in one atomic call.
@@ -10,7 +10,7 @@ aliases: [bulk-actions, bulk-delete, bulk-update, bulk-export]
 related_code:
   - "apps/node-backend/src/services/bulkSelection.js"
   - "apps/node-backend/src/services/transactionExport.js"
-  - "apps/node-backend/src/routes/transactions.js"
+  - "apps/node-backend/src/routes/transactions.ts"
   - "apps/frontend/src/features/transactions/components/bulk/BulkActionsBar.tsx"
   - "apps/frontend/src/features/transactions/components/bulk/BulkRecategorizeDialog.tsx"
   - "apps/frontend/src/features/transactions/components/bulk/BulkRecipientDialog.tsx"
@@ -57,7 +57,7 @@ Resolver: [`apps/node-backend/src/services/bulkSelection.js`](apps/node-backend/
 | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `apps/node-backend/src/services/bulkSelection.js`     | Shared id/filter → ids resolver with caps                                                                                  |
 | `apps/node-backend/src/services/transactionExport.js` | Owns the repeatable-read bulk-export snapshot and the CSV / NDJSON streaming pipeline shared with the GET export endpoints |
-| `apps/node-backend/src/routes/transactions.js`        | New POST routes: `/bulk-delete`, `/bulk-update`, `/bulk-export`                                                            |
+| `apps/node-backend/src/routes/transactions.ts`        | New POST routes: `/bulk-delete`, `/bulk-update`, `/bulk-export`                                                            |
 
 Every write route runs inside `withTransaction(client => …)` and ends with `scheduleRefresh()` so materialized views catch up. `validateInt4Ids` validates every id before any SQL touches the DB — a malformed entry **rejects the whole request** (400) rather than being dropped from the batch, so a bulk action never silently operates on a subset of what the caller named. `normalizeBulkFilter` applies the same rule to the `filter` path: an unknown key or a malformed field rejects rather than being skipped, so a bulk action never silently operates on a _wider_ set than the caller named either. A well-formed id whose row no longer exists is _not_ malformed: it passes validation and simply matches no rows, so a stale selection still succeeds.
 

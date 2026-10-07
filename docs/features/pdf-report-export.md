@@ -2,7 +2,7 @@
 title: PDF Report Export
 type: feature
 status: active
-date: 2026-09-27
+date: 2026-10-07
 updated: 2026-08-26
 tags:
   [
@@ -49,7 +49,7 @@ aliases:
   ]
 related_code:
   - apps/node-backend/src/services/reports/
-  - apps/node-backend/src/routes/reports.js
+  - apps/node-backend/src/routes/reports.ts
   - apps/frontend/src/lib/api/reports.ts
   - apps/frontend/src/features/reports/ExportDialog.tsx
   - apps/frontend/src/pages/StatisticsPage.tsx
@@ -641,7 +641,7 @@ const pdf = await renderHtmlToPdf(html, {
    - Invokes Puppeteer renderer → PDF buffer
    - Returns `{ pdf, filename }` to the route without depending on Express
 
-2. **HTTP route** (`apps/node-backend/src/routes/reports.js`)
+2. **HTTP route** (`apps/node-backend/src/routes/reports.ts`)
    - Writes the PDF content type, download filename, and byte length
    - Ends the response with the raw PDF buffer
 

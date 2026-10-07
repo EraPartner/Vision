@@ -2,7 +2,7 @@
 title: Market Lookup API
 type: endpoint
 status: active
-date: 2026-09-27
+date: 2026-10-07
 updated: 2026-09-27
 tags:
   - api
@@ -16,7 +16,7 @@ aliases:
   - quotes-api
   - yahoo-finance
 related_code:
-  - apps/node-backend/src/routes/marketLookup.js
+  - apps/node-backend/src/routes/marketLookup.ts
 ---
 
 # Market Lookup API
@@ -264,7 +264,7 @@ Get news articles for one or more symbols.
 - Yahoo thumbnail arrays now select the best available resolution instead of always taking the first resolution.
 - Frontend consumers render these URLs via a shared safe image component; news cards can pass `fallbackClassName="hidden"` to suppress placeholder icon boxes when fetches fail.
 
-Code links: [[apps/node-backend/src/main.js]], [[apps/node-backend/src/routes/marketLookup.js]], [[apps/frontend/src/components/shared/RemoteNewsImage.tsx]], [[apps/frontend/src/features/portfolio/PortfolioNewsFeed.tsx]], [[apps/frontend/src/pages/research/MarketLookupPage.tsx]]
+Code links: [[apps/node-backend/src/main.js]], [[apps/node-backend/src/routes/marketLookup.ts]], [[apps/frontend/src/components/shared/RemoteNewsImage.tsx]], [[apps/frontend/src/features/portfolio/PortfolioNewsFeed.tsx]], [[apps/frontend/src/pages/research/MarketLookupPage.tsx]]
 
 ---
 
@@ -312,4 +312,4 @@ Backend import route tests were updated to validate the unified API response env
 - `GET /api/market/news` deduplication by title and server-side thumbnail normalization.
 - News search failure tolerance returning `{"items": [], "total": 0}`.
 
-Code links: [[apps/node-backend/tests/routes/marketLookup.test.js]], [[apps/node-backend/src/routes/marketLookup.js]], [[apps/node-backend/tests/routes/import.test.js]]
+Code links: [[apps/node-backend/tests/routes/marketLookup.test.js]], [[apps/node-backend/src/routes/marketLookup.ts]], [[apps/node-backend/tests/routes/import.test.js]]

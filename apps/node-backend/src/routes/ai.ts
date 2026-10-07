@@ -1,0 +1,393 @@
+/**
+ * AI chat routes.
+ *
+ * Mounted at /api/ai by main.js.
+ *
+ *   GET    /api/ai/status                   — Ollama reachability + baseUrl
+ *   GET    /api/ai/models                   — installed models (pass-through)
+ *   GET    /api/ai/conversations            — list (newest first)
+ *   POST   /api/ai/conversations            — create empty (optional title/model)
+ *   GET    /api/ai/conversations/:id        — conversation + messages
+ *   PATCH  /api/ai/conversations/:id        — rename
+ *   DELETE /api/ai/conversations/:id        — delete (cascades messages)
+ *   POST   /api/ai/chat                     — send message, run tool loop, return turn (JSON)
+ *   POST   /api/ai/chat/stream              — same, but streams SSE events
+ *
+ * SSE events on /chat/stream:
+ *   - user_message       {message}         — user row persisted
+ *   - token              "delta"           — content chunk (assistant text streaming)
+ *   - tool_call          {name, args}      — model requested a tool (before
+ *                                            dispatch); args are the model's own
+ *                                            when already a plain object, else {}
+ *                                            — the following tool_result row
+ *                                            carries the dispatcher-coerced args
+ *                                            the tool actually received (or the
+ *                                            raw value next to the error)
+ *   - tool_result        {message}         — tool row persisted (result in .tool_result)
+ *   - complete           {assistantMessage, usage, iterations, conversation}
+ *   - error              {detail, code}
+ *
+ * JSON responses use the unified envelope (ADR-026). The SSE stream keeps
+ * the raw event protocol — headers are committed before the first handler
+ * error can fire, so errors ride the `error` SSE frame instead.
+ */
+
+import { Router } from "express";
+import type {
+  ExpressNextFunction,
+  ExpressRequest,
+  ExpressResponse,
+} from "../types/express.ts";
+import { z } from "zod";
+
+import { logger } from "../config/logger.ts";
+import { createSseWriter } from "../lib/sse.ts";
+import settings from "../config/config.ts";
+import { getOllamaClient, OllamaError } from "../integrations/ollama/client.ts";
+import {
+  AiChatServiceError,
+  createEmptyConversation,
+  deleteConversation,
+  getConversationWithMessages,
+  listConversations,
+  renameConversation,
+  runChatTurn,
+} from "../services/aiChatService.js";
+import { ApiErrorCode } from "@vision/types/errors";
+import { AI_CHAT_STREAM_EVENT } from "@vision/types/aiChat";
+import { listBody, parsePagination } from "../lib/pagination.ts";
+import {
+  AppError,
+  NotFoundError,
+  UpstreamError,
+  ValidationError,
+} from "../middleware/errorHandler.ts";
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MAX_MESSAGE_LENGTH = 4000;
+const MAX_TITLE_LENGTH = 200;
+
+/* ── Zod schemas ─────────────────────────────────────────────────────────────
+ * schema → safeParse → ValidationError, the idiom from settings.js/reports.js.
+ * UUIDs keep the existing case-insensitive UUID_RE (zod's .uuid() is stricter
+ * about variant/version bits, and ids are passed through in their original
+ * case), so the accepted id set is unchanged. */
+
+// Case-insensitive UUID; any-case input is forwarded unchanged.
+const conversationIdSchema = z.string().regex(UUID_RE);
+
+const uuidField = (message: string) =>
+  z.string({ error: message }).regex(UUID_RE, message);
+
+const nonBlankString = (message: string) =>
+  z.string({ error: message }).refine((s) => s.trim().length > 0, message);
+
+const chatBodySchema = z
+  .object({
+    conversationId: uuidField('"conversationId" must be a UUID').nullish(),
+    message: nonBlankString('"message" is required').refine(
+      (s) => s.length <= MAX_MESSAGE_LENGTH,
+      `"message" must be <= ${MAX_MESSAGE_LENGTH} chars`,
+    ),
+    model: nonBlankString('"model" must be a non-empty string').nullish(),
+    useTools: z.boolean({ error: '"useTools" must be a boolean' }).optional(),
+    // ADR-110 §4: when true, the backend executes `insightsDigest` server-side
+    // before the model turn so the model only narrates the injected findings.
+    insightsPreCall: z
+      .boolean({ error: '"insightsPreCall" must be a boolean' })
+      .optional(),
+    retryLastTurn: z
+      .boolean({ error: '"retryLastTurn" must be a boolean' })
+      .optional(),
+  })
+  .transform((body) => ({
+    conversationId: body.conversationId ?? null,
+    message: body.message,
+    model: body.model ?? null,
+    useTools: body.useTools !== false,
+    insightsPreCall: body.insightsPreCall === true,
+    retryLastTurn: body.retryLastTurn === true,
+  }));
+
+const createConversationSchema = z.object({
+  // An empty title is allowed (only type and length are checked); model must
+  // be a non-blank string when provided — null is NOT treated as absent here.
+  title: z
+    .string({
+      error: `"title" must be a string up to ${MAX_TITLE_LENGTH} chars`,
+    })
+    .max(
+      MAX_TITLE_LENGTH,
+      `"title" must be a string up to ${MAX_TITLE_LENGTH} chars`,
+    )
+    .optional(),
+  model: nonBlankString('"model" must be a non-empty string').optional(),
+});
+
+const renameConversationSchema = z.object({
+  title: nonBlankString('"title" is required').refine(
+    (s) => s.length <= MAX_TITLE_LENGTH,
+    `"title" must be <= ${MAX_TITLE_LENGTH} chars`,
+  ),
+});
+
+function parseAiBody<T>(schema: z.ZodType<T>, body: unknown): T {
+  const result = schema.safeParse(body || {});
+  if (!result.success) {
+    const msg = result.error.issues.map((issue) => issue.message).join("; ");
+    throw new ValidationError(msg);
+  }
+  return result.data;
+}
+
+function requireConversationId(req: ExpressRequest): string {
+  const result = conversationIdSchema.safeParse(req.params.id);
+  if (!result.success) throw new ValidationError("Invalid conversation id");
+  return result.data;
+}
+
+function enforceAiChatEnabled(
+  _req: ExpressRequest,
+  _res: ExpressResponse,
+  next: ExpressNextFunction,
+): void {
+  if (!settings.aiChat.enabled) {
+    next(
+      new AppError("AI chat is disabled", {
+        status: 503,
+        code: ApiErrorCode.SERVICE_UNAVAILABLE,
+      }),
+    );
+    return;
+  }
+  next();
+}
+
+/**
+ * Ensure only typed AppErrors leave this router. AiChatServiceError extends
+ * AppError (services throw typed AppErrors; only the error middleware maps
+ * them to HTTP — docs/reference/service-layer.md), so it passes through
+ * untouched and needs no per-route translation. Anything untyped is wrapped
+ * as a 500 with an authored fallback message so raw internals never reach
+ * clients, even in development.
+ *
+ * `err` is an upstream error of unknown provenance (service layer, zod,
+ * Ollama client).
+ */
+function rethrowAsAppError(err: unknown, fallbackMessage: string): never {
+  if (err instanceof AppError) throw err;
+  throw new AppError(fallbackMessage, {
+    status: 500,
+    code: ApiErrorCode.INTERNAL_SERVER_ERROR,
+    cause: err,
+  });
+}
+
+const router = Router();
+router.use(enforceAiChatEnabled);
+
+// GET /api/ai/status
+//
+// Normalized for the frontend:
+//   - `ok`         : boolean          — reachable flag
+//   - `baseUrl`    : string           — actual URL used by the backend
+//   - `displayUrl` : string           — URL displayed to the user
+//   - `hint`       : string | null    — optional connection guidance
+//
+// The health probe never throws — it returns `{reachable: false, error, code}`
+// on failure — so this endpoint always emits a success envelope.
+
+router.get("/status", async (req, res) => {
+  const client = getOllamaClient();
+  const health = await client.healthCheck();
+  res.ok({
+    ok: Boolean(health.reachable),
+    baseUrl: health.baseUrl,
+    displayUrl: health.baseUrl,
+    modelCount: health.modelCount ?? 0,
+    error: health.error ?? null,
+    code: health.code ?? null,
+    hint: null,
+    defaultModel: settings.ollama.defaultModel,
+    enabled: settings.aiChat.enabled,
+  });
+});
+
+// GET /api/ai/models
+//
+// Pagination is opt-in for compatibility. The shipped frontend always asks for
+// bounded pages; callers that omit both parameters retain the historical full list.
+router.get("/models", async (req, res) => {
+  const client = getOllamaClient();
+  try {
+    const models = await client.listModels();
+    res.ok({ items: models, total: models.length });
+  } catch (err) {
+    if (err instanceof OllamaError) {
+      throw new UpstreamError(`Ollama not reachable: ${err.message}`, {
+        details: { ollamaCode: err.code },
+        cause: err,
+      });
+    }
+    throw err;
+  }
+});
+
+// GET /api/ai/conversations
+//
+// Conversation history is always bounded. Callers may omit pagination and
+// receive the documented first page.
+router.get("/conversations", async (req, res) => {
+  const page = parsePagination(req.query, {
+    defaultLimit: 50,
+    maxLimit: 200,
+  });
+  const { items, total } = await listConversations(page);
+  res.ok(listBody(items, total, page));
+});
+
+// POST /api/ai/conversations
+router.post("/conversations", async (req, res) => {
+  const { title, model } = parseAiBody(createConversationSchema, req.body);
+
+  try {
+    const conversation = await createEmptyConversation({ title, model });
+    res.status(201);
+    res.ok(conversation);
+  } catch (err) {
+    rethrowAsAppError(err, "Failed to create AI conversation");
+  }
+});
+
+// GET /api/ai/conversations/:id
+router.get("/conversations/:id", async (req, res) => {
+  const id = requireConversationId(req);
+  const convo = await getConversationWithMessages(id);
+  if (!convo) throw new NotFoundError("Conversation not found");
+  res.ok(convo);
+});
+
+// PATCH /api/ai/conversations/:id
+router.patch("/conversations/:id", async (req, res) => {
+  const id = requireConversationId(req);
+  const { title } = parseAiBody(renameConversationSchema, req.body);
+
+  const updated = await renameConversation(id, title);
+  if (!updated) throw new NotFoundError("Conversation not found");
+  res.ok(updated);
+});
+
+// DELETE /api/ai/conversations/:id
+router.delete("/conversations/:id", async (req, res) => {
+  const id = requireConversationId(req);
+  const deleted = await deleteConversation(id);
+  if (!deleted) throw new NotFoundError("Conversation not found");
+  res.status(204).send();
+});
+
+// POST /api/ai/chat
+router.post("/chat", async (req, res) => {
+  const parsed = parseAiBody(chatBodySchema, req.body);
+
+  const abortController = new AbortController();
+  res.on("close", () => {
+    if (!res.writableEnded) abortController.abort();
+  });
+
+  try {
+    const turn = await runChatTurn({
+      conversationId: parsed.conversationId,
+      message: parsed.message,
+      model: parsed.model,
+      useTools: parsed.useTools,
+      preCallTool: parsed.insightsPreCall ? "insightsDigest" : null,
+      retryLastTurn: parsed.retryLastTurn,
+      signal: abortController.signal,
+    });
+    res.ok({
+      conversation: turn.conversation,
+      userMessage: turn.userMessage,
+      toolMessages: turn.toolMessages,
+      assistantMessage: turn.assistantMessage,
+      usage: turn.usage,
+      iterations: turn.iterations,
+    });
+  } catch (err) {
+    rethrowAsAppError(err, "Failed to process AI chat message");
+  }
+});
+
+// POST /api/ai/chat/stream — SSE-streamed chat turn.
+//
+// Validation throws happen before headers are written, so they travel
+// through the global error handler as envelope responses. After headers
+// commit, errors ride the SSE `error` frame.
+router.post("/chat/stream", async (req, res) => {
+  const parsed = parseAiBody(chatBodySchema, req.body);
+  logger.info("[ai] chat/stream start", {
+    requestId: req.id,
+    conversationId: parsed.conversationId,
+    model: parsed.model,
+    useTools: parsed.useTools,
+    messageLen: parsed.message.length,
+  });
+
+  const writer = createSseWriter(req, res);
+  const abortController = new AbortController();
+  res.on("close", () => {
+    if (!res.writableEnded) abortController.abort();
+  });
+
+  try {
+    const turn = await runChatTurn({
+      conversationId: parsed.conversationId,
+      message: parsed.message,
+      model: parsed.model,
+      useTools: parsed.useTools,
+      preCallTool: parsed.insightsPreCall ? "insightsDigest" : null,
+      retryLastTurn: parsed.retryLastTurn,
+      signal: abortController.signal,
+      streaming: true,
+      onEvent: async (evt) => {
+        await writer.write(evt.type, evt.data);
+      },
+    });
+
+    if (!writer.closed) {
+      const terminalPayload = {
+        conversation: turn.conversation,
+        assistantMessage: turn.assistantMessage,
+        usage: turn.usage,
+        iterations: turn.iterations,
+      };
+      await writer.write(AI_CHAT_STREAM_EVENT.COMPLETE, terminalPayload);
+      writer.end();
+    }
+  } catch (err) {
+    if (writer.closed) return;
+    if (err instanceof AiChatServiceError) {
+      logger.warn("[ai] stream service error", {
+        code: err.code,
+        status: err.status,
+        message: err.message,
+      });
+      await writer.write(AI_CHAT_STREAM_EVENT.ERROR, {
+        detail: err.message,
+        code: err.code,
+      });
+    } else {
+      logger.error("Failed to stream AI chat message", {
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      await writer.write(AI_CHAT_STREAM_EVENT.ERROR, {
+        detail: "Failed to stream AI chat message",
+        code: ApiErrorCode.INTERNAL_SERVER_ERROR,
+      });
+    }
+    writer.end();
+  }
+});
+
+export default router;

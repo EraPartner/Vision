@@ -39,7 +39,7 @@ vi.mock("../../src/database/connection.ts", () =>
 );
 
 const { default: transactionsRouter } =
-  await import("../../src/routes/transactions.js");
+  await import("../../src/routes/transactions.ts");
 
 import { getClient } from "../../src/database/connection.ts";
 

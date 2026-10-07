@@ -8,7 +8,7 @@ tags: [feature, admin, observability, provider-health, endpoint-liveness, shadow
 description: Unified admin hub — DB maintenance, provider health, endpoint liveness, and request metrics — gated via Settings toggle.
 aliases: [admin dashboard, system observability, admin monitoring, admin hub]
 related_code:
-  - apps/node-backend/src/routes/admin.js
+  - apps/node-backend/src/routes/admin.ts
   - apps/node-backend/src/services/providerHealth/providerHealthService.js
   - apps/node-backend/src/middleware/requestMetrics.ts
   - apps/frontend/src/pages/admin/AdminOverviewPage.tsx

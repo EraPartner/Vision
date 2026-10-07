@@ -61,7 +61,7 @@ import {
 } from "../../src/services/deduplication.js";
 
 const { default: transactionsRouter } =
-  await import("../../src/routes/transactions.js");
+  await import("../../src/routes/transactions.ts");
 
 const api = routeAgent(transactionsRouter, { mountPath: "/api/transactions" });
 

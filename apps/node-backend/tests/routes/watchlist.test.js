@@ -27,7 +27,7 @@ vi.mock("../../src/config/logger.ts", () => ({
 import { watchlistRepository } from "../../src/repositories/watchlistRepository.ts";
 
 const { default: watchlistRouter } =
-  await import("../../src/routes/watchlist.js");
+  await import("../../src/routes/watchlist.ts");
 
 const api = routeAgent(watchlistRouter, { mountPath: "/api/watchlist" });
 const BASE = "/api/watchlist";

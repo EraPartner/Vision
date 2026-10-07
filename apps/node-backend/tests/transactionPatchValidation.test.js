@@ -46,7 +46,7 @@ vi.mock("../src/services/transactionExport.js", () => ({
 import transactionRepository from "../src/services/transactionService.js";
 
 const { default: transactionsRouter } =
-  await import("../src/routes/transactions.js");
+  await import("../src/routes/transactions.ts");
 
 const api = routeAgent(transactionsRouter, { mountPath: "/api/transactions" });
 

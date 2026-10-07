@@ -10,7 +10,7 @@ updated: 2026-10-04
 tags: [api, investments, portfolio, stocks, crypto, metals, phase-9, decimal, money, offline-fallback, per-account, adr-091, show-in-ticker, portfolio-ticker]
 status: active
 aliases: [investments-api, portfolio-api, holdings, stocks, crypto, real-estate, savings, bonds, metals]
-related_code: ["apps/node-backend/src/routes/investments.js", "apps/node-backend/src/repositories/investmentRepository.ts"]
+related_code: ["apps/node-backend/src/routes/investments.ts", "apps/node-backend/src/repositories/investmentRepository.ts"]
 ---
 
 # Investments API
@@ -94,9 +94,9 @@ Retrieve a list of investments.
 
 Notes:
 
-- Internal route refactor consolidated shared query/ID parsing helpers (`parseDefaultListOptions`, `parseBulkTransactionsOptions`, `parseInvestmentTransactionsOptions`, `parseDbOnlyQueryValue`, `parseRequestId`, `parseTxnRequestId`) to reduce duplication while preserving all defaults, clamping rules, and endpoint response semantics ([[apps/node-backend/src/routes/investments.js]]).
-- Follow-up route refactor extracted shared transaction-id validation for transaction mutation endpoints via `parseAndValidateTxnRequestId(req, res)` and centralized validation-error response mapping via `handleValidationError(res, err)`; status codes and error payloads remain unchanged ([[apps/node-backend/src/routes/investments.js]]).
-- Investment list (`GET /api/investments`) and per-investment transaction list (`GET /api/investments/:id/transactions`) now use repository one-query pagination helpers (`getAllWithCount`) instead of separate list/count route calls, preserving filters, totals, ordering, and response payload shape ([[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/repositories/investmentRepository.ts]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.ts]]).
+- Internal route refactor consolidated shared query/ID parsing helpers (`parseDefaultListOptions`, `parseBulkTransactionsOptions`, `parseInvestmentTransactionsOptions`, `parseDbOnlyQueryValue`, `parseRequestId`, `parseTxnRequestId`) to reduce duplication while preserving all defaults, clamping rules, and endpoint response semantics ([[apps/node-backend/src/routes/investments.ts]]).
+- Follow-up route refactor extracted shared transaction-id validation for transaction mutation endpoints via `parseAndValidateTxnRequestId(req, res)` and centralized validation-error response mapping via `handleValidationError(res, err)`; status codes and error payloads remain unchanged ([[apps/node-backend/src/routes/investments.ts]]).
+- Investment list (`GET /api/investments`) and per-investment transaction list (`GET /api/investments/:id/transactions`) now use repository one-query pagination helpers (`getAllWithCount`) instead of separate list/count route calls, preserving filters, totals, ordering, and response payload shape ([[apps/node-backend/src/routes/investments.ts]], [[apps/node-backend/src/repositories/investmentRepository.ts]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.ts]]).
 
 ### GET /api/investments/exposure
 
@@ -325,7 +325,7 @@ Validation and mutability rules:
 - The response includes `show_in_ticker` once migration 0061 has been applied (via the joined read path described above).
 - The frontend `PortfolioTicker` `TickerManager` popover uses this field via an optimistic `PATCH` + React Query cache update (rolls back on error, invalidates investments + portfolio-summary on settle).
 
-Code links: [[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/repositories/investmentRepository.ts]]
+Code links: [[apps/node-backend/src/routes/investments.ts]], [[apps/node-backend/src/repositories/investmentRepository.ts]]
 
 ### DELETE /api/investments/:id
 
@@ -440,7 +440,7 @@ phantoms while the full-history invariant and compare-and-set update run in one 
 }
 ```
 
-Code links: [[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.ts]], [[apps/frontend/src/lib/api.ts]], [[apps/frontend/src/hooks/usePortfolio.ts]]
+Code links: [[apps/node-backend/src/routes/investments.ts]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.ts]], [[apps/frontend/src/lib/api.ts]], [[apps/frontend/src/hooks/usePortfolio.ts]]
 
 `import_batch_id` records portfolio-import provenance. It is a decimal string
 when the row was created by a portfolio import because node-postgres preserves
@@ -527,7 +527,7 @@ Create-path compatibility:
 - `investmentService` validates request field shapes. `portfolioTransactionService.create` and `portfolioTransactionRules` own type-specific normalization, unit math, recurrence hygiene, and sell-availability policy before the repository performs a parameterized insert ([[apps/node-backend/src/services/investmentService.js]], [[apps/node-backend/src/services/portfolio/portfolioTransactionService.js]], [[apps/node-backend/src/services/portfolio/portfolioTransactionRules.js]]).
 - Optional `fx_rate_to_eur` is accepted and persisted for portfolio transactions, enabling transaction-level FX locking for later P&L calculations ([[apps/node-backend/src/services/investmentService.js]], [[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]], [[apps/frontend/src/types/api.ts]]).
 - `POST /api/investments/:id/transactions` forwards the investment lookup's `asset_class` into `portfolioTransactionService.create` as `preloaded_asset_class`, so the service can skip a duplicate metadata query while preserving validation and response behavior ([[apps/node-backend/src/services/investmentService.js]], [[apps/node-backend/src/services/portfolio/portfolioTransactionService.js]]).
-- `POST /api/investments/refresh-prices` now performs update writes in bounded batches (instead of one unbounded `Promise.all`) to reduce DB/pool contention spikes while preserving response payload semantics (`updated`, `total`, `prices`, `priceSources`) and per-investment update behavior ([[apps/node-backend/src/routes/investments.js]]).
+- `POST /api/investments/refresh-prices` now performs update writes in bounded batches (instead of one unbounded `Promise.all`) to reduce DB/pool contention spikes while preserving response payload semantics (`updated`, `total`, `prices`, `priceSources`) and per-investment update behavior ([[apps/node-backend/src/routes/investments.ts]]).
 - Migration safety note: in inherited-schema deployments where `portfolio_transactions` is a compatibility view, migration `0016_add_fx_rate_to_portfolio_transactions` now checks relation kind before running `ALTER TABLE` (`r`/`p` only) and keeps the view recreation path for `relkind='v'`, so migration does not fail on view-backed schemas ([[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]], [[docs/features/portfolio|Feature: Portfolio & Investments]]).
 - Add/Edit portfolio transaction dialogs expose an optional `fx_rate_to_eur` field and pass it through to create payloads when set ([[apps/frontend/src/features/portfolio/AddPortfolioTxnDialog.tsx]], [[apps/frontend/src/features/portfolio/EditPortfolioTxnDialog.tsx]], [[apps/frontend/src/hooks/usePortfolio.ts]]).
 - If `fx_rate_to_eur` is omitted, FX conversion uses historical rates from `exchange_rates` for transaction dates; missing rows are auto-backfilled from ECB historical data at startup, with nearest DB historical-rate fallback when exact dates are unavailable ([[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/main.js]]).
@@ -548,7 +548,7 @@ Update a portfolio transaction by transaction ID.
 > [!warning] `:txnId` and `account_id` contract (2026-08-11 — breaking for malformed ids)
 > Applies to `PATCH` and `DELETE /api/investments/transactions/:txnId` and to `POST /api/investments/:id/transactions`.
 >
-> **`:txnId`** now accepts only a plain base-10 integer in 1..2,147,483,647 (`400 VALIDATION_ERROR` — `"Invalid transaction ID"` — otherwise). These two were the only routes in `routes/investments.js` with **no id middleware at all**, and `requireTxnId` was a `parseInt` guarded by `isNaN`/`<= 0`: `DELETE /transactions/12abc` answered **`204` having hard-deleted transaction 12**, `1e3` deleted transaction 1, and `PATCH` retargeted the same way. Both routes now carry `validateIntParam('txnId')` as well.
+> **`:txnId`** now accepts only a plain base-10 integer in 1..2,147,483,647 (`400 VALIDATION_ERROR` — `"Invalid transaction ID"` — otherwise). These two were the only routes in `routes/investments.ts` with **no id middleware at all**, and `requireTxnId` was a `parseInt` guarded by `isNaN`/`<= 0`: `DELETE /transactions/12abc` answered **`204` having hard-deleted transaction 12**, `1e3` deleted transaction 1, and `PATCH` retargeted the same way. Both routes now carry `validateIntParam('txnId')` as well.
 >
 > **`account_id`** on both write bodies now goes through `validateId`. It was a bare `Number()` with no integer check whatsoever — `'1e3'` booked the lot against account **1000**, `'0x10'` against 16, `true` against 1 and `[7]` against 7, all `201`, while `'12abc'` reached Postgres as `NaN` and 500'd. `PATCH` forwarded the field raw through the repository allow-list, where Postgres' hex-literal parsing turned `'0x10'` into account 16. `0`, negatives and `''` now 400 instead of 500ing at the FK.
 >
@@ -556,7 +556,7 @@ Update a portfolio transaction by transaction ID.
 
 Update endpoint notes:
 
-- Route is available at `PATCH /api/investments/transactions/:txnId` ([[apps/node-backend/src/routes/investments.js]]).
+- Route is available at `PATCH /api/investments/transactions/:txnId` ([[apps/node-backend/src/routes/investments.ts]]).
 - The shared POST/PATCH body parser validates common field shapes at the service boundary;
   `portfolioTransactionService.update` and `portfolioTransactionRules` enforce type-specific unit
   math, oversell checks, and recurrence-window rules before a parameterized repository update.
@@ -715,4 +715,4 @@ For real estate investments:
 
 Metals implementation code links: [[apps/node-backend/src/repositories/investmentRepository.ts]], [[apps/node-backend/src/repositories/infoRepository.ts]], [[apps/node-backend/src/services/priceProviderService.js]]
 
-Historical quote cache code links: [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/config/kinesisConfig.ts]], [[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/main.js]], [[alembic/versions/0019_asset_price_history_cache.py]]
+Historical quote cache code links: [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/config/kinesisConfig.ts]], [[apps/node-backend/src/routes/investments.ts]], [[apps/node-backend/src/main.js]], [[alembic/versions/0019_asset_price_history_cache.py]]

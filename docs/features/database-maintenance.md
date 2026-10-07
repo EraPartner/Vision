@@ -2,7 +2,7 @@
 title: Database Maintenance UI
 type: feature
 status: active
-date: 2026-09-27
+date: 2026-10-07
 updated: 2026-09-27
 tags:
   [
@@ -28,7 +28,7 @@ aliases:
     table editor,
   ]
 related_code:
-  - apps/node-backend/src/routes/admin.js
+  - apps/node-backend/src/routes/admin.ts
   - apps/node-backend/src/services/dbEditor.js
   - apps/frontend/src/pages/DbMaintenancePage.tsx
   - apps/frontend/src/pages/admin/TableDataEditorPage.tsx
@@ -142,7 +142,7 @@ Run `VACUUM ANALYZE` on one or all tables.
 The VACUUM operation uses a **raw database client** (not the connection pool) because PostgreSQL does not allow VACUUM inside a transaction:
 
 ```javascript
-// apps/node-backend/src/routes/admin.js
+// apps/node-backend/src/routes/admin.ts
 const client = await getClient(); // Raw client, not pool
 try {
   await client.query("VACUUM ANALYZE " + (tableName ? `"${tableName}"` : ""));
@@ -310,7 +310,7 @@ Full endpoint documentation: [[docs/api/admin|Admin API]].
 
 ## Related Code
 
-- [[apps/node-backend/src/routes/admin.js]]
+- [[apps/node-backend/src/routes/admin.ts]]
 - [[apps/node-backend/src/services/dbEditor.js]]
 - [[apps/frontend/src/pages/DbMaintenancePage.tsx]]
 - [[apps/frontend/src/pages/admin/TableDataEditorPage.tsx]]

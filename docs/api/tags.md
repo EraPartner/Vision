@@ -8,7 +8,7 @@ tags: [api, tags, tagging, orthogonal-dimension, adr-052, bulk-tag]
 description: REST endpoints for transaction tags — a slug-based orthogonal labelling dimension introduced in ADR-052 (May 2026). Tag attachment to transactions is performed via the bulk endpoint on /api/transactions.
 aliases: [tags api, transaction tags api, /api/tags]
 related_code:
-  - apps/node-backend/src/routes/tags.js
+  - apps/node-backend/src/routes/tags.ts
   - apps/node-backend/src/repositories/tagRepository.ts
   - apps/node-backend/src/lib/slugify.ts
 ---
@@ -16,7 +16,7 @@ related_code:
 # Tags API
 
 > [!abstract] Overview
-> Tags are an orthogonal labelling dimension layered on top of transactions (independent of categories or recipients). Each tag has a slug-based identity, a colour, and an `is_active` soft-delete flag. Attachment / detachment is performed in bulk on `/api/transactions/bulk-tag` so the slug ↔ id resolution can happen once per call. Source: [[apps/node-backend/src/routes/tags.js]] and [[apps/node-backend/src/repositories/tagRepository.ts]].
+> Tags are an orthogonal labelling dimension layered on top of transactions (independent of categories or recipients). Each tag has a slug-based identity, a colour, and an `is_active` soft-delete flag. Attachment / detachment is performed in bulk on `/api/transactions/bulk-tag` so the slug ↔ id resolution can happen once per call. Source: [[apps/node-backend/src/routes/tags.ts]] and [[apps/node-backend/src/repositories/tagRepository.ts]].
 
 ## Resource shape
 

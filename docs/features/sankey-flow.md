@@ -9,7 +9,7 @@ aliases: [flow diagram, sankey, income flow, spending allocation]
 related_code:
   - apps/node-backend/src/services/calculations/aggregation/sankey.js
   - apps/node-backend/src/repositories/infoRepositorySankey.ts
-  - apps/node-backend/src/routes/aggregations.js
+  - apps/node-backend/src/routes/aggregations.ts
   - apps/frontend/src/features/statistics/SankeyChart.tsx
   - apps/frontend/src/features/statistics/SankeyTab.tsx
   - apps/frontend/src/lib/api/aggregations.ts

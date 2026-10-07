@@ -31,7 +31,7 @@ vi.mock("../../src/config/logger.ts", () => ({
 import bankAccountRepo from "../../src/repositories/recipientBankAccountRepository.ts";
 
 const { default: recipientBankAccountsRouter } =
-  await import("../../src/routes/recipientBankAccounts.js");
+  await import("../../src/routes/recipientBankAccounts.ts");
 
 const api = routeAgent(recipientBankAccountsRouter, {
   mountPath: "/api/recipients",

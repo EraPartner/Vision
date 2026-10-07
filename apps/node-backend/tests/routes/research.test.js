@@ -59,7 +59,7 @@ import {
 import { runPortfolioForecast } from "../../src/services/research/projection/portfolioProjection.js";
 
 const { default: researchRouter } =
-  await import("../../src/routes/research.js");
+  await import("../../src/routes/research.ts");
 
 const api = routeAgent(researchRouter, { mountPath: "/api/research" });
 const BASE = "/api/research";
@@ -101,6 +101,17 @@ describe("Research route parameter guards", () => {
         expect(res2.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
       },
     );
+
+    it("trims the first entry of an array-valued symbol like a scalar", async () => {
+      await api.get(`${BASE}/quote?symbol=%20%20&symbol=MSFT`).expect(400);
+      expect(researchAggregator.fetch).not.toHaveBeenCalled();
+
+      await api.get(`${BASE}/quote?symbol=%20AAPL%20&symbol=MSFT`).expect(200);
+      expect(researchAggregator.fetch).toHaveBeenLastCalledWith(
+        "quote",
+        expect.objectContaining({ symbol: "AAPL" }),
+      );
+    });
 
     it("uses the first entry of an array-valued symbol and trims scalars", async () => {
       await api.get(`${BASE}/quote?symbol=AAPL&symbol=MSFT`).expect(200);

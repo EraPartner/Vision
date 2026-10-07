@@ -62,7 +62,7 @@ import { scheduleAggregationRefresh } from "../../src/services/aggregationRefres
 import { invalidatePortfolioCaches } from "../../src/services/info/cache.js";
 
 const { default: accountsRouter } =
-  await import("../../src/routes/accounts.js");
+  await import("../../src/routes/accounts.ts");
 
 const api = routeAgent(accountsRouter, { mountPath: "/api/accounts" });
 const BASE = "/api/accounts";

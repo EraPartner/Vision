@@ -9,7 +9,7 @@ updated: 2026-10-06
 tags: [api, attachments, receipts, files, storage, phase-5a, security, path-traversal, rfc-5987]
 status: active
 aliases: [attachments-api, receipts, documents, file-management]
-related_code: ["apps/node-backend/src/routes/attachments.js", "apps/node-backend/src/middleware/attachmentUpload.ts", "apps/node-backend/src/services/attachmentService.js", "apps/node-backend/src/repositories/attachmentRepository.ts", "apps/frontend/src/components/shared/AttachmentPanel.tsx"]
+related_code: ["apps/node-backend/src/routes/attachments.ts", "apps/node-backend/src/middleware/attachmentUpload.ts", "apps/node-backend/src/services/attachmentService.js", "apps/node-backend/src/repositories/attachmentRepository.ts", "apps/frontend/src/components/shared/AttachmentPanel.tsx"]
 ---
 
 # Attachments API

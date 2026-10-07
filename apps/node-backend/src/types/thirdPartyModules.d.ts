@@ -19,11 +19,12 @@
 // each of which then behaves as an untyped (`any`) import at its use sites,
 // same as it always has.
 //
-// tsconfig.check(.strict).json's `include` is `src/**/*.js`, which does not
-// pick up `.d.ts` files on its own; a consuming file pulls this in with a
-// `/// <reference path="../types/thirdPartyModules.d.ts" />` comment, after
-// which the ambient declarations below are visible to the whole program
-// (ambient declarations are global once included, not per-importer).
+// Only the legacy checkJs program (tsconfig.check.json) includes this file,
+// by name in its `include`. Source files must not pull it in with a
+// `/// <reference path>` comment: ambient declarations are global once
+// included, so a reference would also turn `express`, `pg` and `multer` into
+// `any` in the strict TypeScript program (tsconfig.json), which checks them
+// against their real `@types` packages.
 //
 // `pg` is here for the same VALUE-import reason as `multer`: every other
 // file references `pg` in TYPE position only (`import('pg').PoolClient`) and

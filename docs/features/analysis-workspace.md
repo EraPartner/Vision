@@ -2,7 +2,7 @@
 title: Analysis Workspace
 type: feature
 status: active
-date: 2026-10-01
+date: 2026-10-07
 updated: 2026-10-01
 tags:
   [
@@ -19,7 +19,7 @@ description: Visual and SQL analysis over approved financial datasets, with boun
 aliases: [manual analysis, visual query builder, SQL workspace]
 related_code:
   - apps/frontend/src/pages/AnalysisWorkspacePage.tsx
-  - apps/node-backend/src/routes/analysis.js
+  - apps/node-backend/src/routes/analysis.ts
   - apps/node-backend/src/services/analysisExecutor.js
   - apps/node-backend/src/services/savedAnalysisService.js
 ---

@@ -24,8 +24,8 @@ status: active
 aliases: [imports-api, csv-import, bank-import, bank-statement, deduplication]
 related_code:
   [
-    "apps/node-backend/src/routes/importRoutes.js",
-    "apps/node-backend/src/routes/importBatchRoutes.js",
+    "apps/node-backend/src/routes/importRoutes.ts",
+    "apps/node-backend/src/routes/importBatchRoutes.ts",
     "apps/node-backend/src/services/importBatchService.js",
     "apps/node-backend/src/services/importPipeline/index.js",
     "apps/node-backend/src/lib/sse.ts",
@@ -151,7 +151,7 @@ data: {"phase":"matching","current":50,"total":150}
 event: progress
 data: {"phase":"committing","current":50,"total":150,"imported":48,"duplicates":2,"errors":0}
 
-// Complete event (buildComplete in routes/importRoutes.js)
+// Complete event (buildComplete in routes/importRoutes.ts)
 event: complete
 data: {"total_processed":150,"imported":148,"duplicates":2,"errors":0,"batch_id":42,"auto_linked_count":0,"status":"completed","percent":100}
 
@@ -248,7 +248,7 @@ TRANSPORT,GAS,Fuel purchases
 
 - **Unified Pipeline**: All imports (standard, custom, and streaming) route through `runImportPipeline()` ([[apps/node-backend/src/services/importPipeline/index.js]]), which orchestrates stage → validate → match → commit, then attempts transfer reconciliation, awaits forecast-cache invalidation, and schedules one materialized-view refresh. The response confirms the ledger commit, not completion of the derived-view refresh.
 - **Phase Isolation**: Each phase is idempotent at its boundary; failures in any phase mark the batch as `failed` without cascading partial state.
-- **Temp File Cleanup**: Route-level cleanup uses non-blocking `fs.promises.unlink(...).catch(...)` to avoid blocking the event loop under concurrent imports ([[apps/node-backend/src/routes/importRoutes.js]]).
+- **Temp File Cleanup**: Route-level cleanup uses non-blocking `fs.promises.unlink(...).catch(...)` to avoid blocking the event loop under concurrent imports ([[apps/node-backend/src/routes/importRoutes.ts]]).
 - **Concurrent Row Processing**: Row batches are processed with adaptive concurrency calculated as `Math.max(2, Math.floor(poolMax / 2))` where `poolMax = max(DB_POOL_SIZE, DB_MAX_OVERFLOW)`. With default pool settings (poolMax=10), concurrency is 5. Batches use `Promise.allSettled` so one bad row doesn't stall others.
 - **Deduplication**: provider-neutral, versioned occurrence fingerprints shared across every
   adapter. Immutable provider IDs take precedence; normalized field identity is the fallback.

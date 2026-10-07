@@ -9,7 +9,7 @@ description: Freeform tagging for transactions and planned transactions as a sec
 aliases: [tags, transaction-tags, labels]
 related_code:
   - "apps/node-backend/src/repositories/tagRepository.ts"
-  - "apps/node-backend/src/routes/tags.js"
+  - "apps/node-backend/src/routes/tags.ts"
   - "apps/node-backend/src/repositories/transactionRepository.ts"
   - "apps/frontend/src/hooks/useTags.ts"
   - "apps/frontend/src/components/shared/TagInput.tsx"
@@ -56,10 +56,10 @@ Slugs are globally unique (not partial-on-active) so junction rows survive soft-
 | File | Role |
 |------|------|
 | `apps/node-backend/src/repositories/tagRepository.ts` | CRUD + `findOrCreateBySlug` (atomic upsert) |
-| `apps/node-backend/src/routes/tags.js` | `GET /api/tags`, `POST /api/tags`, `PATCH /api/tags/:id`, `DELETE /api/tags/:id` |
+| `apps/node-backend/src/routes/tags.ts` | `GET /api/tags`, `POST /api/tags`, `PATCH /api/tags/:id`, `DELETE /api/tags/:id` |
 | `apps/node-backend/src/repositories/transactionRepository.ts` | Batched second query attaches `tags: Tag[]` to list results; `create`/`update` accept `tags: string[]` |
 | `apps/node-backend/src/lib/filterBuilder.ts` | `tags` param → `EXISTS (SELECT 1 FROM transaction_tags ...)` |
-| `apps/node-backend/src/routes/transactions.js` | `tags` query param + `POST /api/transactions/bulk-tag` |
+| `apps/node-backend/src/routes/transactions.ts` | `tags` query param + `POST /api/transactions/bulk-tag` |
 | `apps/node-backend/src/repositories/plannedTransactionRepository.ts` | `planned_transaction_tags` read/write; `executeAndAdvance` inherits tags |
 
 ### Slug normalisation
@@ -153,7 +153,7 @@ The Transaction Tags feature test suite is **complete and passing** (2026-05-08)
 | Test File | Coverage |
 |-----------|----------|
 | `apps/node-backend/tests/filterBuilder.test.js` | Filter builder tag slug handling (empty/single/multiple tag filter semantics) |
-| `apps/node-backend/tests/routes/tags.js` | Tag CRUD endpoints (list, create, update color/is_active, soft-delete) |
+| `apps/node-backend/tests/routes/tags.ts` | Tag CRUD endpoints (list, create, update color/is_active, soft-delete) |
 | `apps/node-backend/tests/plannedTransactionRepository.test.js` | Planned transaction tag read/write and execute-forward inheritance |
 | `apps/node-backend/tests/routes/transactions.test.js` | Transaction tag filtering and NDJSON export with tag fields |
 | `apps/node-backend/src/backup/coverage.ts` | Backup table enumeration includes tag tables (`tags`, `transaction_tags`, `planned_transaction_tags`) |

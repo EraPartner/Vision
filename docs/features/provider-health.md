@@ -2,7 +2,7 @@
 title: Provider Health Tracking
 type: feature
 status: active
-date: 2026-04-24
+date: 2026-10-07
 updated: 2026-06-16
 last_modified: 2026-06-16
 tags: [feature, admin, provider-health, observability, research-providers, twelve-data, finnhub, fmp, alpha-vantage]
@@ -11,7 +11,7 @@ aliases: [provider health, data source health, provider monitoring]
 related_code:
   - apps/node-backend/src/services/providerHealth/providerHealthService.js
   - apps/node-backend/src/services/providerHealth/providerHealthRepo.js
-  - apps/node-backend/src/routes/admin.js
+  - apps/node-backend/src/routes/admin.ts
   - apps/frontend/src/pages/admin/ProviderHealthPage.tsx
   - apps/frontend/src/lib/api/admin.ts
 ---
