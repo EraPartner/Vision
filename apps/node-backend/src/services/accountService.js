@@ -295,6 +295,8 @@ const accountService = {
    * sends) means the full list, so `total` is just the row count and the extra
    * COUNT round-trip is skipped. A supplied limit/offset pages the rows while
    * `total` stays the full match count.
+   *
+   * @param {{ active?: boolean|null, limit?: number|null, offset?: number }} [opts]
    */
   async list({ active = null, limit = null, offset = 0 } = {}) {
     const rows = await accountRepository.getAll({ active, limit, offset });

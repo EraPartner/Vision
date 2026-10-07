@@ -65,7 +65,7 @@ vi.mock('../../src/services/calculations/aggregation/tagPivot.js', () => ({
   computeTagPivot: (...a) => tagPivotSpy(...a),
 }));
 
-const { default: aggregationsRouter } = await import('../../src/routes/aggregations.js');
+const { default: aggregationsRouter } = await import('../../src/routes/aggregations.ts');
 
 const api = routeAgent(aggregationsRouter, { mountPath: '/api/aggregations' });
 

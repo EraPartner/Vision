@@ -41,8 +41,8 @@ related_code:
   - apps/frontend/src/components/charts/ChartCard.tsx
   - apps/frontend/src/components/charts/ChartPeriodSelector.tsx
   - apps/frontend/src/components/charts/chartPeriods.ts
-  - apps/node-backend/src/routes/info.js
-  - apps/node-backend/src/routes/info/netWorth.js
+  - apps/node-backend/src/routes/info.ts
+  - apps/node-backend/src/routes/info/netWorth.ts
   - apps/node-backend/src/routes/info/_liveSummary.js
   - apps/node-backend/src/repositories/infoRepositoryNetWorth.ts
   - apps/node-backend/src/services/portfolioPerformanceSnapshotService.js
@@ -223,10 +223,10 @@ On the most recent snapshot day, `investments.current_price` is used directly in
 
 Implementation notes:
 
-- Route-level cache behavior in `info` routes is centralized through shared helpers (`getFreshCachedData`, `setCachedData`, `setInflightCache`, `resolveCacheWithInflight`) and reused by both `GET /api/info/net-worth` and `GET /api/info/portfolio-performance`, preserving TTL and concurrent-request deduplication behavior while reducing duplicate logic ([[apps/node-backend/src/routes/info.js]]).
+- Route-level cache behavior in `info` routes is centralized through shared helpers (`getFreshCachedData`, `setCachedData`, `setInflightCache`, `resolveCacheWithInflight`) and reused by both `GET /api/info/net-worth` and `GET /api/info/portfolio-performance`, preserving TTL and concurrent-request deduplication behavior while reducing duplicate logic ([[apps/node-backend/src/routes/info.ts]]).
 - The live-overlay helper `resolveLivePortfolioValue` (and the broader `resolveLiveSummary`) live in [[apps/node-backend/src/routes/info/_liveSummary.js]] so they can be imported by both `netWorth.js` and the warmup pre-warm path in `info.js` without circular dependencies.
-- `GET /api/info/category-breakdown` uses a dedicated repository path (`getCategoryBreakdown`) instead of full `getStatistics`, and hot-path info route imports (exchange-rates + portfolio-performance snapshot service) are module-scoped to remove repeated dynamic import overhead without changing API responses ([[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/repositories/infoRepositoryNetWorth.ts]]).
-- Info-route response caches opportunistically prune expired entries and enforce a bounded maximum entry count to prevent long-lived unbounded memory growth while keeping inflight dedupe semantics intact ([[apps/node-backend/src/routes/info.js]]).
+- `GET /api/info/category-breakdown` uses a dedicated repository path (`getCategoryBreakdown`) instead of full `getStatistics`, and hot-path info route imports (exchange-rates + portfolio-performance snapshot service) are module-scoped to remove repeated dynamic import overhead without changing API responses ([[apps/node-backend/src/routes/info.ts]], [[apps/node-backend/src/repositories/infoRepositoryNetWorth.ts]]).
+- Info-route response caches opportunistically prune expired entries and enforce a bounded maximum entry count to prevent long-lived unbounded memory growth while keeping inflight dedupe semantics intact ([[apps/node-backend/src/routes/info.ts]]).
 
 ## Chart Architecture
 

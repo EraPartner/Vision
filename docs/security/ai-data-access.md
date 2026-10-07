@@ -21,7 +21,7 @@ aliases:
   [ai data access, ai security, llm security, ollama security, ai chat security]
 related_code:
   [
-    "apps/node-backend/src/routes/ai.js",
+    "apps/node-backend/src/routes/ai.ts",
     "apps/node-backend/src/services/aiChatService.js",
     "apps/node-backend/src/services/aiChat/tools/index.js",
     "apps/node-backend/src/integrations/ollama/client.ts",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { __experimentalAccessDecision as experimentalAccessDecision } from "../src/routes/codexExperimental.js";
+import { __experimentalAccessDecision as experimentalAccessDecision } from "../src/routes/codexExperimental.ts";
 
 describe("experimental Codex access gate", () => {
   const base = {

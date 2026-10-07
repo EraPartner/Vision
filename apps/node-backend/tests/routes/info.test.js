@@ -120,8 +120,8 @@ import {
   invalidatePortfolioCaches,
   invalidateStatisticsCaches,
 } from "../../src/services/info/cache.js";
-const { default: infoRouter } = await import("../../src/routes/info.js");
-const { warmInfoCaches } = await import("../../src/routes/info.js");
+const { default: infoRouter } = await import("../../src/routes/info.ts");
+const { warmInfoCaches } = await import("../../src/routes/info.ts");
 
 const BASE = "/api/info";
 const api = routeAgent(infoRouter, { mountPath: BASE });

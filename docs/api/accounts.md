@@ -9,7 +9,7 @@ updated: 2026-09-13
 tags: [api, accounts, account-entity, adr-088, net-worth, cash-sleeve, rename-propagation, lifecycle, normalized-identity]
 status: active
 aliases: [accounts-api, account-management, account-entity]
-related_code: [[apps/node-backend/src/routes/accounts.js]], [[apps/node-backend/src/services/accountService.js]], [[apps/node-backend/src/services/accountCloseService.js]], [[apps/node-backend/src/services/accountMergeService.js]], [[apps/node-backend/src/repositories/accountRepository.ts]]
+related_code: [[apps/node-backend/src/routes/accounts.ts]], [[apps/node-backend/src/services/accountService.js]], [[apps/node-backend/src/services/accountCloseService.js]], [[apps/node-backend/src/services/accountMergeService.js]], [[apps/node-backend/src/repositories/accountRepository.ts]]
 ---
 
 # Accounts API

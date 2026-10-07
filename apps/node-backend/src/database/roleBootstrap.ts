@@ -62,7 +62,7 @@ export interface ParsedDbUrl {
 
 /** The slice of `pg.Client` this module calls. */
 export interface PgOneShotClient {
-  connect: () => Promise<void>;
+  connect: () => Promise<unknown>;
   query: (
     text: string,
     params?: unknown[],

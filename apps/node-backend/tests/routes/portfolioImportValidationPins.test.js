@@ -108,7 +108,7 @@ import accountService from "../../src/services/accountService.js";
 import customParserConfigRepository from "../../src/repositories/customParserConfigRepository.ts";
 
 const { default: portfolioImportRouter } =
-  await import("../../src/routes/portfolioImportRoutes.js");
+  await import("../../src/routes/portfolioImportRoutes.ts");
 
 const UPLOAD = { path: "/tmp/pin.csv", originalname: "pin.csv", size: 10 };
 const BASE = "/api/portfolio/import";
@@ -315,6 +315,15 @@ describe("override/commit body id shape", () => {
       });
       expect(res.body.data.user_override_investment_id).toBeNull();
     }
+
+    // No JSON body at all leaves req.body undefined under Express 5; it clears
+    // the override like an empty body instead of failing with a 500.
+    await api.post(`${BASE}/batches/5/rows/6/investment-override`).expect(200);
+    expect(overrideInvestment).toHaveBeenLastCalledWith({
+      batchId: 5,
+      rowId: 6,
+      investmentId: null,
+    });
   });
 
   it("rejects a commit account_id that used to stamp the batch with another account", async () => {

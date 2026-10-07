@@ -1,0 +1,282 @@
+/**
+ * Recipient routes.
+ */
+
+import { Router } from "express";
+import recipientService from "../services/recipientService.js";
+import { mergeRecipients as mergeRecipientsAtomic } from "../services/recipientMergeService.js";
+import {
+  listPatternsForRecipient,
+  createPattern,
+  updatePattern,
+  deletePattern,
+  previewPatternMatches,
+  suggestPatternFromNames,
+} from "../services/recipientPatternService.js";
+import { findRecipientClusters } from "../services/recipientClusterService.js";
+import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
+import {
+  validateIdParam,
+  validateIntParam,
+  assertOptionalId,
+  assertIdParam,
+  validateIntArray,
+} from "../middleware/validation.ts";
+import { parsePagination } from "../lib/pagination.ts";
+import { withCreateOutcome } from "../lib/createOutcome.ts";
+import {
+  optionalQueryString,
+  parseBooleanQueryParam,
+} from "../lib/httpParams.ts";
+// The MVs attribute transactions to categories via a 3-level resolution
+// (COALESCE(t.category_id, r.default_category_id, pr.default_category_id),
+// where pr is the recipient's PRIMARY recipient), so recipient edits/merges/
+// deletes must schedule a refresh — otherwise the dashboard serves the old
+// grouping until an unrelated transaction mutation.
+import { scheduleRefresh } from "../services/materializedViewService.js";
+
+const router = Router();
+
+router.get("/clusters", async (req, res) => {
+  const minCount = Math.max(
+    2,
+    parseInt(optionalQueryString(req.query, "min_count") ?? "", 10) || 2,
+  );
+  const clusters = await findRecipientClusters({ minCount });
+  res.ok({ items: clusters, total: clusters.length });
+});
+
+router.get("/", async (req, res) => {
+  const {
+    default_category_id,
+    active = "true",
+    uncategorized = "false",
+    sort_dir,
+  } = req.query;
+  const name = optionalQueryString(req.query, "name");
+  const search = optionalQueryString(req.query, "search");
+  const sort_by = optionalQueryString(req.query, "sort_by");
+
+  const { limit, offset } = parsePagination(req.query, { maxLimit: 1000 });
+  const opts: Parameters<typeof recipientService.getAll>[0] = {
+    limit,
+    offset,
+    name: name || undefined,
+    // Same strict id parse as every other id query param: absent/empty is "no
+    // filter" (undefined, 200), malformed is a 400. `parseInt` truncated instead —
+    // ?default_category_id=12abc listed the recipients defaulting to category
+    // 12 — and a NaN reached Postgres as a 22P02 500.
+    defaultCategoryId: assertOptionalId(
+      default_category_id,
+      "default_category_id",
+    ),
+    search: search ? search.slice(0, 200) : undefined,
+    active: parseBooleanQueryParam(active, true),
+    uncategorized: parseBooleanQueryParam(uncategorized),
+    sortBy: sort_by || undefined,
+    sortDir: sort_dir === "asc" || sort_dir === "desc" ? sort_dir : undefined,
+  };
+
+  const [items, total] = await Promise.all([
+    recipientService.getAll(opts),
+    recipientService.getCount(opts),
+  ]);
+
+  res.ok({
+    items: items.map((r) => ({
+      ...r,
+      links: [],
+    })),
+    total,
+    limit: opts.limit,
+    offset: opts.offset,
+    links: [],
+  });
+});
+
+router.post("/", async (req, res) => {
+  const { name, default_category_id, notes } = req.body;
+  if (!name) throw new ValidationError("Missing required field: name");
+
+  const { recipient, created } = await recipientService.createOrGet({ name });
+  // Only null if the row vanished between upsert and re-read.
+  if (!recipient) throw new NotFoundError("Recipient not found");
+
+  let finalRecipient: typeof recipient | null = recipient;
+  if (default_category_id != null || notes != null) {
+    finalRecipient = await recipientService.update(recipient.id, {
+      default_category_id,
+      notes,
+    });
+  }
+
+  res.status(created ? 201 : 200);
+  res.ok(withCreateOutcome(finalRecipient ?? {}, created));
+});
+
+router.get("/:id", validateIdParam, async (req, res) => {
+  const recipient = await recipientService.getById(assertIdParam(req));
+  if (!recipient) throw new NotFoundError("Recipient not found");
+  res.ok({ ...recipient, links: [] });
+});
+
+router.patch("/:id", validateIdParam, async (req, res) => {
+  const id = assertIdParam(req);
+  const updated = await recipientService.update(id, req.body);
+  if (!updated) throw new NotFoundError("Recipient not found");
+  scheduleRefresh();
+  res.ok({ ...updated, links: [] });
+});
+
+router.delete("/:id", validateIdParam, async (req, res) => {
+  const id = assertIdParam(req);
+  const deleted = await recipientService.hardDelete(id);
+  if (!deleted) throw new NotFoundError("Recipient not found");
+  scheduleRefresh();
+  // Hard delete → 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
+  res.status(204).send();
+});
+
+router.post("/:id/merge", validateIdParam, async (req, res) => {
+  const primaryId = assertIdParam(req);
+  const { alias_ids } = req.body;
+  if (!alias_ids || !Array.isArray(alias_ids) || alias_ids.length === 0) {
+    throw new ValidationError(
+      "Missing required field: alias_ids (array of recipient IDs)",
+    );
+  }
+  const aliasIdsResult = validateIntArray(alias_ids, "alias_ids");
+  if (!aliasIdsResult.valid) throw new ValidationError(aliasIdsResult.error);
+
+  const primary = await recipientService.getById(primaryId);
+  if (!primary) throw new NotFoundError("Primary recipient not found");
+  if (primary.primary_recipient_id) {
+    throw new ValidationError(
+      "Cannot merge into a recipient that is itself an alias. Use its primary instead.",
+    );
+  }
+
+  const { mergedAliasIds, reassigned } = await mergeRecipientsAtomic(
+    primaryId,
+    aliasIdsResult.value,
+  );
+  const updatedPrimary = await recipientService.getById(primaryId);
+  if (!updatedPrimary) throw new NotFoundError("Primary recipient not found");
+  const aliases = await recipientService.getAliases(primaryId);
+
+  // Build pattern suggestion from merged alias names + primary name
+  const mergedNames = aliases
+    .filter((a) => mergedAliasIds.includes(a.id))
+    .map((a) => a.name);
+  const allNames = [updatedPrimary.name, ...mergedNames];
+  const suggestion = suggestPatternFromNames(allNames);
+
+  let patternSuggestion = null;
+  if (suggestion) {
+    try {
+      const preview = await previewPatternMatches({
+        pattern: suggestion.pattern,
+        pattern_kind: suggestion.kind,
+        case_sensitive: false,
+      });
+      patternSuggestion = {
+        pattern: suggestion.pattern,
+        kind: suggestion.kind,
+        matchCount: preview.matchCount,
+        confidence: suggestion.confidence,
+      };
+    } catch {
+      // suggestion is optional; ignore preview errors
+    }
+  }
+
+  scheduleRefresh();
+  res.ok({
+    primary: { ...updatedPrimary, links: [] },
+    merged_ids: mergedAliasIds,
+    reassigned,
+    aliases: aliases.map((a) => ({ id: a.id, name: a.name })),
+    patternSuggestion,
+  });
+});
+
+router.post("/:id/unmerge", validateIdParam, async (req, res) => {
+  const id = assertIdParam(req);
+  const success = await recipientService.unmergeRecipient(id);
+  if (!success) throw new NotFoundError("Recipient not found");
+  const recipient = await recipientService.getById(id);
+  scheduleRefresh();
+  res.ok({ ...recipient, links: [] });
+});
+
+router.get("/:id/aliases", validateIdParam, async (req, res) => {
+  const id = assertIdParam(req);
+  const aliases = await recipientService.getAliases(id);
+  res.ok({
+    items: aliases.map((a) => ({
+      ...a,
+      links: [],
+    })),
+    total: aliases.length,
+  });
+});
+
+// ── Pattern sub-routes ───────────────────────────────────────────────────────
+
+router.get("/:id/patterns", validateIdParam, async (req, res) => {
+  const id = assertIdParam(req);
+  const patterns = await listPatternsForRecipient(id);
+  res.ok({ items: patterns, total: patterns.length });
+});
+
+router.post("/:id/patterns", validateIdParam, async (req, res) => {
+  const recipientId = assertIdParam(req);
+  const { pattern, pattern_kind, case_sensitive, priority, notes } = req.body;
+  if (!pattern) throw new ValidationError("Missing required field: pattern");
+  const result = await createPattern({
+    recipientId,
+    pattern,
+    pattern_kind,
+    case_sensitive,
+    priority,
+    notes,
+  });
+  res.status(201);
+  res.ok(result);
+});
+
+router.post("/:id/patterns/preview", validateIdParam, async (req, res) => {
+  const { pattern, pattern_kind, case_sensitive } = req.body;
+  if (!pattern) throw new ValidationError("Missing required field: pattern");
+  const result = await previewPatternMatches({
+    pattern,
+    pattern_kind: pattern_kind ?? "literal_prefix",
+    case_sensitive: case_sensitive ?? false,
+  });
+  res.ok(result);
+});
+
+router.patch(
+  "/:id/patterns/:patternId",
+  validateIdParam,
+  validateIntParam("patternId"),
+  async (req, res) => {
+    const patternId = assertIdParam(req, "patternId");
+    await updatePattern(patternId, req.body);
+    res.ok({ patternId });
+  },
+);
+
+router.delete(
+  "/:id/patterns/:patternId",
+  validateIdParam,
+  validateIntParam("patternId"),
+  async (req, res) => {
+    const patternId = assertIdParam(req, "patternId");
+    await deletePattern(patternId);
+    // Hard delete → 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
+    res.status(204).send();
+  },
+);
+
+export default router;

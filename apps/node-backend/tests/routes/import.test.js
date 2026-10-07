@@ -140,7 +140,7 @@ import {
 } from "../../src/services/aggregationRefresh.js";
 
 const { default: importRouter } =
-  await import("../../src/routes/importRoutes.js");
+  await import("../../src/routes/importRoutes.ts");
 
 const BASE = "/api/import";
 const api = routeAgent(importRouter, { mountPath: BASE });

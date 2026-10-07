@@ -14,7 +14,7 @@ aliases:
     GENERAL-DETAIL,
   ]
 related_code:
-  - apps/node-backend/src/routes/categories.js
+  - apps/node-backend/src/routes/categories.ts
   - apps/node-backend/src/repositories/categoryRepository.ts
   - apps/node-backend/src/repositories/categoryHierarchyRepository.ts
   - apps/frontend/src/features/categories/

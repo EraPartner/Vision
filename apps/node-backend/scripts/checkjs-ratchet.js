@@ -77,6 +77,11 @@ const BASELINE_PATH = path.join(ROOT, "scripts/checkjs-ratchet-baseline.json");
  * `import { Router } from 'express'`, a VALUE import that trips TS7016 the
  * same way).
  *
+ * TypeScript sources (`.ts`) are compiled into this program because JavaScript
+ * imports them, but they are not ratcheted here: `tsconfig.json` checks them
+ * with `strict` (noImplicitAny included) against the real `@types` packages,
+ * while this program still sees `express` through the ambient `any` shim.
+ *
  * @type {string[]}
  */
 const RATCHETED = ["src/"];
@@ -94,6 +99,7 @@ function toRelative(absolutePath) {
  * @returns {boolean}
  */
 function isRatcheted(relativePath) {
+  if (relativePath.endsWith(".ts")) return false;
   return RATCHETED.some((entry) =>
     entry.endsWith("/")
       ? relativePath.startsWith(entry)

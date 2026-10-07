@@ -52,7 +52,7 @@ related_code:
   - apps/frontend/src/stores/hydration/SettingsHydration.tsx
   - apps/frontend/src/contexts/SettingsPreloadContext.tsx
   - apps/frontend/src/stores/hydration/ThemeHydration.tsx
-  - apps/node-backend/src/routes/settings.js
+  - apps/node-backend/src/routes/settings.ts
   - apps/node-backend/src/repositories/settingsRepository.ts
 ---
 
@@ -187,7 +187,7 @@ Located at `[[apps/node-backend/src/repositories/settingsRepository.ts]]`:
 
 ### API Endpoints
 
-Located at `[[apps/node-backend/src/routes/settings.js]]`:
+Located at `[[apps/node-backend/src/routes/settings.ts]]`:
 
 #### GET /api/settings
 

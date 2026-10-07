@@ -89,7 +89,7 @@ import {
 } from "../../src/services/priceProviderService.js";
 
 const { default: investmentsRouter } =
-  await import("../../src/routes/investments.js");
+  await import("../../src/routes/investments.ts");
 
 const portfolioTransactionRepository = {
   ...portfolioTransactionPersistence,

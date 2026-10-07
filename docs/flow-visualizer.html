@@ -2022,7 +2022,7 @@
                 "from": "be.middleware",
                 "to": "be.routes",
                 "payload": "validated request body",
-                "annotation": "apps/node-backend/src/routes/transactions.js",
+                "annotation": "apps/node-backend/src/routes/transactions.ts",
                 "title": "Validate the body",
                 "note": "The route validates the request body before calling the service."
               },
@@ -2082,7 +2082,7 @@
                 "from": "be.routes",
                 "to": "fe.apiclient",
                 "payload": "201 { ok: true, data: { transaction fields, auto_linked }, meta }",
-                "annotation": "apps/node-backend/src/routes/transactions.js; apps/node-backend/src/middleware/envelope.ts; apps/frontend/src/hooks/useTransactions.ts",
+                "annotation": "apps/node-backend/src/routes/transactions.ts; apps/node-backend/src/middleware/envelope.ts; apps/frontend/src/hooks/useTransactions.ts",
                 "title": "Return the saved transaction",
                 "note": "The response uses the unified success envelope. The mutation invalidates affected queries."
               }
@@ -2115,7 +2115,7 @@
                 "title": "Upload the CSV",
                 "note": "The streaming route reports progress; a one-shot route is also supported.",
                 "payload": "POST /api/import/csv/stream or /api/import/csv; multipart bank_name",
-                "annotation": "apps/frontend/src/lib/api/imports.ts; apps/node-backend/src/routes/importRoutes.js"
+                "annotation": "apps/frontend/src/lib/api/imports.ts; apps/node-backend/src/routes/importRoutes.ts"
               },
               {
                 "from": "fe.apiclient",
@@ -2123,7 +2123,7 @@
                 "title": "Validate the upload",
                 "note": "Check the file and adapter before running the pipeline.",
                 "payload": "filePath and adapterName",
-                "annotation": "apps/node-backend/src/routes/importRoutes.js"
+                "annotation": "apps/node-backend/src/routes/importRoutes.ts"
               },
               {
                 "from": "be.routes",
@@ -2182,7 +2182,7 @@
                 "title": "Review staged rows",
                 "note": "Load the batch preview.",
                 "payload": "GET /api/import/batches/:id/preview",
-                "annotation": "apps/frontend/src/pages/ImportReviewPage.tsx; apps/node-backend/src/routes/importRoutes.js"
+                "annotation": "apps/frontend/src/pages/ImportReviewPage.tsx; apps/node-backend/src/routes/importRoutes.ts"
               },
               {
                 "from": "fe.pages",
@@ -2190,7 +2190,7 @@
                 "title": "Save recipient and category choices",
                 "note": "Each row override is persisted separately.",
                 "payload": "POST /api/import/batches/:id/rows/:rowId/override or category-override",
-                "annotation": "apps/frontend/src/lib/api/imports.ts; apps/node-backend/src/routes/importRoutes.js"
+                "annotation": "apps/frontend/src/lib/api/imports.ts; apps/node-backend/src/routes/importRoutes.ts"
               },
               {
                 "from": "fe.pages",
@@ -2198,7 +2198,7 @@
                 "title": "Confirm the batch",
                 "note": "Commit uses the choices already stored.",
                 "payload": "POST /api/import/batches/:id/commit",
-                "annotation": "apps/node-backend/src/routes/importRoutes.js"
+                "annotation": "apps/node-backend/src/routes/importRoutes.ts"
               },
               {
                 "from": "be.routes",
@@ -2238,7 +2238,7 @@
                 "title": "Report accepted and failed rows",
                 "note": "Show imported, duplicate and error counts.",
                 "payload": "imported, duplicates, errors, auto_linked_count",
-                "annotation": "apps/node-backend/src/routes/importRoutes.js; apps/frontend/src/pages/ImportReviewPage.tsx"
+                "annotation": "apps/node-backend/src/routes/importRoutes.ts; apps/frontend/src/pages/ImportReviewPage.tsx"
               }
             ],
             "takeaway": "Successful chunks remain committed. Review choices are stored before the commit request; the whole batch is not one atomic write.",
@@ -2275,7 +2275,7 @@
                 "from": "fe.apiclient",
                 "to": "be.routes",
                 "payload": "investment ids",
-                "annotation": "routes/marketLookup.js."
+                "annotation": "routes/marketLookup.ts."
               },
               {
                 "from": "be.routes",
@@ -2349,7 +2349,7 @@
                 "title": "Fetch the payload",
                 "note": "Specify period and currency.",
                 "payload": "GET /api/info/portfolio-performance?currency=EUR&period=1y",
-                "annotation": "apps/node-backend/src/routes/info/performance.js"
+                "annotation": "apps/node-backend/src/routes/info/performance.ts"
               },
               {
                 "from": "be.routes",
@@ -2357,7 +2357,7 @@
                 "title": "Reuse or read snapshots",
                 "note": "Use cache/in-flight reuse before loading history.",
                 "payload": "getSnapshots",
-                "annotation": "apps/node-backend/src/routes/info/performance.js"
+                "annotation": "apps/node-backend/src/routes/info/performance.ts"
               },
               {
                 "from": "sv.snapshot",
@@ -2449,7 +2449,7 @@
                 "from": "be.routes",
                 "to": "sv.analysis",
                 "payload": "validated SQL or canonical service plan; bounded preparation and scenarios",
-                "annotation": "apps/node-backend/src/routes/analysis.js selects restricted SQL, analysisFinancialDatasets.js or analysisWorkbenchService.js. No arbitrary application-table access.",
+                "annotation": "apps/node-backend/src/routes/analysis.ts selects restricted SQL, analysisFinancialDatasets.js or analysisWorkbenchService.js. No arbitrary application-table access.",
                 "title": "Validate and select the execution path"
               },
               {
@@ -2496,7 +2496,7 @@
                 "from": "fe.apiclient",
                 "to": "be.routes",
                 "payload": "PUT /api/research-dossiers/:id",
-                "annotation": "apps/node-backend/src/routes/researchDossiers.js uses the aggregation limiter and standard response envelope."
+                "annotation": "apps/node-backend/src/routes/researchDossiers.ts uses the aggregation limiter and standard response envelope."
               },
               {
                 "from": "be.routes",
@@ -2546,7 +2546,7 @@
                 "from": "fe.apiclient",
                 "to": "be.routes",
                 "payload": "validated local monitor request",
-                "annotation": "apps/node-backend/src/routes/analysisMonitors.js is mounted before the generic analysis route with the aggregation limiter."
+                "annotation": "apps/node-backend/src/routes/analysisMonitors.ts is mounted before the generic analysis route with the aggregation limiter."
               },
               {
                 "from": "be.routes",
@@ -2652,7 +2652,7 @@
                 "from": "fe.apiclient",
                 "to": "be.routes",
                 "payload": "GET /api/investments/exposure or PUT /api/investments/exposure/sources",
-                "annotation": "routes/investments.js validates the reporting currency and delegates source validation and aggregation."
+                "annotation": "routes/investments.ts validates the reporting currency and delegates source validation and aggregation."
               },
               {
                 "from": "be.routes",
@@ -2746,7 +2746,7 @@
                 "title": "Validate the stream request",
                 "note": "Use the streaming chat route.",
                 "payload": "POST /api/ai/chat/stream",
-                "annotation": "apps/node-backend/src/routes/ai.js"
+                "annotation": "apps/node-backend/src/routes/ai.ts"
               },
               {
                 "from": "be.routes",
@@ -2818,7 +2818,7 @@
                 "title": "Stream tokens and completion",
                 "note": "Report tokens, tools, completion, abort or failure.",
                 "payload": "Server-Sent Events",
-                "annotation": "apps/node-backend/src/routes/ai.js; apps/frontend/src/lib/api/ai.ts"
+                "annotation": "apps/node-backend/src/routes/ai.ts; apps/frontend/src/lib/api/ai.ts"
               },
               {
                 "from": "fe.apiclient",
@@ -3037,7 +3037,7 @@
                 "from": "fe.apiclient",
                 "to": "be.routes",
                 "payload": "{ alias_ids: [...] }",
-                "annotation": "routes/recipients.js."
+                "annotation": "routes/recipients.ts."
               },
               {
                 "from": "be.routes",
@@ -3105,7 +3105,7 @@
                 "title": "Fetch the read-time analysis",
                 "note": "Detection runs when this endpoint is requested.",
                 "payload": "GET /api/info/recurring-patterns",
-                "annotation": "apps/frontend/src/lib/api/info.ts; apps/node-backend/src/routes/info/statistics.js"
+                "annotation": "apps/frontend/src/lib/api/info.ts; apps/node-backend/src/routes/info/statistics.ts"
               },
               {
                 "from": "be.routes",
@@ -3145,7 +3145,7 @@
                 "title": "Create the plan",
                 "note": "Creation is a separate write after the explicit choice.",
                 "payload": "POST /api/planned-transactions",
-                "annotation": "apps/node-backend/src/routes/plannedTransactions.js"
+                "annotation": "apps/node-backend/src/routes/plannedTransactions.ts"
               },
               {
                 "from": "be.routes",
@@ -3194,7 +3194,7 @@
                 "from": "fe.apiclient",
                 "to": "be.routes",
                 "payload": "provider key",
-                "annotation": "routes/admin.js."
+                "annotation": "routes/admin.ts."
               },
               {
                 "from": "be.routes",
@@ -3256,7 +3256,7 @@
                 "from": "fe.apiclient",
                 "to": "be.routes",
                 "payload": "report params",
-                "annotation": "routes/reports.js."
+                "annotation": "routes/reports.ts."
               },
               {
                 "from": "be.routes",
@@ -3396,7 +3396,7 @@
                 "title": "Read requested statistics",
                 "note": "The database supplies the requested data, never token matching.",
                 "payload": "database statistics",
-                "annotation": "apps/node-backend/src/routes/admin.js"
+                "annotation": "apps/node-backend/src/routes/admin.ts"
               },
               {
                 "from": "be.routes",
@@ -3485,7 +3485,7 @@
                 "from": "be.middleware",
                 "to": "be.routes",
                 "payload": "validated body",
-                "annotation": "routes/transactions.js dispatches to the bulk handler."
+                "annotation": "routes/transactions.ts dispatches to the bulk handler."
               },
               {
                 "from": "be.routes",
@@ -3553,7 +3553,7 @@
                 "from": "be.middleware",
                 "to": "be.routes",
                 "payload": "validated multipart  \u00b7  size \u2264 ATTACHMENT_MAX_SIZE_MB",
-                "annotation": "routes/attachments.js."
+                "annotation": "routes/attachments.ts."
               },
               {
                 "from": "be.routes",
@@ -3615,7 +3615,7 @@
                 "from": "fe.apiclient",
                 "to": "be.routes",
                 "payload": "{ name, color? }",
-                "annotation": "routes/tags.js."
+                "annotation": "routes/tags.ts."
               },
               {
                 "from": "be.routes",
@@ -3795,7 +3795,7 @@
                 "from": "fe.apiclient",
                 "to": "be.routes",
                 "payload": "validated query  \u00b7  cache-aware endpoint (Phase E)",
-                "annotation": "routes/aggregations.js  \u00b7  parseIntClamped() guards every numeric param."
+                "annotation": "routes/aggregations.ts  \u00b7  parseIntClamped() guards every numeric param."
               },
               {
                 "from": "be.routes",
@@ -3949,13 +3949,13 @@
                 "from": "fe.apiclient",
                 "to": "be.middleware",
                 "payload": "multipart file + config fields; importRateLimiter; portfolio-only CSV/XLSX upload",
-                "annotation": "apps/node-backend/src/routes/portfolioImportRoutes.js uses portfolioUpload from apps/node-backend/src/lib/portfolioUpload.ts to enforce the 50 MiB file limit. Bank imports retain lib/csvUpload.ts and CSV-only input."
+                "annotation": "apps/node-backend/src/routes/portfolioImportRoutes.ts uses portfolioUpload from apps/node-backend/src/lib/portfolioUpload.ts to enforce the 50 MiB file limit. Bank imports retain lib/csvUpload.ts and CSV-only input."
               },
               {
                 "from": "be.middleware",
                 "to": "be.routes",
                 "payload": "validated multipart config + account + optional included_symbols; read-only workbook preflight before batch / SSE",
-                "annotation": "apps/node-backend/src/routes/portfolioImportRoutes.js builds the required mapping and validates an active broker account. apps/node-backend/src/lib/portfolioUpload.ts rejects unsupported XLSX, bounds archive expansion, and preflights the detailed Saxo adapter before batch creation or SSE headers."
+                "annotation": "apps/node-backend/src/routes/portfolioImportRoutes.ts builds the required mapping and validates an active broker account. apps/node-backend/src/lib/portfolioUpload.ts rejects unsupported XLSX, bounds archive expansion, and preflights the detailed Saxo adapter before batch creation or SSE headers."
               },
               {
                 "from": "be.routes",
@@ -3997,7 +3997,7 @@
                 "from": "fe.apiclient",
                 "to": "sv.portfolioreference",
                 "payload": "optional POST /reconciliation/reference: XML + explicit batch_ids + placeholder_basis_policy=zero",
-                "annotation": "apps/node-backend/src/routes/portfolioImportRoutes.js uses apps/node-backend/src/lib/portfolioReferenceUpload.ts for a separate 10 MiB XML boundary. apps/node-backend/src/services/portfolioPerformanceXmlParser.js requires UTF-8, forbids DTD/entity declarations, and bounds depth/nodes/reference chains. Initial Kinesis staging uses the same explicitly selected zero policy."
+                "annotation": "apps/node-backend/src/routes/portfolioImportRoutes.ts uses apps/node-backend/src/lib/portfolioReferenceUpload.ts for a separate 10 MiB XML boundary. apps/node-backend/src/services/portfolioPerformanceXmlParser.js requires UTF-8, forbids DTD/entity declarations, and bounds depth/nodes/reference chains. Initial Kinesis staging uses the same explicitly selected zero policy."
               },
               {
                 "from": "sv.portfolioreference",
@@ -4116,7 +4116,7 @@
                 "from": "fe.apiclient",
                 "to": "be.routes",
                 "payload": "q=cpi (query string)",
-                "annotation": "apps/node-backend/src/routes/research.js GET /api/research/macro/search under marketRateLimiter."
+                "annotation": "apps/node-backend/src/routes/research.ts GET /api/research/macro/search under marketRateLimiter."
               },
               {
                 "from": "be.routes",
@@ -4204,7 +4204,7 @@
                 "from": "fe.apiclient",
                 "to": "be.routes",
                 "payload": "POST /api/accounts/:id/close body",
-                "annotation": "routes/accounts.js -> accountCloseService.closeAccount.",
+                "annotation": "routes/accounts.ts -> accountCloseService.closeAccount.",
                 "title": "Validate and route the request"
               },
               {
@@ -4356,7 +4356,7 @@
                 "from": "fe.apiclient",
                 "to": "be.routes",
                 "payload": "Authenticated Desktop setup request",
-                "annotation": "apps/node-backend/src/routes/aiResearch.js validates the strict boolean body and delegates to configureAgentCloakDesktop()."
+                "annotation": "apps/node-backend/src/routes/aiResearch.ts validates the strict boolean body and delegates to configureAgentCloakDesktop()."
               },
               {
                 "from": "be.routes",
@@ -4406,7 +4406,7 @@
                 "from": "fe.apiclient",
                 "to": "be.routes",
                 "payload": "strict AiInvestigationRequest preview",
-                "annotation": "routes/aiResearch.js validates the cloud-only preview request, then delegates reference preparation before computing the digest-bound disclosure payload."
+                "annotation": "routes/aiResearch.ts validates the cloud-only preview request, then delegates reference preparation before computing the digest-bound disclosure payload."
               },
               {
                 "from": "be.routes",
@@ -4436,7 +4436,7 @@
                 "from": "be.routes",
                 "to": "sv.agentcloak",
                 "payload": "optional preview check of present user-authored cloud fields",
-                "annotation": "routes/aiResearch.js calls checkAgentCloakPreflight() on the exact payload after Vision finishes selected-text protection; the final check never alters its digest."
+                "annotation": "routes/aiResearch.ts calls checkAgentCloakPreflight() on the exact payload after Vision finishes selected-text protection; the final check never alters its digest."
               },
               {
                 "from": "sv.agentcloak",
@@ -4574,7 +4574,7 @@
                 "from": "fe.apiclient",
                 "to": "be.routes",
                 "payload": "validated category tree request",
-                "annotation": "routes/categories.js validates names, parent IDs and merge target IDs, then schedules derived-view refresh after mutations."
+                "annotation": "routes/categories.ts validates names, parent IDs and merge target IDs, then schedules derived-view refresh after mutations."
               },
               {
                 "from": "be.routes",
@@ -4592,7 +4592,7 @@
                 "from": "be.routes",
                 "to": "sv.matview",
                 "payload": "scheduleRefresh() after a committed category mutation",
-                "annotation": "routes/categories.js refreshes derived monthly and category-total labels without changing the assigned category IDs."
+                "annotation": "routes/categories.ts refreshes derived monthly and category-total labels without changing the assigned category IDs."
               },
               {
                 "from": "be.routes",
@@ -4630,7 +4630,7 @@
                 "from": "fe.apiclient",
                 "to": "be.routes",
                 "payload": "validated currency and reserve floor",
-                "annotation": "apps/node-backend/src/routes/crossWorkspace.js delegates to the commitment-aware cash service."
+                "annotation": "apps/node-backend/src/routes/crossWorkspace.ts delegates to the commitment-aware cash service."
               },
               {
                 "from": "be.routes",
@@ -4702,7 +4702,7 @@
                 "from": "fe.apiclient",
                 "to": "be.routes",
                 "payload": "validated income_interruption definition",
-                "annotation": "apps/node-backend/src/routes/settings.js validates the scenario and persisted baseline; settingsRepository.replace rejects stale whole-value saves with 409."
+                "annotation": "apps/node-backend/src/routes/settings.ts validates the scenario and persisted baseline; settingsRepository.replace rejects stale whole-value saves with 409."
               },
               {
                 "from": "be.routes",
@@ -4726,7 +4726,7 @@
                 "from": "fe.apiclient",
                 "to": "be.routes",
                 "payload": "monthly_contribution_schedule and optional goal_month",
-                "annotation": "apps/node-backend/src/routes/research.js bounds the schedule and goal month."
+                "annotation": "apps/node-backend/src/routes/research.ts bounds the schedule and goal month."
               },
               {
                 "from": "be.routes",
@@ -4776,7 +4776,7 @@
                 "from": "build.electron",
                 "to": "be.routes",
                 "payload": "POST /api/internal/audit/verify with loopback peer and per-launch token",
-                "annotation": "packaging/electron/runtime/native.js calls apps/node-backend/src/routes/internalAudit.js; the renderer never receives the token."
+                "annotation": "packaging/electron/runtime/native.js calls apps/node-backend/src/routes/internalAudit.ts; the renderer never receives the token."
               },
               {
                 "from": "be.routes",
@@ -4862,7 +4862,7 @@
                 "from": "browser",
                 "to": "be.routes",
                 "payload": "admin bearer, CSRF, loopback, empty request",
-                "annotation": "apps/node-backend/src/routes/codexExperimental.js requires the explicit enable flag, binary path, admin token, and loopback peer."
+                "annotation": "apps/node-backend/src/routes/codexExperimental.ts requires the explicit enable flag, binary path, admin token, and loopback peer."
               },
               {
                 "from": "be.routes",
@@ -4941,7 +4941,7 @@
                 "title": "Validate the request",
                 "note": "The route validates inputs and delegates work.",
                 "payload": "GET /api/transactions",
-                "annotation": "apps/node-backend/src/routes/transactions.js"
+                "annotation": "apps/node-backend/src/routes/transactions.ts"
               },
               {
                 "from": "be.routes",
@@ -5048,7 +5048,7 @@
                 "title": "Validate filters",
                 "note": "Validate repeated IDs, dates and currency.",
                 "payload": "currency and exclusion IDs",
-                "annotation": "apps/node-backend/src/routes/aggregations.js"
+                "annotation": "apps/node-backend/src/routes/aggregations.ts"
               },
               {
                 "from": "be.routes",
@@ -5254,7 +5254,7 @@
                 "title": "Optional API resolution",
                 "note": "API capability: confirm ambiguous or cross-currency pairs, or dismiss a wrong pair. Current frontend has no dedicated transfer controls.",
                 "payload": "GET /api/transactions/transfer-suggestions; POST /api/transactions/transfers; DELETE /api/transactions/transfers/:id",
-                "annotation": "apps/node-backend/src/routes/transactions.js; apps/node-backend/src/services/transferReconciliationService.js"
+                "annotation": "apps/node-backend/src/routes/transactions.ts; apps/node-backend/src/services/transferReconciliationService.js"
               }
             ],
             "docs": [
@@ -5293,7 +5293,7 @@
                 "title": "Validate the allocation",
                 "note": "Validate all rows before writing.",
                 "payload": "createSplitsBatchAtomic",
-                "annotation": "apps/node-backend/src/routes/splits.js; apps/node-backend/src/services/splitService.js"
+                "annotation": "apps/node-backend/src/routes/splits.ts; apps/node-backend/src/services/splitService.js"
               },
               {
                 "from": "sv.transactiondomains",
@@ -5309,7 +5309,7 @@
                 "title": "Show what each person owes",
                 "note": "The Owes page groups debt and recipient aliases.",
                 "payload": "GET /api/splits/owed",
-                "annotation": "apps/frontend/src/pages/OwesPage.tsx; apps/node-backend/src/routes/splits.js"
+                "annotation": "apps/frontend/src/pages/OwesPage.tsx; apps/node-backend/src/routes/splits.ts"
               },
               {
                 "from": "browser",
@@ -5317,7 +5317,7 @@
                 "title": "Record a repayment",
                 "note": "Record an amount against one split.",
                 "payload": "POST /api/splits/:id/pay",
-                "annotation": "apps/frontend/src/hooks/useSplits.ts; apps/node-backend/src/routes/splits.js"
+                "annotation": "apps/frontend/src/hooks/useSplits.ts; apps/node-backend/src/routes/splits.ts"
               },
               {
                 "from": "be.routes",
@@ -5404,7 +5404,7 @@
                 "title": "Execute this occurrence",
                 "note": "The selected transaction ID is required.",
                 "payload": "POST /api/planned-transactions/:id/execute; executed_transaction_id",
-                "annotation": "apps/frontend/src/hooks/usePlannedPayments.ts; apps/node-backend/src/routes/plannedTransactions.js"
+                "annotation": "apps/frontend/src/hooks/usePlannedPayments.ts; apps/node-backend/src/routes/plannedTransactions.ts"
               },
               {
                 "from": "be.routes",
@@ -5451,7 +5451,7 @@
                 "title": "Preview selected evidence",
                 "note": "Choose exact evidence and an approved model.",
                 "payload": "POST /api/ai-research/disclosures/preview",
-                "annotation": "apps/node-backend/src/routes/aiResearch.js; apps/node-backend/src/services/aiDisclosureService.js"
+                "annotation": "apps/node-backend/src/routes/aiResearch.ts; apps/node-backend/src/services/aiDisclosureService.js"
               },
               {
                 "from": "be.routes",
@@ -5475,7 +5475,7 @@
                 "title": "Grant the bounded disclosure",
                 "note": "The user approves a mode-specific grant.",
                 "payload": "POST /api/ai-research/disclosures/grants",
-                "annotation": "apps/node-backend/src/routes/aiResearch.js; apps/node-backend/src/services/aiDisclosureService.js"
+                "annotation": "apps/node-backend/src/routes/aiResearch.ts; apps/node-backend/src/services/aiDisclosureService.js"
               },
               {
                 "from": "be.routes",

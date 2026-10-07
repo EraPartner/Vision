@@ -64,7 +64,12 @@ rebaseline accepted 912 diagnostics added since 2026-09-24, mostly in the portfo
 reconciliation and analysis workbench services, and removed 10 entries that no longer occur. A
 new diagnostic fails CI, including one in a newly added file. A corrected diagnostic also
 requires removal of its baseline entry, so the same error cannot silently return later. Entries for
-files converted to TypeScript are removed in the converting change.
+files converted to TypeScript are removed in the converting change. The ratchet skips `.ts` files:
+the JavaScript program compiles them because JavaScript imports them, but it still sees `express`,
+`pg` and `multer` through the ambient `any` shim, while the strict program checks the same files
+against the real `@types` packages. Only the JavaScript program includes
+`src/types/thirdPartyModules.d.ts`, by name in `tsconfig.check.json`; no source file may pull it in
+with a `/// <reference>`, because that would make those packages `any` in the strict program too.
 
 ### Dependency and workflow admission
 

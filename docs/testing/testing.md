@@ -926,7 +926,7 @@ Reference: [[docs/reference/code-patterns#Golden-Fixture Pattern|Golden-Fixture 
 - `apps/node-backend/tests/routes/admin.test.js` covers `POST /api/admin/investments/kinesis/sanitize-history` response handling for success and failure paths.
 - `apps/node-backend/tests/routes/investments.test.js` covers refresh eligibility for Kinesis investments when `price_provider_id` is missing but asset name/symbol maps through Kinesis config.
 
-Code links: [[apps/node-backend/tests/priceProviderService.test.js]], [[apps/node-backend/tests/routes/admin.test.js]], [[apps/node-backend/tests/routes/investments.test.js]], [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/routes/admin.js]], [[apps/node-backend/src/routes/investments.js]]
+Code links: [[apps/node-backend/tests/priceProviderService.test.js]], [[apps/node-backend/tests/routes/admin.test.js]], [[apps/node-backend/tests/routes/investments.test.js]], [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/routes/admin.ts]], [[apps/node-backend/src/routes/investments.ts]]
 
 ### Backend
 
@@ -1406,7 +1406,7 @@ Validation runs (passed):
 - `bun vitest run tests/currencyConversionService.test.js tests/routes/plannedTransactions.test.js tests/routes/transactions.test.js`
 - `npm test -- --coverage`
 
-Related code: [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/routes/plannedTransactions.js]], [[apps/node-backend/src/routes/transactions.js]]
+Related code: [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/routes/plannedTransactions.ts]], [[apps/node-backend/src/routes/transactions.ts]]
 
 ### Additional backend repository/schema coverage (2026-04-11)
 
@@ -1480,7 +1480,7 @@ Validation runs (Phase C):
 
 ### Incremental backend info-route test addendum (2026-04-11)
 
-- [[apps/node-backend/tests/routes/info.test.js]] expanded coverage for route-level dependency interactions in [[apps/node-backend/src/routes/info.js]] using explicit mocks for:
+- [[apps/node-backend/tests/routes/info.test.js]] expanded coverage for route-level dependency interactions in [[apps/node-backend/src/routes/info.ts]] using explicit mocks for:
   - [[apps/node-backend/src/database/connection.ts]] query behavior
   - [[apps/node-backend/src/services/recurringDetectionService.js]]
   - [[apps/node-backend/src/services/materializedViewService.js]]
@@ -1500,7 +1500,7 @@ Validation runs (passed):
 - `bun vitest run tests/routes/info.test.js`
 - `npm test -- --coverage`
 
-Coverage snapshot after this update: overall `81.12/66.86/84.49/84.53` and [[apps/node-backend/src/routes/info.js]] `93.62/78.72/100/94.58` (statements/branches/functions/lines).
+Coverage snapshot after this update: overall `81.12/66.86/84.49/84.53` and [[apps/node-backend/src/routes/info.ts]] `93.62/78.72/100/94.58` (statements/branches/functions/lines).
 
 ### Incremental backend repository coverage addendum (2026-04-11, portfolio transactions)
 

@@ -15,7 +15,7 @@ aliases:
   - bank accounts
   - recipient banking
 related_code:
-  - apps/node-backend/src/routes/recipientBankAccounts.js
+  - apps/node-backend/src/routes/recipientBankAccounts.ts
   - apps/node-backend/src/repositories/recipientBankAccountRepository.ts
 ---
 

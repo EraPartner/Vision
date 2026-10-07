@@ -88,6 +88,9 @@ export async function createSplitAtomic(input) {
   });
 }
 
+/**
+ * @param {{transaction_id:number, splits:Array<{recipient_id:number, amount:number|string, note?:string|null}>, actor?:string|null}} input
+ */
 export async function createSplitsBatchAtomic({
   transaction_id,
   splits,
@@ -194,6 +197,10 @@ export async function addPayment(input) {
   });
 }
 
+/**
+ * @param {number} splitId
+ * @param {string|null} [actor]
+ */
 export async function settleSplit(splitId, actor = null) {
   return withTransaction(async (client) => {
     const split = await splitRepository.settleSplit(splitId, client);
@@ -209,6 +216,10 @@ export async function settleSplit(splitId, actor = null) {
   });
 }
 
+/**
+ * @param {number} recipientId
+ * @param {string|null} [actor]
+ */
 export async function settleAllByRecipient(recipientId, actor = null) {
   return withTransaction(async (client) => {
     const result = await splitRepository.settleAllByRecipient(
@@ -230,6 +241,10 @@ export async function settleAllByRecipient(recipientId, actor = null) {
   });
 }
 
+/**
+ * @param {number} splitId
+ * @param {string|null} [actor]
+ */
 export async function deleteSplit(splitId, actor = null) {
   return withTransaction(async (client) => {
     const split = await splitRepository.getSplitById(splitId, client);

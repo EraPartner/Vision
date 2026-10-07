@@ -29,7 +29,7 @@ vi.mock("../../src/config/logger.ts", () => ({
 import savedChartsRepository from "../../src/repositories/savedChartsRepository.ts";
 
 const { default: savedChartsRouter } =
-  await import("../../src/routes/savedCharts.js");
+  await import("../../src/routes/savedCharts.ts");
 
 const api = routeAgent(savedChartsRouter, { mountPath: "/api/saved-charts" });
 const BASE = "/api/saved-charts";

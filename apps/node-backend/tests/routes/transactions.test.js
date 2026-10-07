@@ -76,7 +76,7 @@ import { attachmentRepository } from "../../src/services/attachmentRecordService
 import { removeAttachmentFile } from "../../src/services/attachmentService.js";
 
 const { default: transactionsRouter } =
-  await import("../../src/routes/transactions.js");
+  await import("../../src/routes/transactions.ts");
 
 const api = routeAgent(transactionsRouter, { mountPath: "/api/transactions" });
 // Same router behind an error handler in production mode (main.js:401 passes

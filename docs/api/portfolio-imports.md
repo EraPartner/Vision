@@ -27,8 +27,8 @@ tags:
 status: active
 aliases: [portfolio-imports-api, portfolio-csv-import, brokerage-import]
 related_code:
-  - "apps/node-backend/src/routes/portfolioImportRoutes.js"
-  - "apps/node-backend/src/routes/importBatchRoutes.js"
+  - "apps/node-backend/src/routes/portfolioImportRoutes.ts"
+  - "apps/node-backend/src/routes/importBatchRoutes.ts"
   - "apps/node-backend/src/services/portfolioImportPipeline/index.js"
   - "apps/node-backend/src/services/portfolioImportPipeline/stage.js"
   - "apps/node-backend/src/services/portfolioImportPipeline/validate.js"

@@ -37,7 +37,7 @@ vi.mock('../../src/config/logger.ts', () => ({
   logger: mockLogger(),
 }));
 
-const { default: marketLookupRouter, __clearQuoteCacheForTests } = await import('../../src/routes/marketLookup.js');
+const { default: marketLookupRouter, __clearQuoteCacheForTests } = await import('../../src/routes/marketLookup.ts');
 
 const api = routeAgent(marketLookupRouter, { mountPath: '/api/market' });
 const BASE = '/api/market';

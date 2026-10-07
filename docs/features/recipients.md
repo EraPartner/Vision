@@ -8,7 +8,7 @@ description: Recipient (payee/payer) management with atomic merge, normalization
 aliases:
   [recipients-feature, payees, payers, counterparties, recipient-management]
 related_code:
-  - apps/node-backend/src/routes/recipients.js
+  - apps/node-backend/src/routes/recipients.ts
   - apps/node-backend/src/repositories/recipientRepository.ts
   - apps/node-backend/src/services/recipientMergeService.js
   - apps/node-backend/src/services/calculations/normalization.js

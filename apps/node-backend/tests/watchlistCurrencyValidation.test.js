@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   __parseWatchlistCreateBody as parseWatchlistCreateBody,
   __parseWatchlistUpdateBody as parseWatchlistUpdateBody,
-} from "../src/routes/watchlist.js";
+} from "../src/routes/watchlist.ts";
 
 const validCreate = {
   name: "ETF Idea",

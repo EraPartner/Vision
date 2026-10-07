@@ -13,7 +13,7 @@ related_code:
   - apps/node-backend/src/services/calculations/forecast/index.js
   - apps/node-backend/src/services/calculations/forecast/categoryBreakdown.js
   - apps/node-backend/src/services/calculations/forecast/accuracyStore.js
-  - apps/node-backend/src/routes/aggregations.js
+  - apps/node-backend/src/routes/aggregations.ts
   - apps/node-backend/src/repositories/plannedTransactionRepository.ts
   - apps/node-backend/src/repositories/infoRepositoryMonthly.ts
   - apps/node-backend/src/repositories/cashflowForecastAccuracyRepository.ts

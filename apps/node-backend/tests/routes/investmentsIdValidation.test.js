@@ -79,7 +79,7 @@ import portfolioTransactionPersistence from "../../src/repositories/portfolioTra
 import portfolioTransactionService from "../../src/services/portfolio/portfolioTransactionService.js";
 
 const { default: investmentsRouter } =
-  await import("../../src/routes/investments.js");
+  await import("../../src/routes/investments.ts");
 
 const portfolioTransactionRepository = {
   ...portfolioTransactionPersistence,

@@ -12,7 +12,7 @@ vi.mock("../src/config/logger.ts", () => ({
 
 import { query } from "../src/database/connection.ts";
 import settingsRepository from "../src/repositories/settingsRepository.ts";
-const { default: settingsRouter } = await import("../src/routes/settings.js");
+const { default: settingsRouter } = await import("../src/routes/settings.ts");
 
 const api = routeAgent(settingsRouter, { mountPath: "/api/settings" });
 const BASE = "/api/settings";

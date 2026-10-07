@@ -2,11 +2,11 @@
 title: Integration - Belgian Inflation Service
 type: integration
 status: active
-date: 2026-04-02
+date: 2026-10-07
 tags: [integration, belgian-inflation, statbel, eurostat, government-data]
 description: Belgian inflation data sourcing from Statbel and Eurostat HICP
 aliases: [belgian inflation, statbel, eurostat, hicp, inflation service]
-related_code: ["apps/node-backend/src/services/belgianInflationService.js", "apps/node-backend/src/routes/info.js"]
+related_code: ["apps/node-backend/src/services/belgianInflationService.js", "apps/node-backend/src/routes/info.ts"]
 ---
 
 # Integration: Belgian Inflation Service

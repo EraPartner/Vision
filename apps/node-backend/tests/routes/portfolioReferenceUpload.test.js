@@ -49,7 +49,7 @@ import { applyPortfolioImportReference } from "../../src/services/portfolioImpor
 import { commitReviewedPortfolioImports } from "../../src/services/portfolioImportCommitService.js";
 import { cleanup } from "../../src/lib/csvUpload.ts";
 import { ConflictError } from "../../src/middleware/errorHandler.ts";
-import router from "../../src/routes/portfolioImportRoutes.js";
+import router from "../../src/routes/portfolioImportRoutes.ts";
 
 const api = routeAgent(router, { mountPath: "/api/portfolio/import" });
 const endpoint = "/api/portfolio/import/reconciliation/reference";

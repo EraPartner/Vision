@@ -382,4 +382,4 @@ they need no separate per-dialog catalog edits.
 - [[docs/adr/079-multi-provider-research-aggregation|ADR-079]] — Research aggregation architectural decision
 - [[docs/adr/082-macroeconomic-indicators-data-vertical|ADR-082]] — Macro data vertical (FRED + Eurostat + DBnomics, provider-pinned, in-memory only)
 
-Code links: [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/config/kinesisConfig.ts]], [[apps/node-backend/src/main.js]], [[apps/node-backend/src/routes/admin.js]], [[apps/frontend/src/features/portfolio/usePriceProviderCatalog.ts]], [[apps/frontend/src/features/portfolio/PriceProviderFields.tsx]], [[alembic/legacy_versions/0019_asset_price_history_cache.py]]
+Code links: [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/config/kinesisConfig.ts]], [[apps/node-backend/src/main.js]], [[apps/node-backend/src/routes/admin.ts]], [[apps/frontend/src/features/portfolio/usePriceProviderCatalog.ts]], [[apps/frontend/src/features/portfolio/PriceProviderFields.tsx]], [[alembic/legacy_versions/0019_asset_price_history_cache.py]]

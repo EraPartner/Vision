@@ -111,7 +111,7 @@ import { previewPortfolioImportReconciliation } from "../../src/services/portfol
 import { ConflictError } from "../../src/middleware/errorHandler.ts";
 
 const { default: portfolioImportRouter } =
-  await import("../../src/routes/portfolioImportRoutes.js");
+  await import("../../src/routes/portfolioImportRoutes.ts");
 
 const BASE = "/api/portfolio/import";
 const api = routeAgent(portfolioImportRouter, { mountPath: BASE });

@@ -2,12 +2,12 @@
 title: Private Electron Audit Bridge API
 type: endpoint
 status: active
-date: 2026-09-20
+date: 2026-10-07
 tags: [api, audit, electron, security, internal]
 description: Private loopback verification and checkpoint metadata routes used by the native Electron main process.
 aliases: [internal audit bridge, audit verification API]
 related_code:
-  - apps/node-backend/src/routes/internalAudit.js
+  - apps/node-backend/src/routes/internalAudit.ts
   - apps/node-backend/src/services/auditVerificationService.js
   - apps/node-backend/src/services/auditReadService.js
   - apps/node-backend/src/services/auditBridgeService.js

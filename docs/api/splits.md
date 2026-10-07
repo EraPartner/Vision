@@ -23,7 +23,7 @@ aliases:
   - transaction-split
 description: API endpoints for transaction splitting and debt tracking between recipients. Phase Q+ adds automatic recipient-alias collapsing on owed-summary endpoints to consolidate linked recipients (via merge operations) for consistency with merge semantics.
 related_code:
-  - apps/node-backend/src/routes/splits.js
+  - apps/node-backend/src/routes/splits.ts
   - apps/node-backend/src/services/splitService.js
   - apps/node-backend/src/repositories/splitRepository.ts
 ---
@@ -362,7 +362,7 @@ The endpoint validates total batch allocation via `validateBatchSplitAllocation`
 Implementation notes:
 
 - Batch allocation validation via `validateBatchSplitAllocation({ splits, transactionTotal, currentSplitTotal })` ([[apps/node-backend/src/lib/calculations/splits.ts]]).
-- Normalized inputs via `normalizeBatchSplitInputs(splits)` to filter and type-cast before validation ([[apps/node-backend/src/routes/splits.js]]).
+- Normalized inputs via `normalizeBatchSplitInputs(splits)` to filter and type-cast before validation ([[apps/node-backend/src/routes/splits.ts]]).
 - `splitService.createSplitsBatchAtomic()` validates the complete allocation, persists all rows through one bulk repository primitive, and writes one action='create' audit per split in the same transaction.
 
 ---
@@ -430,7 +430,7 @@ The endpoint validates payment amount via `validatePaymentAmount` before write. 
 Implementation notes:
 
 - `splitService.addPayment()` locks and fetches the split, obtains the already-paid total, validates at four-decimal precision, inserts the payment, conditionally auto-settles, and writes the audit row in one database transaction ([[apps/node-backend/src/services/splitService.js]]).
-- Actor is resolved by the route and propagated to the service audit transaction via `resolveActor(req)` ([[apps/node-backend/src/routes/splits.js]]).
+- Actor is resolved by the route and propagated to the service audit transaction via `resolveActor(req)` ([[apps/node-backend/src/routes/splits.ts]]).
 
 ---
 

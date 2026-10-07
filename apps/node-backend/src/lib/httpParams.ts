@@ -1,3 +1,5 @@
+import { ValidationError } from "../middleware/errorHandler.ts";
+
 /**
  * Parse a boolean query parameter with one accepted spelling set.
  *
@@ -19,4 +21,20 @@ export function parseBooleanQueryParam(
   if (normalized === "true" || normalized === "1") return true;
   if (normalized === "false" || normalized === "0") return false;
   return defaultValue;
+}
+
+/**
+ * Read one optional single-valued query parameter. Express's default query
+ * parser turns a repeated key (`?a=1&a=2`) into an array and a bracketed key
+ * (`?a[b]=1`) into an object; a route that expects one string answers 400
+ * instead of passing either shape on to string methods or SQL parameters.
+ */
+export function optionalQueryString(
+  query: Record<string, unknown>,
+  name: string,
+): string | undefined {
+  const raw = query[name];
+  if (raw === undefined) return undefined;
+  if (typeof raw === "string") return raw;
+  throw new ValidationError(`${name} must be a single value`);
 }

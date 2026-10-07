@@ -45,7 +45,7 @@ import {
   NotFoundError,
 } from "../../src/middleware/errorHandler.ts";
 
-const { default: splitsRouter } = await import("../../src/routes/splits.js");
+const { default: splitsRouter } = await import("../../src/routes/splits.ts");
 
 const BASE = "/api/splits";
 const api = routeAgent(splitsRouter, { mountPath: BASE });

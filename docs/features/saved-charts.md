@@ -26,7 +26,7 @@ related_code:
   - apps/frontend/src/features/statistics/CustomChart.tsx
   - apps/frontend/src/features/statistics/CustomChartBuilderModal.tsx
   - apps/frontend/src/features/statistics/SavedChartsSection.tsx
-  - apps/node-backend/src/routes/savedCharts.js
+  - apps/node-backend/src/routes/savedCharts.ts
   - apps/node-backend/src/repositories/savedChartsRepository.ts
   - apps/node-backend/src/repositories/infoRepositoryTags.ts
   - apps/node-backend/src/services/calculations/aggregation/tagPivot.js

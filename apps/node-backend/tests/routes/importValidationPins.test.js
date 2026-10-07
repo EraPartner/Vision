@@ -116,7 +116,7 @@ import { query as dbQuery } from "../../src/database/connection.ts";
 import customParserConfigRepository from "../../src/repositories/customParserConfigRepository.ts";
 
 const { default: importRouter, __parseCsvImportOptionsForTests } =
-  await import("../../src/routes/importRoutes.js");
+  await import("../../src/routes/importRoutes.ts");
 
 const UPLOAD = { path: "/tmp/pin.csv", originalname: "pin.csv", size: 10 };
 
@@ -200,6 +200,19 @@ describe("multipart body parameters", () => {
     expect(runImportPipeline).toHaveBeenCalledWith(
       expect.objectContaining({ adapterName: "body-bank" }),
     );
+  });
+
+  it("rejects a repeated bank_name field with a 400", async () => {
+    await api
+      .post(`${BASE}/csv`)
+      .send({ bank_name: ["vision", "other"] })
+      .expect(400);
+    await api
+      .post(`${BASE}/csv/stream`)
+      .send({ bank_name: ["vision", "other"] })
+      .expect(400);
+
+    expect(runImportPipeline).not.toHaveBeenCalled();
   });
 
   it("rejects query-only bank names for one-shot and streaming imports", async () => {
@@ -436,6 +449,21 @@ describe("override-body id shape (parseOverrideId)", () => {
         recipientId: 7,
       });
     }
+
+    // A request with no JSON body leaves req.body undefined under Express 5;
+    // it clears the override like an empty body instead of failing with a 500.
+    await api.post(`${BASE}/batches/5/rows/6/override`).expect(200);
+    expect(overrideRecipient).toHaveBeenLastCalledWith({
+      batchId: 5,
+      rowId: 6,
+      recipientId: null,
+    });
+    await api.post(`${BASE}/batches/5/rows/6/category-override`).expect(200);
+    expect(overrideCategory).toHaveBeenLastCalledWith({
+      batchId: 5,
+      rowId: 6,
+      categoryId: null,
+    });
 
     // Absent and explicit null both mean "clear the override", at 200 — the
     // shipped clear-the-selection flow, unchanged.

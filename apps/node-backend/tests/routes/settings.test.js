@@ -29,7 +29,7 @@ import { ConflictError } from "../../src/middleware/errorHandler.ts";
 import settingsRepository from "../../src/repositories/settingsRepository.ts";
 
 const { default: settingsRouter } =
-  await import("../../src/routes/settings.js");
+  await import("../../src/routes/settings.ts");
 
 const api = routeAgent(settingsRouter, { mountPath: "/api/settings" });
 const BASE = "/api/settings";

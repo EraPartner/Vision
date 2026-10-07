@@ -18,7 +18,7 @@ vi.mock('../../src/services/crossWorkspaceDataService.js', () => ({
 
 import { assembleRebalanceInputs } from '../../src/services/crossWorkspaceDataService.js';
 
-const { default: crossWorkspaceRouter } = await import('../../src/routes/crossWorkspace.js');
+const { default: crossWorkspaceRouter } = await import('../../src/routes/crossWorkspace.ts');
 
 const api = routeAgent(crossWorkspaceRouter, { mountPath: '/api/cross-workspace' });
 const rebalance = (body) => api.post('/api/cross-workspace/rebalance').send(body);

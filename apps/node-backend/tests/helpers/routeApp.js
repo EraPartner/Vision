@@ -56,7 +56,7 @@
  * Usage:
  *   import { routeAgent } from '../helpers/routeApp.js';
  *   // ... vi.mock() the repositories/services this router imports ...
- *   const { default: router } = await import('../../src/routes/transactions.js');
+ *   const { default: router } = await import('../../src/routes/transactions.ts');
  *   const api = routeAgent(router, { mountPath: '/api/transactions' });
  *
  *   const res = await api.get('/api/transactions/').expect(200);

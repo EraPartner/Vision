@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { __validateSettingValue } from "../src/routes/settings.js";
+import { __validateSettingValue } from "../src/routes/settings.ts";
 
 describe("Belgian tax frozen-calculation settings validation", () => {
   it("accepts the canonical field and preserves unrelated metadata", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { __formatTransaction } from "../src/routes/transactions.js";
+import { __formatTransaction } from "../src/routes/transactions.ts";
 
 describe("transaction response formatter", () => {
   it("emits only the canonical transaction_date field", () => {

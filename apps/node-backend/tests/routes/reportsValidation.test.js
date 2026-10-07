@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { __parseReportBody } from '../../src/routes/reports.js';
+import { __parseReportBody } from '../../src/routes/reports.ts';
 
 describe('Report exclusion id validation', () => {
   it.each(['excludedCategoryIds', 'excludedRecipientIds'])(

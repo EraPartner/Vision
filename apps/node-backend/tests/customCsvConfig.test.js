@@ -6,11 +6,11 @@ vi.mock("../src/database/connection.ts", () => mockConnection());
 import {
   __buildCustomCsvConfig as buildBankConfig,
   __normalizeParserConfig as normalizeBankParser,
-} from "../src/routes/importRoutes.js";
+} from "../src/routes/importRoutes.ts";
 import {
   __buildPortfolioConfig as buildPortfolioConfig,
   __normalizePortfolioParserConfig as normalizePortfolioParser,
-} from "../src/routes/portfolioImportRoutes.js";
+} from "../src/routes/portfolioImportRoutes.ts";
 
 const bankBody = {
   bank_name: "Custom",

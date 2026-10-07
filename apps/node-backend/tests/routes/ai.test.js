@@ -89,7 +89,7 @@ import {
 } from "../../src/services/aiChatService.js";
 import settings from "../../src/config/config.ts";
 
-const { default: aiRouter } = await import("../../src/routes/ai.js");
+const { default: aiRouter } = await import("../../src/routes/ai.ts");
 
 const api = routeAgent(aiRouter, { mountPath: "/api/ai" });
 const BASE = "/api/ai";

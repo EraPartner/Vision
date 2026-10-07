@@ -14,7 +14,7 @@ vi.mock("../../src/services/calculations/aggregation/tagPivot.js", () => ({
 }));
 
 const { default: aggregationsRouter } =
-  await import("../../src/routes/aggregations.js");
+  await import("../../src/routes/aggregations.ts");
 
 function getHandler(path) {
   const layer = aggregationsRouter.stack.find(

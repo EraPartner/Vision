@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { registerImportBatchRoutes } from '../src/routes/importBatchRoutes.js';
+import { registerImportBatchRoutes } from '../src/routes/importBatchRoutes.ts';
 
 function captureRoutes(options) {
   const handlers = new Map();

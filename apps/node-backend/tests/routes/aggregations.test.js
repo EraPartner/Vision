@@ -19,7 +19,7 @@ vi.mock('../../src/lib/pagination.ts', () => ({
   parsePagination: () => ({ limit: 50, offset: 0 }),
 }));
 
-const { default: aggregationsRouter } = await import('../../src/routes/aggregations.js');
+const { default: aggregationsRouter } = await import('../../src/routes/aggregations.ts');
 
 const api = routeAgent(aggregationsRouter, { mountPath: '/api/aggregations' });
 
