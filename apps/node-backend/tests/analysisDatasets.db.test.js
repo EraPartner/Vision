@@ -7,8 +7,8 @@ import {
   hasTestDatabase,
   releaseDbSuiteLock,
 } from "./setup/db.js";
-import { closePool } from "../src/database/connection.js";
-import { getMonthlyFinancialSummary } from "../src/repositories/infoRepositoryMonthly.js";
+import { closePool } from "../src/database/connection.ts";
+import { getMonthlyFinancialSummary } from "../src/repositories/infoRepositoryMonthly.ts";
 
 describe.skipIf(!hasTestDatabase())(
   "versioned analysis datasets (real DB)",

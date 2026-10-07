@@ -11,9 +11,9 @@ import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.js";
 
 // The route imports its repository through services/categoryService.js, which
 // re-exports the default from this module (`export { default } from
-// '../repositories/categoryRepository.js'`) — mocking the repository here
+// '../repositories/categoryRepository.ts'`) — mocking the repository here
 // intercepts that same binding.
-vi.mock("../../src/repositories/categoryRepository.js", () => ({
+vi.mock("../../src/repositories/categoryRepository.ts", () => ({
   default: {
     getAll: vi.fn(),
     getCount: vi.fn(),
@@ -29,14 +29,14 @@ vi.mock("../../src/services/materializedViewService.js", () => ({
   scheduleRefresh: vi.fn(),
 }));
 
-vi.mock("../../src/config/logger.js", () => ({
+vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-import categoryRepository from "../../src/repositories/categoryRepository.js";
+import categoryRepository from "../../src/repositories/categoryRepository.ts";
 
 const { default: categoriesRouter } =
-  await import("../../src/routes/categories.js");
+  await import("../../src/routes/categories.ts");
 
 const api = routeAgent(categoriesRouter, { mountPath: "/api/categories" });
 const BASE = "/api/categories";
@@ -197,7 +197,7 @@ describe("Category Routes", () => {
     });
 
     it("rejects a non-integer :id via the real validateIdParam guard", async () => {
-      // Previously `vi.mock('.../middleware/validation.js')` replaced
+      // Previously `vi.mock('.../middleware/validation.ts')` replaced
       // validateIdParam with a pass-through, so this guard was never tested.
       const res = await api.get(`${BASE}/abc`).expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));

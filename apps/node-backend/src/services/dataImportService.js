@@ -26,12 +26,12 @@ import os from "os";
 import path from "path";
 import { parse } from "csv-parse/sync";
 import { parseCategoryName } from "@vision/shared-utils";
-import { logger } from "../config/logger.js";
-import { query, withTransaction } from "../database/connection.js";
-import { normalizeForMatching } from "../lib/textNormalization.js";
-import { recipientRepository } from "../repositories/recipientRepository.js";
-import { categoryRepository } from "../repositories/categoryRepository.js";
-import { recipientBankAccountRepository } from "../repositories/recipientBankAccountRepository.js";
+import { logger } from "../config/logger.ts";
+import { query, withTransaction } from "../database/connection.ts";
+import { normalizeForMatching } from "../lib/textNormalization.ts";
+import { recipientRepository } from "../repositories/recipientRepository.ts";
+import { categoryRepository } from "../repositories/categoryRepository.ts";
+import { recipientBankAccountRepository } from "../repositories/recipientBankAccountRepository.ts";
 import {
   decodeCsvBuffer,
   normalizeCsvEncoding,
@@ -380,7 +380,7 @@ async function importRecipientRowsBatched(rows, results) {
   // One transaction so a resolve that fails part-way leaves nothing behind and
   // the fallback re-derives `created` from an unchanged database. No client is
   // threaded through: the module-level query() helper joins the ambient
-  // transaction store (see database/connection.js).
+  // transaction store (see database/connection.ts).
   const { recipients, categories } = await withTransaction(async () => ({
     recipients: await resolveRecipients([...distinctNames.values()]),
     categories: await resolveCategories([...distinctPairs.values()]),

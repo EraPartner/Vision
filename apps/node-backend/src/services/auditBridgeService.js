@@ -1,7 +1,7 @@
 import {
   appendAuditEvent,
   recordAuditCheckpoint,
-} from "../repositories/auditChainRepository.js";
+} from "../repositories/auditChainRepository.ts";
 
 /** The repository checks the externally anchored entry under lock. */
 export async function recordElectronAuditCheckpoint(receipt) {

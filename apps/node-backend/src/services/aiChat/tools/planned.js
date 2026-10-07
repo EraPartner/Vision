@@ -4,13 +4,13 @@
  * Reuses plannedTransactionRepository. No new SQL.
  */
 
-import { plannedTransactionRepository } from "../../../repositories/plannedTransactionRepository.js";
-import { infoRepository } from "../../../repositories/infoRepository.js";
-import settings from "../../../config/config.js";
-import { toDecimal, roundToCents } from "../../../lib/money.js";
-import { expandOccurrences } from "../../../lib/calculations/recurrence.js";
-import { normalizeDateLikeToYmd } from "../../../lib/dateFormat.js";
-import { todayAppDateString, addDaysYmd } from "../../../lib/timezone.js";
+import { plannedTransactionRepository } from "../../../repositories/plannedTransactionRepository.ts";
+import { infoRepository } from "../../../repositories/infoRepository.ts";
+import settings from "../../../config/config.ts";
+import { toDecimal, roundToCents } from "../../../lib/money.ts";
+import { expandOccurrences } from "../../../lib/calculations/recurrence.ts";
+import { normalizeDateLikeToYmd } from "../../../lib/dateFormat.ts";
+import { todayAppDateString, addDaysYmd } from "../../../lib/timezone.ts";
 import { parseEnum, parsePositiveInt } from "./_validate.js";
 
 const RECURRENCE_TO_MONTHLY = Object.freeze({

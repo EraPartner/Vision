@@ -2,7 +2,7 @@
 title: Test Inventory
 type: testing
 status: active
-date: 2026-10-06
+date: 2026-10-07
 last_modified: 2026-10-06
 updated: 2026-10-06
 last-updated: 2026-10-06
@@ -897,7 +897,7 @@ The Transaction Tags feature test suite is now **complete and passing**. All tes
 | -------------------------------------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `apps/node-backend/tests/filterBuilder.test.js`                | Filter builder                 | Fixed assertion in `buildTransactionWhere — tagSlugs > produces no clause when tagSlugs is empty`: changed `expect(sql).toBe('')` to `expect(sql).not.toContain('transaction_tags')` (filterBuilder always initializes clauses with `['1=1']`) |
 | `apps/node-backend/tests/plannedTransactionRepository.test.js` | Planned transaction repository | Added `mockResolvedValueOnce({ rows: [] })` for new tag queries in `getAll`, `getById`, `create`, and `update`; updated `toHaveBeenCalledTimes` from 3→4 in getAll/getById/update-loan tests, 2→3 in update-no-fields test                     |
-| `apps/node-backend/src/backup/coverage.js`                     | Backup coverage                | Added `planned_transaction_tags`, `tags`, `transaction_tags` (alphabetically) to `BACKUP_COVERED_TABLES`                                                                                                                                       |
+| `apps/node-backend/src/backup/coverage.ts`                     | Backup coverage                | Added `planned_transaction_tags`, `tags`, `transaction_tags` (alphabetically) to `BACKUP_COVERED_TABLES`                                                                                                                                       |
 | `apps/node-backend/tests/routes/transactions.test.js`          | Transactions route             | Added `'tags'` to expected fields array in NDJSON export test                                                                                                                                                                                  |
 | `apps/node-backend/tests/routes/tags.test.js`                  | Tags route                     | Removed TypeScript non-null assertion syntax (`]!` → `]`) that was causing parse failure in a `.js` file                                                                                                                                       |
 
@@ -1007,14 +1007,14 @@ bun vitest run --test-name-pattern="testName"
 
 Validation runs (passed): `bun vitest run tests/currencyConversionService.test.js tests/routes/plannedTransactions.test.js tests/routes/transactions.test.js`; `npm test -- --coverage`
 
-Related code: [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/routes/plannedTransactions.js]], [[apps/node-backend/src/routes/transactions.js]]
+Related code: [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/routes/plannedTransactions.ts]], [[apps/node-backend/src/routes/transactions.ts]]
 
 ### Test Updates (2026-04-22)
 
 | File                                              | Area       | Changes                                                                                                                                                                                                                      |
 | ------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [[apps/node-backend/tests/routes/import.test.js]] | Import API | Updated to ADR-026 envelope pattern — validation errors assert `.rejects.toBeInstanceOf(ValidationError)`, success responses check `body.data.xxx` instead of `body.xxx`, mock response includes `res.ok(data, meta)` method |
-| [[apps/node-backend/src/routes/marketLookup.js]]  | Market API | `symbols.split()` operation moved inside try-catch block (line 86), so malformed string parameters now throw `AppError(502)` instead of raw TypeError                                                                        |
+| [[apps/node-backend/src/routes/marketLookup.ts]]  | Market API | `symbols.split()` operation moved inside try-catch block (line 86), so malformed string parameters now throw `AppError(502)` instead of raw TypeError                                                                        |
 
 Related docs: [[docs/adr/026-unified-api-response-envelope|ADR-026]], [[docs/testing/testing#Envelope-Aware Route Testing (ADR-026)|Envelope-Aware Route Testing pattern]]
 
@@ -1030,7 +1030,7 @@ Related docs: [[docs/adr/026-unified-api-response-envelope|ADR-026]], [[docs/tes
 
 Validation runs (passed): `bun vitest run tests/categoryRepository.test.js tests/plannedTransactionRepository.test.js`; `npm test -- --coverage`
 
-Related code: [[apps/node-backend/src/repositories/categoryRepository.js]], [[apps/node-backend/src/repositories/plannedTransactionRepository.js]]
+Related code: [[apps/node-backend/src/repositories/categoryRepository.ts]], [[apps/node-backend/src/repositories/plannedTransactionRepository.ts]]
 
 ### Incremental backend coverage addendum (2026-04-11)
 
@@ -1049,7 +1049,7 @@ Validation runs (passed): `bun vitest run tests/categoryRepository.test.js tests
 
 Coverage snapshot after this cycle: overall `76.84/61.72/80.74/80.29` (statements/branches/functions/lines).
 
-Related code: [[apps/node-backend/src/repositories/categoryRepository.js]], [[apps/node-backend/src/repositories/plannedTransactionRepository.js]], [[docs/testing/testing|Testing Documentation]]
+Related code: [[apps/node-backend/src/repositories/categoryRepository.ts]], [[apps/node-backend/src/repositories/plannedTransactionRepository.ts]], [[docs/testing/testing|Testing Documentation]]
 
 ### Backend coverage addendum (2026-04-11, adapters + raw import service)
 
@@ -1083,9 +1083,9 @@ Validation runs (passed):
 - `bun vitest run tests/routes/info.test.js`
 - `npm test -- --coverage`
 
-Coverage snapshot after this update: overall `81.12/66.86/84.49/84.53` and [[apps/node-backend/src/routes/info.js]] `93.62/78.72/100/94.58` (statements/branches/functions/lines).
+Coverage snapshot after this update: overall `81.12/66.86/84.49/84.53` and [[apps/node-backend/src/routes/info.ts]] `93.62/78.72/100/94.58` (statements/branches/functions/lines).
 
-Related source links: [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/database/connection.js]], [[apps/node-backend/src/services/recurringDetectionService.js]], [[apps/node-backend/src/services/materializedViewService.js]], [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]], [[docs/testing/testing|Testing Documentation]]
+Related source links: [[apps/node-backend/src/routes/info.ts]], [[apps/node-backend/src/database/connection.ts]], [[apps/node-backend/src/services/recurringDetectionService.js]], [[apps/node-backend/src/services/materializedViewService.js]], [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]], [[docs/testing/testing|Testing Documentation]]
 
 ### Backend coverage addendum (2026-04-11, portfolio transaction repository)
 
@@ -1098,9 +1098,9 @@ Validation runs (passed):
 - `bun vitest run tests/portfolioTransactionRepository.test.js` (25 tests)
 - `npm test -- --coverage` (827 tests)
 
-Coverage snapshot after this update: overall `81.81/67.61/85.42/85.25`; repositories bucket `68.47/63.45/67.02/72.66`; [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]] `78.73/71.5/84.84/82.95` (statements/branches/functions/lines).
+Coverage snapshot after this update: overall `81.81/67.61/85.42/85.25`; repositories bucket `68.47/63.45/67.02/72.66`; [[apps/node-backend/src/repositories/portfolioTransactionRepository.ts]] `78.73/71.5/84.84/82.95` (statements/branches/functions/lines).
 
-Related source links: [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]], [[docs/testing/testing|Testing Documentation]]
+Related source links: [[apps/node-backend/src/repositories/portfolioTransactionRepository.ts]], [[docs/testing/testing|Testing Documentation]]
 
 ### Backend coverage additions (2026-05-18, snapshot valuation parity)
 

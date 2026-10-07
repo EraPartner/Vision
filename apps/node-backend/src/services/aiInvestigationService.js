@@ -9,7 +9,7 @@ import {
   generateWithProvider,
   generateLocalSynthesis,
 } from "./aiProviderAdapters.js";
-import * as jobs from "../repositories/aiInvestigationRepository.js";
+import * as jobs from "../repositories/aiInvestigationRepository.ts";
 import {
   executeCloudAnalysisPlan,
   parseCloudAnalysisPlans,
@@ -21,6 +21,7 @@ import {
 } from "./aiReferenceService.js";
 
 const active = new Map();
+/** @type {Promise<unknown>} */
 let executionTail = Promise.resolve();
 
 function planInvestigation(request) {

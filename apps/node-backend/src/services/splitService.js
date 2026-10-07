@@ -1,18 +1,18 @@
 /** Split lifecycle, validation, projection, and audit orchestration. */
 
 import crypto from "node:crypto";
-import { withTransaction } from "../database/connection.js";
-import { appendAuditEvent } from "../repositories/auditChainRepository.js";
+import { withTransaction } from "../database/connection.ts";
+import { appendAuditEvent } from "../repositories/auditChainRepository.ts";
 import {
   computeOwedSummary,
   normalizeMoneyAmount,
   roundToMoneyPrecision,
   validateBatchSplitAllocation,
   validateSplitAllocation,
-} from "../lib/calculations/splits.js";
-import { subtract, toDecimal, toNumber } from "../lib/money.js";
-import { toAppDateString } from "../lib/timezone.js";
-import { NotFoundError, ValidationError } from "../middleware/errorHandler.js";
+} from "../lib/calculations/splits.ts";
+import { subtract, toDecimal, toNumber } from "../lib/money.ts";
+import { toAppDateString } from "../lib/timezone.ts";
+import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
 import splitRepository, {
   formatSplit,
   getPaidAmountInTransaction,
@@ -22,7 +22,7 @@ import splitRepository, {
   lockAndGetTotals,
   lockSplitForPayment,
   markSettledIfCovered,
-} from "../repositories/splitRepository.js";
+} from "../repositories/splitRepository.ts";
 
 async function writeSplitAudit(input) {
   const row = await splitRepository.writeAudit(input);
@@ -88,6 +88,9 @@ export async function createSplitAtomic(input) {
   });
 }
 
+/**
+ * @param {{transaction_id:number, splits:Array<{recipient_id:number, amount:number|string, note?:string|null}>, actor?:string|null}} input
+ */
 export async function createSplitsBatchAtomic({
   transaction_id,
   splits,
@@ -194,6 +197,10 @@ export async function addPayment(input) {
   });
 }
 
+/**
+ * @param {number} splitId
+ * @param {string|null} [actor]
+ */
 export async function settleSplit(splitId, actor = null) {
   return withTransaction(async (client) => {
     const split = await splitRepository.settleSplit(splitId, client);
@@ -209,6 +216,10 @@ export async function settleSplit(splitId, actor = null) {
   });
 }
 
+/**
+ * @param {number} recipientId
+ * @param {string|null} [actor]
+ */
 export async function settleAllByRecipient(recipientId, actor = null) {
   return withTransaction(async (client) => {
     const result = await splitRepository.settleAllByRecipient(
@@ -230,6 +241,10 @@ export async function settleAllByRecipient(recipientId, actor = null) {
   });
 }
 
+/**
+ * @param {number} splitId
+ * @param {string|null} [actor]
+ */
 export async function deleteSplit(splitId, actor = null) {
   return withTransaction(async (client) => {
     const split = await splitRepository.getSplitById(splitId, client);

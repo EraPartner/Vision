@@ -2,7 +2,7 @@
 title: AI Data Access Policy
 type: security
 status: active
-date: 2026-10-03
+date: 2026-10-07
 updated: 2026-10-03
 tags:
   [
@@ -21,17 +21,17 @@ aliases:
   [ai data access, ai security, llm security, ollama security, ai chat security]
 related_code:
   [
-    "apps/node-backend/src/routes/ai.js",
+    "apps/node-backend/src/routes/ai.ts",
     "apps/node-backend/src/services/aiChatService.js",
     "apps/node-backend/src/services/aiChat/tools/index.js",
-    "apps/node-backend/src/integrations/ollama/client.js",
+    "apps/node-backend/src/integrations/ollama/client.ts",
     "apps/node-backend/tests/aiChatService.test.js",
     "apps/node-backend/tests/aiChatTools.test.js",
     "apps/node-backend/src/services/aiEvaluation/localReliability.js",
     "apps/node-backend/src/services/aiEvaluation/cloudPrivacy.js",
     "apps/node-backend/src/services/aiReferenceService.js",
     "apps/node-backend/src/services/agentCloakPreflight.js",
-    "apps/node-backend/src/repositories/aiReferenceRepository.js",
+    "apps/node-backend/src/repositories/aiReferenceRepository.ts",
     "apps/node-backend/tests/aiReferenceService.test.js",
   ]
 ---
@@ -51,7 +51,7 @@ Security policies governing the AI chat feature introduced by [[docs/adr/024-loc
    Code capability does not establish live synthetic release acceptance; see
    [[docs/adr/171-packaged-openai-explicit-configuration|ADR-171]].
 2. **No raw SQL from LLM output.** The LLM cannot emit SQL. It selects from a fixed tool registry; every tool is backed by existing parameterized repository queries.
-3. **Parameterized queries only.** All tool dispatch goes through `query(text, params)` / `queryPrepared()` in [apps/node-backend/src/database/connection.js](apps/node-backend/src/database/connection.js). No string concatenation.
+3. **Parameterized queries only.** All tool dispatch goes through `query(text, params)` / `queryPrepared()` in [apps/node-backend/src/database/connection.ts](apps/node-backend/src/database/connection.ts). No string concatenation.
 4. **Audit trail.** Every `tool_call` and `tool_result` persists in `ai_messages` (role `tool`, with `tool_name`, `tool_args`, `tool_result` JSONB columns). Forensic review is possible per-conversation.
 5. **Local mode stays local.** Data flows from repository → tool → local persistence → Ollama →
    browser. Only a separately previewed and granted typed payload can cross the optional egress path.

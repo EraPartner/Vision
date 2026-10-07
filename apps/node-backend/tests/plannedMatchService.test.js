@@ -7,22 +7,22 @@ const mockGetClusterRootMap = vi.fn();
 const mockSettingsGet = vi.fn();
 const mockExecutePlanned = vi.fn();
 
-vi.mock("../src/repositories/plannedTransactionRepository.js", () => ({
+vi.mock("../src/repositories/plannedTransactionRepository.ts", () => ({
   default: { listActiveUnexecuted: (...a) => mockListActiveUnexecuted(...a) },
 }));
-vi.mock("../src/repositories/transactionRepository.js", () => ({
+vi.mock("../src/repositories/transactionRepository.ts", () => ({
   default: { listRecentUnlinked: (...a) => mockListRecentUnlinked(...a) },
 }));
-vi.mock("../src/repositories/recipientRepository.js", () => ({
+vi.mock("../src/repositories/recipientRepository.ts", () => ({
   default: { getClusterRootMap: (...a) => mockGetClusterRootMap(...a) },
 }));
-vi.mock("../src/repositories/settingsRepository.js", () => ({
+vi.mock("../src/repositories/settingsRepository.ts", () => ({
   default: { get: (...a) => mockSettingsGet(...a) },
 }));
 vi.mock("../src/services/plannedExecutionService.js", () => ({
   executePlanned: (...a) => mockExecutePlanned(...a),
 }));
-vi.mock("../src/config/logger.js", () => ({
+vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 

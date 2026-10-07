@@ -2,7 +2,7 @@
 title: Frontend API Client Architecture
 type: reference
 status: active
-date: 2026-09-30
+date: 2026-10-07
 updated: 2026-09-13
 tags: [reference, frontend, api-client, typescript, http, phase-1, phase-2, phase-q, client-side, environment, domain-split, openapi, recipient-groups, market-search]
 description: Architecture of the frontend HTTP client split into modular layers (transport, types, domain methods) with OpenAPI type generation. Phase Q: getTransactions supports recipient_group_id parameter. 2026-04-29: searchMarket wrapper added to market.ts module; AddToWatchlistDialog migrated to apiClient methods.
@@ -186,7 +186,7 @@ export interface ResponseMeta {
 }
 // Pagination is NOT in meta — a list's data body is
 // `{ items, total, limit?, offset? }` (limit/offset only when the request
-// paginated). See packages/types/src/api.js.
+// paginated). See packages/types/src/api.ts.
 
 export interface ApiError {
   code: ApiErrorCode;

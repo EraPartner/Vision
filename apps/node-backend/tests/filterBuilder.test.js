@@ -13,8 +13,8 @@ import {
   __buildAggregationFilter as buildAggregationFilter,
   parseAmountFilter,
   validateInt4Ids,
-} from "../src/lib/filterBuilder.js";
-import { ValidationError } from "../src/middleware/errorHandler.js";
+} from "../src/lib/filterBuilder.ts";
+import { ValidationError } from "../src/middleware/errorHandler.ts";
 
 describe("parseAmountFilter", () => {
   it("returns undefined for missing or unparseable input", () => {

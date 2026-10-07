@@ -9,7 +9,7 @@ import {
   __executeAuditUpdateDecision as executeAuditUpdateDecision,
   __executeAuditRead as executeAuditRead,
   __parseReadBody as parseReadBody,
-} from "../../src/routes/internalAudit.js";
+} from "../../src/routes/internalAudit.ts";
 
 const HASH = "a".repeat(64);
 const OTHER_HASH = "b".repeat(64);

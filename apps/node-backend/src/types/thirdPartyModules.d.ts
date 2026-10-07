@@ -19,16 +19,17 @@
 // each of which then behaves as an untyped (`any`) import at its use sites,
 // same as it always has.
 //
-// tsconfig.check(.strict).json's `include` is `src/**/*.js`, which does not
-// pick up `.d.ts` files on its own; a consuming file pulls this in with a
-// `/// <reference path="../types/thirdPartyModules.d.ts" />` comment, after
-// which the ambient declarations below are visible to the whole program
-// (ambient declarations are global once included, not per-importer).
+// Only the legacy checkJs program (tsconfig.check.json) includes this file,
+// by name in its `include`. Source files must not pull it in with a
+// `/// <reference path>` comment: ambient declarations are global once
+// included, so a reference would also turn `express`, `pg` and `multer` into
+// `any` in the strict TypeScript program (tsconfig.json), which checks them
+// against their real `@types` packages.
 //
 // `pg` is here for the same VALUE-import reason as `multer`: every other
 // file references `pg` in TYPE position only (`import('pg').PoolClient`) and
 // uses a structural typedef instead (see `QueryRunner` in rows.js), but
-// database/connection.js does `import pg from 'pg'` and calls `new
+// database/connection.ts does `import pg from 'pg'` and calls `new
 // pg.Pool(...)` — a value import TS7016 fires on regardless of use site. That
 // file defines its own structural `PgPoolClient`/`PgQueryResult` typedefs to
 // keep its JSDoc precise despite `pg` itself resolving to `any` here.
@@ -38,7 +39,7 @@
 // same TS7016-on-the-import-statement-itself situation as `multer`/`pg`
 // above. Elsewhere `express` is referenced in TYPE position only
 // (`import('express').X`), which is exactly what this codebase avoids —
-// `src/types/express.js`'s structural typedefs (`ExpressRequest`,
+// `src/types/express.ts`'s structural typedefs (`ExpressRequest`,
 // `ExpressResponse`, `ExpressNextFunction`, `ExpressRouter`, `ExpressHandler`)
 // are the intentional replacement for that, and remain what route handlers
 // are annotated with. This ambient entry only silences the import-statement

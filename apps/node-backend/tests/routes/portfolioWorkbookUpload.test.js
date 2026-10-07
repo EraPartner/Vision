@@ -28,7 +28,7 @@ vi.mock("../../src/services/portfolioImportBatchService.js", () => ({
 vi.mock("../../src/services/accountService.js", () => ({
   default: { get: vi.fn() },
 }));
-vi.mock("../../src/repositories/customParserConfigRepository.js", () => ({
+vi.mock("../../src/repositories/customParserConfigRepository.ts", () => ({
   default: {
     getAll: vi.fn(),
     getById: vi.fn(),
@@ -38,12 +38,12 @@ vi.mock("../../src/repositories/customParserConfigRepository.js", () => ({
     delete: vi.fn(),
   },
 }));
-vi.mock("../../src/database/connection.js", () => mockConnection());
-vi.mock("../../src/config/logger.js", () => ({ logger: mockLogger() }));
+vi.mock("../../src/database/connection.ts", () => mockConnection());
+vi.mock("../../src/config/logger.ts", () => ({ logger: mockLogger() }));
 
 import { runPortfolioImportPipeline } from "../../src/services/portfolioImportPipeline/index.js";
 import accountService from "../../src/services/accountService.js";
-import router from "../../src/routes/portfolioImportRoutes.js";
+import router from "../../src/routes/portfolioImportRoutes.ts";
 const BASE = "/api/portfolio/import";
 const api = routeAgent(router, { mountPath: BASE });
 const MIME =

@@ -31,11 +31,11 @@ import {
   hasTestDatabase,
   releaseDbSuiteLock,
 } from "./setup/db.js";
-import { banksRepository } from "../src/repositories/infoRepositoryBanks.js";
-import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.js";
+import { banksRepository } from "../src/repositories/infoRepositoryBanks.ts";
+import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.js";
-import { closePool } from "../src/database/connection.js";
-import { todayAppDateString } from "../src/lib/timezone.js";
+import { closePool } from "../src/database/connection.ts";
+import { todayAppDateString } from "../src/lib/timezone.ts";
 
 const rec = {};
 
@@ -549,7 +549,7 @@ describe.skipIf(!hasTestDatabase())(
       // Was PIN 1. `anchor_date` is emitted as a 'YYYY-MM-DD' string (the lateral
       // uses to_char) while `first_transaction` / `last_transaction` were passed
       // through RAW from pg. pg reads a DATE column as a JS Date at *local*
-      // midnight, and lib/dateFormat.js documents the project rule: DATE values
+      // midnight, and lib/dateFormat.ts documents the project rule: DATE values
       // at an emit boundary go through toWireDate(), because JSON-serializing the
       // raw Date emits an ISO timestamp of the PREVIOUS day on any server east of
       // UTC (Brussels: all day, every day). The mock suite fed these fields as

@@ -43,10 +43,10 @@ import {
 import { mockLogger } from "../helpers/mockLogger.js";
 import { routeAgent, errEnvelope } from "../helpers/routeApp.js";
 
-vi.mock("../../src/repositories/transactionRepository.js", () =>
+vi.mock("../../src/repositories/transactionRepository.ts", () =>
   mockTransactionRepository(),
 );
-vi.mock("../../src/config/logger.js", () => ({ logger: mockLogger() }));
+vi.mock("../../src/config/logger.ts", () => ({ logger: mockLogger() }));
 vi.mock("../../src/services/deduplication.js", () => mockDeduplication());
 vi.mock("../../src/services/materializedViewService.js", () =>
   mockMaterializedViews(),
@@ -54,7 +54,7 @@ vi.mock("../../src/services/materializedViewService.js", () =>
 vi.mock("../../src/services/currency/currencyConversionService.js", () =>
   mockCurrencyConversion(),
 );
-vi.mock("../../src/database/connection.js", () => mockConnection());
+vi.mock("../../src/database/connection.ts", () => mockConnection());
 vi.mock("../../src/services/attachmentRecordService.js", () =>
   mockAttachmentRecordService(),
 );
@@ -68,14 +68,14 @@ vi.mock("../../src/services/transferReconciliationService.js", () => ({
   unmarkTransfer: vi.fn(),
 }));
 
-import transactionRepository from "../../src/repositories/transactionRepository.js";
+import transactionRepository from "../../src/repositories/transactionRepository.ts";
 import { markTransfer } from "../../src/services/transferReconciliationService.js";
-import { query as dbQuery } from "../../src/database/connection.js";
+import { query as dbQuery } from "../../src/database/connection.ts";
 import { convertRowsToEur } from "../../src/services/currency/currencyConversionService.js";
 import { attachmentRepository } from "../../src/services/attachmentRecordService.js";
 
 const { default: transactionsRouter } =
-  await import("../../src/routes/transactions.js");
+  await import("../../src/routes/transactions.ts");
 
 const api = routeAgent(transactionsRouter, { mountPath: "/api/transactions" });
 

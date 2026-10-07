@@ -50,7 +50,7 @@ import {
   commitImport,
 } from "../src/services/importPipeline/index.js";
 import { accountService } from "../src/services/accountService.js";
-import { closePool } from "../src/database/connection.js";
+import { closePool } from "../src/database/connection.ts";
 
 // Neither the MV refresh (this database has no materialized views) nor the
 // planned-payment auto-link is what this suite measures; both are already

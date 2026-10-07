@@ -18,7 +18,7 @@
  *  - It only catches drift that would make the consumed types unsound.
  *  - Runtime value coercion (pg returns NUMERIC as strings) is a separate
  *    concern handled at the backend repository boundary; see
- *    packages/shared-utils/src/money.js (`numericColumn` / `coerceNumericFields`).
+ *    packages/shared-utils/src/money.ts (`numericColumn` / `coerceNumericFields`).
  *
  * This module has no runtime output — it is pure type-level assertion.
  */

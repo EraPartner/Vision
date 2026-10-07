@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockTxConnection } from "./helpers/repoMocks.js";
 
-vi.mock("../src/database/connection.js", () => mockTxConnection());
+vi.mock("../src/database/connection.ts", () => mockTxConnection());
 
-import { query } from "../src/database/connection.js";
-import categoryRepository from "../src/repositories/categoryRepository.js";
+import { query } from "../src/database/connection.ts";
+import categoryRepository from "../src/repositories/categoryRepository.ts";
 
 describe("categoryRepository.createOrGet", () => {
   beforeEach(() => {

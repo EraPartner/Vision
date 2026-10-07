@@ -1,5 +1,5 @@
 /**
- * lib/pagination.js — the opt-in half.
+ * lib/pagination.ts — the opt-in half.
  *
  * parsePagination (always-on, with a default page size) is exercised through
  * the route tests that use it. These pin parseOptionalPagination, whose whole
@@ -8,8 +8,8 @@
  * endpoint silently truncates every existing client.
  */
 import { describe, expect, it } from 'vitest';
-import { listBody, parseOptionalPagination } from '../src/lib/pagination.js';
-import { buildLimitOffset } from '../src/lib/sqlClauses.js';
+import { listBody, parseOptionalPagination } from '../src/lib/pagination.ts';
+import { buildLimitOffset } from '../src/lib/sqlClauses.ts';
 
 describe('parseOptionalPagination', () => {
   it('returns null when neither limit nor offset is present', () => {

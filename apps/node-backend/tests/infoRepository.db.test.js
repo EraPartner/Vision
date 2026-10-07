@@ -36,15 +36,15 @@ import {
   hasTestDatabase,
   releaseDbSuiteLock,
 } from "./setup/db.js";
-import infoRepository from "../src/repositories/infoRepository.js";
-import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.js";
+import infoRepository from "../src/repositories/infoRepository.ts";
+import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.js";
-import { closePool } from "../src/database/connection.js";
+import { closePool } from "../src/database/connection.ts";
 import {
   todayAppDateString,
   addDaysYmd,
   firstOfMonthYmd,
-} from "../src/lib/timezone.js";
+} from "../src/lib/timezone.ts";
 
 const cat = {};
 const rec = {};

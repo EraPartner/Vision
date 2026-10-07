@@ -27,12 +27,12 @@ import {
   hasTestDatabase,
   releaseDbSuiteLock,
 } from "./setup/db.js";
-import { statisticsRepository } from "../src/repositories/infoRepositoryStatistics.js";
-import transactionRepository from "../src/repositories/transactionRepository.js";
-import { buildExclusionClauses } from "../src/lib/filterBuilder.js";
-import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.js";
+import { statisticsRepository } from "../src/repositories/infoRepositoryStatistics.ts";
+import transactionRepository from "../src/repositories/transactionRepository.ts";
+import { buildExclusionClauses } from "../src/lib/filterBuilder.ts";
+import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.js";
-import { closePool } from "../src/database/connection.js";
+import { closePool } from "../src/database/connection.ts";
 
 const cat = {};
 const rec = {};

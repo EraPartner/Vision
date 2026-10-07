@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   __parseCodexConnectHeader as parseConnectHeader,
   startCodexConnectProxy,
-} from "../src/integrations/codex/connectProxy.js";
+} from "../src/integrations/codex/connectProxy.ts";
 
 const cleanup = [];
 afterEach(async () => {

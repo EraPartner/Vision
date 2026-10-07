@@ -2,7 +2,7 @@
 title: Watchlist Feature
 type: feature
 status: active
-date: 2026-09-27
+date: 2026-10-07
 last_modified: 2026-09-27
 updated: 2026-09-27
 tags: [feature, watchlist, investments, tracking, alerts, phase-3.6, offline-resilience, online-status-detection, api-client-migration, validation, june-2026, backtest, added-price, adr-097, destructive-confirm]
@@ -15,8 +15,8 @@ related_code:
   - apps/frontend/src/hooks/usePortfolio.ts
   - apps/frontend/src/types/watchlist.ts
   - apps/frontend/src/lib/api.ts
-  - apps/node-backend/src/routes/watchlist.js
-  - apps/node-backend/src/repositories/watchlistRepository.js
+  - apps/node-backend/src/routes/watchlist.ts
+  - apps/node-backend/src/repositories/watchlistRepository.ts
 ---
 
 # Watchlist Feature
@@ -65,8 +65,8 @@ Returns all watchlist items with current prices.
 
 Implementation note:
 
-- Backend list pagination now normalizes `limit` and `offset` (`limit` clamped to `1..5000`, `offset` floored at `0`) to prevent pathological page sizes while preserving payload shape (`{ items, total, limit, offset }`) ([[apps/node-backend/src/routes/watchlist.js]]).
-- Backend watchlist list endpoint now uses repository one-query pagination (`getAllWithCount`) instead of separate list + count calls, preserving filter/order/response semantics while reducing DB round-trips ([[apps/node-backend/src/routes/watchlist.js]], [[apps/node-backend/src/repositories/watchlistRepository.js]]).
+- Backend list pagination now normalizes `limit` and `offset` (`limit` clamped to `1..5000`, `offset` floored at `0`) to prevent pathological page sizes while preserving payload shape (`{ items, total, limit, offset }`) ([[apps/node-backend/src/routes/watchlist.ts]]).
+- Backend watchlist list endpoint now uses repository one-query pagination (`getAllWithCount`) instead of separate list + count calls, preserving filter/order/response semantics while reducing DB round-trips ([[apps/node-backend/src/routes/watchlist.ts]], [[apps/node-backend/src/repositories/watchlistRepository.ts]]).
 
 ### POST /api/watchlist
 

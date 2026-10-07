@@ -5,7 +5,7 @@
  * Backtest runs on demand; accuracy persisted for future ensemble.
  */
 
-import { infoRepository } from "../../../repositories/infoRepository.js";
+import { infoRepository } from "../../../repositories/infoRepository.ts";
 import { buildEnvelope } from "../aggregation/_envelope.js";
 import { fnv1aHash } from "./prng.js";
 import { densifyDailyHistory } from "./_densify.js";
@@ -22,11 +22,11 @@ import * as ensemble from "./methods/ensemble.js";
 import { buildCategoryBreakdown } from "./categoryBreakdown.js";
 import { walkForwardBacktest, walkForwardBacktestRolling } from "./backtest.js";
 import { recordAccuracy, getLatestAccuracyByMethod } from "./accuracyStore.js";
-import mcCacheRepo from "../../../repositories/cashflowForecastMcRepository.js";
-import mcRollingCacheRepo from "../../../repositories/cashflowForecastMcRollingRepository.js";
-import { logger } from "../../../config/logger.js";
-import { todayAppDateString } from "../../../lib/timezone.js";
-import { epochMsToUtcYmd } from "../../../lib/dateFormat.js";
+import mcCacheRepo from "../../../repositories/cashflowForecastMcRepository.ts";
+import mcRollingCacheRepo from "../../../repositories/cashflowForecastMcRollingRepository.ts";
+import { logger } from "../../../config/logger.ts";
+import { todayAppDateString } from "../../../lib/timezone.ts";
+import { epochMsToUtcYmd } from "../../../lib/dateFormat.ts";
 
 const DEFAULT_HISTORY_MONTHS = 36;
 const DEFAULT_MC_PATHS = 1000;

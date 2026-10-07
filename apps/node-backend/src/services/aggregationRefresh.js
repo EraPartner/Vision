@@ -19,9 +19,9 @@ import {
   refreshMaterializedViews as refreshLegacyMaterializedViews,
   scheduleRefresh as scheduleLegacyRefresh,
 } from "./materializedViewService.js";
-import mcCacheRepo from "../repositories/cashflowForecastMcRepository.js";
-import mcRollingCacheRepo from "../repositories/cashflowForecastMcRollingRepository.js";
-import { logger } from "../config/logger.js";
+import mcCacheRepo from "../repositories/cashflowForecastMcRepository.ts";
+import mcRollingCacheRepo from "../repositories/cashflowForecastMcRollingRepository.ts";
+import { logger } from "../config/logger.ts";
 
 /** Trigger-maintained tables — documented here, never refreshed from app code. */
 const TRIGGER_MAINTAINED_TABLES = Object.freeze(["agg_split_outstanding"]);

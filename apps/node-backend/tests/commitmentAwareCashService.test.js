@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../src/repositories/plannedTransactionRepository.js", () => ({
+vi.mock("../src/repositories/plannedTransactionRepository.ts", () => ({
   default: { getForCommitmentProjection: vi.fn() },
 }));
 vi.mock("../src/services/crossWorkspaceDataService.js", () => ({
@@ -17,7 +17,7 @@ vi.mock("../src/services/currency/currencyConversionService.js", () => ({
   ),
 }));
 
-import plannedTransactionRepository from "../src/repositories/plannedTransactionRepository.js";
+import plannedTransactionRepository from "../src/repositories/plannedTransactionRepository.ts";
 import { assembleRebalanceInputs } from "../src/services/crossWorkspaceDataService.js";
 import {
   convertWithRates,

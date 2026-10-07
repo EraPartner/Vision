@@ -1,13 +1,13 @@
 /** Source-backed unit corrections, preserving the original acquisition basis. */
 import { projectAssetTransferPartitions } from "@vision/shared-utils/portfolio";
-import { query, withTransaction } from "../../database/connection.js";
-import { toDecimal } from "../../lib/money.js";
-import { toYmd } from "../../lib/dateFormat.js";
+import { query, withTransaction } from "../../database/connection.ts";
+import { toDecimal } from "../../lib/money.ts";
+import { toYmd } from "../../lib/dateFormat.ts";
 import {
   ConflictError,
   ValidationError,
-} from "../../middleware/errorHandler.js";
-import { getUnitEventsForInvestment } from "../../repositories/portfolioTxRepo.reads.js";
+} from "../../middleware/errorHandler.ts";
+import { getUnitEventsForInvestment } from "../../repositories/portfolioTxRepo.reads.ts";
 import { validatePortfolioAssetTransferHistory } from "./portfolioAssetTransferService.js";
 import { portfolioCustodyWriteHistory } from "./portfolioCustodyImportScope.js";
 import {
@@ -17,7 +17,7 @@ import {
   insertAssetAdjustment,
   getAssetAdjustmentsForBatch,
   deleteAssetAdjustmentsForBatch,
-} from "../../repositories/portfolioAssetAdjustmentRepository.js";
+} from "../../repositories/portfolioAssetAdjustmentRepository.ts";
 
 export function previewPortfolioAssetAdjustment(
   row,
@@ -135,14 +135,14 @@ export async function commitPortfolioAssetAdjustment({ row, batch }) {
       event.dedup_fingerprint_version,
     );
     if (existing) {
-      for (const field of [
+      for (const field of /** @type {const} */ ([
         "investment_id",
         "account_id",
         "date",
         "units",
         "adjustment_kind",
         "basis_policy",
-      ])
+      ]))
         if (
           !(field === "units"
             ? toDecimal(existing[field]).eq(event[field])

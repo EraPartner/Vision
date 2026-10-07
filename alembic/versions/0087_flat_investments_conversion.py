@@ -142,7 +142,7 @@ _CANONICAL_NAMES_SQL_ARRAY = (
 )
 
 
-def _is_legacy_shape(bind) -> bool:
+def _is_legacy_shape(bind: sa.engine.Connection) -> bool:
     return bool(
         bind.execute(
             sa.text(

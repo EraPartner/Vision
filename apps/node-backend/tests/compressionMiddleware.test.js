@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("node:zlib", () => ({ createGzip: vi.fn() }));
 
 import { createGzip } from "node:zlib";
-import { compression } from "../src/middleware/compression.js";
+import { compression } from "../src/middleware/compression.ts";
 
 function createGzipDouble({ writeResult = true } = {}) {
   const gzip = new EventEmitter();

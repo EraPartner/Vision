@@ -16,9 +16,9 @@
  */
 
 import { parseCategoryName } from "@vision/shared-utils";
-import { transactionRepository } from "../../repositories/transactionRepository.js";
+import { transactionRepository } from "../../repositories/transactionRepository.ts";
 import { listCategoryNodes } from "../categoryService.js";
-import { toDecimal, roundToCents } from "../../lib/money.js";
+import { toDecimal, roundToCents } from "../../lib/money.ts";
 import { classifyDeduction } from "./deductionClassifier.js";
 
 /** A decimal.js money value, as produced by the shared `toDecimal` helper. */

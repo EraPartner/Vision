@@ -5,26 +5,26 @@
  * and the Kinesis-specific MAD spike detector.
  */
 
-import { logger } from '../../config/logger.js';
-import { UpstreamError } from '../../middleware/errorHandler.js';
+import { logger } from '../../config/logger.ts';
+import { UpstreamError } from '../../middleware/errorHandler.ts';
 import {
   KINESIS_BASE_URL,
   KINESIS_DEFAULT_TIMEFRAME,
   KINESIS_DEFAULT_FROM_DATE,
   getKinesisAssetConfig,
-} from '../../config/kinesisConfig.js';
+} from '../../config/kinesisConfig.ts';
 import { toNumber, isValidPrice } from './priceCache.js';
-import { madReturnStats, isRobustNeedle } from '../../lib/math.js';
+import { madReturnStats, isRobustNeedle } from '../../lib/math.ts';
 import { convertToCurrency } from '../currency/currencyConversionService.js';
-import { assertPublicHttpUrl } from '../../lib/urlSafety.js';
+import { assertPublicHttpUrl } from '../../lib/urlSafety.ts';
 import { getYahooClient } from './yahooClient.js';
-import { forEachConcurrent } from '../../lib/concurrency.js';
+import { forEachConcurrent } from '../../lib/concurrency.ts';
 
 const PROVIDER_FETCH_CONCURRENCY = 6;
 
 /**
- * @typedef {import('../../types/rows.js').InvestmentRow} InvestmentRow
- * @typedef {import('../../types/rows.js').PricePoint} PricePoint
+ * @typedef {import('../../types/rows.ts').InvestmentRow} InvestmentRow
+ * @typedef {import('../../types/rows.ts').PricePoint} PricePoint
  */
 
 /**

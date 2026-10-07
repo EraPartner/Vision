@@ -5,7 +5,7 @@ import { join } from "node:path";
 import {
   createExperimentalCodexSession,
   __limitsPermitSyntheticTurn,
-} from "../src/integrations/codex/experimentalSession.js";
+} from "../src/integrations/codex/experimentalSession.ts";
 
 const cleanup = [];
 afterEach(async () => {

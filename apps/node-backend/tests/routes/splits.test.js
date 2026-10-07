@@ -35,7 +35,7 @@ vi.mock("../../src/services/splitService.js", () => ({
   },
 }));
 
-vi.mock("../../src/config/logger.js", () => ({
+vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
@@ -43,9 +43,9 @@ import splitService from "../../src/services/splitService.js";
 import {
   ValidationError,
   NotFoundError,
-} from "../../src/middleware/errorHandler.js";
+} from "../../src/middleware/errorHandler.ts";
 
-const { default: splitsRouter } = await import("../../src/routes/splits.js");
+const { default: splitsRouter } = await import("../../src/routes/splits.ts");
 
 const BASE = "/api/splits";
 const api = routeAgent(splitsRouter, { mountPath: BASE });

@@ -8,8 +8,8 @@
  * Usage: import { assertNoNaN, assertMonthlyInvariants } from './_invariants.js';
  */
 
-import settings from '../../../config/config.js';
-import { logger } from '../../../config/logger.js';
+import settings from '../../../config/config.ts';
+import { logger } from '../../../config/logger.ts';
 
 const ENABLED = !settings.isProduction();
 

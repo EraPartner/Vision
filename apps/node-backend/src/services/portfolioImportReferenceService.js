@@ -1,8 +1,8 @@
 /** Apply a literal secondary statement to review staging, never to canonical history. */
-import { withTransaction } from "../database/connection.js";
+import { withTransaction } from "../database/connection.ts";
 import { createHash } from "node:crypto";
-import { ConflictError, ValidationError } from "../middleware/errorHandler.js";
-import { toDecimal } from "../lib/money.js";
+import { ConflictError, ValidationError } from "../middleware/errorHandler.ts";
+import { toDecimal } from "../lib/money.ts";
 import {
   normalizeIdentityText,
   assignImportIdentities,
@@ -32,7 +32,7 @@ import {
   lockReconciliationAccountsAndHistory,
   readReconciliationSources,
   readReconciliationHistory,
-} from "../repositories/portfolioImportReconciliationRepository.js";
+} from "../repositories/portfolioImportReconciliationRepository.ts";
 import {
   lockPortfolioReferenceScope,
   lockPortfolioReferenceRows,
@@ -42,7 +42,7 @@ import {
   stagePortfolioReferenceRows,
   markPortfolioReferenceAwaitingReview,
   restagePortfolioReferencePolicyRow,
-} from "../repositories/portfolioImportReferenceRepository.js";
+} from "../repositories/portfolioImportReferenceRepository.ts";
 
 const FORMAT = "portfolio_performance_reference";
 const same = (a, b, places = 8) =>

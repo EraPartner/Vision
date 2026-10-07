@@ -9,7 +9,7 @@ const repository = vi.hoisted(() => ({
   deleteDocument: vi.fn(),
 }));
 vi.mock(
-  "../src/repositories/aiResearchDocumentRepository.js",
+  "../src/repositories/aiResearchDocumentRepository.ts",
   () => repository,
 );
 import {

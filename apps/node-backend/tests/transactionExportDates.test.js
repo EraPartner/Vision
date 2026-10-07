@@ -8,12 +8,12 @@ import { makeTransactionRow } from "./builders/domainRows.js";
 // cross-TZ re-import) and buildNdjsonRow went through JSON.stringify's
 // toISOString — the PREVIOUS day's timestamp on any backend east of UTC.
 
-vi.mock("../src/config/logger.js", () => ({
+vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
-vi.mock("../src/database/connection.js", () => mockConnection());
+vi.mock("../src/database/connection.ts", () => mockConnection());
 
-import { getClient, query as dbQuery } from "../src/database/connection.js";
+import { getClient, query as dbQuery } from "../src/database/connection.ts";
 import {
   streamBulkTransactionExport,
   streamCsvExport,

@@ -2,7 +2,7 @@
 title: CI/CD Pipelines
 type: guide
 status: active
-date: 2026-10-06
+date: 2026-10-07
 tags:
   [
     guide,
@@ -28,16 +28,16 @@ scan, or publish a product container image. The required aggregate check remains
 
 `.github/workflows/ci.yml` classifies changed paths and runs the relevant independent jobs:
 
-| Area              | Jobs and evidence                                                              |
-| ----------------- | ------------------------------------------------------------------------------ |
-| Repository policy | cloud tooling, package/workflow supply-chain checks, commitlint, secrets scan  |
-| Dependencies      | PR dependency review, Bun audit and pip-audit                                  |
-| Static checks     | frontend/backend lint, frontend/backend type checks, generated-artifact checks |
-| Builds and tests  | frontend build, frontend tests, Electron/runtime tests, backend tests          |
-| Database safety   | destructive-migration check against repository source                          |
-| Security          | Trivy filesystem scan with table and SARIF output                              |
-| Runtime           | native production-health and migration-reversibility smoke                     |
-| Contracts         | live API contract tests against a native backend and disposable PostgreSQL 18  |
+| Area              | Jobs and evidence                                                             |
+| ----------------- | ----------------------------------------------------------------------------- |
+| Repository policy | cloud tooling, package/workflow supply-chain checks, commitlint, secrets scan |
+| Dependencies      | PR dependency review, Bun audit and pip-audit                                 |
+| Static checks     | frontend/backend lint, frontend/backend/Python type checks, generated checks  |
+| Builds and tests  | frontend build, frontend tests, Electron/runtime tests, backend tests         |
+| Database safety   | destructive-migration check against repository source                         |
+| Security          | Trivy filesystem scan with table and SARIF output                             |
+| Runtime           | native production-health and migration-reversibility smoke                    |
+| Contracts         | live API contract tests against a native backend and disposable PostgreSQL 18 |
 
 `quality-gate` aggregates the portable pre-runtime checks. `CI Complete` aggregates every required
 stage and keeps a stable branch-protection name. A skipped path-filtered job is handled explicitly;
@@ -50,13 +50,26 @@ limit over the 2026-10-06 build, after the owner approved raising it for growth 
 and locale chunks. The checker reads the generated `index.html` and assets to catch new eager
 imports and total bundle growth.
 
-The backend runs the base JSDoc type check and a `noImplicitAny` check over every `src/` file.
+Python is checked by `mypy --strict` from `config/mypy.ini` (Alembic env and migrations,
+`scripts/`, the packaged Alembic wrapper) in the `Type Check (Python)` job, which installs the
+hash-pinned `config/requirements.txt` and `config/requirements-dev.txt` and also runs the Alembic
+audit callback test. See [[docs/adr/184-strict-python-type-checking|ADR-184]].
+
+The backend runs three checks. Converted TypeScript files (`src/**/*.ts`) are checked by the
+strict `apps/node-backend/tsconfig.json`; see [[docs/adr/186-backend-strict-typescript|ADR-186]].
+The remaining JavaScript gets the base JSDoc type check and a `noImplicitAny` check.
 The latter compares diagnostics with `scripts/checkjs-ratchet-baseline.json`, which records the
 2,155 existing diagnostics measured on 2026-10-05 by file, code, message, and source line. That
 rebaseline accepted 912 diagnostics added since 2026-09-24, mostly in the portfolio import
 reconciliation and analysis workbench services, and removed 10 entries that no longer occur. A
 new diagnostic fails CI, including one in a newly added file. A corrected diagnostic also
-requires removal of its baseline entry, so the same error cannot silently return later.
+requires removal of its baseline entry, so the same error cannot silently return later. Entries for
+files converted to TypeScript are removed in the converting change. The ratchet skips `.ts` files:
+the JavaScript program compiles them because JavaScript imports them, but it still sees `express`,
+`pg` and `multer` through the ambient `any` shim, while the strict program checks the same files
+against the real `@types` packages. Only the JavaScript program includes
+`src/types/thirdPartyModules.d.ts`, by name in `tsconfig.check.json`; no source file may pull it in
+with a `/// <reference>`, because that would make those packages `any` in the strict program too.
 
 ### Dependency and workflow admission
 
@@ -179,6 +192,7 @@ the change:
 bun run lint
 bun run lint:backend
 bun run typecheck
+bun run typecheck:python
 bun run validate-locales
 bun run test:scripts
 bun run test

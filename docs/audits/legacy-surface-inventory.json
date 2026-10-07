@@ -54,7 +54,7 @@
       "paths": [
         "alembic/versions/0001_initial_database_schema.py",
         "apps/node-backend/src/services/deduplication.js",
-        "apps/node-backend/src/backup/coverage.js"
+        "apps/node-backend/src/backup/coverage.ts"
       ],
       "readers": "Current runtime reads provider-neutral source records, links, and manual duplicate claims; no current reader requires the retired relations.",
       "writers": "Current imports and manual creation write only the provider-neutral replacement relations.",
@@ -73,7 +73,7 @@
       "disposition": "Budgeting and portfolio imports use versioned fingerprints only. The guarded maintenance contract removed legacy tx_hash columns from the maintained installation and remains available for other installations.",
       "paths": [
         "alembic/versions/0103_import_identity_provenance.py",
-        "apps/node-backend/src/repositories/transactionRepository.js",
+        "apps/node-backend/src/repositories/transactionRepository.ts",
         "apps/node-backend/src/services/importPipeline/commit.js"
       ],
       "readers": "No current runtime reader.",
@@ -94,7 +94,7 @@
       "paths": [
         "alembic/versions/0091_import_staging_resolved_fks.py",
         "alembic/versions/0104_drop_dormant_import_bank_resolution.py",
-        "apps/node-backend/src/types/rows.js",
+        "apps/node-backend/src/types/rows.ts",
         "apps/node-backend/tests/importStagingResolvedForeignKeys.db.test.js",
         "scripts/test-legacy-retirements.js"
       ],
@@ -116,7 +116,7 @@
       "paths": [
         "alembic/legacy_versions/0025_exchange_rate_cache.py",
         "alembic/versions/0105_retire_legacy_exchange_rate_cache.py",
-        "apps/node-backend/src/backup/coverage.js",
+        "apps/node-backend/src/backup/coverage.ts",
         "apps/node-backend/src/services/currency/currencyConversionService.js",
         "scripts/test-legacy-retirements.js"
       ],
@@ -178,7 +178,7 @@
       "paths": [
         "alembic/versions/0001_initial_database_schema.py",
         "apps/node-backend/src/services/portfolioImportPipeline/validate.js",
-        "apps/node-backend/src/repositories/portfolioTxRepo.reads.js"
+        "apps/node-backend/src/repositories/portfolioTxRepo.reads.ts"
       ],
       "readers": "Portfolio repositories and import validation cast and read it.",
       "writers": "Current portfolio staging and canonical transaction writes use it.",
@@ -197,7 +197,7 @@
       "disposition": "Canonical APIs and every first-party create, edit, duplicate, undo, and recurrence path use account_id. The maintained schema has retired the compatibility columns; the guarded manual contract remains available for other installations.",
       "paths": [
         "alembic/manual/contract_drop_bank_account/up.sql",
-        "apps/node-backend/src/repositories/transactionRepository.js",
+        "apps/node-backend/src/repositories/transactionRepository.ts",
         "apps/frontend/src/features/transactions/components/AddTransactionSheet.tsx"
       ],
       "readers": "Responses project the bank_account display label from accounts.name; request schemas reject bank_account.",
@@ -217,7 +217,7 @@
       "disposition": "First-party readers and writers use account_statement_balances only. The guarded maintenance contract removed both redundant scalar columns from the maintained installation and remains available for other installations.",
       "paths": [
         "alembic/versions/0098_account_statement_balances.py",
-        "apps/node-backend/src/repositories/accountRepository.js",
+        "apps/node-backend/src/repositories/accountRepository.ts",
         "apps/frontend/src/lib/api/accounts.ts"
       ],
       "readers": "Edit, reconcile, opening-balance, drift-date, and dashboard paths read statement_balances.",
@@ -236,7 +236,7 @@
       "classification": "retain-with-reason",
       "disposition": "The startup migrator still needs the map to prevent supported old databases from failing with an unknown revision.",
       "paths": [
-        "apps/node-backend/src/database/migrate.js",
+        "apps/node-backend/src/database/migrate.ts",
         "apps/node-backend/tests/migrationRolePreflight.test.js"
       ],
       "readers": "Startup reads alembic_version and the archived revision set.",
@@ -321,16 +321,16 @@
       "classification": "historical-record-only",
       "disposition": "Removed after confirming that every caller imports the seven money and date helpers from their canonical owners.",
       "paths": [
-        "apps/node-backend/src/repositories/infoRepositoryHelpers.js",
-        "apps/node-backend/src/lib/money.js",
-        "apps/node-backend/src/lib/dateFormat.js",
-        "apps/node-backend/src/lib/dateKeys.js"
+        "apps/node-backend/src/repositories/infoRepositoryHelpers.ts",
+        "apps/node-backend/src/lib/money.ts",
+        "apps/node-backend/src/lib/dateFormat.ts",
+        "apps/node-backend/src/lib/dateKeys.ts"
       ],
       "readers": "No callers through infoRepositoryHelpers; the file's repository-specific helpers remain active.",
       "writers": "None.",
       "persistedData": "None.",
       "supportWindow": "None; internal exports with zero importers.",
-      "replacement": "Direct imports from lib/money.js, lib/dateFormat.js, and lib/dateKeys.js.",
+      "replacement": "Direct imports from lib/money.ts, lib/dateFormat.ts, and lib/dateKeys.ts.",
       "deletionDependencies": ["exact stale-import scan", "repository tests"],
       "liveEvidence": "Static symbol and export search finds no compatibility re-exports or consumers.",
       "todoTitle": null
@@ -342,9 +342,9 @@
       "classification": "retain-with-reason",
       "disposition": "Thin modules are heavily imported and form stable app-local boundaries over shared implementations.",
       "paths": [
-        "apps/node-backend/src/lib/money.js",
-        "apps/node-backend/src/lib/csv.js",
-        "apps/node-backend/src/lib/slugify.js",
+        "apps/node-backend/src/lib/money.ts",
+        "apps/node-backend/src/lib/csv.ts",
+        "apps/node-backend/src/lib/slugify.ts",
         "apps/frontend/src/lib/csv.ts",
         "apps/frontend/src/lib/slugify.ts"
       ],
@@ -402,8 +402,8 @@
       "classification": "historical-record-only",
       "disposition": "Removed after the explicit client/server compatibility cutoff; complete is the sole terminal success event.",
       "paths": [
-        "apps/node-backend/src/routes/ai.js",
-        "packages/types/src/aiChat.js",
+        "apps/node-backend/src/routes/ai.ts",
+        "packages/types/src/aiChat.ts",
         "apps/frontend/src/lib/api/ai.ts",
         "openapi.yaml"
       ],
@@ -423,7 +423,7 @@
       "classification": "historical-record-only",
       "disposition": "Removed after the explicit external-client cutoff; assignment uses the category-id resource action.",
       "paths": [
-        "apps/node-backend/src/routes/categories.js",
+        "apps/node-backend/src/routes/categories.ts",
         "apps/frontend/src/test/msw/handlers.ts",
         "openapi.yaml"
       ],
@@ -443,8 +443,8 @@
       "classification": "historical-record-only",
       "disposition": "Removed after the explicit external-client cutoff; stale aliases now fail validation instead of widening results.",
       "paths": [
-        "apps/node-backend/src/lib/aggregationDateRange.js",
-        "apps/node-backend/src/routes/aggregations.js",
+        "apps/node-backend/src/lib/aggregationDateRange.ts",
+        "apps/node-backend/src/routes/aggregations.ts",
         "apps/frontend/src/lib/api/aggregations.ts",
         "openapi.yaml"
       ],
@@ -464,7 +464,7 @@
       "classification": "historical-record-only",
       "disposition": "Removed under accepted ADR-136's explicit same-release client cutoff. Budgeting and portfolio imports now accept upload options only as multipart fields.",
       "paths": [
-        "apps/node-backend/src/routes/importRoutes.js",
+        "apps/node-backend/src/routes/importRoutes.ts",
         "apps/frontend/src/lib/api/imports.ts",
         "apps/frontend/src/lib/api/portfolioImports.ts",
         "openapi.yaml"
@@ -485,7 +485,7 @@
       "classification": "historical-record-only",
       "disposition": "Removed after the explicit admin-client cutoff; reset confirmation accepts only the required JSON boolean body field.",
       "paths": [
-        "apps/node-backend/src/routes/admin.js",
+        "apps/node-backend/src/routes/admin.ts",
         "apps/node-backend/tests/routes/admin.test.js",
         "apps/frontend/src/types/generated.ts",
         "openapi.yaml"
@@ -506,7 +506,7 @@
       "classification": "historical-record-only",
       "disposition": "Removed after the explicit external-client cutoff; omitted pagination now returns the bounded default page.",
       "paths": [
-        "apps/node-backend/src/routes/ai.js",
+        "apps/node-backend/src/routes/ai.ts",
         "apps/frontend/src/lib/api/ai.ts",
         "openapi.yaml"
       ],
@@ -527,7 +527,7 @@
       "disposition": "Removed under accepted ADR-136's explicit same-release client/server cutoff. The frontend parses the unified HTTP failure envelope and uses status fallback for malformed bodies.",
       "paths": [
         "apps/frontend/src/lib/api/client.ts",
-        "apps/node-backend/src/middleware/errorHandler.js"
+        "apps/node-backend/src/middleware/errorHandler.ts"
       ],
       "readers": "Every frontend API request uses the canonical-envelope parser.",
       "writers": "Current backend middleware emits canonical envelopes; SSE detail payloads are separate.",
@@ -547,7 +547,7 @@
       "paths": [
         "apps/frontend/src/lib/api/transactions.ts",
         "apps/frontend/src/lib/api/__tests__/transactions.test.ts",
-        "apps/node-backend/src/routes/transactions.js",
+        "apps/node-backend/src/routes/transactions.ts",
         "openapi.yaml"
       ],
       "readers": "Current clients read transaction_date directly.",
@@ -609,8 +609,7 @@
       "disposition": "Removed after confirming that canonical asset-class constants live in @vision/types and no repository importer used the compatibility subpath.",
       "paths": [
         "packages/shared-utils/package.json",
-        "packages/types/src/assetClasses.js",
-        "packages/types/src/assetClasses.d.ts"
+        "packages/types/src/assetClasses.ts"
       ],
       "readers": "No repository callers.",
       "writers": "None.",
@@ -733,7 +732,7 @@
       "paths": [
         "apps/frontend/src/pages/portfolio/PortfolioPage.tsx",
         "apps/frontend/src/features/splits/SplitTransactionDialog.tsx",
-        "packages/shared-utils/src/money.js"
+        "packages/shared-utils/src/money.ts"
       ],
       "readers": "Six production portfolio, account, planned, and split modules.",
       "writers": "None.",
@@ -806,7 +805,7 @@
         "apps/frontend/src/lib/belgianTax/types.ts",
         "apps/frontend/src/lib/belgianTax/pit.ts",
         "alembic/versions/0106_remove_federal_pit_total_alias.py",
-        "apps/node-backend/src/routes/settings.js"
+        "apps/node-backend/src/routes/settings.ts"
       ],
       "readers": "Current code reads only federalPITBeforeExemption.",
       "writers": "Current calculation output and settings validation accept only the canonical field.",
@@ -824,7 +823,7 @@
       "classification": "historical-record-only",
       "disposition": "Removed. Portfolio and planned-transaction runtime paths accept and emit only biweekly; migration 0099 rewrites and constrains stored values.",
       "paths": [
-        "packages/types/src/recurrence.js",
+        "packages/types/src/recurrence.ts",
         "apps/node-backend/src/services/investmentService.js",
         "apps/node-backend/src/services/portfolio/portfolioTransactionRules.js"
       ],

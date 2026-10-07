@@ -10,14 +10,14 @@ async function loadSubject() {
   const cleanup = vi.fn();
   const logger = { error: vi.fn() };
 
-  vi.doMock("../src/lib/sse.js", () => ({
+  vi.doMock("../src/lib/sse.ts", () => ({
     createSseWriter: vi.fn(() => writer),
   }));
-  vi.doMock("../src/lib/csvUpload.js", () => ({ cleanup }));
-  vi.doMock("../src/config/logger.js", () => ({ logger }));
+  vi.doMock("../src/lib/csvUpload.ts", () => ({ cleanup }));
+  vi.doMock("../src/config/logger.ts", () => ({ logger }));
 
-  const subject = await import("../src/lib/importProgress.js");
-  const { ValidationError } = await import("../src/middleware/errorHandler.js");
+  const subject = await import("../src/lib/importProgress.ts");
+  const { ValidationError } = await import("../src/middleware/errorHandler.ts");
   return { ...subject, ValidationError, writer, cleanup };
 }
 

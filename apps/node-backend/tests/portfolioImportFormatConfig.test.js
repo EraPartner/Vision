@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   __assertPortfolioFormatBrokerage,
   __buildPortfolioConfig,
-} from "../src/routes/portfolioImportRoutes.js";
+} from "../src/routes/portfolioImportRoutes.ts";
 
 const minimal = {
   date_column: "Date",

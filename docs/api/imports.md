@@ -4,7 +4,7 @@ type: endpoint
 method: POST, GET, PATCH, DELETE
 path: /api/import
 description: CSV import for transactions, recipients, and categories; CRUD for saved named custom CSV parsers
-date: 2026-09-27
+date: 2026-10-07
 updated: 2026-09-27
 last_modified: 2026-09-27
 tags:
@@ -24,13 +24,13 @@ status: active
 aliases: [imports-api, csv-import, bank-import, bank-statement, deduplication]
 related_code:
   [
-    "apps/node-backend/src/routes/importRoutes.js",
-    "apps/node-backend/src/routes/importBatchRoutes.js",
+    "apps/node-backend/src/routes/importRoutes.ts",
+    "apps/node-backend/src/routes/importBatchRoutes.ts",
     "apps/node-backend/src/services/importBatchService.js",
     "apps/node-backend/src/services/importPipeline/index.js",
-    "apps/node-backend/src/lib/sse.js",
-    "apps/node-backend/src/repositories/importBatchRepository.js",
-    "apps/node-backend/src/repositories/customParserConfigRepository.js",
+    "apps/node-backend/src/lib/sse.ts",
+    "apps/node-backend/src/repositories/importBatchRepository.ts",
+    "apps/node-backend/src/repositories/customParserConfigRepository.ts",
   ]
 ---
 
@@ -151,14 +151,14 @@ data: {"phase":"matching","current":50,"total":150}
 event: progress
 data: {"phase":"committing","current":50,"total":150,"imported":48,"duplicates":2,"errors":0}
 
-// Complete event (buildComplete in routes/importRoutes.js)
+// Complete event (buildComplete in routes/importRoutes.ts)
 event: complete
 data: {"total_processed":150,"imported":148,"duplicates":2,"errors":0,"batch_id":42,"auto_linked_count":0,"status":"completed","percent":100}
 
 event: error
 data: {"detail":"Import failed","code":"INTERNAL_SERVER_ERROR"}
 
-// Review-required terminal event (lib/importProgress.js) — carries NO counts:
+// Review-required terminal event (lib/importProgress.ts) — carries NO counts:
 // the batch is parked in awaiting_review and nothing was committed yet, so the
 // client must not synthesize a total_processed (2026-08-09 fix in
 // apps/frontend/src/lib/api/imports.ts).
@@ -168,7 +168,7 @@ data: {"batch_id":42,"match_source_counts":{"exact":140,"fuzzy":10},"percent":70
 
 **Backpressure & Resilience (Phase C):**
 
-- **SSE Writer**: Server uses `createSseWriter(req, res)` ([[apps/node-backend/src/lib/sse.js]]) to track client disconnects and propagate TCP backpressure from the HTTP socket into the import pipeline.
+- **SSE Writer**: Server uses `createSseWriter(req, res)` ([[apps/node-backend/src/lib/sse.ts]]) to track client disconnects and propagate TCP backpressure from the HTTP socket into the import pipeline.
 - **Pause on Drain**: When Node.js write buffer is full (`res.writableNeedDrain`), `await writer.write()` pauses the import loop until the kernel drains buffered events, preventing memory exhaustion on slow clients.
 - **Orchestrator Integration**: The `runImportPipeline()` ([[apps/node-backend/src/services/importPipeline/index.js]]) passes an `async onProgress` callback that awaits SSE writes, turning network delays into back-pressure on processing.
 - **Batch Persistence**: Each import is assigned a `batchId` and tracked in `import_batches` table for history and rollback capability.
@@ -248,7 +248,7 @@ TRANSPORT,GAS,Fuel purchases
 
 - **Unified Pipeline**: All imports (standard, custom, and streaming) route through `runImportPipeline()` ([[apps/node-backend/src/services/importPipeline/index.js]]), which orchestrates stage → validate → match → commit, then attempts transfer reconciliation, awaits forecast-cache invalidation, and schedules one materialized-view refresh. The response confirms the ledger commit, not completion of the derived-view refresh.
 - **Phase Isolation**: Each phase is idempotent at its boundary; failures in any phase mark the batch as `failed` without cascading partial state.
-- **Temp File Cleanup**: Route-level cleanup uses non-blocking `fs.promises.unlink(...).catch(...)` to avoid blocking the event loop under concurrent imports ([[apps/node-backend/src/routes/importRoutes.js]]).
+- **Temp File Cleanup**: Route-level cleanup uses non-blocking `fs.promises.unlink(...).catch(...)` to avoid blocking the event loop under concurrent imports ([[apps/node-backend/src/routes/importRoutes.ts]]).
 - **Concurrent Row Processing**: Row batches are processed with adaptive concurrency calculated as `Math.max(2, Math.floor(poolMax / 2))` where `poolMax = max(DB_POOL_SIZE, DB_MAX_OVERFLOW)`. With default pool settings (poolMax=10), concurrency is 5. Batches use `Promise.allSettled` so one bad row doesn't stall others.
 - **Deduplication**: provider-neutral, versioned occurrence fingerprints shared across every
   adapter. Immutable provider IDs take precedence; normalized field identity is the fallback.

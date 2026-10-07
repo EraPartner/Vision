@@ -5,13 +5,13 @@ import {
   getAssetClassByInvestmentId,
   getById,
   getUnitEventIdsForImportBatch,
-} from "../../repositories/portfolioTxRepo.reads.js";
+} from "../../repositories/portfolioTxRepo.reads.ts";
 import {
   hardDelete,
   insert,
   updateFields,
-} from "../../repositories/portfolioTxRepo.writes.js";
-import { makeValidationError } from "../../lib/repositoryErrors.js";
+} from "../../repositories/portfolioTxRepo.writes.ts";
+import { makeValidationError } from "../../lib/repositoryErrors.ts";
 import {
   UNIT_BASED_ASSET_CLASSES,
   normalizeTransactionPayload,

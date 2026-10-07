@@ -7,9 +7,9 @@ import {
   makeInvestmentRow,
   makePortfolioTransactionRow,
 } from "./builders/domainRows.js";
-vi.mock("../src/database/connection.js", () => mockTxConnection());
+vi.mock("../src/database/connection.ts", () => mockTxConnection());
 
-vi.mock("../src/config/logger.js", () => ({
+vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
@@ -28,13 +28,13 @@ vi.mock("../src/services/currency/currencyConversionService.js", () =>
   mockCurrencyConversion({ convertToCurrency: mockConvertToCurrency }),
 );
 
-vi.mock("../src/repositories/settingsRepository.js", () => ({
+vi.mock("../src/repositories/settingsRepository.ts", () => ({
   settingsRepository: { get: vi.fn(async () => null) },
 }));
 
 import { __storeCurrentBrokerSnapshot } from "../src/services/portfolioPerformanceSnapshotService.js";
-import { query } from "../src/database/connection.js";
-import { settingsRepository } from "../src/repositories/settingsRepository.js";
+import { query } from "../src/database/connection.ts";
+import { settingsRepository } from "../src/repositories/settingsRepository.ts";
 import {
   getPortfolioSummary,
   getBreakdownSummary,

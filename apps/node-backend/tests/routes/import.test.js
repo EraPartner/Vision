@@ -86,11 +86,11 @@ vi.mock("../../src/services/materializedViewService.js", () => ({
   },
 }));
 
-vi.mock("../../src/config/logger.js", () => ({
+vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-vi.mock("../../src/repositories/importBatchRepository.js", () => ({
+vi.mock("../../src/repositories/importBatchRepository.ts", () => ({
   listBatches: vi.fn(),
   getBatch: vi.fn(),
   rollbackBatch: vi.fn(),
@@ -105,7 +105,7 @@ vi.mock("../../src/services/aggregationRefresh.js", () => ({
   scheduleMaterializedViewRefresh: vi.fn(),
 }));
 
-vi.mock("../../src/repositories/customParserConfigRepository.js", () => ({
+vi.mock("../../src/repositories/customParserConfigRepository.ts", () => ({
   default: {
     getAll: vi.fn(),
     getById: vi.fn(),
@@ -116,7 +116,7 @@ vi.mock("../../src/repositories/customParserConfigRepository.js", () => ({
   },
 }));
 
-vi.mock("../../src/database/connection.js", () => mockConnection());
+vi.mock("../../src/database/connection.ts", () => mockConnection());
 
 import { runImportPipeline } from "../../src/services/importPipeline/index.js";
 import {
@@ -131,16 +131,16 @@ import {
   overrideRecipient,
   overrideCategory,
   categoryExists,
-} from "../../src/repositories/importBatchRepository.js";
+} from "../../src/repositories/importBatchRepository.ts";
 import multer from "multer";
-import customParserConfigRepository from "../../src/repositories/customParserConfigRepository.js";
+import customParserConfigRepository from "../../src/repositories/customParserConfigRepository.ts";
 import {
   clearForecastMcCaches,
   scheduleMaterializedViewRefresh,
 } from "../../src/services/aggregationRefresh.js";
 
 const { default: importRouter } =
-  await import("../../src/routes/importRoutes.js");
+  await import("../../src/routes/importRoutes.ts");
 
 const BASE = "/api/import";
 const api = routeAgent(importRouter, { mountPath: BASE });

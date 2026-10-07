@@ -2,7 +2,7 @@
 title: Form Dialogs
 type: component
 status: active
-date: 2026-10-06
+date: 2026-10-07
 updated: 2026-10-06
 tags: [components, forms, dialogs, settings, refactor, phase-3]
 description: Modal dialogs for adding, editing data, and configuring settings throughout the application
@@ -794,7 +794,7 @@ Cancelling changes nothing. Confirming resets the app and dashboard settings to 
 
 - Settings Context: `[[apps/frontend/src/stores/hydration/SettingsHydration.tsx]]`
 - App Settings Context: `[[apps/frontend/src/stores/hydration/AppSettingsHydration.tsx]]`
-- Settings API: `[[apps/node-backend/src/routes/settings.js]]`
+- Settings API: `[[apps/node-backend/src/routes/settings.ts]]`
 
 ---
 

@@ -4,15 +4,15 @@ import { mockConnection } from "./helpers/repoMocks.js";
 import { routeAgent, okEnvelope } from "./helpers/routeApp.js";
 
 // Mock the DB layer used by the settings repository
-vi.mock("../src/database/connection.js", () => mockConnection());
+vi.mock("../src/database/connection.ts", () => mockConnection());
 
-vi.mock("../src/config/logger.js", () => ({
+vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-import { query } from "../src/database/connection.js";
-import settingsRepository from "../src/repositories/settingsRepository.js";
-const { default: settingsRouter } = await import("../src/routes/settings.js");
+import { query } from "../src/database/connection.ts";
+import settingsRepository from "../src/repositories/settingsRepository.ts";
+const { default: settingsRouter } = await import("../src/routes/settings.ts");
 
 const api = routeAgent(settingsRouter, { mountPath: "/api/settings" });
 const BASE = "/api/settings";

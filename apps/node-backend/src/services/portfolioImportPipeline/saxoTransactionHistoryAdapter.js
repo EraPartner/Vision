@@ -1,12 +1,12 @@
 /** Saxo transaction-history adapter for localized CSV and detailed XLSX exports. */
 
-import { logger } from "../../config/logger.js";
-import { divide, toDecimal, toNumber } from "../../lib/money.js";
+import { logger } from "../../config/logger.ts";
+import { divide, toDecimal, toNumber } from "../../lib/money.ts";
 import {
   detectPortfolioFileFormat,
   readPortfolioWorkbook,
-} from "../../lib/portfolioUpload.js";
-import { ValidationError } from "../../middleware/errorHandler.js";
+} from "../../lib/portfolioUpload.ts";
+import { ValidationError } from "../../middleware/errorHandler.ts";
 import {
   parseAmountField,
   parseCsvFile,
@@ -260,7 +260,7 @@ function workbookProvenance(records) {
   });
 }
 
-/** @param {import('../../lib/portfolioUpload.js').PortfolioWorkbookSheet} sheet @param {string[]} required */
+/** @param {import('../../lib/portfolioUpload.ts').PortfolioWorkbookSheet} sheet @param {string[]} required */
 function workbookRecords(sheet, required) {
   const [rawHeaders, ...data] = sheet.data;
   if (!rawHeaders)

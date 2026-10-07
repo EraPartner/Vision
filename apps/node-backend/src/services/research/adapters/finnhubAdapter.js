@@ -11,7 +11,7 @@
 import { z } from "zod";
 import { getJson, num } from "./httpClient.js";
 import { requireProviderKey } from "../providerKeys.js";
-import { epochMsToUtcYmd } from "../../../lib/dateFormat.js";
+import { epochMsToUtcYmd } from "../../../lib/dateFormat.ts";
 import { looseArray, looseString, numish, parseOr } from "./schemas.js";
 import { makeChartRangeMap } from "@vision/types/chartRanges";
 

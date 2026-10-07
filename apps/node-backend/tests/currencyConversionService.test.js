@@ -7,9 +7,9 @@ import { mockConnection } from "./helpers/repoMocks.js";
 import { mockLogger } from "./helpers/mockLogger.js";
 
 // Mock database
-vi.mock("../src/database/connection.js", () => mockConnection());
+vi.mock("../src/database/connection.ts", () => mockConnection());
 
-vi.mock("../src/config/logger.js", () => ({
+vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
@@ -23,9 +23,9 @@ import {
   __clearHistoricalIndexCache as clearHistoricalIndexCache,
   getHistoricalRateIndex,
 } from "../src/services/currency/currencyConversionService.js";
-import { hasConversionRate } from "../src/lib/exchangeRates.js";
-import { query, withTransaction } from "../src/database/connection.js";
-import { logger } from "../src/config/logger.js";
+import { hasConversionRate } from "../src/lib/exchangeRates.ts";
+import { query, withTransaction } from "../src/database/connection.ts";
+import { logger } from "../src/config/logger.ts";
 
 const originalFetch = global.fetch;
 

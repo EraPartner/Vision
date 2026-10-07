@@ -16,9 +16,9 @@ import {
   filterValidatedIdNumbers,
   MAX_INT32_ID,
   MAX_SAFE_ID,
-} from "../src/middleware/validation.js";
-import { coercedIdSchema, parseOverrideId } from "../src/lib/importBatchIds.js";
-import { ValidationError } from "../src/middleware/errorHandler.js";
+} from "../src/middleware/validation.ts";
+import { coercedIdSchema, parseOverrideId } from "../src/lib/importBatchIds.ts";
+import { ValidationError } from "../src/middleware/errorHandler.ts";
 
 // validateIdParam is unit-tested as a plain middleware function
 // (req, res, next) — a minimal res stub is enough; there is no router/HTTP
@@ -226,6 +226,14 @@ describe("Validation Middleware", () => {
       expect(validateDateString("invalid-date").valid).toBe(false);
       expect(validateDateString("15/01/2026").valid).toBe(false);
       expect(validateDateString("2026-13-01").valid).toBe(false);
+    });
+
+    it("should reject non-string input such as a repeated query key", () => {
+      expect(validateDateString(["2026-01-15"])).toEqual({
+        valid: false,
+        error: "date must be in YYYY-MM-DD format",
+      });
+      expect(validateDateString(20260115).valid).toBe(false);
     });
 
     it("should accept null/empty", () => {

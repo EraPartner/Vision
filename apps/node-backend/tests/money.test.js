@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toDecimal, addAll, subtract, roundToCents, roundMoney, toNumber, numericColumn, coerceNumericFields } from '../src/lib/money.js';
+import { toDecimal, addAll, subtract, roundToCents, roundMoney, toNumber, numericColumn, coerceNumericFields } from '../src/lib/money.ts';
 
 describe('money util', () => {
   it('handles 0.1 + 0.2 exactly', () => {

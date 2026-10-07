@@ -7,7 +7,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockConnection } from "./helpers/repoMocks.js";
 
-vi.mock("../src/database/connection.js", () =>
+vi.mock("../src/database/connection.ts", () =>
   mockConnection({
     query: vi.fn().mockResolvedValue({ rows: [] }),
     queryPrepared: vi.fn().mockResolvedValue({ rows: [] }),
@@ -19,8 +19,8 @@ import {
   query,
   queryPrepared,
   withTransaction,
-} from "../src/database/connection.js";
-import transactionRepository from "../src/repositories/transactionRepository.js";
+} from "../src/database/connection.ts";
+import transactionRepository from "../src/repositories/transactionRepository.ts";
 
 beforeEach(() => {
   query.mockReset();

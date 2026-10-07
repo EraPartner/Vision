@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createDailyJob } from "../src/startup/dailyJobs.js";
+import { createDailyJob } from "../src/startup/dailyJobs.ts";
 const DAY = 86400000;
 function fixture(completedAt) {
   let clock = 10 * DAY;

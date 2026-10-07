@@ -7,7 +7,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { routeAgent, errEnvelope } from "../helpers/routeApp.js";
 
-vi.mock("../../src/repositories/tagRepository.js", () => ({
+vi.mock("../../src/repositories/tagRepository.ts", () => ({
   default: {
     getAll: vi.fn(),
     getCount: vi.fn(),
@@ -19,9 +19,9 @@ vi.mock("../../src/repositories/tagRepository.js", () => ({
   },
 }));
 
-import tagRepository from "../../src/repositories/tagRepository.js";
+import tagRepository from "../../src/repositories/tagRepository.ts";
 
-const { default: tagsRouter } = await import("../../src/routes/tags.js");
+const { default: tagsRouter } = await import("../../src/routes/tags.ts");
 
 const api = routeAgent(tagsRouter, { mountPath: "/api/tags" });
 const BASE = "/api/tags";
@@ -256,7 +256,7 @@ describe("PATCH /api/tags/:id", () => {
   });
 
   it("rejects a non-integer :id via the real validateIdParam guard", async () => {
-    // Previously `vi.mock('.../middleware/validation.js')` replaced
+    // Previously `vi.mock('.../middleware/validation.ts')` replaced
     // validateIdParam with a pass-through, so this guard was never tested.
     const res = await api
       .patch(`${BASE}/abc`)

@@ -10,7 +10,7 @@
  * is formed from the first N characters of the normalized name + category.
  */
 
-import { query } from '../database/connection.js';
+import { query } from '../database/connection.ts';
 import { suggestPatternFromNames } from './recipientPatternService.js';
 
 const MIN_LCP_LENGTH = 8;

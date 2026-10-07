@@ -4,7 +4,7 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/watchlist
 description: Investment watchlist management
-date: 2026-06-18
+date: 2026-10-07
 updated: 2026-08-31
 tags:
   [
@@ -20,8 +20,8 @@ tags:
 status: active
 aliases: [watchlist-api, tracked-symbols, watch list]
 related_code:
-  - apps/node-backend/src/routes/watchlist.js
-  - apps/node-backend/src/repositories/watchlistRepository.js
+  - apps/node-backend/src/routes/watchlist.ts
+  - apps/node-backend/src/repositories/watchlistRepository.ts
 ---
 
 # Watchlist API
@@ -48,8 +48,8 @@ Notes:
 
 - `limit` is normalized to a safe range of `1..5000` (default `50`).
 - `offset` is normalized to a minimum of `0` (default `0`).
-- This preserves endpoint response shape while preventing unbounded list-page scans on malformed or extreme inputs ([[apps/node-backend/src/routes/watchlist.js]]).
-- Watchlist list retrieval now uses repository one-query pagination (`getAllWithCount`) instead of separate `getAll` + `getCount` calls in route code; ordering/filter behavior and response shape are unchanged ([[apps/node-backend/src/routes/watchlist.js]], [[apps/node-backend/src/repositories/watchlistRepository.js]]).
+- This preserves endpoint response shape while preventing unbounded list-page scans on malformed or extreme inputs ([[apps/node-backend/src/routes/watchlist.ts]]).
+- Watchlist list retrieval now uses repository one-query pagination (`getAllWithCount`) instead of separate `getAll` + `getCount` calls in route code; ordering/filter behavior and response shape are unchanged ([[apps/node-backend/src/routes/watchlist.ts]], [[apps/node-backend/src/repositories/watchlistRepository.ts]]).
 
 **Response:**
 

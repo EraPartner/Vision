@@ -2,7 +2,7 @@
 title: Feature - CSV Import, Export, Attachments & Deduplication
 type: feature
 status: active
-date: 2026-10-06
+date: 2026-10-07
 updated: 2026-10-06
 last_modified: 2026-10-03
 tags:
@@ -76,12 +76,12 @@ related_code:
     "apps/node-backend/src/services/importBatchService.js",
     "apps/node-backend/src/services/dataImportService.js",
     "apps/node-backend/src/services/deduplication.js",
-    "apps/node-backend/src/lib/textNormalization.js",
-    "apps/node-backend/src/routes/importRoutes.js",
-    "apps/node-backend/src/routes/importBatchRoutes.js",
-    "apps/node-backend/src/lib/sse.js",
-    "apps/node-backend/src/repositories/importBatchRepository.js",
-    "apps/node-backend/src/repositories/customParserConfigRepository.js",
+    "apps/node-backend/src/lib/textNormalization.ts",
+    "apps/node-backend/src/routes/importRoutes.ts",
+    "apps/node-backend/src/routes/importBatchRoutes.ts",
+    "apps/node-backend/src/lib/sse.ts",
+    "apps/node-backend/src/repositories/importBatchRepository.ts",
+    "apps/node-backend/src/repositories/customParserConfigRepository.ts",
     "apps/frontend/src/features/imports/TransactionImportCard.tsx",
     "apps/frontend/src/features/imports/FileHeadersPanel.tsx",
     "apps/frontend/src/features/imports/RecipientsImportCard.tsx",
@@ -448,9 +448,9 @@ Both use `createOrGet` pattern — existing records are skipped, not overwritten
 
 ## Supporting Services
 
-### `lib/textNormalization.js`
+### `lib/textNormalization.ts`
 
-**File:** [[apps/node-backend/src/lib/textNormalization.js]]
+**File:** [[apps/node-backend/src/lib/textNormalization.ts]]
 
 Text processing utilities for import and recipient matching:
 
@@ -499,7 +499,7 @@ Field-based deduplication for transactions. Uses SHA-256 hash of `date|amount|re
   malformed values use `EUR`; Vision applies that default in its adapter, while the other six stage
   `NULL` for the commit boundary to default. SABB derives a fixed or embedded code; Wise retains its
   separate source/target currency parsing.
-- Temporary upload-file cleanup in import routes now uses non-blocking async unlink to avoid request-path synchronous filesystem blocking while keeping ignore-on-missing behavior ([[apps/node-backend/src/routes/importRoutes.js]]).
+- Temporary upload-file cleanup in import routes now uses non-blocking async unlink to avoid request-path synchronous filesystem blocking while keeping ignore-on-missing behavior ([[apps/node-backend/src/routes/importRoutes.ts]]).
 
 ### 3. Deduplication
 
@@ -626,9 +626,9 @@ Saved parsers are persisted in the `custom_parser_configs` table (migration `003
 | `created_at`  | TIMESTAMPTZ    |                                                                                                                                       |
 | `updated_at`  | TIMESTAMPTZ    | Maintained by the shared `update_updated_at_column()` trigger                                                                         |
 
-**Repository**: [[apps/node-backend/src/repositories/customParserConfigRepository.js]] — `getAll`, `getById`, `getByName`, `create`, `update`, `delete`; maps `config_json` → `config` for callers.
+**Repository**: [[apps/node-backend/src/repositories/customParserConfigRepository.ts]] — `getAll`, `getById`, `getByName`, `create`, `update`, `delete`; maps `config_json` → `config` for callers.
 
-**Backup**: `custom_parser_configs` is registered in `apps/node-backend/src/backup/coverage.js` and travels with `.visionbak` exports.
+**Backup**: `custom_parser_configs` is registered in `apps/node-backend/src/backup/coverage.ts` and travels with `.visionbak` exports.
 
 ### CRUD Endpoints
 
@@ -777,7 +777,7 @@ data: {"batchId":42,"total_processed":150,"imported":148,"duplicates":2,"errors"
 
 ### Backpressure & Resource Management (Phase C)
 
-The streaming endpoint uses `createSseWriter(req, res)` ([[apps/node-backend/src/lib/sse.js]]) to propagate backpressure from the HTTP client into the import pipeline:
+The streaming endpoint uses `createSseWriter(req, res)` ([[apps/node-backend/src/lib/sse.ts]]) to propagate backpressure from the HTTP client into the import pipeline:
 
 - **SSE Write Promises:** Progress callbacks in the pipeline are `async` and `await` the SSE writer's `write()` call
 - **Drain Pausing:** When client consumes events slower than the server produces them, `drainIfNeeded()` pauses the write buffer, preventing unbounded memory growth in Node.js TCP buffers
@@ -798,7 +798,7 @@ The streaming endpoint uses `createSseWriter(req, res)` ([[apps/node-backend/src
 Import routes sanitize error details to prevent exposure of internal exception messages:
 
 - JSON responses return generic `"Import failed"` message
-- SSE error events also sanitized (see [[apps/node-backend/src/routes/importRoutes.js]])
+- SSE error events also sanitized (see [[apps/node-backend/src/routes/importRoutes.ts]])
 - Batch status marked as `'failed'` with truncated error summary (2000 chars max) stored in database
 
 ## Raw Transaction Storage
@@ -887,7 +887,7 @@ The `ExportCard` component now provides multi-select pickers for bank accounts a
 
 #### buildExportFilters
 
-**File:** `[[apps/node-backend/src/routes/transactions.js]]`
+**File:** `[[apps/node-backend/src/routes/transactions.ts]]`
 
 - **Purpose:** Construct precise SQL filters for `bank_accounts` and `category_ids` query params
 - **Precedence:** Plural params (`bank_accounts`, `category_ids`) take precedence over singular params (`bank_account`, `category_id`)
@@ -897,7 +897,7 @@ The `ExportCard` component now provides multi-select pickers for bank accounts a
 
 #### filterBuilder.buildTransactionWhere
 
-**File:** `[[apps/node-backend/src/lib/filterBuilder.js]]`
+**File:** `[[apps/node-backend/src/lib/filterBuilder.ts]]`
 
 - **Purpose:** Build WHERE clause for transaction queries
 - **Support:** Now accepts `bankAccounts` (plural, exact IN clause) and `categoryIds` (plural, IN clause)
@@ -949,10 +949,10 @@ Vision supports receipt and document attachments for transactions via the attach
 
 ### Backend Services
 
-- [[apps/node-backend/src/middleware/attachmentUpload.js]]: Multipart memory buffering, declared MIME prefilter, and upload-size limit
+- [[apps/node-backend/src/middleware/attachmentUpload.ts]]: Multipart memory buffering, declared MIME prefilter, and upload-size limit
 - [[apps/node-backend/src/services/attachmentService.js]]: Content verification, file storage, path resolution, and removal
-- [[apps/node-backend/src/repositories/attachmentRepository.js]]: Database operations (CRUD)
-- [[apps/node-backend/src/routes/attachments.js]]: Four REST endpoints for attachment management
+- [[apps/node-backend/src/repositories/attachmentRepository.ts]]: Database operations (CRUD)
+- [[apps/node-backend/src/routes/attachments.ts]]: Four REST endpoints for attachment management
 - Database migration `0004_attachments.py`: Schema with transaction FK, stored_path, mime_type, size_bytes
 
 ### Frontend Components

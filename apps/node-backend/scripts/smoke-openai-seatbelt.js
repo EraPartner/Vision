@@ -5,7 +5,7 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { __seatbeltProfile } from "../src/integrations/openai/brokerClient.js";
+import { __seatbeltProfile } from "../src/integrations/openai/brokerClient.ts";
 
 if (process.platform !== "darwin") {
   console.error("This smoke check requires macOS Seatbelt.");

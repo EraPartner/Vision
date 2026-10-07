@@ -1,23 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/repositories/infoRepository.js", () => ({
+vi.mock("../src/repositories/infoRepository.ts", () => ({
   default: {
     getCategoryPivot: vi.fn(),
     getRecipientByYear: vi.fn(),
   },
 }));
 
-vi.mock("../src/repositories/infoRepositoryRecipients.js", () => ({
+vi.mock("../src/repositories/infoRepositoryRecipients.ts", () => ({
   recipientInsightsRepository: { getRecipientPivot: vi.fn() },
 }));
 
-vi.mock("../src/repositories/infoRepositoryTags.js", () => ({
+vi.mock("../src/repositories/infoRepositoryTags.ts", () => ({
   tagInsightsRepository: { getTagPivot: vi.fn() },
 }));
 
-import infoRepository from "../src/repositories/infoRepository.js";
-import { recipientInsightsRepository } from "../src/repositories/infoRepositoryRecipients.js";
-import { tagInsightsRepository } from "../src/repositories/infoRepositoryTags.js";
+import infoRepository from "../src/repositories/infoRepository.ts";
+import { recipientInsightsRepository } from "../src/repositories/infoRepositoryRecipients.ts";
+import { tagInsightsRepository } from "../src/repositories/infoRepositoryTags.ts";
 import { computeCategoryPivot } from "../src/services/calculations/aggregation/categoryPivot.js";
 import { computeRecipientByYear } from "../src/services/calculations/aggregation/recipientByYear.js";
 import { computeRecipientPivot } from "../src/services/calculations/aggregation/recipientPivot.js";

@@ -2,9 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import { mockTxConnection } from "./helpers/repoMocks.js";
 
 const mocked = vi.hoisted(() => ({ client: { query: vi.fn() } }));
-vi.mock("../src/database/connection.js", () => mockTxConnection(mocked.client));
+vi.mock("../src/database/connection.ts", () => mockTxConnection(mocked.client));
 
-import { reserveDisclosure } from "../src/repositories/aiDisclosureRepository.js";
+import { reserveDisclosure } from "../src/repositories/aiDisclosureRepository.ts";
 
 const preview = {
   payloadSha256: "a".repeat(64),
@@ -84,5 +84,31 @@ describe("disclosure grant reservation", () => {
     expect(
       mocked.client.query.mock.calls.filter(([sql]) => sql.includes("INSERT")),
     ).toHaveLength(1);
+  });
+
+  it("adds BIGINT usage counters returned as strings numerically", async () => {
+    mocked.client.query.mockReset();
+    mocked.client.query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            ...grant("openai-api", "cloud-plan-public"),
+            max_requests: 3,
+            used_requests: 1,
+            used_input_characters: "100",
+            used_output_tokens: "50",
+            used_cost_micros: "10",
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ total: 0 }] })
+      .mockResolvedValueOnce({ rows: [{ id: "synthetic-record" }] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    await expect(reserveDisclosure(reservation)).resolves.toEqual({
+      id: "synthetic-record",
+    });
   });
 });

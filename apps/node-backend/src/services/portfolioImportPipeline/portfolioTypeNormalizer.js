@@ -9,7 +9,7 @@
  * CSV has no type column).
  */
 
-import { VALID_PORTFOLIO_TXN_TYPES } from '../../lib/portfolioTxnTypes.js';
+import { VALID_PORTFOLIO_TXN_TYPES } from '../../lib/portfolioTxnTypes.ts';
 
 // Lowercased raw → canonical. Covers common English/Dutch/German brokerage labels.
 /** @type {Record<string, string>} */

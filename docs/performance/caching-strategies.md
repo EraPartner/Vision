@@ -2,7 +2,7 @@
 title: Caching Strategies
 type: performance
 status: active
-date: 2026-04-25
+date: 2026-10-07
 last_modified: 2026-04-25
 tags: [performance, caching, optimization, startup, dependency-ordering]
 description: In-memory caching implementation for exchange rates and price feeds
@@ -99,7 +99,7 @@ const mvCache = new Map();
 - This ensures exchange rates are written to the database before info caches query them, preventing spurious "Historical FX missing" warnings
 - The `computeAndStoreSnapshots()` service depends on today's FX rates being available in `exchange_rates` table before computing portfolio snapshots
 
-Code links: [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/repositories/infoRepository.js]], [[apps/node-backend/src/main.js]]
+Code links: [[apps/node-backend/src/routes/info.ts]], [[apps/node-backend/src/repositories/infoRepository.ts]], [[apps/node-backend/src/main.js]]
 
 ---
 
@@ -114,7 +114,7 @@ Code links: [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/re
 Regression coverage:
 - Differing-limit collision prevention is validated in [[apps/node-backend/tests/routes/investments.test.js]].
 
-Code link: [[apps/node-backend/src/routes/investments.js]]
+Code link: [[apps/node-backend/src/routes/investments.ts]]
 
 ---
 
@@ -161,7 +161,7 @@ import { clearMemoryCache } from './services/currencyConversionService.js';
 clearMemoryCache();
 
 // Clear materialized view cache
-import { clearMvCache } from './repositories/infoRepository.js';
+import { clearMvCache } from './repositories/infoRepository.ts';
 clearMvCache();
 ```
 

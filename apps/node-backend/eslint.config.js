@@ -19,6 +19,7 @@
 
 import js from "@eslint/js";
 import globals from "globals";
+import tseslint from "typescript-eslint";
 
 // ── custom local rule ─────────────────────────────────────────────────────────
 
@@ -182,13 +183,13 @@ export const noNullRouteFilter = {
 const SANCTIONED_REPO_SERVICE_IMPORTS = {
   // The `info*` read-repositories aggregate rows and currency-convert them as
   // part of producing API-shaped results — effectively read-services.
-  "infoRepositoryAverageVsCurrent.js": ["convertRowsToEur"],
-  "infoRepositoryHelpers.js": ["convertRowsToEur"],
-  "infoRepositoryMonthly.js": ["convertRowsToEur"],
-  "infoRepositoryPlanned.js": ["convertRowsToEur"],
-  "infoRepositoryRecipients.js": ["convertRowsToEur"],
-  "infoRepositoryStatistics.js": ["convertRowsToEur"],
-  "infoRepositoryTags.js": ["convertRowsToEur"],
+  "infoRepositoryAverageVsCurrent.ts": ["convertRowsToEur"],
+  "infoRepositoryHelpers.ts": ["convertRowsToEur"],
+  "infoRepositoryMonthly.ts": ["convertRowsToEur"],
+  "infoRepositoryPlanned.ts": ["convertRowsToEur"],
+  "infoRepositoryRecipients.ts": ["convertRowsToEur"],
+  "infoRepositoryStatistics.ts": ["convertRowsToEur"],
+  "infoRepositoryTags.ts": ["convertRowsToEur"],
 };
 
 const SANCTIONED_SERVICE_MODULE =
@@ -276,8 +277,8 @@ const noServiceImportFromRepo = {
  * Warns when monetary identifiers (amount, price, fee, balance, cost, gain,
  * loss, total, sum, cents) appear on either side of `+ - * /` arithmetic,
  * including compound assignments and statically named object properties.
- * Encourages migration to Decimal helpers in `lib/money.js`. Allowed in
- * `lib/money.js` itself and in test files.
+ * Encourages migration to Decimal helpers in `lib/money.ts`. Allowed in
+ * `lib/money.ts` itself and in test files.
  */
 const MONEY_NAME =
   /^(amount|price|fee|fees|balance|cost|gain|loss|total|sum|cents)$/i;
@@ -288,13 +289,13 @@ const noRawMoneyArithmetic = {
     type: "suggestion",
     docs: {
       description:
-        "Monetary identifiers should not use raw float arithmetic; use Decimal helpers from lib/money.js.",
+        "Monetary identifiers should not use raw float arithmetic; use Decimal helpers from lib/money.ts.",
       url: null,
     },
     messages: {
       rawMoney:
         "Raw float arithmetic on monetary identifier '{{name}}'. " +
-        "Use Decimal helpers from lib/money.js (toDecimal, addAll, subtract, roundToCents).",
+        "Use Decimal helpers from lib/money.ts (toDecimal, addAll, subtract, roundToCents).",
     },
     schema: [],
   },
@@ -344,9 +345,9 @@ const noRawMoneyArithmetic = {
 export default [
   { ignores: ["node_modules/", "coverage/", "dist/"] },
 
-  // Base JS rules for all source files
+  // Base rules for all source files (JavaScript and converted TypeScript)
   {
-    files: ["src/**/*.js"],
+    files: ["src/**/*.{js,ts}"],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: "module",
@@ -362,9 +363,29 @@ export default [
     },
   },
 
+  // TypeScript sources: the typescript-eslint parser and recommended rules,
+  // with the same unused-variable convention as the JavaScript files.
+  ...tseslint.configs.recommended.map((config) => ({
+    ...config,
+    files: ["src/**/*.ts"],
+  })),
+  {
+    files: ["src/**/*.ts"],
+    rules: {
+      "no-unused-vars": "off",
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
+      // Shared Express shim types still carry `any` at the request/response
+      // boundary until runtime schemas replace them; warn so each one stays visible.
+      "@typescript-eslint/no-explicit-any": "warn",
+    },
+  },
+
   // HTTP-handler→repo enforcement — routes are fully migrated and fail lint.
   {
-    files: ["src/routes/**/*.js"],
+    files: ["src/routes/**/*.{js,ts}"],
     plugins: {
       "vision-local": {
         rules: {
@@ -384,7 +405,7 @@ export default [
   // that debt visible, and cover any future controller files, without turning
   // the pre-existing edges into a repository-wide lint failure.
   {
-    files: ["src/controllers/**/*.js"],
+    files: ["src/controllers/**/*.{js,ts}"],
     plugins: {
       "vision-local": {
         rules: { "no-repo-direct-from-route": noRepoDirectFromRoute },
@@ -397,7 +418,7 @@ export default [
 
   // Repo→service enforcement (the inverse edge) — repositories only.
   {
-    files: ["src/repositories/**/*.js"],
+    files: ["src/repositories/**/*.{js,ts}"],
     plugins: {
       "vision-local": {
         rules: { "no-service-import-from-repo": noServiceImportFromRepo },
@@ -408,10 +429,10 @@ export default [
     },
   },
 
-  // Money-arithmetic guard — all backend source except money.js itself and tests.
+  // Money-arithmetic guard — all backend source except lib/money itself and tests.
   {
-    files: ["src/**/*.js"],
-    ignores: ["src/lib/money.js", "test/**", "tests/**", "**/*.test.js"],
+    files: ["src/**/*.{js,ts}"],
+    ignores: ["src/lib/money.{js,ts}", "test/**", "tests/**", "**/*.test.js"],
     plugins: {
       "vision-local-money": {
         rules: { "no-raw-money-arithmetic": noRawMoneyArithmetic },

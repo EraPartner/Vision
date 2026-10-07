@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { slugify } from '../src/lib/slugify.js';
+import { slugify } from '../src/lib/slugify.ts';
 
 describe('slugify', () => {
   it('lowercases input', () => {

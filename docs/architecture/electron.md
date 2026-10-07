@@ -2,7 +2,7 @@
 title: Electron Desktop Architecture
 type: architecture-doc
 status: active
-date: 2026-10-06
+date: 2026-10-07
 updated: 2026-10-06
 tags:
   [
@@ -1060,7 +1060,7 @@ Previously only the two `apps/` directories were watched, so edits to `packages/
 
 **Fix:** Only workspace manifests (`packages/*/package.json`) are copied before `bun install`. The full `packages/` tree and `i18n/source/` are copied after the install layer, before the build steps that require them. Stage 2 also adds a post-install `COPY packages/` so symlink targets for the shared-utils workspace are in place at runtime.
 
-**Verify:** `docker build` twice with a one-line change in `packages/shared-utils/src/money.js` between runs — the second build should show `CACHED` on the install layer.
+**Verify:** `docker build` twice with a one-line change in `packages/shared-utils/src/money.ts` between runs — the second build should show `CACHED` on the install layer.
 
 ### Retired Dockerfile Bun Install Retries (August 2026)
 

@@ -24,7 +24,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Router } from 'express';
 import { routeAgent, errEnvelope } from '../helpers/routeApp.js';
 
-vi.mock('../../src/repositories/customParserConfigRepository.js', () => ({
+vi.mock('../../src/repositories/customParserConfigRepository.ts', () => ({
   default: {
     getAll: vi.fn(),
     getById: vi.fn(),
@@ -35,8 +35,8 @@ vi.mock('../../src/repositories/customParserConfigRepository.js', () => ({
   },
 }));
 
-import customParserConfigRepository from '../../src/repositories/customParserConfigRepository.js';
-const { registerParserRoutes } = await import('../../src/routes/parserConfigRoutes.js');
+import customParserConfigRepository from '../../src/repositories/customParserConfigRepository.ts';
+const { registerParserRoutes } = await import('../../src/routes/parserConfigRoutes.ts');
 
 // Mirrors main.js's two mounts and each router's registerParserRoutes call.
 const MOUNTS = [
@@ -95,6 +95,20 @@ describe.each(MOUNTS)('$label parsers — :id shape', ({ mountPath, kind }) => {
 
     expect(customParserConfigRepository.delete.mock.calls).toEqual([[12], [12]]);
     expect(customParserConfigRepository.update).toHaveBeenCalledWith(12, { name: 'Renamed', config: undefined });
+  });
+
+  it('answers 400, not 500, to a create or update with no JSON body', async () => {
+    const api = agentFor(kind, mountPath);
+    customParserConfigRepository.update.mockResolvedValue({ id: 12, name: 'Same' });
+
+    const res = await api.post(base);
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
+    expect(customParserConfigRepository.create).not.toHaveBeenCalled();
+
+    // An empty PATCH changes nothing and is passed through, as `{}` already is.
+    await api.patch(`${base}/12`).expect(200);
+    expect(customParserConfigRepository.update).toHaveBeenCalledWith(12, { name: undefined, config: undefined });
   });
 
   it('still 404s on a well-formed id that matches no row', async () => {

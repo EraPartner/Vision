@@ -2,7 +2,7 @@
 title: Feature - Portfolio Import
 type: feature
 status: active
-date: 2026-10-04
+date: 2026-10-07
 updated: 2026-10-04
 last_modified: 2026-10-04
 tags:
@@ -44,20 +44,20 @@ related_code:
   - "apps/node-backend/src/services/portfolioImportPipeline/nexoProTransactionHistoryAdapter.js"
   - "apps/node-backend/src/services/portfolioImportReconciliationService.js"
   - "apps/node-backend/src/services/portfolioImportDuplicateRepairService.js"
-  - "apps/node-backend/src/repositories/portfolioImportDuplicateRepairRepository.js"
+  - "apps/node-backend/src/repositories/portfolioImportDuplicateRepairRepository.ts"
   - "apps/node-backend/src/services/portfolio/portfolioAssetTransferService.js"
   - "apps/node-backend/src/services/portfolio/portfolioCustodyImportScope.js"
-  - "packages/shared-utils/src/portfolioCustody.js"
+  - "packages/shared-utils/src/portfolioCustody.ts"
   - "apps/node-backend/src/services/portfolioImportPipeline/saxoTransactionHistoryAdapter.js"
   - "apps/node-backend/src/services/portfolioImportPipeline/portfolioTypeNormalizer.js"
   - "apps/node-backend/src/services/importIdentity.js"
   - "apps/node-backend/src/services/portfolioImportBatchService.js"
   - "apps/node-backend/src/services/portfolioImportCommitService.js"
   - "apps/node-backend/src/services/portfolioImportReadinessService.js"
-  - "apps/node-backend/src/repositories/portfolioImportBatchRepository.js"
-  - "apps/node-backend/src/routes/portfolioImportRoutes.js"
-  - "apps/node-backend/src/routes/importBatchRoutes.js"
-  - "apps/node-backend/src/lib/portfolioUpload.js"
+  - "apps/node-backend/src/repositories/portfolioImportBatchRepository.ts"
+  - "apps/node-backend/src/routes/portfolioImportRoutes.ts"
+  - "apps/node-backend/src/routes/importBatchRoutes.ts"
+  - "apps/node-backend/src/lib/portfolioUpload.ts"
   - "apps/node-backend/src/services/portfolio/fxResolve.js"
   - "apps/frontend/src/pages/portfolio/PortfolioImportPage.tsx"
   - "apps/frontend/src/pages/portfolio/PortfolioImportSession.tsx"
@@ -75,9 +75,9 @@ related_code:
   - "apps/node-backend/src/services/portfolioPerformanceXmlParser.js"
   - "apps/node-backend/src/services/portfolioPerformanceReferenceEvidence.js"
   - "apps/node-backend/src/services/portfolioReferenceYieldCoverage.js"
-  - "apps/node-backend/src/repositories/portfolioImportReferenceRepository.js"
-  - "apps/node-backend/src/repositories/portfolioAssetAdjustmentRepository.js"
-  - "apps/node-backend/src/lib/portfolioReferenceUpload.js"
+  - "apps/node-backend/src/repositories/portfolioImportReferenceRepository.ts"
+  - "apps/node-backend/src/repositories/portfolioAssetAdjustmentRepository.ts"
+  - "apps/node-backend/src/lib/portfolioReferenceUpload.ts"
   - "apps/node-backend/src/services/portfolio/portfolioAssetAdjustmentService.js"
   - "alembic/versions/0040_add_portfolio_import_staging.py"
   - "alembic/versions/0041_add_parser_config_kind.py"
@@ -352,7 +352,7 @@ can still be retried with an explicit batch account under the batch lock.
 
 **Modules:** [[apps/node-backend/src/services/portfolioImportReconciliationService.js]],
 [[apps/node-backend/src/services/portfolioImportCommitService.js]], and
-[[apps/node-backend/src/repositories/portfolioImportReconciliationRepository.js]].
+[[apps/node-backend/src/repositories/portfolioImportReconciliationRepository.ts]].
 
 A session previews all selected batches together. Pending, validated, unresolved, and error rows
 block commit. The planner checks existing source fingerprints, repeated source identities across
@@ -433,7 +433,7 @@ timestamp-trigger changes on retained rows do not replace the financial equality
 ### Dated custody and original basis
 
 **Modules:** [[apps/node-backend/src/services/portfolio/portfolioAssetTransferService.js]] and
-[[packages/shared-utils/src/portfolioCustody.js]].
+[[packages/shared-utils/src/portfolioCustody.ts]].
 
 `portfolio_asset_transfers` stores one dated, source-identified event for a whole or partial custody
 move. The source and destination must be different active brokerage, exchange, or wallet accounts.
@@ -457,7 +457,7 @@ partial custody movement. See [[docs/adr/177-reviewed-history-reconciliation-and
 ### Unit adjustments and consumed basis
 
 **Modules:** [[apps/node-backend/src/services/portfolio/portfolioAssetAdjustmentService.js]] and
-[[packages/shared-utils/src/portfolioCustody.js]].
+[[packages/shared-utils/src/portfolioCustody.ts]].
 
 `portfolio_asset_adjustments` stores dated positive unit removals as `yield_reversal` with
 `zero_yield_only` basis, or `asset_fee` with carried basis. These rows use the `asset_adjustment`

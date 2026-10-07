@@ -14,8 +14,8 @@ import {
   hasTestDatabase,
   releaseDbSuiteLock,
 } from "./setup/db.js";
-import { closePool } from "../src/database/connection.js";
-import { ensureAnalysisRole } from "../src/database/analysisRoleBootstrap.js";
+import { closePool } from "../src/database/connection.ts";
+import { ensureAnalysisRole } from "../src/database/analysisRoleBootstrap.ts";
 import { closeAnalysisPool } from "../src/services/analysisExecutor.js";
 import {
   createSavedAnalysis,

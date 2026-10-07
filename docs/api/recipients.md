@@ -4,12 +4,12 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/recipients
 description: Recipient (payee/payer) management with atomic merge and normalization-based matching
-date: 2026-09-27
+date: 2026-10-07
 updated: 2026-09-27
 tags: [api, recipients, payees, merge, atomic, phase-6, recipient-clusters]
 status: active
 aliases: [recipients-api, payee, payer, counterparty, recipient-management]
-related_code: [[apps/node-backend/src/routes/recipients.js]], [[apps/node-backend/src/repositories/recipientRepository.js]], [[apps/node-backend/src/services/recipientMergeService.js]], [[apps/node-backend/src/services/recipientClusterService.js]]
+related_code: [[apps/node-backend/src/routes/recipients.ts]], [[apps/node-backend/src/repositories/recipientRepository.ts]], [[apps/node-backend/src/services/recipientMergeService.js]], [[apps/node-backend/src/services/recipientClusterService.js]]
 ---
 
 # Recipients API
@@ -74,9 +74,9 @@ Retrieve a list of recipients.
 
 Implementation note:
 
-- Recipient list route now fetches `items` and `total` via `Promise.all` because both repository calls are independent; response payload and filtering behavior are unchanged ([[apps/node-backend/src/routes/recipients.js]]).
-- Recipient repository list query now computes `primary_bank_account` via `LEFT JOIN LATERAL` and alias totals via a pre-aggregated join instead of per-row correlated subqueries, preserving sortable fields and response shape while improving scalability on larger recipient sets ([[apps/node-backend/src/repositories/recipientRepository.js]]).
-- Recipient `getById` now uses the same lateral/pre-aggregated enrichment pattern as list queries (instead of correlated subqueries), and recipient update now returns enriched fields via a single CTE update-and-select query instead of update + follow-up read; API payloads and not-found behavior are unchanged ([[apps/node-backend/src/repositories/recipientRepository.js]]).
+- Recipient list route now fetches `items` and `total` via `Promise.all` because both repository calls are independent; response payload and filtering behavior are unchanged ([[apps/node-backend/src/routes/recipients.ts]]).
+- Recipient repository list query now computes `primary_bank_account` via `LEFT JOIN LATERAL` and alias totals via a pre-aggregated join instead of per-row correlated subqueries, preserving sortable fields and response shape while improving scalability on larger recipient sets ([[apps/node-backend/src/repositories/recipientRepository.ts]]).
+- Recipient `getById` now uses the same lateral/pre-aggregated enrichment pattern as list queries (instead of correlated subqueries), and recipient update now returns enriched fields via a single CTE update-and-select query instead of update + follow-up read; API payloads and not-found behavior are unchanged ([[apps/node-backend/src/repositories/recipientRepository.ts]]).
 
 ### POST /api/recipients
 

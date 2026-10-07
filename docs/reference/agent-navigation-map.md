@@ -2,7 +2,7 @@
 title: AI Agent Codebase Navigation Map
 type: reference
 status: active
-date: 2026-10-06
+date: 2026-10-07
 updated: 2026-10-06
 tags:
   [
@@ -36,9 +36,9 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | Components         | [[apps/frontend/src/features/transactions/components/TransactionsToolbar.tsx]], [[apps/frontend/src/features/transactions/components/TransactionsTable.tsx]], [[apps/frontend/src/features/transactions/components/TransactionInspector.tsx]], [[apps/frontend/src/features/transactions/components/AddTransactionSheet.tsx]] |
 | Hook               | [[apps/frontend/src/hooks/useTransactions.ts]], [[apps/frontend/src/features/transactions/hooks/useCreateTransfer.ts]] |
 | API Client         | `apiClient.getTransactions()`, `createTransaction()`, etc. in [[apps/frontend/src/lib/api.ts]] |
-| Backend Route      | [[apps/node-backend/src/routes/transactions.js]]                                               |
+| Backend Route      | [[apps/node-backend/src/routes/transactions.ts]]                                               |
 | Backend Service    | None (direct repository calls)                                                                 |
-| Backend Repository | [[apps/node-backend/src/repositories/transactionRepository.js]]                                |
+| Backend Repository | [[apps/node-backend/src/repositories/transactionRepository.ts]]                                |
 | API Doc            | [[docs/api/transactions]]                                                                      |
 | Feature Doc        | [[docs/features/transactions]]                                                                 |
 
@@ -51,7 +51,7 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | Hook             | `useBulkDeleteTransactions`, `useBulkUpdateTransactions`, `useBulkExportTransactions` in [[apps/frontend/src/hooks/useTransactions.ts]]                                                                                                                                                                                                      |
 | API Client       | `bulkDeleteTransactions()`, `bulkUpdateTransactions()`, `bulkExportTransactions()` in [[apps/frontend/src/lib/api/transactions.ts]]                                                                                                                                                                                                          |
 | Backend Service  | [[apps/node-backend/src/services/bulkSelection.js]] (id/filter resolver), [[apps/node-backend/src/services/transactionExport.js]] (streaming export)                                                                                                                                                                                         |
-| Backend Route    | [[apps/node-backend/src/routes/transactions.js]] (`/bulk-delete`, `/bulk-update`, `/bulk-export`)                                                                                                                                                                                                                                            |
+| Backend Route    | [[apps/node-backend/src/routes/transactions.ts]] (`/bulk-delete`, `/bulk-update`, `/bulk-export`)                                                                                                                                                                                                                                            |
 | API Doc          | [[docs/api/transactions#post-apitransactionsbulk-delete                                                                                                                                                                                                                                                                                      | Bulk Delete]], [[docs/api/transactions#post-apitransactionsbulk-update | Bulk Update]], [[docs/api/transactions#post-apitransactionsbulk-export | Bulk Export]] |
 | Feature Doc      | [[docs/features/bulk-actions]]                                                                                                                                                                                                                                                                                                               |
 
@@ -61,8 +61,8 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | ------------------ | ------------------------------------------------------------ |
 | Frontend Page      | [[apps/frontend/src/pages/CategoriesPage.tsx]]               |
 | Hook               | [[apps/frontend/src/hooks/useCategories.ts]]                 |
-| Backend Route      | [[apps/node-backend/src/routes/categories.js]]               |
-| Backend Repository | [[apps/node-backend/src/repositories/categoryRepository.js]] |
+| Backend Route      | [[apps/node-backend/src/routes/categories.ts]]               |
+| Backend Repository | [[apps/node-backend/src/repositories/categoryRepository.ts]] |
 | API Doc            | [[docs/api/categories]]                                      |
 
 ### Recipients
@@ -72,8 +72,8 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | Frontend Page      | [[apps/frontend/src/pages/RecipientsPage.tsx]]                      |
 | Hook               | [[apps/frontend/src/hooks/useRecipients.ts]]                        |
 | Merge Dialog       | [[apps/frontend/src/features/recipients/MergeRecipientsDialog.tsx]] |
-| Backend Route      | [[apps/node-backend/src/routes/recipients.js]]                      |
-| Backend Repository | [[apps/node-backend/src/repositories/recipientRepository.js]]       |
+| Backend Route      | [[apps/node-backend/src/routes/recipients.ts]]                      |
+| Backend Repository | [[apps/node-backend/src/repositories/recipientRepository.ts]]       |
 | API Doc            | [[docs/api/recipients]]                                             |
 
 ### Planned Transactions
@@ -84,8 +84,8 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | Hook                | [[apps/frontend/src/hooks/usePlannedPayments.ts]]                                                                              |
 | Form                | [[apps/frontend/src/features/planned/PlannedPaymentForm.tsx]]                                                                  |
 | Recurring Detection | [[apps/frontend/src/features/planned/RecurringDetectionPanel.tsx]]                                                             |
-| Backend Route       | [[apps/node-backend/src/routes/plannedTransactions.js]]                                                                        |
-| Backend Repository  | [[apps/node-backend/src/repositories/plannedTransactionRepository.js]]                                                         |
+| Backend Route       | [[apps/node-backend/src/routes/plannedTransactions.ts]]                                                                        |
+| Backend Repository  | [[apps/node-backend/src/repositories/plannedTransactionRepository.ts]]                                                         |
 | Backend Service     | [[apps/node-backend/src/services/calculations/recurrence.js]], [[apps/node-backend/src/services/recurringDetectionService.js]] |
 | API Doc             | [[docs/api/plannedTransactions]]                                                                                               |
 | Feature Doc         | [[docs/features/plannedTransactions]]                                                                                          |
@@ -104,8 +104,8 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | Watchlist Page     | [[apps/frontend/src/pages/research/WatchlistPage.tsx]]                                                                                                                                                   |
 | Hook               | [[apps/frontend/src/hooks/usePortfolio.ts]]                                                                                                                                                              |
 | Dialogs            | [[apps/frontend/src/features/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/features/portfolio/EditInvestmentDialog.tsx]], [[apps/frontend/src/features/portfolio/InvestmentDetailDialog.tsx]] |
-| Backend Route      | [[apps/node-backend/src/routes/investments.js]]                                                                                                                                                          |
-| Backend Repository | [[apps/node-backend/src/repositories/investmentRepository.js]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]], [[apps/node-backend/src/repositories/watchlistRepository.js]]  |
+| Backend Route      | [[apps/node-backend/src/routes/investments.ts]]                                                                                                                                                          |
+| Backend Repository | [[apps/node-backend/src/repositories/investmentRepository.ts]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.ts]], [[apps/node-backend/src/repositories/watchlistRepository.ts]]  |
 | Backend Services   | [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]]                                                                    |
 | API Doc            | [[docs/api/investments]], [[docs/api/watchlist]], [[docs/api/marketLookup]]                                                                                                                              |
 | Feature Doc        | [[docs/features/portfolio]]                                                                                                                                                                              |
@@ -117,8 +117,8 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | Frontend Page      | [[apps/frontend/src/pages/OwesPage.tsx]]                         |
 | Dialog             | [[apps/frontend/src/features/splits/SplitTransactionDialog.tsx]] |
 | Hook               | [[apps/frontend/src/hooks/useSplits.ts]]                         |
-| Backend Route      | [[apps/node-backend/src/routes/splits.js]]                       |
-| Backend Repository | [[apps/node-backend/src/repositories/splitRepository.js]]        |
+| Backend Route      | [[apps/node-backend/src/routes/splits.ts]]                       |
+| Backend Repository | [[apps/node-backend/src/repositories/splitRepository.ts]]        |
 | API Doc            | [[docs/api/splits]]                                              |
 | Feature Doc        | [[docs/features/splits]]                                         |
 
@@ -144,8 +144,8 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | [[apps/frontend/src/features/imports/ImportHistoryCard.tsx]] | Import history view (composed in ImportPage)          |
 | [[apps/frontend/src/features/imports/CsvColumnMapper.tsx]]   | CSV column mapping UI (used by TransactionImportCard) |
 
-**Backend Route** | [[apps/node-backend/src/routes/importRoutes.js]] |
-**Backend Services** | [[apps/node-backend/src/services/importPipeline/index.js|importPipeline]] (orchestrator), [[apps/node-backend/src/services/importPipeline/adapters/index.js|adapter registry]], [[apps/node-backend/src/services/deduplication.js]], [[apps/node-backend/src/lib/textNormalization.js]] |
+**Backend Route** | [[apps/node-backend/src/routes/importRoutes.ts]] |
+**Backend Services** | [[apps/node-backend/src/services/importPipeline/index.js|importPipeline]] (orchestrator), [[apps/node-backend/src/services/importPipeline/adapters/index.js|adapter registry]], [[apps/node-backend/src/services/deduplication.js]], [[apps/node-backend/src/lib/textNormalization.ts]] |
 | API Doc | [[docs/api/imports]] |
 | Feature Doc | [[docs/features/import]] |
 
@@ -251,38 +251,38 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 
 | Route                          | File                                                      |
 | ------------------------------ | --------------------------------------------------------- |
-| `/api/transactions`            | [[apps/node-backend/src/routes/transactions.js]]          |
-| `/api/categories`              | [[apps/node-backend/src/routes/categories.js]]            |
-| `/api/recipients`              | [[apps/node-backend/src/routes/recipients.js]]            |
-| `/api/planned-transactions`    | [[apps/node-backend/src/routes/plannedTransactions.js]]   |
-| `/api/investments`             | [[apps/node-backend/src/routes/investments.js]]           |
-| `/api/watchlist`               | [[apps/node-backend/src/routes/watchlist.js]]             |
-| `/api/market`                  | [[apps/node-backend/src/routes/marketLookup.js]]          |
-| `/api/import`                  | [[apps/node-backend/src/routes/importRoutes.js]]          |
-| `/api/settings`                | [[apps/node-backend/src/routes/settings.js]]              |
-| `/api/saved-charts`            | [[apps/node-backend/src/routes/savedCharts.js]]           |
-| `/api/splits`                  | [[apps/node-backend/src/routes/splits.js]]                |
-| `/api/info`                    | [[apps/node-backend/src/routes/info.js]]                  |
-| `/api/admin`                   | [[apps/node-backend/src/routes/admin.js]]                 |
-| `/api/recipient-bank-accounts` | [[apps/node-backend/src/routes/recipientBankAccounts.js]] |
+| `/api/transactions`            | [[apps/node-backend/src/routes/transactions.ts]]          |
+| `/api/categories`              | [[apps/node-backend/src/routes/categories.ts]]            |
+| `/api/recipients`              | [[apps/node-backend/src/routes/recipients.ts]]            |
+| `/api/planned-transactions`    | [[apps/node-backend/src/routes/plannedTransactions.ts]]   |
+| `/api/investments`             | [[apps/node-backend/src/routes/investments.ts]]           |
+| `/api/watchlist`               | [[apps/node-backend/src/routes/watchlist.ts]]             |
+| `/api/market`                  | [[apps/node-backend/src/routes/marketLookup.ts]]          |
+| `/api/import`                  | [[apps/node-backend/src/routes/importRoutes.ts]]          |
+| `/api/settings`                | [[apps/node-backend/src/routes/settings.ts]]              |
+| `/api/saved-charts`            | [[apps/node-backend/src/routes/savedCharts.ts]]           |
+| `/api/splits`                  | [[apps/node-backend/src/routes/splits.ts]]                |
+| `/api/info`                    | [[apps/node-backend/src/routes/info.ts]]                  |
+| `/api/admin`                   | [[apps/node-backend/src/routes/admin.ts]]                 |
+| `/api/recipient-bank-accounts` | [[apps/node-backend/src/routes/recipientBankAccounts.ts]] |
 
 ### Backend Repositories (13 files)
 
 | Repository             | File                                                                     |
 | ---------------------- | ------------------------------------------------------------------------ |
-| Transaction            | [[apps/node-backend/src/repositories/transactionRepository.js]]          |
-| Category               | [[apps/node-backend/src/repositories/categoryRepository.js]]             |
-| Recipient              | [[apps/node-backend/src/repositories/recipientRepository.js]]            |
-| Planned Transaction    | [[apps/node-backend/src/repositories/plannedTransactionRepository.js]]   |
-| Investment             | [[apps/node-backend/src/repositories/investmentRepository.js]]           |
-| Portfolio Transaction  | [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]] |
-| Watchlist              | [[apps/node-backend/src/repositories/watchlistRepository.js]]            |
-| Split                  | [[apps/node-backend/src/repositories/splitRepository.js]]                |
+| Transaction            | [[apps/node-backend/src/repositories/transactionRepository.ts]]          |
+| Category               | [[apps/node-backend/src/repositories/categoryRepository.ts]]             |
+| Recipient              | [[apps/node-backend/src/repositories/recipientRepository.ts]]            |
+| Planned Transaction    | [[apps/node-backend/src/repositories/plannedTransactionRepository.ts]]   |
+| Investment             | [[apps/node-backend/src/repositories/investmentRepository.ts]]           |
+| Portfolio Transaction  | [[apps/node-backend/src/repositories/portfolioTransactionRepository.ts]] |
+| Watchlist              | [[apps/node-backend/src/repositories/watchlistRepository.ts]]            |
+| Split                  | [[apps/node-backend/src/repositories/splitRepository.ts]]                |
 | Raw Transaction        | [[apps/node-backend/src/repositories/rawTransactionRepository.js]]       |
-| Recipient Bank Account | [[apps/node-backend/src/repositories/recipientBankAccountRepository.js]] |
-| Saved Charts           | [[apps/node-backend/src/repositories/savedChartsRepository.js]]          |
-| Settings               | [[apps/node-backend/src/repositories/settingsRepository.js]]             |
-| Info                   | [[apps/node-backend/src/repositories/infoRepository.js]]                 |
+| Recipient Bank Account | [[apps/node-backend/src/repositories/recipientBankAccountRepository.ts]] |
+| Saved Charts           | [[apps/node-backend/src/repositories/savedChartsRepository.ts]]          |
+| Settings               | [[apps/node-backend/src/repositories/settingsRepository.ts]]             |
+| Info                   | [[apps/node-backend/src/repositories/infoRepository.ts]]                 |
 
 ### Backend Services (18 files)
 
@@ -305,15 +305,15 @@ Full reference: [[docs/reference/service-layer|Service Layer Reference]]
 | Quote Backfill        | [[apps/node-backend/src/services/quoteBackfillService.js]]                                 |
 | Recurrence            | [[apps/node-backend/src/services/calculations/recurrence.js]]                              |
 | Recurring Detection   | [[apps/node-backend/src/services/recurringDetectionService.js]]                            |
-| Text Normalization    | [[apps/node-backend/src/lib/textNormalization.js]]                                         |
+| Text Normalization    | [[apps/node-backend/src/lib/textNormalization.ts]]                                         |
 
 ### Database
 
 | File                                             | Purpose                                    |
 | ------------------------------------------------ | ------------------------------------------ |
-| [[apps/node-backend/src/database/connection.js]] | Database connection setup                  |
+| [[apps/node-backend/src/database/connection.ts]] | Database connection setup                  |
 | [[apps/node-backend/src/main.js]]                | DB readiness retry loop + server startup   |
-| [[apps/node-backend/src/database/migrate.js]]    | Alembic migrations (schema initialization) |
+| [[apps/node-backend/src/database/migrate.ts]]    | Alembic migrations (schema initialization) |
 
 ### Migrations
 

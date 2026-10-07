@@ -37,12 +37,12 @@ import {
 
 import { mockLogger } from "./helpers/mockLogger.js";
 
-vi.mock("../src/config/logger.js", () => ({ logger: mockLogger() }));
+vi.mock("../src/config/logger.ts", () => ({ logger: mockLogger() }));
 
 // Wrap the module-level query() helper so the round-trip count is observable.
 // Everything else (including withTransaction and its ambient-client routing)
 // stays the real implementation.
-vi.mock("../src/database/connection.js", async (importOriginal) => {
+vi.mock("../src/database/connection.ts", async (importOriginal) => {
   const actual = /** @type {any} */ (await importOriginal());
   return {
     ...actual,
@@ -58,14 +58,14 @@ import {
   hasTestDatabase,
   releaseDbSuiteLock,
 } from "./setup/db.js";
-import { logger } from "../src/config/logger.js";
-import { closePool, query } from "../src/database/connection.js";
-import { recipientRepository } from "../src/repositories/recipientRepository.js";
-import { categoryRepository } from "../src/repositories/categoryRepository.js";
+import { logger } from "../src/config/logger.ts";
+import { closePool, query } from "../src/database/connection.ts";
+import { recipientRepository } from "../src/repositories/recipientRepository.ts";
+import { categoryRepository } from "../src/repositories/categoryRepository.ts";
 import {
   mergeCategoryNodes,
   updateCategoryNode,
-} from "../src/repositories/categoryHierarchyRepository.js";
+} from "../src/repositories/categoryHierarchyRepository.ts";
 import {
   importCategoriesCSV,
   importRecipientsCSV,

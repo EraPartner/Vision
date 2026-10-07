@@ -11,12 +11,11 @@
  * controls the final path.
  */
 
-/// <reference path="../types/thirdPartyModules.d.ts" />
 import { mkdirSync, promises as fsPromises } from 'fs';
 import { join, extname, resolve, sep } from 'path';
 import { randomUUID } from 'crypto';
-import { env } from '../config/env.js';
-import { sniffMime, extensionMime } from '../lib/fileSniff.js';
+import { env } from '../config/env.ts';
+import { sniffMime, extensionMime } from '../lib/fileSniff.ts';
 
 /**
  * The slice of a multer memoryStorage upload this service reads.

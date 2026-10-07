@@ -24,12 +24,12 @@
  */
 
 import { z } from "zod";
-import { query, withTransaction } from "../database/connection.js";
-import accountRepository from "../repositories/accountRepository.js";
-import { recipientRepository } from "../repositories/recipientRepository.js";
-import { NotFoundError, ValidationError } from "../middleware/errorHandler.js";
-import { assertCurrency, assertYmd } from "../lib/validation.js";
-import { toWireDate } from "../lib/dateFormat.js";
+import { query, withTransaction } from "../database/connection.ts";
+import accountRepository from "../repositories/accountRepository.ts";
+import { recipientRepository } from "../repositories/recipientRepository.ts";
+import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
+import { assertCurrency, assertYmd } from "../lib/validation.ts";
+import { toWireDate } from "../lib/dateFormat.ts";
 
 const OPENING_MEMO = "OPENING BALANCE";
 

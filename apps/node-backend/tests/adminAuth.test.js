@@ -3,8 +3,8 @@ import {
   createAdminAuthMiddleware,
   __extractAdminBearerToken as extractAdminBearerToken,
   isLoopbackHost,
-} from '../src/middleware/adminAuth.js';
-import { UnauthorizedError } from '../src/middleware/errorHandler.js';
+} from '../src/middleware/adminAuth.ts';
+import { UnauthorizedError } from '../src/middleware/errorHandler.ts';
 
 const mkReq = (overrides = {}) => ({ headers: {}, socket: {}, ...overrides });
 

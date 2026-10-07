@@ -36,7 +36,7 @@ import {
   releaseDbSuiteLock,
 } from "./setup/db.js";
 
-import { closePool } from "../src/database/connection.js";
+import { closePool } from "../src/database/connection.ts";
 import { validateBatch } from "../src/services/portfolioImportPipeline/validate.js";
 import { matchBatch } from "../src/services/portfolioImportPipeline/matchInvestments.js";
 import { commitPortfolioImport } from "../src/services/portfolioImportPipeline/index.js";

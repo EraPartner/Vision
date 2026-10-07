@@ -12,7 +12,8 @@
  * `TO_CHAR` period keys, the alias-member narrowing round-trip, and FX resolved
  * from seeded `exchange_rates` rows.
  *
- * `getRecipientInsights`'s MoM window is anchored on `CURRENT_DATE`, so those
+ * `getRecipientInsights`'s MoM window is anchored on the APP_TIMEZONE day
+ * (`todayAppDateString()`, ADR-009), bound here as `TODAY_SQL`, so those
  * fixtures are dated by SQL expressions relative to it; the by-year and pivot
  * queries have no date window, so those use literal calendar dates.
  */
@@ -26,10 +27,14 @@ import {
   hasTestDatabase,
   releaseDbSuiteLock,
 } from "./setup/db.js";
-import { recipientInsightsRepository } from "../src/repositories/infoRepositoryRecipients.js";
-import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.js";
+import { recipientInsightsRepository } from "../src/repositories/infoRepositoryRecipients.ts";
+import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.js";
-import { closePool } from "../src/database/connection.js";
+import { closePool } from "../src/database/connection.ts";
+import { todayAppDateString } from "../src/lib/timezone.ts";
+
+// The MoM window's "today": the APP_TIMEZONE day the repository binds (ADR-009).
+const TODAY_SQL = `'${todayAppDateString()}'::date`;
 
 const cat = {};
 const rec = {};
@@ -89,7 +94,7 @@ async function ensureAccount(name) {
 
 /**
  * Insert one transaction. Exactly one of `date` (literal 'YYYY-MM-DD') or
- * `dateExpr` (a SQL expression, for the CURRENT_DATE-anchored MoM window) is
+ * `dateExpr` (a SQL expression, for the APP_TIMEZONE-day-anchored MoM window) is
  * given. `recipientId: null` writes a recipient-less row on purpose.
  */
 async function insertTxn({
@@ -385,24 +390,24 @@ describe.skipIf(!hasTestDatabase())(
       it("reports only recipients present in BOTH periods, with the percentage change", async () => {
         await seedBase();
         await insertTxn({
-          dateExpr: `date_trunc('month', CURRENT_DATE)`,
+          dateExpr: `date_trunc('month', ${TODAY_SQL})`,
           amount: "-60.00",
           recipientId: rec.colruyt,
         });
         await insertTxn({
-          dateExpr: `date_trunc('month', CURRENT_DATE) - interval '1 month'`,
+          dateExpr: `date_trunc('month', ${TODAY_SQL}) - interval '1 month'`,
           amount: "-40.00",
           recipientId: rec.colruyt,
         });
         // Current month only → no comparison possible.
         await insertTxn({
-          dateExpr: `date_trunc('month', CURRENT_DATE)`,
+          dateExpr: `date_trunc('month', ${TODAY_SQL})`,
           amount: "-30.00",
           recipientId: rec.electrabel,
         });
         // Previous month only.
         await insertTxn({
-          dateExpr: `date_trunc('month', CURRENT_DATE) - interval '1 month'`,
+          dateExpr: `date_trunc('month', ${TODAY_SQL}) - interval '1 month'`,
           amount: "-25.00",
           recipientId: rec.delhaize,
         });
@@ -424,16 +429,16 @@ describe.skipIf(!hasTestDatabase())(
         const pool = getTestPool();
         const { rows } = await pool.query(`
         SELECT to_char(
-                 (date_trunc('month', CURRENT_DATE) - INTERVAL '1 month')::date
-                 + (CURRENT_DATE - DATE_TRUNC('month', CURRENT_DATE)::date), 'YYYY-MM-DD') AS cap,
-               ((date_trunc('month', CURRENT_DATE) - INTERVAL '1 month')::date
-                 + (CURRENT_DATE - DATE_TRUNC('month', CURRENT_DATE)::date) + 1)
-                 < date_trunc('month', CURRENT_DATE)::date AS beyond_cap_still_prev_month
+                 (date_trunc('month', ${TODAY_SQL}) - INTERVAL '1 month')::date
+                 + (${TODAY_SQL} - DATE_TRUNC('month', ${TODAY_SQL})::date), 'YYYY-MM-DD') AS cap,
+               ((date_trunc('month', ${TODAY_SQL}) - INTERVAL '1 month')::date
+                 + (${TODAY_SQL} - DATE_TRUNC('month', ${TODAY_SQL})::date) + 1)
+                 < date_trunc('month', ${TODAY_SQL})::date AS beyond_cap_still_prev_month
       `);
         const { cap, beyond_cap_still_prev_month: beyondIsTestable } = rows[0];
 
         await insertTxn({
-          dateExpr: `date_trunc('month', CURRENT_DATE)`,
+          dateExpr: `date_trunc('month', ${TODAY_SQL})`,
           amount: "-10.00",
           recipientId: rec.colruyt,
         });
@@ -447,8 +452,8 @@ describe.skipIf(!hasTestDatabase())(
           // short previous month and a late day-of-month the cap lands past its
           // end, and then the whole previous month is in-window by construction.
           await insertTxn({
-            dateExpr: `(date_trunc('month', CURRENT_DATE) - INTERVAL '1 month')::date
-                     + (CURRENT_DATE - DATE_TRUNC('month', CURRENT_DATE)::date) + 1`,
+            dateExpr: `(date_trunc('month', ${TODAY_SQL}) - INTERVAL '1 month')::date
+                     + (${TODAY_SQL} - DATE_TRUNC('month', ${TODAY_SQL})::date) + 1`,
             amount: "-1000.00",
             recipientId: rec.colruyt,
           });
@@ -464,17 +469,17 @@ describe.skipIf(!hasTestDatabase())(
       it("ignores months outside the two-period window entirely", async () => {
         await seedBase();
         await insertTxn({
-          dateExpr: `date_trunc('month', CURRENT_DATE)`,
+          dateExpr: `date_trunc('month', ${TODAY_SQL})`,
           amount: "-10.00",
           recipientId: rec.colruyt,
         });
         await insertTxn({
-          dateExpr: `date_trunc('month', CURRENT_DATE) - interval '1 month'`,
+          dateExpr: `date_trunc('month', ${TODAY_SQL}) - interval '1 month'`,
           amount: "-10.00",
           recipientId: rec.colruyt,
         });
         await insertTxn({
-          dateExpr: `date_trunc('month', CURRENT_DATE) - interval '2 months'`,
+          dateExpr: `date_trunc('month', ${TODAY_SQL}) - interval '2 months'`,
           amount: "-9999.00",
           recipientId: rec.colruyt,
         });
@@ -497,8 +502,8 @@ describe.skipIf(!hasTestDatabase())(
       it("converts each month at ITS OWN date rate, agreeing with top merchants", async () => {
         await seedBase();
         const { rows } = await getTestPool().query(`
-        SELECT to_char(date_trunc('month', CURRENT_DATE), 'YYYY-MM-DD') AS cur_day,
-               to_char(date_trunc('month', CURRENT_DATE) - INTERVAL '1 month', 'YYYY-MM-DD') AS prev_day
+        SELECT to_char(date_trunc('month', ${TODAY_SQL}), 'YYYY-MM-DD') AS cur_day,
+               to_char(date_trunc('month', ${TODAY_SQL}) - INTERVAL '1 month', 'YYYY-MM-DD') AS prev_day
       `);
         const { cur_day: curDay, prev_day: prevDay } = rows[0];
 

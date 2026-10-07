@@ -5,7 +5,7 @@ vi.mock('../src/services/reports/index.js', () => ({
 }));
 
 import { generateReport } from '../src/services/reports/index.js';
-import reportsRouter from '../src/routes/reports.js';
+import reportsRouter from '../src/routes/reports.ts';
 
 /** Find one Express route handler without binding a network listener. */
 function routeHandler(path) {

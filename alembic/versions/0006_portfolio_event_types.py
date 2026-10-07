@@ -19,7 +19,7 @@ depends_on = None
 NEW_TYPES = ['split', 'merger', 'spinoff', 'return_of_capital']
 
 
-def upgrade():
+def upgrade() -> None:
     # Postgres requires ALTER TYPE … ADD VALUE for enum additions.
     # Each ADD VALUE is committed immediately (cannot run inside a transaction).
     for value in NEW_TYPES:
@@ -28,7 +28,7 @@ def upgrade():
         )
 
 
-def downgrade():
+def downgrade() -> None:
     # Postgres does not support removing enum values directly.
     # The safest rollback recreates the enum without the new values,
     # migrating any rows that use them to NULL first.

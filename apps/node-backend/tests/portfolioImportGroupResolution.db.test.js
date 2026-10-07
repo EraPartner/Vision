@@ -14,7 +14,7 @@ import {
   hasTestDatabase,
   releaseDbSuiteLock,
 } from './setup/db.js';
-import { closePool } from '../src/database/connection.js';
+import { closePool } from '../src/database/connection.ts';
 import { resolveInvestmentRows } from '../src/services/portfolioImportBatchService.js';
 
 const pool = getTestPool();

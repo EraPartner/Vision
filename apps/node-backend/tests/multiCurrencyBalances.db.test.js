@@ -39,7 +39,7 @@ import {
   releaseDbSuiteLock,
 } from "./setup/db.js";
 import { accountService } from "../src/services/accountService.js";
-import { accountRepository } from "../src/repositories/accountRepository.js";
+import { accountRepository } from "../src/repositories/accountRepository.ts";
 
 const listAccounts = async (opts = {}) =>
   (await accountService.list(opts)).items;
@@ -49,11 +49,11 @@ import {
   previewMerge,
 } from "../src/services/accountMergeService.js";
 import { assembleRebalanceInputs } from "../src/services/crossWorkspaceDataService.js";
-import { netWorthRepository } from "../src/repositories/infoRepositoryNetWorth.js";
-import { banksRepository } from "../src/repositories/infoRepositoryBanks.js";
-import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.js";
+import { netWorthRepository } from "../src/repositories/infoRepositoryNetWorth.ts";
+import { banksRepository } from "../src/repositories/infoRepositoryBanks.ts";
+import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.js";
-import { closePool } from "../src/database/connection.js";
+import { closePool } from "../src/database/connection.ts";
 
 const rec = {};
 

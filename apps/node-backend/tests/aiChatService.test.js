@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../src/config/config.js", () => {
+vi.mock("../src/config/config.ts", () => {
   const settings = {
     aiChat: {
       enabled: true,
@@ -18,7 +18,7 @@ vi.mock("../src/config/config.js", () => {
   return { default: settings };
 });
 
-vi.mock("../src/repositories/aiChatRepository.js", () => ({
+vi.mock("../src/repositories/aiChatRepository.ts", () => ({
   aiChatRepository: {
     listConversations: vi.fn(),
     getConversation: vi.fn(),
@@ -41,10 +41,10 @@ vi.mock("../src/services/aiChat/tools/index.js", () => ({
   getToolNames: vi.fn().mockReturnValue(["getSpendByCategory"]),
 }));
 
-import settings from "../src/config/config.js";
-import { aiChatRepository } from "../src/repositories/aiChatRepository.js";
+import settings from "../src/config/config.ts";
+import { aiChatRepository } from "../src/repositories/aiChatRepository.ts";
 import { dispatchTool } from "../src/services/aiChat/tools/index.js";
-import { OllamaError } from "../src/integrations/ollama/client.js";
+import { OllamaError } from "../src/integrations/ollama/client.ts";
 import {
   AiChatServiceError,
   listConversations,
@@ -1096,7 +1096,7 @@ describe("AiChatServiceError", () => {
   });
 
   it("extends AppError and carries status/code so the error middleware maps it", async () => {
-    const { AppError } = await import("../src/middleware/errorHandler.js");
+    const { AppError } = await import("../src/middleware/errorHandler.ts");
     const err = new AiChatServiceError("nope", {
       code: "CONVERSATION_NOT_FOUND",
       status: 404,

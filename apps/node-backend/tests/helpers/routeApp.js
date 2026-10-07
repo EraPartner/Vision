@@ -56,7 +56,7 @@
  * Usage:
  *   import { routeAgent } from '../helpers/routeApp.js';
  *   // ... vi.mock() the repositories/services this router imports ...
- *   const { default: router } = await import('../../src/routes/transactions.js');
+ *   const { default: router } = await import('../../src/routes/transactions.ts');
  *   const api = routeAgent(router, { mountPath: '/api/transactions' });
  *
  *   const res = await api.get('/api/transactions/').expect(200);
@@ -65,11 +65,11 @@
 import express from 'express';
 import supertest from 'supertest';
 
-import { requestId } from '../../src/middleware/requestId.js';
-import { requestMetrics } from '../../src/middleware/requestMetrics.js';
-import { wrapResponse } from '../../src/middleware/envelope.js';
-import { createCsrfGuard } from '../../src/middleware/csrfGuard.js';
-import { createErrorHandler, NotFoundError } from '../../src/middleware/errorHandler.js';
+import { requestId } from '../../src/middleware/requestId.ts';
+import { requestMetrics } from '../../src/middleware/requestMetrics.ts';
+import { wrapResponse } from '../../src/middleware/envelope.ts';
+import { createCsrfGuard } from '../../src/middleware/csrfGuard.ts';
+import { createErrorHandler, NotFoundError } from '../../src/middleware/errorHandler.ts';
 
 /**
  * @typedef {object} RouteAppOptions

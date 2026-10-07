@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("../src/config/config.js", () => ({
+vi.mock("../src/config/config.ts", () => ({
   default: { aiResearch: { agentCloak: { enabled: false } } },
 }));
 vi.mock("../src/services/agentCloakRuntimeConfig.js", () => ({

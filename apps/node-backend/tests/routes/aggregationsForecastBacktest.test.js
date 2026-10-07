@@ -13,7 +13,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { routeAgent } from "../helpers/routeApp.js";
-import { parseBooleanQueryParam } from "../../src/lib/httpParams.js";
+import { parseBooleanQueryParam } from "../../src/lib/httpParams.ts";
 
 describe("parseBooleanQueryParam — default-aware boolean query param", () => {
   it("returns the provided default when the param is absent/empty", () => {
@@ -51,7 +51,7 @@ vi.mock("../../src/services/calculations/forecast/index.js", () => ({
 }));
 
 const { default: aggregationsRouter } =
-  await import("../../src/routes/aggregations.js");
+  await import("../../src/routes/aggregations.ts");
 
 const api = routeAgent(aggregationsRouter, { mountPath: "/api/aggregations" });
 

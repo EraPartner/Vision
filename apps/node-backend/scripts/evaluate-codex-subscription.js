@@ -1,5 +1,5 @@
 import { isAbsolute } from "node:path";
-import { createExperimentalCodexSession } from "../src/integrations/codex/experimentalSession.js";
+import { createExperimentalCodexSession } from "../src/integrations/codex/experimentalSession.ts";
 
 const binary = process.env.VISION_EXPERIMENTAL_CODEX_BINARY;
 if (process.platform !== "darwin" || !binary || !isAbsolute(binary)) {

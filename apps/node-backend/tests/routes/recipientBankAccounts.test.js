@@ -12,7 +12,7 @@ import { routeAgent, errEnvelope } from "../helpers/routeApp.js";
 // The route imports its repository through services/recipientBankAccountService.js,
 // which re-exports the default from this module — mocking the repository here
 // intercepts that same binding.
-vi.mock("../../src/repositories/recipientBankAccountRepository.js", () => ({
+vi.mock("../../src/repositories/recipientBankAccountRepository.ts", () => ({
   default: {
     getByRecipientId: vi.fn(),
     getByAccountNumber: vi.fn(),
@@ -24,14 +24,14 @@ vi.mock("../../src/repositories/recipientBankAccountRepository.js", () => ({
   },
 }));
 
-vi.mock("../../src/config/logger.js", () => ({
+vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-import bankAccountRepo from "../../src/repositories/recipientBankAccountRepository.js";
+import bankAccountRepo from "../../src/repositories/recipientBankAccountRepository.ts";
 
 const { default: recipientBankAccountsRouter } =
-  await import("../../src/routes/recipientBankAccounts.js");
+  await import("../../src/routes/recipientBankAccounts.ts");
 
 const api = routeAgent(recipientBankAccountsRouter, {
   mountPath: "/api/recipients",
@@ -134,7 +134,7 @@ describe("Recipient Bank Account Routes", () => {
     });
 
     it("rejects a non-integer :id via the real validateIdParam guard", async () => {
-      // Previously `vi.mock('.../middleware/validation.js')` replaced
+      // Previously `vi.mock('.../middleware/validation.ts')` replaced
       // validateIdParam with a pass-through, so this guard was never tested.
       const res = await api
         .post(`${BASE}/abc/bank-accounts`)

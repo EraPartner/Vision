@@ -8,11 +8,11 @@ vi.mock("../src/services/currency/currencyConversionService.js", () => ({
   ),
 }));
 
-vi.mock("../src/database/connection.js", () =>
+vi.mock("../src/database/connection.ts", () =>
   mockConnection({ withTransaction: vi.fn(async (fn) => fn()) }),
 );
 
-vi.mock("../src/repositories/accountRepository.js", () => {
+vi.mock("../src/repositories/accountRepository.ts", () => {
   const repo = {
     getAll: vi.fn(),
     getCount: vi.fn(),
@@ -29,13 +29,13 @@ vi.mock("../src/repositories/accountRepository.js", () => {
   return { default: repo, accountRepository: repo };
 });
 
-import accountRepository from "../src/repositories/accountRepository.js";
+import accountRepository from "../src/repositories/accountRepository.ts";
 import { accountService } from "../src/services/accountService.js";
 import {
   ValidationError,
   NotFoundError,
   ConflictError,
-} from "../src/middleware/errorHandler.js";
+} from "../src/middleware/errorHandler.ts";
 
 const pgErr = (code) => Object.assign(new Error(code), { code });
 const emptyBalanceAccount = (id) => ({

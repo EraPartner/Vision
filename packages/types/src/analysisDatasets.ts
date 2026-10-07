@@ -1,0 +1,201 @@
+export const ANALYSIS_DATASET_CATALOG_VERSION = 1 as const;
+
+export interface AnalysisDatasetJoinPath {
+  id: string;
+  toDatasetId: string;
+  cardinality: "many-to-one";
+  fields: string[];
+}
+
+export interface AnalysisDatasetDescriptor {
+  id:
+    | "transactions"
+    | "accounts"
+    | "holdings"
+    | "cash-flows"
+    | "positions"
+    | "cost-basis"
+    | "portfolio-history"
+    | "broker-history"
+    | "fx-history"
+    | "benchmark-history";
+  schemaVersion: 1;
+  relation: string;
+  grain: string;
+  authorizationScope: "local-user-database";
+  timeBasis: string;
+  currencySemantics: string;
+  signSemantics: string;
+  coverage: string;
+  primaryKey: string[];
+  joinPaths: AnalysisDatasetJoinPath[];
+}
+
+const DATASETS: AnalysisDatasetDescriptor[] = [
+  {
+    id: "transactions",
+    schemaVersion: 1,
+    relation: "vision_analysis.transactions_v1",
+    grain: "one canonical ledger transaction, including inactive history",
+    authorizationScope: "local-user-database",
+    timeBasis: "transaction_date is a calendar date in APP_TIMEZONE",
+    currencySemantics:
+      "amount is expressed in currency; cross-currency aggregation requires an explicit reporting-currency conversion",
+    signSemantics:
+      "negative is an outflow and positive is an inflow or refund; is_transfer identifies internal movements",
+    coverage:
+      "all canonical ledger rows; raw import payloads and duplicate identities are excluded",
+    primaryKey: ["transaction_id"],
+    joinPaths: [
+      {
+        id: "transactions.account",
+        toDatasetId: "accounts",
+        cardinality: "many-to-one",
+        fields: ["account_id"],
+      },
+    ],
+  },
+  {
+    id: "accounts",
+    schemaVersion: 1,
+    relation: "vision_analysis.accounts_v1",
+    grain: "one canonical own-account entity",
+    authorizationScope: "local-user-database",
+    timeBasis:
+      "statement balance entries carry their own calendar balance_date",
+    currencySemantics:
+      "currency is the declared account currency; statement_balances retains each native currency independently",
+    signSemantics:
+      "statement balances retain the bank-declared signed value; liability interpretation uses account_type",
+    coverage:
+      "all own accounts including archived accounts; credential and provider configuration is excluded",
+    primaryKey: ["account_id"],
+    joinPaths: [],
+  },
+  {
+    id: "holdings",
+    schemaVersion: 1,
+    relation: "vision_analysis.holding_events_v1",
+    grain: "one canonical portfolio event used to replay holdings",
+    authorizationScope: "local-user-database",
+    timeBasis:
+      "event_date is a calendar date; same-day replay orders by event_id with sells after other unit events",
+    currencySemantics:
+      "amount, fees and taxes use event currency; fx_rate_to_eur is transaction-date conversion evidence when present",
+    signSemantics:
+      "buy and gift add units, sell removes units, and corporate actions require the canonical portfolio replay engine",
+    coverage:
+      "all portfolio events; current units, cost basis and gain must be calculated by the versioned canonical engine",
+    primaryKey: ["event_id"],
+    joinPaths: [
+      {
+        id: "holdings.account",
+        toDatasetId: "accounts",
+        cardinality: "many-to-one",
+        fields: ["account_id"],
+      },
+    ],
+  },
+  {
+    id: "cash-flows",
+    schemaVersion: 1,
+    relation: "vision_analysis.cash_flows_v1",
+    grain: "one canonical budgeting ledger transaction",
+    authorizationScope: "local-user-database",
+    timeBasis: "cash_flow_date is a calendar date in APP_TIMEZONE",
+    currencySemantics:
+      "all amount columns use currency; cross-currency totals require an explicit reporting-currency conversion",
+    signSemantics:
+      "signed_amount retains ledger sign; spending_amount is positive magnitude for non-transfer negative rows; positive_flow_amount combines income and refunds",
+    coverage:
+      "budgeting ledger cash flows only; portfolio income is excluded unless represented by a linked ledger transaction",
+    primaryKey: ["cash_flow_id"],
+    joinPaths: [
+      {
+        id: "cash-flows.account",
+        toDatasetId: "accounts",
+        cardinality: "many-to-one",
+        fields: ["account_id"],
+      },
+    ],
+  },
+];
+
+function deepFreeze<T>(value: T): T {
+  if (value && typeof value === "object" && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const child of Object.values(value)) deepFreeze(child);
+  }
+  return value;
+}
+
+const FINANCIAL_DATASET_GRAINS: ReadonlyArray<
+  readonly [AnalysisDatasetDescriptor["id"], string]
+> = [
+  ["positions", "one current investment position"],
+  ["cost-basis", "one current investment cost basis"],
+  ["portfolio-history", "one portfolio valuation per calendar date"],
+  ["broker-history", "one broker valuation per calendar date"],
+  ["fx-history", "one stored exchange rate per currency and date"],
+  ["benchmark-history", "one benchmark price per market date"],
+];
+
+export const ANALYSIS_FINANCIAL_DATASETS_V1: readonly AnalysisDatasetDescriptor[] =
+  deepFreeze(
+    FINANCIAL_DATASET_GRAINS.map(([id, grain]): AnalysisDatasetDescriptor => ({
+      id,
+      schemaVersion: 1,
+      relation: `service:${id}@1`,
+      grain,
+      authorizationScope: "local-user-database",
+      timeBasis: "calendar dates; positions are current only",
+      currencySemantics:
+        "explicit reporting currency; missing dated rates retain partial coverage",
+      signSemantics:
+        "canonical portfolio replay; benchmark returns are price returns",
+      coverage:
+        "stored local evidence; benchmark explicitly requests provider data",
+      primaryKey:
+        id === "positions" || id === "cost-basis"
+          ? ["investment_id"]
+          : ["date", "currency"],
+      joinPaths: [],
+    })),
+  );
+
+export const ANALYSIS_DATASETS_V1: readonly AnalysisDatasetDescriptor[] =
+  deepFreeze(DATASETS);
+
+export function getAnalysisDataset(
+  id: string,
+  schemaVersion = 1,
+): AnalysisDatasetDescriptor | undefined {
+  return [...ANALYSIS_DATASETS_V1, ...ANALYSIS_FINANCIAL_DATASETS_V1].find(
+    (dataset) => dataset.id === id && dataset.schemaVersion === schemaVersion,
+  );
+}
+
+export function assertAnalysisDatasetReference(reference: {
+  id: string;
+  schemaVersion: number;
+  authorizationScope: string;
+  requiredColumns?: string[];
+}): AnalysisDatasetDescriptor {
+  const dataset = getAnalysisDataset(reference.id, reference.schemaVersion);
+  if (!dataset) {
+    throw new Error(
+      `Unsupported analysis dataset ${reference.id}@${reference.schemaVersion}`,
+    );
+  }
+  if (reference.authorizationScope !== dataset.authorizationScope) {
+    throw new Error(
+      `Analysis dataset scope mismatch for ${reference.id}@${reference.schemaVersion}`,
+    );
+  }
+  for (const column of reference.requiredColumns ?? []) {
+    if (!/^[A-Za-z][A-Za-z0-9._:-]*$/.test(column)) {
+      throw new Error(`Invalid analysis column identifier: ${column}`);
+    }
+  }
+  return dataset;
+}

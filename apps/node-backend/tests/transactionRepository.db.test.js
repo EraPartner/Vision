@@ -33,9 +33,9 @@ import {
   hasTestDatabase,
   releaseDbSuiteLock,
 } from "./setup/db.js";
-import transactionRepository from "../src/repositories/transactionRepository.js";
-import { closePool } from "../src/database/connection.js";
-import { toWireDate } from "../src/lib/dateFormat.js";
+import transactionRepository from "../src/repositories/transactionRepository.ts";
+import { closePool } from "../src/database/connection.ts";
+import { toWireDate } from "../src/lib/dateFormat.ts";
 
 /** 'YYYY-MM-DD' of a row's `date` column, using the production DATE boundary. */
 const ymd = (d) => toWireDate(d);

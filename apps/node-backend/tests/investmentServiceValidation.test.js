@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // cast error (500 instead of 400) and negatives / 1e15 / "Infinity" inserted
 // cleanly into the valuation and Belgian property-tax math.
 
-vi.mock("../src/repositories/investmentRepository.js", () => ({
+vi.mock("../src/repositories/investmentRepository.ts", () => ({
   default: {
     create: vi.fn().mockResolvedValue({ id: 1 }),
     update: vi.fn().mockResolvedValue({ id: 1 }),
@@ -14,7 +14,7 @@ vi.mock("../src/repositories/investmentRepository.js", () => ({
   },
   pickInvestmentCreateFields: (body) => body,
 }));
-vi.mock("../src/repositories/portfolioTransactionRepository.js", () => ({
+vi.mock("../src/repositories/portfolioTransactionRepository.ts", () => ({
   default: {},
 }));
 vi.mock("../src/services/priceProviderService.js", () => ({
@@ -25,24 +25,24 @@ vi.mock("../src/services/priceProviderService.js", () => ({
 vi.mock("../src/services/quoteBackfillService.js", () => ({
   refreshQuotesForInvestment: vi.fn(),
 }));
-vi.mock("../src/config/kinesisConfig.js", () => ({
+vi.mock("../src/config/kinesisConfig.ts", () => ({
   getKinesisAssetConfig: vi.fn(),
 }));
 vi.mock("../src/services/info/cache.js", () => ({
   invalidatePortfolioCaches: vi.fn(),
 }));
-vi.mock("../src/lib/urlSafety.js", () => ({ assertPublicHttpUrl: vi.fn() }));
+vi.mock("../src/lib/urlSafety.ts", () => ({ assertPublicHttpUrl: vi.fn() }));
 vi.mock("../src/services/portfolio/fxResolve.js", () => ({
   autoResolveFxRateToEur: vi.fn(),
 }));
 
-import investmentRepository from "../src/repositories/investmentRepository.js";
+import investmentRepository from "../src/repositories/investmentRepository.ts";
 import {
   createInvestment,
   updateInvestment,
   __parseDefaultListOptions as parseDefaultListOptions,
 } from "../src/services/investmentService.js";
-import { ValidationError } from "../src/middleware/errorHandler.js";
+import { ValidationError } from "../src/middleware/errorHandler.ts";
 
 function mockRes() {
   return { ok: vi.fn(), status: vi.fn().mockReturnThis(), send: vi.fn() };

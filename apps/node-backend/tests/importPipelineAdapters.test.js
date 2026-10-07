@@ -13,7 +13,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-vi.mock("../src/config/logger.js", () => ({
+vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 

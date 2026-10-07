@@ -29,7 +29,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockLogger } from "../helpers/mockLogger.js";
 import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.js";
 
-vi.mock("../../src/repositories/infoRepository.js", () => ({
+vi.mock("../../src/repositories/infoRepository.ts", () => ({
   default: {
     getStatistics: vi.fn(),
     getCategoryBreakdown: vi.fn(),
@@ -46,7 +46,7 @@ vi.mock("../../src/repositories/infoRepository.js", () => ({
   },
 }));
 
-vi.mock("../../src/config/logger.js", () => ({
+vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
@@ -114,14 +114,14 @@ vi.mock("../../src/services/insightDismissalService.js", () => ({
   dismissInsight: mockDismissInsight,
 }));
 
-import infoRepository from "../../src/repositories/infoRepository.js";
-import { logger } from "../../src/config/logger.js";
+import infoRepository from "../../src/repositories/infoRepository.ts";
+import { logger } from "../../src/config/logger.ts";
 import {
   invalidatePortfolioCaches,
   invalidateStatisticsCaches,
 } from "../../src/services/info/cache.js";
-const { default: infoRouter } = await import("../../src/routes/info.js");
-const { warmInfoCaches } = await import("../../src/routes/info.js");
+const { default: infoRouter } = await import("../../src/routes/info.ts");
+const { warmInfoCaches } = await import("../../src/routes/info.ts");
 
 const BASE = "/api/info";
 const api = routeAgent(infoRouter, { mountPath: BASE });
@@ -429,7 +429,7 @@ describe("Info Routes", () => {
       expect(result.snapshots[1].date).toBe("2026-03-04");
       expect(result.snapshotsTotal).toBe(5);
       // Pagination facts live in the body, not in envelope meta — the
-      // meta.pagination convention is retired (packages/types/src/api.js).
+      // meta.pagination convention is retired (packages/types/src/api.ts).
       expect(result.snapshotsLimit).toBe(2);
       expect(result.snapshotsOffset).toBe(0);
       expect(res.body.meta.requestId).toEqual(expect.any(String));

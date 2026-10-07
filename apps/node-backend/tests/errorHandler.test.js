@@ -4,7 +4,7 @@
  * Covers: typed error class defaults, production detail masking, 4xx leakage
  * policy (expose message), 5xx leakage policy (mask in production), and the
  * forwarded-4xx rule for non-AppError errors that carry their own status
- * (body-parser's http-errors) — see THE RULE in src/middleware/errorHandler.js.
+ * (body-parser's http-errors) — see THE RULE in src/middleware/errorHandler.ts.
  */
 
 import express from 'express';
@@ -12,7 +12,7 @@ import supertest from 'supertest';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { mockLogger } from './helpers/mockLogger.js';
-vi.mock('../src/config/logger.js', () => ({
+vi.mock('../src/config/logger.ts', () => ({
   logger: mockLogger(),
 }));
 
@@ -26,7 +26,7 @@ const {
   UpstreamError,
   __UpstreamTimeoutError: UpstreamTimeoutError,
   createErrorHandler,
-} = await import('../src/middleware/errorHandler.js');
+} = await import('../src/middleware/errorHandler.ts');
 
 const { createRouteApp } = await import('./helpers/routeApp.js');
 

@@ -2,10 +2,14 @@ import os
 import hashlib
 import json
 import re
+from collections.abc import Collection, Iterable, Mapping
 from logging.config import fileConfig
+from typing import Any
 from dotenv import load_dotenv
 
 from alembic import context
+from alembic.runtime.migration import MigrationContext, MigrationInfo
+from alembic.script.revision import RevisionMap
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 from sqlalchemy import text
@@ -53,10 +57,12 @@ AUDIT_GENESIS_HASH = "0" * 64
 MAX_SAFE_INTEGER = 2**53 - 1
 
 
-def _revision_at_or_after_audit_chain(revision_map, revision_ids):
+def _revision_at_or_after_audit_chain(
+    revision_map: RevisionMap, revision_ids: Iterable[str]
+) -> bool:
     """Follow Alembic's graph, rather than assuming revision names sort."""
     pending = list(revision_ids)
-    visited = set()
+    visited: set[str] = set()
     while pending:
         revision_id = pending.pop()
         if revision_id == AUDIT_CHAIN_REVISION:
@@ -75,7 +81,12 @@ def _revision_at_or_after_audit_chain(revision_map, revision_ids):
     return False
 
 
-def _append_migration_audit(ctx, step, heads, run_args):
+def _append_migration_audit(
+    ctx: MigrationContext,
+    step: MigrationInfo,
+    heads: Collection[Any],
+    run_args: Mapping[str, Any],
+) -> None:
     """Append after Alembic changes the version row, before its transaction commits.
 
     The payload intentionally contains only ASCII revision identifiers and
@@ -83,6 +94,9 @@ def _append_migration_audit(ctx, step, heads, run_args):
     the Node audit chain; the SHA-256 envelope matches hashAuditEntry v1.
     """
     connection = ctx.connection
+    if connection is None:
+        # Only run_migrations_online registers this callback, so a connection exists.
+        raise RuntimeError("Migration audit requires an online migration connection")
     if connection.dialect.name != "postgresql":
         return
 
@@ -202,7 +216,7 @@ if config.config_file_name is not None:
 
 
 # Helper to determine render_as_batch for SQLite (required for certain ALTER ops)
-def _render_as_batch_for_sqlite(connectable_or_url):
+def _render_as_batch_for_sqlite(connectable_or_url: object) -> bool:
     try:
         name = None
         if hasattr(connectable_or_url, "dialect"):

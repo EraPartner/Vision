@@ -1,15 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mockConnection } from "./helpers/repoMocks.js";
 
-vi.mock("../src/database/connection.js", () => mockConnection());
+vi.mock("../src/database/connection.ts", () => mockConnection());
 
 // getIncludeTransfers() reads `user_settings` (ADR-083). Stub it so the module
 // under test does not spend a `query` mock call on the settings lookup — the
 // call-count/param assertions below are about the cash-flow SQL only. Its
 // behaviour is exercised for real in infoRepoForecast.db.test.js.
-vi.mock("../src/repositories/infoRepositoryHelpers.js", async () => {
+vi.mock("../src/repositories/infoRepositoryHelpers.ts", async () => {
   const actual = await vi.importActual(
-    "../src/repositories/infoRepositoryHelpers.js",
+    "../src/repositories/infoRepositoryHelpers.ts",
   );
   return {
     ...actual,
@@ -18,19 +18,19 @@ vi.mock("../src/repositories/infoRepositoryHelpers.js", async () => {
   };
 });
 
-import { query } from "../src/database/connection.js";
+import { query } from "../src/database/connection.ts";
 import {
   batchConvertGroupsWithHistoricalRateFallback,
   getIncludeTransfers,
-} from "../src/repositories/infoRepositoryHelpers.js";
+} from "../src/repositories/infoRepositoryHelpers.ts";
 import {
   getCashflowComparison,
   getCashflowForecastData,
   getCashflowForecastDataRolling,
   getCashflowForecastDataByCategory,
-} from "../src/repositories/infoRepositoryForecast.js";
-import { ValidationError } from "../src/middleware/errorHandler.js";
-import { appDateStringToUtc, todayAppDateString } from "../src/lib/timezone.js";
+} from "../src/repositories/infoRepositoryForecast.ts";
+import { ValidationError } from "../src/middleware/errorHandler.ts";
+import { appDateStringToUtc, todayAppDateString } from "../src/lib/timezone.ts";
 
 beforeEach(() => {
   vi.clearAllMocks();

@@ -12,7 +12,7 @@ import { routeAgent, errEnvelope } from "../helpers/routeApp.js";
 // The route imports its repository through services/recipientService.js, which
 // re-exports the default from this module — mocking the repository here
 // intercepts that same binding.
-vi.mock("../../src/repositories/recipientRepository.js", () => ({
+vi.mock("../../src/repositories/recipientRepository.ts", () => ({
   default: {
     getAll: vi.fn(),
     getCount: vi.fn(),
@@ -47,11 +47,11 @@ vi.mock("../../src/services/materializedViewService.js", () => ({
   scheduleRefresh: vi.fn(),
 }));
 
-vi.mock("../../src/config/logger.js", () => ({
+vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-import recipientRepository from "../../src/repositories/recipientRepository.js";
+import recipientRepository from "../../src/repositories/recipientRepository.ts";
 import { mergeRecipients as mergeRecipientsAtomic } from "../../src/services/recipientMergeService.js";
 import {
   updatePattern,
@@ -59,7 +59,7 @@ import {
 } from "../../src/services/recipientPatternService.js";
 
 const { default: recipientsRouter } =
-  await import("../../src/routes/recipients.js");
+  await import("../../src/routes/recipients.ts");
 
 const api = routeAgent(recipientsRouter, { mountPath: "/api/recipients" });
 const BASE = "/api/recipients";
@@ -185,7 +185,7 @@ describe("Recipient Routes", () => {
     });
 
     it("rejects a non-integer :id via the real validateIdParam guard", async () => {
-      // Previously `vi.mock('.../middleware/validation.js')` replaced
+      // Previously `vi.mock('.../middleware/validation.ts')` replaced
       // validateIdParam with a pass-through, so this guard was never tested.
       const res = await api.get(`${BASE}/abc`).expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));

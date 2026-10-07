@@ -21,9 +21,9 @@
  *    already correct when the auto-commit path returns.
  */
 
-import { query } from "../../database/connection.js";
-import { logger } from "../../config/logger.js";
-import { ValidationError } from "../../middleware/errorHandler.js";
+import { query } from "../../database/connection.ts";
+import { logger } from "../../config/logger.ts";
+import { ValidationError } from "../../middleware/errorHandler.ts";
 import { invalidatePortfolioCaches } from "../info/cache.js";
 
 import { createBatch, stageBatch } from "./stage.js";
@@ -53,7 +53,7 @@ export { createBatch, stageBatch, validateBatch, matchBatch, commitBatch };
  *
  * Always a NUMBER — `createBatch` (stage.js) normalizes node-postgres's
  * BIGSERIAL string at the boundary, and the review/commit routes parse it out
- * of the URL through `coercedIdSchema` (lib/importBatchIds.js:17), which
+ * of the URL through `coercedIdSchema` (lib/importBatchIds.ts:17), which
  * already yielded a number. Formerly a `string|number` union that let the two
  * import responses disagree on the wire.
  *

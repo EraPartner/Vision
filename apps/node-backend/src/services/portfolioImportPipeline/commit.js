@@ -13,12 +13,12 @@
  * legitimate identical fills land while re-importing the statement is a no-op.
  */
 
-import { query, withTransaction } from "../../database/connection.js";
-import { logger } from "../../config/logger.js";
+import { query, withTransaction } from "../../database/connection.ts";
+import { logger } from "../../config/logger.ts";
 import portfolioTransactionService from "../portfolio/portfolioTransactionService.js";
-import recipientRepository from "../../repositories/recipientRepository.js";
-import categoryRepository from "../../repositories/categoryRepository.js";
-import settingsRepository from "../../repositories/settingsRepository.js";
+import recipientRepository from "../../repositories/recipientRepository.ts";
+import categoryRepository from "../../repositories/categoryRepository.ts";
+import settingsRepository from "../../repositories/settingsRepository.ts";
 import { normalizeTransactionPayload } from "../portfolio/portfolioTransactionRules.js";
 import { autoResolveFxRateToEur } from "../portfolio/fxResolve.js";
 import { classifyBrokerageRow } from "../importPipeline/brokerageRouting.js";
@@ -31,7 +31,7 @@ import { commitPortfolioAssetAdjustment } from "../portfolio/portfolioAssetAdjus
 // handful, while a per-row SAVEPOINT keeps crash-isolation (a bad row rolls back
 // to its savepoint without poisoning the chunk).
 /**
- * @typedef {import('../../types/rows.js').PortfolioImportStagingRow} PortfolioImportStagingRow
+ * @typedef {import('../../types/rows.ts').PortfolioImportStagingRow} PortfolioImportStagingRow
  * @typedef {import('./index.js').PortfolioImportBatchId} PortfolioImportBatchId
  * @typedef {import('./index.js').PortfolioImportProgressCallback} PortfolioImportProgressCallback
  */

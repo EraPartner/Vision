@@ -6,14 +6,14 @@ const mocks = vi.hoisted(() => ({
   withTransaction: vi.fn(async (callback) => callback()),
 }));
 
-vi.mock("../src/database/connection.js", () =>
+vi.mock("../src/database/connection.ts", () =>
   mockConnection({
     query: mocks.query,
     withTransaction: mocks.withTransaction,
   }),
 );
 
-import savedChartsRepository from "../src/repositories/savedChartsRepository.js";
+import savedChartsRepository from "../src/repositories/savedChartsRepository.ts";
 
 const storedRow = {
   id: 7,

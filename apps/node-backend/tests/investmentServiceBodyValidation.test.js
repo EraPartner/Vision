@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import investmentRepository from "../src/repositories/investmentRepository.js";
+import investmentRepository from "../src/repositories/investmentRepository.ts";
 import portfolioTransactionService from "../src/services/portfolio/portfolioTransactionService.js";
 import {
   createTransaction,

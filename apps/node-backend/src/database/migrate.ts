@@ -1,0 +1,542 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+} from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import pg from "pg";
+import { logger } from "../config/logger.ts";
+import { query } from "./connection.ts";
+import type { PgQueryResult } from "./connection.ts";
+import {
+  FRESH_BASELINE_REVISION,
+  installFreshBaseline,
+} from "./freshBaseline.ts";
+
+const execFileAsync = promisify(execFile);
+
+type MigrationQuery = (
+  text: string,
+  params?: unknown[],
+) => Promise<PgQueryResult>;
+
+interface HeadCache {
+  head?: string;
+  fingerprint?: string;
+}
+
+/** Shape of the rejection from a promisified `execFile`. */
+interface ExecFileError extends Error {
+  stdout?: string | Buffer;
+  stderr?: string | Buffer;
+  code?: number | string;
+  signal?: string;
+}
+
+interface RunAlembicCommandOptions {
+  timeoutMs?: number;
+}
+
+interface RunMigrationsOptions {
+  /** Defaults to `head`. */
+  target?: string;
+  timeoutMs?: number;
+}
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// repo root: apps/node-backend/src/database/ -> ../../../..
+const REPO_ROOT = process.env.VISION_RUNTIME_ROOT
+  ? path.resolve(process.env.VISION_RUNTIME_ROOT)
+  : path.resolve(__dirname, "..", "..", "..", "..");
+
+// A cold or big-jump upgrade can legitimately run for minutes (full-table
+// rewrites on transactions / asset_price_history). The old 120s kill turned a
+// slow-but-progressing upgrade into a hard failure. Default to 10 minutes and
+// let operators override via VISION_MIGRATE_TIMEOUT_MS (0 = no timeout).
+// Progress is now durable per-migration (env.py transaction_per_migration), so
+// even if this fires mid-chain the completed migrations persist and the next
+// boot resumes rather than restarting the whole chain.
+function resolveDefaultTimeoutMs(): number {
+  const raw = process.env.VISION_MIGRATE_TIMEOUT_MS;
+  if (raw === undefined || raw === "") return 600_000;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return 600_000;
+  return n; // 0 disables the execFile timeout entirely
+}
+
+const DEFAULT_TIMEOUT_MS = resolveDefaultTimeoutMs();
+
+// Binary path for alembic. Defaults to PATH lookup; override in containers
+// where alembic lives inside a venv (e.g. /venv/bin/alembic).
+const ALEMBIC_BIN = process.env.ALEMBIC_BIN || "alembic";
+
+// alembic.ini lives at config/alembic.ini relative to repo root.
+const ALEMBIC_CONFIG = process.env.ALEMBIC_CONFIG || "config/alembic.ini";
+
+// Skip-at-head cache. After a successful `alembic upgrade head`, we record the
+// applied revision + a fingerprint of alembic/versions/. On subsequent boots,
+// if the DB is still at that revision and the versions directory hasn't
+// changed, we skip the alembic invocation entirely (~1-3s warm-boot win).
+const HEAD_CACHE_DIR =
+  process.env.VISION_CACHE_DIR || path.join(REPO_ROOT, ".vision-cache");
+const HEAD_CACHE_FILE = path.join(HEAD_CACHE_DIR, "alembic-head.json");
+const VERSIONS_DIR = path.join(REPO_ROOT, "alembic", "versions");
+const PUBLIC_TABLES_ANALYZE_SQL = `DO $vision_analyze$
+DECLARE item record;
+BEGIN
+  FOR item IN
+    SELECT schemaname, tablename
+    FROM pg_catalog.pg_tables
+    WHERE schemaname = 'public'
+    ORDER BY tablename
+  LOOP
+    EXECUTE format('ANALYZE %I.%I', item.schemaname, item.tablename);
+  END LOOP;
+END
+$vision_analyze$`;
+
+/**
+ * Execute migration preflight queries with the schema owner when Vision uses
+ * separate runtime and migration roles. The application pool deliberately
+ * lacks ownership of alembic_version, so CREATE/ALTER/UPDATE preflight work
+ * must never fall back to DATABASE_URL in the least-privilege setup.
+ */
+async function withMigrationQuery<T>(
+  fn: (queryFn: MigrationQuery) => Promise<T>,
+): Promise<T> {
+  const migrationsUrl = process.env.DATABASE_URL_MIGRATIONS?.trim();
+  const databaseUrl = process.env.DATABASE_URL?.trim();
+  if (!migrationsUrl || migrationsUrl === databaseUrl) {
+    return fn(query);
+  }
+
+  const client = new pg.Client({
+    connectionString: migrationsUrl,
+    connectionTimeoutMillis: 5_000,
+    statement_timeout: 30_000,
+  });
+  await client.connect();
+  try {
+    return await fn((text, params) => client.query(text, params));
+  } finally {
+    await client.end().catch((error: Error) => {
+      logger.warn(
+        { err: error.message },
+        "migration preflight connection cleanup failed",
+      );
+    });
+  }
+}
+
+function fingerprintVersionsDir() {
+  try {
+    const files = readdirSync(VERSIONS_DIR)
+      .filter((f) => f.endsWith(".py") && !f.startsWith("_"))
+      .sort();
+    return files.join(",");
+  } catch {
+    return "";
+  }
+}
+
+async function isAtHeadCached() {
+  if (!existsSync(HEAD_CACHE_FILE)) return false;
+  try {
+    const cached = JSON.parse(
+      readFileSync(HEAD_CACHE_FILE, "utf8"),
+    ) as HeadCache | null;
+    if (!cached?.head || !cached?.fingerprint) return false;
+    const fp = fingerprintVersionsDir();
+    if (!fp || fp !== cached.fingerprint) return false;
+    const res = await query("SELECT version_num FROM alembic_version LIMIT 1");
+    const dbRev = res.rows[0]?.version_num;
+    return dbRev === cached.head;
+  } catch (err) {
+    logger.warn(
+      { err: (err as Error).message },
+      "isAtHeadCached check failed; will run alembic",
+    );
+    return false;
+  }
+}
+
+async function writeHeadCache() {
+  try {
+    mkdirSync(HEAD_CACHE_DIR, { recursive: true });
+    const res = await query("SELECT version_num FROM alembic_version LIMIT 1");
+    const head = res.rows[0]?.version_num;
+    if (!head) return;
+    const payload = {
+      head,
+      fingerprint: fingerprintVersionsDir(),
+      appliedAt: new Date().toISOString(),
+    };
+    writeFileSync(HEAD_CACHE_FILE, JSON.stringify(payload) + "\n");
+  } catch (err) {
+    logger.warn({ err }, "writeHeadCache failed; non-fatal");
+  }
+}
+
+// Consolidated baseline revision — replaces the 0002..0032 chain that was
+// previously overlaid on top of a schemaInit.js-seeded DB. Kept in sync with
+// the `revision` identifier in alembic/versions/0001_initial_database_schema.py.
+const BASELINE_REVISION = "0001_initial";
+
+// Revisions that existed in the previous chain and were moved to
+// alembic/legacy_versions/ as part of ADR-027 squash. If a deployed DB is
+// stamped at any of these, we normalize it to BASELINE_REVISION so that
+// `alembic upgrade head` does not fail with "Can't locate revision".
+const LEGACY_REVISIONS = new Set([
+  "0002_add_url",
+  "0003_make_recipient_nullable",
+  "0004_portfolio_tables",
+  "0005_manual_raw_transactions",
+  "0006_price_providers",
+  "0007_recipient_merge",
+  "0008_drop_custom_raw_txns",
+  "0009_transaction_splits",
+  "0010_inv_muni_tax",
+  "0011_planned_loans",
+  "0012_add_indexes",
+  "0013_investment_inheritance",
+  "0014_investments_view_update_trigger",
+  "0015_add_gift_portfolio_txn_type",
+  "0016_add_fx_rate_to_portfolio_transactions",
+  "0017_investment_custom_provider_history",
+  "0018_metals_transactions_inheritance_split",
+  "0019_asset_price_history_cache",
+  "0020_drop_asset_price_history_fk",
+  "0021_price_provider_binance",
+  "0022_price_provider_kinesis",
+  "0023_portfolio_performance_snapshots",
+  "0024_per_class_invested_columns",
+  "0025_exchange_rate_cache",
+  "0026_finance_aggregations",
+  "0027_planned_execution_idempotency",
+  "0028_split_audit_overpayment_guard",
+  "0029_recipient_category_uniqueness",
+  "0030_import_pipeline_staging",
+  "0031_ai_chat_tables",
+  "0032_add_hot_path_indexes",
+]);
+const LEGACY_0001_SCHEMA_FINGERPRINT =
+  "fd651bec4d81a896e89e25af39821bb744e6a8e7b08a2cc8528915fcfa1c22bc";
+
+/**
+ * If the DB has an `alembic_version` row pointing at a revision that was
+ * moved to legacy_versions/, rewrite it to the current baseline so
+ * `alembic upgrade head` does not fail with "Can't locate revision".
+ *
+ * On a truly fresh DB the table does not exist yet. Alembic would otherwise
+ * create it itself with a default `version_num VARCHAR(32)`, which is too
+ * narrow for current revision names (e.g. `0003_import_batch_id_on_transactions`
+ * is 38 chars). We preflight-create it at VARCHAR(64) so the first revision
+ * insert does not blow up with a string-truncation error.
+ */
+async function stampBaselineWithQuery(migrationQuery: MigrationQuery) {
+  try {
+    const tableExists = await migrationQuery(
+      `SELECT EXISTS (
+         SELECT 1 FROM information_schema.tables
+         WHERE table_schema = 'public' AND table_name = 'alembic_version'
+       ) AS present`,
+    );
+    if (!tableExists.rows[0]?.present) {
+      await migrationQuery(
+        `CREATE TABLE alembic_version (
+           version_num VARCHAR(64) NOT NULL,
+           CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num)
+         )`,
+      );
+      logger.info("alembic_version preflight-created with VARCHAR(64)");
+      return {
+        skipped: true,
+        reason: "preflight-created empty alembic_version",
+      };
+    }
+
+    const versionRes = await migrationQuery(
+      "SELECT version_num FROM alembic_version LIMIT 2",
+    );
+    if (versionRes.rows.length > 1) {
+      throw new Error(
+        "Multiple Alembic revisions require manual reconciliation",
+      );
+    }
+    const current = versionRes.rows[0]?.version_num;
+    if (!current) {
+      return { skipped: true, reason: "alembic_version table empty" };
+    }
+    const legacy = LEGACY_REVISIONS.has(current);
+    const active = readdirSync(VERSIONS_DIR).some((filename) => {
+      if (!filename.endsWith(".py")) return false;
+      const source = readFileSync(path.join(VERSIONS_DIR, filename), "utf8");
+      const match = /^revision\s*(?::\s*str)?\s*=\s*["']([^"']+)["']/m.exec(
+        source,
+      );
+      return match?.[1] === current;
+    });
+    if (!legacy && !active) {
+      return {
+        skipped: true,
+        reason: `unknown revision ${current}; leaving untouched`,
+      };
+    }
+    if (legacy && process.env.VISION_BASELINE_BRIDGE_APPROVED !== "1") {
+      throw new Error(
+        `Historical revision ${current} requires an explicit, restore-tested bridge`,
+      );
+    }
+    if (legacy) {
+      const fingerprintSql = readFileSync(
+        path.join(REPO_ROOT, "alembic", "baseline", "schema_fingerprint.sql"),
+        "utf8",
+      );
+      const fingerprint = await migrationQuery(fingerprintSql);
+      if (
+        fingerprint.rows[0]?.schema_fingerprint !==
+        LEGACY_0001_SCHEMA_FINGERPRINT
+      ) {
+        throw new Error(
+          `Historical revision ${current} has an unrecognized schema; refusing stamp`,
+        );
+      }
+    }
+
+    // Only recognized, approved revision paths may alter the version column.
+    const colRes = await migrationQuery(
+      `SELECT character_maximum_length AS len
+       FROM information_schema.columns
+       WHERE table_name = 'alembic_version' AND column_name = 'version_num'`,
+    );
+    const colLen = colRes.rows[0]?.len;
+    if (typeof colLen === "number" && colLen < 64) {
+      logger.warn(
+        { from: colLen, to: 64 },
+        "expanding alembic_version.version_num",
+      );
+      await migrationQuery(
+        "ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(64)",
+      );
+    }
+    if (!legacy) {
+      return {
+        skipped: true,
+        reason:
+          current === BASELINE_REVISION
+            ? "already at baseline"
+            : `active revision ${current}`,
+      };
+    }
+
+    await migrationQuery("UPDATE alembic_version SET version_num = $1", [
+      BASELINE_REVISION,
+    ]);
+    logger.warn(
+      { from: current, to: BASELINE_REVISION },
+      "alembic_version stamped to new baseline (ADR-027 squash)",
+    );
+    return { stamped: true, from: current, to: BASELINE_REVISION };
+  } catch (error) {
+    logger.error({ err: error }, "stampBaselineIfLegacy failed");
+    throw error;
+  }
+}
+
+async function stampBaselineIfLegacy() {
+  return withMigrationQuery(stampBaselineWithQuery);
+}
+
+async function readCurrentRevision() {
+  return withMigrationQuery(async (migrationQuery) => {
+    const result = await migrationQuery(
+      "SELECT version_num FROM alembic_version LIMIT 2",
+    );
+    if (result.rows.length !== 1) {
+      throw new Error("Database must have exactly one Alembic revision");
+    }
+    return result.rows[0].version_num;
+  });
+}
+
+/**
+ * Best-effort ANALYZE of the tables a migration most likely rewrote or
+ * backfilled in full, so the planner has fresh row/histogram stats for the
+ * first queries after an upgrade instead of stale (or empty) ones. Runs only
+ * on a real (non-cached) upgrade. Failures are logged and swallowed — stale
+ * statistics degrade plans but must never fail application boot.
+ */
+async function analyzeAfterMigrations() {
+  try {
+    await withMigrationQuery(async (migrationQuery) => {
+      for (const table of ["transactions", "asset_price_history"]) {
+        try {
+          await migrationQuery(`ANALYZE ${table}`);
+        } catch (err) {
+          logger.warn(
+            { err: (err as Error).message, table },
+            "post-migration ANALYZE failed; non-fatal",
+          );
+        }
+      }
+    });
+  } catch (err) {
+    logger.warn(
+      { err: (err as Error).message },
+      "post-migration ANALYZE connection failed; non-fatal",
+    );
+  }
+}
+
+/**
+ * Refresh database-wide planner statistics through the migration/owner role in
+ * split-role installs. The caller keeps this best-effort so an ANALYZE failure
+ * can never block backend readiness.
+ */
+export async function runDatabaseAnalyze(): Promise<void> {
+  return withMigrationQuery(async (migrationQuery) => {
+    await migrationQuery(PUBLIC_TABLES_ANALYZE_SQL);
+  });
+}
+
+/**
+ * Execute alembic with the given subcommand arguments. Fail-fast on non-zero
+ * exit. Logs stdout/stderr streamed from alembic.
+ *
+ * @param args - alembic arguments after `-c <config>` (e.g. ['upgrade', 'head'])
+ */
+async function execAlembic(args: string[], timeoutMs: number): Promise<void> {
+  try {
+    const { stdout, stderr } = await execFileAsync(
+      ALEMBIC_BIN,
+      ["-c", ALEMBIC_CONFIG, ...args],
+      {
+        cwd: REPO_ROOT,
+        env: { ...process.env, PYTHONUNBUFFERED: "1" },
+        timeout: timeoutMs,
+        maxBuffer: 32 * 1024 * 1024,
+      },
+    );
+
+    if (stdout) {
+      logger.info({ output: stdout.trim() }, "alembic stdout");
+    }
+    if (stderr) {
+      // alembic writes INFO-level progress to stderr by default
+      logger.info({ output: stderr.trim() }, "alembic stderr");
+    }
+  } catch (error) {
+    const execError = error as ExecFileError;
+    logger.error(
+      {
+        err: execError,
+        stdout: execError.stdout?.toString?.().trim?.(),
+        stderr: execError.stderr?.toString?.().trim?.(),
+        code: execError.code,
+        signal: execError.signal,
+      },
+      "alembic command failed",
+    );
+    throw new Error(
+      `Alembic ${args[0] ?? "command"} failed (exit ${execError.code ?? "unknown"}): ${execError.message}`,
+      { cause: error },
+    );
+  }
+}
+
+/**
+ * Run an arbitrary alembic subcommand (downgrade, stamp, ...) with the same
+ * `stampBaselineIfLegacy()` preflight the boot path runs. The preflight is
+ * what makes any version-table write safe here: a bare alembic invocation
+ * auto-creates (or has inherited) `alembic_version.version_num` as
+ * VARCHAR(32), which is too narrow for this chain's longer revision ids.
+ *
+ * @param args - alembic arguments (e.g. ['downgrade', '-1'], ['stamp', 'head'])
+ */
+export async function runAlembicCommand(
+  args: string[],
+  options: RunAlembicCommandOptions = {},
+): Promise<void> {
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+
+  logger.info({ args, cwd: REPO_ROOT }, "alembic command start");
+
+  await stampBaselineIfLegacy();
+  await execAlembic(args, timeoutMs);
+
+  logger.info("alembic command ok");
+}
+
+/**
+ * Run alembic upgrade head. Fail-fast on non-zero exit.
+ * Logs stdout/stderr streamed from alembic.
+ */
+export async function runMigrations(options: RunMigrationsOptions = {}) {
+  const target = options.target || "head";
+  // Nullish (not ||) so an explicit timeoutMs: 0 ("no timeout") is honoured.
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+
+  logger.info({ target, cwd: REPO_ROOT }, "alembic migrate start");
+
+  let installed = false;
+  if (target === "head") {
+    installed = await installFreshBaseline({
+      repoRoot: REPO_ROOT,
+      connectionString:
+        process.env.DATABASE_URL_MIGRATIONS?.trim() ||
+        process.env.DATABASE_URL?.trim(),
+    });
+    if (installed) logger.info("reviewed fresh database baseline installed");
+  }
+
+  await stampBaselineIfLegacy();
+
+  const currentRevision =
+    target === "head" ? await readCurrentRevision() : undefined;
+  const bridgeApproved = process.env.VISION_BASELINE_BRIDGE_APPROVED === "1";
+  const deferred =
+    target === "head" &&
+    !installed &&
+    !bridgeApproved &&
+    currentRevision !== FRESH_BASELINE_REVISION;
+  const effectiveTarget = deferred ? "0118_audit_retention_pruner" : target;
+  if (deferred) {
+    logger.warn(
+      { currentRevision },
+      "squashed baseline bridge deferred until approved maintenance",
+    );
+    if (currentRevision === effectiveTarget) {
+      return { revision: effectiveTarget, deferred: true };
+    }
+  }
+
+  if (!deferred && target === "head" && (await isAtHeadCached())) {
+    logger.info("alembic skip: cached head matches DB and versions/ unchanged");
+    return { revision: target, deferred: false };
+  }
+
+  await execAlembic(["upgrade", effectiveTarget], timeoutMs);
+
+  logger.info("alembic migrate ok");
+
+  if (target === "head" && !deferred) {
+    await writeHeadCache();
+  }
+
+  // Freshen planner statistics on the two tables that migrations most often
+  // rewrite/backfill wholesale (transactions, asset_price_history). This only
+  // runs when alembic actually executed — the warm-boot path short-circuits
+  // via isAtHeadCached() above and never reaches here — so it is not paid on
+  // every boot. Best-effort: bad stats are a perf issue, never a boot blocker.
+  await analyzeAfterMigrations();
+  return { revision: effectiveTarget, deferred };
+}
+
+export { stampBaselineIfLegacy as __stampBaselineIfLegacy };

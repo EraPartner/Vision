@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockConnection } from "./helpers/repoMocks.js";
 
-vi.mock("../src/database/connection.js", () => mockConnection());
+vi.mock("../src/database/connection.ts", () => mockConnection());
 
 // Keep convertWithRates real (pure math); only stub the DB-backed current-rate loader.
 vi.mock(
@@ -12,7 +12,7 @@ vi.mock(
   },
 );
 
-import { query } from "../src/database/connection.js";
+import { query } from "../src/database/connection.ts";
 import {
   loadCurrentRates,
   __clearHistoricalIndexCache as clearHistoricalIndexCache,

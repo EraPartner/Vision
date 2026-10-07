@@ -14,19 +14,19 @@ const mocks = vi.hoisted(() => ({
   getSetting: vi.fn(),
 }));
 
-vi.mock("../src/database/connection.js", () =>
+vi.mock("../src/database/connection.ts", () =>
   mockConnection({ withTransaction: (fn) => fn() }),
 );
 
-vi.mock("../src/repositories/portfolioBrokerRetagRepository.js", () => ({
+vi.mock("../src/repositories/portfolioBrokerRetagRepository.ts", () => ({
   default: mocks,
 }));
 
-vi.mock("../src/repositories/auditChainRepository.js", () => ({
+vi.mock("../src/repositories/auditChainRepository.ts", () => ({
   appendAuditEvent: mocks.appendAuditEvent,
 }));
 
-vi.mock("../src/repositories/settingsRepository.js", () => ({
+vi.mock("../src/repositories/settingsRepository.ts", () => ({
   settingsRepository: { get: mocks.getSetting },
 }));
 
@@ -39,7 +39,7 @@ import {
 import {
   ConflictError,
   ValidationError,
-} from "../src/middleware/errorHandler.js";
+} from "../src/middleware/errorHandler.ts";
 
 const request = {
   transaction_ids: [12, 11],

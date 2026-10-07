@@ -29,16 +29,16 @@ const listAccounts = async () => (await accountService.list()).items;
 import {
   recipientRepository,
   __SYSTEM_RECIPIENT_NAME as SYSTEM_RECIPIENT_NAME,
-} from "../src/repositories/recipientRepository.js";
+} from "../src/repositories/recipientRepository.ts";
 import { reconcileAccount } from "../src/services/reconcileService.js";
 import { setOpeningBalance } from "../src/services/openingBalanceService.js";
 import {
   mergeAccounts,
   previewMerge,
 } from "../src/services/accountMergeService.js";
-import { ValidationError } from "../src/middleware/errorHandler.js";
+import { ValidationError } from "../src/middleware/errorHandler.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.js";
-import { closePool } from "../src/database/connection.js";
+import { closePool } from "../src/database/connection.ts";
 
 const rec = {};
 

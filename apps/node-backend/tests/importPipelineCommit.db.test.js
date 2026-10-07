@@ -37,8 +37,8 @@ import {
   releaseDbSuiteLock,
 } from "./setup/db.js";
 import { commitBatch } from "../src/services/importPipeline/commit.js";
-import { transactionRepository } from "../src/repositories/transactionRepository.js";
-import { closePool } from "../src/database/connection.js";
+import { transactionRepository } from "../src/repositories/transactionRepository.ts";
+import { closePool } from "../src/database/connection.ts";
 import {
   assignImportIdentities,
   budgetingIdentityBase,

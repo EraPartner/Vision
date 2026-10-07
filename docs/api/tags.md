@@ -2,21 +2,21 @@
 title: Tags API
 type: api
 status: active
-date: 2026-08-31
+date: 2026-10-07
 updated: 2026-08-31
 tags: [api, tags, tagging, orthogonal-dimension, adr-052, bulk-tag]
 description: REST endpoints for transaction tags — a slug-based orthogonal labelling dimension introduced in ADR-052 (May 2026). Tag attachment to transactions is performed via the bulk endpoint on /api/transactions.
 aliases: [tags api, transaction tags api, /api/tags]
 related_code:
-  - apps/node-backend/src/routes/tags.js
-  - apps/node-backend/src/repositories/tagRepository.js
-  - apps/node-backend/src/lib/slugify.js
+  - apps/node-backend/src/routes/tags.ts
+  - apps/node-backend/src/repositories/tagRepository.ts
+  - apps/node-backend/src/lib/slugify.ts
 ---
 
 # Tags API
 
 > [!abstract] Overview
-> Tags are an orthogonal labelling dimension layered on top of transactions (independent of categories or recipients). Each tag has a slug-based identity, a colour, and an `is_active` soft-delete flag. Attachment / detachment is performed in bulk on `/api/transactions/bulk-tag` so the slug ↔ id resolution can happen once per call. Source: [[apps/node-backend/src/routes/tags.js]] and [[apps/node-backend/src/repositories/tagRepository.js]].
+> Tags are an orthogonal labelling dimension layered on top of transactions (independent of categories or recipients). Each tag has a slug-based identity, a colour, and an `is_active` soft-delete flag. Attachment / detachment is performed in bulk on `/api/transactions/bulk-tag` so the slug ↔ id resolution can happen once per call. Source: [[apps/node-backend/src/routes/tags.ts]] and [[apps/node-backend/src/repositories/tagRepository.ts]].
 
 ## Resource shape
 
@@ -39,7 +39,7 @@ All responses use the unified envelope (`{ ok, data, meta? }` / `{ ok, error, me
 | Method   | Path            | Description                                                                                                                                                               |
 | -------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET`    | `/api/tags`     | List tags. Query: `active=true` (default) / `false` / `all`. Pagination is opt-in: omit `limit`/`offset` for the complete list.                                           |
-| `POST`   | `/api/tags`     | Find-or-create tag by slug (idempotent upsert). A `name` is slugified via `lib/slugify.js`; if the slug already exists, its row is reactivated and the colour is updated. |
+| `POST`   | `/api/tags`     | Find-or-create tag by slug (idempotent upsert). A `name` is slugified via `lib/slugify.ts`; if the slug already exists, its row is reactivated and the colour is updated. |
 | `PATCH`  | `/api/tags/:id` | Update `color` and/or `is_active`.                                                                                                                                        |
 | `DELETE` | `/api/tags/:id` | Soft-delete by setting `is_active=false`. Existing transaction associations are preserved.                                                                                |
 

@@ -14,7 +14,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade() -> None:
     op.execute("""
       CREATE TABLE portfolio_asset_adjustments (
         id BIGINT PRIMARY KEY DEFAULT nextval('portfolio_transactions_id_seq'::regclass),
@@ -76,7 +76,7 @@ def upgrade():
     )
 
 
-def downgrade():
+def downgrade() -> None:
     if (
         op.get_bind()
         .execute(sa.text("SELECT EXISTS(SELECT 1 FROM portfolio_asset_adjustments)"))

@@ -3,9 +3,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mockLogger } from "./helpers/mockLogger.js";
 import { mockTxConnection } from "./helpers/repoMocks.js";
 import { mockCurrencyConversion } from "./helpers/mockCurrencyConversion.js";
-vi.mock("../src/database/connection.js", () => mockTxConnection());
+vi.mock("../src/database/connection.ts", () => mockTxConnection());
 
-vi.mock("../src/config/logger.js", () => ({
+vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
@@ -13,7 +13,7 @@ vi.mock("../src/services/currency/currencyConversionService.js", () =>
   mockCurrencyConversion(),
 );
 
-import { query } from "../src/database/connection.js";
+import { query } from "../src/database/connection.ts";
 import {
   computeAndStoreSnapshots,
   getSnapshots,

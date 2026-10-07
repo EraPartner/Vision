@@ -10,12 +10,12 @@ const mocks = vi.hoisted(() => ({
   assertPortfolioImportReadiness: vi.fn(),
 }));
 
-vi.mock("../src/database/connection.js", () =>
+vi.mock("../src/database/connection.ts", () =>
   mockConnection({
     withTransaction: mocks.withTransaction,
   }),
 );
-vi.mock("../src/repositories/portfolioImportBatchRepository.js", () => ({
+vi.mock("../src/repositories/portfolioImportBatchRepository.ts", () => ({
   lockBatchForUpdate: mocks.lockBatchForUpdate,
   setBatchAccount: mocks.setBatchAccount,
 }));

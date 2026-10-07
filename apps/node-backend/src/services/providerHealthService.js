@@ -6,14 +6,14 @@
  * Supports on-demand probes for the admin UI.
  */
 
-import { logger } from '../config/logger.js';
-import providerHealthRepository from '../repositories/providerHealthRepository.js';
+import { logger } from '../config/logger.ts';
+import providerHealthRepository from '../repositories/providerHealthRepository.ts';
 import twelveDataAdapter from './research/adapters/twelveDataAdapter.js';
 import finnhubAdapter from './research/adapters/finnhubAdapter.js';
 import fmpAdapter from './research/adapters/fmpAdapter.js';
 import alphaVantageAdapter from './research/adapters/alphaVantageAdapter.js';
 
-/** @typedef {import('../repositories/providerHealthRepository.js').ProviderHealth} ProviderHealth */
+/** @typedef {import('../repositories/providerHealthRepository.ts').ProviderHealth} ProviderHealth */
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -115,7 +115,7 @@ async function probeYahoo() {
 
 async function probeKinesis() {
   // Kinesis may not be configured; treat missing base URL as probe failure.
-  const { env } = await import('../config/env.js');
+  const { env } = await import('../config/env.ts');
   const base = env.KINESIS_BASE_URL;
   if (!base) throw new Error('KINESIS_BASE_URL not configured');
   await probeUrl(`${base}/trendline?symbol=KAU_USD&timeframe=60&take=1`);

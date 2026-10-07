@@ -2,7 +2,7 @@
 title: Testing Documentation
 type: testing
 status: active
-date: 2026-10-06
+date: 2026-10-07
 updated: 2026-10-06
 last-updated: 2026-10-06
 last_updated_timestamp: 2026-10-06T00:00:00Z
@@ -549,7 +549,7 @@ import { vi } from "vitest";
 import { mockConnection } from "./helpers/repoMocks.js";
 import { mockCurrencyConversion } from "./helpers/mockCurrencyConversion.js";
 
-vi.mock("../src/database/connection.js", () => mockConnection());
+vi.mock("../src/database/connection.ts", () => mockConnection());
 vi.mock("../src/services/currency/currencyConversionService.js", () =>
   mockCurrencyConversion(),
 );
@@ -841,7 +841,7 @@ The helper returns `null` when `TEST_DATABASE_URL` is unset, so tests skip grace
 
 Backend vitest runs in exactly one CI job, so the service is wired only there. `quality-gate` runs no tests — it only aggregates results.
 
-**`DATABASE_URL` must equal `TEST_DATABASE_URL`.** DB-backed suites seed through the _test_ pool (`getTestPool()`), but the code under test queries through the _app_ pool (`src/database/connection.js`, built from `DATABASE_URL` at import time). Point them at different databases and the seed is invisible to the service. Both the CI job and `with-test-db.sh` set the two to the same value; a suite that depends on it should assert this in `beforeAll` rather than fail mysteriously.
+**`DATABASE_URL` must equal `TEST_DATABASE_URL`.** DB-backed suites seed through the _test_ pool (`getTestPool()`), but the code under test queries through the _app_ pool (`src/database/connection.ts`, built from `DATABASE_URL` at import time). Point them at different databases and the seed is invisible to the service. Both the CI job and `with-test-db.sh` set the two to the same value; a suite that depends on it should assert this in `beforeAll` rather than fail mysteriously.
 
 **Cleanup convention.** Prefer per-test `DELETE` of the tables the suite touches over `TRUNCATE ... CASCADE`: the cascade off `transactions` reaches a dozen unrelated tables and costs ~350 ms per test in ACCESS EXCLUSIVE locks versus ~3 ms for targeted deletes. A wrapping transaction is the other option, but it does not suit services that open their own `withTransaction` or that reconcile the whole corpus rather than a scoped batch — there, other tests' rows would still be visible. Whatever the strategy, the suite must leave no rows behind.
 
@@ -926,7 +926,7 @@ Reference: [[docs/reference/code-patterns#Golden-Fixture Pattern|Golden-Fixture 
 - `apps/node-backend/tests/routes/admin.test.js` covers `POST /api/admin/investments/kinesis/sanitize-history` response handling for success and failure paths.
 - `apps/node-backend/tests/routes/investments.test.js` covers refresh eligibility for Kinesis investments when `price_provider_id` is missing but asset name/symbol maps through Kinesis config.
 
-Code links: [[apps/node-backend/tests/priceProviderService.test.js]], [[apps/node-backend/tests/routes/admin.test.js]], [[apps/node-backend/tests/routes/investments.test.js]], [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/routes/admin.js]], [[apps/node-backend/src/routes/investments.js]]
+Code links: [[apps/node-backend/tests/priceProviderService.test.js]], [[apps/node-backend/tests/routes/admin.test.js]], [[apps/node-backend/tests/routes/investments.test.js]], [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/routes/admin.ts]], [[apps/node-backend/src/routes/investments.ts]]
 
 ### Backend
 
@@ -950,9 +950,9 @@ Code links: [[apps/node-backend/tests/priceProviderService.test.js]], [[apps/nod
 
 - Settings and middleware validation coverage additions for this branch:
   - [[apps/node-backend/tests/routes/settings.test.js]] covers settings route validation and error semantics: key-length guardrails, missing `value`, `dashboard_settings` `exclusionScope` and `excludedCategoryIds` validation, bulk upsert payload-type rejection, and DELETE not-found behavior.
-  - [[apps/node-backend/tests/validation.test.js]] covers validation-only `validateIdParam` and `validateIntParam` behavior in [[apps/node-backend/src/middleware/validation.js]]: missing-id handling, strict invalid-id errors, no mutation of valid Express path strings, repeated validation, and explicit numeric return through `assertIdParam`.
+  - [[apps/node-backend/tests/validation.test.js]] covers validation-only `validateIdParam` and `validateIntParam` behavior in [[apps/node-backend/src/middleware/validation.ts]]: missing-id handling, strict invalid-id errors, no mutation of valid Express path strings, repeated validation, and explicit numeric return through `assertIdParam`.
 - Database connection module coverage additions for this branch:
-  - [[apps/node-backend/tests/connection.test.js]] covers [[apps/node-backend/src/database/connection.js]] pool idle-client error logging, transient retry behavior (`ECONNRESET`, `08006`), non-transient no-retry behavior, max-retry exhaustion, utility/helper methods (`checkConnection`, `getTableCount`, `getPoolStats`, `closePool`, `queryPrepared`, `getClient`), and nested transactions that reuse one ambient client under unique savepoints on success and failure.
+  - [[apps/node-backend/tests/connection.test.js]] covers [[apps/node-backend/src/database/connection.ts]] pool idle-client error logging, transient retry behavior (`ECONNRESET`, `08006`), non-transient no-retry behavior, max-retry exhaustion, utility/helper methods (`checkConnection`, `getTableCount`, `getPoolStats`, `closePool`, `queryPrepared`, `getClient`), and nested transactions that reuse one ambient client under unique savepoints on success and failure.
   - [[apps/node-backend/tests/helpers/repoMocks.test.js]] keeps the shared `mockTxConnection` contract aligned with production ambient routing, including nested savepoints and post-transaction invalidation.
 
 - Security/config regression additions for this branch:
@@ -981,7 +981,7 @@ Code links: [[apps/node-backend/tests/priceProviderService.test.js]], [[apps/nod
 - News image blank-box regression fix: backend CSP `img-src` now includes `https:` in [[apps/node-backend/src/main.js]], and news-card usage passes `fallbackClassName="hidden"` via [[apps/frontend/src/features/portfolio/PortfolioNewsFeed.tsx]] and [[apps/frontend/src/pages/research/MarketLookupPage.tsx]] with support added in [[apps/frontend/src/components/shared/RemoteNewsImage.tsx]].
 - Historical FX conversion coverage expanded: [[apps/node-backend/tests/currencyConversionService.test.js]] now validates sparse historical backfill behavior (missing `(currency,date)` pairs only), date-aware row conversion options (`useHistoricalRatesByDate`, `dateField`), and nearest-date fallback logic.
 - `getBankBalances(targetCurrency)` FX-history coverage expanded: [[apps/node-backend/tests/infoRepository.test.js]] now verifies `convertRowsToEur(..., targetCurrency, { useHistoricalRatesByDate: true, dateField: 'date' })` is used for both current balances and monthly history rows.
-- `apps/node-backend/tests/infoRepository.test.js` adds regression coverage for `/api/info/net-worth` snapshot sanitization of isolated one-day unit investment spikes, asserting outlier-day correction between neighbors and stable current investment totals ([[apps/node-backend/src/repositories/infoRepository.js]], [[apps/node-backend/tests/infoRepository.test.js]]).
+- `apps/node-backend/tests/infoRepository.test.js` adds regression coverage for `/api/info/net-worth` snapshot sanitization of isolated one-day unit investment spikes, asserting outlier-day correction between neighbors and stable current investment totals ([[apps/node-backend/src/repositories/infoRepository.ts]], [[apps/node-backend/tests/infoRepository.test.js]]).
 
 Code links: [[apps/frontend/src/features/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]], [[apps/frontend/src/features/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/features/portfolio/WatchlistChartDialog.tsx]], `apps/frontend/src/components/charts/` (chart.tsx removed in ADR-018 visx/d3 migration), [[apps/frontend/src/lib/dateUtils.ts]], [[apps/frontend/src/hooks/useStatistics.test.ts]], [[apps/frontend/src/features/statistics/statisticsUtils.ts]], [[apps/frontend/src/utils/currency.ts]], [[apps/frontend/src/stores/hydration/AppSettingsHydration.tsx]], [[apps/frontend/src/stores/hydration/SettingsHydration.tsx]], [[apps/node-backend/tests/routes/info.test.js]], [[apps/node-backend/tests/infoRepository.test.js]], [[apps/node-backend/tests/currencyConversionService.test.js]]
 
@@ -1406,7 +1406,7 @@ Validation runs (passed):
 - `bun vitest run tests/currencyConversionService.test.js tests/routes/plannedTransactions.test.js tests/routes/transactions.test.js`
 - `npm test -- --coverage`
 
-Related code: [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/routes/plannedTransactions.js]], [[apps/node-backend/src/routes/transactions.js]]
+Related code: [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/routes/plannedTransactions.ts]], [[apps/node-backend/src/routes/transactions.ts]]
 
 ### Additional backend repository/schema coverage (2026-04-11)
 
@@ -1416,7 +1416,7 @@ Related code: [[apps/node-backend/src/services/currency/currencyConversionServic
 > [!note] Schema initialization test archived
 > `schemaInit.test.js` was deleted in Phase 1 (2026-04-21) when `schemaInit.js` was replaced with Alembic migrations ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]).
 
-Related code: [[apps/node-backend/src/repositories/categoryRepository.js]], [[apps/node-backend/src/repositories/plannedTransactionRepository.js]]
+Related code: [[apps/node-backend/src/repositories/categoryRepository.ts]], [[apps/node-backend/src/repositories/plannedTransactionRepository.ts]]
 
 Validation run (passed): `bun vitest run tests/categoryRepository.test.js tests/plannedTransactionRepository.test.js`; `npm test -- --coverage`
 
@@ -1447,7 +1447,7 @@ Validation run (passed): `bun vitest run tests/categoryRepository.test.js tests/
   - `bun vitest run tests/categoryRepository.test.js tests/plannedTransactionRepository.test.js`
   - `npm test -- --coverage`
 - Latest coverage snapshot: statements **76.84%**, branches **61.72%**, functions **80.74%**, lines **80.29%**.
-- Related code: [[apps/node-backend/src/repositories/categoryRepository.js]], [[apps/node-backend/src/repositories/plannedTransactionRepository.js]]
+- Related code: [[apps/node-backend/src/repositories/categoryRepository.ts]], [[apps/node-backend/src/repositories/plannedTransactionRepository.ts]]
 
 ### Incremental backend test addendum (2026-04-11, adapter + raw import branches)
 
@@ -1480,8 +1480,8 @@ Validation runs (Phase C):
 
 ### Incremental backend info-route test addendum (2026-04-11)
 
-- [[apps/node-backend/tests/routes/info.test.js]] expanded coverage for route-level dependency interactions in [[apps/node-backend/src/routes/info.js]] using explicit mocks for:
-  - [[apps/node-backend/src/database/connection.js]] query behavior
+- [[apps/node-backend/tests/routes/info.test.js]] expanded coverage for route-level dependency interactions in [[apps/node-backend/src/routes/info.ts]] using explicit mocks for:
+  - [[apps/node-backend/src/database/connection.ts]] query behavior
   - [[apps/node-backend/src/services/recurringDetectionService.js]]
   - [[apps/node-backend/src/services/materializedViewService.js]]
   - [[apps/node-backend/src/services/currency/currencyConversionService.js]] cache helpers
@@ -1500,7 +1500,7 @@ Validation runs (passed):
 - `bun vitest run tests/routes/info.test.js`
 - `npm test -- --coverage`
 
-Coverage snapshot after this update: overall `81.12/66.86/84.49/84.53` and [[apps/node-backend/src/routes/info.js]] `93.62/78.72/100/94.58` (statements/branches/functions/lines).
+Coverage snapshot after this update: overall `81.12/66.86/84.49/84.53` and [[apps/node-backend/src/routes/info.ts]] `93.62/78.72/100/94.58` (statements/branches/functions/lines).
 
 ### Incremental backend repository coverage addendum (2026-04-11, portfolio transactions)
 
@@ -1508,7 +1508,7 @@ Coverage snapshot after this update: overall `81.12/66.86/84.49/84.53` and [[app
   - `getAllByInvestmentIds`: empty-normalized-id early return, id/type sanitization, clamped `perInvestmentLimit`/`limit`/`offset`, and omitted type/limit branch
   - `getCount`: single `investmentId` + `type`, normalized `investmentIds` array, and all-invalid-ids branch that skips `ANY(...)` and applies type-only filtering
   - `getSummary`: grouped summary row return path
-- Related code: [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]
+- Related code: [[apps/node-backend/src/repositories/portfolioTransactionRepository.ts]]
 - Validation runs (passed):
   - `bun vitest run tests/portfolioTransactionRepository.test.js` (25 tests)
   - `npm test -- --coverage` (827 tests)
@@ -2006,7 +2006,7 @@ Covers portfolio cost basis calculations (FIFO/LIFO), accrued interest computati
 - Immutability assertions: `sanitizeSnapshotSpikes(input)` does not mutate input array
 - `setUTCDate()` always steps exactly 24 hours regardless of local DST changes
 
-**Related code:** [[apps/node-backend/src/services/calculations/portfolioMath.js]], [[packages/shared-utils/src/portfolio.js]], [[docs/features/portfolio|Portfolio Feature]]
+**Related code:** [[apps/node-backend/src/services/calculations/portfolioMath.js]], [[packages/shared-utils/src/portfolio.ts]], [[docs/features/portfolio|Portfolio Feature]]
 
 ### Import Pipeline Tests
 

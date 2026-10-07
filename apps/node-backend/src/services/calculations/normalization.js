@@ -10,13 +10,13 @@
  * The DB-level UNIQUE constraint on `recipients.normalized_name` (migration
  * 0029) guarantees that an exact-normalized match returns at most one row.
  */
-import { query } from '../../database/connection.js';
+import { query } from '../../database/connection.ts';
 import {
   cleanRecipientName,
   cleanKbcRecipientName,
   normalizeToUppercase,
   normalizeForMatching,
-} from '../../lib/textNormalization.js';
+} from '../../lib/textNormalization.ts';
 
 export {
   cleanRecipientName,

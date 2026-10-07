@@ -1,9 +1,9 @@
-import { ConflictError } from "../middleware/errorHandler.js";
+import { ConflictError } from "../middleware/errorHandler.ts";
 import {
   getImportReadinessProblems,
   getManualPortfolioOverlaps,
   lockImportReadinessHistory,
-} from "../repositories/portfolioImportBatchRepository.js";
+} from "../repositories/portfolioImportBatchRepository.ts";
 
 const MAINTAINED_ADAPTERS = new Set([
   "ibkr",

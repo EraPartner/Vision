@@ -1,10 +1,10 @@
 /** Bounded service datasets with canonical portfolio replay and stored FX only. */
-import { query } from "../database/connection.js";
+import { query } from "../database/connection.ts";
 import { buildInvestmentSummaryCorePartitioned } from "@vision/shared-utils/portfolio";
 import { UNIT_BASED_ASSET_CLASSES } from "@vision/types/assetClasses";
-import { toDecimal } from "../lib/money.js";
+import { toDecimal } from "../lib/money.ts";
 import { findRateOnOrBeforeInIndex } from "./currency/rateFetcher.js";
-import { todayAppDateString } from "../lib/timezone.js";
+import { todayAppDateString } from "../lib/timezone.ts";
 
 const MAX_ROWS = 100000;
 const marketAssetClasses = new Set(UNIT_BASED_ASSET_CLASSES);

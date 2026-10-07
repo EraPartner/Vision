@@ -10,10 +10,10 @@ import {
   query,
   poolQuery,
   withTransaction,
-} from "../src/database/connection.js";
+} from "../src/database/connection.ts";
 import transactionRepository, {
   clearTransactionCountCache,
-} from "../src/repositories/transactionRepository.js";
+} from "../src/repositories/transactionRepository.ts";
 import { getAdapter } from "../src/services/importPipeline/adapters/index.js";
 import { findBestRecipientMatches } from "../src/services/calculations/normalization.js";
 import {
@@ -28,8 +28,8 @@ const baseWithTransaction = withTransaction.getMockImplementation();
 // ambient context routes those onto `mockClient`, alongside SAVEPOINTs issued
 // through withSavepointIfInTransaction.
 const { mockClient } = vi.hoisted(() => ({ mockClient: { query: vi.fn() } }));
-vi.mock("../src/database/connection.js", () => mockTxConnection(mockClient));
-vi.mock("../src/config/logger.js", () => ({
+vi.mock("../src/database/connection.ts", () => mockTxConnection(mockClient));
+vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 vi.mock("../src/services/importPipeline/adapters/index.js", () => ({

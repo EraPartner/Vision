@@ -17,8 +17,8 @@
  */
 
 import { computeCashflowForecast } from "./calculations/forecast/index.js";
-import { roundMoney } from "../lib/money.js";
-import insightCashProjectionRepository from "../repositories/insightCashProjectionRepository.js";
+import { roundMoney } from "../lib/money.ts";
+import insightCashProjectionRepository from "../repositories/insightCashProjectionRepository.ts";
 
 // Method id strings as exported by src/services/calculations/forecast/methods/*.
 // Monte-Carlo methods are the only ones that carry p10/p90 bands.

@@ -2,7 +2,7 @@
 title: Research API
 type: endpoint
 status: active
-date: 2026-06-16
+date: 2026-10-07
 updated: 2026-09-20
 tags:
   - api
@@ -31,7 +31,7 @@ aliases:
   - research-endpoints
   - multi-provider-research
 related_code:
-  - apps/node-backend/src/routes/research.js
+  - apps/node-backend/src/routes/research.ts
   - apps/node-backend/src/services/research/researchAggregator.js
   - apps/node-backend/src/services/research/capabilityMap.js
   - apps/node-backend/src/services/research/quotaGovernor.js
@@ -45,7 +45,7 @@ related_code:
   - apps/node-backend/src/services/research/adapters/macroCatalog.js
   - apps/node-backend/src/services/research/projection/portfolioProjection.js
   - apps/node-backend/src/services/research/fundamentalsScorecard.js
-  - apps/node-backend/src/repositories/providerQuotaRepository.js
+  - apps/node-backend/src/repositories/providerQuotaRepository.ts
 ---
 
 # Research API
@@ -685,7 +685,7 @@ The six data endpoints are thin wrappers over the `researchAggregator` singleton
 
 1. **Cache check** — `researchCache.get(key)` keyed by `dataType:assetClass:symbol:range`. A hit returns `source: 'cache'` immediately; no quota is spent.
 2. **Capability chain** — `resolveProviderChain(dataType, assetClass)` from [[apps/node-backend/src/services/research/capabilityMap.js]] returns the ordered provider preference for that data type and asset class. Providers absent an adapter method or API key are filtered out by `isProviderKeyed` ([[apps/node-backend/src/services/research/providerKeys.js]]).
-3. **Quota gate** — `governor.canSpend(provider)` checks per-minute (in-memory) and per-day (persisted to `provider_quota` table via [[apps/node-backend/src/repositories/providerQuotaRepository.js]]) token buckets. A full bucket moves to the next provider instead of issuing a 429.
+3. **Quota gate** — `governor.canSpend(provider)` checks per-minute (in-memory) and per-day (persisted to `provider_quota` table via [[apps/node-backend/src/repositories/providerQuotaRepository.ts]]) token buckets. A full bucket moves to the next provider instead of issuing a 429.
 4. **Race-to-first** — The first provider that returns successfully wins. `governor.spend()` records the token, `providerHealthService.recordSuccess()` updates health, the result is cached with the type TTL. **Exception: `fundamentals`** — `GET /api/research/fundamentals` and `GET /api/research/scorecard` bypass this step and call `researchAggregator.fetchFundamentals()`, which fetches FMP and Yahoo **in parallel** and merges field-by-field (FMP preferred). See the `/fundamentals` endpoint doc above.
 5. **Provider error** — `providerHealthService.recordError()` is called, the error is noted in `attempted[]`, and the next provider is tried.
 6. **Unavailable** — If all providers are skipped/errored, `source: 'unavailable'` is returned with a stable empty shape.

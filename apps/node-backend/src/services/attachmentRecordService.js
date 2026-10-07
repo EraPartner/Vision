@@ -3,4 +3,4 @@
  * repository's DB-row API (eslint vision-local/no-repo-direct-from-route).
  * Distinct from attachmentService.js, which owns file storage/streaming.
  */
-export { attachmentRepository } from '../repositories/attachmentRepository.js';
+export { attachmentRepository } from '../repositories/attachmentRepository.ts';

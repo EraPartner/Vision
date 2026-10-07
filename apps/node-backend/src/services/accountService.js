@@ -6,25 +6,25 @@
  */
 
 import { z } from "zod";
-import accountRepository from "../repositories/accountRepository.js";
+import accountRepository from "../repositories/accountRepository.ts";
 import {
   NotFoundError,
   ValidationError,
   ConflictError,
-} from "../middleware/errorHandler.js";
+} from "../middleware/errorHandler.ts";
 import {
   assertCurrency,
   validateNumber,
   validateId,
-} from "../lib/validation.js";
+} from "../lib/validation.ts";
 import {
   loadCurrentRates,
   convertWithRates,
 } from "./currency/currencyConversionService.js";
-import { hasConversionRate } from "../lib/exchangeRates.js";
-import { toDecimal, toNumber, roundToCents } from "../lib/money.js";
-import { statementPartition } from "../repositories/accountBalanceSql.js";
-import { withTransaction } from "../database/connection.js";
+import { hasConversionRate } from "../lib/exchangeRates.ts";
+import { toDecimal, toNumber, roundToCents } from "../lib/money.ts";
+import { statementPartition } from "../repositories/accountBalanceSql.ts";
+import { withTransaction } from "../database/connection.ts";
 
 // Enum value sets — mirror migration 0050. Their semantics are activated in ADR-089.
 export const ACCOUNT_TYPES = [
@@ -295,6 +295,8 @@ const accountService = {
    * sends) means the full list, so `total` is just the row count and the extra
    * COUNT round-trip is skipped. A supplied limit/offset pages the rows while
    * `total` stays the full match count.
+   *
+   * @param {{ active?: boolean|null, limit?: number|null, offset?: number }} [opts]
    */
   async list({ active = null, limit = null, offset = 0 } = {}) {
     const rows = await accountRepository.getAll({ active, limit, offset });

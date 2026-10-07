@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockTxConnection } from "./helpers/repoMocks.js";
 
 const mockClientQuery = vi.hoisted(() => vi.fn());
-vi.mock("../src/database/connection.js", () =>
+vi.mock("../src/database/connection.ts", () =>
   mockTxConnection({ query: mockClientQuery }),
 );
 
@@ -11,7 +11,7 @@ import {
   updateCategoryNode,
   deleteCategoryNode,
   mergeCategoryNodes,
-} from "../src/repositories/categoryHierarchyRepository.js";
+} from "../src/repositories/categoryHierarchyRepository.ts";
 
 beforeEach(() => mockClientQuery.mockReset());
 

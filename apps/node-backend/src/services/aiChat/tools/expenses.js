@@ -5,14 +5,14 @@
  * results are ground-truth from the DB — never fabricated by the LLM.
  */
 
-import { transactionRepository } from "../../../repositories/transactionRepository.js";
+import { transactionRepository } from "../../../repositories/transactionRepository.ts";
 import { memoizeAsync } from "../toolCache.js";
-import infoRepository from "../../../repositories/infoRepository.js";
+import infoRepository from "../../../repositories/infoRepository.ts";
 import { getAiDisplayCurrency } from "./_financialMetrics.js";
-import settings from "../../../config/config.js";
-import { toDecimal, roundToCents } from "../../../lib/money.js";
+import settings from "../../../config/config.ts";
+import { toDecimal, roundToCents } from "../../../lib/money.ts";
 import { toYmd } from "../../calculations/portfolioMath.js";
-import { todayAppDateString, firstOfMonthYmd } from "../../../lib/timezone.js";
+import { todayAppDateString, firstOfMonthYmd } from "../../../lib/timezone.ts";
 import {
   requireDate,
   parsePositiveInt,
@@ -21,7 +21,7 @@ import {
   ToolValidationError,
 } from "./_validate.js";
 
-/** @typedef {import('../../../types/rows.js').EnrichedTransactionRow} EnrichedTransactionRow */
+/** @typedef {import('../../../types/rows.ts').EnrichedTransactionRow} EnrichedTransactionRow */
 
 const UNCATEGORISED_LABEL = "Uncategorised";
 const UNKNOWN_RECIPIENT_LABEL = "Unknown";

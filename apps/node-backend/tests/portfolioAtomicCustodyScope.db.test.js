@@ -7,7 +7,7 @@ import {
   hasTestDatabase,
   releaseDbSuiteLock,
 } from "./setup/db.js";
-import { closePool, withTransaction } from "../src/database/connection.js";
+import { closePool, withTransaction } from "../src/database/connection.ts";
 import { previewPortfolioImportReconciliation } from "../src/services/portfolioImportReconciliationService.js";
 import { commitReviewedPortfolioImports } from "../src/services/portfolioImportCommitService.js";
 import { rollbackBatch } from "../src/services/portfolioImportBatchService.js";
@@ -20,7 +20,7 @@ import {
   portfolioCustodyWriteHistory,
   withPortfolioCustodyImportScope,
 } from "../src/services/portfolio/portfolioCustodyImportScope.js";
-import { getUnitEventsForInvestment } from "../src/repositories/portfolioTxRepo.reads.js";
+import { getUnitEventsForInvestment } from "../src/repositories/portfolioTxRepo.reads.ts";
 import { getPortfolioSummary } from "../src/services/portfolio/portfolioSummaryService.js";
 
 const pool = getTestPool();

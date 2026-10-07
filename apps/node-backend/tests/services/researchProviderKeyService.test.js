@@ -6,13 +6,13 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('../../src/repositories/providerApiKeyRepository.js', () => ({
+vi.mock('../../src/repositories/providerApiKeyRepository.ts', () => ({
   listAll: vi.fn(),
   upsert: vi.fn(),
   remove: vi.fn(),
 }));
 
-import * as keyRepo from '../../src/repositories/providerApiKeyRepository.js';
+import * as keyRepo from '../../src/repositories/providerApiKeyRepository.ts';
 import {
   listKeyStatuses,
   setKey,

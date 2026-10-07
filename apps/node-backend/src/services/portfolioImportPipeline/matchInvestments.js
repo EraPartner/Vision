@@ -11,9 +11,9 @@
  * corrupt cost basis).
  */
 
-import { query } from "../../database/connection.js";
-import { logger } from "../../config/logger.js";
-import { getKinesisAssetConfig } from "../../config/kinesisConfig.js";
+import { query } from "../../database/connection.ts";
+import { logger } from "../../config/logger.ts";
+import { getKinesisAssetConfig } from "../../config/kinesisConfig.ts";
 
 // Only explicit fiat quote currencies may be stripped from a Yahoo crypto
 // symbol. A crypto quote or arbitrary three-letter suffix is not an alias.
@@ -52,7 +52,7 @@ const FIAT_QUOTE_CURRENCIES = new Set([
 ]);
 
 /**
- * @typedef {import('../../types/rows.js').PortfolioImportStagingRow} PortfolioImportStagingRow
+ * @typedef {import('../../types/rows.ts').PortfolioImportStagingRow} PortfolioImportStagingRow
  * @typedef {import('./index.js').PortfolioImportBatchId} PortfolioImportBatchId
  * @typedef {import('./index.js').PortfolioImportProgressCallback} PortfolioImportProgressCallback
  */
@@ -244,7 +244,7 @@ async function resolveBySymbolBatch(rows) {
  * Derive an asset code only from the holding's configured price provider.
  * Kinesis codes retain their denominations: KAU/KAG never become XAU/XAG.
  *
- * @param {Pick<import('../../types/rows.js').InvestmentRow, 'symbol'|'name'|'asset_class'|'price_provider'|'price_provider_id'>} investment
+ * @param {Pick<import('../../types/rows.ts').InvestmentRow, 'symbol'|'name'|'asset_class'|'price_provider'|'price_provider_id'>} investment
  * @returns {string|undefined}
  */
 export function providerAssetAlias(investment) {

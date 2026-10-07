@@ -2,13 +2,12 @@
 title: Fund Holdings Import Contract Reference
 type: reference
 status: active
-date: 2026-09-14
+date: 2026-10-07
 tags: [reference, portfolio, funds, holdings, import, provenance]
 description: Version-1 source document and parser result rules for user-supplied fund holdings.
 aliases: [fund holdings source contract, holdings file contract]
 related_code:
-  - packages/types/src/fundHoldings.js
-  - packages/types/src/fundHoldings.d.ts
+  - packages/types/src/fundHoldings.ts
   - apps/node-backend/tests/fundHoldingsContract.test.js
 ---
 

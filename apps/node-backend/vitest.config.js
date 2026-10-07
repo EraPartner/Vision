@@ -36,7 +36,7 @@ export default defineConfig({
     globals: true,
     environment: "node",
     include: [
-      "src/**/*.test.js",
+      "src/**/*.test.{js,ts}",
       "tests/**/*.test.js",
       "tests/**/**/*.test.js",
     ],
@@ -52,17 +52,17 @@ export default defineConfig({
       // What this gate guarantees: the ratio of src/ lines executed by the
       // Vitest suite. It says nothing about HTTP-level behaviour, so routes
       // count here like any other source file.
-      include: ["src/**/*.js"],
+      include: ["src/**/*.{js,ts}"],
       exclude: [
         // Test code is never part of the denominator.
         "src/**/*.test.js",
         "tests/**",
         // Process entrypoint: invokes start() at import time and installs
         // process.exit handlers, so it cannot be imported by a unit test.
-        "src/main.js",
+        "src/main.{js,ts}",
         // Migration glue: execFile()s the alembic CLI against a live database
         // and a Python toolchain; exercised by migration runs, not by Vitest.
-        "src/database/migrate.js",
+        "src/database/migrate.{js,ts}",
       ],
       // Ratchet gate — tracks current actual coverage so regressions are caught
       // immediately. Bump after each phase adds meaningful tests; never lower

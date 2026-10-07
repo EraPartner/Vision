@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockTxConnection } from "./helpers/repoMocks.js";
 const { mockClient } = vi.hoisted(() => ({ mockClient: { query: vi.fn() } }));
 
-vi.mock("../src/database/connection.js", () => mockTxConnection(mockClient));
+vi.mock("../src/database/connection.ts", () => mockTxConnection(mockClient));
 // Real conversion arithmetic, fixed rate table: 1 USD = 0.5 EUR (the canonical
 // fixture from the cross-currency finding).
 vi.mock(
@@ -14,18 +14,18 @@ vi.mock(
   }),
 );
 
-import { query, poolQuery } from "../src/database/connection.js";
+import { query, poolQuery } from "../src/database/connection.ts";
 import {
   __collidingAnchorCurrencies as collidingAnchorCurrencies,
   mergeAccounts,
   previewMerge,
   __stampRangesOverlap as stampRangesOverlap,
 } from "../src/services/accountMergeService.js";
-import { computedBalanceByCurrencyAggLateral } from "../src/repositories/accountBalanceSql.js";
+import { computedBalanceByCurrencyAggLateral } from "../src/repositories/accountBalanceSql.ts";
 import {
   ValidationError,
   NotFoundError,
-} from "../src/middleware/errorHandler.js";
+} from "../src/middleware/errorHandler.ts";
 
 // Default happy-path SQL router: target #2 ('TARGET'), source #1 exists.
 // `stampRanges` primes the per-original-account stamped-date ranges the

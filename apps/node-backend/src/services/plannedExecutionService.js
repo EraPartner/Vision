@@ -12,11 +12,11 @@
  */
 
 import plannedTransactionService from "./plannedTransactionService.js";
-import { withTransaction } from "../database/connection.js";
-import { nextOccurrenceYmd } from "../lib/calculations/recurrence.js";
-import { ConflictError, NotFoundError } from "../middleware/errorHandler.js";
-import { todayAppDateString } from "../lib/timezone.js";
-import { toWireDate } from "../lib/dateFormat.js";
+import { withTransaction } from "../database/connection.ts";
+import { nextOccurrenceYmd } from "../lib/calculations/recurrence.ts";
+import { ConflictError, NotFoundError } from "../middleware/errorHandler.ts";
+import { todayAppDateString } from "../lib/timezone.ts";
+import { toWireDate } from "../lib/dateFormat.ts";
 
 /**
  * Execute a planned transaction against an existing real transaction.
@@ -64,7 +64,7 @@ export async function executePlanned({
      * Sanitized update payload for `plannedTransactionService.executeAndAdvance`
      * — write-side values, NOT the read-side row shape: both dates go in as
      * 'YYYY-MM-DD' strings (pg coerces on bind), whereas a fetched row's same
-     * columns come back as `Date` (see `PlannedTransactionRow` in types/rows.js).
+     * columns come back as `Date` (see `PlannedTransactionRow` in types/rows.ts).
      * @type {{ is_executed: boolean, last_executed_date: string, planned_date?: string }}
      */
     const updateFields = {

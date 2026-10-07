@@ -2,15 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mockConnection } from "./helpers/repoMocks.js";
 import { mockCurrencyConversion } from "./helpers/mockCurrencyConversion.js";
 
-vi.mock("../src/database/connection.js", () => mockConnection());
+vi.mock("../src/database/connection.ts", () => mockConnection());
 
 vi.mock("../src/services/currency/currencyConversionService.js", () =>
   mockCurrencyConversion(),
 );
 
-import { query } from "../src/database/connection.js";
+import { query } from "../src/database/connection.ts";
 import { convertRowsToEur } from "../src/services/currency/currencyConversionService.js";
-import { recipientInsightsRepository } from "../src/repositories/infoRepositoryRecipients.js";
+import { recipientInsightsRepository } from "../src/repositories/infoRepositoryRecipients.ts";
 
 beforeEach(() => vi.clearAllMocks());
 afterEach(() => vi.useRealTimers());
@@ -151,8 +151,14 @@ describe("recipientInsightsRepository.getRecipientInsights", () => {
     // day-of-month so a partial current month isn't compared to a full prior one.
     const momSql = query.mock.calls[1][0];
     expect(momSql).toContain(
-      "(CURRENT_DATE - DATE_TRUNC('month', CURRENT_DATE)::date)",
+      "($1::date - DATE_TRUNC('month', $1::date)::date)",
     );
+    // "Today" is the APP_TIMEZONE day bound once (ADR-009), not CURRENT_DATE.
+    expect(momSql).not.toContain("CURRENT_DATE");
+    expect(query.mock.calls[1][1]).toEqual([
+      expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+    ]);
+    expect(query.mock.calls[2][1]).toEqual(query.mock.calls[1][1]);
     // MoM converts at HISTORICAL per-date rates like every other recipient
     // surface — the no-DB guard for the fix that ended latest-rate conversion
     // here (the DB pin proves the numbers; this pins the contract).
@@ -235,11 +241,17 @@ describe("recipientInsightsRepository.getRecipientInsights", () => {
       endDate: "2026-09-07",
     });
 
-    for (const [sql, params] of query.mock.calls.slice(0, 2)) {
+    for (const [sql] of query.mock.calls.slice(0, 2)) {
       expect(sql).toContain("t.date >= $2");
       expect(sql).toContain("t.date <= $3");
-      expect(params).toEqual([9, "2024-10-01", "2026-09-07"]);
     }
+    expect(query.mock.calls[0][1]).toEqual([9, "2024-10-01", "2026-09-07"]);
+    expect(query.mock.calls[1][1]).toEqual([
+      9,
+      "2024-10-01",
+      "2026-09-07",
+      expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+    ]);
   });
 });
 

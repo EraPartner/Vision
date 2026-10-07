@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ValidationError } from '../../middleware/errorHandler.js';
+import { ValidationError } from '../../middleware/errorHandler.ts';
 import { CLASSIC_PORTFOLIOS, foldTargetSleeves, normalizeWeights } from './allocationAnalytics.js';
 
 // This computation path coerces numeric strings and lets an empty object reach

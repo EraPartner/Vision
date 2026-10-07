@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { mockConnection } from "./helpers/repoMocks.js";
-vi.mock("../src/database/connection.js", () => mockConnection());
+vi.mock("../src/database/connection.ts", () => mockConnection());
 
-import { query } from "../src/database/connection.js";
+import { query } from "../src/database/connection.ts";
 import {
   hasPortfolioTransactionImportBatchIdColumn,
   __resetPortfolioTransactionSchemaCache,
   buildListWhereClause,
-} from "../src/repositories/portfolioTxRepo.common.js";
+} from "../src/repositories/portfolioTxRepo.common.ts";
 import {
   UNIT_BASED_ASSET_CLASSES,
   normalizeTransactionPayload,

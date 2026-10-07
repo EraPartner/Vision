@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parsedDateToYmd } from "../src/lib/importDates.js";
+import { parsedDateToYmd } from "../src/lib/importDates.ts";
 
 describe("parsedDateToYmd", () => {
   it("extracts adapter-created Date values on the UTC calendar", () => {

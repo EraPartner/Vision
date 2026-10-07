@@ -9,8 +9,8 @@
  * is silent so the forecast endpoint remains usable in either case.
  */
 
-import accuracyRepo from "../../../repositories/cashflowForecastAccuracyRepository.js";
-import { logger } from "../../../config/logger.js";
+import accuracyRepo from "../../../repositories/cashflowForecastAccuracyRepository.ts";
+import { logger } from "../../../config/logger.ts";
 
 /**
  * Uniform store output shape. `accuracyRepo`'s Postgres rows come back
@@ -25,7 +25,7 @@ import { logger } from "../../../config/logger.js";
  */
 
 /**
- * @param {import('../../../repositories/cashflowForecastAccuracyRepository.js').AccuracyRow} row
+ * @param {import('../../../repositories/cashflowForecastAccuracyRepository.ts').AccuracyRow} row
  * @returns {AccuracyRecord}
  */
 function toAccuracyRecord(row) {

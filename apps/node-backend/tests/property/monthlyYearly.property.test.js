@@ -6,9 +6,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { mockConnection } from "../helpers/repoMocks.js";
 
-vi.mock("../../src/database/connection.js", () => mockConnection());
+vi.mock("../../src/database/connection.ts", () => mockConnection());
 
-import { buildMonthlySummary } from "../../src/repositories/infoRepositoryHelpers.js";
+import { buildMonthlySummary } from "../../src/repositories/infoRepositoryHelpers.ts";
 
 function seeded(seed) {
   let t = seed >>> 0;

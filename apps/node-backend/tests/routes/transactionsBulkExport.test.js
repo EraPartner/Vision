@@ -16,13 +16,13 @@ import {
 import { mockLogger } from "../helpers/mockLogger.js";
 import { routeAgent } from "../helpers/routeApp.js";
 
-vi.mock("../../src/repositories/transactionRepository.js", () =>
+vi.mock("../../src/repositories/transactionRepository.ts", () =>
   mockTransactionRepository(),
 );
 
 vi.mock("../../src/services/deduplication.js", () => mockDeduplication());
 
-vi.mock("../../src/config/logger.js", () => ({
+vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
@@ -34,14 +34,14 @@ vi.mock("../../src/services/currency/currencyConversionService.js", () =>
   mockCurrencyConversion(),
 );
 
-vi.mock("../../src/database/connection.js", () =>
+vi.mock("../../src/database/connection.ts", () =>
   mockConnection({ getClient: vi.fn() }),
 );
 
 const { default: transactionsRouter } =
-  await import("../../src/routes/transactions.js");
+  await import("../../src/routes/transactions.ts");
 
-import { getClient } from "../../src/database/connection.js";
+import { getClient } from "../../src/database/connection.ts";
 
 const api = routeAgent(transactionsRouter, { mountPath: "/api/transactions" });
 const bulkExport = (body) =>

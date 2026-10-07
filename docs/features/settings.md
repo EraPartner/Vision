@@ -2,7 +2,7 @@
 title: Settings Feature
 type: feature
 status: active
-date: 2026-10-06
+date: 2026-10-07
 updated: 2026-10-06
 tags:
   [
@@ -52,8 +52,8 @@ related_code:
   - apps/frontend/src/stores/hydration/SettingsHydration.tsx
   - apps/frontend/src/contexts/SettingsPreloadContext.tsx
   - apps/frontend/src/stores/hydration/ThemeHydration.tsx
-  - apps/node-backend/src/routes/settings.js
-  - apps/node-backend/src/repositories/settingsRepository.js
+  - apps/node-backend/src/routes/settings.ts
+  - apps/node-backend/src/repositories/settingsRepository.ts
 ---
 
 # Settings Feature
@@ -179,7 +179,7 @@ The same section contains four active-category pickers for instrument-free broke
 
 ### Settings Repository
 
-Located at `[[apps/node-backend/src/repositories/settingsRepository.js]]`:
+Located at `[[apps/node-backend/src/repositories/settingsRepository.ts]]`:
 
 - **Storage format**: JSONB column in `settings` table
 - **Key-based access**: Individual settings accessed by key
@@ -187,7 +187,7 @@ Located at `[[apps/node-backend/src/repositories/settingsRepository.js]]`:
 
 ### API Endpoints
 
-Located at `[[apps/node-backend/src/routes/settings.js]]`:
+Located at `[[apps/node-backend/src/routes/settings.ts]]`:
 
 #### GET /api/settings
 
@@ -210,7 +210,7 @@ Upserts a single setting.
 Implementation note:
 
 - Backend route logic reuses `assertSettingKeyLength` and `validateSettingValue` across single-key and bulk writes. Dashboard exclusion fields must be arrays; digit-string IDs are coerced to positive PostgreSQL `int4` integers, while malformed or out-of-range values are rejected before storage.
-- The repository serializes the already-validated value directly to JSONB. It does not apply a second lossy `Number()` normalization pass ([[apps/node-backend/src/repositories/settingsRepository.js]]).
+- The repository serializes the already-validated value directly to JSONB. It does not apply a second lossy `Number()` normalization pass ([[apps/node-backend/src/repositories/settingsRepository.ts]]).
 
 #### PUT /api/settings (bulk)
 

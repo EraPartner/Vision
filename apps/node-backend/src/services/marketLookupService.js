@@ -11,11 +11,11 @@
  */
 
 import { ApiErrorCode } from '@vision/types/errors';
-import { AppError } from '../middleware/errorHandler.js';
+import { AppError } from '../middleware/errorHandler.ts';
 import { createResearchCache } from './research/researchCache.js';
 import { getYahooClient } from './prices/yahooClient.js';
-import { toAppTz } from '../lib/timezone.js';
-import { forEachConcurrent } from '../lib/concurrency.js';
+import { toAppTz } from '../lib/timezone.ts';
+import { forEachConcurrent } from '../lib/concurrency.ts';
 
 // Per-symbol quote cache + in-flight coalescing. The Markets Overview polls the
 // quote route for the whole active group (tens of symbols) every 60s, which

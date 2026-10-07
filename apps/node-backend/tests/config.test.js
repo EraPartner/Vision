@@ -12,7 +12,7 @@ vi.mock('fs', async (importOriginal) => {
   };
 });
 
-vi.mock('../src/config/logger.js', () => ({
+vi.mock('../src/config/logger.ts', () => ({
   logger: mockLogger(),
 }));
 
@@ -41,7 +41,7 @@ function clearManagedEnv() {
 
 async function importConfigFresh() {
   vi.resetModules();
-  return import('../src/config/config.js');
+  return import('../src/config/config.ts');
 }
 
 describe('Configuration Management', () => {
@@ -227,7 +227,7 @@ describe('Configuration Management', () => {
   describe('Immutability', () => {
     it('exports one default settings singleton and no legacy named accessor', async () => {
       const module = await importConfigFresh();
-      const cachedModule = await import('../src/config/config.js');
+      const cachedModule = await import('../src/config/config.ts');
       expect(module.default).toBe(cachedModule.default);
       expect(module).not.toHaveProperty('getSettings');
     });

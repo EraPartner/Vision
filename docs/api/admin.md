@@ -2,7 +2,7 @@
 title: Admin API
 type: endpoint
 status: active
-date: 2026-09-20
+date: 2026-10-07
 updated: 2026-09-20
 tags:
   - api
@@ -22,13 +22,13 @@ aliases:
   - health
   - initialization
 related_code:
-  - apps/node-backend/src/routes/admin.js
-  - apps/node-backend/src/routes/codexExperimental.js
+  - apps/node-backend/src/routes/admin.ts
+  - apps/node-backend/src/routes/codexExperimental.ts
   - apps/node-backend/src/services/dbEditor.js
   - apps/node-backend/src/main.js
-  - apps/node-backend/src/config/config.js
+  - apps/node-backend/src/config/config.ts
   - apps/node-backend/src/services/providerHealth/providerHealthService.js
-  - apps/node-backend/src/middleware/requestMetrics.js
+  - apps/node-backend/src/middleware/requestMetrics.ts
   - apps/frontend/src/lib/api/admin.ts
   - apps/frontend/src/pages/admin/TableDataEditorPage.tsx
 ---
@@ -94,7 +94,7 @@ Get system health and initialization status.
 
 Implementation note:
 
-- Internal route refactor extracted `formatAdminStatusPayload(isConnected, tableCount)` to centralize status payload construction while preserving response shape and status codes ([[apps/node-backend/src/routes/admin.js]]).
+- Internal route refactor extracted `formatAdminStatusPayload(isConnected, tableCount)` to centralize status payload construction while preserving response shape and status codes ([[apps/node-backend/src/routes/admin.ts]]).
 
 ---
 
@@ -605,7 +605,7 @@ Implementation notes:
 
 - Internal route refactor centralized release/version/update payload logic into `hasValidReleaseTag(release)`, `detectCurrentAppVersion()`, and `buildUpdateCheckPayload(release, currentVersion)`.
 - Every successful response uses the same core contract: `up_to_date`, `current_version`, `latest_version`, and `update_mode`. The no-release fallback therefore remains safe for the same frontend type as a normal release response.
-- The up-to-date comparison remains `latest === current` or `latest === v${current}` ([[apps/node-backend/src/routes/admin.js]]).
+- The up-to-date comparison remains `latest === current` or `latest === v${current}` ([[apps/node-backend/src/routes/admin.ts]]).
 
 ---
 
@@ -862,7 +862,7 @@ See [[docs/security/rate-limiting|Rate Limiting]] for full details and response 
 - [[docs/api/index]] - API Index
 - [[docs/adr/002-database-schema]] - Database Schema
 
-Code links: [[apps/node-backend/src/routes/admin.js]], [[apps/node-backend/src/services/priceProviderService.js]]
+Code links: [[apps/node-backend/src/routes/admin.ts]], [[apps/node-backend/src/services/priceProviderService.js]]
 
 ## Test Coverage Notes (2026-04-10)
 
@@ -871,4 +871,4 @@ Recent backend tests validate admin update behavior for:
 - `GET /api/admin/update/check`: GitHub releases response parsing, version resolution precedence (`APP_VERSION` then `APP_IMAGE_TAG`), no-release fallback payload, and invalid JSON path returning sanitized `500`.
 - `POST /api/admin/update/apply` and `POST /api/admin/update/apply-and-restart`: expected success response contracts.
 
-Code links: [[apps/node-backend/tests/routes/admin.test.js]], [[apps/node-backend/src/routes/admin.js]]
+Code links: [[apps/node-backend/tests/routes/admin.test.js]], [[apps/node-backend/src/routes/admin.ts]]

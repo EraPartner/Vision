@@ -22,7 +22,7 @@ import {
 import { mockLogger } from "../helpers/mockLogger.js";
 import { routeAgent } from "../helpers/routeApp.js";
 
-vi.mock("../../src/repositories/transactionRepository.js", () =>
+vi.mock("../../src/repositories/transactionRepository.ts", () =>
   mockTransactionRepository(),
 );
 
@@ -31,7 +31,7 @@ vi.mock("../../src/services/deduplication.js", () => ({
   lockManualTransactionIdentity: vi.fn(async () => undefined),
 }));
 
-vi.mock("../../src/config/logger.js", () => ({
+vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
@@ -43,9 +43,9 @@ vi.mock("../../src/services/currency/currencyConversionService.js", () =>
   mockCurrencyConversion(),
 );
 
-vi.mock("../../src/database/connection.js", () => mockTxConnection());
+vi.mock("../../src/database/connection.ts", () => mockTxConnection());
 
-vi.mock("../../src/repositories/accountRepository.js", () => {
+vi.mock("../../src/repositories/accountRepository.ts", () => {
   const accountRepository = { findActiveId: vi.fn(async () => 1) };
   return { accountRepository, default: accountRepository };
 });
@@ -54,14 +54,14 @@ vi.mock("../../src/services/plannedMatchService.js", () => ({
   autoLinkTransactions: vi.fn(async () => ({ autoLinkedCount: 0, links: [] })),
 }));
 
-import transactionRepository from "../../src/repositories/transactionRepository.js";
+import transactionRepository from "../../src/repositories/transactionRepository.ts";
 import {
   recordManualTransactionDedupClaim,
   isManualDuplicate,
 } from "../../src/services/deduplication.js";
 
 const { default: transactionsRouter } =
-  await import("../../src/routes/transactions.js");
+  await import("../../src/routes/transactions.ts");
 
 const api = routeAgent(transactionsRouter, { mountPath: "/api/transactions" });
 

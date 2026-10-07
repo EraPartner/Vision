@@ -43,26 +43,26 @@ import {
   hasTestDatabase,
   releaseDbSuiteLock,
 } from "./setup/db.js";
-import { getMonthlyFinancialSummary } from "../src/repositories/infoRepositoryMonthly.js";
+import { getMonthlyFinancialSummary } from "../src/repositories/infoRepositoryMonthly.ts";
 import { computeSankeyFlow } from "../src/services/calculations/aggregation/sankey.js";
 import {
   detectRecurringPatterns,
   __clearRecurringCacheForTests,
 } from "../src/services/recurringDetectionService.js";
 import { createMaterializedViews } from "../src/services/materializedViewService.js";
-import transactionRepository from "../src/repositories/transactionRepository.js";
-import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.js";
+import transactionRepository from "../src/repositories/transactionRepository.ts";
+import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.js";
-import { closePool } from "../src/database/connection.js";
+import { closePool } from "../src/database/connection.ts";
 import {
   __buildIdListWhere as buildIdListWhere,
   streamCsvExport,
   streamNdjsonExport,
 } from "../src/services/transactionExport.js";
-import splitRepository from "../src/repositories/splitRepository.js";
-import plannedTransactionRepository from "../src/repositories/plannedTransactionRepository.js";
-import { plannedRepository } from "../src/repositories/infoRepositoryPlanned.js";
-import { todayAppDateString } from "../src/lib/timezone.js";
+import splitRepository from "../src/repositories/splitRepository.ts";
+import plannedTransactionRepository from "../src/repositories/plannedTransactionRepository.ts";
+import { plannedRepository } from "../src/repositories/infoRepositoryPlanned.ts";
+import { todayAppDateString } from "../src/lib/timezone.ts";
 
 const MANAGED_VIEWS = ["mv_monthly_summary", "mv_category_totals"];
 

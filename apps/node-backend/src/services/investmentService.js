@@ -13,8 +13,8 @@
 import { z } from "zod";
 import investmentRepository, {
   pickInvestmentCreateFields,
-} from "../repositories/investmentRepository.js";
-import portfolioTransactionRepository from "../repositories/portfolioTransactionRepository.js";
+} from "../repositories/investmentRepository.ts";
+import portfolioTransactionRepository from "../repositories/portfolioTransactionRepository.ts";
 import portfolioTransactionService from "./portfolio/portfolioTransactionService.js";
 import portfolioBrokerRetagService from "./portfolio/portfolioBrokerRetagService.js";
 import {
@@ -23,9 +23,9 @@ import {
   SUPPORTED_PROVIDERS,
 } from "./priceProviderService.js";
 import { refreshQuotesForInvestment } from "./quoteBackfillService.js";
-import { logger } from "../config/logger.js";
-import { getKinesisAssetConfig } from "../config/kinesisConfig.js";
-import { NotFoundError, ValidationError } from "../middleware/errorHandler.js";
+import { logger } from "../config/logger.ts";
+import { getKinesisAssetConfig } from "../config/kinesisConfig.ts";
+import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
 import {
   validateNumber,
   assertMaxLength,
@@ -33,21 +33,21 @@ import {
   assertYmd,
   validateId,
   validateIntArray,
-} from "../lib/validation.js";
-import { assertIdParam } from "../middleware/validation.js";
+} from "../lib/validation.ts";
+import { assertIdParam } from "../middleware/validation.ts";
 import { invalidatePortfolioCaches } from "./info/cache.js";
-import { assertPublicHttpUrl } from "../lib/urlSafety.js";
+import { assertPublicHttpUrl } from "../lib/urlSafety.ts";
 import { autoResolveFxRateToEur } from "./portfolio/fxResolve.js";
-import { parsePagination, parseIntClamped } from "../lib/pagination.js";
+import { parsePagination, parseIntClamped } from "../lib/pagination.ts";
 import { PORTFOLIO_TXN_TYPES } from "@vision/types/portfolioTxnTypes";
 import { PORTFOLIO_RECURRENCE_INTERVALS } from "@vision/types/recurrence";
-import { parseBooleanQueryParam } from "../lib/httpParams.js";
+import { parseBooleanQueryParam } from "../lib/httpParams.ts";
 
 /**
- * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
- * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
- * @typedef {import('../types/rows.js').InvestmentRow} InvestmentRow
- * @typedef {import('../types/rows.js').PortfolioTransactionRow} PortfolioTransactionRow
+ * @typedef {import('../types/express.ts').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.ts').ExpressResponse} ExpressResponse
+ * @typedef {import('../types/rows.ts').InvestmentRow} InvestmentRow
+ * @typedef {import('../types/rows.ts').PortfolioTransactionRow} PortfolioTransactionRow
  */
 
 // Custom price-provider URLs are fetched server-side at refresh time, so reject

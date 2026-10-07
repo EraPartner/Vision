@@ -9,14 +9,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockConnection } from './helpers/repoMocks.js';
 import { mockLogger } from './helpers/mockLogger.js';
 
-vi.mock('../src/database/connection.js', () => mockConnection());
+vi.mock('../src/database/connection.ts', () => mockConnection());
 
-vi.mock('../src/config/logger.js', () => ({
+vi.mock('../src/config/logger.ts', () => ({
   logger: mockLogger(),
 }));
 
-import { query } from '../src/database/connection.js';
-import infoRepository from '../src/repositories/infoRepository.js';
+import { query } from '../src/database/connection.ts';
+import infoRepository from '../src/repositories/infoRepository.ts';
 
 describe('Excluded Categories', () => {
   beforeEach(() => {

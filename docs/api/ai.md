@@ -2,7 +2,7 @@
 title: AI Chat API
 type: api
 status: active
-date: 2026-09-11
+date: 2026-10-07
 updated: 2026-09-11
 tags: [api, ai, chat, ollama, sse, streaming, llm, phase-1, idle-timeout, tool-call-accumulation]
 description: Local AI chat endpoints — Ollama status, model discovery, conversation CRUD, chat turn (JSON + SSE) with tools opt-out toggle and 30 tool-calling tools. All responses use camelCase field names. June 2026: streaming uses per-chunk idle timeout (OLLAMA_STREAM_IDLE_TIMEOUT_MS) instead of a fixed total budget; tool calls accumulated across all NDJSON chunks and deduped.
@@ -222,7 +222,7 @@ The public event names and payload shapes are defined once in `@vision/types/aiC
 
 **Backpressure Handling (Phase 3.2):**
 
-- Server uses `createSseWriter(req, res)` [[apps/node-backend/src/lib/sse.js]] to track client lifecycle and propagate TCP write buffer backpressure.
+- Server uses `createSseWriter(req, res)` [[apps/node-backend/src/lib/sse.ts]] to track client lifecycle and propagate TCP write buffer backpressure.
 - When Node.js signals write buffer is full (`res.writableNeedDrain`), `await writer.write()` pauses the token-streaming loop until the kernel drains pending data, preventing memory exhaustion.
 - If client disconnects mid-stream, the server stops writing immediately and no further frames are emitted.
 
@@ -287,7 +287,7 @@ data: {
 | `retryLastTurn`  | optional boolean (default `false`); requires `conversationId` and an incomplete latest user turn |
 | `title` (CRUD)   | non-empty string (PATCH), ≤200 chars                                                             |
 
-`MAX_MESSAGE_LENGTH = 4000`, `MAX_TITLE_LENGTH = 200` — hardcoded in [[apps/node-backend/src/routes/ai.js|routes/ai.js]].
+`MAX_MESSAGE_LENGTH = 4000`, `MAX_TITLE_LENGTH = 200` — hardcoded in [[apps/node-backend/src/routes/ai.ts|routes/ai.ts]].
 
 ## Rate Limiting
 

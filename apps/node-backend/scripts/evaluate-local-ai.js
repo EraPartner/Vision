@@ -3,8 +3,8 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import settings from "../src/config/config.js";
-import { getOllamaClient } from "../src/integrations/ollama/client.js";
+import settings from "../src/config/config.ts";
+import { getOllamaClient } from "../src/integrations/ollama/client.ts";
 import { LOCAL_AI_EVALUATION_CASES } from "../src/services/aiEvaluation/localCases.js";
 import {
   runLocalAiCase,

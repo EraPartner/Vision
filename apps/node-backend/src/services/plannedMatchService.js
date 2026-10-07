@@ -14,19 +14,19 @@
  * ±5%, transaction date within ±5 days of the planned date.
  */
 
-import plannedTransactionRepository from "../repositories/plannedTransactionRepository.js";
-import transactionRepository from "../repositories/transactionRepository.js";
-import recipientRepository from "../repositories/recipientRepository.js";
-import settingsRepository from "../repositories/settingsRepository.js";
+import plannedTransactionRepository from "../repositories/plannedTransactionRepository.ts";
+import transactionRepository from "../repositories/transactionRepository.ts";
+import recipientRepository from "../repositories/recipientRepository.ts";
+import settingsRepository from "../repositories/settingsRepository.ts";
 import { executePlanned } from "./plannedExecutionService.js";
 import {
   addDaysYmd,
   differenceInCalendarDaysYmd,
   todayAppDateString,
-} from "../lib/timezone.js";
-import { toDecimal, toNumber } from "../lib/money.js";
-import { normalizeDateLikeToYmd } from "../lib/dateFormat.js";
-import { logger } from "../config/logger.js";
+} from "../lib/timezone.ts";
+import { toDecimal, toNumber } from "../lib/money.ts";
+import { normalizeDateLikeToYmd } from "../lib/dateFormat.ts";
+import { logger } from "../config/logger.ts";
 
 const AMOUNT_TOLERANCE_PCT = 5;
 const DATE_WINDOW_DAYS = 5;

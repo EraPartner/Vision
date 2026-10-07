@@ -4,29 +4,29 @@ import { mockLogger } from "./helpers/mockLogger.js";
 import { mockTxConnection } from "./helpers/repoMocks.js";
 import { makePortfolioImportStagingRow } from "./builders/domainRows.js";
 const { mockClient } = vi.hoisted(() => ({ mockClient: { query: vi.fn() } }));
-vi.mock("../src/config/logger.js", () => ({
+vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
 // Transaction shim: runs the callback; a throw propagates (= rollback).
-vi.mock("../src/database/connection.js", () => mockTxConnection(mockClient));
+vi.mock("../src/database/connection.ts", () => mockTxConnection(mockClient));
 
-vi.mock("../src/repositories/portfolioTransactionRepository.js", () => ({
+vi.mock("../src/repositories/portfolioTransactionRepository.ts", () => ({
   default: { hardDelete: vi.fn() },
 }));
 vi.mock("../src/services/portfolio/portfolioTransactionService.js", () => ({
   default: { create: vi.fn(), update: vi.fn() },
 }));
 
-vi.mock("../src/repositories/recipientRepository.js", () => ({
+vi.mock("../src/repositories/recipientRepository.ts", () => ({
   default: { createOrGet: vi.fn(), getOrCreateSystemId: vi.fn() },
 }));
 
-vi.mock("../src/repositories/categoryRepository.js", () => ({
+vi.mock("../src/repositories/categoryRepository.ts", () => ({
   default: { getActiveByIds: vi.fn() },
 }));
 
-vi.mock("../src/repositories/settingsRepository.js", () => ({
+vi.mock("../src/repositories/settingsRepository.ts", () => ({
   default: { get: vi.fn() },
 }));
 
@@ -34,12 +34,12 @@ vi.mock("../src/services/portfolio/fxResolve.js", () => ({
   autoResolveFxRateToEur: vi.fn(),
 }));
 
-import { query, poolQuery } from "../src/database/connection.js";
-import portfolioTransactionPersistence from "../src/repositories/portfolioTransactionRepository.js";
+import { query, poolQuery } from "../src/database/connection.ts";
+import portfolioTransactionPersistence from "../src/repositories/portfolioTransactionRepository.ts";
 import portfolioTransactionService from "../src/services/portfolio/portfolioTransactionService.js";
-import recipientRepository from "../src/repositories/recipientRepository.js";
-import categoryRepository from "../src/repositories/categoryRepository.js";
-import settingsRepository from "../src/repositories/settingsRepository.js";
+import recipientRepository from "../src/repositories/recipientRepository.ts";
+import categoryRepository from "../src/repositories/categoryRepository.ts";
+import settingsRepository from "../src/repositories/settingsRepository.ts";
 import { autoResolveFxRateToEur } from "../src/services/portfolio/fxResolve.js";
 import { commitBatch } from "../src/services/portfolioImportPipeline/commit.js";
 

@@ -2,7 +2,7 @@
 title: Algorithms & Data Structures
 type: algorithm-doc
 status: active
-date: 2026-10-06
+date: 2026-10-07
 updated: 2026-08-26
 tags:
   [
@@ -329,7 +329,7 @@ This performs a **single pass** over rows, building a rate lookup map to avoid r
 
 ## Text Normalization
 
-**Location:** [[apps/node-backend/src/lib/textNormalization.js]]
+**Location:** [[apps/node-backend/src/lib/textNormalization.ts]]
 
 ### Problem Statement
 
@@ -365,7 +365,7 @@ Multi-pass normalization pipeline:
 
 ## Net Worth Snapshot Algorithm
 
-**Location:** [[apps/node-backend/src/services/portfolio/snapshotBuilder.js]] (day walk + non-unit valuation), [[apps/node-backend/src/repositories/infoRepository.js]] (liquid component + cache layer)
+**Location:** [[apps/node-backend/src/services/portfolio/snapshotBuilder.js]] (day walk + non-unit valuation), [[apps/node-backend/src/repositories/infoRepository.ts]] (liquid component + cache layer)
 
 ### Problem Statement
 
@@ -421,9 +421,9 @@ For each day from seed_date to today:
 
 Isolated one-day spikes (needles) are sanitized to prevent chart distortion:
 
-The canonical implementation is `lib/calculations/valueSpikeSanitizer.js`.
+The canonical implementation is `lib/calculations/valueSpikeSanitizer.ts`.
 Portfolio snapshots call it through `sanitizeSnapshotSpikes`; net-worth history
-uses `lib/calculations/netWorthSanitizer.js` as a thin wrapper that recomputes
+uses `lib/calculations/netWorthSanitizer.ts` as a thin wrapper that recomputes
 `netWorth` after the shared rule corrects `investments`. Corrected money fields
 remain plain JavaScript numbers on both JSON paths.
 

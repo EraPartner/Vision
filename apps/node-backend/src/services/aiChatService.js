@@ -23,15 +23,15 @@
  * the dispatcher reports back.
  */
 
-import { logger } from "../config/logger.js";
-import settings from "../config/config.js";
-import { AppError } from "../middleware/errorHandler.js";
-import { aiChatRepository } from "../repositories/aiChatRepository.js";
-import { getOllamaClient } from "../integrations/ollama/client.js";
+import { logger } from "../config/logger.ts";
+import settings from "../config/config.ts";
+import { AppError } from "../middleware/errorHandler.ts";
+import { aiChatRepository } from "../repositories/aiChatRepository.ts";
+import { getOllamaClient } from "../integrations/ollama/client.ts";
 import {
   buildChatMessages,
   serializeToolResultForPrompt,
-} from "../integrations/ollama/prompts.js";
+} from "../integrations/ollama/prompts.ts";
 import { AI_CHAT_STREAM_EVENT } from "@vision/types/aiChat";
 import {
   dispatchTool,
@@ -39,12 +39,12 @@ import {
   getToolNames,
 } from "./aiChat/tools/index.js";
 
-/** @typedef {import('../types/rows.js').AiConversationRow} AiConversationRow */
-/** @typedef {import('../types/rows.js').AiMessageRow} AiMessageRow */
+/** @typedef {import('../types/rows.ts').AiConversationRow} AiConversationRow */
+/** @typedef {import('../types/rows.ts').AiMessageRow} AiMessageRow */
 
 /**
  * A message in the array sent to/received from the Ollama `/api/chat`
- * endpoint (see integrations/ollama/prompts.js `toOllamaMessage`). `tool_calls`
+ * endpoint (see integrations/ollama/prompts.ts `toOllamaMessage`). `tool_calls`
  * only appears on an assistant message that invoked a tool; `name` only
  * appears on a `role: 'tool'` result message.
  * @typedef {{ role: string, content: string, tool_calls?: any[], name?: string }} OllamaMessage

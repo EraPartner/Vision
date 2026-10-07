@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   detectCategoryOutliers: vi.fn(),
 }));
 
-vi.mock("../src/repositories/insightDismissalRepository.js", () => ({
+vi.mock("../src/repositories/insightDismissalRepository.ts", () => ({
   default: {
     recipientExists: mocks.recipientExists,
     upsertSubscription: mocks.upsertSubscription,
@@ -20,7 +20,7 @@ vi.mock("../src/services/categoryOutlierService.js", () => ({
 }));
 
 import { dismissInsight } from "../src/services/insightDismissalService.js";
-import { NotFoundError } from "../src/middleware/errorHandler.js";
+import { NotFoundError } from "../src/middleware/errorHandler.ts";
 
 describe("insightDismissalService", () => {
   beforeEach(() => {

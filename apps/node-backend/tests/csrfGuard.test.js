@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createCsrfGuard } from '../src/middleware/csrfGuard.js';
-import { ForbiddenError } from '../src/middleware/errorHandler.js';
+import { createCsrfGuard } from '../src/middleware/csrfGuard.ts';
+import { ForbiddenError } from '../src/middleware/errorHandler.ts';
 
 const ALLOWED = ['http://localhost:3002', 'http://localhost:5173'];
 const guard = createCsrfGuard(() => ALLOWED);

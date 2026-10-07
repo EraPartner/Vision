@@ -4,66 +4,24 @@
   "version": "0.1.0",
   "description": "Shared type definitions and runtime constants used by the Vision backend and frontend.",
   "type": "module",
-  "main": "./src/index.js",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
   "exports": {
-    ".": {
-      "types": "./src/index.d.ts",
-      "default": "./src/index.js"
-    },
-    "./api": {
-      "types": "./src/api.d.ts",
-      "default": "./src/api.js"
-    },
-    "./errors": {
-      "types": "./src/errors.d.ts",
-      "default": "./src/errors.js"
-    },
-    "./assetClasses": {
-      "types": "./src/assetClasses.d.ts",
-      "default": "./src/assetClasses.js"
-    },
-    "./portfolioTxnTypes": {
-      "types": "./src/portfolioTxnTypes.d.ts",
-      "default": "./src/portfolioTxnTypes.js"
-    },
-    "./recurrence": {
-      "types": "./src/recurrence.d.ts",
-      "default": "./src/recurrence.js"
-    },
-    "./aiChat": {
-      "types": "./src/aiChat.d.ts",
-      "default": "./src/aiChat.js"
-    },
-    "./aiResearch": {
-      "types": "./src/aiResearch.d.ts",
-      "default": "./src/aiResearch.js"
-    },
-    "./reportThemeDefaults": {
-      "types": "./src/reportThemeDefaults.d.ts",
-      "default": "./src/reportThemeDefaults.js"
-    },
-    "./chartRanges": {
-      "types": "./src/chartRanges.d.ts",
-      "default": "./src/chartRanges.js"
-    },
-    "./analysis": {
-      "types": "./src/analysis.d.ts",
-      "default": "./src/analysis.js"
-    },
-    "./analysis-datasets": {
-      "types": "./src/analysisDatasets.d.ts",
-      "default": "./src/analysisDatasets.js"
-    },
-    "./fund-holdings": {
-      "types": "./src/fundHoldings.d.ts",
-      "default": "./src/fundHoldings.js"
-    },
-    "./electron": {
-      "types": "./src/electron.d.ts",
-      "default": "./src/electron.js"
-    }
+    ".": "./src/index.ts",
+    "./api": "./src/api.ts",
+    "./errors": "./src/errors.ts",
+    "./assetClasses": "./src/assetClasses.ts",
+    "./portfolioTxnTypes": "./src/portfolioTxnTypes.ts",
+    "./recurrence": "./src/recurrence.ts",
+    "./aiChat": "./src/aiChat.ts",
+    "./aiResearch": "./src/aiResearch.ts",
+    "./reportThemeDefaults": "./src/reportThemeDefaults.ts",
+    "./chartRanges": "./src/chartRanges.ts",
+    "./analysis": "./src/analysis.ts",
+    "./analysis-datasets": "./src/analysisDatasets.ts",
+    "./fund-holdings": "./src/fundHoldings.ts",
+    "./electron": "./src/electron.ts"
   },
-  "types": "./src/index.d.ts",
   "files": [
     "src"
   ],

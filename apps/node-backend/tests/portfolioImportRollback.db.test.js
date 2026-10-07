@@ -41,7 +41,7 @@ import {
 // Passthrough spy on the shared query helper: every statement the pipeline and
 // the repositories issue still hits the real database, but the call log is
 // available for the statement-count assertions.
-vi.mock('../src/database/connection.js', async (importOriginal) => {
+vi.mock('../src/database/connection.ts', async (importOriginal) => {
   const actual = /** @type {any} */ (await importOriginal());
   return {
     ...actual,
@@ -49,10 +49,10 @@ vi.mock('../src/database/connection.js', async (importOriginal) => {
   };
 });
 
-import { query, closePool } from '../src/database/connection.js';
+import { query, closePool } from '../src/database/connection.ts';
 import { commitPortfolioImport } from '../src/services/portfolioImportPipeline/index.js';
 import { rollbackBatch } from '../src/services/portfolioImportBatchService.js';
-import { __resetPortfolioTransactionSchemaCache } from '../src/repositories/portfolioTransactionRepository.js';
+import { __resetPortfolioTransactionSchemaCache } from '../src/repositories/portfolioTransactionRepository.ts';
 
 const pool = getTestPool();
 const describeDb = hasTestDatabase() ? describe : describe.skip;

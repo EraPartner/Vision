@@ -10,7 +10,7 @@ import { routeAgent, errEnvelope } from "../helpers/routeApp.js";
 
 // The route imports its repository through services/watchlistService.js, which
 // re-exports this named binding — mocking the repository here intercepts it.
-vi.mock("../../src/repositories/watchlistRepository.js", () => ({
+vi.mock("../../src/repositories/watchlistRepository.ts", () => ({
   watchlistRepository: {
     getAllWithCount: vi.fn(),
     getById: vi.fn(),
@@ -20,14 +20,14 @@ vi.mock("../../src/repositories/watchlistRepository.js", () => ({
   },
 }));
 
-vi.mock("../../src/config/logger.js", () => ({
+vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-import { watchlistRepository } from "../../src/repositories/watchlistRepository.js";
+import { watchlistRepository } from "../../src/repositories/watchlistRepository.ts";
 
 const { default: watchlistRouter } =
-  await import("../../src/routes/watchlist.js");
+  await import("../../src/routes/watchlist.ts");
 
 const api = routeAgent(watchlistRouter, { mountPath: "/api/watchlist" });
 const BASE = "/api/watchlist";

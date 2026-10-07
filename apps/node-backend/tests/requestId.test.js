@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { getRequestContext } from "../src/lib/requestContext.js";
-import { requestId } from "../src/middleware/requestId.js";
+import { getRequestContext } from "../src/lib/requestContext.ts";
+import { requestId } from "../src/middleware/requestId.ts";
 
 function createResponse() {
   return { setHeader: vi.fn() };

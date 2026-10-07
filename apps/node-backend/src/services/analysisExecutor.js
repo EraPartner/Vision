@@ -1,7 +1,7 @@
 /** Isolated, bounded SQL execution over the approved analysis views only. */
 
 import pg from "pg";
-import settings from "../config/config.js";
+import settings from "../config/config.ts";
 import { APPROVED_ANALYSIS_RELATIONS } from "./analysisCatalog.js";
 
 const MAX_ROWS = 1000;

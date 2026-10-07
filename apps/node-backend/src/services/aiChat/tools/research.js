@@ -3,7 +3,7 @@ import { runPortfolioForecast } from "../../research/projection/portfolioProject
 import { searchResearchDocuments } from "../../aiResearchDocuments.js";
 import { fetchPublicWebPage, searchPublicWeb } from "../../webResearch.js";
 import { getSavedAnalysis } from "../../savedAnalysisService.js";
-import settings from "../../../config/config.js";
+import settings from "../../../config/config.ts";
 import {
   ToolValidationError,
   parseEnum,

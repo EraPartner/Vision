@@ -6,8 +6,8 @@
  */
 
 import { ASSET_CLASSES } from "@vision/types/assetClasses";
-import settings from "../../../config/config.js";
-import { toDecimal, roundToCents } from "../../../lib/money.js";
+import settings from "../../../config/config.ts";
+import { toDecimal, roundToCents } from "../../../lib/money.ts";
 import { loadCanonicalPortfolioSummary } from "./_financialMetrics.js";
 import {
   parseEnum,

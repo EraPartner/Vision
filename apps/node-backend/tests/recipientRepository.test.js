@@ -5,13 +5,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockConnection } from "./helpers/repoMocks.js";
 
-vi.mock("../src/database/connection.js", () => mockConnection());
-vi.mock("../src/lib/textNormalization.js", () => ({
+vi.mock("../src/database/connection.ts", () => mockConnection());
+vi.mock("../src/lib/textNormalization.ts", () => ({
   normalizeForMatching: vi.fn((s) => `norm:${String(s).trim().toLowerCase()}`),
 }));
 
-import { query } from "../src/database/connection.js";
-import recipientRepository from "../src/repositories/recipientRepository.js";
+import { query } from "../src/database/connection.ts";
+import recipientRepository from "../src/repositories/recipientRepository.ts";
 
 describe("recipientRepository", () => {
   beforeEach(() => vi.clearAllMocks());

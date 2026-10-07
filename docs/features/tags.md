@@ -2,15 +2,15 @@
 title: Transaction Tags
 type: feature
 status: active
-date: 2026-10-06
+date: 2026-10-07
 updated: 2026-10-06
 tags: [feature, transactions, tags, categorization, saved-charts, analytics, i18n, combobox-tags, bug-fix]
 description: Freeform tagging for transactions and planned transactions as a second orthogonal classification dimension; tags can also drive spending series in Custom Charts. 2026-06-26: 3 combobox.tags.* i18n keys added for TagFilterCombobox; TransactionInfoDialog tag-editing state bug fixed (last-tag removal chip stayed on screen after PATCH succeeded).
 aliases: [tags, transaction-tags, labels]
 related_code:
-  - "apps/node-backend/src/repositories/tagRepository.js"
-  - "apps/node-backend/src/routes/tags.js"
-  - "apps/node-backend/src/repositories/transactionRepository.js"
+  - "apps/node-backend/src/repositories/tagRepository.ts"
+  - "apps/node-backend/src/routes/tags.ts"
+  - "apps/node-backend/src/repositories/transactionRepository.ts"
   - "apps/frontend/src/hooks/useTags.ts"
   - "apps/frontend/src/components/shared/TagInput.tsx"
   - "apps/frontend/src/components/shared/TagFilterCombobox.tsx"
@@ -55,12 +55,12 @@ Slugs are globally unique (not partial-on-active) so junction rows survive soft-
 
 | File | Role |
 |------|------|
-| `apps/node-backend/src/repositories/tagRepository.js` | CRUD + `findOrCreateBySlug` (atomic upsert) |
-| `apps/node-backend/src/routes/tags.js` | `GET /api/tags`, `POST /api/tags`, `PATCH /api/tags/:id`, `DELETE /api/tags/:id` |
-| `apps/node-backend/src/repositories/transactionRepository.js` | Batched second query attaches `tags: Tag[]` to list results; `create`/`update` accept `tags: string[]` |
-| `apps/node-backend/src/lib/filterBuilder.js` | `tags` param → `EXISTS (SELECT 1 FROM transaction_tags ...)` |
-| `apps/node-backend/src/routes/transactions.js` | `tags` query param + `POST /api/transactions/bulk-tag` |
-| `apps/node-backend/src/repositories/plannedTransactionRepository.js` | `planned_transaction_tags` read/write; `executeAndAdvance` inherits tags |
+| `apps/node-backend/src/repositories/tagRepository.ts` | CRUD + `findOrCreateBySlug` (atomic upsert) |
+| `apps/node-backend/src/routes/tags.ts` | `GET /api/tags`, `POST /api/tags`, `PATCH /api/tags/:id`, `DELETE /api/tags/:id` |
+| `apps/node-backend/src/repositories/transactionRepository.ts` | Batched second query attaches `tags: Tag[]` to list results; `create`/`update` accept `tags: string[]` |
+| `apps/node-backend/src/lib/filterBuilder.ts` | `tags` param → `EXISTS (SELECT 1 FROM transaction_tags ...)` |
+| `apps/node-backend/src/routes/transactions.ts` | `tags` query param + `POST /api/transactions/bulk-tag` |
+| `apps/node-backend/src/repositories/plannedTransactionRepository.ts` | `planned_transaction_tags` read/write; `executeAndAdvance` inherits tags |
 
 ### Slug normalisation
 
@@ -72,7 +72,7 @@ slug = input.toLowerCase().trim()
   .replace(/^-|-$/g, '');
 ```
 
-Applied on both backend (`apps/node-backend/src/lib/slugify.js`) and frontend (`apps/frontend/src/lib/slugify.ts`). Unicode characters are dropped in v1 (known limitation).
+Applied on both backend (`apps/node-backend/src/lib/slugify.ts`) and frontend (`apps/frontend/src/lib/slugify.ts`). Unicode characters are dropped in v1 (known limitation).
 
 ### Frontend components
 
@@ -153,10 +153,10 @@ The Transaction Tags feature test suite is **complete and passing** (2026-05-08)
 | Test File | Coverage |
 |-----------|----------|
 | `apps/node-backend/tests/filterBuilder.test.js` | Filter builder tag slug handling (empty/single/multiple tag filter semantics) |
-| `apps/node-backend/tests/routes/tags.js` | Tag CRUD endpoints (list, create, update color/is_active, soft-delete) |
+| `apps/node-backend/tests/routes/tags.ts` | Tag CRUD endpoints (list, create, update color/is_active, soft-delete) |
 | `apps/node-backend/tests/plannedTransactionRepository.test.js` | Planned transaction tag read/write and execute-forward inheritance |
 | `apps/node-backend/tests/routes/transactions.test.js` | Transaction tag filtering and NDJSON export with tag fields |
-| `apps/node-backend/src/backup/coverage.js` | Backup table enumeration includes tag tables (`tags`, `transaction_tags`, `planned_transaction_tags`) |
+| `apps/node-backend/src/backup/coverage.ts` | Backup table enumeration includes tag tables (`tags`, `transaction_tags`, `planned_transaction_tags`) |
 
 **Frontend Test Coverage:**
 

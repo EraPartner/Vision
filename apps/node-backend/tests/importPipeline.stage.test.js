@@ -14,14 +14,14 @@ const {
   portfolioParseWithConfig: vi.fn().mockResolvedValue([]),
 }));
 
-vi.mock("../src/database/connection.js", () =>
+vi.mock("../src/database/connection.ts", () =>
   mockTxConnection(
     { query: clientQuery },
     { query: vi.fn().mockResolvedValue({ rows: [] }) },
   ),
 );
 
-vi.mock("../src/config/logger.js", () => ({
+vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
@@ -51,7 +51,7 @@ import {
   createBatch as createPortfolioBatch,
   stageBatch as stagePortfolioBatch,
 } from "../src/services/portfolioImportPipeline/stage.js";
-import { query } from "../src/database/connection.js";
+import { query } from "../src/database/connection.ts";
 
 const CONFIG = { dateColumn: "D", recipientColumn: "R", amountColumn: "A" };
 

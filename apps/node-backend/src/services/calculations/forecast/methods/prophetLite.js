@@ -16,7 +16,7 @@ import { densifyDailyHistory } from "../_densify.js";
 import {
   differenceInCalendarDaysYmd,
   ymdToEpochDay,
-} from "../../../../lib/timezone.js";
+} from "../../../../lib/timezone.ts";
 
 export const id = "prophet_lite";
 export const label = "Prophet-lite";

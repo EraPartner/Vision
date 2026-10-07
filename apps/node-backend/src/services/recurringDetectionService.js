@@ -8,16 +8,16 @@
  * - Returns suggestions for planned transactions
  */
 
-import { query } from "../database/connection.js";
-import { normalizeDateLikeToYmd, toWireDate } from "../lib/dateFormat.js";
-import { addDaysYmd, differenceInCalendarDaysYmd } from "../lib/timezone.js";
-import { logger } from "../config/logger.js";
-import { addAll, divide, roundMoney, toDecimal } from "../lib/money.js";
-import { median } from "../lib/math.js";
+import { query } from "../database/connection.ts";
+import { normalizeDateLikeToYmd, toWireDate } from "../lib/dateFormat.ts";
+import { addDaysYmd, differenceInCalendarDaysYmd } from "../lib/timezone.ts";
+import { logger } from "../config/logger.ts";
+import { addAll, divide, roundMoney, toDecimal } from "../lib/money.ts";
+import { median } from "../lib/math.ts";
 
 /**
  * The bespoke projection `detectRecurringPatterns`' query selects — not a
- * plain `SELECT t.*`, so distinct from `TransactionRow` in types/rows.js.
+ * plain `SELECT t.*`, so distinct from `TransactionRow` in types/rows.ts.
  * @typedef {object} RecurringCandidateRow
  * @property {number} id
  * @property {Date} date DATE

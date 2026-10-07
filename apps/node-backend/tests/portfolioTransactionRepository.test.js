@@ -1,25 +1,25 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 import { mockConnection } from "./helpers/repoMocks.js";
-vi.mock("../src/database/connection.js", () => mockConnection());
+vi.mock("../src/database/connection.ts", () => mockConnection());
 // Domain tests isolate the writer boundary; disposable PG tests verify locks.
 vi.mock("../src/services/portfolio/portfolioHistoryWriteService.js", () => ({
   withPortfolioHistoryWrite: (_accounts, work) => work(),
 }));
 vi.mock(
-  "../src/repositories/portfolioAssetTransferRepository.js",
+  "../src/repositories/portfolioAssetTransferRepository.ts",
   async () => ({
     ...(await vi.importActual(
-      "../src/repositories/portfolioAssetTransferRepository.js",
+      "../src/repositories/portfolioAssetTransferRepository.ts",
     )),
     hasAssetTransfersForInvestment: () => false,
   }),
 );
 
-import { query } from "../src/database/connection.js";
+import { query } from "../src/database/connection.ts";
 import portfolioTransactionReadRepository, {
   __resetPortfolioTransactionSchemaCache,
-} from "../src/repositories/portfolioTransactionRepository.js";
+} from "../src/repositories/portfolioTransactionRepository.ts";
 import portfolioTransactionService from "../src/services/portfolio/portfolioTransactionService.js";
 
 const portfolioTransactionRepository = {

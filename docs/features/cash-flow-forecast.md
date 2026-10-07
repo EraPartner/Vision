@@ -2,7 +2,7 @@
 title: Cash Flow Forecast
 type: feature
 status: active
-date: 2026-10-06
+date: 2026-10-07
 updated: 2026-09-25
 last_modified: 2026-09-05
 tags: [feature, cash-flow, forecast, planning, aggregations, phase-6, phase-10, phase-c, phase-d, phase-e, phase-g, planned-transactions, statistical-forecasting, ensemble-methods, ensemble-v2, empirical-bayes, frontend-visualization, multi-method-forecast, diagnostics-sheet, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience]
@@ -13,13 +13,13 @@ related_code:
   - apps/node-backend/src/services/calculations/forecast/index.js
   - apps/node-backend/src/services/calculations/forecast/categoryBreakdown.js
   - apps/node-backend/src/services/calculations/forecast/accuracyStore.js
-  - apps/node-backend/src/routes/aggregations.js
-  - apps/node-backend/src/repositories/plannedTransactionRepository.js
-  - apps/node-backend/src/repositories/infoRepositoryMonthly.js
-  - apps/node-backend/src/repositories/cashflowForecastAccuracyRepository.js
-  - apps/node-backend/src/repositories/cashflowForecastMcRepository.js
-  - apps/node-backend/src/repositories/cashflowForecastMcRollingRepository.js
-  - apps/node-backend/src/jobs/refreshCashflowForecastMc.js
+  - apps/node-backend/src/routes/aggregations.ts
+  - apps/node-backend/src/repositories/plannedTransactionRepository.ts
+  - apps/node-backend/src/repositories/infoRepositoryMonthly.ts
+  - apps/node-backend/src/repositories/cashflowForecastAccuracyRepository.ts
+  - apps/node-backend/src/repositories/cashflowForecastMcRepository.ts
+  - apps/node-backend/src/repositories/cashflowForecastMcRollingRepository.ts
+  - apps/node-backend/src/jobs/refreshCashflowForecastMc.ts
   - apps/frontend/src/features/dashboard/CashFlowForecastChart.tsx
   - apps/frontend/src/features/dashboard/CashFlowForecastDiagnostics.tsx
   - apps/frontend/src/lib/api/aggregations.ts
@@ -686,7 +686,7 @@ Modular forecast orchestrator with 7 pluggable methods:
 - Indexes on (user_id, method_id) and (as_of_month)
 - Stores monthly backtest results from nightly batch jobs or manual updates
 
-**New Repository:** `cashflowForecastAccuracyRepository` (`apps/node-backend/src/repositories/cashflowForecastAccuracyRepository.js`)
+**New Repository:** `cashflowForecastAccuracyRepository` (`apps/node-backend/src/repositories/cashflowForecastAccuracyRepository.ts`)
 
 - Methods: `upsert()`, `getHistory()`, `getLatestByMethod()`, `getAllHistory()`
 - Idempotent upsert per (user_id, method_id, as_of_month)
@@ -725,7 +725,7 @@ Modular forecast orchestrator with 7 pluggable methods:
 - Stores precomputed forecast payloads: methods, actual-to-date, scheduled actual, planned, and
   diagnostics
 
-**New Repository:** `cashflowForecastMcRepository` (`apps/node-backend/src/repositories/cashflowForecastMcRepository.js`)
+**New Repository:** `cashflowForecastMcRepository` (`apps/node-backend/src/repositories/cashflowForecastMcRepository.ts`)
 
 - Methods:
   - `get({ userId, month, filterHash })` — Fetch cached payload and computed_at timestamp
@@ -733,7 +733,7 @@ Modular forecast orchestrator with 7 pluggable methods:
   - `upsert({ userId, month, filterHash, mcPaths, payload })` — Idempotent cache write (updates computed_at on conflict)
   - `getActiveUserIds()` — Fetch distinct user IDs from cashflow_forecast_accuracy table; fallback to ['anonymous'] if table is missing; used by nightly job
 
-**New Job:** `refreshCashflowForecastMc` (`apps/node-backend/src/jobs/refreshCashflowForecastMc.js`)
+**New Job:** `refreshCashflowForecastMc` (`apps/node-backend/src/jobs/refreshCashflowForecastMc.ts`)
 
 - Runs nightly (every 24 hours, scheduled in main.js via `setInterval`)
 - Calls `computeCashflowForecast()` for each active user with `includeBacktest: true, _forceCache: true`
@@ -1021,7 +1021,7 @@ The rolling forecast endpoint now uses a dedicated materialized cache table:
 - Unique constraint on `(user_id, today_iso, days_back, days_forward, filter_hash)` ensures idempotent cache writes
 - Index on `(user_id, today_iso)` for cache freshness lookups by user and date
 
-**New Repository:** `cashflowForecastMcRollingRepository` (`apps/node-backend/src/repositories/cashflowForecastMcRollingRepository.js`)
+**New Repository:** `cashflowForecastMcRollingRepository` (`apps/node-backend/src/repositories/cashflowForecastMcRollingRepository.ts`)
 
 - Methods:
   - `get({ userId, todayIso, daysBack, daysForward, filterHash })` — Fetch cached payload and computed_at timestamp

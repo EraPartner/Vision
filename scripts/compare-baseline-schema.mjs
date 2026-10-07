@@ -3,7 +3,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { readBaselineSchemaInventory } from "../apps/node-backend/src/database/baselineManifest.js";
+import { readBaselineSchemaInventory } from "../apps/node-backend/src/database/baselineManifest.ts";
 
 const expectedPath = process.argv[2];
 if (!expectedPath || !path.isAbsolute(expectedPath)) {

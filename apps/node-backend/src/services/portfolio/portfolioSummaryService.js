@@ -10,24 +10,24 @@
  * target currency to eliminate frontend FX drift across pages.
  */
 
-import { query } from "../../database/connection.js";
+import { query } from "../../database/connection.ts";
 import { convertToCurrency } from "../currency/currencyConversionService.js";
 import {
   buildHistoricalRateIndex,
   findRateOnOrBeforeInIndex,
 } from "../currency/rateFetcher.js";
 import { buildInvestmentSummaryCorePartitioned } from "@vision/shared-utils/portfolio";
-import { settingsRepository } from "../../repositories/settingsRepository.js";
-import { portfolioTransactionRepository } from "../../repositories/portfolioTransactionRepository.js";
-import { todayAppDateString } from "../../lib/timezone.js";
-import { toYmd } from "../../lib/dateFormat.js";
+import { settingsRepository } from "../../repositories/settingsRepository.ts";
+import { portfolioTransactionRepository } from "../../repositories/portfolioTransactionRepository.ts";
+import { todayAppDateString } from "../../lib/timezone.ts";
+import { toYmd } from "../../lib/dateFormat.ts";
 import {
   toDecimal,
   addAll,
   multiply,
   divide,
   roundMoney,
-} from "../../lib/money.js";
+} from "../../lib/money.ts";
 
 /** @typedef {import('@vision/shared-utils/money').DecimalInput} DecimalInput */
 /** @typedef {import('decimal.js').default} Decimal */
@@ -43,22 +43,22 @@ const COST_BASIS_METHODS = new Set(["weighted_avg", "fifo", "lifo"]);
 
 /**
  * `investments` row from `SELECT i.*, COALESCE(...)` above — same shape as
- * {@link import('../../types/rows.js').InvestmentRow} except `current_price`
+ * {@link import('../../types/rows.ts').InvestmentRow} except `current_price`
  * and `interest_rate` are COALESCE-defaulted (never null) and NOT coerced to
  * number here — still pg NUMERIC strings, parsed downstream with `Number()`.
- * @typedef {Omit<import('../../types/rows.js').InvestmentRow, 'current_price'|'interest_rate'> & {
+ * @typedef {Omit<import('../../types/rows.ts').InvestmentRow, 'current_price'|'interest_rate'> & {
  *   current_price: string,
  *   interest_rate: string,
  * }} RawInvestmentRow
  */
 
 /**
- * A {@link import('../../types/rows.js').PortfolioMathTxRow} after
+ * A {@link import('../../types/rows.ts').PortfolioMathTxRow} after
  * `annotateTransactionFxMultipliers`: every txn used downstream also carries
  * an `fxMultiplier` (its currency → target multiplier, resolved at its date)
  * and, when neither the stamped nor a historical rate could be resolved,
  * `_fxFellBack: true`.
- * @typedef {import('../../types/rows.js').PortfolioMathTxRow & {
+ * @typedef {import('../../types/rows.ts').PortfolioMathTxRow & {
  *   fxMultiplier?: number,
  *   _fxFellBack?: boolean,
  * }} AnnotatedTxRow
@@ -294,14 +294,14 @@ function aggregateByAccount(contributions) {
  *
  * @param {string[]} currencies
  * @param {string} target
- * @returns {Promise<import('../../types/rows.js').HistoricalRateIndex>}
+ * @returns {Promise<import('../../types/rows.ts').HistoricalRateIndex>}
  */
 async function loadHistoricalRateIndex(currencies, target) {
   const relevant = [...new Set([...currencies, target])].filter(
     (c) => c && c !== "EUR",
   );
   if (relevant.length === 0) return new Map();
-  /** @type {{ rows: Array<Pick<import('../../types/rows.js').ExchangeRateRow, 'currency_code'|'rate_to_eur'> & { rate_date: string }> }} */
+  /** @type {{ rows: Array<Pick<import('../../types/rows.ts').ExchangeRateRow, 'currency_code'|'rate_to_eur'> & { rate_date: string }> }} */
   const result = await query(
     `SELECT currency_code, to_char(rate_date, 'YYYY-MM-DD') AS rate_date, rate_to_eur
      FROM exchange_rates
@@ -320,7 +320,7 @@ async function loadHistoricalRateIndex(currencies, target) {
  *
  * @param {AnnotatedTxRow[]} txns
  * @param {string} target
- * @param {import('../../types/rows.js').HistoricalRateIndex} historicalIndex
+ * @param {import('../../types/rows.ts').HistoricalRateIndex} historicalIndex
  * @param {Map<string, number>} multiplierByCurrency
  */
 function annotateTransactionFxMultipliers(

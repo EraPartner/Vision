@@ -6,8 +6,8 @@
 import {
   cleanRecipientName,
   normalizeToUppercase,
-} from "../../../lib/textNormalization.js";
-import { logger } from "../../../config/logger.js";
+} from "../../../lib/textNormalization.ts";
+import { logger } from "../../../config/logger.ts";
 import {
   parseDayMonthYear,
   parseCommaDecimal,
@@ -19,7 +19,7 @@ import {
   readTextWithEncodingFallback,
   normalizeIsoCurrency,
 } from "./_shared.js";
-import { toDecimal, roundMoney } from "../../../lib/money.js";
+import { toDecimal, roundMoney } from "../../../lib/money.ts";
 
 /**
  * @typedef {import('./_shared.js').ParsedBankTransaction} ParsedBankTransaction

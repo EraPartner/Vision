@@ -3,7 +3,7 @@ import { z } from "zod";
 import Decimal from "decimal.js";
 import { fundHoldingsDocumentSchema } from "@vision/types/fund-holdings";
 import { getPortfolioSummary } from "./portfolioSummaryService.js";
-import * as repository from "../../repositories/portfolioExposureRepository.js";
+import * as repository from "../../repositories/portfolioExposureRepository.ts";
 
 const identifier = z
   .strictObject({

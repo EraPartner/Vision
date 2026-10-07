@@ -2,7 +2,7 @@
 title: Splits API
 type: endpoint
 status: active
-date: 2026-04-23
+date: 2026-10-07
 updated: 2026-08-19
 tags:
   - api
@@ -23,9 +23,9 @@ aliases:
   - transaction-split
 description: API endpoints for transaction splitting and debt tracking between recipients. Phase Q+ adds automatic recipient-alias collapsing on owed-summary endpoints to consolidate linked recipients (via merge operations) for consistency with merge semantics.
 related_code:
-  - apps/node-backend/src/routes/splits.js
+  - apps/node-backend/src/routes/splits.ts
   - apps/node-backend/src/services/splitService.js
-  - apps/node-backend/src/repositories/splitRepository.js
+  - apps/node-backend/src/repositories/splitRepository.ts
 ---
 
 # Splits API
@@ -48,7 +48,7 @@ All monetary values in split responses (amounts, outstanding, paid) use **Decima
 
 - Split amounts must be **positive numbers**.
 - The cumulative split amount for a transaction (existing splits + new split(s)) cannot exceed the absolute transaction amount.
-- Validation uses `validateSplitAllocation` (single) or `validateBatchSplitAllocation` (batch) from the pure calc module ([[apps/node-backend/src/lib/calculations/splits.js]]).
+- Validation uses `validateSplitAllocation` (single) or `validateBatchSplitAllocation` (batch) from the pure calc module ([[apps/node-backend/src/lib/calculations/splits.ts]]).
 - Decimal.js enforcement compares allocation at the `NUMERIC(18,4)` storage scale.
 - If a transaction does not exist, split creation returns `404`.
 
@@ -115,7 +115,7 @@ Linked recipients (those sharing a `primary_recipient_id` via merge operations) 
 
 Implementation note:
 
-- Groups by `COALESCE(r.primary_recipient_id, r.id)` and returns `COALESCE(pr.name, r.name)` to collapse aliases into their primary. The aggregation joins `agg_split_outstanding` (trigger-maintained materialized view) + `recipients` + the primary recipient's name, filtering to unsettled splits. ([[apps/node-backend/src/repositories/splitRepository.js]]).
+- Groups by `COALESCE(r.primary_recipient_id, r.id)` and returns `COALESCE(pr.name, r.name)` to collapse aliases into their primary. The aggregation joins `agg_split_outstanding` (trigger-maintained materialized view) + `recipients` + the primary recipient's name, filtering to unsettled splits. ([[apps/node-backend/src/repositories/splitRepository.ts]]).
 
 ---
 
@@ -162,7 +162,7 @@ This ensures that viewing splits for a recipient shows the complete history even
 
 Implementation note:
 
-- Uses a CTE (`recipient_group`) to expand the input `recipientId` to all recipients in the same merge group. The CTE resolves to the recipient itself, any aliases pointing at it (when input is a primary), the recipient's primary (when input is an alias), and any siblings sharing that primary. The main query then filters `WHERE ts.recipient_id IN (SELECT id FROM recipient_group)` to retrieve the full group's splits. ([[apps/node-backend/src/repositories/splitRepository.js]]).
+- Uses a CTE (`recipient_group`) to expand the input `recipientId` to all recipients in the same merge group. The CTE resolves to the recipient itself, any aliases pointing at it (when input is a primary), the recipient's primary (when input is an alias), and any siblings sharing that primary. The main query then filters `WHERE ts.recipient_id IN (SELECT id FROM recipient_group)` to retrieve the full group's splits. ([[apps/node-backend/src/repositories/splitRepository.ts]]).
 
 ---
 
@@ -196,7 +196,7 @@ Important behavior:
 
 Implementation notes:
 
-- Uses the same `recipient_group` CTE as `GET /api/splits/owed/:id` to expand the input to all linked aliases. The export includes all splits from recipients in the group, filtering to unsettled splits with a positive remaining amount. ([[apps/node-backend/src/repositories/splitRepository.js]]).
+- Uses the same `recipient_group` CTE as `GET /api/splits/owed/:id` to expand the input to all linked aliases. The export includes all splits from recipients in the group, filtering to unsettled splits with a positive remaining amount. ([[apps/node-backend/src/repositories/splitRepository.ts]]).
 
 ---
 
@@ -291,7 +291,7 @@ The endpoint validates split allocation via `validateSplitAllocation` before wri
 
 Implementation notes:
 
-- Allocation validation via `validateSplitAllocation({ newSplitAmount, transactionTotal, currentSplitTotal })` ([[apps/node-backend/src/lib/calculations/splits.js]]).
+- Allocation validation via `validateSplitAllocation({ newSplitAmount, transactionTotal, currentSplitTotal })` ([[apps/node-backend/src/lib/calculations/splits.ts]]).
 - `splitService.createSplitAtomic()` owns allocation validation, insertion, and the action='create' audit in one transaction. The route supplies the actor resolved from headers.
 
 ---
@@ -361,8 +361,8 @@ The endpoint validates total batch allocation via `validateBatchSplitAllocation`
 
 Implementation notes:
 
-- Batch allocation validation via `validateBatchSplitAllocation({ splits, transactionTotal, currentSplitTotal })` ([[apps/node-backend/src/lib/calculations/splits.js]]).
-- Normalized inputs via `normalizeBatchSplitInputs(splits)` to filter and type-cast before validation ([[apps/node-backend/src/routes/splits.js]]).
+- Batch allocation validation via `validateBatchSplitAllocation({ splits, transactionTotal, currentSplitTotal })` ([[apps/node-backend/src/lib/calculations/splits.ts]]).
+- Normalized inputs via `normalizeBatchSplitInputs(splits)` to filter and type-cast before validation ([[apps/node-backend/src/routes/splits.ts]]).
 - `splitService.createSplitsBatchAtomic()` validates the complete allocation, persists all rows through one bulk repository primitive, and writes one action='create' audit per split in the same transaction.
 
 ---
@@ -430,7 +430,7 @@ The endpoint validates payment amount via `validatePaymentAmount` before write. 
 Implementation notes:
 
 - `splitService.addPayment()` locks and fetches the split, obtains the already-paid total, validates at four-decimal precision, inserts the payment, conditionally auto-settles, and writes the audit row in one database transaction ([[apps/node-backend/src/services/splitService.js]]).
-- Actor is resolved by the route and propagated to the service audit transaction via `resolveActor(req)` ([[apps/node-backend/src/routes/splits.js]]).
+- Actor is resolved by the route and propagated to the service audit transaction via `resolveActor(req)` ([[apps/node-backend/src/routes/splits.ts]]).
 
 ---
 
@@ -543,7 +543,7 @@ This endpoint matches existing settlement behavior: it only sets `is_settled = t
 
 Implementation notes:
 
-- Uses the same `recipient_group` CTE as `GET /api/splits/owed/:id` to expand the input to all linked aliases. The UPDATE statement sets `is_settled = true` for all unsettled splits from recipients in the group, returning the number of settled rows via `result.rowCount`. ([[apps/node-backend/src/repositories/splitRepository.js]]).
+- Uses the same `recipient_group` CTE as `GET /api/splits/owed/:id` to expand the input to all linked aliases. The UPDATE statement sets `is_settled = true` for all unsettled splits from recipients in the group, returning the number of settled rows via `result.rowCount`. ([[apps/node-backend/src/repositories/splitRepository.ts]]).
 - `splitService.settleAllByRecipient()` runs the update and, only when `settled_count > 0`, its action='settle_all' audit in one transaction.
 
 ---
@@ -640,7 +640,7 @@ interface SplitCreateInput {
 - [[docs/api/recipients]] - Recipients API
 - [[docs/features/splits]] - Feature specification
 - [[docs/adr/013-split-hard-delete-with-audit-trail]] - Audit trail design and hard-delete semantics
-- [[apps/node-backend/src/lib/calculations/splits.js]] - Pure validation module
+- [[apps/node-backend/src/lib/calculations/splits.ts]] - Pure validation module
 - [[docs/components/form-dialogs|SplitTransactionDialog]] - Frontend split dialog component
 
 ## Migrations

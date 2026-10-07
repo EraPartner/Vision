@@ -1,0 +1,108 @@
+/**
+ * Shared structural Express types.
+ *
+ * The legacy checkJs program (tsconfig.check.json) still resolves `express`
+ * to the ambient `any` shim in thirdPartyModules.d.ts, so its JavaScript
+ * callers cannot use `@types/express` — same reasoning as `ExpressResponse` in
+ * services/transactionExport.js and services/reports/index.js, and
+ * `ExpressApp`/`ExpressLayer` in services/routeManifest.js. Those files each
+ * defined a narrow local structural type; this module centralizes the
+ * equivalent for the middleware/lib/controllers layer, where many files share
+ * the same req/res/router surface, rather than repeating it per file.
+ *
+ * Each type below describes only the members some annotated backend file
+ * actually reads or writes — not the full Express API. Extend deliberately:
+ * adding a property here makes that member "typed" everywhere this module
+ * is imported, whether or not it is ever really present.
+ *
+ * @module types/express
+ */
+
+import type { ResponseMeta as ApiResponseMeta } from "@vision/types/api";
+
+export interface ExpressRequest {
+  params: Record<string, string>;
+  query: Record<string, any>;
+  body: any;
+  headers: Record<string, string | string[] | undefined>;
+  /** Node wire headers, before duplicate-field normalization. */
+  rawHeaders?: string[];
+  /** Request id stamped by middleware/requestId.ts. */
+  id?: string;
+  method: string;
+  path: string;
+  baseUrl: string;
+  originalUrl: string;
+  url: string;
+  route?: { path?: string };
+  /** Deprecated Node alias for `socket`; still read defensively. */
+  connection?: { remoteAddress?: string };
+  socket?: { remoteAddress?: string };
+  ip?: string;
+  get: (name: string) => string | undefined;
+  /** Attached by multer's `.single(...)`. `buffer` is populated only under multer's memoryStorage (routes/attachments.js); `path`/`filename` only under diskStorage (routes/importRoutes.js, portfolioImportRoutes.js) — the two configurations are mutually exclusive per route, never both populated on the same request. */
+  file?: {
+    path?: string;
+    filename?: string;
+    originalname?: string;
+    mimetype?: string;
+    size?: number;
+    buffer?: Buffer;
+  };
+  cookies?: Record<string, string>;
+}
+
+export interface ExpressResponse {
+  json: (body?: any) => ExpressResponse;
+  status: (code: number) => ExpressResponse;
+  send: (body?: any) => ExpressResponse;
+  setHeader: (name: string, value: string | number) => void;
+  /** Express's `res.set` — an alias for `setHeader` that returns `this` for chaining. */
+  set?: (name: string, value: string | number) => ExpressResponse;
+  on: (event: string, listener: (...args: any[]) => void) => void;
+  once?: (event: string, listener: (...args: any[]) => void) => void;
+  statusCode: number;
+  headersSent: boolean;
+  writableEnded: boolean;
+  /** Node's `http.ServerResponse#write` (overloaded `(chunk, cb?) | (chunk, encoding, cb?)` upstream — loosely typed to cover both). Used by the streaming CSV/NDJSON export pipeline (services/transactionExport.js) and, reassigned wholesale, by main.js's gzip wrapper. */
+  write: (chunk?: any, encoding?: any, cb?: any) => boolean;
+  /** Same overload shape as `write` above; main.js's gzip wrapper reassigns this too. */
+  end: (chunk?: any, encoding?: any, cb?: any) => ExpressResponse | void;
+  /** Express's `res.sendFile`, used by routes/attachments.js's download endpoint. */
+  sendFile?: (path: string, callback?: (err: any) => void) => void;
+  /** Node's `http.ServerResponse#writeHead`, used by main.js's CORS preflight short-circuit. */
+  writeHead?: (statusCode: number) => ExpressResponse;
+  getHeader?: (name: string) => any;
+  removeHeader?: (name: string) => void;
+  /** Express's `res.type`, used by main.js's SPA fallback. */
+  type?: (contentType: string) => ExpressResponse;
+  /** Node's `EventEmitter#emit` (`ExpressResponse` is a `http.ServerResponse`, which is one) — used by main.js's gzip wrapper to re-surface `gz`'s `'drain'` event on `res`. */
+  emit?: (event: string, ...args: any[]) => boolean;
+  destroy?: (err?: Error) => void;
+  /** Attached by middleware/envelope.ts's `wrapResponse`. */
+  ok?: (data: any, meta?: ResponseMeta) => ExpressResponse;
+  locals?: Record<string, any>;
+}
+
+/**
+ * Envelope metadata as declared by the shared package. Route-specific facts
+ * live beside `requestId` at the top level; pagination stays in the data body.
+ */
+export type ResponseMeta = ApiResponseMeta;
+
+export type ExpressNextFunction = (err?: unknown) => void;
+
+export type ExpressHandler = (
+  req: ExpressRequest,
+  res: ExpressResponse,
+  next: ExpressNextFunction,
+) => any;
+
+export interface ExpressRouter {
+  get: (path: string, ...handlers: ExpressHandler[]) => ExpressRouter;
+  post: (path: string, ...handlers: ExpressHandler[]) => ExpressRouter;
+  patch: (path: string, ...handlers: ExpressHandler[]) => ExpressRouter;
+  put: (path: string, ...handlers: ExpressHandler[]) => ExpressRouter;
+  delete: (path: string, ...handlers: ExpressHandler[]) => ExpressRouter;
+  use: (...handlers: ExpressHandler[]) => ExpressRouter;
+}

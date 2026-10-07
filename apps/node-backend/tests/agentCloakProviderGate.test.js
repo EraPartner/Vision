@@ -5,7 +5,7 @@ const mocked = vi.hoisted(() => ({
   reserve: vi.fn(),
   broker: vi.fn(),
 }));
-vi.mock("../src/config/config.js", () => ({
+vi.mock("../src/config/config.ts", () => ({
   default: {
     database: {
       analysisUrl: "postgresql://synthetic.invalid/vision_test",
@@ -31,12 +31,12 @@ vi.mock("../src/config/config.js", () => ({
 vi.mock("../src/services/agentCloakPreflight.js", () => ({
   checkAgentCloakPreflight: mocked.check,
 }));
-vi.mock("../src/repositories/aiDisclosureRepository.js", () => ({
+vi.mock("../src/repositories/aiDisclosureRepository.ts", () => ({
   findUncertainDisclosure: vi.fn(),
   reserveDisclosure: mocked.reserve,
   updateDisclosureRecord: vi.fn(),
 }));
-vi.mock("../src/integrations/openai/brokerClient.js", () => ({
+vi.mock("../src/integrations/openai/brokerClient.ts", () => ({
   callOpenAiBroker: mocked.broker,
 }));
 

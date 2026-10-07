@@ -1,15 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockConnection } from "./helpers/repoMocks.js";
 
-vi.mock("../src/database/connection.js", () => mockConnection());
+vi.mock("../src/database/connection.ts", () => mockConnection());
 
-import { query } from "../src/database/connection.js";
+import { query } from "../src/database/connection.ts";
 import {
   mvAvailable,
   clearMvCache,
-} from "../src/repositories/infoRepositoryHelpers.js";
+} from "../src/repositories/infoRepositoryHelpers.ts";
 import { sanitizeIsolatedValueSpikes } from "../src/services/calculations/portfolioMath.js";
-import { sanitizeIsolatedDailyInvestmentSpikes } from "../src/lib/calculations/netWorthSanitizer.js";
+import { sanitizeIsolatedDailyInvestmentSpikes } from "../src/lib/calculations/netWorthSanitizer.ts";
 
 describe("sanitizeIsolatedValueSpikes", () => {
   it("smooths an isolated one-day needle to the geometric mean of its neighbors", () => {

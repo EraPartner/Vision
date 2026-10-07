@@ -2,7 +2,7 @@
 title: Categories
 type: feature
 status: active
-date: 2026-10-05
+date: 2026-10-07
 tags: [feature, categories, transactions, organization, hierarchy]
 description: Parent-linked transaction categories with stable IDs, ordered paths, and legacy GENERAL:DETAIL compatibility
 aliases:
@@ -14,9 +14,9 @@ aliases:
     GENERAL-DETAIL,
   ]
 related_code:
-  - apps/node-backend/src/routes/categories.js
-  - apps/node-backend/src/repositories/categoryRepository.js
-  - apps/node-backend/src/repositories/categoryHierarchyRepository.js
+  - apps/node-backend/src/routes/categories.ts
+  - apps/node-backend/src/repositories/categoryRepository.ts
+  - apps/node-backend/src/repositories/categoryHierarchyRepository.ts
   - apps/frontend/src/features/categories/
 ---
 

@@ -12,7 +12,7 @@ import { mockConnection } from "../helpers/repoMocks.js";
 import { mockLogger } from "../helpers/mockLogger.js";
 import { routeAgent } from "../helpers/routeApp.js";
 
-vi.mock("../../src/repositories/plannedTransactionRepository.js", () => ({
+vi.mock("../../src/repositories/plannedTransactionRepository.ts", () => ({
   default: {
     getAll: vi.fn(),
     getById: vi.fn(),
@@ -36,7 +36,7 @@ vi.mock("../../src/services/plannedTransactionService.js", () => ({
   },
 }));
 
-vi.mock("../../src/database/connection.js", () => ({
+vi.mock("../../src/database/connection.ts", () => ({
   ...mockConnection(),
   withTransaction: vi.fn(async (fn) => fn()),
 }));
@@ -46,11 +46,11 @@ vi.mock("../../src/database/connection.js", () => ({
 // keyed by IP, so the real 30/min ceiling would make the file self-throttling
 // and flaky as tests are added. The transactions suites exercise the real
 // limiter chain. Every OTHER middleware on the chain is real.
-vi.mock("../../src/middleware/rateLimiter.js", () => ({
+vi.mock("../../src/middleware/rateLimiter.ts", () => ({
   rateLimiter: () => (_req, _res, next) => next(),
 }));
 
-vi.mock("../../src/config/logger.js", () => ({
+vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
@@ -72,11 +72,11 @@ vi.mock(
 );
 
 import plannedTransactionService from "../../src/services/plannedTransactionService.js";
-import { query as dbQuery } from "../../src/database/connection.js";
+import { query as dbQuery } from "../../src/database/connection.ts";
 import { generateLoanRepaymentSchedule } from "../../src/services/calculations/loanSchedule.js";
 
 const { default: plannedRouter } =
-  await import("../../src/routes/plannedTransactions.js");
+  await import("../../src/routes/plannedTransactions.ts");
 
 // Historical assertion alias: every method below is the independently mocked
 // service surface used by the real router.
@@ -334,6 +334,17 @@ describe("Planned Transaction Routes", () => {
         amount: 50,
         is_recurring: true,
         recurrence_pattern: "fortnightly",
+      }).expect(400);
+      expect(plannedTransactionRepository.create).not.toHaveBeenCalled();
+    });
+
+    it("rejects a non-string recurrence_pattern with a 400, not a 500", async () => {
+      await post({
+        planned_date: "2026-03-15",
+        account_id: 7,
+        amount: 50,
+        is_recurring: true,
+        recurrence_pattern: 5,
       }).expect(400);
       expect(plannedTransactionRepository.create).not.toHaveBeenCalled();
     });
@@ -653,6 +664,7 @@ describe("Planned Transaction Routes", () => {
         { recurrence_end_date: "banana" },
         { tags: "nope" },
         { recurrence_pattern: "fortnightly" },
+        { recurrence_pattern: true },
       ]) {
         await patch(1, body).expect(400);
       }
@@ -782,7 +794,7 @@ describe("Planned Transaction Routes", () => {
     });
 
     it("rejects a non-integer :id via the real validateIdParam guard", async () => {
-      // Previously `vi.mock('.../middleware/validation.js')` replaced
+      // Previously `vi.mock('.../middleware/validation.ts')` replaced
       // validateIdParam with a pass-through, so this guard was never tested.
       const res = await api.get(`${BASE}/abc`).expect(400);
 

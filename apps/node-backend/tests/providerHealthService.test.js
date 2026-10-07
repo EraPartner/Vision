@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { mockLogger } from './helpers/mockLogger.js';
-vi.mock('../src/config/logger.js', () => ({
+vi.mock('../src/config/logger.ts', () => ({
   logger: mockLogger(),
 }));
 
-vi.mock('../src/repositories/providerHealthRepository.js', () => ({
+vi.mock('../src/repositories/providerHealthRepository.ts', () => ({
   default: {
     recordSuccess: vi.fn(),
     recordError: vi.fn(),
@@ -14,8 +14,8 @@ vi.mock('../src/repositories/providerHealthRepository.js', () => ({
   },
 }));
 
-import { logger } from '../src/config/logger.js';
-import providerHealthRepository from '../src/repositories/providerHealthRepository.js';
+import { logger } from '../src/config/logger.ts';
+import providerHealthRepository from '../src/repositories/providerHealthRepository.ts';
 import {
   recordSuccess,
   recordError,

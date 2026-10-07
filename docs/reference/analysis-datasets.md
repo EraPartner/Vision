@@ -2,12 +2,12 @@
 title: Analysis Datasets
 type: reference
 status: active
-date: 2026-10-01
+date: 2026-10-07
 tags: [analysis, datasets, reconciliation, money, portfolio, security]
 description: Versioned analysis datasets, including ordered category paths, financial meanings, joins, and reconciliation rules.
 aliases: [financial datasets, vision_analysis]
 related_code:
-  - packages/types/src/analysisDatasets.js
+  - packages/types/src/analysisDatasets.ts
   - alembic/versions/0107_analysis_dataset_views.py
   - alembic/versions/0114_category_hierarchy.py
   - apps/node-backend/tests/analysisDatasets.test.js

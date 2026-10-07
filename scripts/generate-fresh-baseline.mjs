@@ -8,7 +8,7 @@ import { resolve } from "node:path";
 import {
   AUDIT_CHAIN_GENESIS_HASH,
   __hashAuditEntry,
-} from "../apps/node-backend/src/lib/auditChainCore.js";
+} from "../apps/node-backend/src/lib/auditChainCore.ts";
 
 const revision = "0119_squashed_baseline";
 const allowedRows = new Map([

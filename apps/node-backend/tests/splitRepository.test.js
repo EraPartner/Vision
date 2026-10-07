@@ -6,13 +6,13 @@ import { mockTxConnection } from "./helpers/repoMocks.js";
 // split_payments on every call. These tests pin the rewrite to a per-split
 // LATERAL aggregate (only the relevant rows) while preserving numeric output.
 
-vi.mock("../src/database/connection.js", () => mockTxConnection());
-vi.mock("../src/repositories/auditChainRepository.js", () => ({
+vi.mock("../src/database/connection.ts", () => mockTxConnection());
+vi.mock("../src/repositories/auditChainRepository.ts", () => ({
   appendAuditEvent: vi.fn(),
 }));
 
-import { query } from "../src/database/connection.js";
-import splitPersistence from "../src/repositories/splitRepository.js";
+import { query } from "../src/database/connection.ts";
+import splitPersistence from "../src/repositories/splitRepository.ts";
 import splitService from "../src/services/splitService.js";
 
 const splitRepository = { ...splitPersistence, ...splitService };

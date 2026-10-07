@@ -7,12 +7,12 @@ const { mockClient, systemRecipient } = vi.hoisted(() => ({
   systemRecipient: vi.fn(),
 }));
 
-vi.mock("../src/database/connection.js", () => mockTxConnection(mockClient));
-vi.mock("../src/repositories/recipientRepository.js", () => ({
+vi.mock("../src/database/connection.ts", () => mockTxConnection(mockClient));
+vi.mock("../src/repositories/recipientRepository.ts", () => ({
   recipientRepository: { getOrCreateSystemId: systemRecipient },
 }));
 
-import { query, withTransaction } from "../src/database/connection.js";
+import { query, withTransaction } from "../src/database/connection.ts";
 import {
   closeAccount,
   __normalizeCloseAccount as normalizeCloseAccount,

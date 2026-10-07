@@ -1,7 +1,7 @@
 /** Versioned, provider-neutral identity for budgeting and portfolio imports. */
 
 import crypto from "node:crypto";
-import { parsedDateToYmd } from "../lib/importDates.js";
+import { parsedDateToYmd } from "../lib/importDates.ts";
 
 const IMPORT_FINGERPRINT_VERSION = 1;
 

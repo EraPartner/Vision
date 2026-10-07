@@ -2,7 +2,7 @@
 title: Code Patterns Reference
 type: reference
 status: active
-date: 2026-10-06
+date: 2026-10-07
 updated: 2026-10-05
 tags: [reference, patterns, conventions, code-style, backend, frontend, delete-responses, http-204, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number, settings-backed-hook, portfolio-tax-classifications, audit-2026-05-11, belgian-tax, freeze-display-pattern, adr-059, dev-observability, devtools, api-inspector, observability, postgres-locking, for-update-group-by, accessibility, a11y, keyboard-operability, aria, onActivateKeyDown, shared-utils, monorepo, workspace, banker-rounding, plural, tc, portfolio-unit-math, premium-v3, optimistic-create, chart-scrub, chart-sync, context-menu, dialog-interplay, radix, role-based-glass, june-2026, skin-v2, feature-flag, css-scoping, unlayered-css, visual-skin, theming, inline-token-constraint, adr-104, wire-casing, snake-case, api-casing, database-naming, enum-discipline, check-constraints, chk-uq-idx]
 description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via an indexable semi-join (Phase Q; rewritten from the original scalar-subquery OR shape), portfolio totals single-source-of-truth pattern (Phase 14), Belgian Tax freeze/display pattern for engine-drift protection (ADR-059, May 2026), dev-only observability integration pattern (May 2026 devtools: module-level pub-sub event bus with zero-cost tree-shaking in production). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix. May 2026 a11y pass adds onActivateKeyDown keyboard-activation helper pattern. June 2026: shared-utils cross-workspace package (@vision/shared-utils) consolidates money, slugify, and shared portfolio calculations; banker's rounding is now the canonical roundMoney mode; tc() plural pattern documented. June 2026 (ADR-070): optimistic mutation pattern (snapshot/patch/rollback via setQueriesData); surface shell updated with glass-regular/glass-elevated/opaque-table canonical rules; motion consumer updated for PageTransition re-addition and dialog keyframe animation. June 2026 Premium v3 (ADR-071): optimistic-create pattern (temp negative-id row, server swap, rollback, onSettled invalidate); chart scrub pattern (useChartScrub, pointer capture, glass Δ pill); chart sync pattern (ChartSyncProvider, syncId prop, domain guard). June 2026 Premium v3 V5 (ADR-071): Radix ContextMenu + Dialog interplay pattern — modal={false} prevents body pointer-events race when menu items spawn Dialogs. June 2026 (role-based glass): surface shell canonical rule broadened — glass-regular now applied to ALL content/chart/stat/state cards, including current table/form/callout/dialog-nested Card instances; old ~6-surface-per-viewport limit superseded; an explicit opaque exception uses a plain bordered bg-card container instead of Card. June 2026 (ADR-104): scoped-skin-behind-a-flag pattern — alternative visual skin shipped as UNLAYERED CSS under :root.skin-v2 toggled by VITE_SKIN_V2 booleanEnv flag (default OFF); localStorage runtime override + window.__setSkinV2 dev helper; critical inline-token constraint: applyThemePalette() writes color tokens as inline styles which beat any stylesheet rule. July 2026: wire casing convention — snake_case is the request/response body contract, translated to camelCase at the route edge; ai/savedCharts/crossWorkspace/admin-dbEditor requests plus marketLookup and import-rollback responses are grandfathered camelCase; dual-accept (`x_y ?? xY`) is banned.
@@ -32,7 +32,7 @@ Pure logic that is needed on both the frontend and backend lives in this Bun wor
 
 Both apps add `"@vision/shared-utils": "workspace:*"` to their `package.json` dependencies. Use an explicit package subpath for modules exposed that way; `category` remains the root-barrel exception. Asset-class constants belong to `@vision/types/assetClasses`, not shared-utils. Add new modules only when their logic is genuinely shared and pure; backend-only or frontend-only domain logic stays in its owning app.
 
-> [!important] Do not import from `apps/node-backend/src/lib/money.js` directly in the frontend, or vice-versa. Frontend code imports `@vision/shared-utils/money` directly. The backend keeps its app-local `src/lib/money.js` boundary where backend modules already use it.
+> [!important] Do not import from `apps/node-backend/src/lib/money.ts` directly in the frontend, or vice-versa. Frontend code imports `@vision/shared-utils/money` directly. The backend keeps its app-local `src/lib/money.ts` boundary where backend modules already use it.
 
 ## Backend test-only export convention
 
@@ -61,7 +61,7 @@ This eliminates the prior frontend/backend money-rounding drift that was caused 
 
 ## Money Utility Pattern (Phase 9 + June 2026)
 
-**Source:** [[packages/shared-utils/src/money.js]] (re-exported via [[apps/node-backend/src/lib/money.js]] and [[apps/frontend/src/lib/money.ts]])
+**Source:** [[packages/shared-utils/src/money.ts]] (re-exported via [[apps/node-backend/src/lib/money.ts]] and [[apps/frontend/src/lib/money.ts]])
 
 For rendered frontend values, use `components/shared/Money.tsx` after calculation. Pass raw negative/positive deltas with `signed`; pass an explicit currency when the amount is native or already converted. Keep `useCurrencyFormatter` for APIs that require a string, such as translated interpolation, chart ticks/tooltips, input placeholders, titles, and ARIA text.
 
@@ -91,7 +91,7 @@ import {
   divide,
   roundMoney,
   toNumber,
-} from "../lib/money.js";
+} from "../lib/money.ts";
 
 // Convert any input (number, string, Decimal, null) to Decimal
 const amount = toDecimal(100.5);
@@ -116,7 +116,7 @@ const scaled = toNumber(roundMoney("0.123456", 4)); // 0.1235 (to 4 DP)
 const dbAmount = toNumber(toDecimal("100.00")); // Safe from string precision loss
 
 // Repository read boundary: coerce a single DB NUMERIC column, preserving SQL NULL
-import { numericColumn, coerceNumericFields } from "../lib/money.js";
+import { numericColumn, coerceNumericFields } from "../lib/money.ts";
 
 const price = numericColumn(row.current_price); // '31.20' → 31.2; null → null; '' → undefined
 
@@ -446,7 +446,7 @@ intentional; compact axes use the two-digit year.
 
 ## Backend Repository Pattern
 
-**Source:** [[apps/node-backend/src/repositories/transactionRepository.js|transactionRepository.js]], [[apps/node-backend/src/repositories/categoryRepository.js|categoryRepository.js]]
+**Source:** [[apps/node-backend/src/repositories/transactionRepository.ts|transactionRepository.js]], [[apps/node-backend/src/repositories/categoryRepository.ts|categoryRepository.js]]
 
 ### Accepted repository API shapes
 
@@ -492,7 +492,7 @@ Within either form, use `get*` for one value, `list*` for collections, and a spe
 > `null` for absence.
 
 ```js
-import { query } from "../database/connection.js";
+import { query } from "../database/connection.ts";
 
 export const entityRepository = {
   async getAll({ limit = 50, offset = 0, active = true, ...filters } = {}) {
@@ -560,7 +560,7 @@ export default entityRepository;
 
 | Pattern         | Rule                                                                        |
 | --------------- | --------------------------------------------------------------------------- |
-| DB access       | Import `query` from `../database/connection.js`                             |
+| DB access       | Import `query` from `../database/connection.ts`                             |
 | Filter building | `WHERE 1=1` + dynamic `AND` clauses                                         |
 | Parameters      | Positional (`$1`, `$2`) with manual index tracking                          |
 | Single row      | `result.rows[0]                                                             |     | null` |
@@ -574,9 +574,9 @@ export default entityRepository;
 The intended layering is `routes → services → repositories`, with pure, framework-free helpers in
 `lib/` importable from any layer. Pure helpers that used to sit under `services/` were relocated to
 `lib/` in Wave A2 (2026-07) precisely so repositories can use them without inverting the layers:
-`lib/filterBuilder.js`, `lib/textNormalization.js`, `lib/calculations/splits.js`,
-`lib/calculations/recurrence.js`, and the `VALID_PORTFOLIO_TXN_TYPES` const
-(`lib/portfolioTxnTypes.js`).
+`lib/filterBuilder.ts`, `lib/textNormalization.ts`, `lib/calculations/splits.ts`,
+`lib/calculations/recurrence.ts`, and the `VALID_PORTFOLIO_TXN_TYPES` const
+(`lib/portfolioTxnTypes.ts`).
 
 **Enforced mechanically** since 2026-08-11 by `vision-local/no-service-import-from-repo`
 ([[apps/node-backend/eslint.config.js|eslint.config.js]]), the mirror of
@@ -612,7 +612,7 @@ two lists must be edited together.
 
 ## Timezone Boundary Handling & APP_TIMEZONE Consistency (Phase 9, ADR-009)
 
-**Source:** [[apps/node-backend/src/lib/timezone.js|timezone.js]], [[apps/node-backend/tests/timezone.test.js|timezone.test.js]]
+**Source:** [[apps/node-backend/src/lib/timezone.ts|timezone.js]], [[apps/node-backend/tests/timezone.test.js|timezone.test.js]]
 
 **May 2026 Update:** As of 2026-05-14, date bucketing throughout the backend now consistently uses `APP_TIMEZONE` (default `Europe/Brussels`):
 
@@ -627,7 +627,7 @@ Certain JavaScript environments (some older Intl implementations, edge cases in 
 ### Pattern
 
 ```js
-import { toAppTz } from '../lib/timezone.js';
+import { toAppTz } from '../lib/timezone.ts';
 
 // Before (buggy):
 const zoned = new Intl.DateTimeFormat('en-GB', {
@@ -669,16 +669,16 @@ Two new test cases in `timezone.test.js`:
 
 ## Backend Route Pattern
 
-**Source:** [[apps/node-backend/src/routes/transactions.js|transactions.js]], [[apps/node-backend/src/routes/splits.js|splits.js]], [[apps/node-backend/src/routes/categories.js|categories.js]], [[apps/node-backend/src/routes/plannedTransactions.js|plannedTransactions.js]]
+**Source:** [[apps/node-backend/src/routes/transactions.ts|transactions.js]], [[apps/node-backend/src/routes/splits.ts|splits.js]], [[apps/node-backend/src/routes/categories.ts|categories.js]], [[apps/node-backend/src/routes/plannedTransactions.ts|plannedTransactions.js]]
 
 Per [[docs/adr/026-unified-api-response-envelope|ADR-026]], all routes return `{ ok: true, data, meta? }` via `res.ok()` middleware. PATCH handlers must sanitize read-only fields immutably:
 
 ```js
 import { Router } from "express";
 import entityRepository from "../repositories/entityRepository.js";
-import { logger } from "../config/logger.js";
-import { validateIdParam } from "../middleware/validation.js";
-import { NotFoundError, ValidationError } from "../middleware/errorHandler.js";
+import { logger } from "../config/logger.ts";
+import { validateIdParam } from "../middleware/validation.ts";
+import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
 
 const router = Router();
 
@@ -743,7 +743,7 @@ export default router;
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **List envelope**      | `res.ok({ items, total, limit?, offset? })` wraps items in a `data` object per [[docs/adr/026-unified-api-response-envelope                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | ADR-026]]                  |
 | **Parallel fetch**     | `Promise.all([getAll, getCount])` for list endpoints to avoid N+1                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| **ID validation**      | `validateIdParam` middleware on all `/:id` routes; `validateIntParam('<param>')` (e.g. `validateIntParam('patternId')`, `validateIntParam('accountId')`) for sub-resource id params. Handlers then read the number through `assertIdParam(req, '<param>')`, so safety does not depend on middleware ordering. These helpers accept **only** a plain base-10 digit string (or an integer number) in 1..2³¹−1 — `"12abc"`, `"12.5"`, `"1e3"`, `"0x10"`, `" 5 "` and `0` all 400. Never hand-roll an id check with `parseInt` (takes the leading digits of anything) **or `Number()`** (takes `"0x10"` as 16, `"1e3"` as 1000) — both silently address the wrong record. Every id parser delegates to `validateId`: `validateIntArray` for body id arrays, `parseIdArrayQueryParam` (`aggregations.js`) for repeatable id query params, `assertOptionalId` for optional single query ids, `validatedIdField` (`splits.js`) and `coercedIdSchema` (`lib/importBatchIds.js`) for zod bodies/params, `parsePositiveInt` (`aiChat/tools/_validate.js`) for LLM-emitted tool args. Add a call, not another parser. Request boundaries never filter a bad id out of a list; lower merge services may use the documented non-coercing `filterValidatedIdNumbers` defense only after strict boundary validation ([[docs/security/input-validation#ID Validation\|Input Validation]]) |
+| **ID validation**      | `validateIdParam` middleware on all `/:id` routes; `validateIntParam('<param>')` (e.g. `validateIntParam('patternId')`, `validateIntParam('accountId')`) for sub-resource id params. Handlers then read the number through `assertIdParam(req, '<param>')`, so safety does not depend on middleware ordering. These helpers accept **only** a plain base-10 digit string (or an integer number) in 1..2³¹−1 — `"12abc"`, `"12.5"`, `"1e3"`, `"0x10"`, `" 5 "` and `0` all 400. Never hand-roll an id check with `parseInt` (takes the leading digits of anything) **or `Number()`** (takes `"0x10"` as 16, `"1e3"` as 1000) — both silently address the wrong record. Every id parser delegates to `validateId`: `validateIntArray` for body id arrays, `parseIdArrayQueryParam` (`aggregations.js`) for repeatable id query params, `assertOptionalId` for optional single query ids, `validatedIdField` (`splits.js`) and `coercedIdSchema` (`lib/importBatchIds.ts`) for zod bodies/params, `parsePositiveInt` (`aiChat/tools/_validate.js`) for LLM-emitted tool args. Add a call, not another parser. Request boundaries never filter a bad id out of a list; lower merge services may use the documented non-coercing `filterValidatedIdNumbers` defense only after strict boundary validation ([[docs/security/input-validation#ID Validation\|Input Validation]]) |
 | **PATCH sanitization** | Remove read-only fields immutably via destructured rest: `const { id: _id, ...sanitized } = req.body` (never in-place `delete`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | **Error handling**     | Throw `NotFoundError`, `ValidationError`, etc.; `errorHandler` middleware converts to `{ ok: false, error: {...} }`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | **Success response**   | All success paths use `res.ok(data)` or `res.ok({items, total})` — except hard deletes, which answer `204` (see [[docs/reference/code-patterns#DELETE Response Pattern                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | DELETE Response Pattern]]) |
@@ -770,7 +770,7 @@ action and an equivalent collection action. Category assignment uses only the ca
 
 ## List Response Envelope Pattern (ADR-026 Compliance)
 
-**Source:** [[apps/node-backend/src/routes/splits.js|splits.js]], [[apps/node-backend/src/routes/attachments.js|attachments.js]], test suite
+**Source:** [[apps/node-backend/src/routes/splits.ts|splits.js]], [[apps/node-backend/src/routes/attachments.ts|attachments.js]], test suite
 
 All list/paginated endpoints return a consistent envelope shape per [[docs/adr/026-unified-api-response-envelope|ADR-026]]:
 
@@ -811,7 +811,7 @@ router.get('/', async (req, res) => {
 | **Payload wrapping**             | `res.ok({items, total, ...})` wraps the list payload inside `data`; never `res.ok(items)`                                                                                                                      |
 | **Parallel fetch**               | Use `Promise.all([getAll, getCount])` to avoid N+1 queries                                                                                                                                                     |
 | **Frontend unwrapping**          | API client returns `body.data` automatically; consumer receives `{items, total, ...}`                                                                                                                          |
-| **Pagination lives in the body** | `{items, total, limit, offset}` inside `data` — never `meta.pagination`. The envelope-level variant was documented once, emitted by exactly one endpoint, and has been retired ([[packages/types/src/api.js]]) |
+| **Pagination lives in the body** | `{items, total, limit, offset}` inside `data` — never `meta.pagination`. The envelope-level variant was documented once, emitted by exactly one endpoint, and has been retired ([[packages/types/src/api.ts]]) |
 
 ### Common Patterns
 
@@ -834,7 +834,7 @@ its count and window fields belong in the `data` body as described above.
 
 A list endpoint that has always returned every row cannot simply adopt
 `parsePagination` — its `defaultLimit` would truncate every existing client on the
-next deploy. Use the opt-in pair from [[apps/node-backend/src/lib/pagination.js]]:
+next deploy. Use the opt-in pair from [[apps/node-backend/src/lib/pagination.ts]]:
 
 ```js
 // null when the caller sent neither limit nor offset ⇒ serve the whole list.
@@ -846,7 +846,7 @@ res.ok(listBody(items, total, page)); // adds limit/offset only when paging
 ```
 
 Repository side: build the tail with `buildLimitOffset(params, { limit, offset })`
-([[apps/node-backend/src/lib/sqlClauses.js]]) so a `null` limit emits no `LIMIT`
+([[apps/node-backend/src/lib/sqlClauses.ts]]) so a `null` limit emits no `LIMIT`
 clause at all, rather than a large default that silently caps the result.
 
 ### Frontend Consumption
@@ -862,7 +862,7 @@ items.forEach((item) => console.log(item)); // items is already the array
 
 ## DELETE Response Pattern
 
-**Source:** [[apps/node-backend/src/routes/categories.js|categories.js]], [[apps/node-backend/src/routes/tags.js|tags.js]], [[apps/node-backend/src/routes/importRoutes.js|importRoutes.js]]
+**Source:** [[apps/node-backend/src/routes/categories.ts|categories.js]], [[apps/node-backend/src/routes/tags.ts|tags.js]], [[apps/node-backend/src/routes/importRoutes.ts|importRoutes.js]]
 
 DELETE success responses previously used six different shapes (`204` empty, `{message}`, `{deleted:true}`, `{removed}`, `{ok:true}`, `{patternId}`), which made a generic delete-mutation hook impossible. One rule now applies:
 
@@ -923,7 +923,7 @@ Side-effect-count bodies keep their existing key names; unifying response keys a
 
 ## Wire Casing Convention (snake_case bodies)
 
-**Source:** [[apps/node-backend/src/routes/transactions.js|transactions.js]], [[apps/node-backend/src/routes/recipients.js|recipients.js]], [[apps/node-backend/src/routes/research.js|research.js]]
+**Source:** [[apps/node-backend/src/routes/transactions.ts|transactions.js]], [[apps/node-backend/src/routes/recipients.ts|recipients.js]], [[apps/node-backend/src/routes/research.ts|research.js]]
 
 Request and response bodies were split by router: the domain API speaks snake_case (`transaction_ids`, `alias_ids`, `instrument_key`) while a handful of later routers speak camelCase (`conversationId`, `chartType`, `targetWeights`). One rule now applies:
 
@@ -969,13 +969,13 @@ These predate the rule and keep camelCase — including **new endpoints added to
 
 | Surface                                                 | camelCase keys                           | Direction                                                                     |
 | ------------------------------------------------------- | ---------------------------------------- | ----------------------------------------------------------------------------- |
-| [[apps/node-backend/src/routes/ai.js                    | ai.js]]                                  | `conversationId`, `useTools`                                                  | request + response                                         |
-| [[apps/node-backend/src/routes/savedCharts.js           | savedCharts.js]]                         | `chartType`, `chartVariant`, `timeBucket`, `categoryIds`, `dateRangeStart`, … | request + response                                         |
-| [[apps/node-backend/src/routes/crossWorkspace.js        | crossWorkspace.js]]                      | `targetWeights`, `availableCash`                                              | request + response                                         |
-| [[apps/node-backend/src/routes/admin.js                 | admin.js]] DB-editor routes              | `changes`, `dryRun`, `orderBy` ([[docs/adr/101-db-data-editor                 | ADR-101]])                                                 | request |
-| [[apps/node-backend/src/routes/marketLookup.js          | marketLookup.js]]                        | `changePercent`, `dayHigh`, `prevClose`, `publishedAt`, …                     | response only — passthrough of the upstream provider shape |
-| [[apps/node-backend/src/routes/importRoutes.js          | importRoutes.js]] rollback body          | `{ deleted, recipientsRemoved }` on `DELETE /api/import/batches/:id`          | response only                                              |
-| [[apps/node-backend/src/routes/portfolioImportRoutes.js | portfolioImportRoutes.js]] rollback body | `{ deleted }` on `DELETE /api/portfolio/import/batches/:id`                   | response only                                              |
+| [[apps/node-backend/src/routes/ai.ts                    | ai.js]]                                  | `conversationId`, `useTools`                                                  | request + response                                         |
+| [[apps/node-backend/src/routes/savedCharts.ts           | savedCharts.js]]                         | `chartType`, `chartVariant`, `timeBucket`, `categoryIds`, `dateRangeStart`, … | request + response                                         |
+| [[apps/node-backend/src/routes/crossWorkspace.ts        | crossWorkspace.js]]                      | `targetWeights`, `availableCash`                                              | request + response                                         |
+| [[apps/node-backend/src/routes/admin.ts                 | admin.js]] DB-editor routes              | `changes`, `dryRun`, `orderBy` ([[docs/adr/101-db-data-editor                 | ADR-101]])                                                 | request |
+| [[apps/node-backend/src/routes/marketLookup.ts          | marketLookup.js]]                        | `changePercent`, `dayHigh`, `prevClose`, `publishedAt`, …                     | response only — passthrough of the upstream provider shape |
+| [[apps/node-backend/src/routes/importRoutes.ts          | importRoutes.js]] rollback body          | `{ deleted, recipientsRemoved }` on `DELETE /api/import/batches/:id`          | response only                                              |
+| [[apps/node-backend/src/routes/portfolioImportRoutes.ts | portfolioImportRoutes.js]] rollback body | `{ deleted }` on `DELETE /api/portfolio/import/batches/:id`                   | response only                                              |
 
 Everything else in the import routers is snake_case (`auto_linked_count`); only the two rollback bodies are grandfathered.
 
@@ -1241,21 +1241,21 @@ export const apiClient = new ApiClient();
 
 ## HTTP Request Parameter Parsing Pattern (Phase 10)
 
-**Source:** [[apps/node-backend/src/routes/aggregations.js|aggregations.js]], [[apps/node-backend/src/routes/info.js|info.js]]
+**Source:** [[apps/node-backend/src/routes/aggregations.ts|aggregations.js]], [[apps/node-backend/src/routes/info.ts|info.js]]
 
 Query parameters from `req.query.*` are always strings (or string arrays if multi-valued). Safe parsing requires explicit validation, bounds checking, and fallback defaults to prevent type coercion bugs.
 
 ### Pattern: `parseBooleanQueryParam()`
 
 All backend boolean query parameters use
-`lib/httpParams.js#parseBooleanQueryParam`. The accepted compatibility
+`lib/httpParams.ts#parseBooleanQueryParam`. The accepted compatibility
 spellings are `true` / `1` and `false` / `0`, including primitive booleans and
 numbers in listener-free tests. Missing, empty, multi-valued, or unrecognised
 values use the endpoint's explicit default. New clients should emit the
 canonical `true` or `false` strings.
 
 ```js
-import { parseBooleanQueryParam } from "../lib/httpParams.js";
+import { parseBooleanQueryParam } from "../lib/httpParams.ts";
 
 const includeBalance = parseBooleanQueryParam(req.query.include_balance);
 const active = parseBooleanQueryParam(req.query.active, true);
@@ -1376,15 +1376,15 @@ where fractional values are legitimate and a bad one costs a chart band, not a r
 
 ## Express App Setup
 
-**Source:** [[apps/node-backend/src/main.js|main.js]], [[apps/node-backend/src/middleware/cors.js|cors.js]], [[apps/node-backend/src/middleware/compression.js|compression.js]]
+**Source:** [[apps/node-backend/src/main.js|main.js]], [[apps/node-backend/src/middleware/cors.ts|cors.js]], [[apps/node-backend/src/middleware/compression.ts|compression.js]]
 
 ### Middleware Stack (in order)
 
 1. **Request ID and metrics** — attach the correlation ID, then begin rolling request measurement
-2. **CORS** — `middleware/cors.js` checks `Origin` against `settings.api.corsOrigins`, sets `Access-Control-*` headers, and terminates OPTIONS preflight with 204
+2. **CORS** — `middleware/cors.ts` checks `Origin` against `settings.api.corsOrigins`, sets `Access-Control-*` headers, and terminates OPTIONS preflight with 204
 3. **JSON parsing** — `express.json({ limit: '1mb' })`
 4. **Security headers** — CSP, HSTS (prod), X-Frame-Options, etc.
-5. **Compression** — `middleware/compression.js` uses `node:zlib` `createGzip()` for gzip-capable clients, compressible types, and responses of at least 1 KB when length is known; Server-Sent Events remain uncompressed
+5. **Compression** — `middleware/compression.ts` uses `node:zlib` `createGzip()` for gzip-capable clients, compressible types, and responses of at least 1 KB when length is known; Server-Sent Events remain uncompressed
 6. **Request logging and response envelope** — log the request and attach `res.ok(data, meta?)`
 7. **Global guards and rate limiter** — apply cross-site request forgery protection and limiting before routes
 8. **Routes** — registered with per-route limiters where needed
@@ -1415,7 +1415,7 @@ process.on("SIGTERM", async () => {
 
 ## Error Handling Pattern
 
-**Source:** [[apps/node-backend/src/middleware/errorHandler.js|errorHandler.js]], [[apps/node-backend/src/services/deduplication.js|deduplication.js]]
+**Source:** [[apps/node-backend/src/middleware/errorHandler.ts|errorHandler.js]], [[apps/node-backend/src/services/deduplication.js|deduplication.js]]
 
 Centralized error-handling middleware with typed error classes. Routes throw typed errors; middleware maps to HTTP responses.
 
@@ -1465,7 +1465,7 @@ import {
   NotFoundError,
   ConflictError,
   RateLimitedError,
-} from "../middleware/errorHandler.js";
+} from "../middleware/errorHandler.ts";
 
 // Usage in routes:
 if (!requiredField) {
@@ -1484,7 +1484,7 @@ if (isDuplicate) {
 
 ### Response Format
 
-The `errorHandler` middleware ([[apps/node-backend/src/middleware/errorHandler.js|errorHandler.js]]) converts every thrown error into the unified envelope (ADR-026):
+The `errorHandler` middleware ([[apps/node-backend/src/middleware/errorHandler.ts|errorHandler.js]]) converts every thrown error into the unified envelope (ADR-026):
 
 ```json
 {
@@ -1579,7 +1579,7 @@ class AppError extends Error {
 
 ## Filter Builder Pattern
 
-**Source:** [[apps/node-backend/src/lib/filterBuilder.js|filterBuilder.js]] _(moved from `services/` to `lib/` in Wave A2, 2026-07)_
+**Source:** [[apps/node-backend/src/lib/filterBuilder.ts|filterBuilder.js]] _(moved from `services/` to `lib/` in Wave A2, 2026-07)_
 
 Centralized SQL WHERE clause builder for transaction-like queries. Consolidates previously duplicated filter logic across repositories.
 
@@ -1589,7 +1589,7 @@ Centralized SQL WHERE clause builder for transaction-like queries. Consolidates 
 import {
   buildTransactionWhere,
   validateInt4Ids,
-} from "../lib/filterBuilder.js";
+} from "../lib/filterBuilder.ts";
 
 const opts = {
   startDate: "2026-01-01",
@@ -1668,7 +1668,7 @@ The branch set is unchanged from the earlier shape, which ORed `t.recipient_id` 
 
 ## Aggregation Query Optimization Pattern (Phase 12 Bugfix Sweep)
 
-**Source:** [[apps/node-backend/src/repositories/infoRepositoryBanks.js|infoRepositoryBanks.js]]
+**Source:** [[apps/node-backend/src/repositories/infoRepositoryBanks.ts|infoRepositoryBanks.js]]
 
 For aggregation queries that combine per-account and total monthly data, avoid nested `.find()` loops over account arrays (O(n²) or worse). Instead, build a single-pass `Map` to accumulate totals:
 
@@ -1718,7 +1718,7 @@ const totalHistory = [...totalsByMonth.keys()]
 
 ## Pure Calculation Services (Phase 3)
 
-**Source:** [[apps/node-backend/src/services/calculations/|services/calculations/]], [[apps/node-backend/src/services/calculations/portfolioMath.js|portfolioMath.js]], [[packages/shared-utils/src/portfolio.js|shared portfolio calculations]]
+**Source:** [[apps/node-backend/src/services/calculations/|services/calculations/]], [[apps/node-backend/src/services/calculations/portfolioMath.js|portfolioMath.js]], [[packages/shared-utils/src/portfolio.ts|shared portfolio calculations]]
 
 As of Phase 3, business logic for non-trivial calculations has been extracted into **pure, stateless functions** with no I/O side effects. Backend-owned functions live in `services/calculations/`; cross-workspace portfolio calculations live in `@vision/shared-utils/portfolio`. Both are suitable for golden-fixture testing.
 
@@ -1727,8 +1727,8 @@ As of Phase 3, business logic for non-trivial calculations has been extracted in
 | Module                                                                              | Purpose                                                                                                          |
 | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `services/calculations/loanSchedule.js`                                             | Loan amortization schedule generation (amortizing, fixed_principal, interest_only)                               |
-| `lib/calculations/recurrence.js` _(moved from `services/calculations/` in Wave A2)_ | Recurring payment date calculation (daily, weekly, monthly, yearly, custom)                                      |
-| `lib/calculations/splits.js` _(moved from `services/calculations/` in Wave A2)_     | Transaction-split allocation/payment validation and owed-summary projection                                      |
+| `lib/calculations/recurrence.ts` _(moved from `services/calculations/` in Wave A2)_ | Recurring payment date calculation (daily, weekly, monthly, yearly, custom)                                      |
+| `lib/calculations/splits.ts` _(moved from `services/calculations/` in Wave A2)_     | Transaction-split allocation/payment validation and owed-summary projection                                      |
 | `services/calculations/portfolioMath.js`                                            | Backend portfolio metrics, date helpers, interest accrual, and snapshot-spike sanitation                         |
 | `@vision/shared-utils/portfolio`                                                    | Cost basis calculations (weighted average, FIFO, LIFO) and immutable lot-event handling shared with the frontend |
 
@@ -1738,7 +1738,7 @@ As of Phase 3, business logic for non-trivial calculations has been extracted in
 - `applyEventToLots()` returns an object with mapped lot arrays (never mutations), supporting corporate actions (splits, return_of_capital) with immutable lot transformations.
 - Shared cost-basis calculations avoid in-place mutations, enabling safe concurrent processing and eliminating hidden side effects.
 
-**Migration Status:** Complete. The old `services/loanRepaymentService.js` and `services/recurrenceService.js` shims have been removed; `routes/plannedTransactions.js` now uses the canonical `services/calculations/` modules directly.
+**Migration Status:** Complete. The old `services/loanRepaymentService.js` and `services/recurrenceService.js` shims have been removed; `routes/plannedTransactions.ts` now uses the canonical `services/calculations/` modules directly.
 
 ---
 
@@ -1837,7 +1837,7 @@ See [[docs/testing/testing#Property Test Pattern (Phase 8)|Property Test Pattern
 
 ## Aggregation Envelope Pattern (Phase 2, Updated Phase 1)
 
-**Source:** [[apps/node-backend/src/services/calculations/aggregation/_envelope.js|_envelope.js]], [[apps/node-backend/src/routes/aggregations.js|aggregations.js]]
+**Source:** [[apps/node-backend/src/services/calculations/aggregation/_envelope.js|_envelope.js]], [[apps/node-backend/src/routes/aggregations.ts|aggregations.js]]
 
 All `/api/aggregations/*` endpoints follow the unified transport envelope (ADR-026) with a nested aggregation domain envelope. Calculation modules return `{ data, meta: { source, computedAt } }`, and routes pass this directly to `res.ok()`.
 
@@ -1904,7 +1904,7 @@ The `meta.source` field indicates whether the response was served from a materia
 ```js
 // Service: computeMonthlySummary (calculation module)
 import { buildEnvelope } from "./_envelope.js";
-import { getMonthlyFinancialSummary } from "../../repositories/infoRepository.js";
+import { getMonthlyFinancialSummary } from "../../repositories/infoRepository.ts";
 
 export async function computeMonthlySummary({
   targetCurrency,
@@ -2119,7 +2119,7 @@ const outstanding = await query(
 
 ## Materialized View Availability & Caching Pattern (Bug-Hunt 2026-05-08)
 
-**Source:** [[apps/node-backend/src/repositories/infoRepositoryHelpers.js|infoRepositoryHelpers.js]]
+**Source:** [[apps/node-backend/src/repositories/infoRepositoryHelpers.ts|infoRepositoryHelpers.js]]
 
 When querying PostgreSQL materialized views that may not exist or may be empty (e.g., during post-listen creation or after migrations), use the `mvAvailable(viewName)` helper with allowlist validation and a short cache for both outcomes.
 
@@ -2130,7 +2130,7 @@ Without caching, checking view existence on every request produces N+1 round-tri
 ### Solution
 
 ```js
-import { mvAvailable } from "../repositories/infoRepositoryHelpers.js";
+import { mvAvailable } from "../repositories/infoRepositoryHelpers.ts";
 
 // Always use the helper, never raw SELECT without it
 const isCategoryTotalsAvailable = await mvAvailable("mv_category_totals");
@@ -2226,8 +2226,8 @@ const result = await query("SELECT ... FROM mv_category_totals LIMIT 500");
 
 ## Safe CSV Export Pattern (Phase 5+)
 
-**Source:** [[apps/node-backend/src/lib/csv.js|csv.js]] — Shared utility with formula injection guard
-**Used in:** [[apps/node-backend/src/routes/transactions.js|transactions.js]], [[apps/node-backend/src/routes/splits.js|splits.js]]
+**Source:** [[apps/node-backend/src/lib/csv.ts|csv.js]] — Shared utility with formula injection guard
+**Used in:** [[apps/node-backend/src/routes/transactions.ts|transactions.js]], [[apps/node-backend/src/routes/splits.ts|splits.js]]
 
 CSV exports must escape field values to prevent formula injection (CWE-1236). A centralized utility ensures all exports are protected.
 
@@ -2245,7 +2245,7 @@ Result: Arbitrary code execution when file is opened
 ### Shared Implementation
 
 ```js
-// apps/node-backend/src/lib/csv.js
+// apps/node-backend/src/lib/csv.ts
 const DANGEROUS_CSV_FORMULA_PREFIXES = new Set(["=", "+", "-", "@"]);
 
 export function neutralizeCsvFormula(value) {
@@ -2273,7 +2273,7 @@ export function escapeCsvValue(value) {
 Import the utility and use it to escape all user-controllable fields before CSV serialization:
 
 ```js
-import { escapeCsvValue } from "../lib/csv.js";
+import { escapeCsvValue } from "../lib/csv.ts";
 
 function buildTransactionCsvRow(row, { includeBalance = false } = {}) {
   const cols = [
@@ -2660,7 +2660,7 @@ Successful long-running streams use `complete` as the terminal event. Error even
 `{ detail, code }`. Payload field casing remains endpoint-local during this
 migration: import events are snake_case, while the grandfathered AI router remains camelCase.
 
-**Source:** [[apps/node-backend/src/lib/sse.js|sse.js]], [[apps/node-backend/src/routes/ai.js|ai.js]], [[apps/node-backend/src/routes/importRoutes.js|importRoutes.js]]
+**Source:** [[apps/node-backend/src/lib/sse.ts|sse.js]], [[apps/node-backend/src/routes/ai.ts|ai.js]], [[apps/node-backend/src/routes/importRoutes.ts|importRoutes.js]]
 
 For long-running streaming responses (AI chat, CSV import progress), propagate TCP backpressure from the HTTP client into the server's event-generation loop to prevent unbounded write buffer growth and memory exhaustion.
 
@@ -2684,7 +2684,7 @@ Node.js's `res.write()` returns `false` when the internal buffer is full (`res.w
 Create a backpressure-aware writer and `await` after each frame:
 
 ```js
-import { createSseWriter } from "../lib/sse.js";
+import { createSseWriter } from "../lib/sse.ts";
 
 router.post("/import/csv/stream", async (req, res) => {
   const writer = createSseWriter(req, res);
@@ -2801,7 +2801,7 @@ export function createSseWriter(req, res) {
 
 ```js
 import { test, expect } from "vitest";
-import { createSseWriter, drainIfNeeded } from "../lib/sse.js";
+import { createSseWriter, drainIfNeeded } from "../lib/sse.ts";
 
 test("drainIfNeeded returns immediately when buffer not full", async () => {
   const res = { writableNeedDrain: false };
@@ -2828,7 +2828,7 @@ test("createSseWriter tracks client close", (done) => {
 
 ## Atomic Transaction Pattern (Multi-Step Operations)
 
-**Source:** [[apps/node-backend/src/database/connection.js|connection.js]], [[apps/node-backend/src/services/recipientMergeService.js|recipientMergeService.js]], [[apps/node-backend/src/repositories/splitRepository.js|splitRepository.js]] (Phase 12 Bugfix Sweep)
+**Source:** [[apps/node-backend/src/database/connection.ts|connection.js]], [[apps/node-backend/src/services/recipientMergeService.js|recipientMergeService.js]], [[apps/node-backend/src/repositories/splitRepository.ts|splitRepository.js]] (Phase 12 Bugfix Sweep)
 
 For complex operations spanning multiple tables (e.g., merging recipients across transactions, splits, planned transactions, and bank accounts), or for race-sensitive single-table operations (e.g., recording payments against a split with overpayment risk), use explicit transaction control with row-level locking to ensure atomicity and serialize concurrent access.
 
@@ -2837,7 +2837,7 @@ Vision is a single-user application, but the HTTP process can overlap user reque
 ### Pattern
 
 ```js
-import { withTransaction } from "../database/connection.js";
+import { withTransaction } from "../database/connection.ts";
 
 export async function complexMultiStepOperation(primaryId, aliasIds) {
   if (!Number.isInteger(primaryId) || !Array.isArray(aliasIds)) {

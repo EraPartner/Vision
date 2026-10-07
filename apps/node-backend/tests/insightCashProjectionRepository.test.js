@@ -3,9 +3,9 @@ import { mockConnection } from "./helpers/repoMocks.js";
 
 const query = vi.hoisted(() => vi.fn());
 
-vi.mock("../src/database/connection.js", () => mockConnection({ query }));
+vi.mock("../src/database/connection.ts", () => mockConnection({ query }));
 
-import { __saveProjection as saveProjection } from "../src/repositories/insightCashProjectionRepository.js";
+import { __saveProjection as saveProjection } from "../src/repositories/insightCashProjectionRepository.ts";
 
 describe("insightCashProjectionRepository", () => {
   beforeEach(() => query.mockReset());

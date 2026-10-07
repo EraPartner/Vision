@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { mockCurrencyConversion } from "./helpers/mockCurrencyConversion.js";
 import { mockConnection } from "./helpers/repoMocks.js";
 
-vi.mock("../src/database/connection.js", () => mockConnection());
+vi.mock("../src/database/connection.ts", () => mockConnection());
 vi.mock("../src/services/portfolio/portfolioSummaryService.js", () => ({
   getPortfolioSummary: vi.fn(),
 }));
@@ -14,7 +14,7 @@ vi.mock("../src/services/currency/currencyConversionService.js", () =>
   }),
 );
 
-import { query } from "../src/database/connection.js";
+import { query } from "../src/database/connection.ts";
 import { getPortfolioSummary } from "../src/services/portfolio/portfolioSummaryService.js";
 import {
   convertToCurrency,

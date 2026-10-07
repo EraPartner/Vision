@@ -9,40 +9,40 @@ import { setTimeout as sleep } from "node:timers/promises";
 import fs from "node:fs";
 import { dirname, resolve, sep } from "path";
 import { fileURLToPath } from "url";
-import settings from "./config/config.js";
-import { logger } from "./config/logger.js";
+import settings from "./config/config.ts";
+import { logger } from "./config/logger.ts";
 import {
   checkConnection,
   closePool,
   getPoolStats,
-} from "./database/connection.js";
-import { ensureAppRole } from "./database/roleBootstrap.js";
-import { ensureAnalysisRole } from "./database/analysisRoleBootstrap.js";
-import { runDatabaseAnalyze, runMigrations } from "./database/migrate.js";
+} from "./database/connection.ts";
+import { ensureAppRole } from "./database/roleBootstrap.ts";
+import { ensureAnalysisRole } from "./database/analysisRoleBootstrap.ts";
+import { runDatabaseAnalyze, runMigrations } from "./database/migrate.ts";
 import {
   createErrorHandler,
   NotFoundError,
-} from "./middleware/errorHandler.js";
+} from "./middleware/errorHandler.ts";
 import {
   createAdminAuthMiddleware,
   isLoopbackHost,
-} from "./middleware/adminAuth.js";
-import { createCsrfGuard } from "./middleware/csrfGuard.js";
-import { createHostGuard } from "./middleware/hostGuard.js";
-import { createCorsMiddleware } from "./middleware/cors.js";
-import { compression } from "./middleware/compression.js";
+} from "./middleware/adminAuth.ts";
+import { createCsrfGuard } from "./middleware/csrfGuard.ts";
+import { createHostGuard } from "./middleware/hostGuard.ts";
+import { createCorsMiddleware } from "./middleware/cors.ts";
+import { compression } from "./middleware/compression.ts";
 import { closeBrowser as closePuppeteerBrowser } from "./services/reports/puppeteerRenderer.js";
-import { wrapResponse } from "./middleware/envelope.js";
-import { requestId } from "./middleware/requestId.js";
-import { requestMetrics } from "./middleware/requestMetrics.js";
+import { wrapResponse } from "./middleware/envelope.ts";
+import { requestId } from "./middleware/requestId.ts";
+import { requestMetrics } from "./middleware/requestMetrics.ts";
 import { cancelPendingAggregationRefresh } from "./services/aggregationRefresh.js";
-import { runWarmupTasks } from "./startup/warmup.js";
+import { runWarmupTasks } from "./startup/warmup.ts";
 import { resumeRecoverableInvestigations } from "./services/aiInvestigationService.js";
 
 /**
- * @typedef {import('./types/express.js').ExpressRequest} ExpressRequest
- * @typedef {import('./types/express.js').ExpressResponse} ExpressResponse
- * @typedef {import('./types/express.js').ExpressNextFunction} ExpressNextFunction
+ * @typedef {import('./types/express.ts').ExpressRequest} ExpressRequest
+ * @typedef {import('./types/express.ts').ExpressResponse} ExpressResponse
+ * @typedef {import('./types/express.ts').ExpressNextFunction} ExpressNextFunction
  */
 
 const adminAuthMiddleware = createAdminAuthMiddleware(
@@ -55,37 +55,37 @@ const csrfGuard = createCsrfGuard(() => settings.api.corsOrigins);
 const adminCsrfGuard = csrfGuard;
 
 // Import route modules
-import transactionsRouter from "./routes/transactions.js";
-import categoriesRouter from "./routes/categories.js";
-import recipientsRouter from "./routes/recipients.js";
-import plannedTransactionsRouter from "./routes/plannedTransactions.js";
-import infoRouter from "./routes/info.js";
-import aggregationsRouter from "./routes/aggregations.js";
-import adminRouter from "./routes/admin.js";
-import codexExperimentalRouter from "./routes/codexExperimental.js";
-import importRouter from "./routes/importRoutes.js";
-import portfolioImportRouter from "./routes/portfolioImportRoutes.js";
-import investmentsRouter from "./routes/investments.js";
-import recipientBankAccountsRouter from "./routes/recipientBankAccounts.js";
-import settingsRouter from "./routes/settings.js";
-import marketLookupRouter from "./routes/marketLookup.js";
-import researchRouter from "./routes/research.js";
-import watchlistRouter from "./routes/watchlist.js";
-import splitsRouter from "./routes/splits.js";
-import savedChartsRouter from "./routes/savedCharts.js";
-import aiRouter from "./routes/ai.js";
-import attachmentsRouter from "./routes/attachments.js";
-import reportsRouter from "./routes/reports.js";
-import tagsRouter from "./routes/tags.js";
-import accountsRouter from "./routes/accounts.js";
-import crossWorkspaceRouter from "./routes/crossWorkspace.js";
-import internalAuditRouter from "./routes/internalAudit.js";
-import analysisRouter from "./routes/analysis.js";
-import analysisMonitorsRouter from "./routes/analysisMonitors.js";
-import researchDossiersRouter from "./routes/researchDossiers.js";
-import { startAnalysisMonitorScheduler } from "./startup/analysisMonitorScheduler.js";
-import aiResearchDocumentsRouter from "./routes/aiResearchDocuments.js";
-import aiResearchRouter from "./routes/aiResearch.js";
+import transactionsRouter from "./routes/transactions.ts";
+import categoriesRouter from "./routes/categories.ts";
+import recipientsRouter from "./routes/recipients.ts";
+import plannedTransactionsRouter from "./routes/plannedTransactions.ts";
+import infoRouter from "./routes/info.ts";
+import aggregationsRouter from "./routes/aggregations.ts";
+import adminRouter from "./routes/admin.ts";
+import codexExperimentalRouter from "./routes/codexExperimental.ts";
+import importRouter from "./routes/importRoutes.ts";
+import portfolioImportRouter from "./routes/portfolioImportRoutes.ts";
+import investmentsRouter from "./routes/investments.ts";
+import recipientBankAccountsRouter from "./routes/recipientBankAccounts.ts";
+import settingsRouter from "./routes/settings.ts";
+import marketLookupRouter from "./routes/marketLookup.ts";
+import researchRouter from "./routes/research.ts";
+import watchlistRouter from "./routes/watchlist.ts";
+import splitsRouter from "./routes/splits.ts";
+import savedChartsRouter from "./routes/savedCharts.ts";
+import aiRouter from "./routes/ai.ts";
+import attachmentsRouter from "./routes/attachments.ts";
+import reportsRouter from "./routes/reports.ts";
+import tagsRouter from "./routes/tags.ts";
+import accountsRouter from "./routes/accounts.ts";
+import crossWorkspaceRouter from "./routes/crossWorkspace.ts";
+import internalAuditRouter from "./routes/internalAudit.ts";
+import analysisRouter from "./routes/analysis.ts";
+import analysisMonitorsRouter from "./routes/analysisMonitors.ts";
+import researchDossiersRouter from "./routes/researchDossiers.ts";
+import { startAnalysisMonitorScheduler } from "./startup/analysisMonitorScheduler.ts";
+import aiResearchDocumentsRouter from "./routes/aiResearchDocuments.ts";
+import aiResearchRouter from "./routes/aiResearch.ts";
 import { closeAnalysisPool } from "./services/analysisExecutor.js";
 import {
   rateLimiter,
@@ -98,7 +98,7 @@ import {
   marketRateLimiter,
   investmentRateLimiter,
   aggregationRateLimiter,
-} from "./middleware/rateLimiter.js";
+} from "./middleware/rateLimiter.ts";
 import { buildRouteManifest, mountRouter } from "./services/routeManifest.js";
 
 const app = express();
@@ -603,7 +603,7 @@ async function start() {
         );
         // Materialized views are runtime artifacts, not schema (ADR-027), so the
         // whole create/index/refresh lifecycle lives in the post-listen warmup
-        // (startup/warmup.js) rather than here. Creation is not a no-op on the
+        // (startup/warmup.ts) rather than here. Creation is not a no-op on the
         // boots that matter: on a first-ever boot, or after a migration that
         // drops a view to redefine it (0084/0085), `CREATE MATERIALIZED VIEW`
         // runs a full aggregation scan of `transactions` per view — pre-listen

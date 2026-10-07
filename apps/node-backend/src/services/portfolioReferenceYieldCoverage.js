@@ -1,6 +1,6 @@
 /** Bounded unit coverage only; secondary yield values never replace source money. */
 import { parse } from "csv-parse/sync";
-import { toDecimal } from "../lib/money.js";
+import { toDecimal } from "../lib/money.ts";
 import { parseAmountField } from "./importPipeline/adapters/_shared.js";
 import { __computeSourceRecordHash } from "./importIdentity.js";
 

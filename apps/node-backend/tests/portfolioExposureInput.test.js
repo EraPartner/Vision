@@ -5,7 +5,7 @@ const repository = vi.hoisted(() => ({
   upsertExposureBundle: vi.fn(),
 }));
 
-vi.mock("../src/repositories/portfolioExposureRepository.js", () => repository);
+vi.mock("../src/repositories/portfolioExposureRepository.ts", () => repository);
 vi.mock("../src/services/portfolio/portfolioSummaryService.js", () => ({
   getPortfolioSummary: vi.fn(),
 }));

@@ -20,7 +20,7 @@
  * governed instead by cache TTLs and providerHealthService.
  */
 
-import { epochMsToUtcYmd } from "../../lib/dateFormat.js";
+import { epochMsToUtcYmd } from "../../lib/dateFormat.ts";
 
 const ONE_MINUTE_MS = 60_000;
 

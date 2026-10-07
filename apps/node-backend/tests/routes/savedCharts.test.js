@@ -12,7 +12,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockLogger } from "../helpers/mockLogger.js";
 import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.js";
 
-vi.mock("../../src/repositories/savedChartsRepository.js", () => ({
+vi.mock("../../src/repositories/savedChartsRepository.ts", () => ({
   default: {
     getAll: vi.fn(),
     getCount: vi.fn(),
@@ -22,14 +22,14 @@ vi.mock("../../src/repositories/savedChartsRepository.js", () => ({
   },
 }));
 
-vi.mock("../../src/config/logger.js", () => ({
+vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-import savedChartsRepository from "../../src/repositories/savedChartsRepository.js";
+import savedChartsRepository from "../../src/repositories/savedChartsRepository.ts";
 
 const { default: savedChartsRouter } =
-  await import("../../src/routes/savedCharts.js");
+  await import("../../src/routes/savedCharts.ts");
 
 const api = routeAgent(savedChartsRouter, { mountPath: "/api/saved-charts" });
 const BASE = "/api/saved-charts";

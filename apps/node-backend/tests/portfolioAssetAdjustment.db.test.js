@@ -11,7 +11,7 @@ import {
   hasTestDatabase,
   closeTestPool,
 } from "./setup/db.js";
-import { closePool, withTransaction } from "../src/database/connection.js";
+import { closePool, withTransaction } from "../src/database/connection.ts";
 import transactionService from "../src/services/portfolio/portfolioTransactionService.js";
 import { stageBatch } from "../src/services/portfolioImportPipeline/stage.js";
 import { validateBatch } from "../src/services/portfolioImportPipeline/validate.js";
@@ -20,9 +20,9 @@ import { previewPortfolioImportReconciliation } from "../src/services/portfolioI
 import { commitReviewedPortfolioImports } from "../src/services/portfolioImportCommitService.js";
 import { rollbackBatch } from "../src/services/portfolioImportBatchService.js";
 import { commitPortfolioAssetTransfer } from "../src/services/portfolio/portfolioAssetTransferService.js";
-import { toDecimal } from "../src/lib/money.js";
+import { toDecimal } from "../src/lib/money.ts";
 import { commitPortfolioAssetAdjustment } from "../src/services/portfolio/portfolioAssetAdjustmentService.js";
-import { getUnitEventsForInvestment } from "../src/repositories/portfolioTxRepo.reads.js";
+import { getUnitEventsForInvestment } from "../src/repositories/portfolioTxRepo.reads.ts";
 import { buildInvestmentSummaryCorePartitioned } from "@vision/shared-utils/portfolio";
 
 const pool = getTestPool(),

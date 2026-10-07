@@ -62,11 +62,11 @@ vi.mock("../../src/services/dataImportService.js", () => ({
   importCategoriesCSV: vi.fn(),
 }));
 
-vi.mock("../../src/config/logger.js", () => ({
+vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-vi.mock("../../src/repositories/importBatchRepository.js", () => ({
+vi.mock("../../src/repositories/importBatchRepository.ts", () => ({
   listBatches: vi.fn(),
   getBatch: vi.fn(),
   rollbackBatch: vi.fn(),
@@ -81,7 +81,7 @@ vi.mock("../../src/services/aggregationRefresh.js", () => ({
   scheduleMaterializedViewRefresh: vi.fn(),
 }));
 
-vi.mock("../../src/repositories/customParserConfigRepository.js", () => ({
+vi.mock("../../src/repositories/customParserConfigRepository.ts", () => ({
   default: {
     getAll: vi.fn(),
     getById: vi.fn(),
@@ -92,7 +92,7 @@ vi.mock("../../src/repositories/customParserConfigRepository.js", () => ({
   },
 }));
 
-vi.mock("../../src/database/connection.js", () => mockConnection());
+vi.mock("../../src/database/connection.ts", () => mockConnection());
 
 import {
   runImportPipeline,
@@ -111,12 +111,12 @@ import {
   overrideRecipient,
   overrideCategory,
   categoryExists,
-} from "../../src/repositories/importBatchRepository.js";
-import { query as dbQuery } from "../../src/database/connection.js";
-import customParserConfigRepository from "../../src/repositories/customParserConfigRepository.js";
+} from "../../src/repositories/importBatchRepository.ts";
+import { query as dbQuery } from "../../src/database/connection.ts";
+import customParserConfigRepository from "../../src/repositories/customParserConfigRepository.ts";
 
 const { default: importRouter, __parseCsvImportOptionsForTests } =
-  await import("../../src/routes/importRoutes.js");
+  await import("../../src/routes/importRoutes.ts");
 
 const UPLOAD = { path: "/tmp/pin.csv", originalname: "pin.csv", size: 10 };
 
@@ -200,6 +200,19 @@ describe("multipart body parameters", () => {
     expect(runImportPipeline).toHaveBeenCalledWith(
       expect.objectContaining({ adapterName: "body-bank" }),
     );
+  });
+
+  it("rejects a repeated bank_name field with a 400", async () => {
+    await api
+      .post(`${BASE}/csv`)
+      .send({ bank_name: ["vision", "other"] })
+      .expect(400);
+    await api
+      .post(`${BASE}/csv/stream`)
+      .send({ bank_name: ["vision", "other"] })
+      .expect(400);
+
+    expect(runImportPipeline).not.toHaveBeenCalled();
   });
 
   it("rejects query-only bank names for one-shot and streaming imports", async () => {
@@ -288,7 +301,7 @@ describe("batch-id shape pins (validateId, bounded to MAX_SAFE_ID)", () => {
   });
 
   // '1e300' used to be let through to a downstream 404 on purpose, to keep the
-  // pre-zod wire unchanged (the old lib/importBatchIds.js header said so). That
+  // pre-zod wire unchanged (the old lib/importBatchIds.ts header said so). That
   // reasoning was about not moving 404→400 during a mechanical swap, not about
   // 404 being the right answer: '1e300' names no batch in any notation this
   // API accepts, and it is the same exponent form that made '1e3' resolve to
@@ -436,6 +449,21 @@ describe("override-body id shape (parseOverrideId)", () => {
         recipientId: 7,
       });
     }
+
+    // A request with no JSON body leaves req.body undefined under Express 5;
+    // it clears the override like an empty body instead of failing with a 500.
+    await api.post(`${BASE}/batches/5/rows/6/override`).expect(200);
+    expect(overrideRecipient).toHaveBeenLastCalledWith({
+      batchId: 5,
+      rowId: 6,
+      recipientId: null,
+    });
+    await api.post(`${BASE}/batches/5/rows/6/category-override`).expect(200);
+    expect(overrideCategory).toHaveBeenLastCalledWith({
+      batchId: 5,
+      rowId: 6,
+      categoryId: null,
+    });
 
     // Absent and explicit null both mean "clear the override", at 200 — the
     // shipped clear-the-selection flow, unchanged.

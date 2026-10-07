@@ -11,7 +11,7 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { readBaselineManifest } from "../apps/node-backend/src/database/baselineManifest.js";
+import { readBaselineManifest } from "../apps/node-backend/src/database/baselineManifest.ts";
 import pg from "../apps/node-backend/node_modules/pg/lib/index.js";
 
 const repoRoot = path.resolve(

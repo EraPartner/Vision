@@ -21,11 +21,11 @@ import {
 import { mockLogger } from "../helpers/mockLogger.js";
 import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.js";
 
-vi.mock("../../src/repositories/transactionRepository.js", () =>
+vi.mock("../../src/repositories/transactionRepository.ts", () =>
   mockTransactionRepository(),
 );
 
-vi.mock("../../src/config/logger.js", () => ({
+vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
@@ -42,9 +42,9 @@ vi.mock("../../src/services/currency/currencyConversionService.js", () =>
   mockCurrencyConversion(),
 );
 
-vi.mock("../../src/database/connection.js", () => mockTxConnection());
+vi.mock("../../src/database/connection.ts", () => mockTxConnection());
 
-vi.mock("../../src/repositories/accountRepository.js", () => {
+vi.mock("../../src/repositories/accountRepository.ts", () => {
   const accountRepository = { findActiveId: vi.fn(async () => 1) };
   return { accountRepository, default: accountRepository };
 });
@@ -64,19 +64,19 @@ vi.mock("../../src/services/transferReconciliationService.js", () => ({
   unmarkTransfer: vi.fn(),
 }));
 
-import transactionRepository from "../../src/repositories/transactionRepository.js";
+import transactionRepository from "../../src/repositories/transactionRepository.ts";
 import {
   unmarkTransfer,
   scheduleReconcile,
 } from "../../src/services/transferReconciliationService.js";
-import { query as dbQuery } from "../../src/database/connection.js";
+import { query as dbQuery } from "../../src/database/connection.ts";
 import { isManualDuplicate } from "../../src/services/deduplication.js";
 import { convertRowsToEur } from "../../src/services/currency/currencyConversionService.js";
 import { attachmentRepository } from "../../src/services/attachmentRecordService.js";
 import { removeAttachmentFile } from "../../src/services/attachmentService.js";
 
 const { default: transactionsRouter } =
-  await import("../../src/routes/transactions.js");
+  await import("../../src/routes/transactions.ts");
 
 const api = routeAgent(transactionsRouter, { mountPath: "/api/transactions" });
 // Same router behind an error handler in production mode (main.js:401 passes

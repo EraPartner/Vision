@@ -4,30 +4,15 @@
   "version": "0.1.0",
   "description": "Shared cross-workspace financial calculations and utility helpers for the Vision backend and frontend.",
   "type": "module",
-  "main": "./src/index.js",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
   "exports": {
-    ".": {
-      "types": "./src/index.d.ts",
-      "default": "./src/index.js"
-    },
-    "./money": {
-      "types": "./src/money.d.ts",
-      "default": "./src/money.js"
-    },
-    "./portfolio": {
-      "types": "./src/portfolio.d.ts",
-      "default": "./src/portfolio.js"
-    },
-    "./csv": {
-      "types": "./src/csv.d.ts",
-      "default": "./src/csv.js"
-    },
-    "./slugify": {
-      "types": "./src/slugify.d.ts",
-      "default": "./src/slugify.js"
-    }
+    ".": "./src/index.ts",
+    "./money": "./src/money.ts",
+    "./portfolio": "./src/portfolio.ts",
+    "./csv": "./src/csv.ts",
+    "./slugify": "./src/slugify.ts"
   },
-  "types": "./src/index.d.ts",
   "files": [
     "src"
   ],

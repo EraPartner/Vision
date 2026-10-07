@@ -4,7 +4,7 @@ import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import os from "node:os";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mockLogger } from "./helpers/mockLogger.js";
-vi.mock("../src/config/logger.js", () => ({ logger: mockLogger() }));
+vi.mock("../src/config/logger.ts", () => ({ logger: mockLogger() }));
 import {
   parseNexoProSpotHistory,
   getNexoProSpotReconciliationEvidence,
@@ -14,7 +14,7 @@ import {
   portfolioIdentityBase,
   assignImportIdentities,
 } from "../src/services/importIdentity.js";
-import { toDecimal } from "../src/lib/money.js";
+import { toDecimal } from "../src/lib/money.ts";
 
 const fixture = path.join(
   path.dirname(fileURLToPath(import.meta.url)),

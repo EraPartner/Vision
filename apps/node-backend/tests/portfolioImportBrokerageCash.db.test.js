@@ -32,7 +32,7 @@ import {
   releaseDbSuiteLock,
 } from './setup/db.js';
 
-import { closePool } from '../src/database/connection.js';
+import { closePool } from '../src/database/connection.ts';
 import { commitPortfolioImport } from '../src/services/portfolioImportPipeline/index.js';
 import { rollbackBatch } from '../src/services/portfolioImportBatchService.js';
 

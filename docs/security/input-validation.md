@@ -2,7 +2,7 @@
 title: Input Validation
 type: security
 status: active
-date: 2026-04-26
+date: 2026-10-07
 updated: 2026-09-05
 tags:
   [
@@ -33,22 +33,22 @@ aliases:
   ]
 related_code:
   [
-    "apps/node-backend/src/lib/validation.js",
-    "apps/node-backend/src/middleware/validation.js",
-    "apps/node-backend/src/lib/importBatchIds.js",
-    "apps/node-backend/src/routes/parserConfigRoutes.js",
-    "apps/node-backend/src/routes/importRoutes.js",
-    "apps/node-backend/src/routes/portfolioImportRoutes.js",
-    "apps/node-backend/src/routes/investments.js",
+    "apps/node-backend/src/lib/validation.ts",
+    "apps/node-backend/src/middleware/validation.ts",
+    "apps/node-backend/src/lib/importBatchIds.ts",
+    "apps/node-backend/src/routes/parserConfigRoutes.ts",
+    "apps/node-backend/src/routes/importRoutes.ts",
+    "apps/node-backend/src/routes/portfolioImportRoutes.ts",
+    "apps/node-backend/src/routes/investments.ts",
     "apps/node-backend/src/services/accountService.js",
-    "apps/node-backend/src/lib/filterBuilder.js",
-    "apps/node-backend/src/routes/aggregations.js",
-    "apps/node-backend/src/routes/transactions.js",
+    "apps/node-backend/src/lib/filterBuilder.ts",
+    "apps/node-backend/src/routes/aggregations.ts",
+    "apps/node-backend/src/routes/transactions.ts",
     "apps/node-backend/src/services/aiChat/tools/_validate.js",
-    "apps/node-backend/src/lib/csv.js",
-    "apps/node-backend/src/lib/urlSafety.js",
+    "apps/node-backend/src/lib/csv.ts",
+    "apps/node-backend/src/lib/urlSafety.ts",
     "apps/node-backend/src/services/investmentService.js",
-    "apps/node-backend/src/repositories/portfolioTxRepo.reads.js",
+    "apps/node-backend/src/repositories/portfolioTxRepo.reads.ts",
     "apps/node-backend/src/services/prices/priceProviderRegistry.js",
   ]
 ---
@@ -59,12 +59,12 @@ Vision implements comprehensive input validation to prevent SQL injection, XSS a
 
 ## Overview
 
-`lib/validation.js` owns the pure value rules and update-field whitelist used by routes, services,
-repositories, and lower-level libraries. `middleware/validation.js` contains the Express
+`lib/validation.ts` owns the pure value rules and update-field whitelist used by routes, services,
+repositories, and lower-level libraries. `middleware/validation.ts` contains the Express
 parameter adapters (`validateIdParam`, `validateIntParam`, and the point-of-use `assertIdParam`) and
 re-exports the pure helpers for route compatibility. Lower layers import the library directly and
-do not depend on `middleware/validation.js`; typed application errors remain owned by
-`middleware/errorHandler.js` under the existing project-wide convention.
+do not depend on `middleware/validation.ts`; typed application errors remain owned by
+`middleware/errorHandler.ts` under the existing project-wide convention.
 
 ## Validation Functions
 
@@ -133,7 +133,7 @@ const accountId = assertOptionalId(req.query.account_id, "account_id");
 - Anything else must satisfy `validateId`; otherwise a `ValidationError` (400) is raised **before** the value reaches the database layer
 - This is what keeps `?account_id=abc` a 400 rather than a `NaN` parameter that Postgres rejects with `22P02` as a 500
 
-**Call sites:** `routes/transactions.js` (export filters), `routes/info/statistics.js`.
+**Call sites:** `routes/transactions.ts` (export filters), `routes/info/statistics.ts`.
 
 ---
 
@@ -166,8 +166,8 @@ validateIntArray(values, (fieldName = "ids"));
 - **Every element goes through `validateId`**, so the per-element accept set is exactly the one documented above (plain base-10 digit string or integer `number`, 1..2,147,483,647)
 - One bad element rejects the **whole** array — `ValidationError` with `"<field> contains invalid value: <value>"`. No partial or filtered set ever reaches the query
 
-**Call sites — bodies:** `routes/savedCharts.js` (`categoryIds`, `recipientIds`, `tagIds`), `routes/settings.js` (`dashboard_settings.excludedCategoryIds` / `.excludedRecipientIds`).
-**Call sites — query strings:** `routes/aggregations.js` via `parseIdArrayQueryParam` (see below).
+**Call sites — bodies:** `routes/savedCharts.ts` (`categoryIds`, `recipientIds`, `tagIds`), `routes/settings.ts` (`dashboard_settings.excludedCategoryIds` / `.excludedRecipientIds`).
+**Call sites — query strings:** `routes/aggregations.ts` via `parseIdArrayQueryParam` (see below).
 
 > [!warning] Breaking change (2026-08-11) — `["12abc"]` no longer becomes `[12]`
 > The element parse was `parseInt`, the same truncation the `:id` params lost the same day, and here it was worse. These arrays feed **exclusion and filter sets**, not a single-record lookup, so a truncated element did not 404 — it quietly changed which rows an aggregation or saved chart covered, and no error surfaced to anyone. `["12abc"]` silently became category `[12]`; `["12.5"]` and `["1e3"]` likewise became `[12]` and `[1]`.
@@ -185,9 +185,15 @@ regression test. Route handlers must not use this helper.
 
 ---
 
+### Single-Valued Query Params
+
+Express's default query parser turns a repeated key (`?search=a&search=b`) into an array and a bracketed key (`?search[x]=1`) into an object. A route that expects one string reads it with `optionalQueryString(req.query, "<name>")` from `lib/httpParams.ts`. The helper returns the string, returns `undefined` when the key is absent, and otherwise raises `ValidationError` → **400 `VALIDATION_ERROR`** (`"<name> must be a single value"`).
+
+Before 2026-10-07 these values reached string methods, SQL parameters or cache keys unchecked, which answered 500 or quietly used one of the values. Query params whose parser already accepts any shape (boolean flags, pagination, the repeatable id lists below) do not use it.
+
 ### Repeatable ID Query Params (aggregations)
 
-The aggregation endpoints take their id lists in the query string, one occurrence per id (`?excluded_category_ids=5&excluded_category_ids=9`). They go through `parseIdArrayQueryParam` in `routes/aggregations.js`, a thin throwing wrapper around `validateIntArray` — so the per-element accept set is the same one documented under [[docs/security/input-validation#ID Validation|ID Validation]], not a second rule.
+The aggregation endpoints take their id lists in the query string, one occurrence per id (`?excluded_category_ids=5&excluded_category_ids=9`). They go through `parseIdArrayQueryParam` in `routes/aggregations.ts`, a thin throwing wrapper around `validateIntArray` — so the per-element accept set is the same one documented under [[docs/security/input-validation#ID Validation|ID Validation]], not a second rule.
 
 ```javascript
 parseIdArrayQueryParam(
@@ -218,7 +224,7 @@ parseIdArrayQueryParam(
 The transactions list and the two streamed export endpoints take their id lists comma-separated
 (`?category_ids=5,7,12`, `?account_ids=3,9`) rather than one occurrence per id, because that is the
 shape their `ids.join(',')` frontend builders emit. They go through `parseIdListQueryParam` in
-`routes/transactions.js` — a thin throwing wrapper around `validateIntArray`, so the per-element
+`routes/transactions.ts` — a thin throwing wrapper around `validateIntArray`, so the per-element
 accept set is the same one under [[docs/security/input-validation#ID Validation|ID Validation]],
 not a third rule. Repeated occurrences work too: Express hands back an array and `String([...])`
 re-joins it with commas.
@@ -297,7 +303,7 @@ always been a silent filter, and the throwing guard belongs where a 400 can reac
 
 ### SQL-build-time id lists (`validateInt4Ids`)
 
-`apps/node-backend/src/lib/filterBuilder.js` — the last layer before an id becomes a `$n`
+`apps/node-backend/src/lib/filterBuilder.ts` — the last layer before an id becomes a `$n`
 placeholder. Used by `buildTransactionWhere` (`accountIds`, `categoryIds`),
 `buildExclusionClauses` (`excludedCategoryIds`, `excludedRecipientIds`),
 `resolveBulkSelection`, `bulkTagTransactions`, and the price-history batch loader.
@@ -418,11 +424,11 @@ The last `parseInt`-based id parsers outside the transactions routes, converged 
 
 | Site                                            | Param                         | Was                                       |
 | ----------------------------------------------- | ----------------------------- | ----------------------------------------- |
-| `routes/plannedTransactions.js` (`GET /`)       | `category_id`, `recipient_id` | `x ? parseInt(x) : null`                  |
-| `routes/recipients.js` (`GET /`)                | `default_category_id`         | `x ? parseInt(x) : null`                  |
-| `routes/research.js` (`POST /mappings/resolve`) | `investment_id`               | `Number.parseInt`, `undefined` on failure |
-| `routes/accounts.js` (`POST /:id/merge`)        | `source_ids[]`                | `parseInt` + `Number.isInteger`           |
-| `routes/accounts.js` (`GET /:id/merge-preview`) | `?into=`                      | `Number(...)`                             |
+| `routes/plannedTransactions.ts` (`GET /`)       | `category_id`, `recipient_id` | `x ? parseInt(x) : null`                  |
+| `routes/recipients.ts` (`GET /`)                | `default_category_id`         | `x ? parseInt(x) : null`                  |
+| `routes/research.ts` (`POST /mappings/resolve`) | `investment_id`               | `Number.parseInt`, `undefined` on failure |
+| `routes/accounts.ts` (`POST /:id/merge`)        | `source_ids[]`                | `parseInt` + `Number.isInteger`           |
+| `routes/accounts.ts` (`GET /:id/merge-preview`) | `?into=`                      | `Number(...)`                             |
 
 > [!warning] Breaking change (2026-08-11) — malformed ids on these five sites
 > Same two failure modes as everywhere else in this family. **Retarget:**
@@ -443,7 +449,7 @@ The last `parseInt`-based id parsers outside the transactions routes, converged 
 ### Pagination Validation
 
 Validates and normalizes pagination parameters. `validatePagination(limit, offset)` was removed
-in PR #103; list routes now use the helpers in `apps/node-backend/src/lib/pagination.js`.
+in PR #103; list routes now use the helpers in `apps/node-backend/src/lib/pagination.ts`.
 
 ```javascript
 parseIntClamped(raw, { min = 1, max, fallback })
@@ -545,7 +551,7 @@ router.get("/:id", validateIdParam, async (req, res) => {
 });
 ```
 
-Applied in 14 routers: `accounts`, `attachments`, `categories`, `investments`, `plannedTransactions`, `recipientBankAccounts`, `recipients`, `research`, `savedCharts`, `splits`, `tags`, `transactions`, `watchlist`, plus the two import routers via the shared `registerParserRoutes` (`routes/parserConfigRoutes.js`, which registers the four saved-parser-config PATCH/DELETE operations on both).
+Applied in 14 routers: `accounts`, `attachments`, `categories`, `investments`, `plannedTransactions`, `recipientBankAccounts`, `recipients`, `research`, `savedCharts`, `splits`, `tags`, `transactions`, `watchlist`, plus the two import routers via the shared `registerParserRoutes` (`routes/parserConfigRoutes.ts`, which registers the four saved-parser-config PATCH/DELETE operations on both).
 
 ### validateIntParam
 
@@ -578,7 +584,7 @@ Used for `:patternId` (`recipients.js`), `:accountId` (`recipientBankAccounts.js
 
 ### coercedIdSchema (import batch/row ids)
 
-The import pipelines' batch and row ids (`/api/import/batches/*`, `/api/portfolio/import/batches/*`) are parsed by the zod adapter `coercedIdSchema` in `lib/importBatchIds.js`, via `parseBatchIdParam(req)` and `parseBatchRowIdParams(req)`. It **delegates to `validateId`**, so there is one definition of a valid id rather than two kept in step by hand.
+The import pipelines' batch and row ids (`/api/import/batches/*`, `/api/portfolio/import/batches/*`) are parsed by the zod adapter `coercedIdSchema` in `lib/importBatchIds.ts`, via `parseBatchIdParam(req)` and `parseBatchRowIdParams(req)`. It **delegates to `validateId`**, so there is one definition of a valid id rather than two kept in step by hand.
 
 ```javascript
 const id = parseBatchIdParam(req); // req.params.id
@@ -635,7 +641,7 @@ The id **route params** above are only half of what a write addresses. The other
 
 | Site                                                                                   | Field                         | Parser                                                             |
 | -------------------------------------------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------ |
-| `POST /api/import/batches/:id/rows/:rowId/override`                                    | `recipient_id`                | `parseOverrideId` (`lib/importBatchIds.js`)                        |
+| `POST /api/import/batches/:id/rows/:rowId/override`                                    | `recipient_id`                | `parseOverrideId` (`lib/importBatchIds.ts`)                        |
 | `POST /api/import/batches/:id/rows/:rowId/category-override`                           | `category_id`                 | `parseOverrideId`                                                  |
 | `POST /api/portfolio/import/batches/:id/rows/:rowId/investment-override`               | `investment_id`               | `parseOverrideId`                                                  |
 | `POST /api/portfolio/import/batches/:id/rows/investment-override`                      | `row_ids[]`, `investment_id`  | `validateId`, inline; safe-integer row ids and int32 investment id |
@@ -714,7 +720,7 @@ All CSV exports use a centralized utility that prefixes dangerous leading charac
 Example: "  =formula" → trimmed to "=formula" → prefixed to "'=formula" (rendered as literal text)
 ```
 
-**Implementation:** [[apps/node-backend/src/lib/csv.js|lib/csv.js]]
+**Implementation:** [[apps/node-backend/src/lib/csv.ts|lib/csv.ts]]
 
 ```js
 export function escapeCsvValue(value) {
@@ -734,7 +740,7 @@ export function escapeCsvValue(value) {
 Every CSV export route **must** pass all user-controllable fields through `escapeCsvValue()`:
 
 ```js
-import { escapeCsvValue } from "../lib/csv.js";
+import { escapeCsvValue } from "../lib/csv.ts";
 
 // Transaction export
 const cols = [row.date, row.recipient_name, row.memo, row.comment];
@@ -747,8 +753,8 @@ const csv = cols.map(escapeCsvValue).join(",");
 
 ### Compliance
 
-- [[apps/node-backend/src/routes/transactions.js]] — `GET /api/transactions/export/csv` ✓
-- [[apps/node-backend/src/routes/splits.js]] — `GET /api/splits/owed/:id/export/csv` ✓
+- [[apps/node-backend/src/routes/transactions.ts]] — `GET /api/transactions/export/csv` ✓
+- [[apps/node-backend/src/routes/splits.ts]] — `GET /api/splits/owed/:id/export/csv` ✓
 
 ---
 
@@ -758,7 +764,7 @@ Custom price-provider investments may carry user-supplied URLs (`price_provider_
 
 ### Module
 
-**[[apps/node-backend/src/lib/urlSafety.js]]** exports:
+**[[apps/node-backend/src/lib/urlSafety.ts]]** exports:
 
 | Export                           | Description                                                                                                                                                                        |
 | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

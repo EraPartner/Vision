@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addDaysUtc, extractYearMonth, formatYearMonthKey, getDayKeyUtc } from '../src/lib/dateKeys.js';
+import { addDaysUtc, extractYearMonth, formatYearMonthKey, getDayKeyUtc } from '../src/lib/dateKeys.ts';
 
 describe('date key helpers', () => {
   it('formats one-based months with zero padding', () => {

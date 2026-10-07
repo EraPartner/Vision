@@ -8,7 +8,7 @@
  *
  * Usage:
  *   import { mockTransactionRepository } from '../helpers/transactionsRouteMocks.js';
- *   vi.mock('../../src/repositories/transactionRepository.js', () => mockTransactionRepository());
+ *   vi.mock('../../src/repositories/transactionRepository.ts', () => mockTransactionRepository());
  */
 import { vi } from "vitest";
 

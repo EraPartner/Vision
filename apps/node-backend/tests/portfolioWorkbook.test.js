@@ -7,13 +7,13 @@ import {
   writeSyntheticWorkbook,
   syntheticSaxoWorkbook,
 } from "./helpers/saxoWorkbook.js";
-vi.mock("../src/config/logger.js", () => ({ logger: mockLogger() }));
+vi.mock("../src/config/logger.ts", () => ({ logger: mockLogger() }));
 import {
   assertPortfolioUploadSupported,
   detectPortfolioFileFormat,
   readPortfolioWorkbook,
   isLikelyPortfolioFile,
-} from "../src/lib/portfolioUpload.js";
+} from "../src/lib/portfolioUpload.ts";
 import { parseSaxoTransactionHistory } from "../src/services/portfolioImportPipeline/saxoTransactionHistoryAdapter.js";
 import { parseWithConfig } from "../src/services/portfolioImportPipeline/portfolioGenericAdapter.js";
 

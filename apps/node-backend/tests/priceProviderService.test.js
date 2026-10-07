@@ -20,11 +20,11 @@ vi.mock("yahoo-finance2", () => ({
   }),
 }));
 
-vi.mock("../src/config/logger.js", () => ({
+vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-vi.mock("../src/database/connection.js", () => mockConnection());
+vi.mock("../src/database/connection.ts", () => mockConnection());
 
 // The SSRF guard (lib/urlSafety) resolves custom-provider hostnames before fetch.
 // Stub DNS to a public address so these hermetic tests don't hit the network;
@@ -43,8 +43,8 @@ import {
   SUPPORTED_PROVIDERS,
   __resetPriceCache,
 } from "../src/services/priceProviderService.js";
-import { query } from "../src/database/connection.js";
-import { logger } from "../src/config/logger.js";
+import { query } from "../src/database/connection.ts";
+import { logger } from "../src/config/logger.ts";
 import { __clearHistoricalIndexCache as clearHistoricalIndexCache } from "../src/services/currency/currencyConversionService.js";
 
 describe("Price Provider Service", () => {

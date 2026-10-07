@@ -110,7 +110,7 @@ describe("shared database and currency mock architecture", () => {
       const source = readFileSync(file, "utf8");
       if (
         !allowedPartialReal.has(relative(file)) &&
-        manualModuleMocks(source, "database/connection.js", [
+        manualModuleMocks(source, "database/connection.ts", [
           "mockConnection",
           "mockTxConnection",
           "mockPooledTxConnection",
@@ -143,7 +143,7 @@ describe("shared database and currency mock architecture", () => {
   it("rejects multiline manual mocks even when a helper is mentioned later", () => {
     const source = `
       vi.mock(
-        "../src/database/connection.js",
+        "../src/database/connection.ts",
         () => ({ query: vi.fn() }),
       );
       const unrelated = mockConnection();
@@ -154,7 +154,7 @@ describe("shared database and currency mock architecture", () => {
     `;
 
     expect(
-      manualModuleMocks(source, "database/connection.js", ["mockConnection"]),
+      manualModuleMocks(source, "database/connection.ts", ["mockConnection"]),
     ).toHaveLength(1);
     expect(
       manualModuleMocks(source, "currencyConversionService.js", [
@@ -165,14 +165,14 @@ describe("shared database and currency mock architecture", () => {
 
   it("accepts only helpers invoked inside the matching mock factory", () => {
     const source = `
-      vi.mock("../src/database/connection.js", () => mockTxConnection());
+      vi.mock("../src/database/connection.ts", () => mockTxConnection());
       vi.mock("../src/services/currency/currencyConversionService.js", () =>
         mockCurrencyConversion(),
       );
     `;
 
     expect(
-      manualModuleMocks(source, "database/connection.js", [
+      manualModuleMocks(source, "database/connection.ts", [
         "mockConnection",
         "mockTxConnection",
       ]),

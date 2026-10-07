@@ -1,7 +1,7 @@
 /** Planned-transaction orchestration above parameterized persistence. */
 
-import { withTransaction } from "../database/connection.js";
-import { sanitizeUpdateFields } from "../lib/validation.js";
+import { withTransaction } from "../database/connection.ts";
+import { sanitizeUpdateFields } from "../lib/validation.ts";
 import plannedTransactionRepository, {
   applyPlannedFieldUpdate,
   inheritTransactionTagsInTransaction,
@@ -10,8 +10,8 @@ import plannedTransactionRepository, {
   insertPlannedTransactionInTransaction,
   replaceLoanScheduleInTransaction,
   setPlannedTransactionTags,
-} from "../repositories/plannedTransactionRepository.js";
-import { stampAccountIdForUpdate } from "../repositories/transactionRepository.js";
+} from "../repositories/plannedTransactionRepository.ts";
+import { stampAccountIdForUpdate } from "../repositories/transactionRepository.ts";
 
 /**
  * @param {Record<string, any>} input

@@ -7,17 +7,17 @@
  * portfolio_performance_snapshots.
  */
 
-import { query, withTransaction } from "../../database/connection.js";
-import { logger } from "../../config/logger.js";
-import { portfolioTransactionRepository } from "../../repositories/portfolioTransactionRepository.js";
+import { query, withTransaction } from "../../database/connection.ts";
+import { logger } from "../../config/logger.ts";
+import { portfolioTransactionRepository } from "../../repositories/portfolioTransactionRepository.ts";
 import {
   sanitizeSnapshotSpikes,
   calendarDaysBetween,
   toYmd,
 } from "../calculations/portfolioMath.js";
-import { toDecimal, roundMoney } from "../../lib/money.js";
-import { epochMsToUtcYmd } from "../../lib/dateFormat.js";
-import { todayAppDateString } from "../../lib/timezone.js";
+import { toDecimal, roundMoney } from "../../lib/money.ts";
+import { epochMsToUtcYmd } from "../../lib/dateFormat.ts";
+import { todayAppDateString } from "../../lib/timezone.ts";
 import { areLotsFullyAssigned } from "@vision/shared-utils/portfolio";
 
 /** @typedef {import('decimal.js').default} Decimal */
@@ -111,7 +111,7 @@ import { areLotsFullyAssigned } from "@vision/shared-utils/portfolio";
 
 /**
  * One replayed transaction, coerced from {@link
- * import('../../types/rows.js').PortfolioMathTxRow} for the day walk (numeric
+ * import('../../types/rows.ts').PortfolioMathTxRow} for the day walk (numeric
  * strings parsed to number, `fx_rate_to_eur` collapsed to `undefined` when unset).
  * @typedef {object} SnapshotTxEntry
  * @property {number} investmentId

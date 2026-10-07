@@ -6,7 +6,7 @@
  * on failure; section renderers handle null gracefully.
  */
 
-import { query } from "../../database/connection.js";
+import { query } from "../../database/connection.ts";
 import {
   getSnapshots,
   getBreakdownSummary,
@@ -15,9 +15,9 @@ import {
   convertWithRates,
   loadCurrentRates,
 } from "../currency/currencyConversionService.js";
-import { todayAppDateString, firstOfMonthYmd } from "../../lib/timezone.js";
-import { logger } from "../../config/logger.js";
-import { addAll, toNumber } from "../../lib/money.js";
+import { todayAppDateString, firstOfMonthYmd } from "../../lib/timezone.ts";
+import { logger } from "../../config/logger.ts";
+import { addAll, toNumber } from "../../lib/money.ts";
 
 /**
  * @typedef {{ kind: 'ytd' }

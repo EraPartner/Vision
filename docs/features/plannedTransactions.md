@@ -2,12 +2,12 @@
 title: Planned Transactions
 type: feature
 status: active
-date: 2026-10-06
+date: 2026-10-07
 updated: 2026-10-06
 tags: [feature, planned, recurring, bills, loans, phase-3, phase-12, calculations, immutability, error-handling, toast, atomic-patch, virtual-data-table, i18n-toasts, upcoming-payments-hook, occurrence-key-dismissal, june-2026, auto-link, planned-match, exchange-rates, fx]
 aliases: [planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loan-amortization]
 description: "Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses. June 2026: auto-link & auto-clear planned payments on match — ingested transactions are automatically linked to matching planned payments (same recipient cluster, same sign, ±5% amount, ±5 days); ambiguous matches surface as confirmable suggestions. PlannedPaymentsPage migrated from DataTable to VirtualDataTable; native alert() replaced with toast.error (new i18n keys plannedPage.toggleFailed/deleteFailed). V11: useUpcomingPlannedPayments shared hook (single fetch + shared dismissed-ID store); UpcomingPaymentsNotification renders its dashboard reminder without duplicating the planned-payments page, while native badge synchronization remains active throughout AppLayout. June 2026 (B1 fix): dismissals now keyed per occurrence (id:YYYY-MM-DD) so recurring reminders re-surface each cycle; past-dated keys pruned on load; legacy id-only entries silently dropped on next load. August 2026: Planned aggregates omit payments whose exchange rate is unavailable and visibly report the omission instead of blending currencies."
-related_code: ["apps/node-backend/src/routes/plannedTransactions.js", "apps/node-backend/src/services/plannedTransactionService.js", "apps/node-backend/src/repositories/plannedTransactionRepository.js", "apps/node-backend/src/services/plannedExecutionService.js", "apps/node-backend/src/services/plannedMatchService.js", "apps/node-backend/src/services/calculations/loanSchedule.js", "apps/node-backend/src/services/calculations/recurrence.js", "apps/node-backend/src/services/recurringDetectionService.js", "apps/frontend/src/pages/PlannedPaymentsPage.tsx", "apps/frontend/src/features/planned/PlannedPaymentsTable.tsx", "apps/frontend/src/features/planned/PlannedDueBadge.tsx", "apps/frontend/src/features/planned/plannedDueDate.ts", "apps/frontend/src/features/planned/NextSevenDaysStrip.tsx", "apps/frontend/src/features/planned/nextSevenDays.ts", "apps/frontend/src/features/planned/plannedCurrencyTotals.ts", "apps/frontend/src/hooks/useCurrencyConverter.ts", "apps/frontend/src/features/planned/PlannedPaymentForm.tsx", "apps/frontend/src/features/planned/LinkTransactionDialog.tsx", "apps/frontend/src/features/planned/MatchSuggestionsBanner.tsx", "apps/frontend/src/features/planned/ExecutionHistoryDialog.tsx", "apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx", "apps/frontend/src/components/shared/DatePicker.tsx", "apps/frontend/src/lib/dateUtils.ts", "apps/frontend/src/hooks/useUpcomingPlannedPayments.ts", "apps/frontend/src/hooks/usePlannedMatchSuggestions.ts", "apps/frontend/src/components/layout/AppLayout.tsx"]
+related_code: ["apps/node-backend/src/routes/plannedTransactions.ts", "apps/node-backend/src/services/plannedTransactionService.js", "apps/node-backend/src/repositories/plannedTransactionRepository.ts", "apps/node-backend/src/services/plannedExecutionService.js", "apps/node-backend/src/services/plannedMatchService.js", "apps/node-backend/src/services/calculations/loanSchedule.js", "apps/node-backend/src/services/calculations/recurrence.js", "apps/node-backend/src/services/recurringDetectionService.js", "apps/frontend/src/pages/PlannedPaymentsPage.tsx", "apps/frontend/src/features/planned/PlannedPaymentsTable.tsx", "apps/frontend/src/features/planned/PlannedDueBadge.tsx", "apps/frontend/src/features/planned/plannedDueDate.ts", "apps/frontend/src/features/planned/NextSevenDaysStrip.tsx", "apps/frontend/src/features/planned/nextSevenDays.ts", "apps/frontend/src/features/planned/plannedCurrencyTotals.ts", "apps/frontend/src/hooks/useCurrencyConverter.ts", "apps/frontend/src/features/planned/PlannedPaymentForm.tsx", "apps/frontend/src/features/planned/LinkTransactionDialog.tsx", "apps/frontend/src/features/planned/MatchSuggestionsBanner.tsx", "apps/frontend/src/features/planned/ExecutionHistoryDialog.tsx", "apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx", "apps/frontend/src/components/shared/DatePicker.tsx", "apps/frontend/src/lib/dateUtils.ts", "apps/frontend/src/hooks/useUpcomingPlannedPayments.ts", "apps/frontend/src/hooks/usePlannedMatchSuggestions.ts", "apps/frontend/src/components/layout/AppLayout.tsx"]
 ---
 
 # Planned Transactions
@@ -199,7 +199,7 @@ Dismissals in the recurring-pattern detection panel are persistent and do not re
 - Pattern date labels in `RecurringDetectionPanel` follow app `dateFormat` + locale settings
 - Backend settings persistence now stores dismissal arrays as explicit JSONB (`JSON.stringify` + `::jsonb`) to prevent invalid JSON writes when dismissing suggestions
 
-Code links: [[apps/frontend/src/features/planned/RecurringDetectionPanel.tsx]], [[apps/frontend/src/lib/dateUtils.ts]], [[apps/node-backend/src/repositories/settingsRepository.js]]
+Code links: [[apps/frontend/src/features/planned/RecurringDetectionPanel.tsx]], [[apps/frontend/src/lib/dateUtils.ts]], [[apps/node-backend/src/repositories/settingsRepository.ts]]
 
 ---
 
@@ -265,9 +265,9 @@ Users control this toggle via **Settings → General → Auto-clear planned paym
 | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | [[apps/node-backend/src/services/plannedExecutionService.js]]          | `executePlanned({id, executedTransactionId, executionDate})` — shared execution logic extracted from `POST /:id/execute` route |
 | [[apps/node-backend/src/services/plannedMatchService.js]]              | `matchesTolerance`, `findAutoLinkTarget`, `autoLinkTransactions` (batch + mutual-unambiguity rule), `getMatchSuggestions`      |
-| [[apps/node-backend/src/repositories/plannedTransactionRepository.js]] | New `listActiveUnexecuted()` method                                                                                            |
-| [[apps/node-backend/src/repositories/transactionRepository.js]]        | New `listRecentUnlinked({ sinceDate })` (45-day lookback, NOT EXISTS against executions table)                                 |
-| [[apps/node-backend/src/repositories/recipientRepository.js]]          | New `getClusterRootMap(ids)`                                                                                                   |
+| [[apps/node-backend/src/repositories/plannedTransactionRepository.ts]] | New `listActiveUnexecuted()` method                                                                                            |
+| [[apps/node-backend/src/repositories/transactionRepository.ts]]        | New `listRecentUnlinked({ sinceDate })` (45-day lookback, NOT EXISTS against executions table)                                 |
+| [[apps/node-backend/src/repositories/recipientRepository.ts]]          | New `getClusterRootMap(ids)`                                                                                                   |
 
 ### Match Suggestions surface
 
@@ -344,7 +344,7 @@ PostgreSQL. Live verification of these new cases is pending in [[TODO]].
 
 ## Backend Route Implementation Notes
 
-Recent backend route refactoring consolidated duplicated logic in [[apps/node-backend/src/routes/plannedTransactions.js]] while preserving endpoint behavior:
+Recent backend route refactoring consolidated duplicated logic in [[apps/node-backend/src/routes/plannedTransactions.ts]] while preserving endpoint behavior:
 
 - Shared route-id parsing via `parseRouteId(req)` across `GET /:id`, `PATCH /:id`, `POST /:id/execute`, and `DELETE /:id`
 - Shared PATCH sanitization via `withoutPatchOnlyReadOnlyFields(fields)` — returns new object via destructured rest pattern, eliminating in-place mutations
@@ -410,7 +410,7 @@ Mar 28  --[+1 month]--> Apr 28   (stays at 28 forever)
 > [!info] Scope of this note
 > The 2026-04-25 note above this section describes the _double-modulo math_ for normalizing month indices (a low-level arithmetic detail). This section describes the _anchor semantics_: that after a clamp the chain advances from the clamped date, not from a remembered original day-of-month. These are separate concerns.
 
-The code comment in `routes/plannedTransactions.js` at the `updateFields.planned_date` assignment points to this section: `(Day-of-month anchor is intentionally sticky-clamped — see docs/features planned-transactions.)`
+The code comment in `routes/plannedTransactions.ts` at the `updateFields.planned_date` assignment points to this section: `(Day-of-month anchor is intentionally sticky-clamped — see docs/features planned-transactions.)`
 
 ### `services/calculations/loanSchedule.js`
 

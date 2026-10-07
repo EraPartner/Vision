@@ -7,13 +7,13 @@ const portfolioRemovalMocks = vi.hoisted(() => ({
   validateImportBatchRemoval: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("../src/database/connection.js", () =>
+vi.mock("../src/database/connection.ts", () =>
   mockTxConnection(undefined, {
     query: vi.fn().mockResolvedValue({ rows: [], rowCount: 1 }),
   }),
 );
 
-vi.mock("../src/repositories/portfolioTransactionRepository.js", () => ({
+vi.mock("../src/repositories/portfolioTransactionRepository.ts", () => ({
   default: {
     hardDelete: portfolioRemovalMocks.remove,
     hardDeleteByImportBatch: portfolioRemovalMocks.removeByImportBatch,
@@ -45,14 +45,14 @@ vi.mock(
   }),
 );
 
-vi.mock("../src/repositories/investmentRepository.js", () => ({
+vi.mock("../src/repositories/investmentRepository.ts", () => ({
   default: {
     create: vi.fn(),
     getById: vi.fn(),
   },
 }));
 
-vi.mock("../src/repositories/portfolioImportBatchRepository.js", () => ({
+vi.mock("../src/repositories/portfolioImportBatchRepository.ts", () => ({
   getRowForInvestmentCreation: vi.fn(),
   lockBatchForUpdate: vi.fn(),
   lockInvestmentResolutionRows: vi.fn(),
@@ -67,9 +67,9 @@ vi.mock("../src/repositories/portfolioImportBatchRepository.js", () => ({
   setBatchAccount: vi.fn(),
 }));
 
-import { query, withTransaction } from "../src/database/connection.js";
-import portfolioTransactionRepository from "../src/repositories/portfolioTransactionRepository.js";
-import investmentRepository from "../src/repositories/investmentRepository.js";
+import { query, withTransaction } from "../src/database/connection.ts";
+import portfolioTransactionRepository from "../src/repositories/portfolioTransactionRepository.ts";
+import investmentRepository from "../src/repositories/investmentRepository.ts";
 import { getActiveDuplicateRepairReceipts } from "../src/services/portfolioImportDuplicateRepairService.js";
 import {
   getRowForInvestmentCreation,
@@ -81,7 +81,7 @@ import {
   markBatchAborted,
   resetCommittedRowsToMatched,
   getPreviewRows,
-} from "../src/repositories/portfolioImportBatchRepository.js";
+} from "../src/repositories/portfolioImportBatchRepository.ts";
 import {
   createInvestmentForRow,
   getPortfolioImportBatchPreview,

@@ -4,7 +4,7 @@ import { promisify } from "node:util";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
-import { installFreshBaseline } from "../src/database/freshBaseline.js";
+import { installFreshBaseline } from "../src/database/freshBaseline.ts";
 import { hasTestDatabase } from "./setup/db.js";
 
 const run = promisify(execFile);

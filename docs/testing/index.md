@@ -2,7 +2,7 @@
 title: Testing Documentation Index
 type: testing-index
 status: active
-date: 2026-10-06
+date: 2026-10-07
 updated: 2026-10-06
 last-updated: 2026-10-06
 modified: 2026-10-06
@@ -231,7 +231,7 @@ bun vitest run src/path/to/test.test.js
 
 - Additional backend coverage was added for repository-level regressions (category upsert/get semantics and planned-transaction pagination query paths).
 - Tests: [[apps/node-backend/tests/categoryRepository.test.js]], [[apps/node-backend/tests/plannedTransactionRepository.test.js]]
-- Related code: [[apps/node-backend/src/repositories/categoryRepository.js]], [[apps/node-backend/src/repositories/plannedTransactionRepository.js]]
+- Related code: [[apps/node-backend/src/repositories/categoryRepository.ts]], [[apps/node-backend/src/repositories/plannedTransactionRepository.ts]]
 
 > [!note] Schema initialization test archived
 > Schema bootstrap testing was removed in Phase 1 (2026-04-21) when `schemaInit.js` was replaced by Alembic migrations ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]).
@@ -250,7 +250,7 @@ bun vitest run src/path/to/test.test.js
 
 - Added targeted backend coverage for info-route dependency orchestration, stale FX refresh branching, recurring-pattern fallback semantics, and cache prewarm failure isolation.
 - Tests: [[apps/node-backend/tests/routes/info.test.js]]
-- Related source: [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/database/connection.js]], [[apps/node-backend/src/services/recurringDetectionService.js]], [[apps/node-backend/src/services/materializedViewService.js]], [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]]
+- Related source: [[apps/node-backend/src/routes/info.ts]], [[apps/node-backend/src/database/connection.ts]], [[apps/node-backend/src/services/recurringDetectionService.js]], [[apps/node-backend/src/services/materializedViewService.js]], [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]]
 - Validation + coverage snapshot: `bun vitest run tests/routes/info.test.js`; `npm test -- --coverage`; overall `81.12/66.86/84.49/84.53`, `info.js` `93.62/78.72/100/94.58` (statements/branches/functions/lines).
 - Details: [[docs/testing/testing|Testing Documentation]], [[docs/testing/test-inventory|Test Inventory]]
 
@@ -265,7 +265,7 @@ bun vitest run src/path/to/test.test.js
 
 - Added targeted backend repository coverage for portfolio transaction query/filter branches and grouped summary return paths.
 - Test: [[apps/node-backend/tests/portfolioTransactionRepository.test.js]]
-- Related source: [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]
+- Related source: [[apps/node-backend/src/repositories/portfolioTransactionRepository.ts]]
 - Validation + coverage snapshot: `bun vitest run tests/portfolioTransactionRepository.test.js` (25 tests); `npm test -- --coverage` (827 tests); overall `81.81/67.61/85.42/85.25`; repositories bucket `68.47/63.45/67.02/72.66`; `portfolioTransactionRepository.js` `78.73/71.5/84.84/82.95` (statements/branches/functions/lines).
 - Details: [[docs/testing/testing|Testing Documentation]], [[docs/testing/test-inventory|Test Inventory]]
 

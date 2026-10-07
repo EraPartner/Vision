@@ -1,5 +1,5 @@
-import { query, withTransaction } from "../database/connection.js";
-import { readAuditHead } from "../repositories/auditChainRepository.js";
+import { query, withTransaction } from "../database/connection.ts";
+import { readAuditHead } from "../repositories/auditChainRepository.ts";
 import { verifyAuditHistory } from "./auditVerificationService.js";
 
 function safeSequence(value) {

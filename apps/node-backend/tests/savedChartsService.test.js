@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ValidationError } from "../src/middleware/errorHandler.js";
+import { ValidationError } from "../src/middleware/errorHandler.ts";
 
 const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   update: vi.fn(),
 }));
 
-vi.mock("../src/repositories/savedChartsRepository.js", () => ({
+vi.mock("../src/repositories/savedChartsRepository.ts", () => ({
   default: {
     getAll: vi.fn(),
     getCount: vi.fn(),

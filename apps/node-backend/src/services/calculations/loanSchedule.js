@@ -11,9 +11,9 @@
  *   validateLoanConfig(config) → { errors[], normalized }
  */
 
-import { roundMoney } from "../../lib/money.js";
-import { epochMsToUtcYmd } from "../../lib/dateFormat.js";
-import { ValidationError } from "../../middleware/errorHandler.js";
+import { roundMoney } from "../../lib/money.ts";
+import { epochMsToUtcYmd } from "../../lib/dateFormat.ts";
+import { ValidationError } from "../../middleware/errorHandler.ts";
 
 const EPSILON = 0.0000001;
 

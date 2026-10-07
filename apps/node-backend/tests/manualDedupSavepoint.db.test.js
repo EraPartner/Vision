@@ -20,12 +20,12 @@ import {
   hasTestDatabase,
   releaseDbSuiteLock,
 } from "./setup/db.js";
-import { closePool, withTransaction } from "../src/database/connection.js";
+import { closePool, withTransaction } from "../src/database/connection.ts";
 import {
   isManualDuplicate,
   recordManualTransactionDedupClaim,
 } from "../src/services/deduplication.js";
-import { accountRepository } from "../src/repositories/accountRepository.js";
+import { accountRepository } from "../src/repositories/accountRepository.ts";
 
 vi.mock("../src/services/plannedMatchService.js", () => ({
   autoLinkTransactions: vi.fn().mockResolvedValue({

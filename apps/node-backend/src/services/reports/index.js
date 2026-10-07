@@ -7,7 +7,7 @@
  */
 
 import { renderHtmlToPdf } from './puppeteerRenderer.js';
-import { toAppDateString, toAppTz, APP_TIMEZONE } from '../../lib/timezone.js';
+import { toAppDateString, toAppTz, APP_TIMEZONE } from '../../lib/timezone.ts';
 import { buildThemeCss } from './themeCss.js';
 import { escapeHtml, SECTION_CSS } from './sectionHelpers.js';
 import { fetchFinancialData } from './dataFetcher.js';
@@ -38,7 +38,7 @@ import {
   PORTFOLIO_SECTION_CATALOG,
   TAX_SECTION_CATALOG,
 } from './sectionCatalog.js';
-import investmentRepository from '../../repositories/investmentRepository.js';
+import investmentRepository from '../../repositories/investmentRepository.ts';
 
 /**
  * @typedef {'ytd' | 'rolling' | 'custom' | 'year'} PeriodKind
