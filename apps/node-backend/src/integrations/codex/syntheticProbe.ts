@@ -1,8 +1,8 @@
+import { constants } from "node:fs";
 import {
-  lstat,
   mkdtemp,
   mkdir,
-  readFile,
+  open,
   readdir,
   realpath,
   rm,
@@ -86,12 +86,21 @@ export async function cleanupStaleSyntheticCodexProbes(tempParent: string) {
     const root = join(parent, entry.name);
     let owner: SyntheticProbeOwner | null;
     try {
-      const marker = join(root, OWNER_FILE);
-      const details = await lstat(marker);
-      if (!details.isFile() || details.size > 512) continue;
-      owner = JSON.parse(
-        await readFile(marker, "utf8"),
-      ) as SyntheticProbeOwner | null;
+      // Check and read through one handle that refuses symlinks, so the marker
+      // cannot be swapped between the size check and the read.
+      const handle = await open(
+        join(root, OWNER_FILE),
+        constants.O_RDONLY | constants.O_NOFOLLOW,
+      );
+      try {
+        const details = await handle.stat();
+        if (!details.isFile() || details.size > 512) continue;
+        owner = JSON.parse(
+          await handle.readFile("utf8"),
+        ) as SyntheticProbeOwner | null;
+      } finally {
+        await handle.close();
+      }
     } catch {
       continue;
     }
