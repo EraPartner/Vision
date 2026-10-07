@@ -53,6 +53,7 @@ Run root scripts with `bun run <name>`. Run workspace scripts with
 | `lint`                    | Lint the frontend                                  |
 | `lint:backend`            | Lint the backend                                   |
 | `typecheck`               | Type-check the frontend                            |
+| `typecheck:packages`      | Type-check the shared packages (strict)            |
 | `typecheck:python`        | Run `mypy --strict` over Alembic and scripts       |
 | `validate-locales`        | Validate source/generated locale parity            |
 | `generate-locales`        | Generate frontend and Electron locale outputs      |

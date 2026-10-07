@@ -2,7 +2,7 @@
 title: Feature - AI Chat
 type: feature
 status: active
-date: 2026-10-06
+date: 2026-10-07
 updated: 2026-10-06
 last_modified: 2026-10-06
 tags:
@@ -34,8 +34,7 @@ related_code:
     "apps/node-backend/src/services/aiChatService.js",
     "apps/node-backend/src/repositories/aiChatRepository.js",
     "apps/node-backend/src/integrations/ollama/client.js",
-    "packages/types/src/aiChat.js",
-    "packages/types/src/aiChat.d.ts",
+    "packages/types/src/aiChat.ts",
     "apps/frontend/src/pages/AIChatPage.tsx",
     "apps/frontend/src/features/ai-chat/",
     "apps/frontend/src/hooks/useAIChat.ts",

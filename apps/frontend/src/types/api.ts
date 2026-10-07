@@ -8,7 +8,7 @@
  *
  * Note: money/quantity fields are typed `number` here, but pg returns NUMERIC
  * columns as strings — the backend repository layer coerces them on emit (see
- * packages/shared-utils/src/money.js). Do not assume raw repository rows are
+ * packages/shared-utils/src/money.ts). Do not assume raw repository rows are
  * already numeric.
  */
 import type { AssetClass } from "@vision/types/assetClasses";

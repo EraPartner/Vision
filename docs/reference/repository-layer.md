@@ -2,7 +2,7 @@
 title: Repository Layer Reference
 type: reference
 status: active
-date: 2026-09-30
+date: 2026-10-07
 updated: 2026-09-04
 tags: [backend, repositories, reference, data-access, postgresql, phase-0, phase-1, phase-3, phase-3-1, phase-9, phase-q, decimal, money, recipient-groups]
 aliases: [repositories, repository layer, data access, DAL, database access]
@@ -40,7 +40,7 @@ Service Layer (business logic)
 
 **Phase 0+ Note:** Hot-path queries now use `queryPrepared()` for plan caching. This includes frequent repository methods like `getById`, `create`, `hardDelete` in `transactionRepository`, and equivalents in `infoRepository`. The prepared-statement name is the function name + operation, e.g., `'tx_get_by_id'` for `transactionRepository.getById`. See `apps/node-backend/src/database/connection.js` for the implementation and `docs/reference/query-patterns.md` for usage guidelines.
 
-**Phase 9+ Note — Decimal Enforcement (Mandatory):** All repositories returning monetary values must coerce NUMERIC/DECIMAL columns on emit to eliminate IEEE 754 floating-point drift (node-postgres returns NUMERIC as JS strings; no global type parser is set deliberately to avoid loss in the decimal.js pipeline). Two helpers in `packages/shared-utils/src/money.js` (re-exported via `apps/node-backend/src/lib/money.js`) cover the boundary:
+**Phase 9+ Note — Decimal Enforcement (Mandatory):** All repositories returning monetary values must coerce NUMERIC/DECIMAL columns on emit to eliminate IEEE 754 floating-point drift (node-postgres returns NUMERIC as JS strings; no global type parser is set deliberately to avoid loss in the decimal.js pipeline). Two helpers in `packages/shared-utils/src/money.ts` (re-exported via `apps/node-backend/src/lib/money.js`) cover the boundary:
 
 - `numericColumn(v)` — converts a single NUMERIC value to number; `null`/`undefined` pass through unchanged; `''` → `undefined`
 - `coerceNumericFields(row, fields)` — shallow-copy coercion of named columns via `numericColumn`; no-op on nullish rows

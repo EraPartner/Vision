@@ -2,7 +2,7 @@
 title: Testing Documentation
 type: testing
 status: active
-date: 2026-10-06
+date: 2026-10-07
 updated: 2026-10-06
 last-updated: 2026-10-06
 last_updated_timestamp: 2026-10-06T00:00:00Z
@@ -2006,7 +2006,7 @@ Covers portfolio cost basis calculations (FIFO/LIFO), accrued interest computati
 - Immutability assertions: `sanitizeSnapshotSpikes(input)` does not mutate input array
 - `setUTCDate()` always steps exactly 24 hours regardless of local DST changes
 
-**Related code:** [[apps/node-backend/src/services/calculations/portfolioMath.js]], [[packages/shared-utils/src/portfolio.js]], [[docs/features/portfolio|Portfolio Feature]]
+**Related code:** [[apps/node-backend/src/services/calculations/portfolioMath.js]], [[packages/shared-utils/src/portfolio.ts]], [[docs/features/portfolio|Portfolio Feature]]
 
 ### Import Pipeline Tests
 

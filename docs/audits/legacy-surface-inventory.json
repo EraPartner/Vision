@@ -403,7 +403,7 @@
       "disposition": "Removed after the explicit client/server compatibility cutoff; complete is the sole terminal success event.",
       "paths": [
         "apps/node-backend/src/routes/ai.js",
-        "packages/types/src/aiChat.js",
+        "packages/types/src/aiChat.ts",
         "apps/frontend/src/lib/api/ai.ts",
         "openapi.yaml"
       ],
@@ -609,8 +609,7 @@
       "disposition": "Removed after confirming that canonical asset-class constants live in @vision/types and no repository importer used the compatibility subpath.",
       "paths": [
         "packages/shared-utils/package.json",
-        "packages/types/src/assetClasses.js",
-        "packages/types/src/assetClasses.d.ts"
+        "packages/types/src/assetClasses.ts"
       ],
       "readers": "No repository callers.",
       "writers": "None.",
@@ -733,7 +732,7 @@
       "paths": [
         "apps/frontend/src/pages/portfolio/PortfolioPage.tsx",
         "apps/frontend/src/features/splits/SplitTransactionDialog.tsx",
-        "packages/shared-utils/src/money.js"
+        "packages/shared-utils/src/money.ts"
       ],
       "readers": "Six production portfolio, account, planned, and split modules.",
       "writers": "None.",
@@ -824,7 +823,7 @@
       "classification": "historical-record-only",
       "disposition": "Removed. Portfolio and planned-transaction runtime paths accept and emit only biweekly; migration 0099 rewrites and constrains stored values.",
       "paths": [
-        "packages/types/src/recurrence.js",
+        "packages/types/src/recurrence.ts",
         "apps/node-backend/src/services/investmentService.js",
         "apps/node-backend/src/services/portfolio/portfolioTransactionRules.js"
       ],

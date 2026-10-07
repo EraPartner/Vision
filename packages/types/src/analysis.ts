@@ -1,13 +1,18 @@
 import { z } from "zod";
 
-export const ANALYSIS_CONTRACT_VERSION = 1;
-export const ANALYSIS_WORKSPACES = Object.freeze([
+export const ANALYSIS_CONTRACT_VERSION: 1 = 1;
+export const ANALYSIS_WORKSPACES: readonly [
   "budgeting",
   "portfolio",
   "research",
   "cross-workspace",
-]);
-export const ANALYSIS_VALUE_TYPES = Object.freeze([
+] = Object.freeze([
+  "budgeting",
+  "portfolio",
+  "research",
+  "cross-workspace",
+] as const);
+export const ANALYSIS_VALUE_TYPES: readonly [
   "string",
   "integer",
   "decimal",
@@ -15,7 +20,338 @@ export const ANALYSIS_VALUE_TYPES = Object.freeze([
   "date",
   "datetime",
   "currency",
-]);
+] = Object.freeze([
+  "string",
+  "integer",
+  "decimal",
+  "boolean",
+  "date",
+  "datetime",
+  "currency",
+] as const);
+
+export type AnalysisWorkspace = (typeof ANALYSIS_WORKSPACES)[number];
+export type AnalysisValueType = (typeof ANALYSIS_VALUE_TYPES)[number];
+export type AnalysisScalar = string | number | boolean | null;
+export type AnalysisCoverageStatus =
+  "complete" | "partial" | "unknown" | "unavailable";
+
+export interface AnalysisUnit {
+  kind: "money" | "percentage" | "quantity" | "count" | "duration";
+  currency?: string;
+  currencyParameterId?: string;
+  currencyColumn?: string;
+  instrumentColumn?: string;
+  instrumentId?: string;
+  percentageBasis?: "ratio" | "percent";
+  scale?: number;
+}
+export interface AnalysisTypedValue {
+  id: string;
+  label: string;
+  type: AnalysisValueType;
+  unit?: AnalysisUnit;
+}
+export interface AnalysisParameter extends AnalysisTypedValue {
+  required: boolean;
+  defaultValue?: AnalysisScalar;
+  sensitive: boolean;
+}
+export interface AnalysisAssumption extends AnalysisTypedValue {
+  defaultValue: AnalysisScalar;
+  editable: boolean;
+  source: "user" | "template";
+}
+export interface AnalysisCalculation {
+  id: string;
+  label: string;
+  kind: "metric" | "formula";
+  expression: string;
+  resultType: AnalysisValueType;
+  languageVersion: string;
+  metricVersion?: string;
+  dependencies: string[];
+  unit?: AnalysisUnit;
+  rounding?: { mode: "half-even"; scale: number };
+}
+export interface AnalysisResultColumn {
+  id: string;
+  label: string;
+  type: AnalysisValueType;
+  nullable: boolean;
+  semanticType?: string;
+  unit?: AnalysisUnit;
+  calculationId?: string;
+  calculationVersion?: string;
+}
+export interface AnalysisFieldReference {
+  kind: "field";
+  datasetId: string;
+  columnId: string;
+}
+export interface AnalysisVisualPlanSource {
+  kind: "visual-plan";
+  planVersion: number;
+  datasetId: string;
+  select: Array<{
+    id: string;
+    source: AnalysisFieldReference | { kind: "metric"; calculationId: string };
+  }>;
+  joins: Array<{ datasetId: string; type: "inner" | "left"; pathId: string }>;
+  filters: Array<{
+    left: AnalysisFieldReference;
+    operator:
+      | "eq"
+      | "neq"
+      | "lt"
+      | "lte"
+      | "gt"
+      | "gte"
+      | "contains"
+      | "starts-with"
+      | "is-null"
+      | "is-not-null";
+    right?:
+      | { kind: "parameter" | "assumption"; id: string }
+      | { kind: "literal"; value: AnalysisScalar };
+  }>;
+  groupBy: string[];
+  orderBy: Array<{ outputId: string; direction: "asc" | "desc" }>;
+  limit?: number;
+  generatedSql?: string;
+}
+export interface AnalysisCustomSqlSource {
+  kind: "custom-sql";
+  dialect: "postgresql";
+  text: string;
+  datasetIds: string[];
+  parameterBindings: Array<{
+    parameterId: string;
+    startCodeUnit: number;
+    endCodeUnit: number;
+  }>;
+  visualConversion: {
+    status: "convertible" | "unsupported";
+    reasonCode?: string;
+  };
+  visualOrigin?: AnalysisVisualPlanSource;
+}
+export interface AnalysisPresentationRequirement {
+  columns: AnalysisResultColumn[];
+  completeResult: boolean;
+}
+export type AnalysisPresentation =
+  | {
+      id: string;
+      kind: "grid";
+      bindings: { columns: string[] };
+      requires: AnalysisPresentationRequirement;
+    }
+  | {
+      id: string;
+      kind: "line" | "bar" | "area";
+      bindings: { x: string; y: string[] };
+      requires: AnalysisPresentationRequirement;
+    }
+  | {
+      id: string;
+      kind: "pie";
+      bindings: { category: string; value: string };
+      requires: AnalysisPresentationRequirement;
+    }
+  | {
+      id: string;
+      kind: "pivot";
+      bindings: { rows: string[]; columns: string[]; values: string[] };
+      requires: AnalysisPresentationRequirement;
+    };
+
+export interface AnalysisDefinition {
+  contractVersion: 1;
+  definitionId: string;
+  definitionVersion: number;
+  name: string;
+  workspace: AnalysisWorkspace;
+  datasets: Array<{
+    id: string;
+    schemaVersion: number;
+    requiredColumns: string[];
+    authorizationScope: string;
+  }>;
+  source: AnalysisVisualPlanSource | AnalysisCustomSqlSource;
+  parameters: AnalysisParameter[];
+  calculations: AnalysisCalculation[];
+  assumptions: AnalysisAssumption[];
+  presentations: AnalysisPresentation[];
+  expectedResult: { columns: AnalysisResultColumn[] };
+  reporting: {
+    currencyParameterId: string;
+    timezoneParameterId: string;
+    dateFromParameterId: string;
+    dateToParameterId: string;
+  };
+}
+
+export interface AnalysisSourceIdentity {
+  providerId: string;
+  sourceId: string;
+  sourceVersion: string;
+  asOf: string;
+  contentHash?: string;
+  uri?: string;
+  passageId?: string;
+}
+export type AnalysisLineage =
+  | {
+      kind: "records";
+      datasetId: string;
+      records: Array<{
+        entity: string;
+        id: string;
+        source?: AnalysisSourceIdentity;
+      }>;
+    }
+  | {
+      kind: "opaque";
+      datasetId: string;
+      token: string;
+      reason: string;
+      sources: AnalysisSourceIdentity[];
+    };
+export interface AnalysisResultRow {
+  id: string;
+  values: Record<string, AnalysisScalar>;
+  lineage: AnalysisLineage[];
+}
+export type AnalysisResultWindow =
+  | { kind: "complete"; totalRows: number }
+  | {
+      kind: "page";
+      offset: number;
+      limit: number;
+      totalRows?: number;
+      hasMore: boolean;
+    }
+  | {
+      kind: "truncated";
+      returnedRows: number;
+      rowLimit: number;
+      totalRows?: number;
+      reason: string;
+    };
+export interface AnalysisCoverageItem {
+  id: string;
+  status: AnalysisCoverageStatus;
+  reasonCode?: string;
+  detail?: string;
+  missingRatio?: string;
+  sources: AnalysisSourceIdentity[];
+}
+export type AnalysisCalculationResult =
+  | {
+      id: string;
+      status: "ok";
+      kind: "metric" | "formula";
+      version: string;
+      type: AnalysisValueType;
+      unit?: AnalysisUnit;
+      value: AnalysisScalar;
+    }
+  | {
+      id: string;
+      status: "error";
+      kind: "metric" | "formula";
+      version: string;
+      type: AnalysisValueType;
+      unit?: AnalysisUnit;
+      error: { code: string; message: string };
+    };
+export interface AnalysisResultData {
+  schemaVersion: number;
+  rowGrain: { id: string; description: string; keys: string[] };
+  columns: AnalysisResultColumn[];
+  rows: AnalysisResultRow[];
+  window: AnalysisResultWindow;
+}
+interface AnalysisExecutionCommon {
+  contractVersion: 1;
+  runId: string;
+  definitionRef: { definitionId: string; definitionVersion: number };
+  startedAt: string;
+  execution: {
+    executorId: string;
+    executorVersion: string;
+    queryMode: "visual-plan" | "custom-sql";
+    durationMs?: number;
+    snapshot: {
+      consistency: "repeatable-read" | "frozen-inputs" | "best-effort";
+      id: string;
+      capturedAt: string;
+    };
+    effectiveParameters: Record<string, AnalysisScalar>;
+    effectiveAssumptions: Record<string, AnalysisScalar>;
+  };
+  reporting: {
+    currency: string;
+    timezone: string;
+    dateRange: { from: string; to: string; bounds: "inclusive" };
+  };
+  sourceVersions: Array<{
+    datasetId: string;
+    schemaVersion: number;
+    revision: string;
+    capturedAt: string;
+  }>;
+  calculationResults: AnalysisCalculationResult[];
+  coverage: {
+    status: AnalysisCoverageStatus;
+    datasets: AnalysisCoverageItem[];
+    dimensions: AnalysisCoverageItem[];
+    warnings: Array<{
+      code: string;
+      message: string;
+      affectedColumns?: string[];
+    }>;
+  };
+}
+export type AnalysisExecutionResult =
+  | (AnalysisExecutionCommon & { status: "queued" | "running" })
+  | (AnalysisExecutionCommon & {
+      status: "partial" | "completed";
+      completedAt: string;
+      data: AnalysisResultData;
+    })
+  | (AnalysisExecutionCommon & {
+      status: "failed" | "cancelled";
+      completedAt: string;
+      error: { code: string; message: string };
+    });
+
+export interface AnalysisCompatibilityReason {
+  code: string;
+  path: string;
+  message: string;
+}
+export type AnalysisCompatibility =
+  | { compatible: true }
+  | { compatible: false; reasons: AnalysisCompatibilityReason[] };
+
+interface TypedValueDeclaration {
+  type: AnalysisValueType;
+  unit?: AnalysisUnit | undefined;
+}
+interface TypedValueWithDefault extends TypedValueDeclaration {
+  defaultValue?: AnalysisScalar | undefined;
+}
+type IssueContext = Pick<z.RefinementCtx, "addIssue">;
+// The backend's checkJs program compiles this file with `strict: false`, where
+// zod infers union-valued keys as optional and the inferred output no longer
+// matches the contract interfaces. In that mode the refined schema is asserted
+// to its contract type; under strictNullChecks this resolves to the schema's
+// own type, so the declared `z.ZodType<Contract>` annotation is fully checked.
+type ContractSchema<Schema, Contract> = undefined extends null
+  ? z.ZodType<Contract>
+  : Schema;
 
 const identifierSchema = z
   .string()
@@ -109,9 +445,13 @@ const unitSchema = z
     }
   });
 
-function valueMatchesType(value, declaration, nullable = false) {
+function valueMatchesType(
+  value: unknown,
+  declaration: TypedValueDeclaration,
+  nullable = false,
+): boolean {
   if (value === null) return nullable;
-  let valid;
+  let valid: boolean;
   switch (declaration.type) {
     case "integer":
       valid = Number.isInteger(value);
@@ -139,34 +479,35 @@ function valueMatchesType(value, declaration, nullable = false) {
   }
   if (!valid) return false;
   if (declaration.type === "decimal" && declaration.unit?.scale !== undefined) {
-    return (value.split(".")[1] ?? "").length <= declaration.unit.scale;
+    // A valid decimal is always a string (checked in the switch above).
+    return (
+      ((value as string).split(".")[1] ?? "").length <= declaration.unit.scale
+    );
   }
   return true;
 }
 
-function typedValueSchema(shape) {
-  return z
-    .object(shape)
-    .strict()
-    .superRefine((value, context) => {
-      if (
-        value.defaultValue !== undefined &&
-        !valueMatchesType(value.defaultValue, value)
-      ) {
-        context.addIssue({
-          code: "custom",
-          path: ["defaultValue"],
-          message: `Default value does not match ${value.type}`,
-        });
-      }
-      if (value.unit !== undefined && value.type !== "decimal") {
-        context.addIssue({
-          code: "custom",
-          path: ["unit"],
-          message: "Only decimal values may declare a unit",
-        });
-      }
+function refineTypedValue(
+  value: TypedValueWithDefault,
+  context: IssueContext,
+): void {
+  if (
+    value.defaultValue !== undefined &&
+    !valueMatchesType(value.defaultValue, value)
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["defaultValue"],
+      message: `Default value does not match ${value.type}`,
     });
+  }
+  if (value.unit !== undefined && value.type !== "decimal") {
+    context.addIssue({
+      code: "custom",
+      path: ["unit"],
+      message: "Only decimal values may declare a unit",
+    });
+  }
 }
 
 const datasetSchema = z
@@ -177,24 +518,30 @@ const datasetSchema = z
     authorizationScope: z.string().min(1).max(128),
   })
   .strict();
-const parameterSchema = typedValueSchema({
-  id: identifierSchema,
-  label: z.string().min(1).max(160),
-  type: valueTypeSchema,
-  required: z.boolean(),
-  defaultValue: scalarSchema.optional(),
-  sensitive: z.boolean().default(false),
-  unit: unitSchema.optional(),
-});
-const assumptionSchema = typedValueSchema({
-  id: identifierSchema,
-  label: z.string().min(1).max(160),
-  type: valueTypeSchema,
-  defaultValue: scalarSchema,
-  editable: z.boolean(),
-  source: z.enum(["user", "template"]),
-  unit: unitSchema.optional(),
-});
+const parameterSchema = z
+  .object({
+    id: identifierSchema,
+    label: z.string().min(1).max(160),
+    type: valueTypeSchema,
+    required: z.boolean(),
+    defaultValue: scalarSchema.optional(),
+    sensitive: z.boolean().default(false),
+    unit: unitSchema.optional(),
+  })
+  .strict()
+  .superRefine(refineTypedValue);
+const assumptionSchema = z
+  .object({
+    id: identifierSchema,
+    label: z.string().min(1).max(160),
+    type: valueTypeSchema,
+    defaultValue: scalarSchema,
+    editable: z.boolean(),
+    source: z.enum(["user", "template"]),
+    unit: unitSchema.optional(),
+  })
+  .strict()
+  .superRefine(refineTypedValue);
 const calculationSchema = z
   .object({
     id: identifierSchema,
@@ -451,8 +798,12 @@ const presentationSchema = z.discriminatedUnion("kind", [
     .strict(),
 ]);
 
-function addDuplicateIssues(items, context, path) {
-  const seen = new Set();
+function addDuplicateIssues(
+  items: readonly { id: string }[],
+  context: IssueContext,
+  path: string,
+): Set<string> {
+  const seen = new Set<string>();
   for (const [index, item] of items.entries()) {
     if (seen.has(item.id))
       context.addIssue({
@@ -464,22 +815,34 @@ function addDuplicateIssues(items, context, path) {
   }
   return seen;
 }
-function presentationBindings(presentation) {
-  if (presentation.kind === "grid") return presentation.bindings.columns;
-  if (["line", "bar", "area"].includes(presentation.kind))
-    return [presentation.bindings.x, ...presentation.bindings.y];
-  if (presentation.kind === "pie")
-    return [presentation.bindings.category, presentation.bindings.value];
-  return [
-    ...presentation.bindings.rows,
-    ...presentation.bindings.columns,
-    ...presentation.bindings.values,
-  ];
+function presentationBindings(presentation: AnalysisPresentation): string[] {
+  switch (presentation.kind) {
+    case "grid":
+      return presentation.bindings.columns;
+    case "line":
+    case "bar":
+    case "area":
+      return [presentation.bindings.x, ...presentation.bindings.y];
+    case "pie":
+      return [presentation.bindings.category, presentation.bindings.value];
+    default:
+      return [
+        ...presentation.bindings.rows,
+        ...presentation.bindings.columns,
+        ...presentation.bindings.values,
+      ];
+  }
 }
-function sameUnit(left, right) {
+function sameUnit(
+  left: AnalysisUnit | undefined,
+  right: AnalysisUnit | undefined,
+): boolean {
   return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
 }
-function sameColumn(left, right) {
+function sameColumn(
+  left: AnalysisResultColumn,
+  right: AnalysisResultColumn,
+): boolean {
   return (
     left.type === right.type &&
     left.nullable === right.nullable &&
@@ -489,10 +852,20 @@ function sameColumn(left, right) {
   );
 }
 
+interface VisualPlanReferenceScope {
+  datasetIds: ReadonlySet<string>;
+  parameterIds: ReadonlySet<string>;
+  assumptionIds: ReadonlySet<string>;
+  calculationIds: ReadonlySet<string>;
+  calculations: ReadonlyMap<string, AnalysisCalculation>;
+  columnIds: ReadonlySet<string>;
+  expectedColumns: readonly AnalysisResultColumn[];
+}
+
 function validateVisualPlanReferences(
-  plan,
-  context,
-  path,
+  plan: z.output<typeof visualPlanSchema>,
+  context: IssueContext,
+  path: string,
   {
     datasetIds,
     parameterIds,
@@ -501,8 +874,8 @@ function validateVisualPlanReferences(
     calculations,
     columnIds,
     expectedColumns,
-  },
-) {
+  }: VisualPlanReferenceScope,
+): Set<string> {
   const referencedDatasets = [
     plan.datasetId,
     ...plan.joins.map((join) => join.datasetId),
@@ -607,8 +980,8 @@ const definitionBaseSchema = z
   })
   .strict();
 
-export const analysisDefinitionSchema = definitionBaseSchema.superRefine(
-  (definition, context) => {
+export const analysisDefinitionSchema: z.ZodType<AnalysisDefinition> =
+  definitionBaseSchema.superRefine((definition, context) => {
     const datasetIds = addDuplicateIssues(
       definition.datasets,
       context,
@@ -734,7 +1107,7 @@ export const analysisDefinitionSchema = definitionBaseSchema.superRefine(
         context,
         "source.datasetIds",
       );
-      const occupiedOffsets = new Set();
+      const occupiedOffsets = new Set<number>();
       for (const [
         index,
         binding,
@@ -825,10 +1198,10 @@ export const analysisDefinitionSchema = definitionBaseSchema.superRefine(
       ]),
     );
     function hasCalculationCycle(
-      id,
-      visiting = new Set(),
-      visited = new Set(),
-    ) {
+      id: string,
+      visiting = new Set<string>(),
+      visited = new Set<string>(),
+    ): boolean {
       if (visiting.has(id)) return true;
       if (visited.has(id)) return false;
       visiting.add(id);
@@ -887,7 +1260,9 @@ export const analysisDefinitionSchema = definitionBaseSchema.superRefine(
       }
     }
 
-    const reporting = [
+    const reporting: ReadonlyArray<
+      readonly [keyof AnalysisDefinition["reporting"], AnalysisValueType]
+    > = [
       ["currencyParameterId", "currency"],
       ["timezoneParameterId", "string"],
       ["dateFromParameterId", "date"],
@@ -939,8 +1314,7 @@ export const analysisDefinitionSchema = definitionBaseSchema.superRefine(
           });
       }
     }
-  },
-);
+  }) as ContractSchema<typeof definitionBaseSchema, AnalysisDefinition>;
 
 const sourceIdentitySchema = z
   .object({
@@ -1213,8 +1587,8 @@ const resultBaseSchema = z.discriminatedUnion("status", [
     .strict(),
 ]);
 
-export const analysisExecutionResultSchema = resultBaseSchema.superRefine(
-  (result, context) => {
+export const analysisExecutionResultSchema: z.ZodType<AnalysisExecutionResult> =
+  resultBaseSchema.superRefine((result, context) => {
     const sourceIds = addDuplicateIssues(
       result.sourceVersions.map((value) => ({ id: value.datasetId })),
       context,
@@ -1289,7 +1663,7 @@ export const analysisExecutionResultSchema = resultBaseSchema.superRefine(
           message: `Unknown row-grain key: ${key}`,
         });
     }
-    const grainTuples = new Set();
+    const grainTuples = new Set<string>();
     for (const [rowIndex, row] of result.data.rows.entries()) {
       for (const id of columnIds) {
         if (!(id in row.values))
@@ -1390,13 +1764,20 @@ export const analysisExecutionResultSchema = resultBaseSchema.superRefine(
         path: ["data", "window"],
         message: "Truncated row counts are inconsistent",
       });
-  },
-);
+  }) as ContractSchema<typeof resultBaseSchema, AnalysisExecutionResult>;
 
-function reason(code, path, message) {
+function reason(
+  code: string,
+  path: string,
+  message: string,
+): AnalysisCompatibilityReason {
   return { code, path, message };
 }
-function compareExactKeys(record, declarations, requiredOnly) {
+function compareExactKeys(
+  record: Record<string, AnalysisScalar>,
+  declarations: readonly { id: string; required?: boolean }[],
+  requiredOnly: boolean,
+): { unknown: string[]; missing: string[] } {
   const allowed = new Set(declarations.map((value) => value.id));
   const required = declarations
     .filter((value) => !requiredOnly || value.required)
@@ -1407,10 +1788,13 @@ function compareExactKeys(record, declarations, requiredOnly) {
   };
 }
 
-export function checkAnalysisResultCompatibility(definitionInput, resultInput) {
+export function checkAnalysisResultCompatibility(
+  definitionInput: unknown,
+  resultInput: unknown,
+): AnalysisCompatibility {
   const definitionParse = analysisDefinitionSchema.safeParse(definitionInput);
   const resultParse = analysisExecutionResultSchema.safeParse(resultInput);
-  const reasons = [];
+  const reasons: AnalysisCompatibilityReason[] = [];
   if (!definitionParse.success)
     reasons.push(
       ...definitionParse.error.issues.map((entry) =>
@@ -1424,8 +1808,10 @@ export function checkAnalysisResultCompatibility(definitionInput, resultInput) {
       ),
     );
   if (reasons.length > 0) return { compatible: false, reasons };
-  const definition = definitionParse.data;
-  const result = resultParse.data;
+  // Both parses succeeded here: any failure contributes at least one issue to
+  // `reasons`, which returns early above.
+  const definition = definitionParse.data!;
+  const result = resultParse.data!;
   if (result.definitionRef.definitionId !== definition.definitionId)
     reasons.push(
       reason(

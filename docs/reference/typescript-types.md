@@ -2,7 +2,7 @@
 title: TypeScript Types Reference
 type: reference
 status: active
-date: 2026-09-12
+date: 2026-10-07
 updated: 2026-09-19
 tags:
   [
@@ -27,9 +27,8 @@ related_code:
     "apps/frontend/src/types/watchlist.ts",
     "apps/frontend/src/lib/api/splits.ts",
     "packaging/electron/electron-api.d.ts",
-    "packages/types/src/electron.d.ts",
-    "packages/types/src/analysis.js",
-    "packages/types/src/analysis.d.ts",
+    "packages/types/src/electron.ts",
+    "packages/types/src/analysis.ts",
   ]
 ---
 
@@ -43,12 +42,18 @@ related_code:
 ## Contract Architecture (June 2026)
 
 The shared package also exposes `@vision/types/analysis`. Unlike generated HTTP types, it provides
-strict Zod runtime schemas plus paired TypeScript declarations for versioned analysis definitions and
-immutable execution results. The contract records scope, dataset and metric versions, exact decimal
+strict Zod runtime schemas, written in TypeScript beside their types, for versioned analysis
+definitions and immutable execution results. The contract records scope, dataset and metric versions, exact decimal
 values, coverage, pagination or truncation, and row lineage. Its compatibility checker fails closed
 without mutating a saved definition or prior result. See
 [[docs/reference/analysis-contract|Analysis Contract Reference]] and
 [[docs/adr/137-shared-analysis-definition-and-result-contract|ADR-137]].
+
+Both shared packages, `@vision/types` and `@vision/shared-utils`, are strict TypeScript source
+with no hand-written declaration files. Their `package.json` exports point at the `.ts` files, so
+Bun, Vite and the backend's checkJs program read the implementation's own types.
+`bun run typecheck:packages` checks them with their own strict configuration. See
+[[docs/adr/185-shared-packages-typescript|ADR-185]].
 
 Electron inter-process communication has a separate shared contract because it is not HTTP or
 OpenAPI. `packaging/electron/electron-api.d.ts`, beside the preload, owns all 23 invoke channels,

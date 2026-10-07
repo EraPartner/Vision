@@ -8,6 +8,7 @@
  * Both lists are append-only — the values are persisted — and share the same
  * canonical display order.
  */
+/** Portfolio recurrence cadences. The API boundary accepts only these values. */
 export const PORTFOLIO_RECURRENCE_INTERVALS = [
   "daily",
   "weekly",
@@ -15,8 +16,16 @@ export const PORTFOLIO_RECURRENCE_INTERVALS = [
   "monthly",
   "quarterly",
   "yearly",
-];
+] as const;
 
+export type RecurrenceInterval =
+  (typeof PORTFOLIO_RECURRENCE_INTERVALS)[number];
+
+/**
+ * Planned-transaction recurrence cadences. Mirrors
+ * `planned_transactions.recurrence_pattern`. The backend grammar also accepts a
+ * custom `every N days` form that is not in this tuple.
+ */
 export const PLANNED_RECURRENCE_PATTERNS = [
   "daily",
   "weekly",
@@ -24,4 +33,7 @@ export const PLANNED_RECURRENCE_PATTERNS = [
   "monthly",
   "quarterly",
   "yearly",
-];
+] as const;
+
+export type PlannedRecurrencePattern =
+  (typeof PLANNED_RECURRENCE_PATTERNS)[number];

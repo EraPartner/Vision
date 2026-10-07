@@ -9,16 +9,13 @@
  *   'Rome 2020'  → 'rome-2020'
  *   '  --weird-- ' → 'weird'
  *   'Café' → 'caf'
- *
- * @param {string} input
- * @returns {string}
  */
-export function slugify(input) {
+export function slugify(input: string): string {
   return String(input)
     .toLowerCase()
     .trim()
-    .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9-]/g, '')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '');
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
 }

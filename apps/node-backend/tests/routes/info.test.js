@@ -429,7 +429,7 @@ describe("Info Routes", () => {
       expect(result.snapshots[1].date).toBe("2026-03-04");
       expect(result.snapshotsTotal).toBe(5);
       // Pagination facts live in the body, not in envelope meta — the
-      // meta.pagination convention is retired (packages/types/src/api.js).
+      // meta.pagination convention is retired (packages/types/src/api.ts).
       expect(result.snapshotsLimit).toBe(2);
       expect(result.snapshotsOffset).toBe(0);
       expect(res.body.meta.requestId).toEqual(expect.any(String));

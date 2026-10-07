@@ -6,7 +6,7 @@
  * Pagination facts travel in the response BODY (snapshotsTotal / snapshotsLimit
  * / snapshotsOffset), the one convention the API uses — this endpoint was the
  * last emitter of the parallel `meta.pagination` shape, which is now retired
- * (packages/types/src/api.js). The body is a composite (current totals + the
+ * (packages/types/src/api.ts). The body is a composite (current totals + the
  * snapshot series), not a bare collection, so the list fields are prefixed with
  * the list they describe rather than being the bare `total/limit/offset` a
  * `{items, total}` collection body uses.

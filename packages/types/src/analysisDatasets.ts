@@ -1,6 +1,37 @@
-export const ANALYSIS_DATASET_CATALOG_VERSION = 1;
+export const ANALYSIS_DATASET_CATALOG_VERSION = 1 as const;
 
-const DATASETS = [
+export interface AnalysisDatasetJoinPath {
+  id: string;
+  toDatasetId: string;
+  cardinality: "many-to-one";
+  fields: string[];
+}
+
+export interface AnalysisDatasetDescriptor {
+  id:
+    | "transactions"
+    | "accounts"
+    | "holdings"
+    | "cash-flows"
+    | "positions"
+    | "cost-basis"
+    | "portfolio-history"
+    | "broker-history"
+    | "fx-history"
+    | "benchmark-history";
+  schemaVersion: 1;
+  relation: string;
+  grain: string;
+  authorizationScope: "local-user-database";
+  timeBasis: string;
+  currencySemantics: string;
+  signSemantics: string;
+  coverage: string;
+  primaryKey: string[];
+  joinPaths: AnalysisDatasetJoinPath[];
+}
+
+const DATASETS: AnalysisDatasetDescriptor[] = [
   {
     id: "transactions",
     schemaVersion: 1,
@@ -90,7 +121,7 @@ const DATASETS = [
   },
 ];
 
-function deepFreeze(value) {
+function deepFreeze<T>(value: T): T {
   if (value && typeof value === "object" && !Object.isFrozen(value)) {
     Object.freeze(value);
     for (const child of Object.values(value)) deepFreeze(child);
@@ -98,44 +129,58 @@ function deepFreeze(value) {
   return value;
 }
 
-export const ANALYSIS_FINANCIAL_DATASETS_V1 = deepFreeze(
-  [
-    ["positions", "one current investment position"],
-    ["cost-basis", "one current investment cost basis"],
-    ["portfolio-history", "one portfolio valuation per calendar date"],
-    ["broker-history", "one broker valuation per calendar date"],
-    ["fx-history", "one stored exchange rate per currency and date"],
-    ["benchmark-history", "one benchmark price per market date"],
-  ].map(([id, grain]) => ({
-    id,
-    schemaVersion: 1,
-    relation: `service:${id}@1`,
-    grain,
-    authorizationScope: "local-user-database",
-    timeBasis: "calendar dates; positions are current only",
-    currencySemantics:
-      "explicit reporting currency; missing dated rates retain partial coverage",
-    signSemantics:
-      "canonical portfolio replay; benchmark returns are price returns",
-    coverage:
-      "stored local evidence; benchmark explicitly requests provider data",
-    primaryKey:
-      id === "positions" || id === "cost-basis"
-        ? ["investment_id"]
-        : ["date", "currency"],
-    joinPaths: [],
-  })),
-);
+const FINANCIAL_DATASET_GRAINS: ReadonlyArray<
+  readonly [AnalysisDatasetDescriptor["id"], string]
+> = [
+  ["positions", "one current investment position"],
+  ["cost-basis", "one current investment cost basis"],
+  ["portfolio-history", "one portfolio valuation per calendar date"],
+  ["broker-history", "one broker valuation per calendar date"],
+  ["fx-history", "one stored exchange rate per currency and date"],
+  ["benchmark-history", "one benchmark price per market date"],
+];
 
-export const ANALYSIS_DATASETS_V1 = deepFreeze(DATASETS);
+export const ANALYSIS_FINANCIAL_DATASETS_V1: readonly AnalysisDatasetDescriptor[] =
+  deepFreeze(
+    FINANCIAL_DATASET_GRAINS.map(([id, grain]): AnalysisDatasetDescriptor => ({
+      id,
+      schemaVersion: 1,
+      relation: `service:${id}@1`,
+      grain,
+      authorizationScope: "local-user-database",
+      timeBasis: "calendar dates; positions are current only",
+      currencySemantics:
+        "explicit reporting currency; missing dated rates retain partial coverage",
+      signSemantics:
+        "canonical portfolio replay; benchmark returns are price returns",
+      coverage:
+        "stored local evidence; benchmark explicitly requests provider data",
+      primaryKey:
+        id === "positions" || id === "cost-basis"
+          ? ["investment_id"]
+          : ["date", "currency"],
+      joinPaths: [],
+    })),
+  );
 
-export function getAnalysisDataset(id, schemaVersion = 1) {
+export const ANALYSIS_DATASETS_V1: readonly AnalysisDatasetDescriptor[] =
+  deepFreeze(DATASETS);
+
+export function getAnalysisDataset(
+  id: string,
+  schemaVersion = 1,
+): AnalysisDatasetDescriptor | undefined {
   return [...ANALYSIS_DATASETS_V1, ...ANALYSIS_FINANCIAL_DATASETS_V1].find(
     (dataset) => dataset.id === id && dataset.schemaVersion === schemaVersion,
   );
 }
 
-export function assertAnalysisDatasetReference(reference) {
+export function assertAnalysisDatasetReference(reference: {
+  id: string;
+  schemaVersion: number;
+  authorizationScope: string;
+  requiredColumns?: string[];
+}): AnalysisDatasetDescriptor {
   const dataset = getAnalysisDataset(reference.id, reference.schemaVersion);
   if (!dataset) {
     throw new Error(

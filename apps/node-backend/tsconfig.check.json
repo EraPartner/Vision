@@ -11,7 +11,8 @@
     "noImplicitAny": false,
     "resolveJsonModule": true,
     "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "allowImportingTsExtensions": true
   },
   "include": ["src/**/*.js"],
   "exclude": ["**/*.test.js", "node_modules", "tests", "dist", "coverage"]

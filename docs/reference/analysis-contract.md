@@ -2,7 +2,7 @@
 title: Analysis Definition and Result Contract Reference
 type: reference
 status: active
-date: 2026-10-01
+date: 2026-10-07
 tags: [reference, analysis, contract, lineage, versioning, datasets, money]
 description: Exact version-1 shapes, invariants, compatibility rules, and acceptance fixtures for shared Vision financial analyses.
 aliases:
@@ -12,8 +12,7 @@ aliases:
     analysis result schema,
   ]
 related_code:
-  - packages/types/src/analysis.js
-  - packages/types/src/analysis.d.ts
+  - packages/types/src/analysis.ts
   - apps/node-backend/tests/analysisContract.test.js
   - apps/node-backend/tests/fixtures/analysis/referenceQuestionsV1.js
 ---
@@ -35,7 +34,7 @@ related_code:
 | `analysisDefinitionSchema`           | Strict runtime validator for saved definitions                 |
 | `analysisExecutionResultSchema`      | Strict runtime validator for immutable execution results       |
 | `checkAnalysisResultCompatibility()` | Non-mutating, fail-closed consumer compatibility check         |
-| `AnalysisDefinition`                 | TypeScript declaration paired with the runtime schema          |
+| `AnalysisDefinition`                 | TypeScript type the runtime schema is checked against          |
 | `AnalysisExecutionResult`            | Discriminated TypeScript result declaration                    |
 
 ## Unit provenance extension

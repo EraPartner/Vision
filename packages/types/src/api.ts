@@ -5,11 +5,14 @@
  * Success: { ok: true, data, meta? }
  * Failure: { ok: false, error: { code, message, details? } }
  *
- * This file carries only JSDoc typedefs and a re-export of ApiErrorCode — the
- * envelope has no runtime shape of its own, so nothing to instantiate here.
+ * This file carries only types and a re-export of ApiErrorCode — the envelope
+ * has no runtime shape of its own, so nothing to instantiate here.
  */
 
-export { ApiErrorCode } from './errors.js';
+import type { ApiErrorCodeValue } from "./errors.ts";
+
+export { ApiErrorCode } from "./errors.ts";
+export type { ApiErrorCodeValue } from "./errors.ts";
 
 /**
  * Pagination lives in the response BODY, not in `meta`.
@@ -39,35 +42,32 @@ export { ApiErrorCode } from './errors.js';
  * the correlation middleware), while route-specific facts such as `source`,
  * `provider`, or `computedAt` live beside it at the top level. Pagination does
  * NOT belong here — see the note above.
- *
- * @typedef {Record<string, unknown> & { requestId?: string }} ResponseMeta
  */
+export interface ResponseMeta {
+  requestId?: string;
+  [key: string]: unknown;
+}
 
-/**
- * Shape of an envelope error payload.
- *
- * @typedef {object} ApiError
- * @property {import('./errors.js').ApiErrorCodeValue} code
- * @property {string} message
- * @property {unknown} [details]
- */
+/** Shape of an envelope error payload. */
+export interface ApiError {
+  code: ApiErrorCodeValue;
+  message: string;
+  details?: unknown;
+}
 
-/**
- * Success envelope. Generic over the data payload.
- *
- * @template T
- * @typedef {{ ok: true, data: T, meta?: ResponseMeta }} ApiSuccess
- */
+/** Success envelope. Generic over the data payload. */
+export interface ApiSuccess<T> {
+  ok: true;
+  data: T;
+  meta?: ResponseMeta;
+}
 
-/**
- * Failure envelope.
- *
- * @typedef {{ ok: false, error: ApiError, meta?: ResponseMeta }} ApiFailure
- */
+/** Failure envelope. */
+export interface ApiFailure {
+  ok: false;
+  error: ApiError;
+  meta?: ResponseMeta;
+}
 
-/**
- * Full discriminated union.
- *
- * @template T
- * @typedef {ApiSuccess<T> | ApiFailure} ApiResponse
- */
+/** Full discriminated union. */
+export type ApiResponse<T> = ApiSuccess<T> | ApiFailure;
