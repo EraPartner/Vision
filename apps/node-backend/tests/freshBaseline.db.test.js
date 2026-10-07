@@ -7,7 +7,7 @@ import {
   FRESH_BASELINE_REVISION,
   installFreshBaseline,
 } from "../src/database/freshBaseline.ts";
-import { __readBaselineManifest as readBaselineManifest } from "../src/database/baselineManifest.ts";
+import { readBaselineManifest } from "../src/database/baselineManifest.ts";
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),

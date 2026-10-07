@@ -28,6 +28,8 @@ const PUBLIC_NAMED_EXPORTS = new Set([
   "apps/node-backend/src/services/aiEvaluation/localReliability.js:scoreLocalAiRun",
   "apps/node-backend/src/services/aiEvaluation/localReliability.js:summarizeLocalAiEvaluation",
   "apps/node-backend/src/lib/importBatchIds.ts:coercedIdSchema",
+  // Imported by the root baseline maintenance scripts, which this scan does not read.
+  "apps/node-backend/src/database/baselineManifest.ts:readBaselineManifest",
   // Named helpers mirrored by a stable runtime default object.
   "apps/node-backend/src/lib/calculations/splits.ts:roundToCents",
   "apps/node-backend/src/lib/calculations/splits.ts:validatePaymentAmount",

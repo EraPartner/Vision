@@ -228,6 +228,14 @@ describe("Validation Middleware", () => {
       expect(validateDateString("2026-13-01").valid).toBe(false);
     });
 
+    it("should reject non-string input such as a repeated query key", () => {
+      expect(validateDateString(["2026-01-15"])).toEqual({
+        valid: false,
+        error: "date must be in YYYY-MM-DD format",
+      });
+      expect(validateDateString(20260115).valid).toBe(false);
+    });
+
     it("should accept null/empty", () => {
       expect(validateDateString(null)).toEqual({ valid: true, value: null });
       expect(validateDateString("")).toEqual({ valid: true, value: null });

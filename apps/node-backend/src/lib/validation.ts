@@ -188,16 +188,16 @@ export function validateDateString(
   fieldName = "date",
 ): FieldValidationResult<string | null> {
   if (!value) return { valid: true, value: null };
-  // Raw request input; the regex below is the only shape check (historical).
-  const str = value as string;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+  // A repeated query key (`?start_date[]=...`) arrives as an array, which the
+  // regex would otherwise accept through string coercion.
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     return { valid: false, error: `${fieldName} must be in YYYY-MM-DD format` };
   }
-  const parsed = new Date(str);
+  const parsed = new Date(value);
   if (isNaN(parsed.getTime())) {
     return { valid: false, error: `${fieldName} is not a valid date` };
   }
-  return { valid: true, value: str };
+  return { valid: true, value };
 }
 
 export function assertYmd(
