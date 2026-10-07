@@ -232,6 +232,12 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 
 ## Recent Decisions
 
+### 2026-10-07: Python is type-checked with mypy --strict
+
+[[docs/adr/184-strict-python-type-checking|ADR-184]] checks Alembic env and migrations, repository
+scripts and the packaged Alembic wrapper with `mypy --strict` in a required CI job, using
+hash-pinned dev requirements.
+
 ### 2026-10-06: Remaining screens adopt the design system
 
 [[docs/adr/183-remaining-screens-redesign|ADR-183]] merges Portfolio and Performance, gives Net

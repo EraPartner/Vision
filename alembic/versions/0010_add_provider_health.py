@@ -17,7 +17,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade() -> None:
     op.execute(sa.text("""
         CREATE TABLE IF NOT EXISTS provider_health (
             provider              TEXT PRIMARY KEY,
@@ -34,6 +34,6 @@ def upgrade():
     ))
 
 
-def downgrade():
+def downgrade() -> None:
     op.execute(sa.text("DROP INDEX IF EXISTS idx_ph_kind"))
     op.execute(sa.text("DROP TABLE IF EXISTS provider_health"))

@@ -211,7 +211,7 @@ jobs:
         run: sh scripts/audit-js.sh
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Python deps audit — pip-audit on config/requirements.txt
+  # Python deps audit — pip-audit on config/requirements*.txt
   # ─────────────────────────────────────────────────────────────────────────────
   pip-audit:
     name: Deps Audit (Python)
@@ -232,7 +232,7 @@ jobs:
           python-version: "3.12"
 
       - name: Audit Python dependencies
-        run: pip install pip-audit==2.10.1 && pip-audit -r config/requirements.txt
+        run: pip install pip-audit==2.10.1 && pip-audit -r config/requirements.txt -r config/requirements-dev.txt
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Lint — frontend ESLint + backend ESLint
@@ -314,6 +314,38 @@ jobs:
 
       - name: Type-check backend (noImplicitAny ratchet)
         run: cd apps/node-backend && bun scripts/checkjs-ratchet.js
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Python type check — mypy --strict over Alembic env and migrations, repo
+  # scripts and their tests (config/mypy.ini). Dependencies come from the
+  # hash-pinned runtime and dev requirement files so mypy sees shipped versions.
+  # ─────────────────────────────────────────────────────────────────────────────
+  typecheck-python:
+    name: Type Check (Python)
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pinned Python dependencies
+        run: pip install --require-hashes -r config/requirements.txt -r config/requirements-dev.txt
+
+      - name: Type-check Python (mypy --strict)
+        run: python3 -m mypy --config-file config/mypy.ini
+
+      - name: Test Alembic audit callback
+        run: python3 scripts/tests/test_audit_migration_hook.py
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Verify generated artifacts — the committed locale TS files and the
@@ -639,6 +671,7 @@ jobs:
       - lint
       - typecheck
       - typecheck-backend
+      - typecheck-python
       - verify-generated
       - build-frontend
       - test-frontend
@@ -675,7 +708,7 @@ jobs:
             *) echo "Agent tooling did not pass: $AGENT_TOOLING_RESULT"; exit 1 ;;
           esac
 
-          # 'skipped' is tolerated here BY DESIGN: on a docs-only diff the eleven
+          # 'skipped' is tolerated here BY DESIGN: on a docs-only diff the
           # code jobs are gated off by `changes.outputs.code`, so they report
           # 'skipped' and this gate must still pass. `changes` and `secrets-scan`
           # always run, so a genuine upstream break still shows as failure.

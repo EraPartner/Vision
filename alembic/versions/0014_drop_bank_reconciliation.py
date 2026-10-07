@@ -17,7 +17,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade() -> None:
     # destructive-ok: shipped 2026-04-26, annotated retroactively. The bank-reconciliation feature
     # was removed from the application in the same release, so no running code reads these tables,
     # their triggers, or the enum (see docstring). Downgrade recreates the full structure.
@@ -31,7 +31,7 @@ def upgrade():
     op.execute(sa.text("DROP TYPE IF EXISTS reconciliation_match_status"))
 
 
-def downgrade():
+def downgrade() -> None:
     op.execute(sa.text("""
         CREATE TYPE reconciliation_match_status
             AS ENUM ('unmatched', 'auto', 'confirmed', 'manual', 'ignored')

@@ -17,7 +17,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade() -> None:
     # destructive-ok: shipped 2026-04-24, annotated retroactively. Runtime toggles were removed
     # app-wide in the same release (see docstring + docs/adr/035-remove-feature-flags), so nothing
     # reads feature_flags any more. Config table, not user data; downgrade recreates it.
@@ -28,7 +28,7 @@ def upgrade():
     op.execute(sa.text("DROP TABLE IF EXISTS feature_flags"))
 
 
-def downgrade():
+def downgrade() -> None:
     op.execute(
         sa.text("""
         CREATE TABLE IF NOT EXISTS feature_flags (

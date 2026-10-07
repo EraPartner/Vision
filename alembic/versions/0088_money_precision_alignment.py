@@ -142,7 +142,7 @@ MONEY_COLUMNS: "list[tuple[str, tuple[str, ...]]]" = [
 RUNTIME_MVS = ("mv_monthly_summary", "mv_category_totals", "mv_cashflow_daily")
 
 
-def _drop_runtime_mvs_bound_to_money_columns(conn) -> None:
+def _drop_runtime_mvs_bound_to_money_columns(conn: sa.engine.Connection) -> None:
     """Drop any of the three runtime MVs with a column-level dependency on a widened column.
 
     Dependencies of a view body live on its pg_rewrite rule (not the view relation), with
@@ -225,7 +225,7 @@ _AGG_SYNC_FN_18_4 = """
 _AGG_SYNC_FN_15_2 = _AGG_SYNC_FN_18_4.replace("NUMERIC(18, 4)", "NUMERIC(15, 2)")
 
 
-def _drop_legacy_overpayment_guard(conn) -> None:
+def _drop_legacy_overpayment_guard(conn: sa.engine.Connection) -> None:
     """Remove the pre-squash trigger that blocks retyping split_payments.amount.
 
     The consolidated migration chain never creates this object. Keeping the cleanup

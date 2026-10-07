@@ -113,7 +113,7 @@ _VIEWS_DDL = [
 ]
 
 
-def _drop_views(conn) -> None:
+def _drop_views(conn: sa.engine.Connection) -> None:
     # Dependencies on view columns are tracked via pg_rewrite rules (d.objid is
     # the rule OID, not the view OID), so we must bridge through pg_rewrite.
     result = conn.execute(sa.text("""
@@ -131,7 +131,7 @@ def _drop_views(conn) -> None:
         conn.execute(sa.text(f"DROP MATERIALIZED VIEW IF EXISTS {row[0]} CASCADE"))
 
 
-def _create_views(conn) -> None:
+def _create_views(conn: sa.engine.Connection) -> None:
     for _, view_ddl, index_ddl in _VIEWS_DDL:
         conn.execute(sa.text(view_ddl))
         conn.execute(sa.text(index_ddl))
