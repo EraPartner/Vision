@@ -41,7 +41,7 @@
     "puppeteer": "^25.3.0",
     "read-excel-file": "9.3.10",
     "saxes": "6.0.0",
-    "yahoo-finance2": "^4.0.0",
+    "yahoo-finance2": "^4.0.3",
     "zod": "^4.4.3"
   }
 }

@@ -82,7 +82,9 @@ describe("PortfolioCsvColumnMapper", () => {
         renderMapper(null, baseConfig());
         // LanguageProvider loads the locale async; wait for the translated note.
         expect(
-            await screen.findByText(/Map a date column/),
+            await screen.findByText(
+                /Map a date column and a symbol or name column/,
+            ),
         ).toBeInTheDocument();
         // Core mappings are visible; supplementary values remain discoverable.
         expect(screen.getByLabelText(/Date column/)).toBeVisible();
@@ -185,7 +187,9 @@ describe("PortfolioCsvColumnMapper", () => {
         );
 
         expect(
-            await screen.findByText(/Map a date column/),
+            await screen.findByText(
+                /Map a date column and a symbol or name column/,
+            ),
         ).toBeInTheDocument();
         expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     });
