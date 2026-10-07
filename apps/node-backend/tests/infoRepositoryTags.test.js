@@ -9,7 +9,7 @@ vi.mock("../src/services/currency/currencyConversionService.js", () =>
 
 import { query } from "../src/database/connection.ts";
 import { convertRowsToEur } from "../src/services/currency/currencyConversionService.js";
-import { tagInsightsRepository } from "../src/repositories/infoRepositoryTags.js";
+import { tagInsightsRepository } from "../src/repositories/infoRepositoryTags.ts";
 
 beforeEach(() => vi.clearAllMocks());
 

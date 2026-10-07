@@ -32,7 +32,7 @@ import {
   lockReconciliationAccountsAndHistory,
   readReconciliationSources,
   readReconciliationHistory,
-} from "../repositories/portfolioImportReconciliationRepository.js";
+} from "../repositories/portfolioImportReconciliationRepository.ts";
 import {
   lockPortfolioReferenceScope,
   lockPortfolioReferenceRows,
@@ -42,7 +42,7 @@ import {
   stagePortfolioReferenceRows,
   markPortfolioReferenceAwaitingReview,
   restagePortfolioReferencePolicyRow,
-} from "../repositories/portfolioImportReferenceRepository.js";
+} from "../repositories/portfolioImportReferenceRepository.ts";
 
 const FORMAT = "portfolio_performance_reference";
 const same = (a, b, places = 8) =>

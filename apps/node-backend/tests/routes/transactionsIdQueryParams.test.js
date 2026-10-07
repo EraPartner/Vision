@@ -43,7 +43,7 @@ import {
 import { mockLogger } from "../helpers/mockLogger.js";
 import { routeAgent, errEnvelope } from "../helpers/routeApp.js";
 
-vi.mock("../../src/repositories/transactionRepository.js", () =>
+vi.mock("../../src/repositories/transactionRepository.ts", () =>
   mockTransactionRepository(),
 );
 vi.mock("../../src/config/logger.ts", () => ({ logger: mockLogger() }));
@@ -68,7 +68,7 @@ vi.mock("../../src/services/transferReconciliationService.js", () => ({
   unmarkTransfer: vi.fn(),
 }));
 
-import transactionRepository from "../../src/repositories/transactionRepository.js";
+import transactionRepository from "../../src/repositories/transactionRepository.ts";
 import { markTransfer } from "../../src/services/transferReconciliationService.js";
 import { query as dbQuery } from "../../src/database/connection.ts";
 import { convertRowsToEur } from "../../src/services/currency/currencyConversionService.js";

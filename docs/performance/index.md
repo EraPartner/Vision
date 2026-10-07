@@ -115,7 +115,7 @@ Call-frequency telemetry is still needed before accepting the write and storage 
 index.
 
 The latest stamped-balance probe used the exact predicate and ordering from
-[[apps/node-backend/src/repositories/accountBalanceSql.js|accountBalanceSql.js]]. Its target
+[[apps/node-backend/src/repositories/accountBalanceSql.ts|accountBalanceSql.js]]. Its target
 account held 6,000 rows, including 30 balance-stamped rows.
 
 | Stamped-balance plan              | Execution | Shared hits | Retained plan shape                                                       |

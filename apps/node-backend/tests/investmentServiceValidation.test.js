@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // cast error (500 instead of 400) and negatives / 1e15 / "Infinity" inserted
 // cleanly into the valuation and Belgian property-tax math.
 
-vi.mock("../src/repositories/investmentRepository.js", () => ({
+vi.mock("../src/repositories/investmentRepository.ts", () => ({
   default: {
     create: vi.fn().mockResolvedValue({ id: 1 }),
     update: vi.fn().mockResolvedValue({ id: 1 }),
@@ -14,7 +14,7 @@ vi.mock("../src/repositories/investmentRepository.js", () => ({
   },
   pickInvestmentCreateFields: (body) => body,
 }));
-vi.mock("../src/repositories/portfolioTransactionRepository.js", () => ({
+vi.mock("../src/repositories/portfolioTransactionRepository.ts", () => ({
   default: {},
 }));
 vi.mock("../src/services/priceProviderService.js", () => ({
@@ -36,7 +36,7 @@ vi.mock("../src/services/portfolio/fxResolve.js", () => ({
   autoResolveFxRateToEur: vi.fn(),
 }));
 
-import investmentRepository from "../src/repositories/investmentRepository.js";
+import investmentRepository from "../src/repositories/investmentRepository.ts";
 import {
   createInvestment,
   updateInvestment,

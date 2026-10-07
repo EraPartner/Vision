@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   detectCategoryOutliers: vi.fn(),
 }));
 
-vi.mock("../src/repositories/insightDismissalRepository.js", () => ({
+vi.mock("../src/repositories/insightDismissalRepository.ts", () => ({
   default: {
     recipientExists: mocks.recipientExists,
     upsertSubscription: mocks.upsertSubscription,

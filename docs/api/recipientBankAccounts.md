@@ -2,7 +2,7 @@
 title: Recipient Bank Accounts API
 type: endpoint
 status: active
-date: 2026-08-31
+date: 2026-10-07
 updated: 2026-08-31
 tags:
   - api
@@ -16,7 +16,7 @@ aliases:
   - recipient banking
 related_code:
   - apps/node-backend/src/routes/recipientBankAccounts.js
-  - apps/node-backend/src/repositories/recipientBankAccountRepository.js
+  - apps/node-backend/src/repositories/recipientBankAccountRepository.ts
 ---
 
 # Recipient Bank Accounts API

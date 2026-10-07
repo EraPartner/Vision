@@ -8,8 +8,8 @@
  */
 
 import { query, withTransaction } from "../database/connection.ts";
-import { computedBalanceByCurrencyAggLateral } from "../repositories/accountBalanceSql.js";
-import { recipientRepository } from "../repositories/recipientRepository.js";
+import { computedBalanceByCurrencyAggLateral } from "../repositories/accountBalanceSql.ts";
+import { recipientRepository } from "../repositories/recipientRepository.ts";
 import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
 import { roundToCents, toDecimal, toNumber } from "../lib/money.ts";
 import { todayAppDateString } from "../lib/timezone.ts";

@@ -1,0 +1,122 @@
+import { query } from "../database/connection.ts";
+
+export type InsightDismissalRow = {
+  id: number;
+  kind: string;
+  recipient_id: number | null;
+  category_id: number | null;
+  month_key: string | null;
+  dismissed_at: Date;
+  deviation_at_dismiss: string | null;
+};
+
+export type InsightDigestStateRow = {
+  undismissed_count: number | null;
+  dirty_version: string | number;
+  computed_version: string | number | null;
+  computed_at: Date | null;
+  expires_at: Date | null;
+};
+
+export async function listDismissals(): Promise<
+  Omit<InsightDismissalRow, "id">[]
+> {
+  const result = await query<Omit<InsightDismissalRow, "id">>(
+    `SELECT kind, recipient_id, category_id,
+            to_char(month_start, 'YYYY-MM') AS month_key,
+            dismissed_at, deviation_at_dismiss
+       FROM insight_dismissals
+      ORDER BY id`,
+  );
+  return result.rows;
+}
+
+export async function recipientExists(recipientId: number): Promise<boolean> {
+  const result = await query<{ exists: boolean }>(
+    "SELECT EXISTS (SELECT 1 FROM recipients WHERE id = $1) AS exists",
+    [recipientId],
+  );
+  return result.rows[0]?.exists === true;
+}
+
+export async function upsertSubscription(
+  kind: string,
+  recipientId: number,
+): Promise<
+  | Pick<InsightDismissalRow, "id" | "kind" | "recipient_id" | "dismissed_at">
+  | undefined
+> {
+  const result = await query<
+    Pick<InsightDismissalRow, "id" | "kind" | "recipient_id" | "dismissed_at">
+  >(
+    `INSERT INTO insight_dismissals (kind, recipient_id)
+     VALUES ($1, $2)
+     ON CONFLICT (kind, recipient_id)
+       WHERE kind IN ('subscription_new', 'subscription_price_change')
+     DO UPDATE SET dismissed_at = insight_dismissals.dismissed_at
+     RETURNING id, kind, recipient_id, dismissed_at`,
+    [kind, recipientId],
+  );
+  return result.rows[0];
+}
+
+type OutlierDismissalRow = Omit<InsightDismissalRow, "recipient_id">;
+
+/** @param monthKey YYYY-MM */
+export async function upsertOutlier(
+  categoryId: number,
+  monthKey: string,
+  deviation: number,
+): Promise<OutlierDismissalRow | undefined> {
+  const result = await query<OutlierDismissalRow>(
+    `INSERT INTO insight_dismissals
+       (kind, category_id, month_start, deviation_at_dismiss)
+     VALUES ('category_outlier', $1, ($2 || '-01')::date, $3)
+     ON CONFLICT (category_id, month_start)
+       WHERE kind = 'category_outlier'
+     DO UPDATE SET dismissed_at = NOW(),
+                   deviation_at_dismiss = EXCLUDED.deviation_at_dismiss
+     RETURNING id, kind, category_id,
+               to_char(month_start, 'YYYY-MM') AS month_key,
+               dismissed_at, deviation_at_dismiss`,
+    [categoryId, monthKey, deviation],
+  );
+  return result.rows[0];
+}
+
+export async function getCountState(): Promise<
+  InsightDigestStateRow | undefined
+> {
+  const result = await query<InsightDigestStateRow>(
+    `SELECT undismissed_count, dirty_version, computed_version,
+            computed_at, expires_at
+       FROM insight_digest_state WHERE singleton_id = 1`,
+  );
+  return result.rows[0];
+}
+
+export async function saveCountIfVersion(
+  count: number,
+  version: number,
+): Promise<{ computed_at: Date } | undefined> {
+  const result = await query<{ computed_at: Date }>(
+    `UPDATE insight_digest_state
+        SET undismissed_count = $1,
+            computed_version = $2,
+            computed_at = NOW(),
+            expires_at = NOW() + INTERVAL '3 minutes'
+      WHERE singleton_id = 1 AND dirty_version = $2
+      RETURNING computed_at`,
+    [count, version],
+  );
+  return result.rows[0];
+}
+
+export default {
+  listDismissals,
+  recipientExists,
+  upsertSubscription,
+  upsertOutlier,
+  getCountState,
+  saveCountIfVersion,
+};

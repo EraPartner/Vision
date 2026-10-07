@@ -29,9 +29,9 @@ import { parseCategoryName } from "@vision/shared-utils";
 import { logger } from "../config/logger.ts";
 import { query, withTransaction } from "../database/connection.ts";
 import { normalizeForMatching } from "../lib/textNormalization.ts";
-import { recipientRepository } from "../repositories/recipientRepository.js";
-import { categoryRepository } from "../repositories/categoryRepository.js";
-import { recipientBankAccountRepository } from "../repositories/recipientBankAccountRepository.js";
+import { recipientRepository } from "../repositories/recipientRepository.ts";
+import { categoryRepository } from "../repositories/categoryRepository.ts";
+import { recipientBankAccountRepository } from "../repositories/recipientBankAccountRepository.ts";
 import {
   decodeCsvBuffer,
   normalizeCsvEncoding,

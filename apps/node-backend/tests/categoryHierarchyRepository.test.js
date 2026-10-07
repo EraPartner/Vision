@@ -11,7 +11,7 @@ import {
   updateCategoryNode,
   deleteCategoryNode,
   mergeCategoryNodes,
-} from "../src/repositories/categoryHierarchyRepository.js";
+} from "../src/repositories/categoryHierarchyRepository.ts";
 
 beforeEach(() => mockClientQuery.mockReset());
 

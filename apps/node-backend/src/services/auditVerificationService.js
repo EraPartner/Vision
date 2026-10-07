@@ -3,7 +3,7 @@ import { query } from "../database/connection.ts";
 import {
   readAuditHead,
   readAuditSegment,
-} from "../repositories/auditChainRepository.js";
+} from "../repositories/auditChainRepository.ts";
 import {
   AUDIT_CHAIN_GENESIS_HASH,
   canonicalAuditPayload,

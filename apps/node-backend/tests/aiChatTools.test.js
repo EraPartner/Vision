@@ -3,32 +3,32 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../src/repositories/transactionRepository.js", () => ({
+vi.mock("../src/repositories/transactionRepository.ts", () => ({
   transactionRepository: {
     getAll: vi.fn(),
   },
 }));
 
-vi.mock("../src/repositories/investmentRepository.js", () => ({
+vi.mock("../src/repositories/investmentRepository.ts", () => ({
   investmentRepository: {
     getAll: vi.fn(),
   },
 }));
 
-vi.mock("../src/repositories/portfolioTransactionRepository.js", () => ({
+vi.mock("../src/repositories/portfolioTransactionRepository.ts", () => ({
   portfolioTransactionRepository: {
     getAllByInvestmentIds: vi.fn(),
   },
 }));
 
-vi.mock("../src/repositories/plannedTransactionRepository.js", () => ({
+vi.mock("../src/repositories/plannedTransactionRepository.ts", () => ({
   plannedTransactionRepository: {
     getAll: vi.fn(),
     getById: vi.fn(),
   },
 }));
 
-vi.mock("../src/repositories/infoRepository.js", () => ({
+vi.mock("../src/repositories/infoRepository.ts", () => ({
   default: { getMonthlyFinancialSummary: vi.fn() },
 }));
 
@@ -37,11 +37,11 @@ vi.mock("../src/services/aiChat/tools/_financialMetrics.js", () => ({
   loadCanonicalPortfolioSummary: vi.fn(),
 }));
 
-import { transactionRepository } from "../src/repositories/transactionRepository.js";
-import { investmentRepository } from "../src/repositories/investmentRepository.js";
-import { portfolioTransactionRepository } from "../src/repositories/portfolioTransactionRepository.js";
-import { plannedTransactionRepository } from "../src/repositories/plannedTransactionRepository.js";
-import infoRepository from "../src/repositories/infoRepository.js";
+import { transactionRepository } from "../src/repositories/transactionRepository.ts";
+import { investmentRepository } from "../src/repositories/investmentRepository.ts";
+import { portfolioTransactionRepository } from "../src/repositories/portfolioTransactionRepository.ts";
+import { plannedTransactionRepository } from "../src/repositories/plannedTransactionRepository.ts";
+import infoRepository from "../src/repositories/infoRepository.ts";
 import {
   getAiDisplayCurrency,
   loadCanonicalPortfolioSummary,

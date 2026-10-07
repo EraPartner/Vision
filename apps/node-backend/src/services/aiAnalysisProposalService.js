@@ -4,7 +4,7 @@ import {
   getSavedAnalysis,
   updateSavedAnalysis,
 } from "./savedAnalysisService.js";
-import { getOllamaClient } from "../integrations/ollama/client.js";
+import { getOllamaClient } from "../integrations/ollama/client.ts";
 import settings from "../config/config.ts";
 
 function visualPlanFromSource(source) {

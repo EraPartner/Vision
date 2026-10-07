@@ -40,7 +40,7 @@ related_code:
   - apps/node-backend/src/services/categoryOutlierService.js
   - apps/node-backend/src/services/cashForecastInsightService.js
   - apps/node-backend/src/routes/info.js
-  - apps/node-backend/src/repositories/infoRepository.js
+  - apps/node-backend/src/repositories/infoRepository.ts
 ---
 
 # Statistics Feature
@@ -463,7 +463,7 @@ Two new query parameters added to `GET /api/transactions`:
 
 - `[[apps/node-backend/src/lib/filterBuilder.ts]]` — `buildTransactionWhere()` now accepts `categoryIds` and `transactionType` params
 - `[[apps/node-backend/src/routes/transactions.js]]` — `parseTransactionListQuery()` parses comma-separated `category_ids` and `transaction_type` from query string
-- `[[apps/node-backend/src/repositories/transactionRepository.js]]` — `getAllWithCount()` destructures and forwards filter params to service layer
+- `[[apps/node-backend/src/repositories/transactionRepository.ts]]` — `getAllWithCount()` destructures and forwards filter params to service layer
 
 ### Frontend Drillthrough Implementation
 

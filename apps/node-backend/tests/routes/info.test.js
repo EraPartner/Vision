@@ -29,7 +29,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockLogger } from "../helpers/mockLogger.js";
 import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.js";
 
-vi.mock("../../src/repositories/infoRepository.js", () => ({
+vi.mock("../../src/repositories/infoRepository.ts", () => ({
   default: {
     getStatistics: vi.fn(),
     getCategoryBreakdown: vi.fn(),
@@ -114,7 +114,7 @@ vi.mock("../../src/services/insightDismissalService.js", () => ({
   dismissInsight: mockDismissInsight,
 }));
 
-import infoRepository from "../../src/repositories/infoRepository.js";
+import infoRepository from "../../src/repositories/infoRepository.ts";
 import { logger } from "../../src/config/logger.ts";
 import {
   invalidatePortfolioCaches,

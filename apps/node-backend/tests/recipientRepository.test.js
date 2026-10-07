@@ -11,7 +11,7 @@ vi.mock("../src/lib/textNormalization.ts", () => ({
 }));
 
 import { query } from "../src/database/connection.ts";
-import recipientRepository from "../src/repositories/recipientRepository.js";
+import recipientRepository from "../src/repositories/recipientRepository.ts";
 
 describe("recipientRepository", () => {
   beforeEach(() => vi.clearAllMocks());

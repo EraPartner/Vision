@@ -3,9 +3,9 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { withTransaction } from "../../database/connection.ts";
 import { ConflictError } from "../../middleware/errorHandler.ts";
 import { toDecimal } from "../../lib/money.ts";
-import { getUnitEventsForInvestment } from "../../repositories/portfolioTxRepo.reads.js";
-import { findAssetTransferFingerprint } from "../../repositories/portfolioAssetTransferRepository.js";
-import { findAssetAdjustmentFingerprint } from "../../repositories/portfolioAssetAdjustmentRepository.js";
+import { getUnitEventsForInvestment } from "../../repositories/portfolioTxRepo.reads.ts";
+import { findAssetTransferFingerprint } from "../../repositories/portfolioAssetTransferRepository.ts";
+import { findAssetAdjustmentFingerprint } from "../../repositories/portfolioAssetAdjustmentRepository.ts";
 
 const scopes = new AsyncLocalStorage();
 const eventKey = (event) =>

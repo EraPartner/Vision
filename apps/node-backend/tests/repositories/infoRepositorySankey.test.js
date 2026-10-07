@@ -2,13 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockConnection } from "../helpers/repoMocks.js";
 
 vi.mock("../../src/database/connection.ts", () => mockConnection());
-vi.mock("../../src/repositories/infoRepositoryHelpers.js", () => ({
+vi.mock("../../src/repositories/infoRepositoryHelpers.ts", () => ({
   getIncludeTransfers: vi.fn(),
 }));
 
 import { query } from "../../src/database/connection.ts";
-import { getIncludeTransfers } from "../../src/repositories/infoRepositoryHelpers.js";
-import { getSankeyAggregates } from "../../src/repositories/infoRepositorySankey.js";
+import { getIncludeTransfers } from "../../src/repositories/infoRepositoryHelpers.ts";
+import { getSankeyAggregates } from "../../src/repositories/infoRepositorySankey.ts";
 
 beforeEach(() => {
   query.mockReset();

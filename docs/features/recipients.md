@@ -2,14 +2,14 @@
 title: Recipients
 type: feature
 status: active
-date: 2026-09-27
+date: 2026-10-07
 tags: [feature, recipients, transactions, payees, payers, merge, atomic]
 description: Recipient (payee/payer) management with atomic merge, normalization-based fuzzy matching, and UNIQUE constraints
 aliases:
   [recipients-feature, payees, payers, counterparties, recipient-management]
 related_code:
   - apps/node-backend/src/routes/recipients.js
-  - apps/node-backend/src/repositories/recipientRepository.js
+  - apps/node-backend/src/repositories/recipientRepository.ts
   - apps/node-backend/src/services/recipientMergeService.js
   - apps/node-backend/src/services/calculations/normalization.js
   - apps/frontend/src/features/recipients/

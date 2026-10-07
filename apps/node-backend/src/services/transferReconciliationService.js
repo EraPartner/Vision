@@ -13,7 +13,7 @@
  */
 
 import { query, withTransaction } from '../database/connection.ts';
-import { transactionRepository } from '../repositories/transactionRepository.js';
+import { transactionRepository } from '../repositories/transactionRepository.ts';
 import { resolveTransferMatches } from './calculations/transfers.js';
 import { scheduleAggregationRefresh } from './aggregationRefresh.js';
 import { invalidateStatisticsCaches } from './info/cache.js';

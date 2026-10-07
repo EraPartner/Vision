@@ -13,7 +13,7 @@ import {
 } from "../src/database/connection.ts";
 import transactionRepository, {
   clearTransactionCountCache,
-} from "../src/repositories/transactionRepository.js";
+} from "../src/repositories/transactionRepository.ts";
 import { getAdapter } from "../src/services/importPipeline/adapters/index.js";
 import { findBestRecipientMatches } from "../src/services/calculations/normalization.js";
 import {

@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockCurrencyConversion } from "../helpers/mockCurrencyConversion.js";
 
-vi.mock("../../src/repositories/infoRepositorySankey.js", () => ({
+vi.mock("../../src/repositories/infoRepositorySankey.ts", () => ({
   getSankeyAggregates: vi.fn(),
 }));
 vi.mock("../../src/services/currency/currencyConversionService.js", () =>
   mockCurrencyConversion(),
 );
-import { getSankeyAggregates } from "../../src/repositories/infoRepositorySankey.js";
+import { getSankeyAggregates } from "../../src/repositories/infoRepositorySankey.ts";
 import { convertRowsToEur } from "../../src/services/currency/currencyConversionService.js";
 import { computeSankeyFlow } from "../../src/services/calculations/aggregation/sankey.js";
 

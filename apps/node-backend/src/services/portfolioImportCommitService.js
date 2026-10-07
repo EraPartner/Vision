@@ -7,7 +7,7 @@ import {
 import {
   lockBatchForUpdate,
   setBatchAccount,
-} from "../repositories/portfolioImportBatchRepository.js";
+} from "../repositories/portfolioImportBatchRepository.ts";
 import { commitPortfolioImport } from "./portfolioImportPipeline/index.js";
 import { assertPortfolioImportAccount } from "./portfolioImportAccountService.js";
 import {
@@ -18,8 +18,8 @@ import {
   applyPortfolioImportReconciliation,
   getPortfolioImportRepairBatchIds,
 } from "./portfolioImportReconciliationService.js";
-import { lockReconciliationAccountsAndHistory } from "../repositories/portfolioImportReconciliationRepository.js";
-import { readReconciliationSources } from "../repositories/portfolioImportReconciliationRepository.js";
+import { lockReconciliationAccountsAndHistory } from "../repositories/portfolioImportReconciliationRepository.ts";
+import { readReconciliationSources } from "../repositories/portfolioImportReconciliationRepository.ts";
 import { invalidatePortfolioCaches } from "./info/cache.js";
 import {
   previewPortfolioAssetTransfer,
@@ -27,7 +27,7 @@ import {
 } from "./portfolio/portfolioAssetTransferService.js";
 import { previewPortfolioAssetAdjustment } from "./portfolio/portfolioAssetAdjustmentService.js";
 import { withPortfolioCustodyImportScope } from "./portfolio/portfolioCustodyImportScope.js";
-import { getEligibleYieldSourceHashes } from "../repositories/portfolioAssetAdjustmentRepository.js";
+import { getEligibleYieldSourceHashes } from "../repositories/portfolioAssetAdjustmentRepository.ts";
 
 function assertReviewable(batch, batchId) {
   if (!batch) throw new NotFoundError(`Import batch ${batchId} not found`);

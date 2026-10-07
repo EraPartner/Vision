@@ -10,8 +10,8 @@ import plannedTransactionRepository, {
   insertPlannedTransactionInTransaction,
   replaceLoanScheduleInTransaction,
   setPlannedTransactionTags,
-} from "../repositories/plannedTransactionRepository.js";
-import { stampAccountIdForUpdate } from "../repositories/transactionRepository.js";
+} from "../repositories/plannedTransactionRepository.ts";
+import { stampAccountIdForUpdate } from "../repositories/transactionRepository.ts";
 
 /**
  * @param {Record<string, any>} input

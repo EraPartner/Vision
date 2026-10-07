@@ -90,7 +90,7 @@ vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-vi.mock("../../src/repositories/importBatchRepository.js", () => ({
+vi.mock("../../src/repositories/importBatchRepository.ts", () => ({
   listBatches: vi.fn(),
   getBatch: vi.fn(),
   rollbackBatch: vi.fn(),
@@ -105,7 +105,7 @@ vi.mock("../../src/services/aggregationRefresh.js", () => ({
   scheduleMaterializedViewRefresh: vi.fn(),
 }));
 
-vi.mock("../../src/repositories/customParserConfigRepository.js", () => ({
+vi.mock("../../src/repositories/customParserConfigRepository.ts", () => ({
   default: {
     getAll: vi.fn(),
     getById: vi.fn(),
@@ -131,9 +131,9 @@ import {
   overrideRecipient,
   overrideCategory,
   categoryExists,
-} from "../../src/repositories/importBatchRepository.js";
+} from "../../src/repositories/importBatchRepository.ts";
 import multer from "multer";
-import customParserConfigRepository from "../../src/repositories/customParserConfigRepository.js";
+import customParserConfigRepository from "../../src/repositories/customParserConfigRepository.ts";
 import {
   clearForecastMcCaches,
   scheduleMaterializedViewRefresh,

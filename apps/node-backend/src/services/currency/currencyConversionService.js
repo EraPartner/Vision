@@ -34,7 +34,7 @@ import {
   getRateToEurForDate,
   clearHistoricalCache,
 } from "./rateFetcher.js";
-import { settingsRepository } from "../../repositories/settingsRepository.js";
+import { settingsRepository } from "../../repositories/settingsRepository.ts";
 
 /**
  * @typedef {import('../../types/rows.ts').ExchangeRateRow} ExchangeRateRow

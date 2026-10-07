@@ -5,9 +5,9 @@
  * results are ground-truth from the DB — never fabricated by the LLM.
  */
 
-import { transactionRepository } from "../../../repositories/transactionRepository.js";
+import { transactionRepository } from "../../../repositories/transactionRepository.ts";
 import { memoizeAsync } from "../toolCache.js";
-import infoRepository from "../../../repositories/infoRepository.js";
+import infoRepository from "../../../repositories/infoRepository.ts";
 import { getAiDisplayCurrency } from "./_financialMetrics.js";
 import settings from "../../../config/config.ts";
 import { toDecimal, roundToCents } from "../../../lib/money.ts";

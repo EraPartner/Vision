@@ -1014,7 +1014,7 @@ import { createTransaction } from "../services/transactionService.js";
 
 // routes/transactions.js
 // ESLint ERROR — no-repo-direct-from-route
-import { insertTransaction } from "../repositories/transactionRepository.js";
+import { insertTransaction } from "../repositories/transactionRepository.ts";
 ```
 
 The lint rule inspects the resolved import path: any file under `src/routes/` importing from `src/repositories/` triggers the error. Services may still import repositories freely.
@@ -1026,7 +1026,7 @@ The lint rule inspects the resolved import path: any file under `src/routes/` im
 The inverse edge is now guarded too. `vision-local/no-service-import-from-repo` (an **ERROR** on `src/repositories/**/*.js`) fires when a repository imports from `services/`, which would let the data-access layer pull in service state — a rate cache, a logger, provider health, or a service that opens its own `withTransaction`.
 
 ```javascript
-// repositories/tagRepository.js
+// repositories/tagRepository.ts
 // ESLint ERROR — no-service-import-from-repo
 import { convertToCurrency } from "../services/currency/currencyConversionService.js";
 ```

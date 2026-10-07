@@ -22,7 +22,7 @@ import { rollbackBatch } from "../src/services/portfolioImportBatchService.js";
 import { commitPortfolioAssetTransfer } from "../src/services/portfolio/portfolioAssetTransferService.js";
 import { toDecimal } from "../src/lib/money.ts";
 import { commitPortfolioAssetAdjustment } from "../src/services/portfolio/portfolioAssetAdjustmentService.js";
-import { getUnitEventsForInvestment } from "../src/repositories/portfolioTxRepo.reads.js";
+import { getUnitEventsForInvestment } from "../src/repositories/portfolioTxRepo.reads.ts";
 import { buildInvestmentSummaryCorePartitioned } from "@vision/shared-utils/portfolio";
 
 const pool = getTestPool(),

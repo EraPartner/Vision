@@ -5,7 +5,7 @@
  * to render year-over-year recipient spending charts.
  */
 
-import infoRepository from "../../../repositories/infoRepository.js";
+import infoRepository from "../../../repositories/infoRepository.ts";
 import { buildEnvelope } from "./_envelope.js";
 import { assertNoNaN } from "./_invariants.js";
 import { withStatisticsCache, statsKeyPart } from "./_statisticsCache.js";

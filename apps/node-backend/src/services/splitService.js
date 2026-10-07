@@ -2,7 +2,7 @@
 
 import crypto from "node:crypto";
 import { withTransaction } from "../database/connection.ts";
-import { appendAuditEvent } from "../repositories/auditChainRepository.js";
+import { appendAuditEvent } from "../repositories/auditChainRepository.ts";
 import {
   computeOwedSummary,
   normalizeMoneyAmount,
@@ -22,7 +22,7 @@ import splitRepository, {
   lockAndGetTotals,
   lockSplitForPayment,
   markSettledIfCovered,
-} from "../repositories/splitRepository.js";
+} from "../repositories/splitRepository.ts";
 
 async function writeSplitAudit(input) {
   const row = await splitRepository.writeAudit(input);

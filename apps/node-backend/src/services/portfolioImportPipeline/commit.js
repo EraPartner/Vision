@@ -16,9 +16,9 @@
 import { query, withTransaction } from "../../database/connection.ts";
 import { logger } from "../../config/logger.ts";
 import portfolioTransactionService from "../portfolio/portfolioTransactionService.js";
-import recipientRepository from "../../repositories/recipientRepository.js";
-import categoryRepository from "../../repositories/categoryRepository.js";
-import settingsRepository from "../../repositories/settingsRepository.js";
+import recipientRepository from "../../repositories/recipientRepository.ts";
+import categoryRepository from "../../repositories/categoryRepository.ts";
+import settingsRepository from "../../repositories/settingsRepository.ts";
 import { normalizeTransactionPayload } from "../portfolio/portfolioTransactionRules.js";
 import { autoResolveFxRateToEur } from "../portfolio/fxResolve.js";
 import { classifyBrokerageRow } from "../importPipeline/brokerageRouting.js";

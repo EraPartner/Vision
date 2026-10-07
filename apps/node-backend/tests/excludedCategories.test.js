@@ -16,7 +16,7 @@ vi.mock('../src/config/logger.ts', () => ({
 }));
 
 import { query } from '../src/database/connection.ts';
-import infoRepository from '../src/repositories/infoRepository.js';
+import infoRepository from '../src/repositories/infoRepository.ts';
 
 describe('Excluded Categories', () => {
   beforeEach(() => {

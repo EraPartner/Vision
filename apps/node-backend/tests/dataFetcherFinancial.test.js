@@ -21,7 +21,7 @@ vi.mock('../src/services/calculations/aggregation/bankBalances.js', () => ({
 vi.mock('../src/services/calculations/aggregation/averageVsCurrent.js', () => ({
   computeAverageVsCurrent: vi.fn().mockResolvedValue({ data: {} }),
 }));
-vi.mock('../src/repositories/infoRepository.js', () => ({
+vi.mock('../src/repositories/infoRepository.ts', () => ({
   default: { getPlannedExpensesNextMonth: vi.fn().mockResolvedValue({ summary: {}, daily_data: [] }) },
 }));
 vi.mock('../src/config/logger.ts', () => ({
@@ -33,7 +33,7 @@ import { computeCategoryBreakdown } from '../src/services/calculations/aggregati
 import { computeRecipientInsights } from '../src/services/calculations/aggregation/recipient.js';
 import { computeBankBalances } from '../src/services/calculations/aggregation/bankBalances.js';
 import { computeAverageVsCurrent } from '../src/services/calculations/aggregation/averageVsCurrent.js';
-import infoRepository from '../src/repositories/infoRepository.js';
+import infoRepository from '../src/repositories/infoRepository.ts';
 import { fetchFinancialData } from '../src/services/reports/dataFetcher.js';
 
 beforeEach(() => {

@@ -28,7 +28,7 @@ related_code:
   [
     "apps/node-backend/src/routes/splits.js",
     "apps/node-backend/src/services/splitService.js",
-    "apps/node-backend/src/repositories/splitRepository.js",
+    "apps/node-backend/src/repositories/splitRepository.ts",
     "apps/node-backend/src/lib/calculations/splits.ts",
     "apps/node-backend/src/lib/money.ts",
     "apps/frontend/src/pages/OwesPage.tsx",

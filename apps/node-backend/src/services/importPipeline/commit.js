@@ -22,13 +22,13 @@ import {
 import {
   clearTransactionCountCache,
   transactionRepository,
-} from "../../repositories/transactionRepository.js";
-import { accountRepository } from "../../repositories/accountRepository.js";
+} from "../../repositories/transactionRepository.ts";
+import { accountRepository } from "../../repositories/accountRepository.ts";
 import {
   markStagingRowCommitted,
   markStagingRowDuplicate,
   markStagingRowError,
-} from "../../repositories/importBatchRepository.js";
+} from "../../repositories/importBatchRepository.ts";
 import { logger } from "../../config/logger.ts";
 import { formatDateToYmd } from "../../lib/dateFormat.ts";
 import { autoLinkTransactions } from "../plannedMatchService.js";

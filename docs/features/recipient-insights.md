@@ -2,7 +2,7 @@
 title: Recipient Insights Feature
 type: feature
 status: active
-date: 2026-04-09
+date: 2026-10-07
 updated: 2026-08-26
 last_modified: 2026-08-26
 tags: [feature, recipients, analytics, insights, frontend, merchant, exclusion-filters]
@@ -13,7 +13,7 @@ related_code:
   - apps/frontend/src/hooks/useStatistics.ts
   - apps/frontend/src/lib/api/aggregations.ts
   - apps/node-backend/src/routes/aggregations.js
-  - apps/node-backend/src/repositories/infoRepositoryRecipients.js
+  - apps/node-backend/src/repositories/infoRepositoryRecipients.ts
   - apps/node-backend/src/services/calculations/aggregation/recipient.js
 ---
 
@@ -158,7 +158,7 @@ Implementation notes:
 - Recipient repository `getById` now uses lateral/pre-aggregated joins (matching list-query enrichment strategy) instead of correlated subqueries, preserving response fields while improving scalability characteristics.
 - Recipient repository `update` now returns enriched recipient fields via a single CTE update-and-select query (instead of update + follow-up read), preserving payload semantics while reducing one round-trip.
 
-Code links: [[apps/node-backend/src/routes/aggregations.js]], [[apps/node-backend/src/repositories/infoRepositoryRecipients.js]], [[apps/node-backend/src/repositories/recipientRepository.js]]
+Code links: [[apps/node-backend/src/routes/aggregations.js]], [[apps/node-backend/src/repositories/infoRepositoryRecipients.ts]], [[apps/node-backend/src/repositories/recipientRepository.ts]]
 
 ## Related Features
 

@@ -9,7 +9,7 @@
  * is silent so the forecast endpoint remains usable in either case.
  */
 
-import accuracyRepo from "../../../repositories/cashflowForecastAccuracyRepository.js";
+import accuracyRepo from "../../../repositories/cashflowForecastAccuracyRepository.ts";
 import { logger } from "../../../config/logger.ts";
 
 /**
@@ -25,7 +25,7 @@ import { logger } from "../../../config/logger.ts";
  */
 
 /**
- * @param {import('../../../repositories/cashflowForecastAccuracyRepository.js').AccuracyRow} row
+ * @param {import('../../../repositories/cashflowForecastAccuracyRepository.ts').AccuracyRow} row
  * @returns {AccuracyRecord}
  */
 function toAccuracyRecord(row) {

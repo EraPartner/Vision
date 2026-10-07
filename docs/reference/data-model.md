@@ -1361,7 +1361,7 @@ All of them share these anchor columns; the remaining columns are the source's n
 - [[alembic/versions/0037_add_custom_parser_configs.py]] — original table (down_revision `0036_add_transactions_tx_hash`)
 - [[alembic/versions/0041_add_parser_config_kind.py]] — adds `kind` column; drops `uq_custom_parser_configs_name`; creates `uq_custom_parser_configs_name_kind`
 
-**Repository:** [[apps/node-backend/src/repositories/customParserConfigRepository.js]] — maps `config_json` → `config` for application callers; `kind` passed as filter parameter
+**Repository:** [[apps/node-backend/src/repositories/customParserConfigRepository.ts]] — maps `config_json` → `config` for application callers; `kind` passed as filter parameter
 
 **Backup:** Included in `.visionbak` exports (registered in `apps/node-backend/src/backup/coverage.ts`)
 

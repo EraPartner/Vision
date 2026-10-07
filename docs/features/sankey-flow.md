@@ -2,13 +2,13 @@
 title: Sankey Flow Diagram
 type: feature
 status: active
-date: 2026-04-24
+date: 2026-10-07
 tags: [feature, statistics, visualization, d3, sankey, flow, phase-7, analytics]
 description: Interactive Sankey diagram showing income and funding-gap flow through spending categories for a selected year; displays top 12 categories and any savings or funding gap; available as "Flow" tab in Statistics page.
 aliases: [flow diagram, sankey, income flow, spending allocation]
 related_code:
   - apps/node-backend/src/services/calculations/aggregation/sankey.js
-  - apps/node-backend/src/repositories/infoRepositorySankey.js
+  - apps/node-backend/src/repositories/infoRepositorySankey.ts
   - apps/node-backend/src/routes/aggregations.js
   - apps/frontend/src/features/statistics/SankeyChart.tsx
   - apps/frontend/src/features/statistics/SankeyTab.tsx

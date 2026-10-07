@@ -28,7 +28,7 @@ vi.mock("../../src/services/portfolioImportBatchService.js", () => ({
 vi.mock("../../src/services/accountService.js", () => ({
   default: { get: vi.fn() },
 }));
-vi.mock("../../src/repositories/customParserConfigRepository.js", () => ({
+vi.mock("../../src/repositories/customParserConfigRepository.ts", () => ({
   default: {
     getAll: vi.fn(),
     getById: vi.fn(),

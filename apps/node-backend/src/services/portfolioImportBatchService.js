@@ -8,8 +8,8 @@
  */
 
 import portfolioTransactionService from "./portfolio/portfolioTransactionService.js";
-import portfolioTransactionRepository from "../repositories/portfolioTransactionRepository.js";
-import investmentRepository from "../repositories/investmentRepository.js";
+import portfolioTransactionRepository from "../repositories/portfolioTransactionRepository.ts";
+import investmentRepository from "../repositories/investmentRepository.ts";
 import { rollbackPortfolioAssetTransfersForBatch } from "./portfolio/portfolioAssetTransferService.js";
 import { rollbackPortfolioAssetAdjustmentsForBatch } from "./portfolio/portfolioAssetAdjustmentService.js";
 import {
@@ -26,7 +26,7 @@ import {
   getActiveAdoptionReceipts,
   lockReconciliationAccountsAndHistory,
   readReconciliationSources,
-} from "../repositories/portfolioImportReconciliationRepository.js";
+} from "../repositories/portfolioImportReconciliationRepository.ts";
 import {
   getRowForInvestmentCreation,
   getPreviewRows,
@@ -37,7 +37,7 @@ import {
   getCommittedRows,
   markBatchAborted,
   resetCommittedRowsToMatched,
-} from "../repositories/portfolioImportBatchRepository.js";
+} from "../repositories/portfolioImportBatchRepository.ts";
 
 const KINESIS_METAL_SYMBOLS = new Set(["KAU", "KAG"]);
 
@@ -46,7 +46,7 @@ export {
   getBatch,
   overrideInvestment,
   setBatchAccount,
-} from "../repositories/portfolioImportBatchRepository.js";
+} from "../repositories/portfolioImportBatchRepository.ts";
 
 /**
  * Build the portfolio-import preview consumed by the review page.

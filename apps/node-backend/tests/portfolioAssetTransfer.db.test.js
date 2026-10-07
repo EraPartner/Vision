@@ -15,7 +15,7 @@ import { closePool, withTransaction } from "../src/database/connection.ts";
 import {
   getRowsForPortfolioMath,
   getUnitEventsForInvestment,
-} from "../src/repositories/portfolioTxRepo.reads.js";
+} from "../src/repositories/portfolioTxRepo.reads.ts";
 import {
   commitPortfolioAssetTransfer,
   rollbackPortfolioAssetTransfersForBatch,

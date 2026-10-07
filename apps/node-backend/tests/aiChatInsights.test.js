@@ -1,25 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../src/repositories/infoRepository.js", () => ({
+vi.mock("../src/repositories/infoRepository.ts", () => ({
   infoRepository: {
     getBankBalances: vi.fn(),
     getAverageVsCurrentSpending: vi.fn(),
   },
 }));
 
-vi.mock("../src/repositories/watchlistRepository.js", () => ({
+vi.mock("../src/repositories/watchlistRepository.ts", () => ({
   watchlistRepository: {
     getAllWithCount: vi.fn(),
   },
 }));
 
-vi.mock("../src/repositories/categoryRepository.js", () => ({
+vi.mock("../src/repositories/categoryRepository.ts", () => ({
   categoryRepository: {
     getAll: vi.fn(),
   },
 }));
 
-vi.mock("../src/repositories/transactionRepository.js", () => ({
+vi.mock("../src/repositories/transactionRepository.ts", () => ({
   transactionRepository: {
     getAll: vi.fn(),
   },
@@ -33,10 +33,10 @@ vi.mock("../src/services/marketLookupService.js", () => ({
   getQuotes: vi.fn(),
 }));
 
-import { infoRepository } from "../src/repositories/infoRepository.js";
-import { watchlistRepository } from "../src/repositories/watchlistRepository.js";
-import { categoryRepository } from "../src/repositories/categoryRepository.js";
-import { transactionRepository } from "../src/repositories/transactionRepository.js";
+import { infoRepository } from "../src/repositories/infoRepository.ts";
+import { watchlistRepository } from "../src/repositories/watchlistRepository.ts";
+import { categoryRepository } from "../src/repositories/categoryRepository.ts";
+import { transactionRepository } from "../src/repositories/transactionRepository.ts";
 import { detectRecurringPatterns } from "../src/services/recurringDetectionService.js";
 import { getQuotes } from "../src/services/marketLookupService.js";
 import {

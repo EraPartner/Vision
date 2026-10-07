@@ -10,8 +10,8 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { mockLogger } from "../helpers/mockLogger.js";
 import { walkForwardBacktestRolling } from "../../src/services/calculations/forecast/backtest.js";
-import mcRollingCacheRepo from "../../src/repositories/cashflowForecastMcRollingRepository.js";
-import { infoRepository } from "../../src/repositories/infoRepository.js";
+import mcRollingCacheRepo from "../../src/repositories/cashflowForecastMcRollingRepository.ts";
+import { infoRepository } from "../../src/repositories/infoRepository.ts";
 import { __filterHash as filterHash } from "../../src/services/calculations/forecast/index.js";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -48,7 +48,7 @@ const stubMethod = (id) => ({
 
 // ─── mocks (hoisted by vitest) ────────────────────────────────────────────────
 
-vi.mock("../../src/repositories/infoRepository.js", () => ({
+vi.mock("../../src/repositories/infoRepository.ts", () => ({
   infoRepository: {
     // ADR-083 cache-key input (forecast/index.js filterHash).
     getIncludeTransfers: vi.fn(async () => false),
@@ -69,7 +69,7 @@ vi.mock("../../src/repositories/infoRepository.js", () => ({
 }));
 
 vi.mock(
-  "../../src/repositories/cashflowForecastMcRollingRepository.js",
+  "../../src/repositories/cashflowForecastMcRollingRepository.ts",
   () => ({
     default: {
       get: vi.fn(async () => null),
@@ -79,7 +79,7 @@ vi.mock(
   }),
 );
 
-vi.mock("../../src/repositories/cashflowForecastMcRepository.js", () => ({
+vi.mock("../../src/repositories/cashflowForecastMcRepository.ts", () => ({
   default: {
     get: vi.fn(async () => null),
     isFresh: vi.fn(() => false),

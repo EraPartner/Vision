@@ -2,10 +2,10 @@
  * filterBuilder — centralized SQL WHERE/JOIN builders for transaction-like queries.
  *
  * Consolidates filter shapes previously duplicated across:
- *   - repositories/transactionRepository.js  (buildWhereClause)
- *   - repositories/infoRepository.js         (excludedCategoryIds / excludedRecipientIds
+ *   - repositories/transactionRepository.ts  (buildWhereClause)
+ *   - repositories/infoRepository.ts         (excludedCategoryIds / excludedRecipientIds
  *                                             + bankAccount/date predicates)
- *   - repositories/splitRepository.js        (primary-recipient COALESCE pattern)
+ *   - repositories/splitRepository.ts        (primary-recipient COALESCE pattern)
  *
  * `buildTransactionWhere` and `buildExclusionClauses` take the
  * `TransactionWhereOptions` / `ExclusionClauseOptions` interfaces below. This

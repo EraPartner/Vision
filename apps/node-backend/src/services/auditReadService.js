@@ -1,5 +1,5 @@
 import { withTransaction } from "../database/connection.ts";
-import { readAuditSegment } from "../repositories/auditChainRepository.js";
+import { readAuditSegment } from "../repositories/auditChainRepository.ts";
 import { verifyAuditHistory } from "./auditVerificationService.js";
 
 /**

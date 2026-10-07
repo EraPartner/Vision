@@ -7,7 +7,7 @@
  * meta so the LLM is forced to communicate the approximation honestly.
  */
 
-import infoRepository from "../../../repositories/infoRepository.js";
+import infoRepository from "../../../repositories/infoRepository.ts";
 import { UNIT_BASED_ASSET_CLASSES } from "@vision/types/assetClasses";
 import settings from "../../../config/config.ts";
 import {

@@ -11,8 +11,8 @@
 import {
   getAccountLabel as loadAccountLabel,
   getUnitEventsForInvestment,
-} from "../../repositories/portfolioTxRepo.reads.js";
-import { hasAssetTransfersForInvestment } from "../../repositories/portfolioAssetTransferRepository.js";
+} from "../../repositories/portfolioTxRepo.reads.ts";
+import { hasAssetTransfersForInvestment } from "../../repositories/portfolioAssetTransferRepository.ts";
 import {
   areLotsFullyAssigned,
   partitionOversellDeficits,

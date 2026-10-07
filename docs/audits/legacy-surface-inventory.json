@@ -73,7 +73,7 @@
       "disposition": "Budgeting and portfolio imports use versioned fingerprints only. The guarded maintenance contract removed legacy tx_hash columns from the maintained installation and remains available for other installations.",
       "paths": [
         "alembic/versions/0103_import_identity_provenance.py",
-        "apps/node-backend/src/repositories/transactionRepository.js",
+        "apps/node-backend/src/repositories/transactionRepository.ts",
         "apps/node-backend/src/services/importPipeline/commit.js"
       ],
       "readers": "No current runtime reader.",
@@ -178,7 +178,7 @@
       "paths": [
         "alembic/versions/0001_initial_database_schema.py",
         "apps/node-backend/src/services/portfolioImportPipeline/validate.js",
-        "apps/node-backend/src/repositories/portfolioTxRepo.reads.js"
+        "apps/node-backend/src/repositories/portfolioTxRepo.reads.ts"
       ],
       "readers": "Portfolio repositories and import validation cast and read it.",
       "writers": "Current portfolio staging and canonical transaction writes use it.",
@@ -197,7 +197,7 @@
       "disposition": "Canonical APIs and every first-party create, edit, duplicate, undo, and recurrence path use account_id. The maintained schema has retired the compatibility columns; the guarded manual contract remains available for other installations.",
       "paths": [
         "alembic/manual/contract_drop_bank_account/up.sql",
-        "apps/node-backend/src/repositories/transactionRepository.js",
+        "apps/node-backend/src/repositories/transactionRepository.ts",
         "apps/frontend/src/features/transactions/components/AddTransactionSheet.tsx"
       ],
       "readers": "Responses project the bank_account display label from accounts.name; request schemas reject bank_account.",
@@ -217,7 +217,7 @@
       "disposition": "First-party readers and writers use account_statement_balances only. The guarded maintenance contract removed both redundant scalar columns from the maintained installation and remains available for other installations.",
       "paths": [
         "alembic/versions/0098_account_statement_balances.py",
-        "apps/node-backend/src/repositories/accountRepository.js",
+        "apps/node-backend/src/repositories/accountRepository.ts",
         "apps/frontend/src/lib/api/accounts.ts"
       ],
       "readers": "Edit, reconcile, opening-balance, drift-date, and dashboard paths read statement_balances.",
@@ -321,7 +321,7 @@
       "classification": "historical-record-only",
       "disposition": "Removed after confirming that every caller imports the seven money and date helpers from their canonical owners.",
       "paths": [
-        "apps/node-backend/src/repositories/infoRepositoryHelpers.js",
+        "apps/node-backend/src/repositories/infoRepositoryHelpers.ts",
         "apps/node-backend/src/lib/money.ts",
         "apps/node-backend/src/lib/dateFormat.ts",
         "apps/node-backend/src/lib/dateKeys.ts"

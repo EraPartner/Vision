@@ -53,7 +53,7 @@ import {
 // read `undefined`. Force the documented fallback explicitly with a table-missing
 // error (42P01) so these cases exercise the same path deterministically whether
 // or not a database is reachable.
-vi.mock("../../src/repositories/cashflowForecastAccuracyRepository.js", () => {
+vi.mock("../../src/repositories/cashflowForecastAccuracyRepository.ts", () => {
   const undefinedTable = () => {
     const err = new Error(
       'relation "cashflow_forecast_accuracy" does not exist',
@@ -609,7 +609,7 @@ describe("orchestrator computeCashflowForecast", () => {
   });
 
   it("returns envelope with all methods and backtest diagnostics", async () => {
-    vi.doMock("../../src/repositories/infoRepository.js", () => {
+    vi.doMock("../../src/repositories/infoRepository.ts", () => {
       const history = syntheticHistory({ days: 400 });
       return {
         infoRepository: {
@@ -656,7 +656,7 @@ describe("orchestrator computeCashflowForecast", () => {
   });
 
   it("ensemble_imse present in methods output", async () => {
-    vi.doMock("../../src/repositories/infoRepository.js", () => {
+    vi.doMock("../../src/repositories/infoRepository.ts", () => {
       const history = syntheticHistory({ days: 200 });
       return {
         infoRepository: {
@@ -684,7 +684,7 @@ describe("orchestrator computeCashflowForecast", () => {
   });
 
   it("skips diagnostics when includeBacktest=false", async () => {
-    vi.doMock("../../src/repositories/infoRepository.js", () => {
+    vi.doMock("../../src/repositories/infoRepository.ts", () => {
       const history = syntheticHistory({ days: 200 });
       return {
         infoRepository: {

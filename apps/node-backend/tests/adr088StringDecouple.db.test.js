@@ -22,10 +22,10 @@ import {
   hasTestDatabase,
   releaseDbSuiteLock,
 } from "./setup/db.js";
-import { transactionRepository } from "../src/repositories/transactionRepository.js";
-import plannedTransactionPersistence from "../src/repositories/plannedTransactionRepository.js";
+import { transactionRepository } from "../src/repositories/transactionRepository.ts";
+import plannedTransactionPersistence from "../src/repositories/plannedTransactionRepository.ts";
 import plannedTransactionService from "../src/services/plannedTransactionService.js";
-import splitPersistence from "../src/repositories/splitRepository.js";
+import splitPersistence from "../src/repositories/splitRepository.ts";
 import splitService from "../src/services/splitService.js";
 import { streamCsvExport } from "../src/services/transactionExport.js";
 import { buildTransactionWhere } from "../src/lib/filterBuilder.ts";

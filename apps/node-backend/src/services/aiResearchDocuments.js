@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { getOllamaClient } from "../integrations/ollama/client.js";
-import * as repository from "../repositories/aiResearchDocumentRepository.js";
+import { getOllamaClient } from "../integrations/ollama/client.ts";
+import * as repository from "../repositories/aiResearchDocumentRepository.ts";
 
 const SUPPORTED_TYPES = new Set(["text/plain", "text/markdown", "text/html"]);
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -209,6 +209,7 @@ export async function searchResearchDocuments(
     mode === "semantic"
       ? []
       : await repository.keywordSearch(normalized, boundedLimit * 2);
+  /** @type {Array<{ row: import('../repositories/aiResearchDocumentRepository.ts').ResearchPassageRow, score: number }>} */
   let semantic = [];
   let semanticStatus = mode === "keyword" ? "not-requested" : "unavailable";
   if (mode !== "keyword") {

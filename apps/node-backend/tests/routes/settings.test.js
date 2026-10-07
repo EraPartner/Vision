@@ -11,7 +11,7 @@ import { routeAgent, errEnvelope } from "../helpers/routeApp.js";
 // The route imports its repository through services/settingsService.js, which
 // re-exports the default from this module — mocking the repository here
 // intercepts that same binding.
-vi.mock("../../src/repositories/settingsRepository.js", () => ({
+vi.mock("../../src/repositories/settingsRepository.ts", () => ({
   default: {
     getAll: vi.fn(),
     getRecord: vi.fn(),
@@ -26,7 +26,7 @@ vi.mock("../../src/config/logger.ts", () => ({
 }));
 
 import { ConflictError } from "../../src/middleware/errorHandler.ts";
-import settingsRepository from "../../src/repositories/settingsRepository.js";
+import settingsRepository from "../../src/repositories/settingsRepository.ts";
 
 const { default: settingsRouter } =
   await import("../../src/routes/settings.js");

@@ -12,7 +12,7 @@ import { mockTransactionRepository, mockDeduplication, mockTransferReconciliatio
 import { mockLogger } from '../helpers/mockLogger.js';
 import { routeAgent } from '../helpers/routeApp.js';
 
-vi.mock('../../src/repositories/transactionRepository.js', () => mockTransactionRepository());
+vi.mock('../../src/repositories/transactionRepository.ts', () => mockTransactionRepository());
 
 vi.mock('../../src/services/deduplication.js', () => mockDeduplication());
 

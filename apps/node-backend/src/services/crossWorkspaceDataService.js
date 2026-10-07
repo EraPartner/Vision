@@ -16,7 +16,7 @@ import {
 } from "./currency/currencyConversionService.js";
 import { getPortfolioSummary } from "./portfolio/portfolioSummaryService.js";
 import { toDecimal, toNumber, roundToCents } from "../lib/money.ts";
-import { computedBalanceByCurrencyAggLateral } from "../repositories/accountBalanceSql.js";
+import { computedBalanceByCurrencyAggLateral } from "../repositories/accountBalanceSql.ts";
 import { todayAppDateString } from "../lib/timezone.ts";
 
 // Roll the fine-grained `asset_class` taxonomy up into the coarse allocation

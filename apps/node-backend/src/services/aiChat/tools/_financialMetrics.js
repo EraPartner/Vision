@@ -1,4 +1,4 @@
-import { settingsRepository } from "../../../repositories/settingsRepository.js";
+import { settingsRepository } from "../../../repositories/settingsRepository.ts";
 import { getPortfolioSummary } from "../../portfolio/portfolioSummaryService.js";
 import { memoizeAsync } from "../toolCache.js";
 

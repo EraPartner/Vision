@@ -12,7 +12,7 @@ import { routeAgent, errEnvelope } from "../helpers/routeApp.js";
 // The route imports its repository through services/recipientBankAccountService.js,
 // which re-exports the default from this module — mocking the repository here
 // intercepts that same binding.
-vi.mock("../../src/repositories/recipientBankAccountRepository.js", () => ({
+vi.mock("../../src/repositories/recipientBankAccountRepository.ts", () => ({
   default: {
     getByRecipientId: vi.fn(),
     getByAccountNumber: vi.fn(),
@@ -28,7 +28,7 @@ vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-import bankAccountRepo from "../../src/repositories/recipientBankAccountRepository.js";
+import bankAccountRepo from "../../src/repositories/recipientBankAccountRepository.ts";
 
 const { default: recipientBankAccountsRouter } =
   await import("../../src/routes/recipientBankAccounts.js");

@@ -10,7 +10,7 @@
  * exclusions force a filtered scan.
  */
 
-import infoRepository from "../../../repositories/infoRepository.js";
+import infoRepository from "../../../repositories/infoRepository.ts";
 import { buildEnvelope } from "./_envelope.js";
 import { assertNoNaN, assertMonthlyInvariants } from "./_invariants.js";
 

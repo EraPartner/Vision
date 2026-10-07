@@ -4,12 +4,12 @@ type: endpoint
 method: GET, PUT, DELETE
 path: /api/settings
 description: User preferences and application settings
-date: 2026-10-06
+date: 2026-10-07
 updated: 2026-10-06
 tags: [api, settings, preferences, phase-3, auto-link, planned-match, june-2026]
 status: active
 aliases: [settings-api, preferences-api, user-settings, app-settings]
-related_code: [[apps/node-backend/src/routes/settings.js]], [[apps/node-backend/src/repositories/settingsRepository.js]], [[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx]]
+related_code: [[apps/node-backend/src/routes/settings.js]], [[apps/node-backend/src/repositories/settingsRepository.ts]], [[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx]]
 ---
 
 # Settings API
@@ -90,7 +90,7 @@ Storage behavior:
 Implementation note:
 
 - Route-level `validateSettingValue` is reused by single-key and bulk upserts. Its `dashboard_settings` schema delegates each exclusion ID to `validateIntArray`, so coercion and rejection happen before the repository is called ([[apps/node-backend/src/routes/settings.js]]).
-- The repository stores the already-validated value as JSONB and does not apply a second lossy `Number()` normalization pass. A malformed value therefore cannot become JSON `null` during persistence ([[apps/node-backend/src/repositories/settingsRepository.js]]).
+- The repository stores the already-validated value as JSONB and does not apply a second lossy `Number()` normalization pass. A malformed value therefore cannot become JSON `null` during persistence ([[apps/node-backend/src/repositories/settingsRepository.ts]]).
 
 ### PUT /api/settings
 

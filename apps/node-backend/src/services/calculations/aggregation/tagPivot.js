@@ -5,7 +5,7 @@
  * by tag. Used by the custom charts feature for per-tag series rendering.
  */
 
-import { tagInsightsRepository } from '../../../repositories/infoRepositoryTags.js';
+import { tagInsightsRepository } from '../../../repositories/infoRepositoryTags.ts';
 import { buildEnvelope } from './_envelope.js';
 import { assertNoNaN } from './_invariants.js';
 import { withStatisticsCache, statsKeyPart } from './_statisticsCache.js';

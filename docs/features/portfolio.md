@@ -147,7 +147,7 @@ Constraints:
 - `symbol` must be non-empty when set and globally unique (case-insensitive).
 - Edit history is timestamp-only via `updated_at` (no full value history).
 
-Code links: [[apps/frontend/src/features/portfolio/EditInvestmentDialog.tsx]], [[apps/frontend/src/features/portfolio/InvestmentDetailDialog.tsx]], [[apps/node-backend/src/repositories/investmentRepository.js]]
+Code links: [[apps/frontend/src/features/portfolio/EditInvestmentDialog.tsx]], [[apps/frontend/src/features/portfolio/InvestmentDetailDialog.tsx]], [[apps/node-backend/src/repositories/investmentRepository.ts]]
 
 ### Archiving and Restoring Investments
 
@@ -230,7 +230,7 @@ POST /api/investments/:id/transactions
 - Add/Edit portfolio transaction dialogs now expose an optional `fx_rate_to_eur` input so users can lock a manual booking FX per transaction.
 - Backend create path reuses preloaded investment metadata by passing `preloaded_asset_class` from the investment controller into `portfolioTransactionService.create(...)`, removing a duplicate asset-class lookup query while preserving validation and response behavior.
 - Investment live price refresh now applies bounded write concurrency (batched updates) instead of an unbounded all-at-once write fan-out, reducing pool contention risk while preserving refresh result payload semantics.
-- Investment list (`GET /api/investments`) and per-investment transaction list (`GET /api/investments/:id/transactions`) now use repository one-query pagination (`getAllWithCount`) instead of separate list/count round-trips, preserving filters, ordering, and response payloads while reducing DB calls ([[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/repositories/investmentRepository.js]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).
+- Investment list (`GET /api/investments`) and per-investment transaction list (`GET /api/investments/:id/transactions`) now use repository one-query pagination (`getAllWithCount`) instead of separate list/count round-trips, preserving filters, ordering, and response payloads while reducing DB calls ([[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/repositories/investmentRepository.ts]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.ts]]).
 - Portfolio transaction update now reuses `existing.asset_class` from the already-loaded transaction and falls back to a repository lookup only when missing, reducing redundant lookups while preserving validation and write behavior ([[apps/node-backend/src/services/portfolio/portfolioTransactionService.js]]).
 
 ### Editing Portfolio Transactions
@@ -253,7 +253,7 @@ Rules:
 
 When `fx_rate_to_eur` is left empty, portfolio FX conversion uses historical rates from `exchange_rates` by transaction date; missing historical rows are auto-backfilled from ECB historical data on startup, with nearest stored DB rate as fallback.
 
-Code links: [[apps/frontend/src/features/portfolio/AddPortfolioTxnDialog.tsx]], [[apps/frontend/src/features/portfolio/EditPortfolioTxnDialog.tsx]], [[apps/frontend/src/hooks/usePortfolio.ts]], [[apps/node-backend/src/services/portfolio/portfolioTransactionService.js]], [[apps/node-backend/src/services/portfolio/portfolioTransactionRules.js]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]], [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/main.js]]
+Code links: [[apps/frontend/src/features/portfolio/AddPortfolioTxnDialog.tsx]], [[apps/frontend/src/features/portfolio/EditPortfolioTxnDialog.tsx]], [[apps/frontend/src/hooks/usePortfolio.ts]], [[apps/node-backend/src/services/portfolio/portfolioTransactionService.js]], [[apps/node-backend/src/services/portfolio/portfolioTransactionRules.js]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.ts]], [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/main.js]]
 
 ## Holdings Calculation
 
@@ -394,7 +394,7 @@ Code links: [[apps/frontend/src/pages/portfolio/MetalsPage.tsx]], [[apps/fronten
   inheritance compatibility view. Migration 0087 later converted that shape to the canonical flat
   table used by current repositories.
 
-Code links: [[apps/node-backend/src/repositories/investmentRepository.js]], [[apps/node-backend/src/repositories/infoRepository.js]], [[apps/node-backend/src/services/priceProviderService.js]]
+Code links: [[apps/node-backend/src/repositories/investmentRepository.ts]], [[apps/node-backend/src/repositories/infoRepository.ts]], [[apps/node-backend/src/services/priceProviderService.js]]
 
 ## Net Worth Tracking
 
@@ -453,7 +453,7 @@ Current behavior:
   > [!info] Invested cost-basis — resolved by ADR-074 (2026-06-11)
   > The snapshot `invested` column uses transaction-date FX rates. As of ADR-074, the live Portfolio Summary endpoint also converts invested capital at transaction-date rates (no longer at today's rate). The Portfolio page's period chart and "Total invested" breakdown row now use the same semantics — the prior divergence is closed.
 
-Code links: [[apps/node-backend/src/repositories/infoRepository.js]], [[apps/node-backend/tests/infoRepository.test.js]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/lib/api.ts]], [[apps/node-backend/src/services/portfolio/snapshotBuilder.js]], [[apps/node-backend/tests/portfolioPerformanceSnapshotService.test.js]]
+Code links: [[apps/node-backend/src/repositories/infoRepository.ts]], [[apps/node-backend/tests/infoRepository.test.js]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/lib/api.ts]], [[apps/node-backend/src/services/portfolio/snapshotBuilder.js]], [[apps/node-backend/tests/portfolioPerformanceSnapshotService.test.js]]
 
 ## Cross-Currency Display Normalization
 
@@ -541,7 +541,7 @@ Holding names in Stocks, ETFs, Crypto, and Metals, watchlist names, and the Inve
 - If prices are >1 day old, age in days appears next to the date (e.g., "Prices as of 2026-04-25 (2 days old)").
 - If no live prices have ever been recorded, shows "No live prices recorded" to indicate data freshness uncertainty.
 
-Code links: [[apps/frontend/src/hooks/useOnlineStatus.ts]], [[apps/frontend/src/utils/priceStaleness.ts]], [[apps/frontend/src/features/portfolio/StalePriceIndicator.tsx]], [[apps/frontend/src/features/portfolio/StalePricesBanner.tsx]], [[apps/frontend/src/features/portfolio/PortfolioNewsFeed.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/hooks/portfolio/useInvestments.ts]], [[apps/node-backend/src/services/reports/index.js]], [[apps/node-backend/src/repositories/investmentRepository.js]]
+Code links: [[apps/frontend/src/hooks/useOnlineStatus.ts]], [[apps/frontend/src/utils/priceStaleness.ts]], [[apps/frontend/src/features/portfolio/StalePriceIndicator.tsx]], [[apps/frontend/src/features/portfolio/StalePricesBanner.tsx]], [[apps/frontend/src/features/portfolio/PortfolioNewsFeed.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/hooks/portfolio/useInvestments.ts]], [[apps/node-backend/src/services/reports/index.js]], [[apps/node-backend/src/repositories/investmentRepository.ts]]
 
 ## Performance Page Rewrite (Server-Computed Response)
 

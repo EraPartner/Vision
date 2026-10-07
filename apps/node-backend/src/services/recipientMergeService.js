@@ -21,11 +21,11 @@
  */
 import { withTransaction } from "../database/connection.ts";
 import { filterValidatedIdNumbers } from "../lib/validation.ts";
-import { recipientRepository } from "../repositories/recipientRepository.js";
-import { transactionRepository } from "../repositories/transactionRepository.js";
-import { splitRepository } from "../repositories/splitRepository.js";
-import { plannedTransactionRepository } from "../repositories/plannedTransactionRepository.js";
-import { recipientBankAccountRepository } from "../repositories/recipientBankAccountRepository.js";
+import { recipientRepository } from "../repositories/recipientRepository.ts";
+import { transactionRepository } from "../repositories/transactionRepository.ts";
+import { splitRepository } from "../repositories/splitRepository.ts";
+import { plannedTransactionRepository } from "../repositories/plannedTransactionRepository.ts";
+import { recipientBankAccountRepository } from "../repositories/recipientBankAccountRepository.ts";
 import { ConflictError, NotFoundError } from "../middleware/errorHandler.ts";
 
 /**

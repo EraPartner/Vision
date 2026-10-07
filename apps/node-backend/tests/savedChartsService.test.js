@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
   update: vi.fn(),
 }));
 
-vi.mock("../src/repositories/savedChartsRepository.js", () => ({
+vi.mock("../src/repositories/savedChartsRepository.ts", () => ({
   default: {
     getAll: vi.fn(),
     getCount: vi.fn(),

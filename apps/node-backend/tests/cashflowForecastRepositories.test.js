@@ -4,10 +4,10 @@ import { mockConnection } from './helpers/repoMocks.js';
 vi.mock('../src/database/connection.ts', () => mockConnection());
 
 import { query } from '../src/database/connection.ts';
-import mcRepo, { get as mcGet, isFresh as mcIsFresh, upsert as mcUpsert, getActiveUserIds } from '../src/repositories/cashflowForecastMcRepository.js';
-import rollingRepo, { get as rollingGet, isFresh as rollingIsFresh, upsert as rollingUpsert } from '../src/repositories/cashflowForecastMcRollingRepository.js';
-import accuracyRepo from '../src/repositories/cashflowForecastAccuracyRepository.js';
-import providerHealthRepo from '../src/repositories/providerHealthRepository.js';
+import mcRepo, { get as mcGet, isFresh as mcIsFresh, upsert as mcUpsert, getActiveUserIds } from '../src/repositories/cashflowForecastMcRepository.ts';
+import rollingRepo, { get as rollingGet, isFresh as rollingIsFresh, upsert as rollingUpsert } from '../src/repositories/cashflowForecastMcRollingRepository.ts';
+import accuracyRepo from '../src/repositories/cashflowForecastAccuracyRepository.ts';
+import providerHealthRepo from '../src/repositories/providerHealthRepository.ts';
 
 beforeEach(() => vi.clearAllMocks());
 

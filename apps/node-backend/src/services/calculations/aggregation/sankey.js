@@ -18,7 +18,7 @@
  * @param {number} [opts.year]  Defaults to current calendar year.
  */
 
-import { getSankeyAggregates } from "../../../repositories/infoRepositorySankey.js";
+import { getSankeyAggregates } from "../../../repositories/infoRepositorySankey.ts";
 import { convertRowsToEur } from "../../currency/currencyConversionService.js";
 import { buildEnvelope } from "./_envelope.js";
 import { assertNoNaN } from "./_invariants.js";

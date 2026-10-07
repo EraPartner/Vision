@@ -30,13 +30,13 @@ describe("migration 0093 cash-flow date keys", () => {
 
   it("keeps the public repository strings at explicit DATE conversion boundaries", () => {
     const accuracy = readRepoFile(
-      "apps/node-backend/src/repositories/cashflowForecastAccuracyRepository.js",
+      "apps/node-backend/src/repositories/cashflowForecastAccuracyRepository.ts",
     );
     const monthly = readRepoFile(
-      "apps/node-backend/src/repositories/cashflowForecastMcRepository.js",
+      "apps/node-backend/src/repositories/cashflowForecastMcRepository.ts",
     );
     const rolling = readRepoFile(
-      "apps/node-backend/src/repositories/cashflowForecastMcRollingRepository.js",
+      "apps/node-backend/src/repositories/cashflowForecastMcRollingRepository.ts",
     );
 
     expect(accuracy).toContain("($3 || '-01')::date");

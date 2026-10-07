@@ -48,7 +48,7 @@ related_code:
     "apps/node-backend/src/lib/csv.ts",
     "apps/node-backend/src/lib/urlSafety.ts",
     "apps/node-backend/src/services/investmentService.js",
-    "apps/node-backend/src/repositories/portfolioTxRepo.reads.js",
+    "apps/node-backend/src/repositories/portfolioTxRepo.reads.ts",
     "apps/node-backend/src/services/prices/priceProviderRegistry.js",
   ]
 ---

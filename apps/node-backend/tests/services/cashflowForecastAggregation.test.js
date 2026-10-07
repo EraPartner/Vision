@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-vi.mock('../../src/repositories/plannedTransactionRepository.js', () => ({
+vi.mock('../../src/repositories/plannedTransactionRepository.ts', () => ({
   default: { getForForecast: vi.fn() },
 }));
 
-import plannedTransactionRepository from '../../src/repositories/plannedTransactionRepository.js';
+import plannedTransactionRepository from '../../src/repositories/plannedTransactionRepository.ts';
 import { computeCashflowForecast } from '../../src/services/calculations/aggregation/cashflowForecast.js';
 
 describe('computeCashflowForecast — pg DATE handling', () => {

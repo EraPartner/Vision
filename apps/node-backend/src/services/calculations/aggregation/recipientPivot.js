@@ -6,7 +6,7 @@
  * category+recipient series rendering.
  */
 
-import { recipientInsightsRepository } from '../../../repositories/infoRepositoryRecipients.js';
+import { recipientInsightsRepository } from '../../../repositories/infoRepositoryRecipients.ts';
 import { buildEnvelope } from './_envelope.js';
 import { assertNoNaN } from './_invariants.js';
 import { withStatisticsCache, statsKeyPart } from './_statisticsCache.js';

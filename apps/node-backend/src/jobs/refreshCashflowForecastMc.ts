@@ -12,7 +12,7 @@
  */
 
 import { computeCashflowForecast } from '../services/calculations/forecast/index.js';
-import { getActiveUserIds } from '../repositories/cashflowForecastMcRepository.js';
+import { getActiveUserIds } from '../repositories/cashflowForecastMcRepository.ts';
 import { logger } from '../config/logger.ts';
 import { forEachConcurrent } from '../lib/concurrency.ts';
 

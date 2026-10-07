@@ -29,8 +29,8 @@ related_code:
     "apps/node-backend/src/services/importBatchService.js",
     "apps/node-backend/src/services/importPipeline/index.js",
     "apps/node-backend/src/lib/sse.ts",
-    "apps/node-backend/src/repositories/importBatchRepository.js",
-    "apps/node-backend/src/repositories/customParserConfigRepository.js",
+    "apps/node-backend/src/repositories/importBatchRepository.ts",
+    "apps/node-backend/src/repositories/customParserConfigRepository.ts",
   ]
 ---
 

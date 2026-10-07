@@ -1,4 +1,4 @@
-import insightDismissalRepository from "../repositories/insightDismissalRepository.js";
+import insightDismissalRepository from "../repositories/insightDismissalRepository.ts";
 import { detectCategoryOutliers } from "./categoryOutlierService.js";
 import { NotFoundError } from "../middleware/errorHandler.ts";
 

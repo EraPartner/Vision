@@ -25,7 +25,7 @@ import {
   validatePortfolioAssetTransferHistory,
 } from "./portfolio/portfolioAssetTransferService.js";
 import { previewPortfolioAssetAdjustment } from "./portfolio/portfolioAssetAdjustmentService.js";
-import { getEligibleYieldSourceHashes } from "../repositories/portfolioAssetAdjustmentRepository.js";
+import { getEligibleYieldSourceHashes } from "../repositories/portfolioAssetAdjustmentRepository.ts";
 import {
   compareAndSetReconciledTransaction,
   getActiveAdoptionReceipts,
@@ -35,11 +35,11 @@ import {
   readReconciliationHistory,
   readReconciliationSources,
   readReconciledProImportAccounts,
-} from "../repositories/portfolioImportReconciliationRepository.js";
+} from "../repositories/portfolioImportReconciliationRepository.ts";
 import {
   readDuplicateRepairContext,
   getActiveDuplicateRepairReceipts,
-} from "../repositories/portfolioImportDuplicateRepairRepository.js";
+} from "../repositories/portfolioImportDuplicateRepairRepository.ts";
 import {
   applyDuplicatePortfolioRepair,
   financialRepairImage,
@@ -1290,16 +1290,18 @@ export async function validatePortfolioImportAdoptionRollback(
       );
   }
   const removed = new Set(removalRows.map((row) => Number(row.id)));
-  const restored = new Map([
-    ...receipts.map((receipt) => [
-      Number(receipt.transaction_id),
-      receipt.before_data,
+  const restored = new Map(
+    /** @type {Array<[number, any]>} */ ([
+      ...receipts.map((receipt) => [
+        Number(receipt.transaction_id),
+        receipt.before_data,
+      ]),
+      ...repairs.map((receipt) => [
+        Number(receipt.legacy_transaction_id),
+        financialRepairImage(receipt.before_data.legacy),
+      ]),
     ]),
-    ...repairs.map((receipt) => [
-      Number(receipt.legacy_transaction_id),
-      financialRepairImage(receipt.before_data.legacy),
-    ]),
-  ]);
+  );
   assertProjectedHistory(history, [
     ...history
       .filter((row) =>

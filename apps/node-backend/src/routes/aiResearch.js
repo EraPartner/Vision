@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import settings from "../config/config.ts";
-import { getOllamaClient } from "../integrations/ollama/client.js";
+import { getOllamaClient } from "../integrations/ollama/client.ts";
 import {
   aiDisclosureGrantSchema,
   aiInvestigationRequestSchema,
@@ -86,6 +86,7 @@ router.put(
 
 router.get("/status", async (_req, res) => {
   const agentCloakConfig = await getAgentCloakConfig();
+  /** @type {import('../integrations/ollama/client.ts').OllamaModelSummary[]} */
   let localModels = [];
   let localStatus;
   try {

@@ -1,4 +1,4 @@
-import settingsRepository from "../repositories/settingsRepository.js";
+import settingsRepository from "../repositories/settingsRepository.ts";
 import { logger } from "../config/logger.ts";
 
 const DAY_MS = 24 * 60 * 60 * 1000;

@@ -45,7 +45,7 @@ import { refreshCashflowForecastMc } from "../jobs/refreshCashflowForecastMc.ts"
 import * as researchProviderKeyService from "../services/research/researchProviderKeyService.js";
 import { isInternetReachable } from "../lib/network.ts";
 import { createDailyJob } from "./dailyJobs.ts";
-import investmentRepository from "../repositories/investmentRepository.js";
+import investmentRepository from "../repositories/investmentRepository.ts";
 import type { InvestmentRow } from "../types/rows.ts";
 import type { ResolvedPrice } from "../services/priceProviderService.js";
 

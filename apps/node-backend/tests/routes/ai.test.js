@@ -51,7 +51,7 @@ vi.mock("../../src/services/aiChatService.js", async () => {
   };
 });
 
-vi.mock("../../src/integrations/ollama/client.js", () => {
+vi.mock("../../src/integrations/ollama/client.ts", () => {
   class OllamaError extends Error {
     constructor(message, { code } = {}) {
       super(message);

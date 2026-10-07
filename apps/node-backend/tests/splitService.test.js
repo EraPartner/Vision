@@ -35,15 +35,15 @@ vi.mock("../src/database/connection.ts", () =>
   }),
 );
 
-vi.mock("../src/repositories/splitRepository.js", () => ({
+vi.mock("../src/repositories/splitRepository.ts", () => ({
   default: mockRepository,
   ...mockPrimitives,
 }));
-vi.mock("../src/repositories/auditChainRepository.js", () => ({
+vi.mock("../src/repositories/auditChainRepository.ts", () => ({
   appendAuditEvent: vi.fn(),
 }));
 
-import { appendAuditEvent } from "../src/repositories/auditChainRepository.js";
+import { appendAuditEvent } from "../src/repositories/auditChainRepository.ts";
 
 import {
   addPayment,

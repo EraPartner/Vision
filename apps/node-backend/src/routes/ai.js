@@ -39,7 +39,7 @@ import { z } from "zod";
 import { logger } from "../config/logger.ts";
 import { createSseWriter } from "../lib/sse.ts";
 import settings from "../config/config.ts";
-import { getOllamaClient, OllamaError } from "../integrations/ollama/client.js";
+import { getOllamaClient, OllamaError } from "../integrations/ollama/client.ts";
 import {
   AiChatServiceError,
   createEmptyConversation,

@@ -981,7 +981,7 @@ Code links: [[apps/node-backend/tests/priceProviderService.test.js]], [[apps/nod
 - News image blank-box regression fix: backend CSP `img-src` now includes `https:` in [[apps/node-backend/src/main.js]], and news-card usage passes `fallbackClassName="hidden"` via [[apps/frontend/src/features/portfolio/PortfolioNewsFeed.tsx]] and [[apps/frontend/src/pages/research/MarketLookupPage.tsx]] with support added in [[apps/frontend/src/components/shared/RemoteNewsImage.tsx]].
 - Historical FX conversion coverage expanded: [[apps/node-backend/tests/currencyConversionService.test.js]] now validates sparse historical backfill behavior (missing `(currency,date)` pairs only), date-aware row conversion options (`useHistoricalRatesByDate`, `dateField`), and nearest-date fallback logic.
 - `getBankBalances(targetCurrency)` FX-history coverage expanded: [[apps/node-backend/tests/infoRepository.test.js]] now verifies `convertRowsToEur(..., targetCurrency, { useHistoricalRatesByDate: true, dateField: 'date' })` is used for both current balances and monthly history rows.
-- `apps/node-backend/tests/infoRepository.test.js` adds regression coverage for `/api/info/net-worth` snapshot sanitization of isolated one-day unit investment spikes, asserting outlier-day correction between neighbors and stable current investment totals ([[apps/node-backend/src/repositories/infoRepository.js]], [[apps/node-backend/tests/infoRepository.test.js]]).
+- `apps/node-backend/tests/infoRepository.test.js` adds regression coverage for `/api/info/net-worth` snapshot sanitization of isolated one-day unit investment spikes, asserting outlier-day correction between neighbors and stable current investment totals ([[apps/node-backend/src/repositories/infoRepository.ts]], [[apps/node-backend/tests/infoRepository.test.js]]).
 
 Code links: [[apps/frontend/src/features/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]], [[apps/frontend/src/features/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/features/portfolio/WatchlistChartDialog.tsx]], `apps/frontend/src/components/charts/` (chart.tsx removed in ADR-018 visx/d3 migration), [[apps/frontend/src/lib/dateUtils.ts]], [[apps/frontend/src/hooks/useStatistics.test.ts]], [[apps/frontend/src/features/statistics/statisticsUtils.ts]], [[apps/frontend/src/utils/currency.ts]], [[apps/frontend/src/stores/hydration/AppSettingsHydration.tsx]], [[apps/frontend/src/stores/hydration/SettingsHydration.tsx]], [[apps/node-backend/tests/routes/info.test.js]], [[apps/node-backend/tests/infoRepository.test.js]], [[apps/node-backend/tests/currencyConversionService.test.js]]
 
@@ -1416,7 +1416,7 @@ Related code: [[apps/node-backend/src/services/currency/currencyConversionServic
 > [!note] Schema initialization test archived
 > `schemaInit.test.js` was deleted in Phase 1 (2026-04-21) when `schemaInit.js` was replaced with Alembic migrations ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]).
 
-Related code: [[apps/node-backend/src/repositories/categoryRepository.js]], [[apps/node-backend/src/repositories/plannedTransactionRepository.js]]
+Related code: [[apps/node-backend/src/repositories/categoryRepository.ts]], [[apps/node-backend/src/repositories/plannedTransactionRepository.ts]]
 
 Validation run (passed): `bun vitest run tests/categoryRepository.test.js tests/plannedTransactionRepository.test.js`; `npm test -- --coverage`
 
@@ -1447,7 +1447,7 @@ Validation run (passed): `bun vitest run tests/categoryRepository.test.js tests/
   - `bun vitest run tests/categoryRepository.test.js tests/plannedTransactionRepository.test.js`
   - `npm test -- --coverage`
 - Latest coverage snapshot: statements **76.84%**, branches **61.72%**, functions **80.74%**, lines **80.29%**.
-- Related code: [[apps/node-backend/src/repositories/categoryRepository.js]], [[apps/node-backend/src/repositories/plannedTransactionRepository.js]]
+- Related code: [[apps/node-backend/src/repositories/categoryRepository.ts]], [[apps/node-backend/src/repositories/plannedTransactionRepository.ts]]
 
 ### Incremental backend test addendum (2026-04-11, adapter + raw import branches)
 
@@ -1508,7 +1508,7 @@ Coverage snapshot after this update: overall `81.12/66.86/84.49/84.53` and [[app
   - `getAllByInvestmentIds`: empty-normalized-id early return, id/type sanitization, clamped `perInvestmentLimit`/`limit`/`offset`, and omitted type/limit branch
   - `getCount`: single `investmentId` + `type`, normalized `investmentIds` array, and all-invalid-ids branch that skips `ANY(...)` and applies type-only filtering
   - `getSummary`: grouped summary row return path
-- Related code: [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]
+- Related code: [[apps/node-backend/src/repositories/portfolioTransactionRepository.ts]]
 - Validation runs (passed):
   - `bun vitest run tests/portfolioTransactionRepository.test.js` (25 tests)
   - `npm test -- --coverage` (827 tests)

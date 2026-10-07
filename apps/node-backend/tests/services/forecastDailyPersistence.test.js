@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ upsert: vi.fn() }));
-vi.mock("../../src/repositories/infoRepository.js", () => ({
+vi.mock("../../src/repositories/infoRepository.ts", () => ({
   infoRepository: {
     getIncludeTransfers: vi.fn(async () => false),
     getCashflowForecastData: vi.fn(async () => ({
@@ -12,7 +12,7 @@ vi.mock("../../src/repositories/infoRepository.js", () => ({
     })),
   },
 }));
-vi.mock("../../src/repositories/cashflowForecastMcRepository.js", () => ({
+vi.mock("../../src/repositories/cashflowForecastMcRepository.ts", () => ({
   default: { upsert: mocks.upsert },
 }));
 vi.mock("../../src/services/calculations/forecast/accuracyStore.js", () => ({

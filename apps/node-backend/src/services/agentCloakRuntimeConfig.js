@@ -1,5 +1,5 @@
 import settings from "../config/config.ts";
-import settingsRepository from "../repositories/settingsRepository.js";
+import settingsRepository from "../repositories/settingsRepository.ts";
 
 const DESKTOP_PREFERENCE_KEY = "agentcloak_desktop_enabled";
 

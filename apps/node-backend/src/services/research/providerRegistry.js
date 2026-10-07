@@ -19,7 +19,7 @@ import fredAdapter from './adapters/fredAdapter.js';
 import eurostatAdapter from './adapters/eurostatAdapter.js';
 import dbnomicsAdapter from './adapters/dbnomicsAdapter.js';
 import { createQuotaGovernor } from './quotaGovernor.js';
-import { createDbQuotaStore } from '../../repositories/providerQuotaRepository.js';
+import { createDbQuotaStore } from '../../repositories/providerQuotaRepository.ts';
 
 /**
  * provider key → adapter object. Yahoo/Eurostat/DBnomics need no key; the others

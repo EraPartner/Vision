@@ -21,7 +21,7 @@ import {
 import { mockLogger } from "../helpers/mockLogger.js";
 import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.js";
 
-vi.mock("../../src/repositories/transactionRepository.js", () =>
+vi.mock("../../src/repositories/transactionRepository.ts", () =>
   mockTransactionRepository(),
 );
 
@@ -44,7 +44,7 @@ vi.mock("../../src/services/currency/currencyConversionService.js", () =>
 
 vi.mock("../../src/database/connection.ts", () => mockTxConnection());
 
-vi.mock("../../src/repositories/accountRepository.js", () => {
+vi.mock("../../src/repositories/accountRepository.ts", () => {
   const accountRepository = { findActiveId: vi.fn(async () => 1) };
   return { accountRepository, default: accountRepository };
 });
@@ -64,7 +64,7 @@ vi.mock("../../src/services/transferReconciliationService.js", () => ({
   unmarkTransfer: vi.fn(),
 }));
 
-import transactionRepository from "../../src/repositories/transactionRepository.js";
+import transactionRepository from "../../src/repositories/transactionRepository.ts";
 import {
   unmarkTransfer,
   scheduleReconcile,

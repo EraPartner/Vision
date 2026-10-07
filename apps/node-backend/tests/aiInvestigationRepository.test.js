@@ -9,7 +9,7 @@ import { query, withTransaction } from "../src/database/connection.ts";
 import {
   clearProviderResult,
   createJob,
-} from "../src/repositories/aiInvestigationRepository.js";
+} from "../src/repositories/aiInvestigationRepository.ts";
 
 const request = {
   conversationId: null,

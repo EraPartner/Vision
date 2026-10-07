@@ -6,7 +6,7 @@ const repository = vi.hoisted(() => ({
   saveCountIfVersion: vi.fn(),
 }));
 
-vi.mock("../src/repositories/insightDismissalRepository.js", () => ({
+vi.mock("../src/repositories/insightDismissalRepository.ts", () => ({
   default: repository,
 }));
 

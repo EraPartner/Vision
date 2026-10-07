@@ -4,7 +4,7 @@ import { mockConnection } from './helpers/repoMocks.js';
 vi.mock('../src/database/connection.ts', () => mockConnection());
 
 import { query } from '../src/database/connection.ts';
-import tagRepository from '../src/repositories/tagRepository.js';
+import tagRepository from '../src/repositories/tagRepository.ts';
 
 describe('tagRepository.getAll', () => {
   beforeEach(() => vi.clearAllMocks());

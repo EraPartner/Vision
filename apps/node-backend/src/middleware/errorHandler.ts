@@ -147,7 +147,7 @@ export class UpstreamError extends AppError {
  *     Every other forwarded 4xx gets the generic reason phrase for its status.
  *     Reason: `.status`/`.statusCode` is a convention any library may adopt,
  *     and its message is not vetted. In this codebase the only other non-AppError
- *     with a status is `OllamaError` (integrations/ollama/client.js:25), which
+ *     with a status is `OllamaError` (integrations/ollama/client.ts:25), which
  *     stores the UPSTREAM provider's HTTP status and a message naming our
  *     internal call ("Ollama POST /api/chat failed with 404"); it is normally
  *     wrapped into an AppError (aiChatService.js:325), but if one ever escapes,

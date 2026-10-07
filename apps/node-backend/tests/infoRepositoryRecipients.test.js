@@ -10,7 +10,7 @@ vi.mock("../src/services/currency/currencyConversionService.js", () =>
 
 import { query } from "../src/database/connection.ts";
 import { convertRowsToEur } from "../src/services/currency/currencyConversionService.js";
-import { recipientInsightsRepository } from "../src/repositories/infoRepositoryRecipients.js";
+import { recipientInsightsRepository } from "../src/repositories/infoRepositoryRecipients.ts";
 
 beforeEach(() => vi.clearAllMocks());
 afterEach(() => vi.useRealTimers());

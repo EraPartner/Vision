@@ -7,7 +7,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { routeAgent, errEnvelope } from "../helpers/routeApp.js";
 
-vi.mock("../../src/repositories/tagRepository.js", () => ({
+vi.mock("../../src/repositories/tagRepository.ts", () => ({
   default: {
     getAll: vi.fn(),
     getCount: vi.fn(),
@@ -19,7 +19,7 @@ vi.mock("../../src/repositories/tagRepository.js", () => ({
   },
 }));
 
-import tagRepository from "../../src/repositories/tagRepository.js";
+import tagRepository from "../../src/repositories/tagRepository.ts";
 
 const { default: tagsRouter } = await import("../../src/routes/tags.js");
 

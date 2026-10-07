@@ -26,7 +26,7 @@
  * @module cashflowForecast
  */
 
-import plannedTransactionRepository from '../../../repositories/plannedTransactionRepository.js';
+import plannedTransactionRepository from '../../../repositories/plannedTransactionRepository.ts';
 import { expandOccurrences as expandRecurrence } from '../../../lib/calculations/recurrence.ts';
 import { buildEnvelope } from './_envelope.js';
 import { assertNoNaN } from './_invariants.js';

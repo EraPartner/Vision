@@ -18,7 +18,7 @@ const testRoot = path.join(backendRoot, "tests");
 // external entry point. They are not test-support seams and keep public names.
 const PUBLIC_NAMED_EXPORTS = new Set([
   // Public facades, domain helpers, and contract types.
-  "apps/node-backend/src/integrations/ollama/prompts.js:toOllamaMessage",
+  "apps/node-backend/src/integrations/ollama/prompts.ts:toOllamaMessage",
   "apps/node-backend/src/services/aiEvaluation/cloudPrivacy.js:createInspectionFetch",
   "apps/node-backend/src/services/aiEvaluation/cloudPrivacy.js:evaluateCloudPrivacyTrace",
   "apps/node-backend/src/services/aiEvaluation/cloudPrivacyCases.js:CLOUD_PRIVACY_EVALUATION_CASES",
@@ -34,14 +34,14 @@ const PUBLIC_NAMED_EXPORTS = new Set([
   "apps/node-backend/src/lib/calculations/splits.ts:roundToCents",
   "apps/node-backend/src/lib/calculations/splits.ts:validatePaymentAmount",
   "apps/node-backend/src/lib/urlSafety.ts:BlockedUrlError",
-  "apps/node-backend/src/repositories/infoRepository.js:clearMvCache",
+  "apps/node-backend/src/repositories/infoRepository.ts:clearMvCache",
   // Named methods mirrored by stable runtime repository default objects.
-  "apps/node-backend/src/repositories/cashflowForecastMcRepository.js:get",
-  "apps/node-backend/src/repositories/cashflowForecastMcRepository.js:isFresh",
-  "apps/node-backend/src/repositories/cashflowForecastMcRepository.js:upsert",
-  "apps/node-backend/src/repositories/cashflowForecastMcRollingRepository.js:get",
-  "apps/node-backend/src/repositories/cashflowForecastMcRollingRepository.js:isFresh",
-  "apps/node-backend/src/repositories/cashflowForecastMcRollingRepository.js:upsert",
+  "apps/node-backend/src/repositories/cashflowForecastMcRepository.ts:get",
+  "apps/node-backend/src/repositories/cashflowForecastMcRepository.ts:isFresh",
+  "apps/node-backend/src/repositories/cashflowForecastMcRepository.ts:upsert",
+  "apps/node-backend/src/repositories/cashflowForecastMcRollingRepository.ts:get",
+  "apps/node-backend/src/repositories/cashflowForecastMcRollingRepository.ts:isFresh",
+  "apps/node-backend/src/repositories/cashflowForecastMcRollingRepository.ts:upsert",
   "apps/node-backend/src/services/accountService.js:accountService",
   "apps/node-backend/src/services/importPipeline/adapters/index.js:createAdapter",
   "apps/node-backend/src/services/importPipeline/adapters/index.js:detectBank",

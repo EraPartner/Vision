@@ -13,8 +13,8 @@
 import { z } from "zod";
 import investmentRepository, {
   pickInvestmentCreateFields,
-} from "../repositories/investmentRepository.js";
-import portfolioTransactionRepository from "../repositories/portfolioTransactionRepository.js";
+} from "../repositories/investmentRepository.ts";
+import portfolioTransactionRepository from "../repositories/portfolioTransactionRepository.ts";
 import portfolioTransactionService from "./portfolio/portfolioTransactionService.js";
 import portfolioBrokerRetagService from "./portfolio/portfolioBrokerRetagService.js";
 import {

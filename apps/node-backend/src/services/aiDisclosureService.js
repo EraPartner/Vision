@@ -1,5 +1,5 @@
 import { validateDisclosureGrant } from "./cloudDisclosurePolicy.js";
-import * as repository from "../repositories/aiDisclosureRepository.js";
+import * as repository from "../repositories/aiDisclosureRepository.ts";
 
 export async function createDisclosureGrant(value) {
   return repository.createGrant(validateDisclosureGrant(value));

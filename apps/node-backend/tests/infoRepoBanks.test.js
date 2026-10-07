@@ -3,17 +3,17 @@ import { mockConnection } from "./helpers/repoMocks.js";
 
 vi.mock("../src/database/connection.ts", () => mockConnection());
 
-vi.mock("../src/repositories/infoRepositoryHelpers.js", async () => {
+vi.mock("../src/repositories/infoRepositoryHelpers.ts", async () => {
   const actual = await vi.importActual(
-    "../src/repositories/infoRepositoryHelpers.js",
+    "../src/repositories/infoRepositoryHelpers.ts",
   );
   return { ...actual, batchConvertGroupsWithHistoricalRateFallback: vi.fn() };
 });
 
 import { query } from "../src/database/connection.ts";
-import { batchConvertGroupsWithHistoricalRateFallback } from "../src/repositories/infoRepositoryHelpers.js";
-import { banksRepository } from "../src/repositories/infoRepositoryBanks.js";
-import { balanceProvenanceLateral } from "../src/repositories/accountBalanceSql.js";
+import { batchConvertGroupsWithHistoricalRateFallback } from "../src/repositories/infoRepositoryHelpers.ts";
+import { banksRepository } from "../src/repositories/infoRepositoryBanks.ts";
+import { balanceProvenanceLateral } from "../src/repositories/accountBalanceSql.ts";
 
 beforeEach(() => vi.clearAllMocks());
 

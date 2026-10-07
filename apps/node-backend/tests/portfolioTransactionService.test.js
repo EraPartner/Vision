@@ -11,8 +11,8 @@ const writes = vi.hoisted(() => ({
   updateFields: vi.fn(),
 }));
 
-vi.mock("../src/repositories/portfolioTxRepo.reads.js", () => reads);
-vi.mock("../src/repositories/portfolioTxRepo.writes.js", () => writes);
+vi.mock("../src/repositories/portfolioTxRepo.reads.ts", () => reads);
+vi.mock("../src/repositories/portfolioTxRepo.writes.ts", () => writes);
 vi.mock("../src/services/portfolio/portfolioHistoryWriteService.js", () => ({
   withPortfolioHistoryWrite: (_accounts, work) => work(),
 }));

@@ -8,7 +8,7 @@ import {
   UnauthorizedError,
   ValidationError,
 } from "../middleware/errorHandler.ts";
-import { createExperimentalCodexSession } from "../integrations/codex/experimentalSession.js";
+import { createExperimentalCodexSession } from "../integrations/codex/experimentalSession.ts";
 
 const router = Router();
 const session = createExperimentalCodexSession({

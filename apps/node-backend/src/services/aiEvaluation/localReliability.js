@@ -1,6 +1,6 @@
 import { performance } from "node:perf_hooks";
 
-import { buildChatMessages } from "../../integrations/ollama/prompts.js";
+import { buildChatMessages } from "../../integrations/ollama/prompts.ts";
 import { getToolNames, getToolSchemas } from "../aiChat/tools/index.js";
 
 export const LOCAL_AI_ACCEPTANCE_THRESHOLDS = Object.freeze({

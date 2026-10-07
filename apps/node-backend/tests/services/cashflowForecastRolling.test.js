@@ -29,7 +29,7 @@ const todayIso = () => todayAppDateString();
 const isoOffsetFromToday = (offsetDays) =>
   addDaysYmd(todayAppDateString(), offsetDays);
 
-vi.mock("../../src/repositories/infoRepository.js", () => ({
+vi.mock("../../src/repositories/infoRepository.ts", () => ({
   infoRepository: {
     // ADR-083 cache-key input (forecast/index.js filterHash).
     getIncludeTransfers: vi.fn(async () => false),

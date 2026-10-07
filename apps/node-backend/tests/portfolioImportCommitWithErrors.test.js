@@ -28,7 +28,7 @@ import {
   overrideInvestment,
   overrideInvestments,
   setBatchAccount,
-} from "../src/repositories/portfolioImportBatchRepository.js";
+} from "../src/repositories/portfolioImportBatchRepository.ts";
 
 beforeEach(() => {
   vi.clearAllMocks();

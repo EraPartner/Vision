@@ -31,8 +31,8 @@ import {
   hasTestDatabase,
   releaseDbSuiteLock,
 } from "./setup/db.js";
-import { banksRepository } from "../src/repositories/infoRepositoryBanks.js";
-import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.js";
+import { banksRepository } from "../src/repositories/infoRepositoryBanks.ts";
+import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.js";
 import { closePool } from "../src/database/connection.ts";
 import { todayAppDateString } from "../src/lib/timezone.ts";

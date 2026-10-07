@@ -1,0 +1,51 @@
+import { query } from "../database/connection.ts";
+
+type CashProjectionRow = {
+  month_end_net_cashflow: string | null;
+};
+
+/** @param month YYYY-MM */
+export async function getProjection(
+  month: string,
+  currency: string,
+  methodId: string,
+): Promise<number | undefined> {
+  const result = await query<CashProjectionRow>(
+    `SELECT month_end_net_cashflow
+       FROM insight_cash_projections
+      WHERE month_start = ($1 || '-01')::date
+        AND currency = $2 AND method_id = $3`,
+    [month, currency, methodId],
+  );
+  const value = result.rows[0]?.month_end_net_cashflow;
+  return value == null ? undefined : Number(value);
+}
+
+async function saveProjection(
+  month: string,
+  currency: string,
+  methodId: string,
+  value: number,
+): Promise<void> {
+  await query(
+    `WITH saved AS (
+       INSERT INTO insight_cash_projections
+         (month_start, currency, method_id, month_end_net_cashflow)
+       VALUES (($1 || '-01')::date, $2, $3, $4)
+       ON CONFLICT (month_start, currency, method_id)
+       DO UPDATE SET month_end_net_cashflow = EXCLUDED.month_end_net_cashflow,
+                     observed_at = NOW()
+       RETURNING 1
+     )
+     DELETE FROM insight_cash_projections
+      WHERE month_start < date_trunc('month', CURRENT_DATE) - INTERVAL '2 months'
+        AND EXISTS (SELECT 1 FROM saved)`,
+    [month, currency, methodId, value],
+  );
+}
+
+export default { getProjection, saveProjection };
+
+export {
+  saveProjection as __saveProjection,
+};

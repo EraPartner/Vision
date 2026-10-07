@@ -3,7 +3,7 @@ import { mockConnection } from "./helpers/repoMocks.js";
 
 vi.mock("../src/database/connection.ts", () => mockConnection());
 
-import { mapPortfolioTxRow } from "../src/repositories/portfolioTxRepo.reads.js";
+import { mapPortfolioTxRow } from "../src/repositories/portfolioTxRepo.reads.ts";
 
 describe("mapPortfolioTxRow — wire shape", () => {
   it("emits DATE columns as calendar-day strings, not raw pg Dates", () => {

@@ -16,7 +16,7 @@ import {
 import { mockLogger } from "../helpers/mockLogger.js";
 import { routeAgent } from "../helpers/routeApp.js";
 
-vi.mock("../../src/repositories/transactionRepository.js", () =>
+vi.mock("../../src/repositories/transactionRepository.ts", () =>
   mockTransactionRepository(),
 );
 
