@@ -4,7 +4,6 @@ import {
 } from "@/components/ui/tooltip";
 import { Filter, FilterX } from "lucide-react";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
-import { cn } from "@/lib/utils";
 
 interface ExclusionToggleProps {
   graphKey: string;
@@ -30,15 +29,11 @@ export function ExclusionToggle({
           <Button
             variant={isFiltered ? "default" : "outline"}
             size="sm"
-            className={cn(
-              "h-8 gap-2 text-xs ml-4 font-medium transition-colors",
-              isFiltered
-                ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                : 'hover:bg-muted'
-            )}
+            aria-pressed={isFiltered}
+            className="ml-4"
             onClick={() => onToggle(graphKey)}
           >
-            {isFiltered ? <Filter className="h-4 w-4" /> : <FilterX className="h-4 w-4" />}
+            {isFiltered ? <Filter aria-hidden="true" /> : <FilterX aria-hidden="true" />}
             {isFiltered ? t('exclusion.filtersActive') : t('exclusion.filtersIgnored')}
           </Button>
         </TooltipTrigger>

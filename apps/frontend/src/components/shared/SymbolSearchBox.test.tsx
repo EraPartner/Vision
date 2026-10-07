@@ -73,7 +73,7 @@ describe("SymbolSearchBox", () => {
             "aria-selected",
             "true",
         );
-        expect(screen.getAllByRole("option")[1]).toHaveClass("bg-muted/70");
+        expect(screen.getAllByRole("option")[1]).toHaveClass("bg-foreground/[0.06]");
 
         await user.keyboard("{Enter}");
         expect(onSelect).toHaveBeenCalledWith(microsoft);

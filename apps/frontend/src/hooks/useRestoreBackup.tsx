@@ -176,14 +176,14 @@ export function useRestoreBackup({ onSuccess }: RestoreOptions = {}) {
             <AlertDialogContent>
                 <AlertDialogHeader>
                     <AlertDialogTitle className="flex items-center gap-2">
-                        <Lock className="h-4 w-4" />
+                        <Lock className="h-4 w-4" aria-hidden="true" />
                         {t('settings.restore.passphraseTitle')}
                     </AlertDialogTitle>
                     <AlertDialogDescription>{t('settings.restore.passphraseDesc')}</AlertDialogDescription>
                 </AlertDialogHeader>
 
                 <div className="space-y-2 py-2">
-                    <Label htmlFor="restore-passphrase" className="text-sm">
+                    <Label htmlFor="restore-passphrase">
                         {t('settings.restore.passphraseLabel')}
                     </Label>
                     <div className="relative">
@@ -202,18 +202,24 @@ export function useRestoreBackup({ onSuccess }: RestoreOptions = {}) {
                             disabled={submitting}
                             className="pr-10"
                         />
-                        <button
+                        <Button
                             type="button"
+                            variant="ghost"
+                            size="icon"
                             onClick={() => setShowPassphrase((v) => !v)}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                            className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-label-secondary hover:text-foreground"
                             tabIndex={-1}
-                            aria-label={showPassphrase ? 'Hide passphrase' : 'Show passphrase'}
+                            aria-label={
+                                showPassphrase
+                                    ? t('settings.restore.hidePassphrase')
+                                    : t('settings.restore.showPassphrase')
+                            }
                         >
-                            {showPassphrase ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </button>
+                            {showPassphrase ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
+                        </Button>
                     </div>
                     {pendingFile && (
-                        <p className="text-xs text-muted-foreground font-mono break-all">
+                        <p className="break-all font-mono type-footnote text-label-secondary">
                             {pendingFile.split('/').pop()}
                         </p>
                     )}
@@ -227,7 +233,7 @@ export function useRestoreBackup({ onSuccess }: RestoreOptions = {}) {
                         onClick={() => { void handlePassphraseSubmit(); }}
                         disabled={!passphraseInput || submitting}
                     >
-                        {submitting && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+                        {submitting && <Loader2 className="animate-spin" aria-hidden="true" />}
                         {t('settings.restore.passphraseSubmit')}
                     </Button>
                 </AlertDialogFooter>

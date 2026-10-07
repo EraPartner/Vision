@@ -1,8 +1,11 @@
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { TextLink } from "@/components/shared/TextLink";
+import { cn } from "@/lib/utils";
 import { ChevronDown, X, CalendarClock } from "lucide-react";
 import { useEffect, useId, useState } from "react";
 import { formatCurrency } from "@/utils/currency";
-import { Link, useLocation } from "react-router";
+import { useLocation } from "react-router";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { numberFormatToLocale } from "@/utils/currency";
@@ -34,62 +37,75 @@ export function UpcomingPaymentsNotification() {
   if (visibleUpcoming.length === 0 || pathname !== "/") return null;
 
   return (
-    <Alert className="relative border-primary/30 bg-primary/5 mb-4">
-      <CalendarClock className="h-4 w-4 text-primary" />
-      <AlertTitle className="mb-0 pr-8 text-primary font-semibold">
-        <button type="button" aria-expanded={expanded} aria-controls={detailsId}
+    <Alert className="relative mb-4 border-primary/30 bg-primary/5 pr-12">
+      <CalendarClock className="h-4 w-4 text-primary" aria-hidden="true" />
+      <AlertTitle className="mb-0 text-primary">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          aria-expanded={expanded}
+          aria-controls={detailsId}
           onClick={() => setExpanded(!expanded)}
-          className="flex min-h-8 items-center gap-2 rounded-sm text-left focus-ring">
+          className="-mx-2 h-8 gap-2 px-2 type-headline text-primary hover:bg-primary/10 hover:text-primary"
+        >
           {tc('upcoming.count', visibleUpcoming.length)}
-          <ChevronDown aria-hidden="true" className={`h-4 w-4 transition-transform ${expanded ? "rotate-180" : ""}`} />
-        </button>
+          <ChevronDown
+            aria-hidden="true"
+            className={cn("transition-transform duration-fast", expanded && "rotate-180")}
+          />
+        </Button>
       </AlertTitle>
       <AlertDescription id={detailsId} hidden={!expanded} className="mt-2 space-y-1">
         {sortedUpcoming.slice(0, 5).map((pt) => (
-          <div key={pt.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm">
-            <span className="font-medium">
+          <div key={pt.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 type-body">
+            <span className="font-medium text-foreground">
               {pt.memo || pt.recipient_name || t('upcoming.unnamed')}
             </span>
-            <span className="flex items-center gap-2 text-muted-foreground">
+            <span className="flex items-center gap-2 text-label-secondary">
               <span>{formatDateStringWithAppSettings(pt.planned_date, appSettings.dateFormat)}</span>
-              <span className="font-semibold text-foreground">
+              <span className="font-medium tabular-nums text-foreground">
                 {formatCurrency(Math.abs(pt.amount), pt.currency || appSettings.defaultCurrency, locale, appSettings.showDecimalPlaces ?? 2)}
               </span>
-              <button
+              <Button
                 type="button"
-                className="inline-flex items-center justify-center h-8 w-8 shrink-0 focus-ring rounded-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 shrink-0 text-label-secondary hover:text-foreground [&_svg]:size-3"
                 title={t('upcoming.dismissPayment', { name: pt.memo || pt.recipient_name || t('upcoming.unnamed') })}
                 aria-label={t('upcoming.dismissPayment', { name: pt.memo || pt.recipient_name || t('upcoming.unnamed') })}
                 onClick={() => dismiss(pt)}
               >
-                <X className="h-3 w-3" />
-              </button>
+                <X aria-hidden="true" />
+              </Button>
             </span>
           </div>
         ))}
         {visibleUpcoming.length > 5 && (
-          <p className="text-xs text-muted-foreground">
+          <p className="type-footnote text-label-secondary">
             {t('upcoming.more', { n: String(visibleUpcoming.length - 5) })}
           </p>
         )}
         <div className="mt-2">
-          <Link
+          <TextLink
             to="/planned"
-            className="text-xs text-primary hover:underline font-medium inline-flex min-h-8 items-center rounded-sm focus-ring"
+            className="inline-flex min-h-8 items-center type-footnote font-medium"
           >
             {t('upcoming.viewAllLink')}
-          </Link>
+          </TextLink>
         </div>
       </AlertDescription>
-      <button
+      <Button
         type="button"
-        className="absolute top-2 right-2 inline-flex items-center justify-center h-8 w-8 shrink-0 focus-ring rounded-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+        variant="ghost"
+        size="icon"
+        className="absolute right-2 top-2 h-8 w-8 shrink-0 text-label-secondary hover:text-foreground"
         title={t('upcoming.dismissAll')}
         aria-label={t('upcoming.dismissAll')}
         onClick={() => dismiss(visibleUpcoming)}
       >
-        <X className="h-3 w-3" />
-      </button>
+        <X aria-hidden="true" />
+      </Button>
     </Alert>
   );
 }

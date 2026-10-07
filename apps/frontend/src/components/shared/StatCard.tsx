@@ -45,11 +45,11 @@ const statContentVariants = cva("", {
     defaultVariants: { size: "default" },
 });
 
-const statValueVariants = cva("font-bold tabular-nums", {
+const statValueVariants = cva("tabular-nums", {
     variants: {
         size: {
-            default: "text-2xl",
-            compact: "text-xl",
+            default: "type-title-1",
+            compact: "type-title-2",
         },
     },
     defaultVariants: { size: "default" },
@@ -141,7 +141,7 @@ export function StatCard({
                         <div
                             className={cn(
                                 statChipVariants({ size }),
-                                "text-muted-foreground",
+                                "text-label-tertiary",
                             )}
                         >
                             <Icon
@@ -209,7 +209,7 @@ export function StatCard({
                     {subtitle && (
                         <p
                             className={cn(
-                                "text-xs text-muted-foreground",
+                                "type-footnote text-label-secondary",
                                 size === "compact" ? "mt-0.5" : "mt-2",
                             )}
                         >

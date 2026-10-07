@@ -16,14 +16,25 @@ import {
     RefreshCw,
     Search,
     KeyRound,
+    MoreHorizontal,
+    Table2,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageShell } from "@/components/shared/PageShell";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { AdminErrorState } from "@/components/shared/AdminErrorState";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
@@ -79,7 +90,7 @@ function rowKey(
     readOnlyIndex?: number,
 ): string {
     if (primaryKey.length > 0) {
-        return primaryKey.map((k) => String(row[k])).join("");
+        return primaryKey.map((k) => String(row[k])).join("");
     }
     return `readonly:${readOnlyIndex}:${JSON.stringify(row)}`;
 }
@@ -117,6 +128,9 @@ function display(value: unknown): { text: string; isNull: boolean } {
 
 // ── editable cell ───────────────────────────────────────────────────────────
 
+const CELL_ACTION_CLASS =
+    "h-5 w-5 shrink-0 rounded-chip [&_svg]:size-3";
+
 function RevertCellButton({
     onRevert,
     t,
@@ -126,9 +140,11 @@ function RevertCellButton({
 }) {
     const label = t("dbEditor.revertCell");
     return (
-        <button
+        <Button
             type="button"
-            className="shrink-0 text-warning hover:text-foreground"
+            variant="ghost"
+            size="icon"
+            className={cn(CELL_ACTION_CLASS, "text-warning hover:text-foreground")}
             aria-label={label}
             title={label}
             onClick={(e) => {
@@ -136,8 +152,8 @@ function RevertCellButton({
                 onRevert();
             }}
         >
-            <RotateCcw className="h-3 w-3" />
-        </button>
+            <RotateCcw aria-hidden="true" />
+        </Button>
     );
 }
 
@@ -172,7 +188,7 @@ function EditableCell({
         }
     }, [editing]);
     const dirtyCls = dirty
-        ? "bg-warning/10 ring-1 ring-inset ring-warning/40"
+        ? "bg-warning/10 shadow-[inset_0_0_0_1px_hsl(var(--warning)/0.4)]"
         : "";
     // A column may be writable in the schema but locked for editing here (e.g.
     // primary keys on existing rows, which must not be repointed in place).
@@ -180,7 +196,7 @@ function EditableCell({
 
     if (isBoolean(column)) {
         return (
-            <TableCell className={dirtyCls}>
+            <TableCell className={cn("py-2", dirtyCls)}>
                 <div className="flex items-center gap-2">
                     <Checkbox
                         aria-label={label}
@@ -210,13 +226,13 @@ function EditableCell({
                   ? JSON.stringify(value)
                   : String(value);
         return (
-            <TableCell className={dirtyCls}>
+            <TableCell className={cn("py-1.5", dirtyCls)}>
                 <Input
                     autoFocus
                     aria-label={label}
                     defaultValue={shown}
                     aria-keyshortcuts="Enter Escape"
-                    className="h-7 font-mono text-xs"
+                    className="h-8 font-mono type-footnote"
                     onBlur={(e) => {
                         onChange(e.target.value);
                         setEditing(false);
@@ -255,10 +271,9 @@ function EditableCell({
                 }
             }}
             className={cn(
-                "font-mono text-xs",
+                "py-2 font-mono type-footnote",
                 dirtyCls,
-                canEdit &&
-                    "cursor-text focus-ring",
+                canEdit && "cursor-text focus-ring focus-visible:outline-offset-[-3px]",
             )}
             onClick={() => canEdit && setEditing(true)}
             title={
@@ -269,11 +284,11 @@ function EditableCell({
                       : t("dbEditor.readOnlyCol")
             }
         >
-            <div className="flex items-center justify-between gap-2 max-w-[28rem] truncate">
+            <div className="flex max-w-[28rem] items-center justify-between gap-2 truncate">
                 <span
                     className={cn(
                         "truncate",
-                        isNull && "text-muted-foreground italic",
+                        isNull && "italic text-label-tertiary",
                     )}
                 >
                     {text}
@@ -282,20 +297,43 @@ function EditableCell({
                     <RevertCellButton onRevert={onRevert} t={t} />
                 )}
                 {column.nullable && canEdit && !isNull && (
-                    <button
+                    <Button
                         type="button"
-                        className="shrink-0 text-muted-foreground hover:text-foreground"
+                        variant="ghost"
+                        size="icon"
+                        className={cn(
+                            CELL_ACTION_CLASS,
+                            "text-label-tertiary hover:text-foreground",
+                        )}
                         title={t("dbEditor.setNull")}
+                        aria-label={t("dbEditor.setNull")}
                         onClick={(e) => {
                             e.stopPropagation();
                             onChange(null);
                         }}
                     >
-                        <Ban className="h-3 w-3" />
-                    </button>
+                        <Ban aria-hidden="true" />
+                    </Button>
                 )}
             </div>
         </TableCell>
+    );
+}
+
+// ── row menu ────────────────────────────────────────────────────────────────
+
+function RowMenuTrigger({ label }: { label: string }) {
+    return (
+        <DropdownMenuTrigger asChild>
+            <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                aria-label={label}
+            >
+                <MoreHorizontal aria-hidden="true" />
+            </Button>
+        </DropdownMenuTrigger>
     );
 }
 
@@ -304,7 +342,7 @@ function EditableCell({
 export default function TableDataEditorPage() {
     const { table = "" } = useParams();
     const navigate = useNavigate();
-    const { t } = useLanguage();
+    const { t, tc } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
 
     const [page, setPage] = useState(0);
@@ -414,6 +452,14 @@ export default function TableDataEditorPage() {
             return next;
         });
     }
+    function revertRow(key: string) {
+        setEdits((prev) => {
+            if (!(key in prev)) return prev;
+            const next = { ...prev };
+            delete next[key];
+            return next;
+        });
+    }
     function setNewCell(tempId: string, col: string, value: unknown) {
         setNewRows((prev) =>
             prev.map((r) =>
@@ -472,51 +518,65 @@ export default function TableDataEditorPage() {
     const { preview: previewMutation, commit: commitMutation } =
         useTableMutationData(table);
 
+    const rowMenuLabel = t("dbEditor.rowMenu");
+
     return (
         <PageShell>
             <PageHeader
                 title={table}
                 subtitle={t("dbEditor.subtitle")}
                 actions={
-                    <div className="flex items-center gap-2">
+                    <>
                         <Button
                             variant="outline"
-                            size="sm"
-                            className="gap-2"
                             onClick={() => navigate("/admin/db")}
                         >
-                            <ArrowLeft className="h-4 w-4" />
+                            <ArrowLeft aria-hidden="true" />
                             {t("dbEditor.back")}
                         </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            className="gap-2"
-                            disabled={query.isFetching}
-                            onClick={refresh}
-                        >
-                            <RefreshCw
-                                className={cn(
-                                    "h-4 w-4",
-                                    query.isFetching && "animate-spin",
-                                )}
-                            />
-                            {t("dbEditor.refresh")}
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    aria-label={t("admin.moreActions")}
+                                >
+                                    <MoreHorizontal aria-hidden="true" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                    disabled={query.isFetching}
+                                    onSelect={refresh}
+                                >
+                                    <RefreshCw
+                                        aria-hidden="true"
+                                        className={cn(
+                                            "mr-2 h-4 w-4 text-label-secondary",
+                                            query.isFetching && "animate-spin",
+                                        )}
+                                    />
+                                    {t("dbEditor.refresh")}
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                        <Button onClick={addRow} disabled={readOnly}>
+                            <Plus aria-hidden="true" />
+                            {t("dbEditor.addRow")}
                         </Button>
-                    </div>
+                    </>
                 }
             />
 
-            {/* Caution banner */}
-            <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-xs text-warning">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>
+            <Alert variant="warning">
+                <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+                <AlertDescription>
                     {t("dbEditor.warning")}
                     {MATVIEW_BASE_TABLES.has(table)
                         ? ` ${t("dbEditor.warningMatview")}`
                         : ""}
-                </span>
-            </div>
+                </AlertDescription>
+            </Alert>
 
             {/* Toolbar. Filtering is the per-column inputs in the header row
                 (structured, parameterized). The raw-WHERE box was removed —
@@ -524,40 +584,25 @@ export default function TableDataEditorPage() {
             <div className="flex flex-wrap items-center gap-2">
                 <Button
                     variant="outline"
-                    size="sm"
                     onClick={applyFilters}
                     disabled={hasPending}
                 >
+                    <Search aria-hidden="true" />
                     {t("dbEditor.applyFilters")}
                 </Button>
-                <div className="flex-1" />
-                <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
-                    onClick={addRow}
-                    disabled={readOnly}
-                >
-                    <Plus className="h-4 w-4" />
-                    {t("dbEditor.addRow")}
-                </Button>
                 {hasPending && (
-                    <>
-                        <span className="text-xs text-muted-foreground">
-                            {t("dbEditor.pending", { n: pendingCount })}
-                        </span>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="gap-2"
-                            onClick={discardAll}
+                    <div className="ml-auto flex flex-wrap items-center gap-2">
+                        <span
+                            role="status"
+                            className="type-callout font-medium text-foreground"
                         >
-                            <RotateCcw className="h-4 w-4" />
+                            {tc("dbEditor.pendingCount", pendingCount)}
+                        </span>
+                        <Button variant="ghost" onClick={discardAll}>
+                            <RotateCcw aria-hidden="true" />
                             {t("dbEditor.discard")}
                         </Button>
                         <Button
-                            size="sm"
-                            className="gap-2"
                             onClick={() =>
                                 previewMutation.mutate(changes, {
                                     onSuccess: (res) => {
@@ -568,15 +613,15 @@ export default function TableDataEditorPage() {
                             }
                             disabled={previewMutation.isPending}
                         >
-                            <Eye className="h-4 w-4" />
+                            <Eye aria-hidden="true" />
                             {t("dbEditor.preview")}
                         </Button>
-                    </>
+                    </div>
                 )}
             </div>
 
             {hasPending && (
-                <p className="text-xs text-muted-foreground">
+                <p className="type-footnote text-label-secondary">
                     {t("dbEditor.lockedWhilePending")}
                 </p>
             )}
@@ -589,7 +634,7 @@ export default function TableDataEditorPage() {
             )}
 
             {/* Grid */}
-            <Card className="glass-chrome overflow-hidden">
+            <Card className="overflow-hidden">
                 {/* The skeleton rows live inside <tbody>, where a wrapper
                     element would be invalid HTML — the scroll container around
                     the table carries the status role, only while loading. */}
@@ -608,11 +653,13 @@ export default function TableDataEditorPage() {
                                     return (
                                         <TableHead
                                             key={col.name}
-                                            className="h-9 whitespace-nowrap pb-0 pt-2.5"
+                                            className="h-9 whitespace-nowrap pb-0 pt-2"
                                         >
-                                            <button
+                                            <Button
                                                 type="button"
-                                                className="group/sort -mx-1.5 flex items-center gap-1.5 rounded-md px-1.5 py-1 font-mono text-xs lowercase tracking-normal text-foreground/75 transition-colors hover:bg-foreground/[0.05] hover:text-foreground disabled:pointer-events-none disabled:opacity-100"
+                                                variant="ghost"
+                                                size="sm"
+                                                className="group/sort -mx-2 h-7 gap-1.5 px-2 font-mono type-footnote font-normal text-label-secondary hover:text-foreground disabled:opacity-100 [&_svg]:size-3"
                                                 onClick={() =>
                                                     toggleSort(col.name)
                                                 }
@@ -620,35 +667,47 @@ export default function TableDataEditorPage() {
                                             >
                                                 {isPk && (
                                                     <KeyRound
-                                                        className="h-3 w-3 shrink-0 text-warning"
+                                                        className="text-warning"
                                                         aria-label="PK"
                                                     />
                                                 )}
                                                 <span>{col.name}</span>
                                                 {active ? (
                                                     sort!.dir === "asc" ? (
-                                                        <ChevronUp className="h-3 w-3 shrink-0 text-primary" />
+                                                        <ChevronUp
+                                                            aria-hidden="true"
+                                                            className="text-primary"
+                                                        />
                                                     ) : (
-                                                        <ChevronDown className="h-3 w-3 shrink-0 text-primary" />
+                                                        <ChevronDown
+                                                            aria-hidden="true"
+                                                            className="text-primary"
+                                                        />
                                                     )
                                                 ) : (
-                                                    <ChevronsUpDown className="h-3 w-3 shrink-0 text-muted-foreground/0 transition-colors group-hover/sort:text-muted-foreground/50" />
+                                                    <ChevronsUpDown
+                                                        aria-hidden="true"
+                                                        className="text-label-tertiary opacity-0 transition-opacity duration-fast group-hover/sort:opacity-100"
+                                                    />
                                                 )}
-                                            </button>
+                                            </Button>
                                         </TableHead>
                                     );
                                 })}
                             </TableRow>
                             {/* Per-column filters */}
                             <TableRow className="hover:bg-transparent">
-                                <TableHead className="h-10 w-10" />
+                                <TableHead className="h-11 w-10" />
                                 {columns.map((col) => (
                                     <TableHead
                                         key={col.name}
-                                        className="h-10 pb-2.5 pt-0"
+                                        className="h-11 pb-2.5 pt-0"
                                     >
                                         <div className="relative min-w-[7rem]">
-                                            <Search className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground/40" />
+                                            <Search
+                                                aria-hidden="true"
+                                                className="pointer-events-none absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-label-tertiary"
+                                            />
                                             <Input
                                                 value={
                                                     draftFilters[col.name] ?? ""
@@ -656,7 +715,8 @@ export default function TableDataEditorPage() {
                                                 placeholder={t(
                                                     "dbEditor.filterPlaceholder",
                                                 )}
-                                                className="h-7 rounded-md border-border/40 bg-background/40 pl-7 pr-2 font-mono text-2xs shadow-none placeholder:text-muted-foreground/40 focus-visible:bg-background/80"
+                                                aria-label={`${t("dbEditor.filterPlaceholder")} ${col.name}`}
+                                                className="h-8 pl-7 pr-2 font-mono type-footnote"
                                                 onChange={(e) =>
                                                     setDraftFilters((p) => ({
                                                         ...p,
@@ -693,26 +753,34 @@ export default function TableDataEditorPage() {
                                     key={nr.tempId}
                                     className="bg-success/5"
                                 >
-                                    <TableCell className="w-10">
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-6 w-6"
-                                            aria-label={t(
-                                                "dbEditor.discardNewRow",
-                                            )}
-                                            onClick={() =>
-                                                setNewRows((prev) =>
-                                                    prev.filter(
-                                                        (r) =>
-                                                            r.tempId !==
-                                                            nr.tempId,
-                                                    ),
-                                                )
-                                            }
-                                        >
-                                            <Trash2 className="h-3.5 w-3.5" />
-                                        </Button>
+                                    <TableCell className="w-10 py-1.5">
+                                        <DropdownMenu>
+                                            <RowMenuTrigger
+                                                label={rowMenuLabel}
+                                            />
+                                            <DropdownMenuContent align="start">
+                                                <DropdownMenuItem
+                                                    className="text-destructive focus:text-destructive"
+                                                    onSelect={() =>
+                                                        setNewRows((prev) =>
+                                                            prev.filter(
+                                                                (r) =>
+                                                                    r.tempId !==
+                                                                    nr.tempId,
+                                                            ),
+                                                        )
+                                                    }
+                                                >
+                                                    <Trash2
+                                                        aria-hidden="true"
+                                                        className="mr-2 h-4 w-4"
+                                                    />
+                                                    {t(
+                                                        "dbEditor.discardNewRow",
+                                                    )}
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
                                     </TableCell>
                                     {columns.map((col) => (
                                         <EditableCell
@@ -754,6 +822,8 @@ export default function TableDataEditorPage() {
                                     );
                                     const isDeleted = deletes.has(key);
                                     const edited = edits[key] ?? {};
+                                    const hasRowEdits =
+                                        Object.keys(edited).length > 0;
                                     return (
                                         <TableRow
                                             key={key}
@@ -763,31 +833,73 @@ export default function TableDataEditorPage() {
                                                     : ""
                                             }
                                         >
-                                            <TableCell className="w-10">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-6 w-6"
-                                                    disabled={readOnly}
-                                                    title={
-                                                        isDeleted
-                                                            ? t(
-                                                                  "dbEditor.undoDelete",
-                                                              )
-                                                            : t(
-                                                                  "dbEditor.deleteRow",
-                                                              )
-                                                    }
-                                                    onClick={() =>
-                                                        toggleDelete(key)
-                                                    }
-                                                >
-                                                    {isDeleted ? (
-                                                        <RotateCcw className="h-3.5 w-3.5" />
-                                                    ) : (
-                                                        <Trash2 className="h-3.5 w-3.5" />
-                                                    )}
-                                                </Button>
+                                            <TableCell className="w-10 py-1.5">
+                                                <DropdownMenu>
+                                                    <RowMenuTrigger
+                                                        label={rowMenuLabel}
+                                                    />
+                                                    <DropdownMenuContent align="start">
+                                                        <DropdownMenuItem
+                                                            disabled={
+                                                                readOnly ||
+                                                                !hasRowEdits ||
+                                                                isDeleted
+                                                            }
+                                                            onSelect={() =>
+                                                                revertRow(key)
+                                                            }
+                                                        >
+                                                            <RotateCcw
+                                                                aria-hidden="true"
+                                                                className="mr-2 h-4 w-4 text-label-secondary"
+                                                            />
+                                                            {t(
+                                                                "dbEditor.revertRow",
+                                                            )}
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuSeparator />
+                                                        {isDeleted ? (
+                                                            <DropdownMenuItem
+                                                                disabled={
+                                                                    readOnly
+                                                                }
+                                                                onSelect={() =>
+                                                                    toggleDelete(
+                                                                        key,
+                                                                    )
+                                                                }
+                                                            >
+                                                                <RotateCcw
+                                                                    aria-hidden="true"
+                                                                    className="mr-2 h-4 w-4 text-label-secondary"
+                                                                />
+                                                                {t(
+                                                                    "dbEditor.undoDelete",
+                                                                )}
+                                                            </DropdownMenuItem>
+                                                        ) : (
+                                                            <DropdownMenuItem
+                                                                disabled={
+                                                                    readOnly
+                                                                }
+                                                                className="text-destructive focus:text-destructive"
+                                                                onSelect={() =>
+                                                                    toggleDelete(
+                                                                        key,
+                                                                    )
+                                                                }
+                                                            >
+                                                                <Trash2
+                                                                    aria-hidden="true"
+                                                                    className="mr-2 h-4 w-4"
+                                                                />
+                                                                {t(
+                                                                    "dbEditor.deleteRow",
+                                                                )}
+                                                            </DropdownMenuItem>
+                                                        )}
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
                                             </TableCell>
                                             {columns.map((col) => {
                                                 const hasEdit =
@@ -859,12 +971,16 @@ export default function TableDataEditorPage() {
                             {!query.isLoading &&
                                 rows.length === 0 &&
                                 newRows.length === 0 && (
-                                    <TableRow>
+                                    <TableRow className="hover:bg-transparent">
                                         <TableCell
                                             colSpan={(columns.length || 1) + 1}
-                                            className="h-24 text-center text-muted-foreground"
                                         >
-                                            {t("dbEditor.empty")}
+                                            <EmptyState
+                                                size="compact"
+                                                headingLevel={3}
+                                                icon={Table2}
+                                                title={t("dbEditor.empty")}
+                                            />
                                         </TableCell>
                                     </TableRow>
                                 )}
@@ -873,22 +989,22 @@ export default function TableDataEditorPage() {
                 </div>
 
                 {/* Pagination footer */}
-                <div className="flex items-center justify-between gap-2 border-t px-4 py-2 text-xs text-muted-foreground">
-                    <span>{t("dbEditor.rowsOnPage", { n: rows.length })}</span>
+                <div className="flex items-center justify-between gap-2 border-t border-border/50 px-4 py-2 type-footnote text-label-secondary">
+                    <span>{tc("dbEditor.rowsOnPage", rows.length)}</span>
                     <div className="flex items-center gap-2">
                         <Button
                             variant="outline"
                             size="icon"
-                            className="h-7 w-7"
+                            className="h-8 w-8"
                             disabled={
                                 page <= 0 || hasPending || query.isFetching
                             }
                             aria-label={t("dbEditor.prevPage")}
                             onClick={() => setPage((p) => Math.max(0, p - 1))}
                         >
-                            <ChevronLeft className="h-4 w-4" />
+                            <ChevronLeft aria-hidden="true" />
                         </Button>
-                        <span>
+                        <span className="tabular-nums">
                             {t("dbEditor.pageNumber", {
                                 page: page + 1,
                             })}
@@ -896,7 +1012,7 @@ export default function TableDataEditorPage() {
                         <Button
                             variant="outline"
                             size="icon"
-                            className="h-7 w-7"
+                            className="h-8 w-8"
                             disabled={
                                 !data?.hasMore || hasPending || query.isFetching
                             }
@@ -910,7 +1026,7 @@ export default function TableDataEditorPage() {
                                 setPage((p) => p + 1);
                             }}
                         >
-                            <ChevronRight className="h-4 w-4" />
+                            <ChevronRight aria-hidden="true" />
                         </Button>
                     </div>
                 </div>
@@ -926,7 +1042,7 @@ export default function TableDataEditorPage() {
                         </DialogDescription>
                     </DialogHeader>
                     {/* Operation summary so the user confirms exactly what will run. */}
-                    <p className="text-sm font-medium">
+                    <p className="type-body font-medium text-foreground">
                         {t("dbEditor.commitSummary", {
                             inserts: opCounts.inserts,
                             updates: opCounts.updates,
@@ -934,23 +1050,30 @@ export default function TableDataEditorPage() {
                         })}
                     </p>
                     {hasDeletes && (
-                        <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-                            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                            <span>{t("dbEditor.deleteWarning")}</span>
-                        </div>
+                        <Alert variant="destructive">
+                            <AlertTriangle
+                                className="h-4 w-4"
+                                aria-hidden="true"
+                            />
+                            <AlertDescription>
+                                {t("dbEditor.deleteWarning")}
+                            </AlertDescription>
+                        </Alert>
                     )}
-                    <div className="max-h-[50vh] space-y-2 overflow-y-auto rounded-md bg-muted/40 p-3">
+                    <div className="max-h-[50vh] space-y-2 overflow-y-auto rounded-card corner-continuous bg-foreground/[0.04] p-3">
                         {previewStatements.map((s, i) => (
                             <pre
                                 key={i}
-                                className="whitespace-pre-wrap break-all font-mono text-xs"
+                                className="whitespace-pre-wrap break-all font-mono type-footnote text-foreground"
                             >
-                                <span className="mr-2 eyebrow">{s.op}</span>
+                                <span className="mr-2 type-caption font-medium text-label-secondary">
+                                    {s.op}
+                                </span>
                                 {s.preview};
                             </pre>
                         ))}
                         {previewStatements.length === 0 && (
-                            <p className="text-sm text-muted-foreground">
+                            <p className="type-body text-label-secondary">
                                 {t("dbEditor.previewEmpty")}
                             </p>
                         )}

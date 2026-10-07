@@ -4,6 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { apiClient } from "@/lib/api";
 import { exchangeRateKeys } from "@/lib/queryKeys";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
@@ -84,8 +85,8 @@ export function FxStatusBanner() {
     };
 
     return (
-        <Alert variant="warning" className="mb-4 pr-10">
-            <AlertTriangle className="h-4 w-4" />
+        <Alert variant="warning" className="mb-4 pr-12">
+            <AlertTriangle className="h-4 w-4" aria-hidden="true" />
             <AlertDescription className="flex flex-wrap items-center gap-3">
                 <span>{message}</span>
                 <Button
@@ -94,22 +95,24 @@ export function FxStatusBanner() {
                     size="sm"
                     disabled={isRefreshing}
                     onClick={() => refreshMutation.mutate()}
-                    className="gap-1.5"
                 >
                     <RefreshCw
-                        className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`}
+                        aria-hidden="true"
+                        className={cn(isRefreshing && "animate-spin")}
                     />
                     {t("exchangeRates.refresh")}
                 </Button>
             </AlertDescription>
-            <button
+            <Button
                 type="button"
+                variant="ghost"
+                size="icon"
                 onClick={handleDismiss}
-                className="absolute right-3 top-3 text-foreground/50 transition-colors hover:text-foreground"
+                className="absolute right-2 top-2 h-8 w-8 text-label-secondary hover:text-foreground"
                 aria-label={t("layout.dismiss")}
             >
-                <X className="h-4 w-4" />
-            </button>
+                <X aria-hidden="true" />
+            </Button>
         </Alert>
     );
 }

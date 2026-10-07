@@ -51,27 +51,27 @@ export function SymbolSearchResultItem({
     const content = (
         <>
             {leadingIcon}
-            <span className="min-w-[5rem] font-mono text-sm font-bold text-foreground">
+            <span className="min-w-[5rem] font-mono type-body font-medium text-foreground">
                 {item.symbol}
             </span>
-            <span className="flex-1 truncate text-sm text-muted-foreground">
+            <span className="flex-1 truncate type-body text-label-secondary">
                 {item.name}
             </span>
             {item.type ? (
-                <Badge variant="outline" className="shrink-0 text-2xs">
+                <Badge variant="outline" size="sm" className="shrink-0">
                     {item.type}
                 </Badge>
             ) : null}
             {item.exchange ? (
-                <span className="shrink-0 text-xs text-muted-foreground">
+                <span className="shrink-0 type-footnote text-label-secondary">
                     {item.exchange}
                 </span>
             ) : null}
         </>
     );
     const classes = cn(
-        "flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left transition-colors hover:bg-muted/70",
-        active && "bg-muted/70",
+        "flex w-full items-center gap-3 rounded-control px-3 py-2.5 text-left transition-[background-color] duration-fast ease-glide hover:bg-foreground/[0.06] focus-ring",
+        active && "bg-foreground/[0.06]",
         className,
     );
     const optionProps = {

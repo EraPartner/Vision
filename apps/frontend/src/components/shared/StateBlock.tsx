@@ -41,16 +41,16 @@ export function StateBlock({
             <div
                 aria-hidden="true"
                 className={cn(
-                    "mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-muted/50",
-                    destructive ? "text-destructive" : "text-muted-foreground",
+                    "mb-3 flex h-10 w-10 items-center justify-center rounded-control bg-foreground/[0.05]",
+                    destructive ? "text-destructive" : "text-label-secondary",
                 )}
             >
                 <Icon className="h-5 w-5" />
             </div>
             <Heading
                 className={cn(
-                    "font-semibold text-foreground text-balance",
-                    compact ? "text-base" : "text-lg",
+                    "text-balance text-foreground",
+                    compact ? "type-headline" : "type-title-3",
                 )}
             >
                 {title}
@@ -58,7 +58,7 @@ export function StateBlock({
             {description && (
                 <p
                     className={cn(
-                        "mt-1 text-sm leading-relaxed text-pretty text-muted-foreground",
+                        "mt-1 text-pretty type-callout text-label-secondary",
                         compact ? "max-w-xs" : "max-w-sm",
                     )}
                 >

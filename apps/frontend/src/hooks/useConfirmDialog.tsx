@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, type ReactNode } from "react";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { buttonVariants } from "@/components/ui/button";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -93,8 +94,8 @@ export function useConfirmDialog() {
                             onClick={onConfirm}
                             className={
                                 opts.variant === "destructive"
-                                    ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                    : ""
+                                    ? buttonVariants({ variant: "destructive" })
+                                    : undefined
                             }
                         >
                             {opts.confirmLabel ?? translate("common.confirm")}

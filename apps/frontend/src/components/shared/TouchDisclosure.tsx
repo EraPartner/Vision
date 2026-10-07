@@ -24,7 +24,7 @@ export function TouchDisclosure({
     className,
 }: TouchDisclosureProps) {
     const triggerClassName = cn(
-        "inline-flex cursor-help items-center rounded-sm focus-ring [@media(pointer:coarse)]:min-h-10 [@media(pointer:coarse)]:min-w-10 [@media(pointer:coarse)]:justify-center",
+        "inline-flex cursor-help items-center rounded-chip focus-ring [@media(pointer:coarse)]:min-h-10 [@media(pointer:coarse)]:min-w-10 [@media(pointer:coarse)]:justify-center",
         className,
     );
 
@@ -41,7 +41,7 @@ export function TouchDisclosure({
             </PopoverTrigger>
             <PopoverContent
                 align="center"
-                className="w-auto max-w-xs px-3 py-2 text-sm tabular-nums"
+                className="w-auto max-w-xs px-3 py-2 type-body tabular-nums"
             >
                 {content}
             </PopoverContent>
@@ -69,7 +69,7 @@ export function CompactValueDisclosure({
             label={fullValue}
             content={fullValue}
             className={cn(
-                "decoration-dotted underline decoration-muted-foreground/60 underline-offset-4",
+                "underline decoration-label-tertiary decoration-dotted underline-offset-4",
                 className,
             )}
         >

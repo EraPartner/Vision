@@ -104,7 +104,10 @@ export function SymbolSearchBox({
 
     return (
         <div className={cn("relative", className)}>
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+            <Search
+                aria-hidden="true"
+                className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-label-tertiary"
+            />
             <Input
                 autoFocus={autoFocus}
                 placeholder={placeholder}
@@ -114,7 +117,7 @@ export function SymbolSearchBox({
                     onChange(e.target.value);
                 }}
                 onKeyDown={onInputKeyDown}
-                className="h-14 pl-12 text-base glass-regular"
+                className="h-14 pl-12 pr-10 glass-regular"
                 aria-label={ariaLabel ?? placeholder}
                 role="combobox"
                 aria-autocomplete="list"
@@ -128,7 +131,7 @@ export function SymbolSearchBox({
                 </div>
             ) : null}
             {open ? (
-                <Card className="absolute z-50 top-full mt-2 w-full glass-thick">
+                <Card className="absolute top-full z-50 mt-2 w-full glass-thick">
                     <CardContent
                         ref={listboxRef}
                         id={listboxId}

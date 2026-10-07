@@ -21,6 +21,7 @@ import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useHiddenSections } from "@/hooks/useSidebarPreferences";
 import { useUpdateStatus } from "@/hooks/useUpdateStatus";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { preloadRoute } from "@/lib/routePreload";
 import {
     ADMIN_SECTION,
@@ -95,38 +96,43 @@ export function AppSidebar({ onOpenSettings, onOpenPalette }: AppSidebarProps) {
                         collapsed && "justify-center",
                     )}
                 >
-                    <button
+                    <Button
                         type="button"
+                        variant="ghost"
+                        size="icon"
                         onClick={() => toggleSidebar()}
                         aria-label={t("aria.toggleSidebar")}
                         aria-expanded={!collapsed}
-                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-chip bg-gradient-to-br from-primary via-primary/85 to-accent/70 text-primary-foreground shadow-[0_6px_18px_-8px_hsl(var(--primary)/0.6)] transition-transform duration-normal hover:scale-[1.04] focus-ring"
+                        className="h-7 w-7 shrink-0 rounded-chip bg-gradient-to-br from-primary via-primary/85 to-accent/70 text-primary-foreground shadow-[0_6px_18px_-8px_hsl(var(--primary)/0.6)] hover:bg-transparent hover:text-primary-foreground hover:brightness-110 [&_svg]:size-3.5"
                     >
                         <VisionMark className="h-3.5 w-3.5" />
-                    </button>
+                    </Button>
                     {!collapsed && (
                         <>
                             <span className="min-w-0 flex-1 truncate font-display type-headline text-sidebar-foreground">
                                 {APP_NAME}
                             </span>
-                            <button
+                            <Button
                                 type="button"
+                                variant="ghost"
+                                size="icon"
                                 onClick={() => toggleSidebar()}
                                 aria-label={t("aria.collapseSidebar")}
-                                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-chip text-label-tertiary transition-colors duration-fast hover:bg-foreground/[0.06] hover:text-foreground focus-ring"
+                                className="h-7 w-7 shrink-0 rounded-chip text-label-tertiary hover:text-foreground"
                             >
-                                <PanelLeftClose className="h-4 w-4" />
-                            </button>
+                                <PanelLeftClose aria-hidden="true" />
+                            </Button>
                         </>
                     )}
                 </div>
-                <button
+                <Button
                     type="button"
+                    variant="ghost"
                     onClick={onOpenPalette}
                     aria-label={t("commandPalette.openLabel")}
                     aria-keyshortcuts="Meta+K Control+K"
                     className={cn(
-                        "flex h-8 items-center gap-2 rounded-chip bg-foreground/[0.06] type-callout text-label-tertiary transition-colors duration-fast hover:bg-foreground/[0.09] hover:text-label-secondary focus-ring",
+                        "h-8 justify-start gap-2 rounded-chip bg-foreground/[0.06] px-0 type-callout font-normal text-label-tertiary hover:bg-foreground/[0.09] hover:text-label-secondary",
                         collapsed ? "w-8 justify-center" : "w-full px-2.5",
                     )}
                 >
@@ -144,7 +150,7 @@ export function AppSidebar({ onOpenSettings, onOpenPalette }: AppSidebarProps) {
                             </kbd>
                         </>
                     )}
-                </button>
+                </Button>
             </SidebarHeader>
 
             <SidebarContent className="gap-0">
@@ -253,16 +259,18 @@ function NavSectionGroup({
                 <SidebarGroupLabel className="justify-between pr-1">
                     <span className="truncate">{label}</span>
                     {section.collapsible && (
-                        <button
+                        <Button
                             type="button"
+                            variant="ghost"
+                            size="sm"
                             onClick={() => setSectionHidden(section.id, open)}
                             aria-expanded={open}
                             aria-controls={contentId}
                             aria-label={`${toggleLabel} ${label}`}
-                            className="rounded-chip px-1 type-caption font-medium text-label-tertiary opacity-0 transition-opacity duration-fast hover:text-foreground focus-ring focus-visible:opacity-100 group-hover/section:opacity-100 aria-[expanded=false]:opacity-100"
+                            className="h-auto rounded-chip px-1 py-0 type-caption font-medium text-label-tertiary opacity-0 transition-opacity duration-fast hover:bg-transparent hover:text-foreground focus-visible:opacity-100 group-hover/section:opacity-100 aria-[expanded=false]:opacity-100"
                         >
                             {toggleLabel}
-                        </button>
+                        </Button>
                     )}
                 </SidebarGroupLabel>
             )}

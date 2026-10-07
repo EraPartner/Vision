@@ -27,7 +27,7 @@ function ErrorFallback({ error, onReset }: { error: Error | null; onReset: () =>
       title={t('common.errorBoundary')}
       description={t('common.errorBoundaryDetail')}
       details={import.meta.env.DEV && error ? (
-        <pre className="mt-2 max-w-lg overflow-auto rounded-md bg-muted p-3 text-xs text-left text-muted-foreground">
+        <pre className="mt-2 max-w-lg overflow-auto rounded-card corner-continuous bg-foreground/[0.04] p-3 text-left type-footnote text-label-secondary">
           {error.message}
         </pre>
       ) : undefined}

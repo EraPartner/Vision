@@ -68,7 +68,7 @@ export function CategoryCombobox({
                     aria-expanded={open}
                     disabled={disabled}
                     className={cn(
-                        "justify-between font-normal h-8 text-sm",
+                        "justify-between font-normal h-8",
                         className,
                     )}
                 >

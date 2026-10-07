@@ -4,6 +4,7 @@ import logger from "@/lib/logger";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { TextLink } from "@/components/shared/TextLink";
 import { VisionMark } from "@/components/shared/VisionMark";
 
 const NotFound = () => {
@@ -16,37 +17,34 @@ const NotFound = () => {
 
     return (
         <div className="flex min-h-[70vh] items-center justify-center">
-            <div className="text-center space-y-6 max-w-md mx-auto px-4">
-                <div className="inline-flex items-center justify-center h-20 w-20 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary mx-auto shadow-sm">
+            <div className="mx-auto flex max-w-md flex-col items-center gap-6 px-4 text-center">
+                <div
+                    aria-hidden="true"
+                    className="inline-flex h-20 w-20 items-center justify-center rounded-card corner-continuous bg-primary/12 text-primary"
+                >
                     <VisionMark className="h-10 w-10" />
                 </div>
                 <div className="space-y-2">
-                    <h1 className="font-display text-6xl font-semibold tracking-tight text-foreground">
+                    <h1 className="font-display type-large-title tabular-nums text-foreground">
                         {t('notFound.title')}
                     </h1>
-                    <p className="text-xl text-muted-foreground">{t('notFound.heading')}</p>
+                    <p className="type-title-3 text-label-secondary">{t('notFound.heading')}</p>
                 </div>
-                <p className="text-muted-foreground/80">{t('notFound.description')}</p>
-                <Button asChild size="lg" className="gap-2">
+                <p className="type-body text-label-secondary">{t('notFound.description')}</p>
+                <Button asChild>
                     <Link to="/">
-                        <ArrowLeft className="h-4 w-4" />
+                        <ArrowLeft aria-hidden="true" />
                         {t('notFound.backHome')}
                     </Link>
                 </Button>
-                <div className="flex items-center justify-center gap-3 text-sm text-muted-foreground">
-                    <Link
-                        className="rounded-sm underline-offset-4 transition-colors hover:text-foreground hover:underline focus-ring"
-                        to="/transactions"
-                    >
+                <div className="flex items-center justify-center gap-3 type-callout text-label-secondary">
+                    <TextLink tone="muted" to="/transactions">
                         {t('nav.transactions')}
-                    </Link>
+                    </TextLink>
                     <span aria-hidden="true">·</span>
-                    <Link
-                        className="rounded-sm underline-offset-4 transition-colors hover:text-foreground hover:underline focus-ring"
-                        to="/import"
-                    >
+                    <TextLink tone="muted" to="/import">
                         {t('nav.importExport')}
-                    </Link>
+                    </TextLink>
                 </div>
             </div>
         </div>

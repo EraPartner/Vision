@@ -228,7 +228,7 @@ export function CommandPalette({
                                         </span>
                                     )}
                                     <span className="ml-auto flex items-baseline gap-2 tabular-nums">
-                                        <span className="font-semibold text-foreground">
+                                        <span className="font-medium text-foreground">
                                             {fmtTickerPrice(
                                                 tickerQuote.price,
                                                 tickerQuote.currency,
@@ -236,7 +236,7 @@ export function CommandPalette({
                                         </span>
                                         <span
                                             className={cn(
-                                                "type-footnote font-semibold",
+                                                "type-footnote font-medium",
                                                 tickerQuote.changePercent >= 0
                                                     ? "text-gain"
                                                     : "text-loss",
@@ -277,7 +277,7 @@ export function CommandPalette({
                             ) : (
                                 <Calculator className="text-label-secondary" />
                             )}
-                            <span className="font-semibold tabular-nums">
+                            <span className="font-medium tabular-nums">
                                 {fxResult ?? calcResult}
                             </span>
                             <CommandShortcut>

@@ -67,8 +67,8 @@ import {
  */
 const HEADING_FOCUS =
     "outline-none focus:outline-none focus-visible:outline-none";
-const STEP_HEADING = `font-display text-xl font-semibold leading-tight tracking-tight text-foreground ${HEADING_FOCUS}`;
-const WELCOME_HEADING = `font-display text-2xl font-semibold leading-tight tracking-tight text-foreground ${HEADING_FOCUS}`;
+const STEP_HEADING = `font-display type-title-2 text-foreground ${HEADING_FOCUS}`;
+const WELCOME_HEADING = `font-display type-title-1 text-foreground ${HEADING_FOCUS}`;
 
 /**
  * Two-letter monogram for a bank tile.
@@ -216,12 +216,15 @@ function StepSuccess({
 }) {
     return (
         <div className="flex-1 flex flex-col items-center justify-center gap-3">
-            <div className="h-14 w-14 rounded-full bg-accent/20 flex items-center justify-center">
+            <div
+                aria-hidden="true"
+                className="flex h-14 w-14 items-center justify-center rounded-full bg-accent/20"
+            >
                 <CheckCircle2 className="h-7 w-7 text-accent" />
             </div>
-            <p className="text-lg font-semibold text-foreground">{title}</p>
+            <p className="type-title-3 text-foreground">{title}</p>
             {subtitle && (
-                <p className="text-sm text-muted-foreground">{subtitle}</p>
+                <p className="type-body text-label-secondary">{subtitle}</p>
             )}
         </div>
     );
@@ -258,16 +261,19 @@ function StepNeedsReview({
 }) {
     return (
         <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center">
-            <div className="h-14 w-14 rounded-full bg-primary/15 flex items-center justify-center">
+            <div
+                aria-hidden="true"
+                className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/15"
+            >
                 <ClipboardCheck className="h-7 w-7 text-primary" />
             </div>
-            <p className="text-lg font-semibold text-foreground">{title}</p>
-            <p className="text-sm text-muted-foreground max-w-md">{desc}</p>
-            <Button onClick={onReview} className="gap-2 mt-1">
+            <p className="type-title-3 text-foreground">{title}</p>
+            <p className="max-w-md type-body text-label-secondary">{desc}</p>
+            <Button onClick={onReview} className="mt-1">
                 {cta}
-                <ArrowRight className="h-3.5 w-3.5" />
+                <ArrowRight aria-hidden="true" />
             </Button>
-            <p className="text-xs text-muted-foreground">{later}</p>
+            <p className="type-footnote text-label-secondary">{later}</p>
         </div>
     );
 }
@@ -680,10 +686,13 @@ export function OnboardingWizard({
                     <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent px-6 pt-6 pb-4">
                         <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center gap-2">
-                                <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
+                                <div
+                                    aria-hidden="true"
+                                    className="flex h-8 w-8 items-center justify-center rounded-control bg-primary"
+                                >
                                     <VisionMark className="h-4 w-4 text-primary-foreground" />
                                 </div>
-                                <span className="font-display font-semibold tracking-tight text-foreground">
+                                <span className="font-display type-headline text-foreground">
                                     Vision
                                 </span>
                             </div>
@@ -694,7 +703,7 @@ export function OnboardingWizard({
                                 aria-label={t("aria.close")}
                                 onClick={onComplete}
                             >
-                                <X className="h-4 w-4" />
+                                <X aria-hidden="true" />
                             </Button>
                         </div>
                         <div className="flex gap-1.5">
@@ -714,12 +723,15 @@ export function OnboardingWizard({
                             {(() => {
                                 const StepIcon = STEPS[stepIdx].icon;
                                 return (
-                                    <StepIcon className="h-4 w-4 text-primary" />
+                                    <StepIcon
+                                        aria-hidden="true"
+                                        className="h-4 w-4 text-primary"
+                                    />
                                 );
                             })()}
                             <span
                                 aria-live="polite"
-                                className="text-sm font-medium text-muted-foreground"
+                                className="type-callout font-medium text-label-secondary"
                             >
                                 {t("onboarding.stepOf", {
                                     n: String(stepIdx + 1),
@@ -746,9 +758,9 @@ export function OnboardingWizard({
                                 <div className="relative">
                                     <div
                                         aria-hidden="true"
-                                        className="absolute -inset-4 rounded-3xl bg-gradient-to-br from-primary/15 to-accent/10 blur-2xl"
+                                        className="absolute -inset-4 rounded-card bg-gradient-to-br from-primary/15 to-accent/10 blur-2xl"
                                     />
-                                    <div className="relative h-20 w-20 rounded-2xl glass-regular flex items-center justify-center">
+                                    <div className="relative flex h-20 w-20 items-center justify-center rounded-card corner-continuous glass-regular">
                                         <VisionMark className="h-10 w-10 text-primary" />
                                     </div>
                                 </div>
@@ -759,7 +771,7 @@ export function OnboardingWizard({
                                 >
                                     {t("onboarding.welcome.title")}
                                 </h2>
-                                <p className="text-muted-foreground max-w-md">
+                                <p className="max-w-md type-body text-label-secondary">
                                     {t("onboarding.welcome.desc")}
                                 </p>
                                 <div className="flex gap-2 mt-2">
@@ -806,7 +818,7 @@ export function OnboardingWizard({
                                     >
                                         {t("onboarding.overview.title")}
                                     </h2>
-                                    <p className="text-sm text-muted-foreground mt-1">
+                                    <p className="mt-1 type-body text-label-secondary">
                                         {t("onboarding.overview.desc")}
                                     </p>
                                 </div>
@@ -815,13 +827,13 @@ export function OnboardingWizard({
                                         <div
                                             key={section.label}
                                             className={cn(
-                                                "rounded-xl border bg-gradient-to-br p-4",
+                                                "rounded-card corner-continuous border bg-gradient-to-br p-4",
                                                 section.color,
                                             )}
                                         >
                                             <p
                                                 className={cn(
-                                                    "eyebrow mb-3",
+                                                    "mb-3 type-footnote font-medium",
                                                     section.iconColor,
                                                 )}
                                             >
@@ -835,7 +847,7 @@ export function OnboardingWizard({
                                                     >
                                                         <div
                                                             className={cn(
-                                                                "h-7 w-7 rounded-md bg-background/60 flex items-center justify-center shrink-0 mt-0.5",
+                                                                "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-chip bg-background/60",
                                                             )}
                                                         >
                                                             <item.icon
@@ -846,10 +858,10 @@ export function OnboardingWizard({
                                                             />
                                                         </div>
                                                         <div className="min-w-0">
-                                                            <p className="text-xs font-semibold text-foreground">
+                                                            <p className="type-footnote font-medium text-foreground">
                                                                 {item.title}
                                                             </p>
-                                                            <p className="text-xs text-muted-foreground line-clamp-2">
+                                                            <p className="line-clamp-2 type-footnote text-label-secondary">
                                                                 {item.desc}
                                                             </p>
                                                         </div>
@@ -873,7 +885,7 @@ export function OnboardingWizard({
                                     >
                                         {t("onboarding.bank.title")}
                                     </h2>
-                                    <p className="text-sm text-muted-foreground mt-1">
+                                    <p className="mt-1 type-body text-label-secondary">
                                         {t("onboarding.bank.desc")}
                                     </p>
                                 </div>
@@ -882,8 +894,10 @@ export function OnboardingWizard({
                                 ) : (
                                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                         {adapters.map((adapter) => (
-                                            <button
+                                            <Button
                                                 key={adapter.key}
+                                                type="button"
+                                                variant="outline"
                                                 onClick={() =>
                                                     setSelectedBank(adapter.key)
                                                 }
@@ -891,11 +905,9 @@ export function OnboardingWizard({
                                                     selectedBank === adapter.key
                                                 }
                                                 className={cn(
-                                                    // Transition list composed via --press-compose (press-feedback
-                                                    // owns the `transition` shorthand — see index.css).
-                                                    "press-feedback [--press-compose:color_var(--default-transition-duration)_var(--default-transition-timing-function),background-color_var(--default-transition-duration)_var(--default-transition-timing-function),border-color_var(--default-transition-duration)_var(--default-transition-timing-function),box-shadow_var(--default-transition-duration)_var(--default-transition-timing-function),transform_var(--duration-press)_ease-out] flex flex-col items-center gap-2 p-4 rounded-xl border-2 hover:shadow-md",
+                                                    "h-auto flex-col items-center gap-2 whitespace-normal rounded-card corner-continuous border-2 p-4 hover:shadow-md",
                                                     selectedBank === adapter.key
-                                                        ? "border-primary bg-primary/5 shadow-sm"
+                                                        ? "border-primary bg-primary/5 shadow-sm hover:border-primary hover:bg-primary/5"
                                                         : "border-border hover:border-primary/40",
                                                 )}
                                             >
@@ -909,31 +921,31 @@ export function OnboardingWizard({
                                                 <span
                                                     aria-hidden="true"
                                                     className={cn(
-                                                        "h-10 w-10 rounded-xl glass-thin flex items-center justify-center font-display text-sm font-semibold tracking-tight transition-colors",
+                                                        "flex h-10 w-10 items-center justify-center rounded-control glass-thin font-display type-headline transition-colors",
                                                         selectedBank ===
                                                             adapter.key
                                                             ? "text-primary"
-                                                            : "text-muted-foreground",
+                                                            : "text-label-secondary",
                                                     )}
                                                 >
                                                     {bankMonogram(adapter)}
                                                 </span>
                                                 <span
                                                     className={cn(
-                                                        "text-sm font-medium",
+                                                        "type-body font-medium",
                                                         selectedBank ===
                                                             adapter.key
                                                             ? "text-foreground"
-                                                            : "text-muted-foreground",
+                                                            : "text-label-secondary",
                                                     )}
                                                 >
                                                     {adapter.name}
                                                 </span>
-                                            </button>
+                                            </Button>
                                         ))}
                                     </div>
                                 )}
-                                <p className="text-xs text-muted-foreground mt-auto">
+                                <p className="mt-auto type-footnote text-label-secondary">
                                     {t("onboarding.bank.notListed")}
                                 </p>
                             </div>
@@ -950,7 +962,7 @@ export function OnboardingWizard({
                                     >
                                         {t("onboarding.import.title")}
                                     </h2>
-                                    <p className="text-sm text-muted-foreground mt-1">
+                                    <p className="mt-1 type-body text-label-secondary">
                                         {t("onboarding.import.desc", {
                                             bank: selectedBank
                                                 ? adapters.find(
@@ -1017,12 +1029,14 @@ export function OnboardingWizard({
                                                 disabled={
                                                     importing || !selectedBank
                                                 }
-                                                className="gap-2"
                                             >
                                                 {importing ? (
-                                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                                    <Loader2
+                                                        aria-hidden="true"
+                                                        className="animate-spin"
+                                                    />
                                                 ) : (
-                                                    <Upload className="h-4 w-4" />
+                                                    <Upload aria-hidden="true" />
                                                 )}
                                                 {importing
                                                     ? t(
@@ -1041,7 +1055,7 @@ export function OnboardingWizard({
                                 waiting, and `onboarding.import.review.later` is the
                                 footnote that arm needs instead. */}
                                 {!reviewBatch && (
-                                    <p className="text-xs text-muted-foreground">
+                                    <p className="type-footnote text-label-secondary">
                                         {t("onboarding.import.skipHint")}
                                     </p>
                                 )}
@@ -1059,7 +1073,7 @@ export function OnboardingWizard({
                                     >
                                         {t("onboarding.categories.title")}
                                     </h2>
-                                    <p className="text-sm text-muted-foreground mt-1">
+                                    <p className="mt-1 type-body text-label-secondary">
                                         {t("onboarding.categories.desc")}
                                     </p>
                                 </div>
@@ -1083,8 +1097,13 @@ export function OnboardingWizard({
                                                             idx,
                                                         );
                                                     return (
-                                                        <button
+                                                        <Button
                                                             key={idx}
+                                                            type="button"
+                                                            variant="outline"
+                                                            aria-pressed={
+                                                                selected
+                                                            }
                                                             onClick={() => {
                                                                 const next =
                                                                     new Set(
@@ -1103,38 +1122,44 @@ export function OnboardingWizard({
                                                                 );
                                                             }}
                                                             className={cn(
-                                                                "press-feedback [--press-compose:color_var(--default-transition-duration)_var(--default-transition-timing-function),background-color_var(--default-transition-duration)_var(--default-transition-timing-function),border-color_var(--default-transition-duration)_var(--default-transition-timing-function),transform_var(--duration-press)_ease-out] flex items-center gap-2 p-2.5 rounded-lg border text-left",
+                                                                "h-auto justify-start gap-2 whitespace-normal p-2.5 text-left font-normal",
                                                                 selected
-                                                                    ? "border-primary bg-primary/5"
+                                                                    ? "border-primary bg-primary/5 hover:border-primary hover:bg-primary/5"
                                                                     : "border-border hover:border-primary/40",
                                                             )}
                                                         >
-                                                            <span className="text-base">
+                                                            <span
+                                                                aria-hidden="true"
+                                                                className="type-title-3"
+                                                            >
                                                                 {cat.emoji}
                                                             </span>
                                                             <div className="min-w-0">
                                                                 <p
                                                                     className={cn(
-                                                                        "text-xs font-medium truncate",
+                                                                        "truncate type-footnote font-medium",
                                                                         selected
                                                                             ? "text-foreground"
-                                                                            : "text-muted-foreground",
+                                                                            : "text-label-secondary",
                                                                     )}
                                                                 >
                                                                     {t(
                                                                         cat.detailKey,
                                                                     )}
                                                                 </p>
-                                                                <p className="text-xs text-muted-foreground/60 truncate">
+                                                                <p className="truncate type-footnote text-label-tertiary">
                                                                     {
                                                                         cat.general
                                                                     }
                                                                 </p>
                                                             </div>
                                                             {selected && (
-                                                                <CheckCircle2 className="h-3.5 w-3.5 text-primary ml-auto shrink-0" />
+                                                                <CheckCircle2
+                                                                    aria-hidden="true"
+                                                                    className="ml-auto shrink-0 text-primary"
+                                                                />
                                                             )}
-                                                        </button>
+                                                        </Button>
                                                     );
                                                 },
                                             )}
@@ -1148,12 +1173,14 @@ export function OnboardingWizard({
                                                     selectedCategories.size ===
                                                         0
                                                 }
-                                                className="gap-2"
                                             >
                                                 {creatingCategories ? (
-                                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                                    <Loader2
+                                                        aria-hidden="true"
+                                                        className="animate-spin"
+                                                    />
                                                 ) : (
-                                                    <Tags className="h-4 w-4" />
+                                                    <Tags aria-hidden="true" />
                                                 )}
                                                 {t(
                                                     "onboarding.categories.create",
@@ -1212,7 +1239,7 @@ export function OnboardingWizard({
                                     >
                                         {t("onboarding.tour.title")}
                                     </h2>
-                                    <p className="text-sm text-muted-foreground mt-1">
+                                    <p className="mt-1 type-body text-label-secondary">
                                         {t("onboarding.tour.desc")}
                                     </p>
                                 </div>
@@ -1225,25 +1252,30 @@ export function OnboardingWizard({
                                 keeps its group-hover lift. */}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     {FEATURES.map((feat) => (
-                                        <button
+                                        <Button
                                             key={feat.path}
+                                            type="button"
+                                            variant="outline"
                                             onClick={() =>
                                                 handleNavigate(feat.path)
                                             }
-                                            className="press-feedback [--press-compose:color_var(--default-transition-duration)_var(--default-transition-timing-function),background-color_var(--default-transition-duration)_var(--default-transition-timing-function),border-color_var(--default-transition-duration)_var(--default-transition-timing-function),box-shadow_var(--default-transition-duration)_var(--default-transition-timing-function),transform_var(--duration-press)_ease-out] glass-thin flex items-start gap-3 p-3 rounded-xl hover:border-primary/40 hover:shadow-md text-left group"
+                                            className="group h-auto items-start justify-start gap-3 whitespace-normal rounded-card corner-continuous p-3 text-left font-normal hover:border-primary/40 hover:shadow-md"
                                         >
-                                            <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
-                                                <feat.icon className="h-4 w-4 text-primary" />
+                                            <div
+                                                aria-hidden="true"
+                                                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-primary/10 transition-colors group-hover:bg-primary/20"
+                                            >
+                                                <feat.icon className="text-primary" />
                                             </div>
                                             <div className="min-w-0">
-                                                <p className="text-sm font-semibold text-foreground">
+                                                <p className="type-headline text-foreground">
                                                     {feat.title}
                                                 </p>
-                                                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                                                <p className="mt-0.5 line-clamp-2 type-footnote text-label-secondary">
                                                     {feat.desc}
                                                 </p>
                                             </div>
-                                        </button>
+                                        </Button>
                                     ))}
                                 </div>
                             </div>
@@ -1260,7 +1292,7 @@ export function OnboardingWizard({
                                     >
                                         {t("onboarding.backup.title")}
                                     </h2>
-                                    <p className="text-sm text-muted-foreground mt-1">
+                                    <p className="mt-1 type-body text-label-secondary">
                                         {t("onboarding.backup.desc")}
                                     </p>
                                 </div>
@@ -1286,12 +1318,15 @@ export function OnboardingWizard({
                                     ].map(({ icon: Icon, labelKey }) => (
                                         <div
                                             key={labelKey}
-                                            className="flex items-start gap-3 p-3 rounded-lg glass-thin"
+                                            className="flex items-start gap-3 rounded-card corner-continuous glass-thin p-3"
                                         >
-                                            <div className="h-8 w-8 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
+                                            <div
+                                                aria-hidden="true"
+                                                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-control bg-primary/10"
+                                            >
                                                 <Icon className="h-4 w-4 text-primary" />
                                             </div>
-                                            <p className="text-sm text-foreground leading-relaxed">
+                                            <p className="type-body text-foreground">
                                                 {t(labelKey)}
                                             </p>
                                         </div>
@@ -1300,17 +1335,17 @@ export function OnboardingWizard({
 
                                 {/* CTA */}
                                 <div className="mt-auto pt-2 flex flex-col gap-2">
-                                    <p className="text-xs text-muted-foreground">
+                                    <p className="type-footnote text-label-secondary">
                                         {t("onboarding.backup.hint")}
                                     </p>
                                     <Button
-                                        className="gap-2 w-full sm:w-auto"
+                                        className="w-full sm:w-auto"
                                         onClick={() => {
                                             onComplete();
                                             onOpenSettings?.("backup");
                                         }}
                                     >
-                                        <FolderOpen className="h-4 w-4" />
+                                        <FolderOpen aria-hidden="true" />
                                         {t("onboarding.backup.openSettings")}
                                     </Button>
                                 </div>
@@ -1318,7 +1353,7 @@ export function OnboardingWizard({
                                 {/* Restore — delegates to RestoreFromBackupCard (handles frontendState + schema errors) */}
                                 <div className="flex items-center gap-3 my-1">
                                     <div className="h-px flex-1 bg-border" />
-                                    <span className="text-xs text-muted-foreground">
+                                    <span className="type-footnote text-label-secondary">
                                         {t("onboarding.restore.orTitle")}
                                     </span>
                                     <div className="h-px flex-1 bg-border" />
@@ -1332,24 +1367,15 @@ export function OnboardingWizard({
                     </div>
 
                     {/* Footer navigation */}
-                    <div className="border-t px-6 py-4 flex items-center justify-between bg-muted/30">
+                    <div className="flex items-center justify-between border-t border-border/50 bg-foreground/[0.02] px-6 py-4">
                         <div>
                             {stepIdx > 0 ? (
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={goBack}
-                                    className="gap-1.5"
-                                >
-                                    <ArrowLeft className="h-3.5 w-3.5" />{" "}
+                                <Button variant="ghost" onClick={goBack}>
+                                    <ArrowLeft aria-hidden="true" />
                                     {t("onboarding.back")}
                                 </Button>
                             ) : (
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={onComplete}
-                                >
+                                <Button variant="ghost" onClick={onComplete}>
                                     {t("onboarding.skipSetup")}
                                 </Button>
                             )}
@@ -1371,24 +1397,23 @@ export function OnboardingWizard({
                                                   )
                                             : completeToDashboard
                                     }
-                                    className="gap-1.5"
                                 >
                                     {reviewBatch
                                         ? t("onboarding.finishImport")
                                         : t("onboarding.goToDashboard")}
-                                    <ArrowRight className="h-3.5 w-3.5" />
+                                    <ArrowRight aria-hidden="true" />
                                 </Button>
                             ) : step === "tour" ? (
-                                <Button onClick={goNext} className="gap-1.5">
-                                    {t("onboarding.nextStep")}{" "}
-                                    <ArrowRight className="h-3.5 w-3.5" />
+                                <Button onClick={goNext}>
+                                    {t("onboarding.nextStep")}
+                                    <ArrowRight aria-hidden="true" />
                                 </Button>
                             ) : (
-                                <Button onClick={goNext} className="gap-1.5">
+                                <Button onClick={goNext}>
                                     {step === "welcome"
                                         ? t("onboarding.getStarted")
                                         : t("onboarding.nextStep")}
-                                    <ArrowRight className="h-3.5 w-3.5" />
+                                    <ArrowRight aria-hidden="true" />
                                 </Button>
                             )}
                         </div>

@@ -4,13 +4,13 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const textLinkVariants = cva(
-    "rounded-sm underline-offset-4 decoration-1 focus-ring",
+    "rounded-chip underline-offset-4 decoration-1 focus-ring",
     {
         variants: {
             tone: {
                 primary: "text-primary decoration-primary/40 hover:underline",
                 inherit: "text-inherit decoration-current/40 hover:underline",
-                muted: "text-muted-foreground decoration-muted-foreground/40 hover:text-foreground hover:underline",
+                muted: "text-label-secondary decoration-label-secondary/40 hover:text-foreground hover:underline",
             },
         },
         defaultVariants: { tone: "primary" },

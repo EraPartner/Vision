@@ -14,7 +14,7 @@ export const ListFilterToggle = forwardRef<
 >(({ checked, onCheckedChange, label }, ref) => {
     const id = useId();
     return (
-        <div className="flex min-h-9 items-center gap-2 rounded-lg border border-border/60 px-3">
+        <div className="flex min-h-9 items-center gap-2 rounded-control border border-border/60 px-3">
             <Switch
                 ref={ref}
                 id={id}
@@ -23,7 +23,7 @@ export const ListFilterToggle = forwardRef<
             />
             <Label
                 htmlFor={id}
-                className="cursor-pointer whitespace-nowrap text-sm"
+                className="cursor-pointer whitespace-nowrap"
             >
                 {label}
             </Label>

@@ -123,11 +123,11 @@ export function DatePicker({
                     aria-describedby={ariaDescribedBy}
                     className={cn(
                         "w-full justify-start text-left font-normal",
-                        !value && "text-muted-foreground",
+                        !value && "text-label-tertiary",
                         buttonClassName,
                     )}
                 >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    <CalendarIcon aria-hidden="true" />
                     <span className="truncate">{formattedDate}</span>
                 </Button>
             </PopoverTrigger>
@@ -136,10 +136,10 @@ export function DatePicker({
                 className={cn("w-auto p-0", className)}
                 align={align}
             >
-                <div className="space-y-1.5 border-b p-3">
+                <div className="space-y-1.5 border-b border-border/50 p-3">
                     <Label
                         htmlFor={inputId}
-                        className="text-xs text-muted-foreground"
+                        className="type-footnote text-label-secondary"
                     >
                         {t("datePicker.inputLabel", {
                             format: appSettings.dateFormat,
@@ -168,7 +168,7 @@ export function DatePicker({
                         <p
                             id={inputErrorId}
                             role="alert"
-                            className="text-xs text-destructive"
+                            className="type-footnote text-destructive"
                         >
                             {t("datePicker.invalidFormat", {
                                 format: appSettings.dateFormat,
@@ -189,15 +189,15 @@ export function DatePicker({
                     className="p-3 pointer-events-auto"
                 />
                 {allowClear && value && (
-                    <div className="border-t p-2">
+                    <div className="border-t border-border/50 p-2">
                         <Button
                             type="button"
                             variant="ghost"
                             size="sm"
-                            className="w-full justify-start text-muted-foreground"
+                            className="w-full justify-start text-label-secondary"
                             onClick={handleClear}
                         >
-                            <X className="mr-2 h-3.5 w-3.5" />
+                            <X aria-hidden="true" />
                             {clearLabel ?? t("common.clear")}
                         </Button>
                     </div>

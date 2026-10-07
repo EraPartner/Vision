@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { useTags, useCreateTag } from '@/hooks/useTags';
 import { useLanguage } from '@/stores/hydration/LanguageHydration';
 import { slugify } from '@/lib/slugify';
@@ -70,22 +71,23 @@ export function TagChip({ tag, onRemove, inactive }: TagChipProps) {
     return (
         <Badge
             variant="outline"
-            className={cn('gap-1 text-xs py-0.5 px-2 font-normal', inactive && 'opacity-40')}
+            className={cn('gap-1 px-2 py-0.5 font-normal', inactive && 'opacity-40')}
             style={style}
         >
             {tag.slug}
             {onRemove && (
-                <button
+                <Button
                     type="button"
+                    variant="ghost"
+                    size="icon"
                     onClick={(e) => { e.stopPropagation(); onRemove(tag.slug); }}
-                    // focus:outline-none is a utility, so it beats the global
-                    // :focus-visible ring in index.css even on keyboard focus —
-                    // restore a ring of our own rather than dropping it.
-                    className="ml-0.5 -m-3.5 rounded-sm p-3.5 hover:opacity-70 focus:outline-none focus-ring"
+                    // The 28px hit area comes from the padding; the negative
+                    // margin keeps the chip visually tight around the glyph.
+                    className="-m-3.5 ml-0.5 h-auto w-auto rounded-chip p-3.5 text-inherit hover:bg-transparent hover:text-inherit hover:opacity-70 [&_svg]:size-3"
                     aria-label={t('aria.removeTag', { tag: tag.slug })}
                 >
-                    <X className="h-3 w-3" />
-                </button>
+                    <X className="h-3 w-3" aria-hidden="true" />
+                </Button>
             )}
         </Badge>
     );
@@ -188,7 +190,7 @@ export function TagInput({ 'aria-labelledby': ariaLabelledBy, value, onChange, d
                     aria-expanded={open}
                     tabIndex={disabled ? -1 : 0}
                     className={cn(
-                        'flex flex-wrap gap-1 items-center min-h-9 px-3 py-1.5 rounded-md border border-input bg-background text-sm cursor-text',
+                        'flex min-h-9 cursor-text flex-wrap items-center gap-1 rounded-control border border-input/70 bg-background/80 px-3 py-1.5 type-body shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.04)]',
                         'focus-ring',
                         disabled && 'opacity-50 pointer-events-none',
                         className,
@@ -206,7 +208,7 @@ export function TagInput({ 'aria-labelledby': ariaLabelledBy, value, onChange, d
                         <TagChip key={tag.slug} tag={tag} onRemove={disabled ? undefined : removeSlug} />
                     ))}
                     {!disabled && value.length < maxTags && (
-                        <TagIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <TagIcon aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-label-tertiary" />
                     )}
                 </div>
             </PopoverTrigger>
@@ -220,7 +222,7 @@ export function TagInput({ 'aria-labelledby': ariaLabelledBy, value, onChange, d
                         onKeyDown={handleKeyDown}
                     />
                     {liveSlug && liveSlug !== inputValue.trim() && (
-                        <p className="px-3 py-1 text-xs text-muted-foreground">
+                        <p className="px-3 py-1 type-footnote text-label-secondary">
                             {t('tags.slugifyHint').replace('{{slug}}', liveSlug)}
                         </p>
                     )}
@@ -246,17 +248,20 @@ export function TagInput({ 'aria-labelledby': ariaLabelledBy, value, onChange, d
                             <CommandGroup>
                                 <CommandItem value={`__create__${liveSlug}`} onSelect={handleCreate}>
                                     <div className="flex items-center gap-2 w-full">
-                                        <Plus className="h-3.5 w-3.5 shrink-0" />
-                                        <span className="flex-1 text-sm">
+                                        <Plus aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+                                        <span className="flex-1 type-body">
                                             {t('tags.create').replace("'{{slug}}'", `'${liveSlug}'`)}
                                         </span>
                                         <div className="flex gap-1">
                                             {PALETTE.map((color) => (
-                                                <button
+                                                <Button
                                                     key={color}
                                                     type="button"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    aria-pressed={pendingColor === color}
                                                     className={cn(
-                                                        'h-4 w-4 rounded-full border-2 shrink-0',
+                                                        'h-4 w-4 shrink-0 rounded-full border-2 p-0 hover:bg-transparent',
                                                         pendingColor === color ? 'border-foreground' : 'border-transparent',
                                                     )}
                                                     style={{ backgroundColor: color }}

@@ -2,6 +2,7 @@ import { Activity } from 'lucide-react';
 import { toggleInspector, useInspectorOpen } from '@/lib/devtools/devtoolsHotkey';
 import { useApiRequestLog } from '@/lib/devtools/apiRequestLog';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 
 export function InspectorToggle() {
     const isOpen = useInspectorOpen();
@@ -9,28 +10,32 @@ export function InspectorToggle() {
     const hasPending = inFlight.length > 0;
 
     return (
-        <button
+        <Button
             type="button"
+            variant="outline"
+            size="sm"
             onClick={toggleInspector}
+            aria-pressed={isOpen}
+            aria-label="Toggle API Inspector (⌘⇧A)"
             title="Toggle API Inspector (⌘⇧A)"
             className={cn(
-                'fixed bottom-4 right-4 z-[9998] flex items-center gap-1.5 rounded-full px-3 py-1.5',
-                'bg-background border border-border shadow-md text-xs font-mono',
-                'text-muted-foreground hover:text-foreground transition-colors',
-                isOpen && 'text-primary border-primary/50',
+                'fixed bottom-4 right-4 z-[9998] gap-1.5 rounded-full font-mono type-footnote shadow-elevation-2',
+                'text-label-secondary hover:text-foreground',
+                isOpen && 'border-primary/50 text-primary hover:text-primary',
             )}
         >
             <Activity
+                aria-hidden="true"
                 className={cn(
-                    'h-3.5 w-3.5',
+                    'size-3.5',
                     hasPending && 'animate-pulse text-warning',
                     isOpen && !hasPending && 'text-primary',
                 )}
             />
             <span>API</span>
             {hasPending && (
-                <span className="text-warning tabular-nums">{inFlight.length}</span>
+                <span className="tabular-nums text-warning">{inFlight.length}</span>
             )}
-        </button>
+        </Button>
     );
 }

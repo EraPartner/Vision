@@ -28,12 +28,12 @@ export function ColumnFilter({
 
     return (
         <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground px-1">{t('table.filterLabel', { header })}</p>
+            <p className="px-1 type-footnote font-medium text-label-secondary">{t('table.filterLabel', { header })}</p>
             <Input
                 placeholder={t('table.filterInputPlaceholder', { header: header.toLowerCase() })}
                 value={value}
                 onChange={(event) => onChange(event.target.value)}
-                className="h-8 text-sm"
+                className="h-8"
                 autoFocus
                 onKeyDown={(event) => {
                     if (event.key === "Enter") {
@@ -54,27 +54,33 @@ export function ColumnFilter({
                             placeholder={t('table.searchValues')}
                             value={filterSearch}
                             onChange={(event) => setFilterSearch(event.target.value)}
-                            className="h-7 text-xs"
+                            className="h-8 type-footnote"
                         />
                     )}
                     <div className="max-h-40 overflow-y-auto space-y-0.5">
                         {filteredValues.slice(0, 30).map((candidate) => (
-                            <button
+                            <Button
                                 key={candidate}
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                aria-pressed={value === candidate}
                                 onClick={() => {
                                     onChange(candidate);
                                     onClose();
                                 }}
-                                className={cn("w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors truncate", value === candidate
-                                        ? "bg-primary/10 text-primary font-medium"
-                                        : "text-foreground"
-                                    )}
+                                className={cn(
+                                    "h-7 w-full justify-start rounded-chip px-2 type-footnote font-normal",
+                                    value === candidate
+                                        ? "bg-primary/10 font-medium text-primary hover:bg-primary/15 hover:text-primary"
+                                        : "text-foreground",
+                                )}
                             >
-                                {candidate}
-                            </button>
+                                <span className="truncate">{candidate}</span>
+                            </Button>
                         ))}
                         {filteredValues.length > 30 && (
-                            <p className="text-2xs text-muted-foreground px-2">
+                            <p className="px-2 type-caption text-label-secondary">
                                 {t('table.moreValues', { count: (filteredValues.length - 30).toString() })}
                             </p>
                         )}
@@ -89,7 +95,7 @@ export function ColumnFilter({
                         onChange("");
                         onClose();
                     }}
-                    className="w-full text-xs h-7 text-muted-foreground"
+                    className="h-7 w-full type-footnote text-label-secondary"
                 >
                     {t('table.clearFilter')}
                 </Button>

@@ -85,7 +85,7 @@ const RecipientComboboxTrigger = forwardRef<
         ref={ref}
         variant="outline"
         role="combobox"
-        className={cn("justify-between font-normal h-8 text-sm", className)}
+        className={cn("justify-between font-normal h-8", className)}
         {...props}
     >
         <span className="truncate">{label}</span>

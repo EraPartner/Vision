@@ -132,7 +132,7 @@ export function AccountCombobox({
                                     {account.display_name &&
                                         account.display_name !==
                                             account.name && (
-                                            <span className="ml-1.5 truncate text-xs text-muted-foreground">
+                                            <span className="ml-1.5 truncate type-footnote text-label-secondary">
                                                 {account.name}
                                             </span>
                                         )}

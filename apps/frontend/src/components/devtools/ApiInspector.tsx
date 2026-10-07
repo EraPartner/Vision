@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, Minus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useApiRequestLog } from '@/lib/devtools/apiRequestLog';
 import { setInspectorOpen } from '@/lib/devtools/devtoolsHotkey';
@@ -37,41 +38,47 @@ export function ApiInspector() {
 
     return (
         <div
-            className="fixed bottom-14 right-4 z-[9999] flex flex-col rounded-lg border border-border bg-background shadow-2xl"
+            className="fixed bottom-14 right-4 z-[9999] flex flex-col overflow-hidden rounded-card corner-continuous border border-border bg-background shadow-elevation-4"
             style={{ width: 520, height: 480 }}
         >
             {/* Header */}
             <div className="flex items-center justify-between px-3 py-2 border-b border-border shrink-0">
                 <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-foreground">API Inspector</span>
+                    <span className="type-headline text-foreground">API Inspector</span>
                     {inFlight.length > 0 && (
-                        <Badge variant="warning" size="sm" className="px-1.5 text-2xs font-mono tabular-nums">
+                        <Badge variant="warning" size="sm" className="px-1.5 font-mono tabular-nums">
                             {inFlight.length} in-flight
                         </Badge>
                     )}
                     {totalCount > 0 && inFlight.length === 0 && (
-                        <span className="text-2xs text-muted-foreground font-mono tabular-nums">
+                        <span className="font-mono type-caption tabular-nums text-label-secondary">
                             {totalCount} requests
                         </span>
                     )}
                 </div>
                 <div className="flex items-center gap-1">
-                    <button
+                    <Button
                         type="button"
+                        variant="ghost"
+                        size="icon"
                         onClick={() => setInspectorOpen(false)}
+                        aria-label="Minimise"
                         title="Minimise"
-                        className="text-muted-foreground hover:text-foreground transition-colors p-0.5"
+                        className="h-7 w-7 text-label-secondary hover:text-foreground"
                     >
-                        <Minus className="h-3.5 w-3.5" />
-                    </button>
-                    <button
+                        <Minus aria-hidden="true" />
+                    </Button>
+                    <Button
                         type="button"
+                        variant="ghost"
+                        size="icon"
                         onClick={() => setInspectorOpen(false)}
+                        aria-label="Close"
                         title="Close"
-                        className="text-muted-foreground hover:text-foreground transition-colors p-0.5"
+                        className="h-7 w-7 text-label-secondary hover:text-foreground"
                     >
-                        <X className="h-3.5 w-3.5" />
-                    </button>
+                        <X aria-hidden="true" />
+                    </Button>
                 </div>
             </div>
 
@@ -81,13 +88,13 @@ export function ApiInspector() {
                     <TabsList className="shrink-0 rounded-none border-b border-border h-8 bg-transparent justify-start px-2 gap-0">
                         <TabsTrigger
                             value="requests"
-                            className="text-2xs h-7 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-3"
+                            className="h-7 rounded-none border-b-2 border-transparent px-3 type-footnote data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
                         >
                             Requests
                         </TabsTrigger>
                         <TabsTrigger
                             value="metrics"
-                            className="text-2xs h-7 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-3"
+                            className="h-7 rounded-none border-b-2 border-transparent px-3 type-footnote data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
                         >
                             Metrics
                         </TabsTrigger>

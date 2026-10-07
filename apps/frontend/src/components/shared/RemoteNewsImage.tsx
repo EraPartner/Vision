@@ -29,7 +29,7 @@ export function RemoteNewsImage({ src, alt = "", className, fallbackClassName }:
     return (
       <div
         className={cn(
-          "h-16 w-24 rounded-md shrink-0 bg-muted border border-border/50 flex items-center justify-center",
+          "h-16 w-24 rounded-control shrink-0 bg-muted border border-border/50 flex items-center justify-center",
           fallbackClassName,
           className
         )}
@@ -46,7 +46,7 @@ export function RemoteNewsImage({ src, alt = "", className, fallbackClassName }:
       alt={alt}
       width={96}
       height={64}
-      className={cn("h-16 w-24 rounded-md object-cover shrink-0 bg-muted", className)}
+      className={cn("h-16 w-24 rounded-control object-cover shrink-0 bg-muted", className)}
       loading="lazy"
       decoding="async"
       referrerPolicy="no-referrer"
