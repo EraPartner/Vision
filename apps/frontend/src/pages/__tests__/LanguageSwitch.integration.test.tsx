@@ -283,16 +283,16 @@ describe("Language switch (integration)", () => {
     it("DbMaintenancePage renders English heading by default", async () => {
         renderWithApp(<DbMaintenancePage />);
         expect(
-            await screen.findByRole("heading", { name: /db maintenance/i }),
+            await screen.findByRole("heading", { name: /database maintenance/i }),
         ).toBeInTheDocument();
     });
 
     it("DbMaintenancePage renders Dutch heading when language is nl", async () => {
         useDutch();
         renderWithApp(<DbMaintenancePage />);
-        // Dutch: dbMaintenance.title = "DB-onderhoud"
+        // Dutch: dbMaintenance.title = "Databaseonderhoud"
         expect(
-            await screen.findByRole("heading", { name: /db-onderhoud/i }),
+            await screen.findByRole("heading", { name: /databaseonderhoud/i }),
         ).toBeInTheDocument();
     });
 

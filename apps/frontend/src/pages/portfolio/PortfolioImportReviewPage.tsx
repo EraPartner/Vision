@@ -37,7 +37,7 @@ import {
     usePortfolioImportPreview,
 } from "@/features/portfolio/usePortfolioQueries";
 
-const PortfolioImportIcon = PAGE_ICONS["/portfolio/import"];
+const PageIcon = PAGE_ICONS["/portfolio/import"];
 
 /**
  * Seed height of a preview row (p-2 around a single line of footnote content
@@ -273,7 +273,7 @@ export function PortfolioImportReviewPage() {
                 <PageHeader
                     title={t("portfolioImport.review.title")}
                     subtitle={t("portfolioImport.review.subtitle")}
-                    icon={PortfolioImportIcon}
+                    icon={PageIcon}
                 />
                 <Skeleton className="h-12 w-full rounded-card" />
                 <Skeleton className="h-48 w-full rounded-card" />
@@ -285,7 +285,7 @@ export function PortfolioImportReviewPage() {
             <PageShell className="mx-auto max-w-3xl">
                 <PageHeader
                     title={t("portfolioImport.review.title")}
-                    icon={PortfolioImportIcon}
+                    icon={PageIcon}
                 />
                 <PageError
                     title={t("importPage.failed")}
@@ -336,7 +336,7 @@ export function PortfolioImportReviewPage() {
             <PageHeader
                 title={t("portfolioImport.review.title")}
                 subtitle={t("portfolioImport.review.subtitle")}
-                icon={PortfolioImportIcon}
+                icon={PageIcon}
                 actions={
                     <div className="flex flex-wrap items-center gap-2">
                         <Badge variant="secondary">

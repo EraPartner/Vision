@@ -43,6 +43,12 @@ import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { useMarketQuotesQuery } from "@/hooks/useMarketQuotesQuery";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { DeltaPill } from "@/components/shared/DeltaPill";
+import { TextLink } from "@/components/shared/TextLink";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 import { watchlistKeys } from "@/lib/queryKeys";
 import {
@@ -226,15 +232,27 @@ export default function WatchlistPage() {
                         );
                         const Icon = ASSET_CLASS_ICON[item.asset_class];
                         const name = item.name || item.symbol || "";
-                        const subtitle = [
-                            t(ASSET_CLASS_LABEL_KEY[item.asset_class]),
-                            sinceAddedPct != null
-                                ? `${t("watchlist.sinceAdded", { date: addedDate })} ${formatPercent(sinceAddedPct, { digits: 1, signed: true })}`
-                                : undefined,
-                            item.notes || undefined,
-                        ]
-                            .filter(Boolean)
-                            .join(" · ");
+                        const subtitle = (
+                            <>
+                                {t(ASSET_CLASS_LABEL_KEY[item.asset_class])}
+                                {sinceAddedPct != null && (
+                                    <>
+                                        {" · "}
+                                        {t("watchlist.sinceAdded", {
+                                            date: addedDate,
+                                        })}{" "}
+                                        <DeltaPill
+                                            value={sinceAddedPct}
+                                            label={formatPercent(
+                                                sinceAddedPct,
+                                                { digits: 1, signed: true },
+                                            )}
+                                        />
+                                    </>
+                                )}
+                                {item.notes ? ` · ${item.notes}` : null}
+                            </>
+                        );
                         const openChart = () => setSelectedItemId(item.id);
 
                         return (
@@ -244,7 +262,34 @@ export default function WatchlistPage() {
                                 leading={Icon ? <Icon /> : undefined}
                                 title={
                                     <span className="inline-flex max-w-full items-center gap-2">
-                                        <span className="truncate">{name}</span>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                {item.symbol ? (
+                                                    <TextLink
+                                                        className="truncate"
+                                                        to={`/research/market?symbol=${encodeURIComponent(item.symbol)}`}
+                                                        onClick={
+                                                            stopRowActivation
+                                                        }
+                                                        onKeyDown={
+                                                            stopRowActivation
+                                                        }
+                                                    >
+                                                        {name}
+                                                    </TextLink>
+                                                ) : (
+                                                    <span
+                                                        className="truncate"
+                                                        tabIndex={0}
+                                                    >
+                                                        {name}
+                                                    </span>
+                                                )}
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                {name}
+                                            </TooltipContent>
+                                        </Tooltip>
                                         {item.symbol && (
                                             <Badge
                                                 variant="outline"
@@ -318,7 +363,9 @@ export default function WatchlistPage() {
                                                         { name },
                                                     )}
                                                     onClick={stopRowActivation}
-                                                    onKeyDown={stopRowActivation}
+                                                    onKeyDown={
+                                                        stopRowActivation
+                                                    }
                                                 >
                                                     <MoreHorizontal />
                                                 </Button>

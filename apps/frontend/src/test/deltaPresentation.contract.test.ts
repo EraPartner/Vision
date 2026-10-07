@@ -23,7 +23,7 @@ describe("shared delta presentation", () => {
             ),
         ).toHaveLength(2);
         const watchlist = read("src/pages/research/WatchlistPage.tsx");
-        expect(watchlist).toMatch(/value=\{priceDiff!\}\s+invert/);
+        expect(watchlist).toMatch(/value=\{priceDiff!?\}\s+invert/);
         expect(watchlist).toMatch(/value=\{sinceAddedPct\}/);
         const digest = read("src/features/statistics/InsightsDigestPanel.tsx");
         expect(digest).toMatch(

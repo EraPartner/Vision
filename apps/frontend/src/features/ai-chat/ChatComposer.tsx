@@ -77,7 +77,7 @@ export function ChatComposer({
     };
 
     return (
-        <div className="border-t border-border/50 px-4 py-3">
+        <div className="border-t border-border/60 bg-card px-4 py-3">
             <div className="mx-auto flex max-w-3xl flex-col gap-2">
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                     <div className="flex items-center gap-2">

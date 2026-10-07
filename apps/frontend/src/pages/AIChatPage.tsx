@@ -32,6 +32,7 @@ import type { ChatMessage } from "@/types/aiChat";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { PageShell } from "@/components/shared/PageShell";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useTabParam } from "@/hooks/useTabParam";
 import { AIInvestigationPanel } from "@/features/ai-chat/AIInvestigationPanel";
@@ -192,7 +193,10 @@ export default function AIChatPage() {
                         onClick={handleInsightsDigest}
                         disabled={composerDisabled}
                     >
-                        <Sparkles className="h-4 w-4 text-primary" aria-hidden />
+                        <Sparkles
+                            className="h-4 w-4 text-primary"
+                            aria-hidden
+                        />
                         {t("aiChat.insightsDigestButton")}
                     </Button>
                 }
@@ -201,7 +205,7 @@ export default function AIChatPage() {
     );
 
     return (
-        <div className="flex h-[calc(100vh-8rem)] flex-col gap-4">
+        <PageShell className="flex h-[calc(100vh-8rem)] flex-col">
             <PageHeader
                 title={t("aiChat.title")}
                 subtitle={t(
@@ -243,11 +247,17 @@ export default function AIChatPage() {
                     </aside>
                 </Card>
 
-                <Card asChild className="flex min-w-0 flex-1 flex-col overflow-hidden">
+                <Card
+                    asChild
+                    className="flex min-w-0 flex-1 flex-col overflow-hidden"
+                >
                     <main>
                         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border/50 px-5 py-3">
                             <div className="flex min-w-0 items-center gap-3">
-                                <Sheet open={railOpen} onOpenChange={setRailOpen}>
+                                <Sheet
+                                    open={railOpen}
+                                    onOpenChange={setRailOpen}
+                                >
                                     <SheetTrigger asChild>
                                         <Button
                                             variant="ghost"
@@ -256,12 +266,17 @@ export default function AIChatPage() {
                                                 "md:hidden",
                                                 mode !== "chat" && "hidden",
                                             )}
-                                            aria-label={t("aiChat.conversations")}
+                                            aria-label={t(
+                                                "aiChat.conversations",
+                                            )}
                                         >
                                             <Menu className="h-5 w-5" />
                                         </Button>
                                     </SheetTrigger>
-                                    <SheetContent side="left" className="w-72 p-0">
+                                    <SheetContent
+                                        side="left"
+                                        className="w-72 p-0"
+                                    >
                                         <SheetHeader className="sr-only">
                                             <SheetTitle>
                                                 {t("aiChat.conversations")}
@@ -348,6 +363,6 @@ export default function AIChatPage() {
                     </main>
                 </Card>
             </div>
-        </div>
+        </PageShell>
     );
 }
