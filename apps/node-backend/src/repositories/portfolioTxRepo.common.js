@@ -1,6 +1,6 @@
 /** Shared SQL helpers for the split portfolio-transaction repository. */
 
-import { query } from "../database/connection.js";
+import { query } from "../database/connection.ts";
 
 /** @type {boolean|undefined} */
 let _hasPortfolioTransactionImportBatchIdColumn;

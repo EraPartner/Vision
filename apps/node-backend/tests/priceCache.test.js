@@ -2,13 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mockConnection } from "./helpers/repoMocks.js";
 
 import { mockLogger } from "./helpers/mockLogger.js";
-vi.mock("../src/database/connection.js", () => mockConnection());
+vi.mock("../src/database/connection.ts", () => mockConnection());
 
-vi.mock("../src/config/logger.js", () => ({
+vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-import { query } from "../src/database/connection.js";
+import { query } from "../src/database/connection.ts";
 import {
   toNumber,
   isValidPrice,
@@ -27,7 +27,7 @@ import {
   loadLatestHistoricalPointByInvestmentIds,
   __PRICE_CACHE_TTL_MS as PRICE_CACHE_TTL_MS,
 } from "../src/services/prices/priceCache.js";
-import { ValidationError } from "../src/middleware/errorHandler.js";
+import { ValidationError } from "../src/middleware/errorHandler.ts";
 
 beforeEach(() => {
   vi.clearAllMocks();

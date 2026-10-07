@@ -6,7 +6,7 @@
  * responses by the service layer and never returned in full to the frontend.
  */
 
-import { query } from '../database/connection.js';
+import { query } from '../database/connection.ts';
 
 /**
  * All stored provider keys.

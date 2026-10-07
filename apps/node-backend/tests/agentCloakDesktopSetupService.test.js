@@ -7,7 +7,7 @@ const calls = vi.hoisted(() => ({
   ensureKey: vi.fn(),
 }));
 
-vi.mock("../src/config/config.js", () => ({
+vi.mock("../src/config/config.ts", () => ({
   default: {
     aiResearch: {
       openai: { enabled: false },

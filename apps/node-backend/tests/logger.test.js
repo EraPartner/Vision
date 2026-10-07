@@ -4,7 +4,7 @@ const originalEnv = process.env;
 
 async function importLoggerFresh() {
   vi.resetModules();
-  return import("../src/config/logger.js");
+  return import("../src/config/logger.ts");
 }
 
 describe("logger", () => {
@@ -134,7 +134,7 @@ describe("logger", () => {
     process.env.LOG_LEVEL = "info";
     const { logger } = await importLoggerFresh();
     const { runWithRequestContext } =
-      await import("../src/lib/requestContext.js");
+      await import("../src/lib/requestContext.ts");
 
     await runWithRequestContext("request-context-123", async () => {
       await Promise.resolve();
@@ -150,7 +150,7 @@ describe("logger", () => {
     process.env.LOG_LEVEL = "info";
     const { logger } = await importLoggerFresh();
     const { runWithRequestContext } =
-      await import("../src/lib/requestContext.js");
+      await import("../src/lib/requestContext.ts");
     let releaseFirst;
     const firstGate = new Promise((resolve) => {
       releaseFirst = resolve;
@@ -179,7 +179,7 @@ describe("logger", () => {
     process.env.LOG_LEVEL = "info";
     const { logger } = await importLoggerFresh();
     const { runWithRequestContext } =
-      await import("../src/lib/requestContext.js");
+      await import("../src/lib/requestContext.ts");
 
     runWithRequestContext("ambient-request", () => {
       logger.info("explicit request", { requestId: "explicit-request" });
@@ -193,7 +193,7 @@ describe("logger", () => {
     process.env.LOG_LEVEL = "error";
     const { logger } = await importLoggerFresh();
     const { runWithRequestContext } =
-      await import("../src/lib/requestContext.js");
+      await import("../src/lib/requestContext.ts");
 
     runWithRequestContext("ambient-fatal-request", () => {
       logger.error("fatal operation", {

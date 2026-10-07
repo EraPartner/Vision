@@ -16,16 +16,16 @@ import {
   removeAttachmentFile,
   verifyAttachmentContent,
 } from '../services/attachmentService.js';
-import { attachmentUpload } from '../middleware/attachmentUpload.js';
-import { validateIdParam, assertIdParam } from '../middleware/validation.js';
-import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
-import { listBody, parseOptionalPagination } from '../lib/pagination.js';
-import { logger } from '../config/logger.js';
+import { attachmentUpload } from '../middleware/attachmentUpload.ts';
+import { validateIdParam, assertIdParam } from '../middleware/validation.ts';
+import { NotFoundError, ValidationError } from '../middleware/errorHandler.ts';
+import { listBody, parseOptionalPagination } from '../lib/pagination.ts';
+import { logger } from '../config/logger.ts';
 
 /**
- * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
- * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
- * @typedef {import('../types/express.js').ExpressNextFunction} ExpressNextFunction
+ * @typedef {import('../types/express.ts').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.ts').ExpressResponse} ExpressResponse
+ * @typedef {import('../types/express.ts').ExpressNextFunction} ExpressNextFunction
  */
 
 const router = Router();

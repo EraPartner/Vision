@@ -13,17 +13,17 @@
  * template-interpolated into the SQL text.
  */
 
-import { query } from '../database/connection.js';
-import { toDecimal, toNumber, addAll, roundMoney as roundToCents } from '../lib/money.js';
-import { formatDateToYmd } from '../lib/dateFormat.js';
-import { extractYearMonth } from '../lib/dateKeys.js';
+import { query } from '../database/connection.ts';
+import { toDecimal, toNumber, addAll, roundMoney as roundToCents } from '../lib/money.ts';
+import { formatDateToYmd } from '../lib/dateFormat.ts';
+import { extractYearMonth } from '../lib/dateKeys.ts';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import {
   mapRowsForAmountConversion,
   getIncludeTransfers,
 } from './infoRepositoryHelpers.js';
-import { todayAppDateString } from '../lib/timezone.js';
-import { countObservedMonths, monthKeyFromDbDate } from '../lib/observedMonths.js';
+import { todayAppDateString } from '../lib/timezone.ts';
+import { countObservedMonths, monthKeyFromDbDate } from '../lib/observedMonths.ts';
 
 /** Lookback length: N complete, already-elapsed calendar months. */
 const WINDOW_MONTHS = 6;
@@ -56,7 +56,7 @@ const WINDOW_MONTHS = 6;
  * ADR-083 transfer predicate empty the oldest months and silently re-base the
  * divisor.
  *
- * The implementation lives in lib/observedMonths.js; this caller passes
+ * The implementation lives in lib/observedMonths.ts; this caller passes
  * its own six-month window while the forecast caller passes 24 months.
  */
 export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {

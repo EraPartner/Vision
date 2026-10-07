@@ -1,8 +1,8 @@
-import { query } from '../database/connection.js';
-import { buildSetClauses } from '../lib/sqlClauses.js';
+import { query } from '../database/connection.ts';
+import { buildSetClauses } from '../lib/sqlClauses.ts';
 
-/** @typedef {import('../types/rows.js').CustomParserConfigRow} CustomParserConfigRow */
-/** @typedef {import('../types/rows.js').FormattedCustomParserConfig} FormattedCustomParserConfig */
+/** @typedef {import('../types/rows.ts').CustomParserConfigRow} CustomParserConfigRow */
+/** @typedef {import('../types/rows.ts').FormattedCustomParserConfig} FormattedCustomParserConfig */
 
 const COLUMNS = 'id, name, kind, config_json, created_at, updated_at';
 
@@ -79,7 +79,7 @@ const customParserConfigRepository = {
    * @returns {Promise<FormattedCustomParserConfig|undefined>}
    */
   async update(id, { name, config }) {
-    // Shared clause builder (lib/sqlClauses.js): undefined fields are skipped.
+    // Shared clause builder (lib/sqlClauses.ts): undefined fields are skipped.
     const { clauses: fields, params: values, nextIdx: idx } = buildSetClauses({
       name,
       config_json: config !== undefined ? JSON.stringify(config) : undefined,

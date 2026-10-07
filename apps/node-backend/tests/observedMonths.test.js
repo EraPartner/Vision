@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { countObservedMonths, monthKeyFromDbDate } from '../src/lib/observedMonths.js';
+import { countObservedMonths, monthKeyFromDbDate } from '../src/lib/observedMonths.ts';
 
 describe('observed-month helpers', () => {
   it.each([

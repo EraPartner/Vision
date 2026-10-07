@@ -1,4 +1,4 @@
-import { query, withTransaction } from "../database/connection.js";
+import { query, withTransaction } from "../database/connection.ts";
 
 const classificationColumns = `id,investment_id AS "investmentId",identifier_type AS "identifierType",
   identifier_value AS "identifierValue",identifier_exchange AS "identifierExchange",

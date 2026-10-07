@@ -14,17 +14,17 @@ import {
   suggestPatternFromNames,
 } from "../services/recipientPatternService.js";
 import { findRecipientClusters } from "../services/recipientClusterService.js";
-import { NotFoundError, ValidationError } from "../middleware/errorHandler.js";
+import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
 import {
   validateIdParam,
   validateIntParam,
   assertOptionalId,
   assertIdParam,
   validateIntArray,
-} from "../middleware/validation.js";
-import { parsePagination } from "../lib/pagination.js";
-import { withCreateOutcome } from "../lib/createOutcome.js";
-import { parseBooleanQueryParam } from "../lib/httpParams.js";
+} from "../middleware/validation.ts";
+import { parsePagination } from "../lib/pagination.ts";
+import { withCreateOutcome } from "../lib/createOutcome.ts";
+import { parseBooleanQueryParam } from "../lib/httpParams.ts";
 // The MVs attribute transactions to categories via a 3-level resolution
 // (COALESCE(t.category_id, r.default_category_id, pr.default_category_id),
 // where pr is the recipient's PRIMARY recipient), so recipient edits/merges/
@@ -33,8 +33,8 @@ import { parseBooleanQueryParam } from "../lib/httpParams.js";
 import { scheduleRefresh } from "../services/materializedViewService.js";
 
 /**
- * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
- * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ * @typedef {import('../types/express.ts').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.ts').ExpressResponse} ExpressResponse
  */
 
 const router = Router();

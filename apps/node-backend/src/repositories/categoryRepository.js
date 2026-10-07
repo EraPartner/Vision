@@ -3,11 +3,11 @@
  *
  */
 
-import { query, withTransaction } from "../database/connection.js";
-import { buildLimitOffset, buildSetClauses } from "../lib/sqlClauses.js";
-import { ConflictError } from "../middleware/errorHandler.js";
+import { query, withTransaction } from "../database/connection.ts";
+import { buildLimitOffset, buildSetClauses } from "../lib/sqlClauses.ts";
+import { ConflictError } from "../middleware/errorHandler.ts";
 
-/** @typedef {import('../types/rows.js').EnrichedCategoryRow} EnrichedCategoryRow */
+/** @typedef {import('../types/rows.ts').EnrichedCategoryRow} EnrichedCategoryRow */
 
 /**
  * @typedef {object} CategoryFilters
@@ -183,7 +183,7 @@ export const categoryRepository = {
    * @returns {Promise<EnrichedCategoryRow|null>}
    */
   async update(id, { general, detail, description, is_active }) {
-    // Shared clause builder (lib/sqlClauses.js): undefined fields are skipped.
+    // Shared clause builder (lib/sqlClauses.ts): undefined fields are skipped.
     // null general/detail/is_active mean "leave unchanged" (pre-mapped to
     // undefined); description accepts an explicit null write.
     const {

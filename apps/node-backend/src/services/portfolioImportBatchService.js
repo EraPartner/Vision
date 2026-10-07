@@ -16,8 +16,8 @@ import {
   getActiveDuplicateRepairReceipts,
   restoreDuplicatePortfolioRepairs,
 } from "./portfolioImportDuplicateRepairService.js";
-import { query, withTransaction } from "../database/connection.js";
-import { ConflictError } from "../middleware/errorHandler.js";
+import { query, withTransaction } from "../database/connection.ts";
+import { ConflictError } from "../middleware/errorHandler.ts";
 import {
   restorePortfolioImportAdoptions,
   validatePortfolioImportAdoptionRollback,
@@ -126,7 +126,7 @@ export async function getPortfolioImportBatchPreview(batchId) {
  * new holding" action.
  *
  * @param {{ batchId: number, rowId: number }} args
- * @returns {Promise<import('../types/rows.js').InvestmentRow|null|undefined>} the
+ * @returns {Promise<import('../types/rows.ts').InvestmentRow|null|undefined>} the
  *          created investment row, `undefined` when the staging row does not
  *          exist, or (in principle) `null` per investmentRepository.create's
  *          own return type — never actually null here since the insert above
@@ -289,7 +289,7 @@ async function createInvestmentFromRow({ batchId, rowId }) {
  * transaction, so an invalid row set cannot leave an orphan holding behind.
  *
  * @param {{ batchId: number, rowIds: number[], investmentId?: number, createNew?: boolean }} args
- * @returns {Promise<{ investmentId: number, created: boolean, resolved: number, investment?: import('../types/rows.js').InvestmentRow }>}
+ * @returns {Promise<{ investmentId: number, created: boolean, resolved: number, investment?: import('../types/rows.ts').InvestmentRow }>}
  */
 export async function resolveInvestmentRows({
   batchId,

@@ -2,7 +2,7 @@
 /**
  * Standalone migration CLI for the DATABASE_URL database.
  *
- * This deliberately delegates to `src/database/migrate.js` (the exact code the
+ * This deliberately delegates to `src/database/migrate.ts` (the exact code the
  * app runs on boot) rather than shelling out to bare alembic, because a plain
  * alembic invocation CANNOT safely write the version table in this repo:
  * alembic auto-creates `alembic_version.version_num` as VARCHAR(32), and the
@@ -141,8 +141,8 @@ if (!process.env.DATABASE_URL) {
 }
 
 const { runMigrations, runAlembicCommand } =
-  await import("../src/database/migrate.js");
-const { closePool } = await import("../src/database/connection.js");
+  await import("../src/database/migrate.ts");
+const { closePool } = await import("../src/database/connection.ts");
 
 try {
   if (command === "upgrade") {

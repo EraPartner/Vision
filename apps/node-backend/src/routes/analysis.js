@@ -29,7 +29,7 @@ import {
   AppError,
   NotFoundError,
   ValidationError,
-} from "../middleware/errorHandler.js";
+} from "../middleware/errorHandler.ts";
 
 import {
   executeFinancialAnalysis,

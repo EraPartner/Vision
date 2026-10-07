@@ -15,7 +15,7 @@ import { fileURLToPath } from "url";
 import {
   __BACKUP_COVERED_TABLES as BACKUP_COVERED_TABLES,
   __BACKUP_EXCLUDED_TABLES as BACKUP_EXCLUDED_TABLES,
-} from "../src/backup/coverage.js";
+} from "../src/backup/coverage.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -159,7 +159,7 @@ describe("BACKUP_COVERED_TABLES registry", () => {
       missingFromRegistry,
       [
         "These tables exist in the schema but are NOT covered by backup.",
-        "Add them to BACKUP_COVERED_TABLES in apps/node-backend/src/backup/coverage.js",
+        "Add them to BACKUP_COVERED_TABLES in apps/node-backend/src/backup/coverage.ts",
         "or to BACKUP_EXCLUDED_TABLES with a documented reason.",
         `Missing: ${missingFromRegistry.join(", ")}`,
       ].join("\n"),

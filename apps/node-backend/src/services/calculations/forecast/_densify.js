@@ -1,5 +1,5 @@
-import { epochMsToUtcYmd as toIso } from "../../../lib/dateFormat.js";
-import { ymdToEpochDay } from "../../../lib/timezone.js";
+import { epochMsToUtcYmd as toIso } from "../../../lib/dateFormat.ts";
+import { ymdToEpochDay } from "../../../lib/timezone.ts";
 
 /**
  * Densify a daily {date, net} history: fill every calendar date from the first

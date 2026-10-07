@@ -21,15 +21,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 import { mockConnection } from "../helpers/repoMocks.js";
-vi.mock("../../src/database/connection.js", () =>
+vi.mock("../../src/database/connection.ts", () =>
   mockConnection({ getClient: vi.fn() }),
 );
 
 const { resolveBulkSelection, __normalizeBulkFilter: normalizeBulkFilter } =
   await import("../../src/services/bulkSelection.js");
-const { query: dbQuery } = await import("../../src/database/connection.js");
+const { query: dbQuery } = await import("../../src/database/connection.ts");
 const { ValidationError } =
-  await import("../../src/middleware/errorHandler.js");
+  await import("../../src/middleware/errorHandler.ts");
 
 /** Every filter that must be rejected, grouped by the field it exercises. */
 const REJECTED = {

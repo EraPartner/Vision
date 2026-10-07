@@ -7,8 +7,8 @@
  */
 
 import { Router } from "express";
-import { logger } from "../../config/logger.js";
-import { rateLimiter, adminRateLimiter } from "../../middleware/rateLimiter.js";
+import { logger } from "../../config/logger.ts";
+import { rateLimiter, adminRateLimiter } from "../../middleware/rateLimiter.ts";
 import {
   FALLBACK_RATES,
   warmCache,
@@ -19,14 +19,14 @@ import {
   getInflationRates,
   clearInflationMemoryCache,
 } from "../../services/belgianInflationService.js";
-import { toDecimal, toNumber } from "../../lib/money.js";
-import { formatDateToYmd } from "../../lib/dateFormat.js";
+import { toDecimal, toNumber } from "../../lib/money.ts";
+import { formatDateToYmd } from "../../lib/dateFormat.ts";
 import { getMonthParam, getCurrentDateString } from "./_queryParams.js";
-import { parseBooleanQueryParam } from "../../lib/httpParams.js";
+import { parseBooleanQueryParam } from "../../lib/httpParams.ts";
 
 /**
- * @typedef {import('../../types/express.js').ExpressRequest} ExpressRequest
- * @typedef {import('../../types/express.js').ExpressResponse} ExpressResponse
+ * @typedef {import('../../types/express.ts').ExpressRequest} ExpressRequest
+ * @typedef {import('../../types/express.ts').ExpressResponse} ExpressResponse
  */
 
 // The pg row shape for `exchange_rates` as SELECTed above — NUMERIC columns

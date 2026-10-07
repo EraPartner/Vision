@@ -1,4 +1,4 @@
-import { query } from "../database/connection.js";
+import { query } from "../database/connection.ts";
 import { PORTFOLIO_TRANSACTION_SNAPSHOT_SQL } from "./portfolioImportReconciliationRepository.js";
 
 const FULL_TRANSACTION = `${PORTFOLIO_TRANSACTION_SNAPSHOT_SQL} || jsonb_build_object('created_at',pt.created_at::text,'updated_at',pt.updated_at::text)`;

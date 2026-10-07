@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
   poolQuery: vi.fn(),
 }));
 
-vi.mock("../src/database/connection.js", () =>
+vi.mock("../src/database/connection.ts", () =>
   mockTxConnection(mocks.client, { query: mocks.poolQuery }),
 );
 

@@ -33,25 +33,25 @@ import {
   validateIntArray,
   MAX_MONEY_VALUE,
   assertIdParam,
-} from "../middleware/validation.js";
-import { rateLimiter } from "../middleware/rateLimiter.js";
-import { ValidationError, NotFoundError } from "../middleware/errorHandler.js";
-import { toDecimal, toNumber } from "../lib/money.js";
-import { parseAmountFilter } from "../lib/filterBuilder.js";
+} from "../middleware/validation.ts";
+import { rateLimiter } from "../middleware/rateLimiter.ts";
+import { ValidationError, NotFoundError } from "../middleware/errorHandler.ts";
+import { toDecimal, toNumber } from "../lib/money.ts";
+import { parseAmountFilter } from "../lib/filterBuilder.ts";
 import {
   EXPORT_MAX_LIST_SIZE,
   streamCsvExport,
   streamNdjsonExport,
   streamBulkTransactionExport,
 } from "../services/transactionExport.js";
-import { parsePagination } from "../lib/pagination.js";
-import { toWireDate } from "../lib/dateFormat.js";
-import { parseBooleanQueryParam } from "../lib/httpParams.js";
+import { parsePagination } from "../lib/pagination.ts";
+import { toWireDate } from "../lib/dateFormat.ts";
+import { parseBooleanQueryParam } from "../lib/httpParams.ts";
 
 /**
- * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
- * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
- * @typedef {import('../types/rows.js').EnrichedTransactionRow} EnrichedTransactionRow
+ * @typedef {import('../types/express.ts').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.ts').ExpressResponse} ExpressResponse
+ * @typedef {import('../types/rows.ts').EnrichedTransactionRow} EnrichedTransactionRow
  */
 
 const router = Router();

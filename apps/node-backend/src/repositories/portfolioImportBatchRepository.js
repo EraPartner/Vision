@@ -6,7 +6,7 @@
  * query helper — no raw pool references.
  */
 
-import { query } from "../database/connection.js";
+import { query } from "../database/connection.ts";
 
 const BATCH_COLUMNS = `id, adapter_name, source_filename, source_size_bytes,
   default_asset_class, default_type, status, account_id,

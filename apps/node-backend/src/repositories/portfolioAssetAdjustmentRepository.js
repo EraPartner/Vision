@@ -1,5 +1,5 @@
 /** Immutable source-backed unit corrections, with no cash or disposal legs. */
-import { query } from "../database/connection.js";
+import { query } from "../database/connection.ts";
 
 export async function getEligibleYieldSources(investmentId, accountId) {
   return (

@@ -1,4 +1,4 @@
-import { query, withTransaction } from "../database/connection.js";
+import { query, withTransaction } from "../database/connection.ts";
 import { readAuditHead } from "../repositories/auditChainRepository.js";
 import { verifyAuditHistory } from "./auditVerificationService.js";
 

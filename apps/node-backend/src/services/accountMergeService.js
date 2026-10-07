@@ -28,17 +28,17 @@
  * collidingAnchorCurrencies.
  */
 
-import { query, withTransaction } from "../database/connection.js";
-import { todayAppDateString } from "../lib/timezone.js";
-import { filterValidatedIdNumbers } from "../lib/validation.js";
-import { NotFoundError, ValidationError } from "../middleware/errorHandler.js";
-import { roundToCents, toDecimal, toNumber } from "../lib/money.js";
+import { query, withTransaction } from "../database/connection.ts";
+import { todayAppDateString } from "../lib/timezone.ts";
+import { filterValidatedIdNumbers } from "../lib/validation.ts";
+import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
+import { roundToCents, toDecimal, toNumber } from "../lib/money.ts";
 import { computedBalanceByCurrencyAggLateral } from "../repositories/accountBalanceSql.js";
 import {
   convertWithRates,
   loadCurrentRates,
 } from "./currency/currencyConversionService.js";
-import { hasConversionRate } from "../lib/exchangeRates.js";
+import { hasConversionRate } from "../lib/exchangeRates.ts";
 import { accountRepository } from "../repositories/accountRepository.js";
 import { transactionRepository } from "../repositories/transactionRepository.js";
 import { plannedTransactionRepository } from "../repositories/plannedTransactionRepository.js";

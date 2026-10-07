@@ -2,14 +2,14 @@
  * Info sub-repository: bank account balances and daily balance history.
  */
 
-import { query } from "../database/connection.js";
+import { query } from "../database/connection.ts";
 import {
   toDecimal,
   toNumber,
   roundMoney as roundToCents,
-} from "../lib/money.js";
-import { toYmd, toWireDate } from "../lib/dateFormat.js";
-import { todayAppDateString } from "../lib/timezone.js";
+} from "../lib/money.ts";
+import { toYmd, toWireDate } from "../lib/dateFormat.ts";
+import { todayAppDateString } from "../lib/timezone.ts";
 import {
   balanceProvenanceLateral,
   computedBalanceByCurrencyLateral,
@@ -274,7 +274,7 @@ export const banksRepository = {
             transaction_count: parseInt(row.transaction_count, 10),
             // DATE columns cross the wire as calendar-day strings: pg reads DATE
             // as a local-midnight Date, which JSON-serializes to the PREVIOUS
-            // day east of UTC (lib/dateFormat.js).
+            // day east of UTC (lib/dateFormat.ts).
             first_transaction: toWireDate(row.first_transaction),
             last_transaction: toWireDate(row.last_transaction),
           },

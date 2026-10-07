@@ -2,9 +2,9 @@ import plannedTransactionRepository from "../repositories/plannedTransactionRepo
 import {
   expandOccurrences,
   nextOccurrenceYmd,
-} from "../lib/calculations/recurrence.js";
-import { todayAppDateString } from "../lib/timezone.js";
-import { toWireDate } from "../lib/dateFormat.js";
+} from "../lib/calculations/recurrence.ts";
+import { todayAppDateString } from "../lib/timezone.ts";
+import { toWireDate } from "../lib/dateFormat.ts";
 import {
   convertWithRates,
   listLatestStoredRates,

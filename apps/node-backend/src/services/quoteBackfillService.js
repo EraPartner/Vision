@@ -13,19 +13,19 @@
  * - Provider-agnostic spike sanitization before persistence
  */
 
-import { logger } from "../config/logger.js";
-import { query } from "../database/connection.js";
-import { getDayKeyUtc } from "../lib/dateKeys.js";
-import { madReturnStats, isRobustNeedle } from "../lib/math.js";
-import { forEachConcurrent } from "../lib/concurrency.js";
-import { differenceInCalendarDaysYmd } from "../lib/timezone.js";
+import { logger } from "../config/logger.ts";
+import { query } from "../database/connection.ts";
+import { getDayKeyUtc } from "../lib/dateKeys.ts";
+import { madReturnStats, isRobustNeedle } from "../lib/math.ts";
+import { forEachConcurrent } from "../lib/concurrency.ts";
+import { differenceInCalendarDaysYmd } from "../lib/timezone.ts";
 import {
   fetchHistoricalPrices,
   saveHistoricalPointsToDatabase,
 } from "./priceProviderService.js";
 
 /**
- * Provider-config subset of `InvestmentRow` (types/rows.js) this module reads
+ * Provider-config subset of `InvestmentRow` (types/rows.ts) this module reads
  * off `HOLDING_WINDOW_SELECT` — a bespoke projection, not `SELECT i.*`, so it
  * only lists the columns actually selected there. Matches
  * `fetchHistoricalPrices`'s own `investment` param shape (priceProviderService.js).

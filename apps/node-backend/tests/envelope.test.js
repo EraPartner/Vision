@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { wrapResponse } from '../src/middleware/envelope.js';
+import { wrapResponse } from '../src/middleware/envelope.ts';
 
 describe('wrapResponse', () => {
   it('keeps route-specific metadata beside the generated requestId', () => {

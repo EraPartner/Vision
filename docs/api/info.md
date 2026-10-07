@@ -7,7 +7,7 @@ updated: 2026-10-04
 tags: [api, analytics, statistics, dashboard, phase-g-deprecation, ing, bnp, supported-adapters]
 description: API endpoints for statistics, analytics, and dashboard data. Phase G removed 6 overlapping endpoints; see aggregations API for their replacements. May 2026: Added ING and BNP Paribas Fortis adapters (8 total banks supported).
 aliases: [info-api, analytics-api, statistics-api, dashboard-api]
-related_code: ["apps/node-backend/src/routes/info.js", "apps/node-backend/src/repositories/infoRepository.js", "apps/node-backend/src/repositories/infoRepositoryHelpers.js", "apps/node-backend/src/repositories/infoRepositoryStatistics.js", "apps/node-backend/src/repositories/infoRepositoryMonthly.js", "apps/node-backend/src/repositories/infoRepositoryBanks.js", "apps/node-backend/src/repositories/infoRepositoryNetWorth.js", "apps/node-backend/src/repositories/infoRepositoryPlanned.js", "apps/node-backend/src/repositories/infoRepositoryRecipients.js", "apps/node-backend/src/lib/dateKeys.js", "apps/node-backend/src/lib/calculations/netWorthSanitizer.js", "apps/node-backend/src/services/currency/currencyConversionService.js", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js", "apps/node-backend/src/services/info/performanceHelpers.js"]
+related_code: ["apps/node-backend/src/routes/info.js", "apps/node-backend/src/repositories/infoRepository.js", "apps/node-backend/src/repositories/infoRepositoryHelpers.js", "apps/node-backend/src/repositories/infoRepositoryStatistics.js", "apps/node-backend/src/repositories/infoRepositoryMonthly.js", "apps/node-backend/src/repositories/infoRepositoryBanks.js", "apps/node-backend/src/repositories/infoRepositoryNetWorth.js", "apps/node-backend/src/repositories/infoRepositoryPlanned.js", "apps/node-backend/src/repositories/infoRepositoryRecipients.js", "apps/node-backend/src/lib/dateKeys.ts", "apps/node-backend/src/lib/calculations/netWorthSanitizer.ts", "apps/node-backend/src/services/currency/currencyConversionService.js", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js", "apps/node-backend/src/services/info/performanceHelpers.js"]
 ---
 
 # Info & Analytics API
@@ -136,7 +136,7 @@ Notes:
 
 - Historical currency conversion is date-aware for this endpoint: each transaction/month row is converted using its own row date (instead of latest FX rates).
 - This makes month-over-month values stable across restarts and exchange-rate cache refreshes.
-- Phase 3.1 refactoring: monolithic 1445-line repository split into 7 domain modules; monthly summary logic now lives in `monthlyRepository` (`infoRepositoryMonthly.js`). Repository-specific aggregation and conversion helpers remain in `infoRepositoryHelpers.js`; generic date formatting and UTC keys are owned by `lib/dateFormat.js` and `lib/dateKeys.js` ([[apps/node-backend/src/repositories/infoRepositoryMonthly.js]]).
+- Phase 3.1 refactoring: monolithic 1445-line repository split into 7 domain modules; monthly summary logic now lives in `monthlyRepository` (`infoRepositoryMonthly.js`). Repository-specific aggregation and conversion helpers remain in `infoRepositoryHelpers.js`; generic date formatting and UTC keys are owned by `lib/dateFormat.ts` and `lib/dateKeys.ts` ([[apps/node-backend/src/repositories/infoRepositoryMonthly.js]]).
 - Phase 3.1 optimization: income/spending rows batch-converted in 1 `convertRowsToEur` call via `batchConvertGroupsWithHistoricalRateFallback()` instead of separate conversions per month.
 - Monthly-summary MV fast path removed a redundant unused conversion pass (`mvConverted`) while keeping the merged income/spending conversion output path unchanged.
 
@@ -425,8 +425,8 @@ Notes:
 - Latest snapshot investment value is reconciled from active investment holdings (`units` × `current_price` for unit-based assets, principal-based for savings/bonds, plus appreciation for real estate) so current net worth is not stuck at `0` when historical portfolio aggregation is sparse.
 - Historical unit-priced investment valuation uses persisted/provider historical quotes first and falls back to transaction-derived unit price carry-forward when quote history is missing; it does not backfill past days from mutable `current_price`.
 - Backend emits debug/warn/info logs for net worth computation context (`firstDataDate`, snapshot count, current totals, fallback usage) to speed up production troubleshooting without changing API shape.
-- Daily net-worth snapshots are sanitized for isolated one-day investment spikes/troughs: confirmed outlier days are replaced with geometric interpolation (`sqrt(prev*next)`) and `netWorth` is recomputed as `liquid + liabilities + correctedInvestments`, preserving that day's liquid and liabilities values; `monthlyChange` and baseline calculations use sanitized snapshots ([[apps/node-backend/src/lib/calculations/netWorthSanitizer.js]], [[apps/node-backend/tests/infoRepositoryHelpers.test.js]]).
-- Net-worth daily timeline loops use the generic UTC/day helpers `addDaysUtc` and `getDayKeyUtc` from [[apps/node-backend/src/lib/dateKeys.js]] to preserve endpoint behavior without making services depend on repository modules.
+- Daily net-worth snapshots are sanitized for isolated one-day investment spikes/troughs: confirmed outlier days are replaced with geometric interpolation (`sqrt(prev*next)`) and `netWorth` is recomputed as `liquid + liabilities + correctedInvestments`, preserving that day's liquid and liabilities values; `monthlyChange` and baseline calculations use sanitized snapshots ([[apps/node-backend/src/lib/calculations/netWorthSanitizer.ts]], [[apps/node-backend/tests/infoRepositoryHelpers.test.js]]).
+- Net-worth daily timeline loops use the generic UTC/day helpers `addDaysUtc` and `getDayKeyUtc` from [[apps/node-backend/src/lib/dateKeys.ts]] to preserve endpoint behavior without making services depend on repository modules.
 
 **Response:** `200 OK`
 
@@ -738,7 +738,7 @@ Security/performance notes:
 - Endpoint now uses `adminRateLimiter` to protect materialized-view refresh from abuse bursts.
 - Route registration/behavior is covered by targeted tests in [[apps/node-backend/tests/routes/info.test.js]].
 
-Code links: [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/middleware/rateLimiter.js]]
+Code links: [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/middleware/rateLimiter.ts]]
 
 ---
 
@@ -790,4 +790,4 @@ These endpoints are optimized using:
 - [[docs/features/transactions]] - Transactions Feature
 - [[docs/performance/materialized-views]] - Materialized Views
 
-Code links: [[apps/node-backend/src/repositories/infoRepository.js]] (barrel), [[apps/node-backend/src/repositories/infoRepositoryHelpers.js]] (repository-specific shared helpers), [[apps/node-backend/src/repositories/infoRepositoryMonthly.js]] (monthly), [[apps/node-backend/src/repositories/infoRepositoryBanks.js]] (banks), [[apps/node-backend/src/repositories/infoRepositoryNetWorth.js]] (net worth), [[apps/node-backend/src/repositories/infoRepositoryStatistics.js]] (stats), [[apps/node-backend/src/repositories/infoRepositoryPlanned.js]] (planned), [[apps/node-backend/src/repositories/infoRepositoryRecipients.js]] (recipients), [[apps/node-backend/src/lib/dateKeys.js]] (UTC date keys), [[apps/node-backend/src/lib/calculations/netWorthSanitizer.js]] (spike sanitization), [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/services/belgianInflationService.js]], [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/tests/infoRepository.test.js]]
+Code links: [[apps/node-backend/src/repositories/infoRepository.js]] (barrel), [[apps/node-backend/src/repositories/infoRepositoryHelpers.js]] (repository-specific shared helpers), [[apps/node-backend/src/repositories/infoRepositoryMonthly.js]] (monthly), [[apps/node-backend/src/repositories/infoRepositoryBanks.js]] (banks), [[apps/node-backend/src/repositories/infoRepositoryNetWorth.js]] (net worth), [[apps/node-backend/src/repositories/infoRepositoryStatistics.js]] (stats), [[apps/node-backend/src/repositories/infoRepositoryPlanned.js]] (planned), [[apps/node-backend/src/repositories/infoRepositoryRecipients.js]] (recipients), [[apps/node-backend/src/lib/dateKeys.ts]] (UTC date keys), [[apps/node-backend/src/lib/calculations/netWorthSanitizer.ts]] (spike sanitization), [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/services/belgianInflationService.js]], [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/tests/infoRepository.test.js]]

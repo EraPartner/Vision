@@ -3,7 +3,7 @@
  *
  * Request parsing is validated with zod (schema → safeParse → ValidationError),
  * the idiom established in settings.js/reports.js. Batch/row route ids share
- * one coerced schema with the portfolio import router (lib/importBatchIds.js).
+ * one coerced schema with the portfolio import router (lib/importBatchIds.ts).
  * CSV option/config schemas normalize multipart fields and validate the
  * supported encoding and numeric convention before staging.
  */
@@ -19,19 +19,19 @@ import {
   parseBatchIdParam,
   parseBatchRowIdParams,
   parseOverrideId,
-} from "../lib/importBatchIds.js";
-import { logger } from "../config/logger.js";
+} from "../lib/importBatchIds.ts";
+import { logger } from "../config/logger.ts";
 import {
   runImportPipeline,
   commitImport,
 } from "../services/importPipeline/index.js";
-import { ValidationError, NotFoundError } from "../middleware/errorHandler.js";
+import { ValidationError, NotFoundError } from "../middleware/errorHandler.ts";
 import {
   csvUpload,
   cleanup,
   csvUploadErrorTranslator,
-} from "../lib/csvUpload.js";
-import { streamImport } from "../lib/importProgress.js";
+} from "../lib/csvUpload.ts";
+import { streamImport } from "../lib/importProgress.ts";
 import {
   listBatches,
   getBatch,
@@ -53,8 +53,8 @@ import {
 } from "../services/importPipeline/adapters/_shared.js";
 
 /**
- * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
- * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ * @typedef {import('../types/express.ts').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.ts').ExpressResponse} ExpressResponse
  */
 
 /**
@@ -483,7 +483,7 @@ router.post(
       throw new ValidationError("Missing required parameter: bank_name");
     }
 
-    // streamImport is typed via node:http's base classes (lib/importProgress.js)
+    // streamImport is typed via node:http's base classes (lib/importProgress.ts)
     // — ExpressRequest/ExpressResponse are a narrower structural stand-in that
     // doesn't model IncomingMessage/ServerResponse, so forward via an any cast,
     // same as routes/ai.js's createSseWriter call.
@@ -644,7 +644,7 @@ router.post(
 
     const { recipient_id } = req.body;
     // null/absent clears the override; anything else must be a real recipient id
-    // (parseOverrideId, not Number() — see lib/importBatchIds.js).
+    // (parseOverrideId, not Number() — see lib/importBatchIds.ts).
     const effectiveRecipientId = parseOverrideId(recipient_id, "recipient_id");
 
     const rowCount = await overrideRecipient({

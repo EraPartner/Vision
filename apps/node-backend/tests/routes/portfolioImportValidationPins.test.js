@@ -31,7 +31,7 @@ vi.mock("multer", () => {
   return { default: multer };
 });
 
-vi.mock("../../src/lib/portfolioUpload.js", async (importOriginal) => ({
+vi.mock("../../src/lib/portfolioUpload.ts", async (importOriginal) => ({
   ...(await importOriginal()),
   assertPortfolioUploadSupported: vi.fn().mockResolvedValue(undefined),
 }));
@@ -88,9 +88,9 @@ vi.mock("../../src/repositories/customParserConfigRepository.js", () => ({
   },
 }));
 
-vi.mock("../../src/database/connection.js", () => mockConnection());
+vi.mock("../../src/database/connection.ts", () => mockConnection());
 
-vi.mock("../../src/config/logger.js", () => ({
+vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
@@ -99,7 +99,7 @@ import { commitReviewedPortfolioImport } from "../../src/services/portfolioImpor
 // NOT mocked: only .../portfolioImportPipeline/index.js is. This is the real
 // boundary function, run here over the mocked pg connection.
 import { createBatch } from "../../src/services/portfolioImportPipeline/stage.js";
-import { query as dbQuery } from "../../src/database/connection.js";
+import { query as dbQuery } from "../../src/database/connection.ts";
 import {
   getBatch,
   overrideInvestment,

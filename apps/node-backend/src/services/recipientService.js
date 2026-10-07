@@ -3,9 +3,9 @@
  * Routes delegate here instead of importing the repository directly
  * (eslint vision-local/no-repo-direct-from-route).
  */
-import { query } from '../database/connection.js';
-import { ValidationError } from '../middleware/errorHandler.js';
-import { normalizeForMatching } from '../lib/textNormalization.js';
+import { query } from '../database/connection.ts';
+import { ValidationError } from '../middleware/errorHandler.ts';
+import { normalizeForMatching } from '../lib/textNormalization.ts';
 
 export { default } from '../repositories/recipientRepository.js';
 

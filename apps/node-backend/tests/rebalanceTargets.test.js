@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ValidationError } from '../src/middleware/errorHandler.js';
+import { ValidationError } from '../src/middleware/errorHandler.ts';
 import { resolveRebalanceTargetWeights } from '../src/services/portfolio/rebalanceTargets.js';
 
 function expectValidationError(body, message) {

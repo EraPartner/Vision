@@ -27,11 +27,11 @@
  */
 
 import plannedTransactionRepository from '../../../repositories/plannedTransactionRepository.js';
-import { expandOccurrences as expandRecurrence } from '../../../lib/calculations/recurrence.js';
+import { expandOccurrences as expandRecurrence } from '../../../lib/calculations/recurrence.ts';
 import { buildEnvelope } from './_envelope.js';
 import { assertNoNaN } from './_invariants.js';
-import { toAppTz, appDateStringToUtc, toAppDateString } from '../../../lib/timezone.js';
-import { toDecimal, roundMoney } from '../../../lib/money.js';
+import { toAppTz, appDateStringToUtc, toAppDateString } from '../../../lib/timezone.ts';
+import { toDecimal, roundMoney } from '../../../lib/money.ts';
 
 const MAX_MONTHS = 24;
 const MAX_OCCURRENCES_PER_ITEM = 500; // guard against infinite-loop on tiny intervals
@@ -81,7 +81,7 @@ function buildMonthKeys(todayParts, months) {
 /**
  * Expand one planned-transaction row into forecast occurrences within [start, end].
  *
- * @param {import('../../../types/rows.js').PlannedForecastRow} row
+ * @param {import('../../../types/rows.ts').PlannedForecastRow} row
  * @param {Date} start  inclusive
  * @param {Date} end    inclusive
  * @returns {Array<{date: Date, item: ForecastItem}>}

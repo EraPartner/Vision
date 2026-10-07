@@ -23,9 +23,9 @@
  * the dispatcher reports back.
  */
 
-import { logger } from "../config/logger.js";
-import settings from "../config/config.js";
-import { AppError } from "../middleware/errorHandler.js";
+import { logger } from "../config/logger.ts";
+import settings from "../config/config.ts";
+import { AppError } from "../middleware/errorHandler.ts";
 import { aiChatRepository } from "../repositories/aiChatRepository.js";
 import { getOllamaClient } from "../integrations/ollama/client.js";
 import {
@@ -39,8 +39,8 @@ import {
   getToolNames,
 } from "./aiChat/tools/index.js";
 
-/** @typedef {import('../types/rows.js').AiConversationRow} AiConversationRow */
-/** @typedef {import('../types/rows.js').AiMessageRow} AiMessageRow */
+/** @typedef {import('../types/rows.ts').AiConversationRow} AiConversationRow */
+/** @typedef {import('../types/rows.ts').AiMessageRow} AiMessageRow */
 
 /**
  * A message in the array sent to/received from the Ollama `/api/chat`

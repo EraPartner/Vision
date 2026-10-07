@@ -11,10 +11,10 @@
  * so this module never needs to touch `updated_at` manually.
  */
 
-import { query } from "../database/connection.js";
+import { query } from "../database/connection.ts";
 
-/** @typedef {import('../types/rows.js').AiConversationRow} AiConversationRow */
-/** @typedef {import('../types/rows.js').AiMessageRow} AiMessageRow */
+/** @typedef {import('../types/rows.ts').AiConversationRow} AiConversationRow */
+/** @typedef {import('../types/rows.ts').AiMessageRow} AiMessageRow */
 
 const CONVERSATION_COLUMNS =
   'id, title, model, created_at AS "createdAt", updated_at AS "updatedAt"';

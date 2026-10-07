@@ -7,7 +7,7 @@
  * (ADR-079). All mutations use parameterised queries.
  */
 
-import { query } from "../database/connection.js";
+import { query } from "../database/connection.ts";
 
 /**
  * Current request count for a provider on a given UTC day. 0 if no row yet.

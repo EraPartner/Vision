@@ -23,7 +23,7 @@
  */
 
 import { makeRng, gaussian } from '../../calculations/forecast/prng.js';
-import { firstOfMonthYmd, todayAppDateString } from '../../../lib/timezone.js';
+import { firstOfMonthYmd, todayAppDateString } from '../../../lib/timezone.ts';
 import { researchAggregator } from '../researchAggregator.js';
 import {
   getPortfolioSummary,

@@ -5,7 +5,7 @@ import {
   validateSplitAllocation,
   validateBatchSplitAllocation,
   validatePaymentAmount,
-} from '../../src/lib/calculations/splits.js';
+} from '../../src/lib/calculations/splits.ts';
 
 /**
  * Golden-fixture regression suite for lib/calculations/splits.

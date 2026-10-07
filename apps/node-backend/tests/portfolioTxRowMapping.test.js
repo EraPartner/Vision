@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { mockConnection } from "./helpers/repoMocks.js";
 
-vi.mock("../src/database/connection.js", () => mockConnection());
+vi.mock("../src/database/connection.ts", () => mockConnection());
 
 import { mapPortfolioTxRow } from "../src/repositories/portfolioTxRepo.reads.js";
 

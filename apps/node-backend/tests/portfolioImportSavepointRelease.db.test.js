@@ -7,7 +7,7 @@ import {
   getTestPool,
   hasTestDatabase,
 } from "./setup/db.js";
-import { closePool } from "../src/database/connection.js";
+import { closePool } from "../src/database/connection.ts";
 import { commitBatch } from "../src/services/portfolioImportPipeline/commit.js";
 const pool = getTestPool();
 describe.skipIf(!hasTestDatabase())("real failed-row savepoint release", () => {

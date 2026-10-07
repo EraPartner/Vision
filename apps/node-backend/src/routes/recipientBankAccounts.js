@@ -4,19 +4,19 @@
 
 import { Router } from "express";
 import recipientBankAccountService from "../services/recipientBankAccountService.js";
-import { NotFoundError, ValidationError } from "../middleware/errorHandler.js";
+import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
 import {
   validateIdParam,
   validateIntParam,
   assertMaxLength,
   assertIdParam,
-} from "../middleware/validation.js";
-import { withCreateOutcome } from "../lib/createOutcome.js";
-import { parseBooleanQueryParam } from "../lib/httpParams.js";
+} from "../middleware/validation.ts";
+import { withCreateOutcome } from "../lib/createOutcome.ts";
+import { parseBooleanQueryParam } from "../lib/httpParams.ts";
 
 /**
- * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
- * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ * @typedef {import('../types/express.ts').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.ts').ExpressResponse} ExpressResponse
  */
 
 const router = Router();

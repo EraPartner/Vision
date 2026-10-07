@@ -1,7 +1,7 @@
 /** Planned-transaction orchestration above parameterized persistence. */
 
-import { withTransaction } from "../database/connection.js";
-import { sanitizeUpdateFields } from "../lib/validation.js";
+import { withTransaction } from "../database/connection.ts";
+import { sanitizeUpdateFields } from "../lib/validation.ts";
 import plannedTransactionRepository, {
   applyPlannedFieldUpdate,
   inheritTransactionTagsInTransaction,

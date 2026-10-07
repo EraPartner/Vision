@@ -2,7 +2,7 @@
 title: Schema Initialization Reference
 type: reference
 status: archived
-date: 2026-08-30
+date: 2026-10-07
 updated: 2026-09-04
 tags:
   [
@@ -19,7 +19,7 @@ description: Legacy schema initialization reference — ARCHIVED. Schema is now 
 aliases: [schema init, database initialization, table creation, startup schema]
 related_code:
   - alembic/versions/0001_initial_database_schema.py
-  - apps/node-backend/src/database/migrate.js
+  - apps/node-backend/src/database/migrate.ts
   - apps/node-backend/src/main.js
 ---
 

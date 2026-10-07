@@ -1,5 +1,5 @@
 /** Explicit history reads, compare-and-set adoption, and immutable receipts. */
-import { query } from "../database/connection.js";
+import { query } from "../database/connection.ts";
 
 // Numeric strings preserve the database's exact stored precision in receipts.
 export const PORTFOLIO_TRANSACTION_SNAPSHOT_SQL = `jsonb_build_object(

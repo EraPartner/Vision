@@ -11,7 +11,7 @@ import {
   normalizeForMatching,
   __formatAmountString as formatAmountString,
   __extractCurrencyCode as extractCurrencyCode,
-} from '../src/lib/textNormalization.js';
+} from '../src/lib/textNormalization.ts';
 
 describe('TextNormalizationService', () => {
   describe('cleanRecipientName', () => {

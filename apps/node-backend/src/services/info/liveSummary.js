@@ -8,7 +8,7 @@
  * truth for the current portfolio value across those surfaces.
  */
 
-import { logger } from '../../config/logger.js';
+import { logger } from '../../config/logger.ts';
 import { getPortfolioSummary } from '../portfolio/portfolioSummaryService.js';
 import {
   portfolioSummaryCache,

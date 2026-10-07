@@ -14,10 +14,10 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("../src/database/connection.js", () =>
+vi.mock("../src/database/connection.ts", () =>
   mockConnection({ query: mocks.query }),
 );
-vi.mock("../src/config/logger.js", () => ({ logger: mocks.logger }));
+vi.mock("../src/config/logger.ts", () => ({ logger: mocks.logger }));
 vi.mock("../src/services/importPipeline/stage.js", () => ({
   createBatch: vi.fn(),
   stageBatch: vi.fn(),

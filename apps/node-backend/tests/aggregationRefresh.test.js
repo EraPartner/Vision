@@ -17,8 +17,8 @@ async function loadAggregationRefresh() {
   const clearMcCache = vi.fn().mockResolvedValue(undefined);
   const clearRollingMcCache = vi.fn().mockResolvedValue(undefined);
 
-  vi.doMock("../src/database/connection.js", () => mockConnection({ query }));
-  vi.doMock("../src/config/logger.js", () => ({ logger }));
+  vi.doMock("../src/database/connection.ts", () => mockConnection({ query }));
+  vi.doMock("../src/config/logger.ts", () => ({ logger }));
   vi.doMock("../src/services/materializedViewService.js", () => ({
     refreshMaterializedViews: refreshLegacyMaterializedViews,
     scheduleRefresh: scheduleLegacyRefresh,

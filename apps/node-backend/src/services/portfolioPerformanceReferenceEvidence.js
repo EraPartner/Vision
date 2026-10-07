@@ -1,6 +1,6 @@
-import { Decimal, toDecimal } from "../lib/money.js";
+import { Decimal, toDecimal } from "../lib/money.ts";
 import { createHash } from "node:crypto";
-import { parsedDateToYmd } from "../lib/importDates.js";
+import { parsedDateToYmd } from "../lib/importDates.ts";
 import { parseKinesisSourceRecordForBasisPolicy } from "./portfolioImportPipeline/kinesisTransactionHistoryAdapter.js";
 import {
   parseAmountField,

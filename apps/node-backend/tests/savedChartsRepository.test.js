@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
   withTransaction: vi.fn(async (callback) => callback()),
 }));
 
-vi.mock("../src/database/connection.js", () =>
+vi.mock("../src/database/connection.ts", () =>
   mockConnection({
     query: mocks.query,
     withTransaction: mocks.withTransaction,

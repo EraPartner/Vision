@@ -431,7 +431,7 @@ describe("GET /:id — real validateIdParam guard", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("rejects a non-integer :id with a 400 VALIDATION_ERROR envelope", async () => {
-    // Previously `vi.mock('.../middleware/validation.js')` replaced
+    // Previously `vi.mock('.../middleware/validation.ts')` replaced
     // validateIdParam with a pass-through, so this guard was never tested.
     const res = await api.get(`${BASE}/abc`).expect(400);
     expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));

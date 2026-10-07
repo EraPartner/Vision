@@ -16,7 +16,7 @@
  */
 
 /**
- * @typedef {import('../../types/rows.js').AiMessageRow} AiMessageRow
+ * @typedef {import('../../types/rows.ts').AiMessageRow} AiMessageRow
  */
 
 /**

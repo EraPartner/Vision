@@ -28,8 +28,8 @@ import plannedTransactionService from "../src/services/plannedTransactionService
 import splitPersistence from "../src/repositories/splitRepository.js";
 import splitService from "../src/services/splitService.js";
 import { streamCsvExport } from "../src/services/transactionExport.js";
-import { buildTransactionWhere } from "../src/lib/filterBuilder.js";
-import { closePool } from "../src/database/connection.js";
+import { buildTransactionWhere } from "../src/lib/filterBuilder.ts";
+import { closePool } from "../src/database/connection.ts";
 
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 const plannedTransactionRepository = {

@@ -1,4 +1,4 @@
-import { query, withTransaction } from "../database/connection.js";
+import { query, withTransaction } from "../database/connection.ts";
 
 export async function createGrant(grant) {
   const result = await query(

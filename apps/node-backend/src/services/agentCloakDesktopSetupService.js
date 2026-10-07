@@ -1,4 +1,4 @@
-import settings from "../config/config.js";
+import settings from "../config/config.ts";
 import { detectAgentCloakDesktopSpans } from "./agentCloakPreflight.js";
 import {
   getAgentCloakConfig,
@@ -10,7 +10,7 @@ import {
   UpstreamError,
   AppError,
   ConflictError,
-} from "../middleware/errorHandler.js";
+} from "../middleware/errorHandler.ts";
 
 const PROBE_TEXT = "Vision privacy connection check";
 

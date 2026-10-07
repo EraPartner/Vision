@@ -2,8 +2,8 @@ import http from "node:http";
 import net from "node:net";
 import express from "express";
 import { afterEach, describe, expect, it } from "vitest";
-import { createHostGuard } from "../src/middleware/hostGuard.js";
-import { createCorsMiddleware } from "../src/middleware/cors.js";
+import { createHostGuard } from "../src/middleware/hostGuard.ts";
+import { createCorsMiddleware } from "../src/middleware/cors.ts";
 
 const servers = [];
 async function listen(handler) {

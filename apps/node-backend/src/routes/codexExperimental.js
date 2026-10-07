@@ -1,13 +1,13 @@
 import { Router } from "express";
 import { isAbsolute } from "node:path";
-import settings from "../config/config.js";
-import { isLoopbackHost } from "../middleware/adminAuth.js";
+import settings from "../config/config.ts";
+import { isLoopbackHost } from "../middleware/adminAuth.ts";
 import {
   AppError,
   ForbiddenError,
   UnauthorizedError,
   ValidationError,
-} from "../middleware/errorHandler.js";
+} from "../middleware/errorHandler.ts";
 import { createExperimentalCodexSession } from "../integrations/codex/experimentalSession.js";
 
 const router = Router();

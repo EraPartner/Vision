@@ -5,13 +5,13 @@
  * dashboard aggregations (monthly summaries and category totals).
  * Views are refreshed CONCURRENTLY so reads remain unblocked.
  *
- * The whole lifecycle runs post-`listen` from startup/warmup.js — none of it is
+ * The whole lifecycle runs post-`listen` from startup/warmup.ts — none of it is
  * on the critical path to `/health`, because both creation and refresh are full
  * aggregation scans of `transactions` whenever the views are missing or stale.
  */
 
-import { query, getClient } from "../database/connection.js";
-import { logger } from "../config/logger.js";
+import { query, getClient } from "../database/connection.ts";
+import { logger } from "../config/logger.ts";
 import { invalidateStatisticsCaches } from "./info/cache.js";
 
 /**
@@ -52,7 +52,7 @@ const MATERIALIZED_VIEWS = ["mv_monthly_summary", "mv_category_totals"];
 /**
  * Create all materialized views (idempotent).
  *
- * Called from the post-listen warmup (startup/warmup.js), never before
+ * Called from the post-listen warmup (startup/warmup.ts), never before
  * `app.listen()`: `IF NOT EXISTS` makes this a metadata no-op once the views
  * are there, but on a first-ever boot — or after a migration that drops a view
  * to redefine it (0084/0085) — each statement is a full aggregation scan of

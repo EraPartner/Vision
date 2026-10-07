@@ -31,7 +31,7 @@ vi.mock("../../src/services/deduplication.js", () => ({
   lockManualTransactionIdentity: vi.fn(async () => undefined),
 }));
 
-vi.mock("../../src/config/logger.js", () => ({
+vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
@@ -43,7 +43,7 @@ vi.mock("../../src/services/currency/currencyConversionService.js", () =>
   mockCurrencyConversion(),
 );
 
-vi.mock("../../src/database/connection.js", () => mockTxConnection());
+vi.mock("../../src/database/connection.ts", () => mockTxConnection());
 
 vi.mock("../../src/repositories/accountRepository.js", () => {
   const accountRepository = { findActiveId: vi.fn(async () => 1) };

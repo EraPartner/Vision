@@ -3,14 +3,14 @@
  * pipelines. Pipeline-specific rollback effects stay in callbacks.
  */
 
-import { parseBatchIdParam } from '../lib/importBatchIds.js';
-import { parsePagination } from '../lib/pagination.js';
-import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
+import { parseBatchIdParam } from '../lib/importBatchIds.ts';
+import { parsePagination } from '../lib/pagination.ts';
+import { NotFoundError, ValidationError } from '../middleware/errorHandler.ts';
 
 /**
- * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
- * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
- * @typedef {import('../types/express.js').ExpressRouter} ExpressRouter
+ * @typedef {import('../types/express.ts').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.ts').ExpressResponse} ExpressResponse
+ * @typedef {import('../types/express.ts').ExpressRouter} ExpressRouter
  */
 
 /**

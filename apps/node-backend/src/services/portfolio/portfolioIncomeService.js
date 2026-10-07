@@ -6,7 +6,7 @@
  * but must NEVER feed Planned Transactions or the cash-flow forecast.
  */
 
-import { toDecimal, toNumber, roundToCents } from '../../lib/money.js';
+import { toDecimal, toNumber, roundToCents } from '../../lib/money.ts';
 
 /**
  * Aggregate income across per-investment summaries.

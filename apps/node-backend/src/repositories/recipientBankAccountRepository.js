@@ -5,10 +5,10 @@
  * Provides CRUD operations for managing bank accounts linked to recipients.
  */
 
-import { query, withTransaction } from '../database/connection.js';
-import { buildSetClauses } from '../lib/sqlClauses.js';
+import { query, withTransaction } from '../database/connection.ts';
+import { buildSetClauses } from '../lib/sqlClauses.ts';
 
-/** @typedef {import('../types/rows.js').RecipientBankAccountRow} RecipientBankAccountRow */
+/** @typedef {import('../types/rows.ts').RecipientBankAccountRow} RecipientBankAccountRow */
 
 export const recipientBankAccountRepository = {
   /**
@@ -84,7 +84,7 @@ export const recipientBankAccountRepository = {
 
     const existing = await this.getByAccountNumber(accountNumber);
     if (existing) {
-      // Enrich with missing metadata. Shared clause builder (lib/sqlClauses.js)
+      // Enrich with missing metadata. Shared clause builder (lib/sqlClauses.ts)
       // skips undefined, so the enrichment conditions map to the field bag.
       const { clauses: updates, params, nextIdx: paramIdx } = buildSetClauses({
         bank_name: bankName && !existing.bank_name ? bankName : undefined,
@@ -144,7 +144,7 @@ export const recipientBankAccountRepository = {
    * @returns {Promise<RecipientBankAccountRow|null>}
    */
   async update(id, { bankName, address, accountLabel }) {
-    // Shared clause builder (lib/sqlClauses.js): undefined fields are skipped.
+    // Shared clause builder (lib/sqlClauses.ts): undefined fields are skipped.
     const { clauses: updates, params, nextIdx: paramIdx } = buildSetClauses({
       bank_name: bankName, address, account_label: accountLabel,
     });

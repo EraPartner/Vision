@@ -6,15 +6,15 @@
  * marks each row 'validated' or 'error'. Repeated equal rows remain valid.
  */
 
-import { query } from "../../database/connection.js";
-import { logger } from "../../config/logger.js";
+import { query } from "../../database/connection.ts";
+import { logger } from "../../config/logger.ts";
 import {
   assignImportIdentities,
   budgetingIdentityBase,
 } from "../importIdentity.js";
 
 /**
- * @typedef {import('../../types/rows.js').ImportStagingRow} ImportStagingRow
+ * @typedef {import('../../types/rows.ts').ImportStagingRow} ImportStagingRow
  * @typedef {import('./index.js').ImportBatchId} ImportBatchId
  * @typedef {import('./index.js').ImportProgressCallback} ImportProgressCallback
  */

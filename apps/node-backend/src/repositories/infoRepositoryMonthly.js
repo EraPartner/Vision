@@ -12,21 +12,21 @@
  * SQL window set and the JS zero-fill key set disagreed by a whole month.
  */
 
-import { query } from "../database/connection.js";
+import { query } from "../database/connection.ts";
 import {
   buildExclusionClauses,
   validateInt4Ids,
-} from "../lib/filterBuilder.js";
+} from "../lib/filterBuilder.ts";
 import { convertRowsToEur } from "../services/currency/currencyConversionService.js";
-import { logger } from "../config/logger.js";
+import { logger } from "../config/logger.ts";
 import {
   toDecimal,
   toNumber,
   roundMoney as roundToCents,
-} from "../lib/money.js";
-import { formatDateToYmd, toWireDate } from "../lib/dateFormat.js";
-import { formatYearMonthKey } from "../lib/dateKeys.js";
-import { todayAppDateString, firstOfMonthYmd } from "../lib/timezone.js";
+} from "../lib/money.ts";
+import { formatDateToYmd, toWireDate } from "../lib/dateFormat.ts";
+import { formatYearMonthKey } from "../lib/dateKeys.ts";
+import { todayAppDateString, firstOfMonthYmd } from "../lib/timezone.ts";
 import {
   mvAvailable,
   buildMonthlySummary,

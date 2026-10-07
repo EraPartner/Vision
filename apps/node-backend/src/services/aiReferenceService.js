@@ -5,7 +5,7 @@ import {
   randomUUID,
 } from "node:crypto";
 import { AI_REVERSIBLE_REFERENCE_TYPES } from "@vision/types/aiResearch";
-import settings from "../config/config.js";
+import settings from "../config/config.ts";
 import * as repository from "../repositories/aiReferenceRepository.js";
 
 const PRIVATE_MARKER_PREFIX = "[[vision-ref:";

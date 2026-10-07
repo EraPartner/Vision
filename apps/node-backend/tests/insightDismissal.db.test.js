@@ -8,7 +8,7 @@ import {
 } from "./setup/db.js";
 import insightDismissalRepository from "../src/repositories/insightDismissalRepository.js";
 import insightCashProjectionRepository from "../src/repositories/insightCashProjectionRepository.js";
-import { closePool } from "../src/database/connection.js";
+import { closePool } from "../src/database/connection.ts";
 
 const pool = getTestPool();
 const describeDb = hasTestDatabase() ? describe : describe.skip;

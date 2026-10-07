@@ -1,4 +1,4 @@
-import { toDecimal } from "../../src/lib/money.js";
+import { toDecimal } from "../../src/lib/money.ts";
 
 const esc = (value) =>
   String(value)

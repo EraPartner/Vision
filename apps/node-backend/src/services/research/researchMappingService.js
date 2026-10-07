@@ -255,7 +255,7 @@ function createResearchMappingService({
 
 /**
  * @param {string} provider
- * @param {import('../../types/rows.js').InstrumentProviderMapRow} row
+ * @param {import('../../types/rows.ts').InstrumentProviderMapRow} row
  * @param {string} status
  */
 function fromStore(provider, row, status) {

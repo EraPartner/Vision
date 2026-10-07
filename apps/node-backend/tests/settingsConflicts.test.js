@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockTxConnection } from "./helpers/repoMocks.js";
-vi.mock("../src/database/connection.js", () => mockTxConnection());
-import { query, withTransaction } from "../src/database/connection.js";
+vi.mock("../src/database/connection.ts", () => mockTxConnection());
+import { query, withTransaction } from "../src/database/connection.ts";
 import repo from "../src/repositories/settingsRepository.js";
 beforeEach(() => vi.clearAllMocks());
 describe("conditional whole-value settings replacement", () => {

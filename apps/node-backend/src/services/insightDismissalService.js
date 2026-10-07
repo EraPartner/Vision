@@ -1,6 +1,6 @@
 import insightDismissalRepository from "../repositories/insightDismissalRepository.js";
 import { detectCategoryOutliers } from "./categoryOutlierService.js";
-import { NotFoundError } from "../middleware/errorHandler.js";
+import { NotFoundError } from "../middleware/errorHandler.ts";
 
 export async function dismissInsight(value) {
   if (

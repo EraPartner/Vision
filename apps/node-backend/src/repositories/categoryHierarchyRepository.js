@@ -1,5 +1,5 @@
-import { query, withTransaction } from "../database/connection.js";
-import { ConflictError, ValidationError } from "../middleware/errorHandler.js";
+import { query, withTransaction } from "../database/connection.ts";
+import { ConflictError, ValidationError } from "../middleware/errorHandler.ts";
 
 function conflict(message, code = "CATEGORY_HIERARCHY_CONFLICT") {
   return new ConflictError(message, { details: { reason: code } });

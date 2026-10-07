@@ -2,7 +2,7 @@
 title: Database Query Patterns & Optimization
 type: reference
 status: active
-date: 2026-04-21
+date: 2026-10-07
 updated: 2026-08-26
 tags:
   [
@@ -36,7 +36,7 @@ related_code:
 
 ## Connection Architecture
 
-**File:** [[apps/node-backend/src/database/connection.js]]
+**File:** [[apps/node-backend/src/database/connection.ts]]
 
 ```
 ┌─────────────────────────────────────────────┐

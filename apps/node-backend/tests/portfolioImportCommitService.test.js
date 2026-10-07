@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   assertPortfolioImportReadiness: vi.fn(),
 }));
 
-vi.mock("../src/database/connection.js", () =>
+vi.mock("../src/database/connection.ts", () =>
   mockConnection({
     withTransaction: mocks.withTransaction,
   }),

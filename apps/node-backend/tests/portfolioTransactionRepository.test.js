@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 import { mockConnection } from "./helpers/repoMocks.js";
-vi.mock("../src/database/connection.js", () => mockConnection());
+vi.mock("../src/database/connection.ts", () => mockConnection());
 // Domain tests isolate the writer boundary; disposable PG tests verify locks.
 vi.mock("../src/services/portfolio/portfolioHistoryWriteService.js", () => ({
   withPortfolioHistoryWrite: (_accounts, work) => work(),
@@ -16,7 +16,7 @@ vi.mock(
   }),
 );
 
-import { query } from "../src/database/connection.js";
+import { query } from "../src/database/connection.ts";
 import portfolioTransactionReadRepository, {
   __resetPortfolioTransactionSchemaCache,
 } from "../src/repositories/portfolioTransactionRepository.js";

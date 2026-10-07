@@ -1,5 +1,5 @@
 /** Keep unit-history validation and mutation under one writer transaction. */
-import { query, withTransaction } from "../../database/connection.js";
+import { query, withTransaction } from "../../database/connection.ts";
 
 export async function withPortfolioHistoryWrite(accountIds, work) {
   return withTransaction(async () => {

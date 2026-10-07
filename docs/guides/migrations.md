@@ -2,7 +2,7 @@
 title: Database Migration Guide
 type: guide
 status: active
-date: 2026-10-04
+date: 2026-10-07
 updated: 2026-10-04
 tags:
   [
@@ -27,7 +27,7 @@ related_code:
     "config/alembic.ini",
     "packaging/electron/runtime/native.js",
     "scripts/check-destructive-migrations.py",
-    "apps/node-backend/src/database/migrate.js",
+    "apps/node-backend/src/database/migrate.ts",
   ]
 ---
 

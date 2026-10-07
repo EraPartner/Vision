@@ -12,7 +12,7 @@ import {
 import { randomUUID } from "node:crypto";
 import { analysisDefinitionSchema } from "@vision/types/analysis";
 import { assertAnalysisDatasetReference } from "@vision/types/analysis-datasets";
-import { query, withTransaction } from "../database/connection.js";
+import { query, withTransaction } from "../database/connection.ts";
 import { compileVisualAnalysis } from "./analysisCatalog.js";
 import { executeAnalysisSql } from "./analysisExecutor.js";
 import { evaluateAnalysisFormulas } from "./analysisFormulaEngine.js";

@@ -1,6 +1,6 @@
-import { epochMsToUtcYmd } from "../lib/dateFormat.js";
-import { assertPublicHttpUrl } from "../lib/urlSafety.js";
-import settings from "../config/config.js";
+import { epochMsToUtcYmd } from "../lib/dateFormat.ts";
+import { assertPublicHttpUrl } from "../lib/urlSafety.ts";
+import settings from "../config/config.ts";
 import { tryReserveDay } from "../repositories/providerQuotaRepository.js";
 
 const BRAVE_ENDPOINT = "https://api.search.brave.com/res/v1/web/search";

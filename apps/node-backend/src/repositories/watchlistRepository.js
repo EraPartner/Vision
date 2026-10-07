@@ -2,17 +2,17 @@
  * Watchlist Repository - data access for watchlist (prospective investments) table.
  */
 
-import { query } from '../database/connection.js';
-import { coerceNumericFields } from '../lib/money.js';
-import { buildSetClauses } from '../lib/sqlClauses.js';
+import { query } from '../database/connection.ts';
+import { coerceNumericFields } from '../lib/money.ts';
+import { buildSetClauses } from '../lib/sqlClauses.ts';
 
 // target_price is NUMERIC (node-postgres returns it as a string); coerce on
 // emit so it matches the `number` API/TS type. current_price/price_change are
 // added later by the route from the price provider, not read from this table.
 const WATCHLIST_NUMERIC_FIELDS = ['target_price', 'added_price'];
 
-/** @typedef {import('../types/rows.js').WatchlistRow} WatchlistRow */
-/** @typedef {import('../types/rows.js').FormattedWatchlistRow} FormattedWatchlistRow */
+/** @typedef {import('../types/rows.ts').WatchlistRow} WatchlistRow */
+/** @typedef {import('../types/rows.ts').FormattedWatchlistRow} FormattedWatchlistRow */
 
 /**
  * @param {any} row A raw {@link WatchlistRow}.

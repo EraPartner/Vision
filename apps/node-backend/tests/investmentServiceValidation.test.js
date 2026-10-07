@@ -25,13 +25,13 @@ vi.mock("../src/services/priceProviderService.js", () => ({
 vi.mock("../src/services/quoteBackfillService.js", () => ({
   refreshQuotesForInvestment: vi.fn(),
 }));
-vi.mock("../src/config/kinesisConfig.js", () => ({
+vi.mock("../src/config/kinesisConfig.ts", () => ({
   getKinesisAssetConfig: vi.fn(),
 }));
 vi.mock("../src/services/info/cache.js", () => ({
   invalidatePortfolioCaches: vi.fn(),
 }));
-vi.mock("../src/lib/urlSafety.js", () => ({ assertPublicHttpUrl: vi.fn() }));
+vi.mock("../src/lib/urlSafety.ts", () => ({ assertPublicHttpUrl: vi.fn() }));
 vi.mock("../src/services/portfolio/fxResolve.js", () => ({
   autoResolveFxRateToEur: vi.fn(),
 }));
@@ -42,7 +42,7 @@ import {
   updateInvestment,
   __parseDefaultListOptions as parseDefaultListOptions,
 } from "../src/services/investmentService.js";
-import { ValidationError } from "../src/middleware/errorHandler.js";
+import { ValidationError } from "../src/middleware/errorHandler.ts";
 
 function mockRes() {
   return { ok: vi.fn(), status: vi.fn().mockReturnThis(), send: vi.fn() };

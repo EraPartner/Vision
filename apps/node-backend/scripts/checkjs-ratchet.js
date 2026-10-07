@@ -64,7 +64,7 @@ const BASELINE_PATH = path.join(ROOT, "scripts/checkjs-ratchet-baseline.json");
  * uniformly clean, so a whole-directory prefix would have gated a mix of
  * annotated and still-dirty files together until the last file landed) plus
  * `main.js`. Shared Express req/res/router structural types for the
- * post-data-layer files live in `src/types/express.js` — extended across the
+ * post-data-layer files live in `src/types/express.ts` — extended across the
  * campaign as new call sites needed members it lacked (`write`/`once`/`set`/
  * `sendFile`/`writeHead`/`getHeader`/`removeHeader`/`type`/`emit`, a
  * `ResponseMetaLoose` alias for `ok(data, meta)`'s second argument, and

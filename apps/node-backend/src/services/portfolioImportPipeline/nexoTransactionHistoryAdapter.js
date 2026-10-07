@@ -8,8 +8,8 @@
  * crypto-to-crypto conversions have one stable transaction currency.
  */
 
-import { logger } from "../../config/logger.js";
-import { divide, toDecimal, toNumber } from "../../lib/money.js";
+import { logger } from "../../config/logger.ts";
+import { divide, toDecimal, toNumber } from "../../lib/money.ts";
 import {
   parseAmountField,
   parseCsvFile,

@@ -11,9 +11,9 @@
  * - If both APIs are unavailable the service falls back to DB then hardcoded constants
  */
 
-import { query } from "../../database/connection.js";
-import { logger } from "../../config/logger.js";
-import { toDecimal, toNumber } from "../../lib/money.js";
+import { query } from "../../database/connection.ts";
+import { logger } from "../../config/logger.ts";
+import { toDecimal, toNumber } from "../../lib/money.ts";
 import {
   recordSuccess as recordProviderSuccess,
   recordError as recordProviderError,
@@ -37,9 +37,9 @@ import {
 import { settingsRepository } from "../../repositories/settingsRepository.js";
 
 /**
- * @typedef {import('../../types/rows.js').ExchangeRateRow} ExchangeRateRow
- * @typedef {import('../../types/rows.js').HistoricalRateIndex} HistoricalRateIndex
- * @typedef {import('../../types/rows.js').RateTable} RateTable
+ * @typedef {import('../../types/rows.ts').ExchangeRateRow} ExchangeRateRow
+ * @typedef {import('../../types/rows.ts').HistoricalRateIndex} HistoricalRateIndex
+ * @typedef {import('../../types/rows.ts').RateTable} RateTable
  */
 
 // In-memory cache: { rates: {...}, timestamp: number } | null

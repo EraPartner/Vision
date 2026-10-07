@@ -6,9 +6,9 @@
  * shared query helper — no raw pool references in this file.
  */
 
-import { query, withTransaction } from "../database/connection.js";
+import { query, withTransaction } from "../database/connection.ts";
 
-/** @typedef {import('../types/rows.js').ImportBatchRow} ImportBatchRow */
+/** @typedef {import('../types/rows.ts').ImportBatchRow} ImportBatchRow */
 
 /**
  * @param {{ limit?: number, offset?: number }} [opts]

@@ -6,7 +6,7 @@
  */
 
 import { Router } from 'express';
-import { ValidationError } from '../middleware/errorHandler.js';
+import { ValidationError } from '../middleware/errorHandler.ts';
 import {
   getChart,
   getNews,
@@ -15,8 +15,8 @@ import {
 } from '../services/marketLookupService.js';
 
 /**
- * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
- * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ * @typedef {import('../types/express.ts').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.ts').ExpressResponse} ExpressResponse
  */
 
 const router = Router();

@@ -11,20 +11,20 @@
  * filter-mode requests so a mistyped filter cannot delete the whole table.
  */
 
-import { query as dbQuery } from "../database/connection.js";
-import { ValidationError } from "../middleware/errorHandler.js";
+import { query as dbQuery } from "../database/connection.ts";
+import { ValidationError } from "../middleware/errorHandler.ts";
 import {
   buildTransactionWhere,
   parseAmountFilter,
   validateInt4Ids,
-} from "../lib/filterBuilder.js";
+} from "../lib/filterBuilder.ts";
 import {
   assertMaxLength,
   assertOptionalId,
   assertYmd,
   validateIntArray,
   validateNumber,
-} from "../lib/validation.js";
+} from "../lib/validation.ts";
 import { EXPORT_JOINS_SQL } from "./transactionExport.js";
 
 const DEFAULT_ID_CAP = 500;

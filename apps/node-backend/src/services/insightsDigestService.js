@@ -15,7 +15,7 @@ import { detectSubscriptionCreep } from "./subscriptionCreepService.js";
 import { detectCategoryOutliers } from "./categoryOutlierService.js";
 import { getCashForecastInsight } from "./cashForecastInsightService.js";
 import insightDismissalRepository from "../repositories/insightDismissalRepository.js";
-import { logger } from "../config/logger.js";
+import { logger } from "../config/logger.ts";
 
 let refreshInFlight;
 let refreshRetryAfter = 0;

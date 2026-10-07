@@ -1,9 +1,9 @@
-import { query, withTransaction } from '../database/connection.js';
-import { logger } from '../config/logger.js';
+import { query, withTransaction } from '../database/connection.ts';
+import { logger } from '../config/logger.ts';
 import { recordSuccess as recordProviderSuccess, recordError as recordProviderError } from './providerHealthService.js';
-import { roundMoney } from '../lib/money.js';
+import { roundMoney } from '../lib/money.ts';
 
-/** @typedef {import('../types/rows.js').BelgianInflationRate} BelgianInflationRate */
+/** @typedef {import('../types/rows.ts').BelgianInflationRate} BelgianInflationRate */
 
 // belgian_inflation_rates.monthly_rate is NUMERIC(10,8): keep the full 8 dp of
 // stored scale. Rounding to 6 dp here threw away precision the column could
@@ -511,7 +511,7 @@ async function loadFromDatabase(startMonth, endMonth) {
     [startMonth ? `${startMonth}-01` : null, endMonth ? `${endMonth}-01` : null]
   );
 
-  return /** @type {Pick<import('../types/rows.js').BelgianInflationRateRow, 'month_date'|'monthly_rate'>[]} */ (result.rows)
+  return /** @type {Pick<import('../types/rows.ts').BelgianInflationRateRow, 'month_date'|'monthly_rate'>[]} */ (result.rows)
     .map((row) => ({
       month: monthKeyFromDatabaseValue(row.month_date),
       monthly_rate: Number(row.monthly_rate),

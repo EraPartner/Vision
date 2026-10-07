@@ -10,7 +10,7 @@
  * semantics are activated in ADR-089.
  */
 
-import { query } from "../database/connection.js";
+import { query } from "../database/connection.ts";
 import {
   balanceProvenanceLateral,
   computedBalanceByCurrencyAggLateral,
@@ -19,12 +19,12 @@ import {
   buildInsert,
   buildSetClauses,
   buildLimitOffset,
-} from "../lib/sqlClauses.js";
-import { todayAppDateString } from "../lib/timezone.js";
-import { lockAccountFundingGraph } from "../lib/accountFundingGraphLock.js";
+} from "../lib/sqlClauses.ts";
+import { todayAppDateString } from "../lib/timezone.ts";
+import { lockAccountFundingGraph } from "../lib/accountFundingGraphLock.ts";
 
-/** @typedef {import('../types/rows.js').AccountRow} AccountRow */
-/** @typedef {import('../types/rows.js').AccountBalanceQueryRow} AccountBalanceQueryRow */
+/** @typedef {import('../types/rows.ts').AccountRow} AccountRow */
+/** @typedef {import('../types/rows.ts').AccountBalanceQueryRow} AccountBalanceQueryRow */
 
 const COLUMNS = `id, name, display_name, institution, currency, type, liquidity_class,
   spendable, in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve,
@@ -72,7 +72,7 @@ export const accountRepository = {
   /**
    * Resolve a caller-supplied canonical identity without minting an account.
    * @param {number} id
-   * @param {{ client?: import('../types/rows.js').QueryRunner }} [options]
+   * @param {{ client?: import('../types/rows.ts').QueryRunner }} [options]
    */
   async findActiveId(id, { client } = {}) {
     const runQuery = client ? client.query.bind(client) : query;
@@ -396,7 +396,7 @@ export const accountRepository = {
    * casing (no-op update purely to RETURNING the id in one round-trip).
    *
    * @param {string|null|undefined} name
-   * @param {{ multiCurrencyCash?: boolean, client?: import('../types/rows.js').QueryRunner }} [capabilities]
+   * @param {{ multiCurrencyCash?: boolean, client?: import('../types/rows.ts').QueryRunner }} [capabilities]
    * @returns {Promise<number|undefined>} undefined when `name` is null or
    *   btrims to empty (the trigger's blank path — no account)
    */

@@ -5,18 +5,18 @@
  * plus the DB read/write layer for asset_price_history.
  */
 
-import { query } from "../../database/connection.js";
-import { logger } from "../../config/logger.js";
+import { query } from "../../database/connection.ts";
+import { logger } from "../../config/logger.ts";
 import {
   epochMsToUtcYmd,
   normalizeDateLikeToYmd,
-} from "../../lib/dateFormat.js";
-import { ymdToEpochDay } from "../../lib/timezone.js";
-import { validateInt4Ids } from "../../lib/filterBuilder.js";
+} from "../../lib/dateFormat.ts";
+import { ymdToEpochDay } from "../../lib/timezone.ts";
+import { validateInt4Ids } from "../../lib/filterBuilder.ts";
 
 /**
- * @typedef {import('../../types/rows.js').AssetPriceHistoryRow} AssetPriceHistoryRow
- * @typedef {import('../../types/rows.js').PricePoint} PricePoint
+ * @typedef {import('../../types/rows.ts').AssetPriceHistoryRow} AssetPriceHistoryRow
+ * @typedef {import('../../types/rows.ts').PricePoint} PricePoint
  */
 
 /**

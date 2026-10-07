@@ -24,7 +24,7 @@ vi.mock('../src/services/calculations/aggregation/averageVsCurrent.js', () => ({
 vi.mock('../src/repositories/infoRepository.js', () => ({
   default: { getPlannedExpensesNextMonth: vi.fn().mockResolvedValue({ summary: {}, daily_data: [] }) },
 }));
-vi.mock('../src/config/logger.js', () => ({
+vi.mock('../src/config/logger.ts', () => ({
   logger: mockLogger(),
 }));
 

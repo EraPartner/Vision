@@ -6,10 +6,10 @@
  * implementations in frontend hooks.
  */
 
-import { toDecimal, toNumber } from "../../lib/money.js";
-import { sanitizeIsolatedValueSpikes } from "../../lib/calculations/valueSpikeSanitizer.js";
-import { appDateStringToUtc, toAppDateString } from "../../lib/timezone.js";
-import { toYmd } from "../../lib/dateFormat.js";
+import { toDecimal, toNumber } from "../../lib/money.ts";
+import { sanitizeIsolatedValueSpikes } from "../../lib/calculations/valueSpikeSanitizer.ts";
+import { appDateStringToUtc, toAppDateString } from "../../lib/timezone.ts";
+import { toYmd } from "../../lib/dateFormat.ts";
 import { calculateAccruedInterest as sharedCalculateAccruedInterest } from "@vision/shared-utils/portfolio";
 
 // Cost-basis accounting and interest accrual live in the shared workspace
@@ -20,7 +20,7 @@ import { calculateAccruedInterest as sharedCalculateAccruedInterest } from "@vis
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
-export { sanitizeIsolatedValueSpikes } from "../../lib/calculations/valueSpikeSanitizer.js";
+export { sanitizeIsolatedValueSpikes } from "../../lib/calculations/valueSpikeSanitizer.ts";
 
 export { toYmd };
 

@@ -18,7 +18,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mockLogger } from "../helpers/mockLogger.js";
 import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.js";
-import { createAdminAuthMiddleware } from "../../src/middleware/adminAuth.js";
+import { createAdminAuthMiddleware } from "../../src/middleware/adminAuth.ts";
 import { mockConnection } from "../helpers/repoMocks.js";
 
 vi.mock("https", () => ({
@@ -27,7 +27,7 @@ vi.mock("https", () => ({
   },
 }));
 
-vi.mock("../../src/database/connection.js", () =>
+vi.mock("../../src/database/connection.ts", () =>
   mockConnection({
     checkConnection: vi.fn(),
     getTableCount: vi.fn(),
@@ -41,9 +41,9 @@ const settings = vi.hoisted(() => ({
   isDevelopment: () => true,
 }));
 
-vi.mock("../../src/config/config.js", () => ({ default: settings }));
+vi.mock("../../src/config/config.ts", () => ({ default: settings }));
 
-vi.mock("../../src/config/logger.js", () => ({
+vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
@@ -63,7 +63,7 @@ vi.mock("../../src/services/routeManifest.js", () => ({
 import {
   checkConnection,
   getTableCount,
-} from "../../src/database/connection.js";
+} from "../../src/database/connection.ts";
 import { sanitizePersistedKinesisHistory } from "../../src/services/priceProviderService.js";
 import { listProviderHealth } from "../../src/services/providerHealthService.js";
 import { getRouteManifest } from "../../src/services/routeManifest.js";

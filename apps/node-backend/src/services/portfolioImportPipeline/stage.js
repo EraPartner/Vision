@@ -7,9 +7,9 @@
  * instrument matching, or dedup happens here.
  */
 
-import { query, withTransaction } from "../../database/connection.js";
-import { logger } from "../../config/logger.js";
-import { parsedDateToYmd } from "../../lib/importDates.js";
+import { query, withTransaction } from "../../database/connection.ts";
+import { logger } from "../../config/logger.ts";
+import { parsedDateToYmd } from "../../lib/importDates.ts";
 import { parseWithConfig } from "./portfolioGenericAdapter.js";
 import {
   normalizeCreatedBatchId,
@@ -17,7 +17,7 @@ import {
 } from "../importStageLifecycle.js";
 
 /**
- * @typedef {import('../../types/rows.js').PortfolioImportStagingRow} PortfolioImportStagingRow
+ * @typedef {import('../../types/rows.ts').PortfolioImportStagingRow} PortfolioImportStagingRow
  * @typedef {import('./index.js').PortfolioImportBatchId} PortfolioImportBatchId
  * @typedef {import('./index.js').PortfolioImportProgressCallback} PortfolioImportProgressCallback
  */
@@ -33,7 +33,7 @@ import {
  *   pipeline (see importPipeline/stage.js `createBatch`): the streaming/immediate
  *   import responses would otherwise emit `batch_id: "12"` while the review-commit
  *   route (routes/portfolioImportRoutes.js:491) emits `batch_id: 12`. NUMBER is
- *   the single wire type — it matches `coercedIdSchema` (lib/importBatchIds.js:17)
+ *   the single wire type — it matches `coercedIdSchema` (lib/importBatchIds.ts:17)
  *   and the frontend guards (`batch_id: z.number()` in
  *   apps/frontend/src/lib/api/portfolioImports.ts).
  */

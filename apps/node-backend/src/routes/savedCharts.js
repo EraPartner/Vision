@@ -8,13 +8,13 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import savedChartsService from '../services/savedChartsService.js';
-import { validateIntArray, validateIdParam, assertIdParam } from '../middleware/validation.js';
-import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
-import { listBody, parseOptionalPagination } from '../lib/pagination.js';
+import { validateIntArray, validateIdParam, assertIdParam } from '../middleware/validation.ts';
+import { NotFoundError, ValidationError } from '../middleware/errorHandler.ts';
+import { listBody, parseOptionalPagination } from '../lib/pagination.ts';
 
 /**
- * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
- * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ * @typedef {import('../types/express.ts').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.ts').ExpressResponse} ExpressResponse
  */
 
 const router = Router();

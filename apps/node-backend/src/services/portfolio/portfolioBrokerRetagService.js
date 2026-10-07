@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { withTransaction } from "../../database/connection.js";
+import { withTransaction } from "../../database/connection.ts";
 import { validatePortfolioAssetTransferHistory } from "./portfolioAssetTransferService.js";
 import repository from "../../repositories/portfolioBrokerRetagRepository.js";
 import { appendAuditEvent } from "../../repositories/auditChainRepository.js";
@@ -8,11 +8,11 @@ import {
   partitionOversellDeficits,
 } from "@vision/shared-utils/portfolio";
 import { settingsRepository } from "../../repositories/settingsRepository.js";
-import { todayAppDateString } from "../../lib/timezone.js";
+import { todayAppDateString } from "../../lib/timezone.ts";
 import {
   ConflictError,
   ValidationError,
-} from "../../middleware/errorHandler.js";
+} from "../../middleware/errorHandler.ts";
 
 const EPSILON = 1e-8;
 const COST_BASIS_METHODS = new Set(["weighted_avg", "fifo", "lifo"]);

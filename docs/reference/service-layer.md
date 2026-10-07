@@ -2,7 +2,7 @@
 title: Service Layer Reference
 type: reference
 status: active
-date: 2026-09-27
+date: 2026-10-07
 last_modified: 2026-09-27
 tags: [backend, services, reference, business-logic, phase-1, phase-c, import-pipeline, graceful-shutdown, bug-hunt-2026-05-05, error-handling, robustness, route-service-boundary, repo-service-boundary, layering, thin-seams, adr-067]
 description: Complete reference for backend service modules. June 2026 — all 15 route files now go through thin `services/<domain>Service.js` seams; the lint rule `vision-local/no-repo-direct-from-route` is enforced as ERROR. 14 new thin seam modules added. August 2026 — the inverse edge is enforced too: `vision-local/no-service-import-from-repo` is an ERROR on `src/repositories/**`, with a closed allowlist for the seven sanctioned currency-conversion importers.
@@ -42,15 +42,15 @@ Repository Layer (SQL queries)
 
 The top level of `services/` is the public route/startup-facing seam. Keep domain facades, cross-domain orchestrators, infrastructure entry points, and established integration seams there. Put internal implementations in domain subdirectories such as `services/prices/`, `services/portfolio/`, `services/aiChat/`, and `services/importPipeline/`.
 
-Top-level modules such as `priceProviderService`, `providerHealthService`, `quoteBackfillService`, `portfolioPerformanceSnapshotService`, `portfolioImportBatchService`, and `aiChatService` are intentional facades or orchestration seams with direct route, controller, or startup callers. Their domain subdirectories contain the lower-level implementation. `deduplication` and `bulkSelection` also remain services because they coordinate persistence or repository-backed selection; they are not pure calculations. Framework-free pure helpers belong in `lib/` or `services/calculations/`, as demonstrated by the move of `textNormalization` to `lib/textNormalization.js`.
+Top-level modules such as `priceProviderService`, `providerHealthService`, `quoteBackfillService`, `portfolioPerformanceSnapshotService`, `portfolioImportBatchService`, and `aiChatService` are intentional facades or orchestration seams with direct route, controller, or startup callers. Their domain subdirectories contain the lower-level implementation. `deduplication` and `bulkSelection` also remain services because they coordinate persistence or repository-backed selection; they are not pure calculations. Framework-free pure helpers belong in `lib/` or `services/calculations/`, as demonstrated by the move of `textNormalization` to `lib/textNormalization.ts`.
 
 > [!note] Who owns HTTP semantics (route/service boundary)
 > The rule is: **services throw typed `AppError` subclasses** (`ValidationError`, `NotFoundError`,
-> `ConflictError`, … from `middleware/errorHandler.js`); **only the error-handling middleware maps
+> `ConflictError`, … from `middleware/errorHandler.ts`); **only the error-handling middleware maps
 > those to HTTP status codes**. A service should never set a status code or shape an HTTP response.
 >
 > Upstream failures have typed classes (2026-08-09): `UpstreamError` (502 `BAD_GATEWAY`) and
-> `UpstreamTimeoutError` (504 `GATEWAY_TIMEOUT`) in `middleware/errorHandler.js`. As 5xx errors,
+> `UpstreamTimeoutError` (504 `GATEWAY_TIMEOUT`) in `middleware/errorHandler.ts`. As 5xx errors,
 > their messages are masked in production (they routinely embed provider URLs/upstream statuses);
 > the stable `code` still reaches the client. Price-provider throws (`prices/priceProviderRegistry.js`,
 > `priceProviderService.js`) use them; research adapters and import still `throw new Error(...)`
@@ -97,11 +97,11 @@ directly. See [[docs/integrations/bank-adapters#adding-new-banks|Adding New Bank
 - **Factory Pattern:** `createAdapter` selects parser from `BANK_CONFIGURATIONS` registry
 - **Generic Adapter:** Accepts `column_mapping`, `date_format`, `separator`, `skip_rows` for arbitrary CSV formats
 - **Reverse Balance (Belfius):** Extracts last balance from CSV metadata, computes running balances backward
-- **Text Normalization:** Delegates to `cleanRecipientName`, `cleanKbcRecipientName` from [[apps/node-backend/src/lib/textNormalization.js]]
+- **Text Normalization:** Delegates to `cleanRecipientName`, `cleanKbcRecipientName` from [[apps/node-backend/src/lib/textNormalization.ts]]
 
 ### Dependencies
 
-- `lib/textNormalization.js`
+- `lib/textNormalization.ts`
 - `logger.js`
 
 ---
@@ -308,7 +308,7 @@ retains its adapter selection and domain-specific staging INSERT.
 
 ### Dependencies
 
-- `importPipeline/adapters/index.js`, `deduplication.js`, `lib/textNormalization.js`
+- `importPipeline/adapters/index.js`, `deduplication.js`, `lib/textNormalization.ts`
 - `materializedViewService.js` (post-pipeline refresh)
 - `importBatchRepository.js`, `connection.js`, `logger.js`
 
@@ -573,9 +573,9 @@ See [[docs/features/import#import-pipeline-orchestrator|Import Feature — Pipel
 
 ---
 
-## 14. lib/calculations/recurrence.js _(formerly recurrenceService.js)_
+## 14. lib/calculations/recurrence.ts _(formerly recurrenceService.js)_
 
-**File:** [[apps/node-backend/src/lib/calculations/recurrence.js]]  
+**File:** [[apps/node-backend/src/lib/calculations/recurrence.ts]]  
 **Purpose:** Calculates next occurrence dates for recurring patterns. **One grammar, two steppers (2026-08-09):** the pattern grammar lives only in `parseRecurrenceStep`; both the Date-space stepper (`calculateNextDate`, used by `/execute` and `expandOccurrences`) and the string-space stepper (`nextOccurrenceYmd` + `fastForwardYmd`, used by `infoRepositoryPlanned`'s next-month expansion) dispatch off it, so a new pattern is added in exactly one place.
 
 ### Exported Functions
@@ -595,7 +595,7 @@ See [[docs/features/import#import-pipeline-orchestrator|Import Feature — Pipel
 
 ### Dependencies
 
-- `lib/timezone.js` (ADR-009 helpers) — otherwise pure, no IO/DB
+- `lib/timezone.ts` (ADR-009 helpers) — otherwise pure, no IO/DB
 
 ---
 
@@ -651,9 +651,9 @@ See [[docs/features/import#streaming-import-with-server-sent-events-sse|Import F
 
 ---
 
-## 17. lib/textNormalization.js
+## 17. lib/textNormalization.ts
 
-**File:** [[apps/node-backend/src/lib/textNormalization.js]]
+**File:** [[apps/node-backend/src/lib/textNormalization.ts]]
 **Purpose:** Normalizes and cleans text data for consistent matching across the application.
 
 ### Exported Functions
@@ -890,7 +890,7 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 | -------------------- | ------------------------------------------- |
 | `findClusters(opts)` | `Array<{ primary, members[], confidence }>` |
 
-**Dependencies:** `recipientRepository.js`, `lib/textNormalization.js`.
+**Dependencies:** `recipientRepository.js`, `lib/textNormalization.ts`.
 
 ---
 
@@ -908,7 +908,7 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 | `createPattern` / `updatePattern` / `deletePattern` | Pattern lifecycle                    |
 | `listPatternsForRecipient(recipientId)`             | Recipient pattern list               |
 
-**Dependencies:** `connection.js`, `lib/sqlClauses.js`, `logger.js`, typed error classes.
+**Dependencies:** `connection.js`, `lib/sqlClauses.ts`, `logger.js`, typed error classes.
 
 ---
 
@@ -924,7 +924,7 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 | `buildIdListWhere(ids)`                       | fixed-id export clause and parameters                       |
 | `streamBulkTransactionExport(res, selection)` | resolves and streams a bulk export in one database snapshot |
 
-**Dependencies:** `database/connection.js`, `bulkSelection.js`, `lib/filterBuilder.js`, `lib/csv.js`, `lib/money.js`, `calculations/portfolioMath.js`, logger and typed errors.
+**Dependencies:** `database/connection.ts`, `bulkSelection.js`, `lib/filterBuilder.ts`, `lib/csv.ts`, `lib/money.ts`, `calculations/portfolioMath.js`, logger and typed errors.
 
 ---
 
@@ -943,7 +943,7 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 
 ## filterBuilder.js
 
-**File:** [[apps/node-backend/src/lib/filterBuilder.js]]
+**File:** [[apps/node-backend/src/lib/filterBuilder.ts]]
 **Purpose:** Builds parameterised `WHERE` clauses for transaction queries from a normalised filter object. Single source of truth shared by list, export, bulk and aggregation paths to keep filter semantics consistent.
 
 | Function                         | Returns           |

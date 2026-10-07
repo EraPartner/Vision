@@ -1,9 +1,9 @@
 /**
- * Shared logger mock used by `vi.mock('.../config/logger.js', ...)` factories.
+ * Shared logger mock used by `vi.mock('.../config/logger.ts', ...)` factories.
  *
  * Usage:
  *   import { mockLogger } from '../helpers/mockLogger.js';
- *   vi.mock('../src/config/logger.js', () => ({ logger: mockLogger() }));
+ *   vi.mock('../src/config/logger.ts', () => ({ logger: mockLogger() }));
  *
  * The function name is prefixed with `mock` so it may be referenced inside a
  * hoisted `vi.mock` factory.

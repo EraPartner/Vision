@@ -2,13 +2,13 @@
  * Info sub-repository: category statistics and transaction summaries.
  */
 
-import { query, queryPrepared } from "../database/connection.js";
-import { buildExclusionClauses } from "../lib/filterBuilder.js";
+import { query, queryPrepared } from "../database/connection.ts";
+import { buildExclusionClauses } from "../lib/filterBuilder.ts";
 import {
   toDecimal,
   toNumber,
   roundMoney as roundToCents,
-} from "../lib/money.js";
+} from "../lib/money.ts";
 import { convertRowsToEur } from "../services/currency/currencyConversionService.js";
 import {
   mvAvailable,

@@ -3,13 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockTxConnection } from "../helpers/repoMocks.js";
 const { mockClient } = vi.hoisted(() => ({ mockClient: { query: vi.fn() } }));
 
-vi.mock("../../src/database/connection.js", () =>
+vi.mock("../../src/database/connection.ts", () =>
   mockTxConnection(mockClient, {
     query: vi.fn(async () => ({ rows: [], rowCount: 0 })),
   }),
 );
 
-import { query } from "../../src/database/connection.js";
+import { query } from "../../src/database/connection.ts";
 import {
   unmarkTransfer,
   markTransfer,

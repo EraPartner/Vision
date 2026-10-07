@@ -1,4 +1,4 @@
-import { roundToCents } from "../lib/money.js";
+import { roundToCents } from "../lib/money.ts";
 
 /**
  * Shared SQL for an account's computed balance (ADR-094).

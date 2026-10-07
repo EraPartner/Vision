@@ -24,7 +24,7 @@ const buildHistory = ({ days = 400 } = {}) => {
 // App-timezone today (ADR-009) — must match rollingWindowDates' anchor, which
 // is deliberately NOT the UTC calendar day (they differ between local
 // midnight and 01:00/02:00 Brussels).
-import { todayAppDateString, addDaysYmd } from "../../src/lib/timezone.js";
+import { todayAppDateString, addDaysYmd } from "../../src/lib/timezone.ts";
 const todayIso = () => todayAppDateString();
 const isoOffsetFromToday = (offsetDays) =>
   addDaysYmd(todayAppDateString(), offsetDays);

@@ -29,7 +29,7 @@ import {
 import { recipientInsightsRepository } from "../src/repositories/infoRepositoryRecipients.js";
 import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.js";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.js";
-import { closePool } from "../src/database/connection.js";
+import { closePool } from "../src/database/connection.ts";
 
 const cat = {};
 const rec = {};

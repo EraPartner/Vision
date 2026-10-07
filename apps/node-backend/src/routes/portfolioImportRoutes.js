@@ -5,7 +5,7 @@
  *
  * Request parsing is validated with zod (schema → safeParse → ValidationError),
  * the idiom established in settings.js/reports.js. Batch/row route ids share
- * one coerced schema with the transaction import router (lib/importBatchIds.js);
+ * one coerced schema with the transaction import router (lib/importBatchIds.ts);
  * multipart config/brokerage schemas normalize strings and validate the
  * supported encoding and numeric convention before staging.
  */
@@ -13,23 +13,23 @@
 /// <reference path="../types/thirdPartyModules.d.ts" />
 import { Router } from "express";
 import { z } from "zod";
-import { logger } from "../config/logger.js";
+import { logger } from "../config/logger.ts";
 import {
   parseBatchIdParam,
   parseBatchRowIdParams,
   parseOverrideId,
-} from "../lib/importBatchIds.js";
-import { validateId } from "../middleware/validation.js";
-import { ValidationError, NotFoundError } from "../middleware/errorHandler.js";
-import { cleanup } from "../lib/csvUpload.js";
+} from "../lib/importBatchIds.ts";
+import { validateId } from "../middleware/validation.ts";
+import { ValidationError, NotFoundError } from "../middleware/errorHandler.ts";
+import { cleanup } from "../lib/csvUpload.ts";
 import {
   portfolioUpload,
   portfolioUploadErrorTranslator,
   assertPortfolioUploadSupported,
-} from "../lib/portfolioUpload.js";
-import { streamImport } from "../lib/importProgress.js";
+} from "../lib/portfolioUpload.ts";
+import { streamImport } from "../lib/importProgress.ts";
 import { runPortfolioImportPipeline } from "../services/portfolioImportPipeline/index.js";
-import { VALID_PORTFOLIO_TXN_TYPES } from "../lib/portfolioTxnTypes.js";
+import { VALID_PORTFOLIO_TXN_TYPES } from "../lib/portfolioTxnTypes.ts";
 import {
   listBatches,
   getBatch,
@@ -48,8 +48,8 @@ import { applyPortfolioImportReference } from "../services/portfolioImportRefere
 import {
   portfolioReferenceUpload,
   portfolioReferenceUploadErrorTranslator,
-} from "../lib/portfolioReferenceUpload.js";
-import { VALID_ASSET_CLASSES } from "../lib/assetClasses.js";
+} from "../lib/portfolioReferenceUpload.ts";
+import { VALID_ASSET_CLASSES } from "../lib/assetClasses.ts";
 import {
   CSV_NUMBER_FORMATS,
   normalizeCsvEncoding,
@@ -63,8 +63,8 @@ import {
 } from "../services/portfolioImportAccountService.js";
 
 /**
- * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
- * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ * @typedef {import('../types/express.ts').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.ts').ExpressResponse} ExpressResponse
  */
 
 const router = Router();
@@ -511,7 +511,7 @@ router.post(
       throw err;
     }
 
-    // streamImport is typed via node:http's base classes (lib/importProgress.js)
+    // streamImport is typed via node:http's base classes (lib/importProgress.ts)
     // — ExpressRequest/ExpressResponse are a narrower structural stand-in that
     // doesn't model IncomingMessage/ServerResponse, so forward via an any cast,
     // same as routes/ai.js's createSseWriter call.
@@ -798,7 +798,7 @@ router.post(
 
     const { investment_id } = req.body;
     // null/absent clears the override; anything else must be a real investment id
-    // (parseOverrideId, not Number() — see lib/importBatchIds.js).
+    // (parseOverrideId, not Number() — see lib/importBatchIds.ts).
     const effectiveId = parseOverrideId(investment_id, "investment_id");
 
     const rowCount = await overrideInvestment({

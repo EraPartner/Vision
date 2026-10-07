@@ -5,7 +5,7 @@ const mocked = vi.hoisted(() => ({
   reserve: vi.fn(),
   broker: vi.fn(),
 }));
-vi.mock("../src/config/config.js", () => ({
+vi.mock("../src/config/config.ts", () => ({
   default: {
     database: {
       analysisUrl: "postgresql://synthetic.invalid/vision_test",

@@ -9,8 +9,8 @@
  * requires positive amount/units/price for buy/sell.
  */
 
-import { logger } from "../../config/logger.js";
-import { ValidationError } from "../../middleware/errorHandler.js";
+import { logger } from "../../config/logger.ts";
+import { ValidationError } from "../../middleware/errorHandler.ts";
 import {
   parseCsvFile,
   rawDataForCsvRecord,

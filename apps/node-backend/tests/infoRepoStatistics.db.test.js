@@ -29,10 +29,10 @@ import {
 } from "./setup/db.js";
 import { statisticsRepository } from "../src/repositories/infoRepositoryStatistics.js";
 import transactionRepository from "../src/repositories/transactionRepository.js";
-import { buildExclusionClauses } from "../src/lib/filterBuilder.js";
+import { buildExclusionClauses } from "../src/lib/filterBuilder.ts";
 import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.js";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.js";
-import { closePool } from "../src/database/connection.js";
+import { closePool } from "../src/database/connection.ts";
 
 const cat = {};
 const rec = {};

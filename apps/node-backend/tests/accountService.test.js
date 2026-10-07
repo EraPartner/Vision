@@ -8,7 +8,7 @@ vi.mock("../src/services/currency/currencyConversionService.js", () => ({
   ),
 }));
 
-vi.mock("../src/database/connection.js", () =>
+vi.mock("../src/database/connection.ts", () =>
   mockConnection({ withTransaction: vi.fn(async (fn) => fn()) }),
 );
 
@@ -35,7 +35,7 @@ import {
   ValidationError,
   NotFoundError,
   ConflictError,
-} from "../src/middleware/errorHandler.js";
+} from "../src/middleware/errorHandler.ts";
 
 const pgErr = (code) => Object.assign(new Error(code), { code });
 const emptyBalanceAccount = (id) => ({

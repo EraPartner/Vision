@@ -3,13 +3,13 @@ import { mockConnection } from "./helpers/repoMocks.js";
 import { mockCurrencyConversion } from "./helpers/mockCurrencyConversion.js";
 
 import { mockLogger } from "./helpers/mockLogger.js";
-vi.mock("../src/database/connection.js", () => mockConnection());
+vi.mock("../src/database/connection.ts", () => mockConnection());
 
 vi.mock("../src/services/currency/currencyConversionService.js", () =>
   mockCurrencyConversion(),
 );
 
-vi.mock("../src/config/logger.js", () => ({
+vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
@@ -25,11 +25,11 @@ vi.mock("../src/repositories/infoRepositoryHelpers.js", async () => {
   };
 });
 
-import { query } from "../src/database/connection.js";
+import { query } from "../src/database/connection.ts";
 import { convertRowsToEur } from "../src/services/currency/currencyConversionService.js";
 import { mvAvailable } from "../src/repositories/infoRepositoryHelpers.js";
 import { getMonthlyFinancialSummary } from "../src/repositories/infoRepositoryMonthly.js";
-import { todayAppDateString } from "../src/lib/timezone.js";
+import { todayAppDateString } from "../src/lib/timezone.ts";
 
 beforeEach(() => vi.clearAllMocks());
 

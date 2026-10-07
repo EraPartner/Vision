@@ -12,13 +12,13 @@
  * are sticky and never overwritten by auto-detection.
  */
 
-import { query, withTransaction } from '../database/connection.js';
+import { query, withTransaction } from '../database/connection.ts';
 import { transactionRepository } from '../repositories/transactionRepository.js';
 import { resolveTransferMatches } from './calculations/transfers.js';
 import { scheduleAggregationRefresh } from './aggregationRefresh.js';
 import { invalidateStatisticsCaches } from './info/cache.js';
-import { logger } from '../config/logger.js';
-import { ValidationError, NotFoundError } from '../middleware/errorHandler.js';
+import { logger } from '../config/logger.ts';
+import { ValidationError, NotFoundError } from '../middleware/errorHandler.ts';
 
 const DEFAULT_WINDOW_DAYS = 3;
 

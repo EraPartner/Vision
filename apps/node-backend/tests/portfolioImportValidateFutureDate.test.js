@@ -6,13 +6,13 @@ import { mockLogger } from "./helpers/mockLogger.js";
 // typo'd year or a settlement date ahead of today would skew every time-based
 // portfolio calc. validate.js now rejects tx_date > today (app calendar).
 
-vi.mock("../src/config/logger.js", () => ({
+vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-vi.mock("../src/database/connection.js", () => mockConnection());
+vi.mock("../src/database/connection.ts", () => mockConnection());
 
-import { query } from "../src/database/connection.js";
+import { query } from "../src/database/connection.ts";
 import { validateBatch } from "../src/services/portfolioImportPipeline/validate.js";
 
 /** Wire query() to respond by SQL shape, returning the given pending rows. */

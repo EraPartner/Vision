@@ -25,7 +25,7 @@ vi.mock('../../src/services/attachmentRecordService.js', () => ({
   },
 }));
 
-vi.mock('../../src/middleware/attachmentUpload.js', () => ({
+vi.mock('../../src/middleware/attachmentUpload.ts', () => ({
   attachmentUpload: {
     single: () => (req, _res, cb) => {
       if (uploadState.error) return cb(uploadState.error);
@@ -42,13 +42,13 @@ vi.mock('../../src/services/attachmentService.js', () => ({
   verifyAttachmentContent: vi.fn(),
 }));
 
-vi.mock('../../src/config/logger.js', () => ({
+vi.mock('../../src/config/logger.ts', () => ({
   logger: mockLogger(),
 }));
 
 import { attachmentRepository } from '../../src/services/attachmentRecordService.js';
 import { storeAttachment, removeAttachmentFile, verifyAttachmentContent } from '../../src/services/attachmentService.js';
-import { logger } from '../../src/config/logger.js';
+import { logger } from '../../src/config/logger.ts';
 
 const { default: attachmentsRouter } = await import('../../src/routes/attachments.js');
 

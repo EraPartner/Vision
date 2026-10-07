@@ -22,7 +22,7 @@
 import { createInterface } from 'node:readline';
 import { backfillHoldingGaps } from '../src/services/quoteBackfillService.js';
 import { computeAndStoreSnapshots } from '../src/services/portfolioPerformanceSnapshotService.js';
-import { closePool } from '../src/database/connection.js';
+import { closePool } from '../src/database/connection.ts';
 
 const args = new Set(process.argv.slice(2));
 const ASSUME_YES = args.has('--yes') || args.has('-y') || args.has('--force');

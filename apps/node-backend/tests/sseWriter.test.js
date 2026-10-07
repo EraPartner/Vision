@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { EventEmitter } from 'events';
-import { __drainIfNeeded as drainIfNeeded, createSseWriter } from '../src/lib/sse.js';
+import { __drainIfNeeded as drainIfNeeded, createSseWriter } from '../src/lib/sse.ts';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { mockLogger } from "./helpers/mockLogger.js";
 
-vi.mock("../src/config/logger.js", () => ({ logger: mockLogger() }));
+vi.mock("../src/config/logger.ts", () => ({ logger: mockLogger() }));
 
 import { parse as parseTransactions } from "../src/services/importPipeline/adapters/generic.js";
 import { parseWithConfig as parsePortfolio } from "../src/services/portfolioImportPipeline/portfolioGenericAdapter.js";

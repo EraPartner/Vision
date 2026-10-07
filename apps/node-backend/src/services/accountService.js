@@ -11,20 +11,20 @@ import {
   NotFoundError,
   ValidationError,
   ConflictError,
-} from "../middleware/errorHandler.js";
+} from "../middleware/errorHandler.ts";
 import {
   assertCurrency,
   validateNumber,
   validateId,
-} from "../lib/validation.js";
+} from "../lib/validation.ts";
 import {
   loadCurrentRates,
   convertWithRates,
 } from "./currency/currencyConversionService.js";
-import { hasConversionRate } from "../lib/exchangeRates.js";
-import { toDecimal, toNumber, roundToCents } from "../lib/money.js";
+import { hasConversionRate } from "../lib/exchangeRates.ts";
+import { toDecimal, toNumber, roundToCents } from "../lib/money.ts";
 import { statementPartition } from "../repositories/accountBalanceSql.js";
-import { withTransaction } from "../database/connection.js";
+import { withTransaction } from "../database/connection.ts";
 
 // Enum value sets — mirror migration 0050. Their semantics are activated in ADR-089.
 export const ACCOUNT_TYPES = [

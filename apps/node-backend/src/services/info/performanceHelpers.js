@@ -9,11 +9,11 @@ import {
   computeMetrics,
   computeHeatmap,
 } from "../portfolioPerformanceSnapshotService.js";
-import { toWireDate } from "../../lib/dateFormat.js";
+import { toWireDate } from "../../lib/dateFormat.ts";
 import { getPortfolioSummary } from "../portfolio/portfolioSummaryService.js";
-import { todayAppDateString, addDaysYmd } from "../../lib/timezone.js";
+import { todayAppDateString, addDaysYmd } from "../../lib/timezone.ts";
 import { toYmd } from "../calculations/portfolioMath.js";
-import { toDecimal, toNumber } from "../../lib/money.js";
+import { toDecimal, toNumber } from "../../lib/money.ts";
 import {
   portfolioSummaryCache,
   PORTFOLIO_SUMMARY_CACHE_TTL_MS,
@@ -22,7 +22,7 @@ import {
 
 /**
  * @typedef {import('@vision/shared-utils/money').DecimalInput} DecimalInput
- * @typedef {import('../../types/rows.js').PortfolioPerformanceSnapshotRow} PortfolioPerformanceSnapshotRow
+ * @typedef {import('../../types/rows.ts').PortfolioPerformanceSnapshotRow} PortfolioPerformanceSnapshotRow
  */
 
 /**

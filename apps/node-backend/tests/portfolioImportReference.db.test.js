@@ -10,7 +10,7 @@ import {
   hasTestDatabase,
   releaseDbSuiteLock,
 } from "./setup/db.js";
-import { closePool } from "../src/database/connection.js";
+import { closePool } from "../src/database/connection.ts";
 import { createBatch } from "../src/services/portfolioImportPipeline/stage.js";
 import { validateBatch } from "../src/services/portfolioImportPipeline/validate.js";
 import { matchBatch } from "../src/services/portfolioImportPipeline/matchInvestments.js";

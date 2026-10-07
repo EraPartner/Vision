@@ -28,11 +28,11 @@ vi.mock("pg", () => ({
   },
 }));
 
-vi.mock("../src/database/connection.js", () =>
+vi.mock("../src/database/connection.ts", () =>
   mockConnection({ query: mocks.appQuery }),
 );
 
-vi.mock("../src/config/logger.js", () => ({
+vi.mock("../src/config/logger.ts", () => ({
   logger: {
     info: vi.fn(),
     warn: vi.fn(),
@@ -44,7 +44,7 @@ const previousDatabaseUrl = process.env.DATABASE_URL;
 const previousMigrationsUrl = process.env.DATABASE_URL_MIGRATIONS;
 
 const { runDatabaseAnalyze, __stampBaselineIfLegacy: stampBaselineIfLegacy } =
-  await import("../src/database/migrate.js");
+  await import("../src/database/migrate.ts");
 
 describe("migration role preflight", () => {
   beforeEach(() => {

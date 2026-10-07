@@ -6,11 +6,11 @@
  * removing the physical file before/after calling these methods.
  */
 
-import { query } from '../database/connection.js';
-import { buildLimitOffset } from '../lib/sqlClauses.js';
+import { query } from '../database/connection.ts';
+import { buildLimitOffset } from '../lib/sqlClauses.ts';
 
-/** @typedef {import('../types/rows.js').AttachmentRow} AttachmentRow */
-/** @typedef {import('../types/rows.js').FormattedAttachment} FormattedAttachment */
+/** @typedef {import('../types/rows.ts').AttachmentRow} AttachmentRow */
+/** @typedef {import('../types/rows.ts').FormattedAttachment} FormattedAttachment */
 
 /**
  * @param {AttachmentRow} row

@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import {
   formatDateToYmd,
   normalizeDateLikeToYmd,
-} from "../src/lib/dateFormat.js";
+} from "../src/lib/dateFormat.ts";
 
 // pg reads DATE columns as LOCAL-midnight Date objects. These tests pin the
 // local-extraction contract under a TZ east of UTC, where the old

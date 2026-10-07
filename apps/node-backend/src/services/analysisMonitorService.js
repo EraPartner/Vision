@@ -3,7 +3,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import Decimal from "decimal.js";
 import { z } from "zod";
-import { query, withTransaction } from "../database/connection.js";
+import { query, withTransaction } from "../database/connection.ts";
 import { runSavedAnalysis } from "./savedAnalysisService.js";
 
 const DECIMAL = /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/;

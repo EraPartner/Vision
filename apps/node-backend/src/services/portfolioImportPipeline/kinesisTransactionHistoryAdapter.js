@@ -8,14 +8,14 @@
  * the quote leg as a second investment.
  */
 
-import { logger } from "../../config/logger.js";
+import { logger } from "../../config/logger.ts";
 import {
   divide,
   multiply,
   subtract,
   toNumber,
   toDecimal,
-} from "../../lib/money.js";
+} from "../../lib/money.ts";
 import {
   parseAmountField,
   parseCsvFile,

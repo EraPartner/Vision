@@ -5,8 +5,8 @@ import {
   fastForwardYmd,
   calculateNextDate,
   isValidPattern,
-} from "../../src/lib/calculations/recurrence.js";
-import { appDateStringToUtc, toAppDateString } from "../../src/lib/timezone.js";
+} from "../../src/lib/calculations/recurrence.ts";
+import { appDateStringToUtc, toAppDateString } from "../../src/lib/timezone.ts";
 
 /**
  * Shared string-space stepper — the single recurrence grammar both steppers

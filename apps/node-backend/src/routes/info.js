@@ -15,7 +15,7 @@
 
 import { Router } from 'express';
 import infoService from '../services/infoService.js';
-import { logger } from '../config/logger.js';
+import { logger } from '../config/logger.ts';
 import { getSnapshots } from '../services/portfolioPerformanceSnapshotService.js';
 import { getPortfolioSummary } from '../services/portfolio/portfolioSummaryService.js';
 import {

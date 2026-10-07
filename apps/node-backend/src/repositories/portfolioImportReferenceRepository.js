@@ -1,4 +1,4 @@
-import { query } from "../database/connection.js";
+import { query } from "../database/connection.ts";
 
 export async function lockPortfolioReferenceScope(batchIds) {
   return (

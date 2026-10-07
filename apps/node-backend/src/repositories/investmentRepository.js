@@ -6,14 +6,14 @@
  * (ADR-109) before the backend starts listening, so no schema-shape probing is needed.
  */
 
-import { query } from "../database/connection.js";
-import { VALID_ASSET_CLASSES } from "../lib/assetClasses.js";
-import { toWireDate } from "../lib/dateFormat.js";
-import { coerceNumericFields } from "../lib/money.js";
-import { makeValidationError } from "../lib/repositoryErrors.js";
-import { buildSetClauses } from "../lib/sqlClauses.js";
+import { query } from "../database/connection.ts";
+import { VALID_ASSET_CLASSES } from "../lib/assetClasses.ts";
+import { toWireDate } from "../lib/dateFormat.ts";
+import { coerceNumericFields } from "../lib/money.ts";
+import { makeValidationError } from "../lib/repositoryErrors.ts";
+import { buildSetClauses } from "../lib/sqlClauses.ts";
 
-/** @typedef {import('../types/rows.js').InvestmentRow} InvestmentRow */
+/** @typedef {import('../types/rows.ts').InvestmentRow} InvestmentRow */
 
 /**
  * The caller-facing create payload — one key per column in

@@ -1,12 +1,12 @@
 /** Source-backed unit corrections, preserving the original acquisition basis. */
 import { projectAssetTransferPartitions } from "@vision/shared-utils/portfolio";
-import { query, withTransaction } from "../../database/connection.js";
-import { toDecimal } from "../../lib/money.js";
-import { toYmd } from "../../lib/dateFormat.js";
+import { query, withTransaction } from "../../database/connection.ts";
+import { toDecimal } from "../../lib/money.ts";
+import { toYmd } from "../../lib/dateFormat.ts";
 import {
   ConflictError,
   ValidationError,
-} from "../../middleware/errorHandler.js";
+} from "../../middleware/errorHandler.ts";
 import { getUnitEventsForInvestment } from "../../repositories/portfolioTxRepo.reads.js";
 import { validatePortfolioAssetTransferHistory } from "./portfolioAssetTransferService.js";
 import { portfolioCustodyWriteHistory } from "./portfolioCustodyImportScope.js";

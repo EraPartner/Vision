@@ -66,6 +66,7 @@ describe("portfolio exposure routes", () => {
     exposure.upsertPortfolioExposureBundle.mockRejectedValue(
       Object.assign(new Error("private parser detail"), {
         code: "INVALID_PORTFOLIO_EXPOSURE_SOURCE",
+        issues: [{ path: ["classifications"], message: "Required" }],
       }),
     );
     await expect(
@@ -76,6 +77,9 @@ describe("portfolio exposure routes", () => {
     ).rejects.toMatchObject({
       code: "INVALID_PORTFOLIO_EXPOSURE_SOURCE",
       message: "The exposure source bundle is invalid",
+      details: {
+        issues: [{ path: ["classifications"], message: "Required" }],
+      },
     });
   });
 

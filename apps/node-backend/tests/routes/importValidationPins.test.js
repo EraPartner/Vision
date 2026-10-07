@@ -62,7 +62,7 @@ vi.mock("../../src/services/dataImportService.js", () => ({
   importCategoriesCSV: vi.fn(),
 }));
 
-vi.mock("../../src/config/logger.js", () => ({
+vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
@@ -92,7 +92,7 @@ vi.mock("../../src/repositories/customParserConfigRepository.js", () => ({
   },
 }));
 
-vi.mock("../../src/database/connection.js", () => mockConnection());
+vi.mock("../../src/database/connection.ts", () => mockConnection());
 
 import {
   runImportPipeline,
@@ -112,7 +112,7 @@ import {
   overrideCategory,
   categoryExists,
 } from "../../src/repositories/importBatchRepository.js";
-import { query as dbQuery } from "../../src/database/connection.js";
+import { query as dbQuery } from "../../src/database/connection.ts";
 import customParserConfigRepository from "../../src/repositories/customParserConfigRepository.js";
 
 const { default: importRouter, __parseCsvImportOptionsForTests } =
@@ -288,7 +288,7 @@ describe("batch-id shape pins (validateId, bounded to MAX_SAFE_ID)", () => {
   });
 
   // '1e300' used to be let through to a downstream 404 on purpose, to keep the
-  // pre-zod wire unchanged (the old lib/importBatchIds.js header said so). That
+  // pre-zod wire unchanged (the old lib/importBatchIds.ts header said so). That
   // reasoning was about not moving 404→400 during a mechanical swap, not about
   // 404 being the right answer: '1e300' names no batch in any notation this
   // API accepts, and it is the same exponent form that made '1e3' resolve to

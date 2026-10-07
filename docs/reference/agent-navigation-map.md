@@ -2,7 +2,7 @@
 title: AI Agent Codebase Navigation Map
 type: reference
 status: active
-date: 2026-10-06
+date: 2026-10-07
 updated: 2026-10-06
 tags:
   [
@@ -145,7 +145,7 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | [[apps/frontend/src/features/imports/CsvColumnMapper.tsx]]   | CSV column mapping UI (used by TransactionImportCard) |
 
 **Backend Route** | [[apps/node-backend/src/routes/importRoutes.js]] |
-**Backend Services** | [[apps/node-backend/src/services/importPipeline/index.js|importPipeline]] (orchestrator), [[apps/node-backend/src/services/importPipeline/adapters/index.js|adapter registry]], [[apps/node-backend/src/services/deduplication.js]], [[apps/node-backend/src/lib/textNormalization.js]] |
+**Backend Services** | [[apps/node-backend/src/services/importPipeline/index.js|importPipeline]] (orchestrator), [[apps/node-backend/src/services/importPipeline/adapters/index.js|adapter registry]], [[apps/node-backend/src/services/deduplication.js]], [[apps/node-backend/src/lib/textNormalization.ts]] |
 | API Doc | [[docs/api/imports]] |
 | Feature Doc | [[docs/features/import]] |
 
@@ -305,15 +305,15 @@ Full reference: [[docs/reference/service-layer|Service Layer Reference]]
 | Quote Backfill        | [[apps/node-backend/src/services/quoteBackfillService.js]]                                 |
 | Recurrence            | [[apps/node-backend/src/services/calculations/recurrence.js]]                              |
 | Recurring Detection   | [[apps/node-backend/src/services/recurringDetectionService.js]]                            |
-| Text Normalization    | [[apps/node-backend/src/lib/textNormalization.js]]                                         |
+| Text Normalization    | [[apps/node-backend/src/lib/textNormalization.ts]]                                         |
 
 ### Database
 
 | File                                             | Purpose                                    |
 | ------------------------------------------------ | ------------------------------------------ |
-| [[apps/node-backend/src/database/connection.js]] | Database connection setup                  |
+| [[apps/node-backend/src/database/connection.ts]] | Database connection setup                  |
 | [[apps/node-backend/src/main.js]]                | DB readiness retry loop + server startup   |
-| [[apps/node-backend/src/database/migrate.js]]    | Alembic migrations (schema initialization) |
+| [[apps/node-backend/src/database/migrate.ts]]    | Alembic migrations (schema initialization) |
 
 ### Migrations
 

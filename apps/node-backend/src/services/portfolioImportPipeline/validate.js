@@ -7,11 +7,11 @@
  * occurrence identity, and mark the row 'validated' or 'error'.
  */
 
-import { query } from "../../database/connection.js";
-import { toDecimal } from "../../lib/money.js";
-import { logger } from "../../config/logger.js";
+import { query } from "../../database/connection.ts";
+import { toDecimal } from "../../lib/money.ts";
+import { logger } from "../../config/logger.ts";
 import { toYmd } from "../calculations/portfolioMath.js";
-import { todayAppDateString } from "../../lib/timezone.js";
+import { todayAppDateString } from "../../lib/timezone.ts";
 import { UNIT_BASED_ASSET_CLASSES } from "../portfolio/portfolioTransactionRules.js";
 import { normalizeType } from "./portfolioTypeNormalizer.js";
 import { classifyBrokerageRow } from "../importPipeline/brokerageRouting.js";
@@ -21,7 +21,7 @@ import {
 } from "../importIdentity.js";
 
 /**
- * @typedef {import('../../types/rows.js').PortfolioImportStagingRow} PortfolioImportStagingRow
+ * @typedef {import('../../types/rows.ts').PortfolioImportStagingRow} PortfolioImportStagingRow
  * @typedef {import('./index.js').PortfolioImportBatchId} PortfolioImportBatchId
  * @typedef {import('./index.js').PortfolioImportProgressCallback} PortfolioImportProgressCallback
  */

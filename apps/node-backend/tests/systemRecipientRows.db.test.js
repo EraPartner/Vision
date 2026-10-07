@@ -36,9 +36,9 @@ import {
   mergeAccounts,
   previewMerge,
 } from "../src/services/accountMergeService.js";
-import { ValidationError } from "../src/middleware/errorHandler.js";
+import { ValidationError } from "../src/middleware/errorHandler.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.js";
-import { closePool } from "../src/database/connection.js";
+import { closePool } from "../src/database/connection.ts";
 
 const rec = {};
 

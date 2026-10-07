@@ -17,7 +17,7 @@ vi.mock('../src/services/attachmentService.js', () => ({
 }));
 
 import multer from 'multer';
-import { attachmentUpload } from '../src/middleware/attachmentUpload.js';
+import { attachmentUpload } from '../src/middleware/attachmentUpload.ts';
 
 describe('attachment upload middleware', () => {
   it('uses memory storage and the configured byte ceiling', () => {

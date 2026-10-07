@@ -6,7 +6,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { mockConnection } from "../helpers/repoMocks.js";
 
-vi.mock("../../src/database/connection.js", () => mockConnection());
+vi.mock("../../src/database/connection.ts", () => mockConnection());
 
 import { buildCategoryFromConvertedRows } from "../../src/repositories/infoRepositoryHelpers.js";
 

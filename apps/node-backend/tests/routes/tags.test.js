@@ -256,7 +256,7 @@ describe("PATCH /api/tags/:id", () => {
   });
 
   it("rejects a non-integer :id via the real validateIdParam guard", async () => {
-    // Previously `vi.mock('.../middleware/validation.js')` replaced
+    // Previously `vi.mock('.../middleware/validation.ts')` replaced
     // validateIdParam with a pass-through, so this guard was never tested.
     const res = await api
       .patch(`${BASE}/abc`)

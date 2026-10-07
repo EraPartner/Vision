@@ -6,16 +6,16 @@
  * written via writeAudit; route/service layer owns when to emit them.
  */
 
-import { query } from "../database/connection.js";
-import { buildLimitOffset } from "../lib/sqlClauses.js";
-import { toWireDate } from "../lib/dateFormat.js";
-import { toDecimal, toNumber } from "../lib/money.js";
+import { query } from "../database/connection.ts";
+import { buildLimitOffset } from "../lib/sqlClauses.ts";
+import { toWireDate } from "../lib/dateFormat.ts";
+import { toDecimal, toNumber } from "../lib/money.ts";
 
-/** @typedef {import('../types/rows.js').QueryRunner} QueryRunner */
-/** @typedef {import('../types/rows.js').FormattedSplit} FormattedSplit */
-/** @typedef {import('../types/rows.js').FormattedSplitPayment} FormattedSplitPayment */
-/** @typedef {import('../types/rows.js').OwedSplitDetailRow} OwedSplitDetailRow */
-/** @typedef {import('../types/rows.js').SplitTotals} SplitTotals */
+/** @typedef {import('../types/rows.ts').QueryRunner} QueryRunner */
+/** @typedef {import('../types/rows.ts').FormattedSplit} FormattedSplit */
+/** @typedef {import('../types/rows.ts').FormattedSplitPayment} FormattedSplitPayment */
+/** @typedef {import('../types/rows.ts').OwedSplitDetailRow} OwedSplitDetailRow */
+/** @typedef {import('../types/rows.ts').SplitTotals} SplitTotals */
 
 /**
  * CTE that resolves $1 to every recipient id in the same merge/alias group:
@@ -238,7 +238,7 @@ export const splitRepository = {
    *
    * Reads from agg_split_outstanding (trigger-maintained by migration
    * 0026) joined to recipients. Projection + filter + sort live in
-   * lib/calculations/splits.js::computeOwedSummary so the shape is
+   * lib/calculations/splits.ts::computeOwedSummary so the shape is
    * golden-fixture covered.
    *
    * Settled splits are excluded at the source: is_settled=true splits

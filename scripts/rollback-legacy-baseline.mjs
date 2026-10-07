@@ -5,7 +5,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "../apps/node-backend/node_modules/pg/lib/index.js";
-import { readBaselineManifest } from "../apps/node-backend/src/database/baselineManifest.js";
+import { readBaselineManifest } from "../apps/node-backend/src/database/baselineManifest.ts";
 
 const argv = process.argv.slice(2);
 if (

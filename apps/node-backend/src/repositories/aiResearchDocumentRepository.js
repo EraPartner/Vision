@@ -1,4 +1,4 @@
-import { query, withTransaction } from "../database/connection.js";
+import { query, withTransaction } from "../database/connection.ts";
 
 const DOCUMENT_COLUMNS = `id, title, source_name AS "sourceName", media_type AS "mediaType",
   content_sha256 AS "contentSha256", version, extraction_status AS "extractionStatus",

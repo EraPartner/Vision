@@ -17,7 +17,7 @@ import {
   lockManualTransactionIdentity,
   recordManualTransactionDedupClaim,
 } from "./deduplication.js";
-import { withTransaction } from "../database/connection.js";
+import { withTransaction } from "../database/connection.ts";
 import { autoLinkTransactions } from "./plannedMatchService.js";
 import { scheduleReconcile } from "./transferReconciliationService.js";
 import {
@@ -29,8 +29,8 @@ import { resolveRecipientIdByName } from "./recipientService.js";
 import { resolveCategoryIdByName } from "./categoryService.js";
 import { attachmentRepository } from "./attachmentRecordService.js";
 import { removeAttachmentFilesBestEffort } from "./attachmentCleanup.js";
-import { ConflictError, ValidationError } from "../middleware/errorHandler.js";
-import { logger } from "../config/logger.js";
+import { ConflictError, ValidationError } from "../middleware/errorHandler.ts";
+import { logger } from "../config/logger.ts";
 
 /**
  * Create a manual transaction with its full side-effect chain.

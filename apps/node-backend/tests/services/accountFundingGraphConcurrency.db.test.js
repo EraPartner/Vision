@@ -16,11 +16,11 @@ import {
 } from "../setup/db.js";
 import { accountService } from "../../src/services/accountService.js";
 import { mergeAccounts } from "../../src/services/accountMergeService.js";
-import { closePool } from "../../src/database/connection.js";
+import { closePool } from "../../src/database/connection.ts";
 import {
   __ACCOUNT_FUNDING_GRAPH_LOCK_PARAMS as ACCOUNT_FUNDING_GRAPH_LOCK_PARAMS,
   __ACCOUNT_FUNDING_GRAPH_LOCK_SQL as ACCOUNT_FUNDING_GRAPH_LOCK_SQL,
-} from "../../src/lib/accountFundingGraphLock.js";
+} from "../../src/lib/accountFundingGraphLock.ts";
 
 async function insertAccount(name, fundingAccountId = null) {
   const { rows } = await getTestPool().query(

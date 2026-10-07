@@ -3,9 +3,9 @@
  * column mapping / date format / separator.
  */
 
-import { logger } from "../../../config/logger.js";
-import { normalizeToUppercase } from "../../../lib/textNormalization.js";
-import { ValidationError } from "../../../middleware/errorHandler.js";
+import { logger } from "../../../config/logger.ts";
+import { normalizeToUppercase } from "../../../lib/textNormalization.ts";
+import { ValidationError } from "../../../middleware/errorHandler.ts";
 import {
   parseCsvFile,
   rawDataForCsvRecord,

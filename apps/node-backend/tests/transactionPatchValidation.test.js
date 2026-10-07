@@ -13,7 +13,7 @@ import {
 // as `SET "date" = ''` (22007 → 500), and non-numeric amount / non-integer
 // FK ids surfaced as DB cast errors instead of 400s.
 
-vi.mock("../src/database/connection.js", () =>
+vi.mock("../src/database/connection.ts", () =>
   mockConnection({ query: vi.fn().mockResolvedValue({ rows: [] }) }),
 );
 vi.mock("../src/services/transactionService.js", () => ({
@@ -27,7 +27,7 @@ vi.mock("../src/services/deduplication.js", () => mockDeduplication());
 vi.mock("../src/services/currency/currencyConversionService.js", () =>
   mockCurrencyConversion(),
 );
-vi.mock("../src/config/logger.js", () => ({
+vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 vi.mock("../src/services/transferReconciliationService.js", () =>

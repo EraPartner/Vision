@@ -3,9 +3,9 @@ import { mockTxConnection } from "./helpers/repoMocks.js";
 
 const { client } = vi.hoisted(() => ({ client: { query: vi.fn() } }));
 
-vi.mock("../src/database/connection.js", () => mockTxConnection(client));
+vi.mock("../src/database/connection.ts", () => mockTxConnection(client));
 
-import { query, withTransaction } from "../src/database/connection.js";
+import { query, withTransaction } from "../src/database/connection.ts";
 import {
   clearProviderResult,
   createJob,

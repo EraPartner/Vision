@@ -15,12 +15,12 @@ import {
   hasTestDatabase,
   releaseDbSuiteLock,
 } from "./setup/db.js";
-import { closePool } from "../src/database/connection.js";
+import { closePool } from "../src/database/connection.ts";
 import { previewPortfolioImportReconciliation } from "../src/services/portfolioImportReconciliationService.js";
 import { commitReviewedPortfolioImports } from "../src/services/portfolioImportCommitService.js";
 import { rollbackBatch } from "../src/services/portfolioImportBatchService.js";
 import portfolioTransactionService from "../src/services/portfolio/portfolioTransactionService.js";
-import { pruneOldImportBatches } from "../src/startup/warmup.js";
+import { pruneOldImportBatches } from "../src/startup/warmup.ts";
 
 const pool = getTestPool();
 const describeDb = hasTestDatabase() ? describe : describe.skip;

@@ -17,7 +17,7 @@
  */
 
 import { computeCashflowForecast } from "./calculations/forecast/index.js";
-import { roundMoney } from "../lib/money.js";
+import { roundMoney } from "../lib/money.ts";
 import insightCashProjectionRepository from "../repositories/insightCashProjectionRepository.js";
 
 // Method id strings as exported by src/services/calculations/forecast/methods/*.

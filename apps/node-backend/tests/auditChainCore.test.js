@@ -5,7 +5,7 @@ import {
   createAuditEntry,
   __hashAuditEntry as hashAuditEntry,
   verifyAuditChain,
-} from "../src/lib/auditChainCore.js";
+} from "../src/lib/auditChainCore.ts";
 
 function segment() {
   const first = createAuditEntry({

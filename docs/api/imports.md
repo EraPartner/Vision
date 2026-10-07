@@ -4,7 +4,7 @@ type: endpoint
 method: POST, GET, PATCH, DELETE
 path: /api/import
 description: CSV import for transactions, recipients, and categories; CRUD for saved named custom CSV parsers
-date: 2026-09-27
+date: 2026-10-07
 updated: 2026-09-27
 last_modified: 2026-09-27
 tags:
@@ -28,7 +28,7 @@ related_code:
     "apps/node-backend/src/routes/importBatchRoutes.js",
     "apps/node-backend/src/services/importBatchService.js",
     "apps/node-backend/src/services/importPipeline/index.js",
-    "apps/node-backend/src/lib/sse.js",
+    "apps/node-backend/src/lib/sse.ts",
     "apps/node-backend/src/repositories/importBatchRepository.js",
     "apps/node-backend/src/repositories/customParserConfigRepository.js",
   ]
@@ -158,7 +158,7 @@ data: {"total_processed":150,"imported":148,"duplicates":2,"errors":0,"batch_id"
 event: error
 data: {"detail":"Import failed","code":"INTERNAL_SERVER_ERROR"}
 
-// Review-required terminal event (lib/importProgress.js) — carries NO counts:
+// Review-required terminal event (lib/importProgress.ts) — carries NO counts:
 // the batch is parked in awaiting_review and nothing was committed yet, so the
 // client must not synthesize a total_processed (2026-08-09 fix in
 // apps/frontend/src/lib/api/imports.ts).
@@ -168,7 +168,7 @@ data: {"batch_id":42,"match_source_counts":{"exact":140,"fuzzy":10},"percent":70
 
 **Backpressure & Resilience (Phase C):**
 
-- **SSE Writer**: Server uses `createSseWriter(req, res)` ([[apps/node-backend/src/lib/sse.js]]) to track client disconnects and propagate TCP backpressure from the HTTP socket into the import pipeline.
+- **SSE Writer**: Server uses `createSseWriter(req, res)` ([[apps/node-backend/src/lib/sse.ts]]) to track client disconnects and propagate TCP backpressure from the HTTP socket into the import pipeline.
 - **Pause on Drain**: When Node.js write buffer is full (`res.writableNeedDrain`), `await writer.write()` pauses the import loop until the kernel drains buffered events, preventing memory exhaustion on slow clients.
 - **Orchestrator Integration**: The `runImportPipeline()` ([[apps/node-backend/src/services/importPipeline/index.js]]) passes an `async onProgress` callback that awaits SSE writes, turning network delays into back-pressure on processing.
 - **Batch Persistence**: Each import is assigned a `batchId` and tracked in `import_batches` table for history and rollback capability.

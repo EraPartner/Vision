@@ -8,7 +8,7 @@ import {
   ymdToEpochDay,
   differenceInCalendarDaysYmd,
   addDaysYmd,
-} from "../src/lib/timezone.js";
+} from "../src/lib/timezone.ts";
 
 describe("timezone helpers", () => {
   it("defaults to Europe/Brussels when APP_TIMEZONE unset", () => {

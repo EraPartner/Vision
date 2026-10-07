@@ -1,4 +1,4 @@
-import settings from "../config/config.js";
+import settings from "../config/config.ts";
 import { getOllamaClient } from "../integrations/ollama/client.js";
 import { callOpenAiBroker } from "../integrations/openai/brokerClient.js";
 import {

@@ -1,6 +1,6 @@
 /**
  * Real-Postgres tests for the runtime least-privilege role bootstrap
- * (src/database/roleBootstrap.js) — the mechanism that gives ALREADY-
+ * (src/database/roleBootstrap.ts) — the mechanism that gives ALREADY-
  * INITIALISED databases the non-superuser app role which
  * Native runtime bootstrap creates and refreshes the application role.
  *
@@ -33,7 +33,7 @@ import {
 import {
   ensureAppRole,
   __renderGrantStatements as renderGrantStatements,
-} from "../src/database/roleBootstrap.js";
+} from "../src/database/roleBootstrap.ts";
 
 const TEST_URL = process.env.TEST_DATABASE_URL;
 

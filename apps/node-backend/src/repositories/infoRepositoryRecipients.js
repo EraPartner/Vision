@@ -8,17 +8,17 @@
  * income/spending cash-flow aggregates) deliberately does not apply.
  */
 
-import { query } from "../database/connection.js";
+import { query } from "../database/connection.ts";
 import {
   toDecimal,
   toNumber,
   roundMoney as roundToCents,
-} from "../lib/money.js";
-import { toWireDate } from "../lib/dateFormat.js";
+} from "../lib/money.ts";
+import { toWireDate } from "../lib/dateFormat.ts";
 import {
   buildExclusionClauses,
   validateInt4Ids,
-} from "../lib/filterBuilder.js";
+} from "../lib/filterBuilder.ts";
 import { convertRowsToEur } from "../services/currency/currencyConversionService.js";
 import {
   buildPeriodPivot,

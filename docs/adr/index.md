@@ -232,6 +232,12 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 
 ## Recent Decisions
 
+### 2026-10-07: Backend source moves to strict TypeScript by directory
+
+[[docs/adr/186-backend-strict-typescript|ADR-186]] converts the Node backend from JSDoc JavaScript to
+strict TypeScript one directory group at a time, checked by a separate strict tsconfig in CI while
+the remaining JavaScript keeps the checkJs gate and ratchet.
+
 ### 2026-10-07: Shared packages are strict TypeScript source
 
 [[docs/adr/185-shared-packages-typescript|ADR-185]] replaces the JavaScript and hand-written

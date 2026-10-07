@@ -4,8 +4,8 @@
  */
 
 import { Router } from "express";
-import { validateIdParam, validateIntParam } from "../middleware/validation.js";
-import { rateLimiter } from "../middleware/rateLimiter.js";
+import { validateIdParam, validateIntParam } from "../middleware/validation.ts";
+import { rateLimiter } from "../middleware/rateLimiter.ts";
 import {
   listInvestments,
   createInvestment,
@@ -27,7 +27,7 @@ import {
   getPortfolioExposure,
   upsertPortfolioExposureBundle,
 } from "../services/portfolio/portfolioExposureService.js";
-import { ValidationError } from "../middleware/errorHandler.js";
+import { ValidationError } from "../middleware/errorHandler.ts";
 
 const router = Router();
 
@@ -60,7 +60,7 @@ router.put("/exposure/sources", async (req, res) => {
     if (error.code !== "INVALID_PORTFOLIO_EXPOSURE_SOURCE") throw error;
     throw new ValidationError("The exposure source bundle is invalid", {
       code: error.code,
-      issues: error.issues,
+      details: { issues: error.issues },
     });
   }
 });

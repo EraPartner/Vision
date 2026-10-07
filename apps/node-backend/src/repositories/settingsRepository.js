@@ -5,8 +5,8 @@
  * Table is created by Alembic migration 0030_add_user_settings_table.
  */
 
-import { query, withTransaction } from "../database/connection.js";
-import { ConflictError } from "../middleware/errorHandler.js";
+import { query, withTransaction } from "../database/connection.ts";
+import { ConflictError } from "../middleware/errorHandler.ts";
 
 /**
  * Settings whose values are plain strings. The legacy self-heal in

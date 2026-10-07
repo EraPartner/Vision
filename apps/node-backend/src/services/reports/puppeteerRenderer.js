@@ -6,7 +6,7 @@
  * it on completion. Call closeBrowser() on process shutdown.
  */
 
-import { logger } from "../../config/logger.js";
+import { logger } from "../../config/logger.ts";
 
 /** @type {import('puppeteer').Browser | null} */
 let browser = null;

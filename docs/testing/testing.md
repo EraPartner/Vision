@@ -549,7 +549,7 @@ import { vi } from "vitest";
 import { mockConnection } from "./helpers/repoMocks.js";
 import { mockCurrencyConversion } from "./helpers/mockCurrencyConversion.js";
 
-vi.mock("../src/database/connection.js", () => mockConnection());
+vi.mock("../src/database/connection.ts", () => mockConnection());
 vi.mock("../src/services/currency/currencyConversionService.js", () =>
   mockCurrencyConversion(),
 );
@@ -841,7 +841,7 @@ The helper returns `null` when `TEST_DATABASE_URL` is unset, so tests skip grace
 
 Backend vitest runs in exactly one CI job, so the service is wired only there. `quality-gate` runs no tests — it only aggregates results.
 
-**`DATABASE_URL` must equal `TEST_DATABASE_URL`.** DB-backed suites seed through the _test_ pool (`getTestPool()`), but the code under test queries through the _app_ pool (`src/database/connection.js`, built from `DATABASE_URL` at import time). Point them at different databases and the seed is invisible to the service. Both the CI job and `with-test-db.sh` set the two to the same value; a suite that depends on it should assert this in `beforeAll` rather than fail mysteriously.
+**`DATABASE_URL` must equal `TEST_DATABASE_URL`.** DB-backed suites seed through the _test_ pool (`getTestPool()`), but the code under test queries through the _app_ pool (`src/database/connection.ts`, built from `DATABASE_URL` at import time). Point them at different databases and the seed is invisible to the service. Both the CI job and `with-test-db.sh` set the two to the same value; a suite that depends on it should assert this in `beforeAll` rather than fail mysteriously.
 
 **Cleanup convention.** Prefer per-test `DELETE` of the tables the suite touches over `TRUNCATE ... CASCADE`: the cascade off `transactions` reaches a dozen unrelated tables and costs ~350 ms per test in ACCESS EXCLUSIVE locks versus ~3 ms for targeted deletes. A wrapping transaction is the other option, but it does not suit services that open their own `withTransaction` or that reconcile the whole corpus rather than a scoped batch — there, other tests' rows would still be visible. Whatever the strategy, the suite must leave no rows behind.
 
@@ -950,9 +950,9 @@ Code links: [[apps/node-backend/tests/priceProviderService.test.js]], [[apps/nod
 
 - Settings and middleware validation coverage additions for this branch:
   - [[apps/node-backend/tests/routes/settings.test.js]] covers settings route validation and error semantics: key-length guardrails, missing `value`, `dashboard_settings` `exclusionScope` and `excludedCategoryIds` validation, bulk upsert payload-type rejection, and DELETE not-found behavior.
-  - [[apps/node-backend/tests/validation.test.js]] covers validation-only `validateIdParam` and `validateIntParam` behavior in [[apps/node-backend/src/middleware/validation.js]]: missing-id handling, strict invalid-id errors, no mutation of valid Express path strings, repeated validation, and explicit numeric return through `assertIdParam`.
+  - [[apps/node-backend/tests/validation.test.js]] covers validation-only `validateIdParam` and `validateIntParam` behavior in [[apps/node-backend/src/middleware/validation.ts]]: missing-id handling, strict invalid-id errors, no mutation of valid Express path strings, repeated validation, and explicit numeric return through `assertIdParam`.
 - Database connection module coverage additions for this branch:
-  - [[apps/node-backend/tests/connection.test.js]] covers [[apps/node-backend/src/database/connection.js]] pool idle-client error logging, transient retry behavior (`ECONNRESET`, `08006`), non-transient no-retry behavior, max-retry exhaustion, utility/helper methods (`checkConnection`, `getTableCount`, `getPoolStats`, `closePool`, `queryPrepared`, `getClient`), and nested transactions that reuse one ambient client under unique savepoints on success and failure.
+  - [[apps/node-backend/tests/connection.test.js]] covers [[apps/node-backend/src/database/connection.ts]] pool idle-client error logging, transient retry behavior (`ECONNRESET`, `08006`), non-transient no-retry behavior, max-retry exhaustion, utility/helper methods (`checkConnection`, `getTableCount`, `getPoolStats`, `closePool`, `queryPrepared`, `getClient`), and nested transactions that reuse one ambient client under unique savepoints on success and failure.
   - [[apps/node-backend/tests/helpers/repoMocks.test.js]] keeps the shared `mockTxConnection` contract aligned with production ambient routing, including nested savepoints and post-transaction invalidation.
 
 - Security/config regression additions for this branch:
@@ -1481,7 +1481,7 @@ Validation runs (Phase C):
 ### Incremental backend info-route test addendum (2026-04-11)
 
 - [[apps/node-backend/tests/routes/info.test.js]] expanded coverage for route-level dependency interactions in [[apps/node-backend/src/routes/info.js]] using explicit mocks for:
-  - [[apps/node-backend/src/database/connection.js]] query behavior
+  - [[apps/node-backend/src/database/connection.ts]] query behavior
   - [[apps/node-backend/src/services/recurringDetectionService.js]]
   - [[apps/node-backend/src/services/materializedViewService.js]]
   - [[apps/node-backend/src/services/currency/currencyConversionService.js]] cache helpers

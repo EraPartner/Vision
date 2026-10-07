@@ -2,7 +2,7 @@
 title: Vision Project Knowledge Base
 type: index
 status: active
-date: 2026-10-06
+date: 2026-10-07
 updated: 2026-10-06
 last_modified: 2026-10-04
 tags:
@@ -434,7 +434,7 @@ See [[docs/features/import|Import Feature]], [[docs/integrations/bank-adapters|B
 **Backend:**
 
 - New filters in `GET /api/transactions`: `category_ids` (comma-separated string, ignored if `category_id` set) and `transaction_type` (enum: 'income' | 'expense')
-- `[[apps/node-backend/src/lib/filterBuilder.js]]` — `buildTransactionWhere()` updated with `categoryIds` and `transactionType` params
+- `[[apps/node-backend/src/lib/filterBuilder.ts]]` — `buildTransactionWhere()` updated with `categoryIds` and `transactionType` params
 - `[[apps/node-backend/src/repositories/transactionRepository.js]]` — `getAllWithCount()` forwards filter params
 - Tests: 9 new tests in `[[apps/node-backend/tests/filterBuilder.test.js]]` for filter logic
 
@@ -619,7 +619,7 @@ See [[docs/adr/035-remove-feature-flags|ADR-035]]
 - **Provider Health Tracking**: Passive success/error recording from 7 data sources (Binance, Yahoo, Kinesis, ECB, open.er-api, Statbel, Eurostat) + on-demand probe endpoints
 - **Request Metrics**: In-memory rolling window (15 min / 1 min buckets) with p50/p95 per route via `requestMetrics` middleware
 - **Endpoint Manifest**: Static Express router scan returning all registered routes with methods + descriptions
-- **New Backend Modules**: `services/providerHealth/`, `middleware/requestMetrics.js`, `services/routeManifest.js`
+- **New Backend Modules**: `services/providerHealth/`, `middleware/requestMetrics.ts`, `services/routeManifest.js`
 - **4 New API Endpoints**: `GET /api/admin/providers/health`, `POST /api/admin/providers/:provider/probe`, `GET /api/admin/metrics/requests`, `GET /api/admin/endpoints`
 - **API Total**: 148 endpoints across 20 routes (Admin: 13 endpoints after feature flags removal)
 

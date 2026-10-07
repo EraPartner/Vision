@@ -6,7 +6,7 @@
  */
 
 import { densifyDailyHistory } from "./_densify.js";
-import { epochMsToUtcYmd } from "../../../lib/dateFormat.js";
+import { epochMsToUtcYmd } from "../../../lib/dateFormat.ts";
 
 const DEFAULT_BACKTEST_MONTHS = 12;
 

@@ -8,7 +8,7 @@ import {
   getSnapshots,
   getBrokerSnapshots,
 } from "../../services/portfolioPerformanceSnapshotService.js";
-import { rateLimiter } from "../../middleware/rateLimiter.js";
+import { rateLimiter } from "../../middleware/rateLimiter.ts";
 import { getTargetCurrency, getCurrentDateString } from "./_queryParams.js";
 import {
   perfResponseCache,
@@ -18,8 +18,8 @@ import {
 import { buildPortfolioPerformancePayload } from "../../services/info/performanceHelpers.js";
 
 /**
- * @typedef {import('../../types/express.js').ExpressRequest} ExpressRequest
- * @typedef {import('../../types/express.js').ExpressResponse} ExpressResponse
+ * @typedef {import('../../types/express.ts').ExpressRequest} ExpressRequest
+ * @typedef {import('../../types/express.ts').ExpressResponse} ExpressResponse
  */
 
 const router = Router();

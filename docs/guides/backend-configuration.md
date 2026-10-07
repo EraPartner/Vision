@@ -1,17 +1,17 @@
 ---
 title: Backend Configuration & Infrastructure
 type: guide
-date: 2026-08-30
+date: 2026-10-07
 tags:
   [guide, backend, configuration, logging, database, infrastructure, phase-1]
 status: active
 description: Backend configuration management, logging, and database startup behavior
 related_code:
   [
-    "apps/node-backend/src/config/config.js",
-    "apps/node-backend/src/config/logger.js",
+    "apps/node-backend/src/config/config.ts",
+    "apps/node-backend/src/config/logger.ts",
     "apps/node-backend/src/main.js",
-    "apps/node-backend/src/database/migrate.js",
+    "apps/node-backend/src/database/migrate.ts",
   ]
 ---
 
@@ -19,7 +19,7 @@ related_code:
 
 ## Configuration Management
 
-**File:** [[apps/node-backend/src/config/config.js]]
+**File:** [[apps/node-backend/src/config/config.ts]]
 
 Centralized configuration module that loads settings from environment variables with `.env.local` support.
 
@@ -65,7 +65,7 @@ On import, the module:
 ### Usage
 
 ```javascript
-import settings from "./config/config.js";
+import settings from "./config/config.ts";
 
 const port = settings.server.port;
 const isProd = settings.isProduction();
@@ -75,7 +75,7 @@ const isProd = settings.isProduction();
 
 ## Logging
 
-**File:** [[apps/node-backend/src/config/logger.js]]
+**File:** [[apps/node-backend/src/config/logger.ts]]
 
 Structured logger with configurable log levels and timestamp formatting. Supports both traditional `(message, extra)` and pino-style `(bindings, message)` calling conventions.
 
@@ -105,7 +105,7 @@ The logger accepts arguments in two styles:
 **Traditional style (message, extra):**
 
 ```javascript
-import { logger } from "./config/logger.js";
+import { logger } from "./config/logger.ts";
 
 logger.info("Server started", { port: 3002 });
 logger.debug("Processing request", {
@@ -147,7 +147,7 @@ Several services have been optimized to use `debug` level for high-frequency or 
 
 ## Database Startup Behavior
 
-**Files:** [[apps/node-backend/src/main.js]], [[apps/node-backend/src/database/migrate.js]]
+**Files:** [[apps/node-backend/src/main.js]], [[apps/node-backend/src/database/migrate.ts]]
 
 The backend process connects to `DATABASE_URL` and waits for readiness. Native Electron manages its
 private PostgreSQL process and supplies that URL. In a custom source deployment the database

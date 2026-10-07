@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { query } from "../database/connection.js";
+import { query } from "../database/connection.ts";
 import {
   readAuditHead,
   readAuditSegment,
@@ -8,7 +8,7 @@ import {
   AUDIT_CHAIN_GENESIS_HASH,
   canonicalAuditPayload,
   verifyAuditChain,
-} from "../lib/auditChainCore.js";
+} from "../lib/auditChainCore.ts";
 
 const HASH = /^[0-9a-f]{64}$/;
 const digest = (values) =>

@@ -16,9 +16,9 @@ import {
   filterValidatedIdNumbers,
   MAX_INT32_ID,
   MAX_SAFE_ID,
-} from "../src/middleware/validation.js";
-import { coercedIdSchema, parseOverrideId } from "../src/lib/importBatchIds.js";
-import { ValidationError } from "../src/middleware/errorHandler.js";
+} from "../src/middleware/validation.ts";
+import { coercedIdSchema, parseOverrideId } from "../src/lib/importBatchIds.ts";
+import { ValidationError } from "../src/middleware/errorHandler.ts";
 
 // validateIdParam is unit-tested as a plain middleware function
 // (req, res, next) — a minimal res stub is enough; there is no router/HTTP

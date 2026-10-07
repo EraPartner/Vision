@@ -2,24 +2,24 @@
  * Info sub-repository: planned expenses for next month.
  */
 
-import { query } from "../database/connection.js";
+import { query } from "../database/connection.ts";
 import { convertRowsToEur } from "../services/currency/currencyConversionService.js";
 import {
   todayAppDateString,
   firstOfMonthYmd,
   addDaysYmd,
-} from "../lib/timezone.js";
+} from "../lib/timezone.ts";
 import {
   nextOccurrenceYmd,
   fastForwardYmd,
-} from "../lib/calculations/recurrence.js";
+} from "../lib/calculations/recurrence.ts";
 import {
   addAll,
   toDecimal,
   toNumber,
   roundMoney as roundToCents,
-} from "../lib/money.js";
-import { formatDateToYmd } from "../lib/dateFormat.js";
+} from "../lib/money.ts";
+import { formatDateToYmd } from "../lib/dateFormat.ts";
 import { mapRowsForAmountConversion } from "./infoRepositoryHelpers.js";
 
 const MAX_OCCURRENCES = 120; // guard against infinite loops on tiny intervals
@@ -47,7 +47,7 @@ function plannedDateToYmd(value) {
  * each occurrence (as a YYYY-MM-DD string in APP_TIMEZONE) that falls within
  * [startYmd, endYmd). Returns [] for a pattern that can't be advanced.
  *
- * The stepping itself is lib/calculations/recurrence.js's shared string-space
+ * The stepping itself is lib/calculations/recurrence.ts's shared string-space
  * stepper (nextOccurrenceYmd + the fastForwardYmd jump) — one grammar for
  * every stepper, so a pattern added there lands here too. Pure calendar-string
  * arithmetic (ADR-009 helpers), so an occurrence lands on the same day on

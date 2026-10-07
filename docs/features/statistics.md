@@ -2,7 +2,7 @@
 title: Statistics Feature
 type: feature
 status: active
-date: 2026-10-06
+date: 2026-10-07
 updated: 2026-10-06
 last_modified: 2026-09-27
 tags:
@@ -461,7 +461,7 @@ Two new query parameters added to `GET /api/transactions`:
 
 **Backend Implementation:**
 
-- `[[apps/node-backend/src/lib/filterBuilder.js]]` — `buildTransactionWhere()` now accepts `categoryIds` and `transactionType` params
+- `[[apps/node-backend/src/lib/filterBuilder.ts]]` — `buildTransactionWhere()` now accepts `categoryIds` and `transactionType` params
 - `[[apps/node-backend/src/routes/transactions.js]]` — `parseTransactionListQuery()` parses comma-separated `category_ids` and `transaction_type` from query string
 - `[[apps/node-backend/src/repositories/transactionRepository.js]]` — `getAllWithCount()` destructures and forwards filter params to service layer
 

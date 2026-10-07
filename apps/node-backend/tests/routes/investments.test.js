@@ -63,7 +63,7 @@ vi.mock("../../src/services/quoteBackfillService.js", () => ({
   refreshQuotesForInvestment: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("../../src/config/kinesisConfig.js", () => ({
+vi.mock("../../src/config/kinesisConfig.ts", () => ({
   getKinesisAssetConfig: vi.fn((assetName) => {
     if (assetName === "kaufen_gold") {
       return {
@@ -76,7 +76,7 @@ vi.mock("../../src/config/kinesisConfig.js", () => ({
   }),
 }));
 
-vi.mock("../../src/config/logger.js", () => ({
+vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 

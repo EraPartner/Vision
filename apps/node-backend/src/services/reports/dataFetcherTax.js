@@ -5,7 +5,7 @@
  * investment, and threads through optional Belgian tax profile data from the client.
  */
 
-import { query } from "../../database/connection.js";
+import { query } from "../../database/connection.ts";
 import {
   convertWithRates,
   loadCurrentRates,
@@ -13,9 +13,9 @@ import {
 } from "../currency/currencyConversionService.js";
 import { findRateOnOrBeforeInIndex } from "../currency/rateFetcher.js";
 import { getTaxTable } from "./belgianTaxTables.js";
-import { todayAppDateString, firstOfMonthYmd } from "../../lib/timezone.js";
-import { logger } from "../../config/logger.js";
-import { addAll, toNumber } from "../../lib/money.js";
+import { todayAppDateString, firstOfMonthYmd } from "../../lib/timezone.ts";
+import { logger } from "../../config/logger.ts";
+import { addAll, toNumber } from "../../lib/money.ts";
 
 /** @param {...(number|string)} values */
 const addMoney = (...values) => toNumber(addAll(values));
@@ -60,7 +60,7 @@ const addMoney = (...values) => toNumber(addAll(values));
  * `fetchTaxTransactions` below. `amount`/`taxes`/`fees` are NUMERIC columns
  * COALESCE-defaulted to 0 — pg still emits NUMERIC as a string even through
  * COALESCE with a numeric literal, so they stay strings here (parsed via
- * `Number()`/`convert()` below), matching `PortfolioMathTxRow` in types/rows.js.
+ * `Number()`/`convert()` below), matching `PortfolioMathTxRow` in types/rows.ts.
  * @typedef {{
  *   id: number,
  *   investment_id: number,

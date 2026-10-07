@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import settings from "../config/config.js";
+import settings from "../config/config.ts";
 import { getOllamaClient } from "../integrations/ollama/client.js";
 import {
   aiDisclosureGrantSchema,
@@ -11,7 +11,7 @@ import {
   ValidationError,
   NotFoundError,
   UpstreamError,
-} from "../middleware/errorHandler.js";
+} from "../middleware/errorHandler.ts";
 import { disclosurePayload } from "../services/aiProviderAdapters.js";
 import {
   checkAgentCloakPreflight,
@@ -44,8 +44,8 @@ import {
 } from "../services/aiReferenceService.js";
 
 /**
- * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
- * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ * @typedef {import('../types/express.ts').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.ts').ExpressResponse} ExpressResponse
  */
 
 const router = Router();

@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
-import { createHostGuard } from "../src/middleware/hostGuard.js";
-import { createCsrfGuard } from "../src/middleware/csrfGuard.js";
-import { createCorsMiddleware } from "../src/middleware/cors.js";
-import { ForbiddenError } from "../src/middleware/errorHandler.js";
+import { createHostGuard } from "../src/middleware/hostGuard.ts";
+import { createCsrfGuard } from "../src/middleware/csrfGuard.ts";
+import { createCorsMiddleware } from "../src/middleware/cors.ts";
+import { ForbiddenError } from "../src/middleware/errorHandler.ts";
 
 const guard = createHostGuard();
 function run(host, options = {}, middleware = guard) {
