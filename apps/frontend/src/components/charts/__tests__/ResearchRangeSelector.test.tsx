@@ -22,9 +22,9 @@ describe("ResearchRangeSelector", () => {
             />,
         );
 
-        const month = await screen.findByRole("button", { name: "1m" });
-        const year = screen.getByRole("button", { name: "1y" });
-        expect(month).toHaveAttribute("aria-pressed", "true");
+        const month = await screen.findByRole("radio", { name: "1m" });
+        const year = screen.getByRole("radio", { name: "1y" });
+        expect(month).toHaveAttribute("aria-checked", "true");
 
         await user.click(year);
         expect(onChange).toHaveBeenCalledWith(OPTIONS[1]);

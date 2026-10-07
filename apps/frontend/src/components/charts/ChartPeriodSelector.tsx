@@ -1,7 +1,13 @@
 /**
- * ChartPeriodSelector — segmented time-range control shared by every chart that
- * scopes its data to a window (Performance, Net Worth, …). One look, one feel.
+ * ChartPeriodSelector — the time-range picker shared by every chart that
+ * scopes its data to a window (Portfolio, Net worth, …). Built on the
+ * SegmentedControl primitive (ADR-179) so it reads as one radio group with
+ * the gliding pill, instead of a row of toggle buttons.
  */
+import {
+    SegmentedControl,
+    SegmentedControlItem,
+} from "@/components/ui/segmented-control";
 import { cn } from "@/lib/utils";
 
 export interface ChartPeriodSelectorProps<P extends string> {
@@ -25,37 +31,24 @@ export function ChartPeriodSelector<P extends string>({
     "aria-label": ariaLabel,
     "aria-labelledby": ariaLabelledBy,
 }: ChartPeriodSelectorProps<P>) {
-    const pad = size === "sm" ? "px-2 py-1" : "px-3 py-1.5";
     return (
-        <div
-            role="group"
+        <SegmentedControl
+            value={value}
+            onValueChange={(next) => onChange(next as P)}
+            size={size === "sm" ? "sm" : "default"}
             aria-label={ariaLabel}
             aria-labelledby={ariaLabelledBy}
-            className={cn(
-                "flex w-fit max-w-full gap-1 overflow-x-auto rounded-lg bg-muted p-1",
-                className,
-            )}
+            className={cn("w-fit", className)}
         >
-            {periods.map((p) => {
-                const active = p === value;
-                return (
-                    <button
-                        key={p}
-                        type="button"
-                        aria-pressed={active}
-                        onClick={() => onChange(p)}
-                        className={cn(
-                            "relative min-h-10 min-w-10 shrink-0 rounded-md text-xs font-medium transition-[color,background-color,box-shadow]",
-                            pad,
-                            active
-                                ? "bg-background text-foreground shadow-sm"
-                                : "text-muted-foreground hover:text-foreground",
-                        )}
-                    >
-                        {labels[p]}
-                    </button>
-                );
-            })}
-        </div>
+            {periods.map((p) => (
+                <SegmentedControlItem
+                    key={p}
+                    value={p}
+                    className={size === "sm" ? "px-2.5 type-footnote" : undefined}
+                >
+                    {labels[p]}
+                </SegmentedControlItem>
+            ))}
+        </SegmentedControl>
     );
 }

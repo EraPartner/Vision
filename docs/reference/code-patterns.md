@@ -2,7 +2,7 @@
 title: Code Patterns Reference
 type: reference
 status: active
-date: 2026-10-05
+date: 2026-10-06
 updated: 2026-10-05
 tags: [reference, patterns, conventions, code-style, backend, frontend, delete-responses, http-204, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number, settings-backed-hook, portfolio-tax-classifications, audit-2026-05-11, belgian-tax, freeze-display-pattern, adr-059, dev-observability, devtools, api-inspector, observability, postgres-locking, for-update-group-by, accessibility, a11y, keyboard-operability, aria, onActivateKeyDown, shared-utils, monorepo, workspace, banker-rounding, plural, tc, portfolio-unit-math, premium-v3, optimistic-create, chart-scrub, chart-sync, context-menu, dialog-interplay, radix, role-based-glass, june-2026, skin-v2, feature-flag, css-scoping, unlayered-css, visual-skin, theming, inline-token-constraint, adr-104, wire-casing, snake-case, api-casing, database-naming, enum-discipline, check-constraints, chk-uq-idx]
 description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via an indexable semi-join (Phase Q; rewritten from the original scalar-subquery OR shape), portfolio totals single-source-of-truth pattern (Phase 14), Belgian Tax freeze/display pattern for engine-drift protection (ADR-059, May 2026), dev-only observability integration pattern (May 2026 devtools: module-level pub-sub event bus with zero-cost tree-shaking in production). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix. May 2026 a11y pass adds onActivateKeyDown keyboard-activation helper pattern. June 2026: shared-utils cross-workspace package (@vision/shared-utils) consolidates money, slugify, and shared portfolio calculations; banker's rounding is now the canonical roundMoney mode; tc() plural pattern documented. June 2026 (ADR-070): optimistic mutation pattern (snapshot/patch/rollback via setQueriesData); surface shell updated with glass-regular/glass-elevated/opaque-table canonical rules; motion consumer updated for PageTransition re-addition and dialog keyframe animation. June 2026 Premium v3 (ADR-071): optimistic-create pattern (temp negative-id row, server swap, rollback, onSettled invalidate); chart scrub pattern (useChartScrub, pointer capture, glass Δ pill); chart sync pattern (ChartSyncProvider, syncId prop, domain guard). June 2026 Premium v3 V5 (ADR-071): Radix ContextMenu + Dialog interplay pattern — modal={false} prevents body pointer-events race when menu items spawn Dialogs. June 2026 (role-based glass): surface shell canonical rule broadened — glass-regular now applied to ALL content/chart/stat/state cards, including current table/form/callout/dialog-nested Card instances; old ~6-surface-per-viewport limit superseded; an explicit opaque exception uses a plain bordered bg-card container instead of Card. June 2026 (ADR-104): scoped-skin-behind-a-flag pattern — alternative visual skin shipped as UNLAYERED CSS under :root.skin-v2 toggled by VITE_SKIN_V2 booleanEnv flag (default OFF); localStorage runtime override + window.__setSkinV2 dev helper; critical inline-token constraint: applyThemePalette() writes color tokens as inline styles which beat any stylesheet rule. July 2026: wire casing convention — snake_case is the request/response body contract, translated to camelCase at the route edge; ai/savedCharts/crossWorkspace/admin-dbEditor requests plus marketLookup and import-rollback responses are grandfathered camelCase; dual-accept (`x_y ?? xY`) is banned.
@@ -3065,7 +3065,7 @@ Warning and neutral-information UI use the semantic `warning` and `info` tokens;
 `premium-frame` is baked into the base `Card` component — do not add it through `className`. Static cards keep the resting frame and material. Use `variant="interactive"` for cards that can be activated or are deliberately promoted as KPI/hero surfaces; the variant owns the hover lift, elevated-shadow crossfade, press response, and reduced-motion fallback. `micro-lift` remains for non-Card interactive surfaces only.
 
 > [!warning] GPU trade-off (card-dense pages)
-> Card-dense pages (e.g., PortfolioOverviewPage, StatisticsPage) now have more active `backdrop-filter` surfaces per viewport than the old ~6-surface budget. This is mitigated by ADR-075 tier auto-adapt: glass auto-degrades to near-opaque on large displays (`fx-reduced` class via `VisualEffectsController`) and under `prefers-reduced-transparency`. Profile the packaged Electron app on Apple Silicon before each release to catch regression.
+> Card-dense pages (e.g., PortfolioPage, StatisticsPage) now have more active `backdrop-filter` surfaces per viewport than the old ~6-surface budget. This is mitigated by ADR-075 tier auto-adapt: glass auto-degrades to near-opaque on large displays (`fx-reduced` class via `VisualEffectsController`) and under `prefers-reduced-transparency`. Profile the packaged Electron app on Apple Silicon before each release to catch regression.
 
 ### Pattern
 
@@ -3309,7 +3309,7 @@ Key rules:
 - Suppress `ChartTooltip` while `scrubRange !== null`.
 - Render the Δ pill with `formatScrubDelta(start, end)` — returns `{ abs, percent }`.
 
-**Enabled on:** CashFlowComparisonChart, ForecastInner, ForecastInnerRolling, BankBalancesWidget, PerformancePage, NetWorthChart.
+**Enabled on:** CashFlowComparisonChart, ForecastInner, ForecastInnerRolling, BankBalancesWidget, PortfolioPage, NetWorthChart.
 
 ### Synced Crosshairs
 
@@ -3850,10 +3850,10 @@ export function usePortfolioSummaryQuery(currency = "EUR") {
 }
 ```
 
-**Consumer (Dashboard):**
+**Consumer (Portfolio page — totals):**
 
 ```typescript
-function PortfolioOverviewPage() {
+function PortfolioPage() {
   const { data: summary } = usePortfolioSummaryQuery(displayCurrency);
 
   return (
@@ -3867,10 +3867,10 @@ function PortfolioOverviewPage() {
 }
 ```
 
-**Consumer (Performance Page):**
+**Consumer (Portfolio page — period performance):**
 
 ```typescript
-function PerformancePage() {
+function PortfolioPage() {
   const { data: performance } = usePortfolioPerformanceQuery(displayCurrency, period);
   const { data: summary } = usePortfolioSummaryQuery(displayCurrency);
 

@@ -2,14 +2,16 @@
 title: DashboardSettingsDialog
 type: component
 status: active
-date: 2026-10-05
-updated: 2026-10-05
+date: 2026-10-06
+updated: 2026-10-06
 tags:
   [
     components,
     forms,
     dialogs,
     settings,
+    design-system,
+    adr-183,
     refactor,
     sidebar,
     instant-apply,
@@ -24,7 +26,7 @@ tags:
     adr-084,
     small-viewport-robustness,
   ]
-description: Sidebar-navigated instant-apply settings dialog. Left rail of seven sections; each section is a self-contained component reading from hooks and writing directly to the store/API. Single "Done" close button replaces the old Save/Cancel footer. Shared SettingsPrimitives (SettingsSection, SettingsGroup, SettingRow) enforce a uniform visual language. (ADR-084)
+description: The Settings window, a macOS-style preferences window drawn as a Dialog. A sidebar list of seven sections on the left, the current section's name in the title bar, and the section's groups as Cards of setting rows in a scrolling pane. Every control saves on change; the window closes with its close button or Escape. Shared SettingsPrimitives (SettingsSection, SettingsGroup, SettingRow) put every setting on the design system. (ADR-084, ADR-183)
 aliases: [settings-dialog, dashboard-settings, DashboardSettingsDialog]
 related_code:
   - apps/frontend/src/features/settings/DashboardSettingsDialog.tsx
@@ -41,10 +43,10 @@ related_code:
 
 # DashboardSettingsDialog
 
-Sidebar-navigated, instant-apply settings dialog for configuring user preferences, display settings, statistics exclusions, backup options, and application behavior.
+The Settings window: a macOS-style preferences window for user preferences, appearance, statistics exclusions, behavior, AI, backup and maintenance. The desktop shell has exactly one BrowserWindow, so the window is a `Dialog` styled as a window (`max-w-4xl`, `h-[82vh]`): a sidebar of sections on the left, a title bar that names the current section, and the section's content in a scrolling pane. Every control saves on change; the window closes with its close button, Escape or browser Back. There is no description line, no "changes save automatically" paragraph and no footer; the sidebar ends with a one-line caption saying changes save automatically.
 
 > [!info] ADR-084 Rework — June 2026
-> The dialog was a 5-tab (`General`, `Appearance`, `Dashboard`, `App`, `Backup`) Save/Cancel form. It is now a **sidebar + scrollable content pane** with **instant-apply**. The Cancel/Save footer is replaced by a single **Done** (close) button. Reset-all moved to the About & Maintenance danger zone. See [[docs/adr/084-settings-instant-apply-sidebar|ADR-084]] for full rationale.
+> The dialog was a 5-tab (`General`, `Appearance`, `Dashboard`, `App`, `Backup`) Save/Cancel form. ADR-084 made it a **sidebar + scrollable content pane** with **instant-apply**; reset-all moved to the About & maintenance section. The redesign (ADR-183, 2026-10-06) restyled it as a window on the design system and removed the Done button. See [[docs/adr/084-settings-instant-apply-sidebar|ADR-084]] for the instant-apply rationale.
 
 ## Architecture
 
@@ -57,8 +59,11 @@ DashboardSettingsDialog (sidebar orchestrator)
 ├── AppearanceSection    — theme variant, color mode + schedule, system accent, visual effects, auto-adapt
 ├── StatisticsSection    — exclusion scope, exclude-hidden, include-transfers, excluded categories/recipients
 ├── BehaviorSection      — startup section, cost-basis method, auto-clear planned, reset recurring dismissals
-├── AiSection            — Ollama AI chat model + research provider keys
+├── AiSection            — AI chat, OpenAI, AgentCloak Desktop, analysis preferences, research provider keys
 │   ├── AIChatSettingsSection
+│   ├── OpenAiSettingsSection
+│   ├── AgentCloakDesktopSettingsSection
+│   ├── AnalysisPreferencesSettings
 │   └── ResearchKeysSection
 ├── BackupSection        — directory, backup-on-quit, passphrase, run/restore (Electron only)
 └── AboutSection         — app updates, onboarding restart, developer/admin mode, reset-all (danger zone)
@@ -83,7 +88,7 @@ Because each section is self-contained, the orchestrator holds no staged state a
 
 | State                                                | Owner                                     | Purpose                                                |
 | ---------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------ |
-| `activeSection`                                      | DashboardSettingsDialog                   | Currently visible section                              |
+| `activeSection`                                      | DashboardSettingsDialog                   | Currently visible section; its name is the title bar   |
 | All settings values                                  | Zustand store (via hooks in each section) | Single source of truth; sections read + write directly |
 | Backup state (dir, passphrase, encrypt, showRestore) | BackupSection internal                    | Not propagated to orchestrator                         |
 
@@ -114,9 +119,10 @@ interface DashboardSettingsDialogProps {
 
 ### Features
 
-- **Sidebar nav**: Left rail with icon + label for each of the seven sections; highlights active section. The rail exposes `tablist`/`tab`/`tabpanel` semantics, keeps only the selected tab in the tab order, and supports Arrow keys plus Home/End. **Responsive (Aug 2026)**: below the `md` breakpoint the nav collapses into a horizontally-scrolling chip bar under the dialog header instead of a fixed 208px sidebar — a fixed sidebar left ~120px for every control at phone widths. `md+` layout is pixel-identical to before.
-- **Scrollable content pane**: Right area renders the active section component.
-- **Done button**: Single close action; no Save/Cancel.
+- **Accessible name**: the dialog is named "Settings" through a visually hidden `DialogTitle`; the visible title bar shows the current section's name as an `h2`, as a macOS preferences window does. `DialogContent` passes `aria-describedby={undefined}` because the window has no description.
+- **Sidebar**: a `List` of `ListRow`s (`asChild` around a `role="tab"` button) with a leading icon and the section name; the selected row is filled with the primary color. The rail exposes `tablist`/`tab`/`tabpanel` semantics, keeps only the selected tab in the tab order, and supports Arrow keys plus Home/End. Below the `md` breakpoint the rail becomes a horizontally scrolling row of sections above the content, because a fixed rail would leave ~120px for every control at phone widths. The rail ends with a `type-caption` line (`settings.autosaveHint`) that says changes save automatically.
+- **Title bar and content pane**: a 48px title bar with the section name, then a `ScrollArea` (`role="tabpanel"`, labelled by the selected tab) that renders the active section component.
+- **Closing**: the window closes with the close button in the top-right corner, Escape, or browser Back (the route-backed `?settings=` entry); there is no Done or Save/Cancel footer.
 - **Section lazy-init**: React Query cache persists across section switches; transient UI state (search inputs) resets on unmount.
 
 ### Usage
@@ -141,7 +147,7 @@ function SettingsButton() {
 
 ## SettingsPrimitives
 
-Shared layout primitives used by every section to enforce a uniform visual language.
+Shared layout primitives used by every section so that every setting sits on the design system (role tokens, type ramp, Card and List primitives).
 
 ### File
 
@@ -149,13 +155,14 @@ Shared layout primitives used by every section to enforce a uniform visual langu
 
 ### Exports
 
-| Component         | Purpose                                                         | Layout                                                |
-| ----------------- | --------------------------------------------------------------- | ----------------------------------------------------- |
-| `SettingsSection` | Title + description header for a section                        | Full-width heading block                              |
-| `SettingsGroup`   | Bordered, hairline-divided card; optional label and description | Groups related rows                                   |
-| `SettingRow`      | Label + hint + control                                          | `row` for switches/actions; `stack` for selects/lists |
+| Component          | Purpose                                                                                                                                       | Layout                                                                                 |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `SettingsSection`  | A `section` landmark labelled with the section name (the title bar shows the name, so it renders no heading); stacks groups with `space-y-6` | Full width                                                                             |
+| `SettingsGroup`    | A `Card`: optional `CardHeader` with a `CardTitle variant="label"` (h3), a `type-footnote` description and an `aside` slot (e.g. a count badge); `CardContent variant="flush"` holding a borderless `List` | Groups related rows                                                                    |
+| `SettingRow`       | An `li` row: `type-body` label (a `<Label>` when `htmlFor`/`labelId` is set) plus an optional `type-footnote text-label-secondary` description on the left, an h-9 control on the right | `row` for switches, buttons and compact selects; `responsive` for selects; `stack` for inputs and lists; `destructive` tones the label; `titleHidden` keeps the label for assistive technology only |
+| `SelectSettingRow` | One `SettingRow` + `Select`, expressed as config                                                                                              | `responsive`, or `stack` when it has supplemental children                             |
 
-`SettingRow` replaces the three inconsistent label-control patterns from the old tabs (bare rows with full-width `Separator`, bordered cards, button-cards). Every setting in every section now uses the same primitive.
+Every setting in every section uses these primitives; no section draws its own bordered box.
 
 ---
 
@@ -167,7 +174,7 @@ Shared layout primitives used by every section to enforce a uniform visual langu
 
 ### Contents
 
-Currency, number format, decimal places, date format, language, start of week, page size (pure formatting + locale + table density settings). Reads from `useAppSettings`; writes through `updateAppSettings`.
+Two groups: **Numbers & dates** (default currency, number format, decimal places, date format) and **Language & display** (language, start of week, default page size). Reads from `useAppSettings`; writes through `updateAppSettings`.
 
 ---
 
@@ -179,7 +186,7 @@ Currency, number format, decimal places, date format, language, start of week, p
 
 ### Contents
 
-Theme variant, color mode (system / light / dark / schedule), schedule start/end times, macOS system accent, visual-effects tier, auto-adapt display toggle. **Accessibility** group (2026-06-24): Gain & loss colors Select (`colorblindGainLoss` setting — colorblind-safe Okabe-Ito vs classic gold/red). Reads from `useTheme` / `useAppSettings`; writes through store actions.
+Theme variant (a stacked row of `aria-pressed` buttons with name, description and palette swatches), **Sidebar** (labels or icons only, when a sidebar is mounted), **Color mode** (mode select, schedule times when scheduled, macOS system accent switch), **Visual effects** (tier select with the auto-cap and session-override notes, reduce-on-large-displays switch) and **Accessibility** (gain & loss colors select, `colorblindGainLoss`: colorblind-safe Okabe-Ito vs classic gold/red). Reads from `useTheme` / `useAppSettings`; writes through store actions.
 
 ### Visual-Effects Tier (ADR-075 addendum)
 
@@ -206,11 +213,11 @@ Formerly the `DashboardTab`. Renamed for accuracy: the exclusion scope option la
 
 ### Contents
 
-- **Exclusion scope**: `everywhere` / `statistics` / `nowhere`
-- **Exclude hidden categories**: auto-exclude inactive categories toggle
-- **Include internal transfers**: server-only aggregation toggle (`includeTransfers`); persists via `apiClient.saveSetting` + `queryClient.invalidateQueries()`; no client-side reader
-- **Excluded categories**: searchable multiselect
-- **Excluded recipients**: searchable multiselect
+- **Where exclusions apply**: `everywhere` / `dashboard` / `statistics` select
+- **Exclude hidden categories**: auto-exclude inactive categories switch
+- **Include transfers**: server-only aggregation switch (`includeTransfers`); persists via `apiClient.saveSetting` + a scoped `queryClient.invalidateQueries()`; no client-side reader
+- **Excluded categories**: a group with a count badge (`settings.dashboard.excludedCount` plural), a search field, and a scrolling checklist grouped by top-level category with a tri-state group checkbox
+- **Excluded payees**: a group with a count badge, a search field, and a scrolling checklist (excluded first)
 
 Reads from `useSettings`; exclusion arrays + scope write through `updateDashboardSettings`. `includeTransfers` writes directly via API (see [[docs/adr/083-internal-transfer-detection|ADR-083]]).
 
@@ -224,10 +231,12 @@ Reads from `useSettings`; exclusion arrays + scope write through `updateDashboar
 
 ### Contents
 
-- **Startup section**: which top-level section opens at launch (`budgeting` / `portfolio` / `research` / `ai-chat`)
-- **Cost-basis method**: portfolio gain/loss calculation method
-- **Auto-clear planned on match**: auto-link + execute planned transactions on ingest match
-- **Reset recurring dismissals**: clear all dismissed recurring suggestions (with confirmation)
+- **Open app on**: which page opens at launch (`budgeting` / `portfolio` / `research` / `ai-chat` / `last`)
+- **Cost basis method**: portfolio gain/loss calculation method (also saved server-side as `cost_basis_method`)
+- **Auto-clear planned payments**: clear a planned payment when an imported or added transaction unambiguously matches it
+- **Keep services running on quit** (desktop only): Electron services setting
+- **Brokerage cash categories**: dividend, interest, fee and tax category pickers
+- **Reset dismissed recurring suggestions**: a Reset button that clears the dismissals and toasts the result
 
 Reads from `useAppSettings`; writes through `updateAppSettings`.
 
@@ -241,7 +250,7 @@ Reads from `useAppSettings`; writes through `updateAppSettings`.
 
 ### Contents
 
-Composes `[[apps/frontend/src/features/settings/AIChatSettingsSection.tsx|AIChatSettingsSection]]` (Ollama connection status + model selector) and `ResearchKeysSection` (provider API keys). Both sub-components read and write independently; `AiSection` is a layout wrapper.
+Composes `[[apps/frontend/src/features/settings/AIChatSettingsSection.tsx|AIChatSettingsSection]]` (Ollama status + default model), `OpenAiSettingsSection` (default OpenAI model), `AgentCloakDesktopSettingsSection` (connection status, Check again, Enable/Disable), `AnalysisPreferencesSettings` (default answer depth, default benchmark with Clear) and `ResearchKeysSection` (one row per provider: masked status, key input, Save, Clear). Each sub-component reads and writes independently; `AiSection` is a layout wrapper. Keys are entered inline; no sub-dialog opens from this section.
 
 ---
 
@@ -255,11 +264,11 @@ Formerly `BackupTab`. Now self-contained: it owns all backup state and writes di
 
 ### Contents
 
-- **Backup directory**: path input + Electron file picker (Electron only)
-- **Backup on quit**: auto-backup-on-exit toggle
-- **Passphrase + encryption**: AES-256-GCM encrypt toggle + passphrase input (>6 chars)
-- **Create backup**: immediate backup with progress UI
-- **Restore backup**: file picker → encrypted detection → `useRestoreBackup` hook → passphrase modal on `.visionbak.enc`
+Outside the desktop app the section is one `CardContent variant="state"` card saying backups are only available in the desktop app. In the desktop app, three groups:
+
+- **Backups**: backup folder (read-only path + Browse…/Change…), Back up when quitting switch, Back up now button
+- **Backup encryption (optional)**: passphrase input with Save passphrase and Clear saved passphrase, the encryption status as the row's description, the secure-storage warning, and a dismissable "Store your passphrase securely" reminder row
+- **Restore from backup**: Choose backup file… (read-only file name + picker), then a destructive Restore now row whose description carries the irreversibility warning. Restore now asks first through the destructive `useConfirmDialog` (`settings.restore.confirmTitle`, Restore / Cancel), then hands the file to `useRestoreBackup`, which opens the passphrase dialog for `.visionbak.enc` files
 
 ### Internal State
 
@@ -294,10 +303,13 @@ All backup state (`backupDir`, `backupPassphrase`, `backupEncrypt`, `showRestore
 
 ### Contents
 
-- **App updates**: manual update check + install (Electron)
-- **Restart onboarding**: reset onboarding completion + reshow wizard
-- **Developer / admin mode**: toggle (with confirmation)
-- **Reset to defaults** (danger zone): replaces the old `handleReset()` in the orchestrator. Since 2026-10-05 the **Reset** button asks first through the destructive `useConfirmDialog` confirmation (`settings.app.resetAllConfirm.*`), which says what is reset and what is kept. Confirming resets the app preferences, the session visual-effects override and the dashboard statistics settings (exclusions), and saves the server-side `includeTransfers` setting as `false`. Theme variant and color mode, accounts, transactions, categories and other data are kept. See [[docs/features/settings#instant-apply-model|Settings — Instant-Apply Model]] for the full list.
+- **Identity card**: a `Card` with the Vision mark, product name (`type-title-2`), version and license, and Source code / Documentation links
+- **Updates**: the shared `useUpdateStatus` result as a row (running the latest version, or the available version with release date, release notes excerpt and a Release notes link), then a Check for updates button and, in the desktop app when an update exists, Install update
+- **Setup assistant**: Restart button (resets onboarding, closes the window, reloads)
+- **Admin mode**: switch that shows the Admin section in the sidebar
+- **Reset**: the **Reset all settings** row (destructive tone) with a Reset button that asks first through the destructive `useConfirmDialog` confirmation (`settings.app.resetAllConfirm.*`), which says what is reset and what is kept. Confirming resets the app preferences, the session visual-effects override and the dashboard statistics settings (exclusions), and saves the server-side `includeTransfers` setting as `false`. Theme variant and color mode, accounts, transactions, categories and other data are kept. See [[docs/features/settings#instant-apply-model|Settings — Instant-Apply Model]] for the full list.
+
+Admin and Monitors stay in the sidebar (ADR-180); they are not sections of the Settings window.
 
 ---
 
@@ -328,18 +340,17 @@ interface AIChatSettingsSectionProps {
 
 ---
 
-## i18n Keys (ADR-084)
+## i18n Keys
 
-New keys added in en + nl; no existing keys changed:
+| Key pattern                                                         | Purpose                                              |
+| ------------------------------------------------------------------- | ---------------------------------------------------- |
+| `settings.title`                                                    | Accessible name of the window and the tablist        |
+| `settings.tab.{general,appearance,backup}`, `settings.section.{statistics,behavior,ai,about}` | Sidebar section names, also the title bar |
+| `settings.autosaveHint`                                             | Caption at the bottom of the sidebar                 |
+| `settings.group.{formatting,localeDisplay,colorMode,visualEffects}` | Group card titles                                    |
+| `settings.dashboard.excludedCount.{one,other}`                      | Count badge on the exclusion groups (`tc()`)         |
 
-| Key pattern                                                         | Purpose                  |
-| ------------------------------------------------------------------- | ------------------------ |
-| `settings.done`                                                     | Done button label        |
-| `settings.section.{about,ai,behavior,statistics,...}`               | Sidebar section labels   |
-| `settings.section.*.desc`                                           | Section description text |
-| `settings.group.{formatting,localeDisplay,colorMode,visualEffects}` | Group card labels        |
-
-The old `settings.save` / `settings.cancel` strings remain in locale files (unused).
+ADR-183 removed `settings.done`, `settings.description`, `settings.saveHint`, `settings.section.*.desc`, `settings.app.identity` and `settings.dashboard.excluded`, and reworded the failure toasts to the "Couldn't …" form (`settings.backup.failed`, `settings.restore.failed`, `settings.backup.passphrase.saveFailed`, `settings.research.{save,clear}Failed`, `settings.agentCloak.statusError`); the restore confirmation button reads Restore.
 
 ---
 
@@ -347,7 +358,7 @@ The old `settings.save` / `settings.cancel` strings remain in locale files (unus
 
 | Component               | Test Scope                                                                             |
 | ----------------------- | -------------------------------------------------------------------------------------- |
-| DashboardSettingsDialog | Dialog open/close, section nav, Done button, canonical and retired section-id behavior |
+| DashboardSettingsDialog | Dialog open/close, accessible name and title bar, section nav, close button and Escape, canonical and retired section-id behavior |
 | GeneralSection          | Currency/format selection, instant write to store                                      |
 | StatisticsSection       | Category/recipient exclusion, scope selection, includeTransfers toggle                 |
 | BehaviorSection         | Startup section select, auto-clear planned toggle, recurring reset confirmation        |
@@ -368,6 +379,7 @@ The old `settings.save` / `settings.cancel` strings remain in locale files (unus
 | ADR-084                   | 2026-06-18 | 5-tab Save/Cancel form → sidebar + instant-apply; `SettingsPrimitives`; section taxonomy rework; `tabs/` directory removed |
 | ADR-104 addendum          | 2026-06-24 | Accessibility group added to AppearanceSection: Gain & loss colors Select (`colorblindGainLoss`)                           |
 | Small-viewport robustness | 2026-08-10 | Section nav collapses to a horizontal scrolling chip bar below `md`; `md+` unchanged (PR #156)                             |
+| ADR-183                   | 2026-10-06 | Settings window on the design system: sidebar as List/ListRow tabs, section name in the title bar, Done button and description removed, groups as Cards of rows, sentence-case copy and "Couldn't …" toasts |
 
 ---
 

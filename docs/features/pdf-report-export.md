@@ -372,7 +372,7 @@ interface ExportDialogProps {
 | Statistics         | `apps/frontend/src/pages/StatisticsPage.tsx`                  | `financial`  | PageHeader actions (left of WidgetVisibilityDialog) |
 | Tax Overview       | `apps/frontend/src/pages/TaxOverviewPage.tsx`                 | `tax`        | PageHeader actions (alongside TaxProfileDialog)     |
 | Stocks             | `apps/frontend/src/pages/portfolio/StocksPage.tsx`            | `portfolio`  | PageHeader actions (alongside AddInvestmentDialog)  |
-| Portfolio Overview | `apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx` | `portfolio`  | PageHeader actions (first action slot)              |
+| Portfolio Overview | `apps/frontend/src/pages/portfolio/PortfolioPage.tsx` | `portfolio`  | PageHeader actions (first action slot)              |
 
 ### Period Presets
 

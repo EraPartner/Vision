@@ -671,7 +671,7 @@
       "disposition": "Removed after portfolio overview adopted translated labels and investment creation adopted canonical ASSET_CLASSES enumeration.",
       "paths": [
         "apps/frontend/src/types/portfolio.ts",
-        "apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx",
+        "apps/frontend/src/pages/portfolio/PortfolioPage.tsx",
         "apps/frontend/src/features/portfolio/AddInvestmentDialog.tsx"
       ],
       "readers": "Two production UI surfaces.",
@@ -731,7 +731,7 @@
       "classification": "historical-record-only",
       "disposition": "Removed after all six production modules moved to @vision/shared-utils/money.",
       "paths": [
-        "apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx",
+        "apps/frontend/src/pages/portfolio/PortfolioPage.tsx",
         "apps/frontend/src/features/splits/SplitTransactionDialog.tsx",
         "packages/shared-utils/src/money.js"
       ],
@@ -944,7 +944,7 @@
       "disposition": "Legacy describes formula lineage; the metric remains heavily used and intentionally differs from narrower gain components.",
       "paths": [
         "apps/frontend/src/types/portfolio.ts",
-        "apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx",
+        "apps/frontend/src/pages/portfolio/PortfolioPage.tsx",
         "apps/node-backend/src/services/portfolio/portfolioSummaryService.js"
       ],
       "readers": "Portfolio pages, accounts, reports, hooks, and metrics.",

@@ -2,8 +2,8 @@
 title: Planned Transactions
 type: feature
 status: active
-date: 2026-10-05
-updated: 2026-10-05
+date: 2026-10-06
+updated: 2026-10-06
 tags: [feature, planned, recurring, bills, loans, phase-3, phase-12, calculations, immutability, error-handling, toast, atomic-patch, virtual-data-table, i18n-toasts, upcoming-payments-hook, occurrence-key-dismissal, june-2026, auto-link, planned-match, exchange-rates, fx]
 aliases: [planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loan-amortization]
 description: "Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses. June 2026: auto-link & auto-clear planned payments on match — ingested transactions are automatically linked to matching planned payments (same recipient cluster, same sign, ±5% amount, ±5 days); ambiguous matches surface as confirmable suggestions. PlannedPaymentsPage migrated from DataTable to VirtualDataTable; native alert() replaced with toast.error (new i18n keys plannedPage.toggleFailed/deleteFailed). V11: useUpcomingPlannedPayments shared hook (single fetch + shared dismissed-ID store); UpcomingPaymentsNotification renders its dashboard reminder without duplicating the planned-payments page, while native badge synchronization remains active throughout AppLayout. June 2026 (B1 fix): dismissals now keyed per occurrence (id:YYYY-MM-DD) so recurring reminders re-surface each cycle; past-dated keys pruned on load; legacy id-only entries silently dropped on next load. August 2026: Planned aggregates omit payments whose exchange rate is unavailable and visibly report the omission instead of blending currencies."
@@ -19,7 +19,7 @@ Account detail pages expose active, unexecuted plans in a separate forecast sect
 
 ## List URL state
 
-The page stores the non-default `show_all=true` list toggle in the URL. Missing or invalid values use the active-only default. Updates preserve unrelated query parameters and replace the current history entry.
+The page stores the non-default `show_all=true` list toggle in the URL. Missing or invalid values use the active-only default. Updates preserve unrelated query parameters and replace the current history entry. Since October 2026 the toggle is the "Include paused" checkbox item in the page's View menu (the same pattern as the Transactions page), and the filtered empty state offers an "Include paused" button that turns it on.
 
 Vision's planned transaction system helps track upcoming payments, recurring bills, subscriptions, and loan repayments.
 
@@ -564,15 +564,24 @@ When a planned transaction is executed:
 
 ## Frontend Components
 
+### Planned page on the design system (October 2026, ADR-183)
+
+- The page is titled "Planned". Header actions are a View menu (checkbox item "Include paused"), a ••• menu (`plannedPage.menu`) holding "Payment history", and the primary "Add payment" button.
+- `PlannedPaymentsTable` has no status column. Each row carries a worded "Mark as paid" button (disabled for paused rows; replaced by a "Paid" badge that links to `/transactions?transaction_id=…` once executed), a "Paused" badge when `is_active` is false, and a row ••• menu (`plannedPage.rowMenu`, "Actions for {name}") with Edit, Pause or Resume, and Delete.
+- Pause and Resume act immediately and confirm with an undo toast ("Payment paused" / "Payment resumed" with the payment name and an Undo action that flips the row back). Delete keeps its destructive confirm dialog because the backend has no restore endpoint for a deleted planned transaction.
+- "Mark as paid" opens `LinkTransactionDialog`, titled "Mark {name} as paid", whose description explains in one sentence that the chosen transaction is linked and the payment recorded on the transaction's date. The backend `POST /api/planned-transactions/:id/execute` still requires `executed_transaction_id`, so marking as paid always goes through the link dialog.
+- The empty state ("Nothing planned yet") offers one "Add payment" action; with the active-only filter hiding every row it offers "Include paused" instead. The old empty-state key no longer reads "New payment".
+- `NextSevenDaysStrip`, `MatchSuggestionsBanner`, `RecurringDetectionPanel` and `ExecutionHistoryDialog` were restyled with the type ramp, label colours, `rounded-card corner-continuous` surfaces and the `List` primitive; their behaviour, roles and accessible names are unchanged (the recurring disclosures still default to collapsed, the banner still reviews the first suggestion).
+
 ### PlannedPaymentForm
 
-Dialog form for creating and editing planned transactions. Supports both one-time payments and recurring payments with optional loan configuration.
+Right-hand sheet (`Sheet`, `side="right"`, the `AddTransactionSheet` pattern) for creating and editing planned transactions. Supports both one-time payments and recurring payments with optional loan configuration. The title is "New payment" or "Edit payment"; the footer carries a live hint naming the first missing required field ("Enter a name.", "Enter an amount.", "Choose a bank account.") or the keyboard affordance, a ghost Cancel and the primary "Add payment" / "Save changes" button. The direction (expense/income) is a `SegmentedControl`, locked to expense for loans.
 
 **Props:**
 
 | Prop           | Type              | Description                                |
 | -------------- | ----------------- | ------------------------------------------ |
-| `open`         | `boolean`         | Dialog open state                          |
+| `open`         | `boolean`         | Sheet open state                           |
 | `onOpenChange` | `(open) => void`  | Open state change handler                  |
 | `onSubmit`     | `(data) => void`  | Submit handler with PlannedPayment payload |
 | `initial`      | `PlannedPayment?` | Pre-fill values for editing mode           |
@@ -623,7 +632,8 @@ Extracted dialog component that manages linking a transaction execution to a pla
 **Behavior:**
 
 - Initializes filters from the planned payment's recipient, bank_account, and a **search window that opens ~14 days before the due date** (upper bound stays open). The pre-window ensures direct debits that post a few days early are included; the open upper bound catches late postings. The `start_date` filter is therefore `due_date − 14 days`; `end_date` is not sent.
-- Dialog header (`DialogDescription`) shows the planned payment's due date using i18n key `plannedPage.link.dueOn` ("Due {date}") (2026-06-25).
+- Dialog title is `plannedPage.link.title` ("Mark {name} as paid"); the description (`DialogDescription`) explains the link in one sentence (`plannedPage.link.intro`) followed by the planned payment's due date using i18n key `plannedPage.link.dueOn` ("Due {date}") (2026-06-25, retitled October 2026).
+- Filters sit in a labelled "Narrow the list" group; candidates render as a `RadioGroup` inside a `List` (one labelled radio per row with memo or payee, payee · date, and signed `Money`). Rows no longer print the raw transaction id.
 - **Recipient Resolution (2026-04-26):** When the planned payment has a `recipient_id`, the dialog:
   1. Fetches the recipient object to resolve the cluster root
   2. Uses `primary_recipient_id` if present (indicating the recipient is an alias in a cluster), otherwise uses the recipient's own ID
@@ -683,7 +693,7 @@ Panel that displays detected recurring payment patterns from the backend. Allows
 - Shows confidence indicators (amount stability, interval consistency)
 - Dismiss patterns (persisted to localStorage + backend settings)
 - Create planned transactions from detected patterns
-- Expandable/collapsible pattern cards
+- Expandable/collapsible pattern lists (`List` rows inside a card)
 - Pattern and amount-change disclosures default collapsed so the payments table remains the primary page content
 - Match suggestions render as one compact count-and-review summary instead of an expanded list
 

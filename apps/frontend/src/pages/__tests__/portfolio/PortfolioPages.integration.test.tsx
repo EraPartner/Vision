@@ -12,7 +12,6 @@ import CryptoPage from "@/pages/portfolio/CryptoPage";
 import MetalsPage from "@/pages/portfolio/MetalsPage";
 import RealEstatePage from "@/pages/portfolio/RealEstatePage";
 import SavingsPage from "@/pages/portfolio/SavingsPage";
-import PerformancePage from "@/pages/portfolio/PerformancePage";
 import NetWorthPage from "@/pages/portfolio/net-worth/NetWorthPage";
 import ExchangeRatesPage from "@/pages/admin/ExchangeRatesPage";
 import WatchlistPage from "@/pages/research/WatchlistPage";
@@ -221,212 +220,6 @@ describe("Portfolio pages (integration)", () => {
         expect(buttons.length).toBeGreaterThan(0);
     });
 
-    // ─── PerformancePage ──────────────────────────────────────────────────────
-    it("PerformancePage renders heading", async () => {
-        renderWithApp(<PerformancePage />);
-        await screen.findByRole("heading", { name: /performance/i });
-    });
-
-    it("PerformancePage hydrates period and FX-neutral state from the URL", async () => {
-        const requestedPeriods: string[] = [];
-        server.use(
-            http.get(
-                `${API_BASE}/api/info/portfolio-performance`,
-                ({ request }) => {
-                    requestedPeriods.push(
-                        new URL(request.url).searchParams.get("period") ?? "",
-                    );
-                    return ok({
-                        currency: "EUR",
-                        start_date: "2026-07-01",
-                        end_date: "2026-08-01",
-                        snapshots: [
-                            {
-                                date: "2026-07-01",
-                                invested: 100,
-                                value: 110,
-                                value_fx_neutral: 108,
-                                stocks_etfs_value: 110,
-                                crypto_value: 0,
-                                metals_value: 0,
-                                stocks_etfs_invested: 100,
-                                crypto_invested: 0,
-                                metals_invested: 0,
-                                inflation_adjusted_value: 109,
-                                gain_loss: 10,
-                                return_pct: 10,
-                            },
-                            {
-                                date: "2026-08-01",
-                                invested: 100,
-                                value: 120,
-                                value_fx_neutral: 116,
-                                stocks_etfs_value: 120,
-                                crypto_value: 0,
-                                metals_value: 0,
-                                stocks_etfs_invested: 100,
-                                crypto_invested: 0,
-                                metals_invested: 0,
-                                inflation_adjusted_value: 118,
-                                gain_loss: 20,
-                                return_pct: 20,
-                            },
-                        ],
-                        metrics: null,
-                        heatmap: { years: [], data: {}, maxAbsPct: 0 },
-                        breakdownSummary: [],
-                    });
-                },
-            ),
-        );
-
-        renderWithApp(<PerformancePage />, {
-            initialEntries: [
-                "/portfolio/performance?period=3m&fx_neutral=true",
-            ],
-        });
-
-        expect(
-            await screen.findByRole("button", { name: "3 months" }),
-        ).toHaveAttribute("aria-pressed", "true");
-        expect(
-            screen.getByRole("button", { name: /without currency effects/i }),
-        ).toHaveClass("bg-background");
-        expect(requestedPeriods).toContain("3m");
-        expect(
-            screen.getByText(
-                "The period changes the charts. Summary returns cover all available history.",
-            ),
-        ).toBeInTheDocument();
-    });
-
-    it("PerformancePage shows empty state when no snapshots", async () => {
-        renderWithApp(<PerformancePage />);
-        // Default MSW returns { snapshots: [] } → PerformanceEmptyState renders
-        // performance.emptyTitle = "No performance history yet"
-        expect(
-            await screen.findByRole("heading", {
-                name: /no performance history yet/i,
-            }),
-        ).toBeInTheDocument();
-    });
-
-    it("PerformancePage shows Refresh Prices button in empty state", async () => {
-        renderWithApp(<PerformancePage />);
-        // portfolio.refreshPrices = "Refresh Prices"
-        expect(
-            await screen.findByRole("button", { name: /refresh prices/i }),
-        ).toBeInTheDocument();
-    });
-
-    it("PerformancePage keeps its value, invested, FX, allocation, and return facts in the shared hero", async () => {
-        server.use(
-            http.get(`${API_BASE}/api/info/portfolio-performance`, () =>
-                ok({
-                    currency: "EUR",
-                    start_date: "2026-07-01",
-                    end_date: "2026-08-01",
-                    snapshots: [
-                        {
-                            date: "2026-07-01",
-                            invested: 1_000,
-                            value: 1_100,
-                            stocks_etfs_value: 800,
-                            crypto_value: 200,
-                            metals_value: 100,
-                            stocks_etfs_invested: 750,
-                            crypto_invested: 150,
-                            metals_invested: 100,
-                            inflation_adjusted_value: 1_080,
-                            gain_loss: 100,
-                            return_pct: 10,
-                        },
-                        {
-                            date: "2026-08-01",
-                            invested: 1_100,
-                            value: 1_500,
-                            stocks_etfs_value: 900,
-                            crypto_value: 220,
-                            metals_value: 130,
-                            stocks_etfs_invested: 800,
-                            crypto_invested: 180,
-                            metals_invested: 120,
-                            inflation_adjusted_value: 1_220,
-                            gain_loss: 150,
-                            return_pct: 13.64,
-                            is_provisional: true,
-                        },
-                    ],
-                    metrics: {
-                        currentValue: 1_500,
-                        totalInvested: 1_100,
-                        totalGainLoss: 150,
-                        totalReturnPct: 13.64,
-                        annualizedReturn: 8,
-                        realReturnPct: 11,
-                        cumulativeInflation: 2.2,
-                    },
-                    heatmap: { years: [], data: {}, maxAbsPct: 0 },
-                    breakdownSummary: [
-                        {
-                            id: 1,
-                            name: "World ETF",
-                            symbol: "IWDA",
-                            assetClass: "etf",
-                            currency: "USD",
-                            currentValue: 1_500,
-                            totalInvested: 1_100,
-                            gainLoss: 150,
-                            gainLossPercent: 13.64,
-                        },
-                    ],
-                    totals: {
-                        totalPortfolioValue: 1_500,
-                        totalInvested: 1_100,
-                        totalGainLoss: 150,
-                        totalRealizedGain: 0,
-                        totalUnrealizedGain: 150,
-                        totalGain: 150,
-                        totalIncome: 0,
-                        totalFees: 0,
-                        totalTaxes: 0,
-                        totalAssetGain: 125,
-                        totalFxGain: 25,
-                        totalReturnPct: 13.64,
-                        usedFallbackRate: false,
-                    },
-                }),
-            ),
-        );
-
-        renderWithApp(<PerformancePage />);
-
-        const heroHeading = await screen.findByRole("heading", {
-            name: "Portfolio value",
-        });
-        const hero = heroHeading.closest(".premium-frame");
-        expect(hero).toHaveTextContent("Total invested");
-        expect(hero).toHaveTextContent("Net profit or loss");
-        expect(hero).toHaveTextContent("Asset gain");
-        expect(hero).toHaveTextContent("Currency effect");
-        expect(hero).toHaveTextContent("Stocks, crypto & metals (% of group)");
-        expect(hero).toHaveTextContent("900,00 € (72,0%)");
-        expect(hero).toHaveTextContent("220,00 € (17,6%)");
-        expect(hero).toHaveTextContent("130,00 € (10,4%)");
-        expect(screen.getByRole("note")).toHaveTextContent(
-            "Today's value may still change",
-        );
-        expect(
-            screen.getByRole("heading", { name: "Total return" }),
-        ).toBeInTheDocument();
-        expect(
-            screen.getByRole("heading", { name: "Annualized return" }),
-        ).toBeInTheDocument();
-        expect(
-            screen.getByRole("heading", { name: /real return/i }),
-        ).toBeInTheDocument();
-    }, 15_000);
-
     // ─── NetWorthPage ─────────────────────────────────────────────────────────
     it("NetWorthPage renders heading", async () => {
         renderWithApp(<NetWorthPage />);
@@ -478,7 +271,7 @@ describe("Portfolio pages (integration)", () => {
         consoleSpy.mockRestore();
     });
 
-    it("NetWorthPage presents current components as labeled amounts and percentages", async () => {
+    it("NetWorthPage reads assets against debt under the headline", async () => {
         server.use(
             http.get(`${API_BASE}/api/info/net-worth`, () =>
                 ok({
@@ -512,23 +305,19 @@ describe("Portfolio pages (integration)", () => {
 
         renderWithApp(<NetWorthPage />);
 
-        const liquid = await screen.findByText("Cash & savings", {
-            selector: "dt",
-        });
-        const investments = screen.getByText("Investments", { selector: "dt" });
-        const liabilities = screen.getByText("Liabilities", { selector: "dt" });
-        expect(
-            within(liquid.parentElement!).getByLabelText(/5\.000,00/),
-        ).toBeInTheDocument();
-        expect(
-            within(investments.parentElement!).getByLabelText(/7\.000,00/),
-        ).toBeInTheDocument();
-        expect(
-            within(liabilities.parentElement!).getByLabelText(/1\.000,00/),
-        ).toBeInTheDocument();
-        expect(liquid.parentElement).toHaveTextContent(/45\s*%/);
-        expect(investments.parentElement).toHaveTextContent(/64\s*%/);
-        expect(liabilities.parentElement).toHaveTextContent(/-9\s*%/);
+        const assets = await screen.findByText("Assets", { selector: "dt" });
+        const debt = screen.getByText("Debt", { selector: "dt" });
+        // Assets = cash & savings + investments; debt is the absolute liability.
+        expect(assets.parentElement).toHaveTextContent(/12\.000,00/);
+        expect(debt.parentElement).toHaveTextContent(/1\.000,00/);
+        // The asset split stays readable under the bar.
+        const assetsBar = assets.parentElement!.parentElement!;
+        expect(assetsBar).toHaveTextContent(/Cash & savings.*5\.000,00/);
+        expect(assetsBar).toHaveTextContent(/Investments.*7\.000,00/);
+        // Shares of net worth are gone; the month change and all-time change remain.
+        expect(screen.queryByText(/of net worth/i)).not.toBeInTheDocument();
+        expect(screen.getByText(/this month/i)).toBeInTheDocument();
+        expect(screen.getByText("All time", { selector: "dt" })).toBeInTheDocument();
     }, 15_000);
 
     it("NetWorthPage reconciles the displayed By Account rows to its headline", async () => {
@@ -636,6 +425,9 @@ describe("Portfolio pages (integration)", () => {
         expect(card).toHaveTextContent(/Daily cash.*900,00/s);
         expect(card).toHaveTextContent(/Broker.*100,00.*900,00.*1\.000,00/s);
         expect(card).toHaveTextContent(/Unassigned.*50,00/s);
+        expect(
+            within(card).getByRole("link", { name: "Assign to an account" }),
+        ).toHaveAttribute("href", "/portfolio");
         expect(card).toHaveTextContent(
             /Displayed total.*Matches net worth.*1\.950,00/s,
         );
@@ -698,7 +490,7 @@ describe("Portfolio pages (integration)", () => {
         );
 
         renderWithApp(<NetWorthPage />);
-        await screen.findByRole("heading", { name: "Net Worth", level: 1 });
+        await screen.findByRole("heading", { name: "Net worth", level: 1 });
         expect(
             screen.queryByRole("heading", { name: "By account" }),
         ).not.toBeInTheDocument();
@@ -742,8 +534,8 @@ describe("Portfolio pages (integration)", () => {
         });
 
         expect(
-            await screen.findByRole("button", { name: "3 months" }),
-        ).toHaveAttribute("aria-pressed", "true");
+            await screen.findByRole("radio", { name: "3 months" }),
+        ).toHaveAttribute("aria-checked", "true");
     }, 15_000);
 
     it("NetWorthPage identifies the live investment-price timestamp in its hero", async () => {
@@ -1060,14 +852,6 @@ describe("Portfolio pages (integration)", () => {
         ).toBeInTheDocument();
     });
 
-    it("PerformancePage shows empty state description text", async () => {
-        renderWithApp(<PerformancePage />);
-        // performance.emptyDescription = "No performance history yet. Refresh investment prices to create the first snapshot."
-        expect(
-            await screen.findByText(/refresh investment prices to create the first snapshot/i),
-        ).toBeInTheDocument();
-    });
-
     // ─── ExchangeRatesPage additional ─────────────────────────────────────────
     it("ExchangeRatesPage shows subtitle text", async () => {
         renderWithApp(<ExchangeRatesPage />);
@@ -1246,26 +1030,6 @@ describe("Portfolio pages (integration)", () => {
             await screen.findByRole(
                 "heading",
                 { name: /savings & bonds/i },
-                { timeout: 5000 },
-            ),
-        ).toBeInTheDocument();
-        consoleSpy.mockRestore();
-    });
-
-    it("PerformancePage renders gracefully when portfolio-performance API returns 500", async () => {
-        const consoleSpy = vi
-            .spyOn(console, "error")
-            .mockImplementation(() => {});
-        server.use(
-            http.get(`${API_BASE}/api/info/portfolio-performance`, () =>
-                err(500, "db error"),
-            ),
-        );
-        renderWithApp(<PerformancePage />);
-        expect(
-            await screen.findByRole(
-                "heading",
-                { name: /performance/i },
                 { timeout: 5000 },
             ),
         ).toBeInTheDocument();
@@ -1846,21 +1610,6 @@ describe("Portfolio pages (integration)", () => {
                 ),
             );
             const { container } = renderWithApp(<StocksPage />);
-            await new Promise((r) => setTimeout(r, 200));
-            expect(container.firstChild).toBeTruthy();
-            errSpy.mockRestore();
-        });
-
-        it("PerformancePage does not crash on 4xx performance endpoint", async () => {
-            const errSpy = vi
-                .spyOn(console, "error")
-                .mockImplementation(() => {});
-            server.use(
-                http.get(`${API_BASE}/api/info/portfolio-performance`, () =>
-                    err(404, "Not found"),
-                ),
-            );
-            const { container } = renderWithApp(<PerformancePage />);
             await new Promise((r) => setTimeout(r, 200));
             expect(container.firstChild).toBeTruthy();
             errSpy.mockRestore();

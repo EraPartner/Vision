@@ -67,7 +67,7 @@ export function AppSidebar({ onOpenSettings, onOpenPalette }: AppSidebarProps) {
         (url: string) => {
             preloadRoute(url);
             if (url === "/portfolio/net-worth") prefetchNetWorth();
-            else if (url === "/portfolio/performance") prefetchPerformance();
+            else if (url === "/portfolio") prefetchPerformance();
         },
         [prefetchNetWorth, prefetchPerformance],
     );

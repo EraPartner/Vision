@@ -2,7 +2,7 @@
 title: Algorithms & Data Structures
 type: algorithm-doc
 status: active
-date: 2026-04-02
+date: 2026-10-06
 updated: 2026-08-26
 tags:
   [
@@ -481,7 +481,7 @@ new_fxn  = (reconciled_value - cash) × ratio + cash
 ```
 
 This matters because an all-EUR portfolio has `value_fx_neutral == value` on
-every day by construction, and `PerformancePage` lights up the FX-attribution
+every day by construction, and `PortfolioPage` lights up the FX-attribution
 line when _any_ day's two totals differ by more than 0.01. Reconciling `value`
 while leaving `value_fx_neutral` on its own geometric mean would show a currency
 effect to a user holding no foreign currency. A price needle scales a position's
@@ -548,7 +548,7 @@ The snapshot algorithm assumes `asset_price_history` contains daily close prices
 
 ### Modified Dietz Method (Relative Performance)
 
-**Location:** [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]]
+**Location:** [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]]
 
 For contribution-adjusted return calculation:
 

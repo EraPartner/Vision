@@ -157,7 +157,7 @@ describe("AppLayout a11y landmarks", () => {
         await user.keyboard("{Meta>},{/Meta}");
         await screen.findByRole("dialog", { name: "Settings" });
         await user.keyboard("{Meta>},{/Meta}");
-        await user.click(screen.getByRole("button", { name: "Done" }));
+        await user.click(screen.getByRole("button", { name: "Close" }));
         await waitFor(() =>
             expect(screen.getByLabelText("location")).toHaveTextContent(
                 "/?keep=1",
@@ -177,7 +177,7 @@ describe("AppLayout a11y landmarks", () => {
         renderLayout("/?keep=1&settings=appearance");
 
         await screen.findByRole("dialog", { name: "Settings" });
-        await user.click(screen.getByRole("button", { name: "Done" }));
+        await user.click(screen.getByRole("button", { name: "Close" }));
 
         await waitFor(() =>
             expect(screen.getByLabelText("location")).toHaveTextContent(

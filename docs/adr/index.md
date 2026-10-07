@@ -28,6 +28,10 @@ counterparty, *excluded* for a transaction left out of totals, *income tax* inst
 
 ## Current screen redesign decision
 
+[[docs/adr/183-remaining-screens-redesign|ADR-183]] merges the Portfolio overview and the
+Performance page into one Portfolio screen and moves Net worth, Insights (formerly Statistics),
+Import, Planned and the Settings window onto the design system without cutting any action.
+
 [[docs/adr/181-home-transactions-redesign|ADR-181]] moves Home, Transactions and New Transaction
 onto the design system: a month-to-date hero and Needs attention list on Home, filter chips, a
 View menu and a docked inspector on Transactions, and a New Transaction sheet that records
@@ -227,6 +231,12 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > - Recording a decision that affects multiple parts of the system
 
 ## Recent Decisions
+
+### 2026-10-06: Remaining screens adopt the design system
+
+[[docs/adr/183-remaining-screens-redesign|ADR-183]] merges Portfolio and Performance, gives Net
+worth an assets-and-debt hero, renames Statistics to Insights, reorders Import file-first, puts
+Planned actions in words and menus, and restyles Settings as a sectioned window.
 
 ### 2026-09-04: Provisional latest portfolio snapshot
 

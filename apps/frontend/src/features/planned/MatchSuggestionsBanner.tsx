@@ -23,18 +23,21 @@ export function MatchSuggestionsBanner({
     if (suggestions.length === 0) return null;
 
     return (
-        <Card className="border-none shadow-md">
-            <CardContent className="flex items-center justify-between gap-4 py-3">
-                <div className="min-w-0">
-                    <div className="flex items-center gap-2 text-sm font-medium">
-                        <Sparkles className="h-4 w-4 shrink-0 text-chart-5" />
+        <Card>
+            <CardContent variant="row" className="gap-4">
+                <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 type-body font-medium text-foreground">
+                        <Sparkles
+                            className="h-4 w-4 shrink-0 text-primary"
+                            aria-hidden
+                        />
                         <span>
                             {t("plannedPage.suggestions.title", {
                                 n: suggestions.length,
                             })}
                         </span>
                     </div>
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                    <p className="mt-0.5 truncate type-footnote text-label-secondary">
                         {t("plannedPage.suggestions.subtitle")}
                     </p>
                 </div>

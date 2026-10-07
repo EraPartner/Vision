@@ -1,14 +1,27 @@
-import { ListFilterToggle } from "@/components/shared/ListFilterToggle";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useCallback, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { History, Plus } from "lucide-react";
+import {
+    CalendarClock,
+    History,
+    MoreHorizontal,
+    Plus,
+    SlidersHorizontal,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageError } from "@/components/shared/PageError";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+    DropdownMenu,
+    DropdownMenuCheckboxItem,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
@@ -30,12 +43,20 @@ import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import logger from "@/lib/logger";
 import { plannedKeys } from "@/lib/queryKeys";
+import { undoToast } from "@/lib/undoToast";
 import { PageShell } from "@/components/shared/PageShell";
 import {
     booleanSearchParamCodec,
     useSearchParamState,
 } from "@/hooks/useSearchParamState";
 
+/**
+ * Planned (ADR-183): the next seven days, likely matches and detected
+ * patterns above the list of planned payments. Add payment opens a right-hand
+ * sheet; Pause and Resume act at once and offer Undo; Delete keeps its
+ * confirmation because there is no restore endpoint; Mark as paid opens the
+ * link dialog, since the execute route needs the transaction that paid it.
+ */
 export default function PlannedPaymentsPage() {
     const { t } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
@@ -61,7 +82,7 @@ export default function PlannedPaymentsPage() {
     const { confirm, ConfirmDialog } = useConfirmDialog();
     const [formOpen, setFormOpen] = useState(false);
     const [editing, setEditing] = useState<PlannedPayment | undefined>();
-    // Bumped on every "New" open so the create form's key changes and it
+    // Bumped on every "Add" open so the create form's key changes and it
     // remounts blank instead of retaining the previous create form's state.
     const [createFormKey, setCreateFormKey] = useState(0);
     const [actionLoading, setActionLoading] = useState(false);
@@ -71,6 +92,12 @@ export default function PlannedPaymentsPage() {
     );
     const [historyOpen, setHistoryOpen] = useState(false);
     const queryClient = useQueryClient();
+
+    const openCreate = useCallback(() => {
+        setEditing(undefined);
+        setCreateFormKey((key) => key + 1);
+        setFormOpen(true);
+    }, []);
 
     const handleReviewSuggestion = useCallback(
         (plannedId: number) => {
@@ -118,19 +145,30 @@ export default function PlannedPaymentsPage() {
         setFormOpen(true);
     }, []);
 
+    // Pause and Resume are reversible, so they act at once and offer Undo
+    // (ADR-179 "forgive, don't warn"); Undo flips the same row back.
     const handleToggleActive = useCallback(
         async (payment: PlannedPayment) => {
             setActionLoading(true);
             try {
                 await toggleActive(payment.id);
-                toast.success(
-                    t(
+                undoToast({
+                    message: t(
                         payment.is_active
                             ? "plannedPage.toast.paused"
                             : "plannedPage.toast.resumed",
-                        { name: payment.name },
                     ),
-                );
+                    description: payment.name,
+                    undoLabel: t("common.undo"),
+                    undo: async () => {
+                        try {
+                            await toggleActive(payment.id);
+                        } catch (error) {
+                            logger.error("Failed to undo status change:", error);
+                            toast.error(t("plannedPage.toggleFailed"));
+                        }
+                    },
+                });
             } catch (error) {
                 logger.error("Failed to toggle status:", error);
                 toast.error(t("plannedPage.toggleFailed"));
@@ -205,7 +243,7 @@ export default function PlannedPaymentsPage() {
                     subtitle={t("plannedPage.subtitle")}
                     icon={PAGE_ICONS["/planned"]}
                 />
-                <Card className="glass-elevated">
+                <Card>
                     <CardContent variant="headerless">
                         <div className="flex items-start justify-between gap-4">
                             <div className="space-y-2">
@@ -213,21 +251,21 @@ export default function PlannedPaymentsPage() {
                                 <Skeleton className="h-4 w-56" />
                             </div>
                             <div className="space-y-2">
-                                <Skeleton className="h-3 w-20 ml-auto" />
-                                <Skeleton className="h-7 w-24 ml-auto" />
+                                <Skeleton className="ml-auto h-3 w-20" />
+                                <Skeleton className="ml-auto h-7 w-24" />
                             </div>
                         </div>
                         <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
                             {[...Array(8)].map((_, index) => (
                                 <Skeleton
                                     key={index}
-                                    className="h-[6.5rem] w-full rounded-[0.625rem]"
+                                    className="h-[6.5rem] w-full rounded-card"
                                 />
                             ))}
                         </div>
                     </CardContent>
                 </Card>
-                <Skeleton className="h-[300px] w-full rounded-xl" />
+                <Skeleton className="h-[300px] w-full rounded-card" />
             </PageShell>
         );
     }
@@ -235,6 +273,38 @@ export default function PlannedPaymentsPage() {
     if (error) {
         return <PageError message={error} onRetry={() => void refetch()} />;
     }
+
+    const addButton = (
+        <Button onClick={openCreate}>
+            <Plus className="h-4 w-4" aria-hidden />
+            {t("plannedPage.newPayment")}
+        </Button>
+    );
+
+    const emptyState =
+        payments.length === 0 ? (
+            <EmptyState
+                headingLevel={3}
+                size="compact"
+                icon={CalendarClock}
+                title={t("plannedPage.empty")}
+                description={t("plannedPage.emptyDesc")}
+                action={addButton}
+            />
+        ) : (
+            <EmptyState
+                headingLevel={3}
+                size="compact"
+                icon={CalendarClock}
+                title={t("plannedPage.emptyFiltered")}
+                description={t("plannedPage.emptyFilteredDesc")}
+                action={
+                    <Button variant="outline" onClick={() => setShowAll(true)}>
+                        {t("plannedPage.includePaused")}
+                    </Button>
+                }
+            />
+        );
 
     return (
         <>
@@ -244,33 +314,58 @@ export default function PlannedPaymentsPage() {
                     subtitle={t("plannedPage.subtitle")}
                     icon={PAGE_ICONS["/planned"]}
                     actions={
-                        <div className="flex flex-wrap items-center gap-2">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setHistoryOpen(true)}
-                                className="gap-1.5"
-                            >
-                                <History className="h-4 w-4" />
-                                {t("plannedPage.history.button")}
-                            </Button>
-                            <ListFilterToggle
-                                checked={showAll}
-                                onCheckedChange={setShowAll}
-                                label={t("plannedPage.includePaused")}
-                            />
-                            <Button
-                                onClick={() => {
-                                    setEditing(undefined);
-                                    setCreateFormKey((key) => key + 1);
-                                    setFormOpen(true);
-                                }}
-                                className="gap-2"
-                            >
-                                <Plus className="h-4 w-4" />
-                                {t("plannedPage.newPayment")}
-                            </Button>
-                        </div>
+                        <>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        aria-label={t("txPage.view.menu")}
+                                    >
+                                        <SlidersHorizontal
+                                            className="h-4 w-4"
+                                            aria-hidden
+                                        />
+                                        {t("txPage.view.menu")}
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-56">
+                                    <DropdownMenuCheckboxItem
+                                        checked={showAll}
+                                        onCheckedChange={(checked) =>
+                                            setShowAll(checked === true)
+                                        }
+                                    >
+                                        {t("plannedPage.includePaused")}
+                                    </DropdownMenuCheckboxItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        size="icon"
+                                        aria-label={t("plannedPage.menu")}
+                                    >
+                                        <MoreHorizontal
+                                            className="h-4 w-4"
+                                            aria-hidden
+                                        />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                        onSelect={() => setHistoryOpen(true)}
+                                    >
+                                        <History
+                                            className="mr-2 h-4 w-4 text-label-secondary"
+                                            aria-hidden
+                                        />
+                                        {t("plannedPage.history.title")}
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                            {addButton}
+                        </>
                     }
                 />
 
@@ -297,6 +392,7 @@ export default function PlannedPaymentsPage() {
                     onEdit={handleEdit}
                     onToggleActive={handleToggleActive}
                     onDelete={handleDelete}
+                    emptyState={emptyState}
                 />
 
                 <PlannedPaymentForm

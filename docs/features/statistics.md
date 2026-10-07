@@ -3,7 +3,7 @@ title: Statistics Feature
 type: feature
 status: active
 date: 2026-10-06
-updated: 2026-09-27
+updated: 2026-10-06
 last_modified: 2026-09-27
 tags:
   [
@@ -47,7 +47,9 @@ related_code:
 
 ## Overview
 
-The Statistics page (`/statistics`) is the primary analytics dashboard for transaction data. It provides comprehensive financial insights through multiple chart types, a category pivot table, year-over-year comparisons, and recipient spending analysis. It is the most complex single page in the frontend with 9 configurable widgets, per-graph exclusion toggles, and 6 tabbed sections (including the new Custom Charts tab added April 2026).
+The Statistics page (`/statistics`) is titled **Insights** in the navigation and page header
+(`nav.statistics`, `statsPage.title`; Dutch **Inzichten**); the route and the `statistics` widget
+page key are unchanged. It is the primary analytics dashboard for transaction data. It provides comprehensive financial insights through multiple chart types, a category pivot table, year-over-year comparisons, and recipient spending analysis. It is the most complex single page in the frontend with 9 configurable widgets, per-graph exclusion toggles, and 6 tabbed sections (including the new Custom Charts tab added April 2026).
 
 ## Refactoring and Performance Optimization (April 2026)
 
@@ -58,9 +60,15 @@ The Statistics page (`/statistics`) is the primary analytics dashboard for trans
 ## Current Status
 
 The Statistics page uses server-side aggregation endpoints. Its default date range is the latest
-24 calendar months, including the current partial month. The page header shows the active range and
-offers an explicit **All time** option. The choice is encoded as `?window=all`; the default omits the
-parameter so shared links remain compact.
+24 calendar months, including the current partial month. The page header carries a two-segment
+`SegmentedControl` (**Last 24 months | All time**, a radio group labelled "Date range"). The choice
+is encoded as `?window=all`; the default omits the parameter so shared links remain compact.
+
+Next to it, a ••• menu ("More actions") holds **Export PDF…** (the `ExportDialog`, rendered with
+`trigger={null}` and controlled open state; offered only once there is data) and **Customize…**
+(the controlled `WidgetVisibilityDialog`). The same header renders in the loading, error, empty
+and data states, so both actions stay reachable from every state. The empty and error states are
+cards with `CardContent variant="state"`.
 
 The same inclusive `start_date` and `end_date` bounds are applied to monthly summary, category
 pivot, recipient insights, and recipient-by-year requests. All-time monthly requests use
@@ -138,7 +146,7 @@ The Statistics page (`StatisticsPage.tsx`, 232 lines) is a thin orchestrator tha
 | Component                     | Lines | Purpose                                                                                                                                                                                                                                                   | Tabs           |
 | ----------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
 | `ChartCard.tsx`               | 48    | Card wrapper with ExclusionToggle and render-prop children                                                                                                                                                                                                | All            |
-| `MonthlyRhythm.tsx`           | —     | Overview lede: scrubbable per-month net strip + typical-month figures + strongest/toughest/in-the-black facts (replaced `SummaryCards`, whose income/spending/net tiles restated the dashboard hero and whose 4th tile, "Months tracked", was filler) | Overview       |
+| `MonthlyRhythm.tsx`           | —     | Overview lede: scrubbable per-month net strip + typical-month figures + best/worst/in-the-black facts. The month in progress is labelled "so far" and left out of best/worst (replaced `SummaryCards`, whose income/spending/net tiles restated the dashboard hero and whose 4th tile, "Months tracked", was filler) | Overview       |
 | `MonthlyChart.tsx`            | 42    | Monthly income/spending bar chart                                                                                                                                                                                                                         | Overview       |
 | `NetTrendChart.tsx`           | 44    | Net balance area chart over time                                                                                                                                                                                                                          | Overview       |
 | `CategoryPieChart.tsx`        | 64    | Category spending donut chart (top 10, year-filterable)                                                                                                                                                                                                   | Categories     |
@@ -248,7 +256,7 @@ The Statistics page uses the `useWidgetVisibility` hook with 9 configurable widg
 
 | Widget ID          | Label Key                           | Default | Description                                          |
 | ------------------ | ----------------------------------- | ------- | ---------------------------------------------------- |
-| `summaryCards`     | `statsPage.widget.summaryCards`     | Visible | 4 KPI cards (income, spending, net, months tracked)  |
+| `summaryCards`     | `statsPage.widget.monthlyRhythm`    | Visible | Monthly rhythm lede (id kept for persisted settings) |
 | `monthly`          | `statsPage.widget.monthly`          | Visible | Monthly income vs spending bar chart                 |
 | `netTrend`         | `statsPage.widget.netTrend`         | Visible | Net balance area chart over time                     |
 | `categoryPie`      | `statsPage.widget.categoryPie`      | Visible | Category spending donut chart (top 10)               |
@@ -521,9 +529,9 @@ The Monthly Chart now supports optional 3-month rolling average visualization:
 
 See [[docs/features/rolling-averages|Rolling Averages Feature]].
 
-### PDF Export Button
+### PDF export
 
-Statistics page header includes "Export PDF" button:
+The page header's ••• menu offers **Export PDF…**, which opens the shared `ExportDialog`:
 
 - **Generates**: A4 PDF with summary cards, monthly table, top 10 categories
 - **Endpoint**: `GET /api/reports/financial?currency=EUR`

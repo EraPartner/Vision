@@ -117,7 +117,7 @@ export default function TaxOverviewPage() {
                 <Card>
                     <CardContent variant="headerless">
                         <p className="text-destructive">
-                            {t("statsPage.error", {
+                            {t("tax.page.loadError", {
                                 msg: stats.error?.message ?? "",
                             })}
                         </p>

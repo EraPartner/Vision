@@ -983,7 +983,7 @@ Code links: [[apps/node-backend/tests/priceProviderService.test.js]], [[apps/nod
 - `getBankBalances(targetCurrency)` FX-history coverage expanded: [[apps/node-backend/tests/infoRepository.test.js]] now verifies `convertRowsToEur(..., targetCurrency, { useHistoricalRatesByDate: true, dateField: 'date' })` is used for both current balances and monthly history rows.
 - `apps/node-backend/tests/infoRepository.test.js` adds regression coverage for `/api/info/net-worth` snapshot sanitization of isolated one-day unit investment spikes, asserting outlier-day correction between neighbors and stable current investment totals ([[apps/node-backend/src/repositories/infoRepository.js]], [[apps/node-backend/tests/infoRepository.test.js]]).
 
-Code links: [[apps/frontend/src/features/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/features/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/features/portfolio/WatchlistChartDialog.tsx]], `apps/frontend/src/components/charts/` (chart.tsx removed in ADR-018 visx/d3 migration), [[apps/frontend/src/lib/dateUtils.ts]], [[apps/frontend/src/hooks/useStatistics.test.ts]], [[apps/frontend/src/features/statistics/statisticsUtils.ts]], [[apps/frontend/src/utils/currency.ts]], [[apps/frontend/src/stores/hydration/AppSettingsHydration.tsx]], [[apps/frontend/src/stores/hydration/SettingsHydration.tsx]], [[apps/node-backend/tests/routes/info.test.js]], [[apps/node-backend/tests/infoRepository.test.js]], [[apps/node-backend/tests/currencyConversionService.test.js]]
+Code links: [[apps/frontend/src/features/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]], [[apps/frontend/src/features/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/features/portfolio/WatchlistChartDialog.tsx]], `apps/frontend/src/components/charts/` (chart.tsx removed in ADR-018 visx/d3 migration), [[apps/frontend/src/lib/dateUtils.ts]], [[apps/frontend/src/hooks/useStatistics.test.ts]], [[apps/frontend/src/features/statistics/statisticsUtils.ts]], [[apps/frontend/src/utils/currency.ts]], [[apps/frontend/src/stores/hydration/AppSettingsHydration.tsx]], [[apps/frontend/src/stores/hydration/SettingsHydration.tsx]], [[apps/node-backend/tests/routes/info.test.js]], [[apps/node-backend/tests/infoRepository.test.js]], [[apps/node-backend/tests/currencyConversionService.test.js]]
 
 Dependency remediation links: [[apps/node-backend/tests/priceProviderService.test.js]], [[apps/node-backend/package.json]], [[apps/frontend/package.json]], [[package.json]]
 
@@ -1011,7 +1011,7 @@ Launched initial frontend component-integration test infrastructure to validate 
    - `TaxOverviewPage.integration.test.tsx` — 5 tests: heading, empty state, CTA button via `findAllByRole`, sheet open, Employment radio via `getByRole` anchored to start
    - `AddTransactionDialog.integration.test.tsx` (since renamed `AddTransactionSheet.integration.test.tsx`) — 4 tests: dialog open/close, form submission with request body capture, 409 duplicate error handling via toast spy
    - `PlannedPaymentsPage.integration.test.tsx` — 2 tests: heading, New Payment button
-   - `PortfolioOverviewPage.integration.test.tsx` — 2 tests: heading, empty state
+   - `PortfolioPage.integration.test.tsx` — 26 tests: header, hero, figures, holdings, allocation, widgets, dialogs
 
 ### Test Authoring Pattern
 

@@ -182,7 +182,7 @@ export function ExecutionHistoryDialog({
                 {historyFailed && !historyLoading && (
                     <div
                         role="alert"
-                        className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warning/30 bg-warning/5 p-3 text-sm"
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-card corner-continuous border border-warning/30 bg-warning/5 p-3 type-body"
                     >
                         <p>{t("plannedPage.history.loadFailed")}</p>
                         <Button
@@ -198,13 +198,13 @@ export function ExecutionHistoryDialog({
                 {historyLoading ? (
                     <div
                         role="status"
-                        className="py-10 text-center text-muted-foreground"
+                        className="py-10 text-center type-body text-label-secondary"
                     >
                         {t("plannedPage.history.loading")}
                     </div>
                 ) : executionHistory.length === 0 ? (
                     historyFailed ? null : (
-                        <div className="py-10 text-center text-muted-foreground">
+                        <div className="py-10 text-center type-body text-label-secondary">
                             {t("plannedPage.history.empty")}
                         </div>
                     )
@@ -213,10 +213,10 @@ export function ExecutionHistoryDialog({
                         role="region"
                         aria-label={t("plannedPage.history.title")}
                         tabIndex={0}
-                        className="overflow-x-auto rounded-md border focus-ring"
+                        className="overflow-x-auto rounded-card corner-continuous border border-border/60 focus-ring"
                     >
                         <div className="min-w-[36rem]">
-                            <div className="grid grid-cols-[7rem_10rem_minmax(12rem,1fr)_max-content] gap-3 border-b bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground">
+                            <div className="grid grid-cols-[7rem_10rem_minmax(12rem,1fr)_max-content] gap-3 border-b border-border/50 bg-foreground/[0.04] px-3 py-2 eyebrow text-label-secondary">
                                 <div>
                                     {t("plannedPage.history.colExecutedOn")}
                                 </div>
@@ -234,20 +234,21 @@ export function ExecutionHistoryDialog({
                                 {executionHistory.map((item) => (
                                     <div
                                         key={`${item.plannedPaymentId}-${item.transactionId}-${item.executionDate}`}
-                                        className="grid grid-cols-[7rem_10rem_minmax(12rem,1fr)_max-content] gap-3 border-b px-3 py-2 text-sm last:border-b-0"
+                                        className="grid grid-cols-[7rem_10rem_minmax(12rem,1fr)_max-content] gap-3 border-b border-border/50 px-3 py-2 type-body last:border-b-0"
                                     >
-                                        <div className="text-muted-foreground">
+                                        <div className="text-label-secondary">
                                             {formatDateStringWithAppSettings(
                                                 item.executionDate,
                                                 appSettings.dateFormat,
                                             ) || "—"}
                                         </div>
-                                        <div className="font-medium">
+                                        <div className="truncate font-medium text-foreground">
                                             {item.plannedPaymentName}
                                         </div>
                                         <div className="min-w-0">
                                             <div className="truncate">
                                                 {item.memo ||
+                                                    item.recipientName ||
                                                     t(
                                                         "plannedPage.link.txFallback",
                                                         {
@@ -255,7 +256,7 @@ export function ExecutionHistoryDialog({
                                                         },
                                                     )}
                                             </div>
-                                            <div className="text-xs text-muted-foreground truncate">
+                                            <div className="truncate type-footnote text-label-secondary">
                                                 {[
                                                     item.recipientName,
                                                     item.categoryName,
@@ -265,7 +266,7 @@ export function ExecutionHistoryDialog({
                                                     ),
                                                 ]
                                                     .filter(Boolean)
-                                                    .join(" • ")}
+                                                    .join(" · ")}
                                             </div>
                                         </div>
                                         <div className="flex items-center justify-end gap-2">
@@ -273,7 +274,7 @@ export function ExecutionHistoryDialog({
                                                 className={cn(
                                                     "tabular-nums font-semibold",
                                                     item.amount < 0
-                                                        ? "text-loss"
+                                                        ? "text-foreground"
                                                         : "text-gain",
                                                 )}
                                             >
@@ -307,7 +308,10 @@ export function ExecutionHistoryDialog({
                                                         }
                                                     }}
                                                 >
-                                                    <ExternalLink className="h-4 w-4" />
+                                                    <ExternalLink
+                                                        className="h-4 w-4"
+                                                        aria-hidden
+                                                    />
                                                 </Link>
                                             </Button>
                                         </div>

@@ -1,4 +1,4 @@
-import { useState, memo } from "react";
+import { useState, memo, useMemo } from "react";
 import { SectionLoader } from "@/components/shared/SectionLoader";
 import { useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
@@ -7,13 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import {
     useSettings,
@@ -26,14 +19,33 @@ import {
     SettingsSection,
     SettingsGroup,
     SettingRow,
+    SelectSettingRow,
 } from "../SettingsPrimitives";
 import {
     useSetting,
     useStatisticsRecipientOptions,
 } from "../useSettingsQueries";
 
+interface CategoryOption {
+    id: number;
+    name: string;
+    path: string[];
+    is_active: boolean;
+}
+
+interface RecipientOption {
+    id: number;
+    name: string;
+    is_active: boolean;
+}
+
+const checkRowClass =
+    "flex items-center gap-3 rounded-control px-3 py-2 transition-[background-color] duration-fast ease-glide hover:bg-foreground/[0.04]";
+
+const emptyClass = "py-4 text-center type-callout text-label-secondary";
+
 export const StatisticsSection = memo(function StatisticsSection() {
-    const { t } = useLanguage();
+    const { t, tc } = useLanguage();
     const { settings, updateSettings } = useSettings();
     const queryClient = useQueryClient();
     const [categorySearch, setCategorySearch] = useState("");
@@ -45,8 +57,14 @@ export const StatisticsSection = memo(function StatisticsSection() {
         useStatisticsRecipientOptions();
     const { data: includeTransfersSetting } = useSetting("includeTransfers");
 
-    const categories = categoriesData?.items ?? [];
-    const recipients = recipientsData?.items ?? [];
+    const categories = useMemo<CategoryOption[]>(
+        () => categoriesData?.items ?? [],
+        [categoriesData],
+    );
+    const recipients = useMemo<RecipientOption[]>(
+        () => recipientsData?.items ?? [],
+        [recipientsData],
+    );
     const isLoading = categoriesLoading || recipientsLoading;
 
     const excludedCategories = settings.excludedCategoryIds;
@@ -99,43 +117,97 @@ export const StatisticsSection = memo(function StatisticsSection() {
             });
     };
 
+    // Categories grouped by their top-level ancestor, filtered by the search.
+    const categoryGroups = useMemo(() => {
+        const searchLower = categorySearch.toLowerCase();
+        const grouped = new Map<string, CategoryOption[]>();
+        for (const cat of categories) {
+            const matchesSearch =
+                !categorySearch ||
+                cat.path.some((segment) =>
+                    segment.toLowerCase().includes(searchLower),
+                );
+            if (!matchesSearch) continue;
+            const key = cat.path[0] ?? cat.name;
+            const group = grouped.get(key) ?? [];
+            group.push(cat);
+            grouped.set(key, group);
+        }
+        return Array.from(grouped.entries())
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([general, items]) => ({
+                general,
+                items: [...items].sort((a, b) =>
+                    a.path.join(" / ").localeCompare(b.path.join(" / ")),
+                ),
+            }));
+    }, [categories, categorySearch]);
+
+    const toggleCategoryGroup = (items: CategoryOption[]) => {
+        const allExcluded = items.every((c) =>
+            excludedCategories.includes(c.id),
+        );
+        if (allExcluded) {
+            updateSettings({
+                excludedCategoryIds: excludedCategories.filter(
+                    (id) => !items.some((c) => c.id === id),
+                ),
+            });
+        } else {
+            const newIds = items
+                .map((c) => c.id)
+                .filter((id) => !excludedCategories.includes(id));
+            updateSettings({
+                excludedCategoryIds: [...excludedCategories, ...newIds],
+            });
+        }
+    };
+
+    // Excluded payees first, then alphabetical.
+    const visibleRecipients = useMemo(() => {
+        const filtered = recipients.filter((r) =>
+            r.name.toLowerCase().includes(recipientSearch.toLowerCase()),
+        );
+        return [...filtered].sort((a, b) => {
+            const aExcl = excludedRecipients.includes(a.id) ? 0 : 1;
+            const bExcl = excludedRecipients.includes(b.id) ? 0 : 1;
+            if (aExcl !== bExcl) return aExcl - bExcl;
+            return a.name.localeCompare(b.name);
+        });
+    }, [recipients, recipientSearch, excludedRecipients]);
+
+    const hiddenBadge = (
+        <Badge variant="outline" size="sm" className="ml-2">
+            {t("settings.dashboard.hidden")}
+        </Badge>
+    );
+
     return (
-        <SettingsSection
-            title={t("settings.section.statistics")}
-            description={t("settings.section.statistics.desc")}
-        >
+        <SettingsSection title={t("settings.section.statistics")}>
             <SettingsGroup label={t("settings.dashboard.exclusionScope")}>
-                <SettingRow
+                <SelectSettingRow
                     title={t("settings.dashboard.exclusionScope")}
                     description={t("settings.dashboard.exclusionScopeHint")}
-                    layout="stack"
-                >
-                    <Select
-                        value={settings.exclusionScope}
-                        onValueChange={(v) =>
-                            updateSettings({
-                                exclusionScope: v as ExclusionScope,
-                            })
-                        }
-                    >
-                        <SelectTrigger
-                            aria-label={t("settings.dashboard.exclusionScope")}
-                        >
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="everywhere">
-                                {t("settings.dashboard.scope.everywhere")}
-                            </SelectItem>
-                            <SelectItem value="dashboard">
-                                {t("settings.dashboard.scope.dashboard")}
-                            </SelectItem>
-                            <SelectItem value="statistics">
-                                {t("settings.dashboard.scope.statistics")}
-                            </SelectItem>
-                        </SelectContent>
-                    </Select>
-                </SettingRow>
+                    value={settings.exclusionScope}
+                    onValueChange={(v) =>
+                        updateSettings({ exclusionScope: v as ExclusionScope })
+                    }
+                    triggerAriaLabel={t("settings.dashboard.exclusionScope")}
+                    options={[
+                        {
+                            value: "everywhere",
+                            label: t("settings.dashboard.scope.everywhere"),
+                        },
+                        {
+                            value: "dashboard",
+                            label: t("settings.dashboard.scope.dashboard"),
+                        },
+                        {
+                            value: "statistics",
+                            label: t("settings.dashboard.scope.statistics"),
+                        },
+                    ]}
+                />
 
                 <SettingRow
                     title={t("settings.dashboard.excludeHidden")}
@@ -168,30 +240,28 @@ export const StatisticsSection = memo(function StatisticsSection() {
                 <SectionLoader />
             ) : (
                 <>
-                    {/* Excluded categories */}
                     <SettingsGroup
-                        label={
-                            <span className="flex items-center justify-between">
-                                <span>
-                                    {t("settings.dashboard.excludedCategories")}
-                                </span>
-                                <Badge
-                                    variant="secondary"
-                                    className="text-2xs normal-case"
-                                >
-                                    {excludedCategories.length}{" "}
-                                    {t("settings.dashboard.excluded")}
-                                </Badge>
-                            </span>
+                        label={t("settings.dashboard.excludedCategories")}
+                        description={t(
+                            "settings.dashboard.excludedCategoriesHint",
+                        )}
+                        aside={
+                            <Badge variant="secondary" size="sm">
+                                {tc(
+                                    "settings.dashboard.excludedCount",
+                                    excludedCategories.length,
+                                )}
+                            </Badge>
                         }
                     >
                         <SettingRow
-                            title={t(
-                                "settings.dashboard.excludedCategoriesHint",
-                            )}
+                            title={t("settings.dashboard.searchCategories")}
+                            htmlFor="exclude-category-search"
                             layout="stack"
+                            titleHidden
                         >
                             <Input
+                                id="exclude-category-search"
                                 placeholder={t(
                                     "settings.dashboard.searchCategories",
                                 )}
@@ -199,228 +269,136 @@ export const StatisticsSection = memo(function StatisticsSection() {
                                 onChange={(e) =>
                                     setCategorySearch(e.target.value)
                                 }
-                                className="h-8 text-sm"
                             />
                             <ScrollArea className="mt-3 h-[230px]">
                                 <div className="space-y-1 pr-3">
                                     {categories.length === 0 ? (
-                                        <p className="py-4 text-center text-sm text-muted-foreground">
+                                        <p className={emptyClass}>
                                             {t(
                                                 "settings.dashboard.noCategories",
                                             )}
                                         </p>
+                                    ) : categoryGroups.length === 0 ? (
+                                        <p className={emptyClass}>
+                                            {t(
+                                                "settings.dashboard.noMatchingCategories",
+                                            )}
+                                        </p>
                                     ) : (
-                                        (() => {
-                                            const searchLower =
-                                                categorySearch.toLowerCase();
-                                            const grouped = new Map<
-                                                string,
-                                                typeof categories
-                                            >();
-                                            for (const cat of categories) {
-                                                const matchesSearch =
-                                                    !categorySearch ||
-                                                    cat.path.some((segment) =>
-                                                        segment
-                                                            .toLowerCase()
-                                                            .includes(
-                                                                searchLower,
-                                                            ),
+                                        categoryGroups.map(
+                                            ({ general, items }) => {
+                                                const allExcluded =
+                                                    items.every((c) =>
+                                                        excludedCategories.includes(
+                                                            c.id,
+                                                        ),
                                                     );
-                                                if (!matchesSearch) continue;
-                                                const group =
-                                                    grouped.get(
-                                                        cat.path[0] ?? cat.name,
-                                                    ) || [];
-                                                group.push(cat);
-                                                grouped.set(
-                                                    cat.path[0] ?? cat.name,
-                                                    group,
-                                                );
-                                            }
-                                            if (grouped.size === 0) {
+                                                const someExcluded =
+                                                    items.some((c) =>
+                                                        excludedCategories.includes(
+                                                            c.id,
+                                                        ),
+                                                    );
                                                 return (
-                                                    <p className="py-4 text-center text-sm text-muted-foreground">
-                                                        {t(
-                                                            "settings.dashboard.noMatchingCategories",
-                                                        )}
-                                                    </p>
-                                                );
-                                            }
-                                            return Array.from(grouped.entries())
-                                                .sort(([a], [b]) =>
-                                                    a.localeCompare(b),
-                                                )
-                                                .map(([general, items]) => {
-                                                    const allExcluded =
-                                                        items.every((c) =>
-                                                            excludedCategories.includes(
-                                                                c.id,
-                                                            ),
-                                                        );
-                                                    const someExcluded =
-                                                        items.some((c) =>
-                                                            excludedCategories.includes(
-                                                                c.id,
-                                                            ),
-                                                        );
-                                                    const toggleGroup = () => {
-                                                        if (allExcluded) {
-                                                            updateSettings({
-                                                                excludedCategoryIds:
-                                                                    excludedCategories.filter(
-                                                                        (id) =>
-                                                                            !items.some(
-                                                                                (
-                                                                                    c,
-                                                                                ) =>
-                                                                                    c.id ===
-                                                                                    id,
-                                                                            ),
-                                                                    ),
-                                                            });
-                                                        } else {
-                                                            const newIds = items
-                                                                .map(
-                                                                    (c) => c.id,
-                                                                )
-                                                                .filter(
-                                                                    (id) =>
-                                                                        !excludedCategories.includes(
-                                                                            id,
-                                                                        ),
-                                                                );
-                                                            updateSettings({
-                                                                excludedCategoryIds:
-                                                                    [
-                                                                        ...excludedCategories,
-                                                                        ...newIds,
-                                                                    ],
-                                                            });
-                                                        }
-                                                    };
-                                                    return (
-                                                        <div
-                                                            key={general}
-                                                            className="space-y-0.5"
+                                                    <div
+                                                        key={general}
+                                                        className="space-y-0.5"
+                                                    >
+                                                        <Label
+                                                            htmlFor={`category-group-${items[0].id}`}
+                                                            className={`${checkRowClass} cursor-pointer bg-foreground/[0.04]`}
                                                         >
-                                                            <Label
-                                                                htmlFor={`category-group-${items[0].id}`}
-                                                                className="flex cursor-pointer items-center space-x-3 rounded-md bg-muted/50 px-3 py-2 transition-colors hover:bg-muted"
-                                                            >
-                                                                <Checkbox
-                                                                    id={`category-group-${items[0].id}`}
-                                                                    aria-label={general}
-                                                                    checked={
-                                                                        allExcluded
-                                                                            ? true
-                                                                            : someExcluded
-                                                                              ? "indeterminate"
-                                                                              : false
+                                                            <Checkbox
+                                                                id={`category-group-${items[0].id}`}
+                                                                aria-label={
+                                                                    general
+                                                                }
+                                                                checked={
+                                                                    allExcluded
+                                                                        ? true
+                                                                        : someExcluded
+                                                                          ? "indeterminate"
+                                                                          : false
+                                                                }
+                                                                onCheckedChange={() =>
+                                                                    toggleCategoryGroup(
+                                                                        items,
+                                                                    )
+                                                                }
+                                                            />
+                                                            <span className="flex-1 type-headline text-foreground">
+                                                                {general}
+                                                            </span>
+                                                            <span className="type-footnote tabular-nums text-label-tertiary">
+                                                                {items.length}
+                                                            </span>
+                                                        </Label>
+                                                        {items.map(
+                                                            (category) => (
+                                                                <div
+                                                                    key={
+                                                                        category.id
                                                                     }
-                                                                    onCheckedChange={
-                                                                        toggleGroup
-                                                                    }
-                                                                />
-                                                                <span className="flex-1 text-sm font-semibold text-foreground">
-                                                                    {general}
-                                                                </span>
-                                                                <span className="text-xs text-muted-foreground">
-                                                                    {
-                                                                        items.length
-                                                                    }
-                                                                </span>
-                                                            </Label>
-                                                            {items
-                                                                .sort((a, b) =>
-                                                                    a.path
-                                                                        .join(
-                                                                            " / ",
-                                                                        )
-                                                                        .localeCompare(
-                                                                            b.path.join(
+                                                                    className={`${checkRowClass} ml-6`}
+                                                                >
+                                                                    <Checkbox
+                                                                        id={`category-${category.id}`}
+                                                                        checked={excludedCategories.includes(
+                                                                            category.id,
+                                                                        )}
+                                                                        onCheckedChange={() =>
+                                                                            toggleCategory(
+                                                                                category.id,
+                                                                            )
+                                                                        }
+                                                                    />
+                                                                    <Label
+                                                                        htmlFor={`category-${category.id}`}
+                                                                        className="flex flex-1 cursor-pointer items-center justify-between font-normal"
+                                                                    >
+                                                                        <span>
+                                                                            {category.path.join(
                                                                                 " / ",
-                                                                            ),
-                                                                        ),
-                                                                )
-                                                                .map(
-                                                                    (
-                                                                        category,
-                                                                    ) => (
-                                                                        <div
-                                                                            key={
-                                                                                category.id
-                                                                            }
-                                                                            className="ml-6 flex items-center space-x-3 rounded-md border px-3 py-2 transition-colors hover:bg-accent/50"
-                                                                        >
-                                                                            <Checkbox
-                                                                                id={`category-${category.id}`}
-                                                                                checked={excludedCategories.includes(
-                                                                                    category.id,
-                                                                                )}
-                                                                                onCheckedChange={() =>
-                                                                                    toggleCategory(
-                                                                                        category.id,
-                                                                                    )
-                                                                                }
-                                                                            />
-                                                                            <Label
-                                                                                htmlFor={`category-${category.id}`}
-                                                                                className="flex flex-1 cursor-pointer items-center justify-between text-sm"
-                                                                            >
-                                                                                <span>
-                                                                                    {category.path.join(
-                                                                                        " / ",
-                                                                                    )}
-                                                                                </span>
-                                                                                {!category.is_active && (
-                                                                                    <Badge
-                                                                                        variant="outline"
-                                                                                        className="ml-2 text-xs"
-                                                                                    >
-                                                                                        {t(
-                                                                                            "settings.dashboard.hidden",
-                                                                                        )}
-                                                                                    </Badge>
-                                                                                )}
-                                                                            </Label>
-                                                                        </div>
-                                                                    ),
-                                                                )}
-                                                        </div>
-                                                    );
-                                                });
-                                        })()
+                                                                            )}
+                                                                        </span>
+                                                                        {!category.is_active &&
+                                                                            hiddenBadge}
+                                                                    </Label>
+                                                                </div>
+                                                            ),
+                                                        )}
+                                                    </div>
+                                                );
+                                            },
+                                        )
                                     )}
                                 </div>
                             </ScrollArea>
                         </SettingRow>
                     </SettingsGroup>
 
-                    {/* Excluded recipients */}
                     <SettingsGroup
-                        label={
-                            <span className="flex items-center justify-between">
-                                <span>
-                                    {t("settings.dashboard.excludedRecipients")}
-                                </span>
-                                <Badge
-                                    variant="secondary"
-                                    className="text-2xs normal-case"
-                                >
-                                    {excludedRecipients.length}{" "}
-                                    {t("settings.dashboard.excluded")}
-                                </Badge>
-                            </span>
+                        label={t("settings.dashboard.excludedRecipients")}
+                        description={t(
+                            "settings.dashboard.excludedRecipientsHint",
+                        )}
+                        aside={
+                            <Badge variant="secondary" size="sm">
+                                {tc(
+                                    "settings.dashboard.excludedCount",
+                                    excludedRecipients.length,
+                                )}
+                            </Badge>
                         }
                     >
                         <SettingRow
-                            title={t(
-                                "settings.dashboard.excludedRecipientsHint",
-                            )}
+                            title={t("settings.dashboard.searchRecipients")}
+                            htmlFor="exclude-recipient-search"
                             layout="stack"
+                            titleHidden
                         >
                             <Input
+                                id="exclude-recipient-search"
                                 placeholder={t(
                                     "settings.dashboard.searchRecipients",
                                 )}
@@ -428,57 +406,24 @@ export const StatisticsSection = memo(function StatisticsSection() {
                                 onChange={(e) =>
                                     setRecipientSearch(e.target.value)
                                 }
-                                className="h-8 text-sm"
                             />
                             <ScrollArea className="mt-3 h-[200px]">
-                                <div className="space-y-2 pr-3">
-                                    {(() => {
-                                        const filtered = recipients.filter(
-                                            (r) =>
-                                                r.name
-                                                    .toLowerCase()
-                                                    .includes(
-                                                        recipientSearch.toLowerCase(),
-                                                    ),
-                                        );
-                                        if (filtered.length === 0) {
-                                            return (
-                                                <p className="py-4 text-center text-sm text-muted-foreground">
-                                                    {recipientSearch
-                                                        ? t(
-                                                              "settings.dashboard.noMatchingRecipients",
-                                                          )
-                                                        : t(
-                                                              "settings.dashboard.noRecipients",
-                                                          )}
-                                                </p>
-                                            );
-                                        }
-                                        const sorted = [...filtered].sort(
-                                            (a, b) => {
-                                                const aExcl =
-                                                    excludedRecipients.includes(
-                                                        a.id,
-                                                    )
-                                                        ? 0
-                                                        : 1;
-                                                const bExcl =
-                                                    excludedRecipients.includes(
-                                                        b.id,
-                                                    )
-                                                        ? 0
-                                                        : 1;
-                                                if (aExcl !== bExcl)
-                                                    return aExcl - bExcl;
-                                                return a.name.localeCompare(
-                                                    b.name,
-                                                );
-                                            },
-                                        );
-                                        return sorted.map((recipient) => (
+                                <div className="space-y-1 pr-3">
+                                    {visibleRecipients.length === 0 ? (
+                                        <p className={emptyClass}>
+                                            {recipientSearch
+                                                ? t(
+                                                      "settings.dashboard.noMatchingRecipients",
+                                                  )
+                                                : t(
+                                                      "settings.dashboard.noRecipients",
+                                                  )}
+                                        </p>
+                                    ) : (
+                                        visibleRecipients.map((recipient) => (
                                             <div
                                                 key={recipient.id}
-                                                className="flex items-center space-x-3 rounded-md border px-3 py-2.5 transition-colors hover:bg-accent/50"
+                                                className={checkRowClass}
                                             >
                                                 <Checkbox
                                                     id={`recipient-${recipient.id}`}
@@ -493,25 +438,17 @@ export const StatisticsSection = memo(function StatisticsSection() {
                                                 />
                                                 <Label
                                                     htmlFor={`recipient-${recipient.id}`}
-                                                    className="flex flex-1 cursor-pointer items-center justify-between text-sm"
+                                                    className="flex flex-1 cursor-pointer items-center justify-between font-normal"
                                                 >
                                                     <span>
                                                         {recipient.name}
                                                     </span>
-                                                    {!recipient.is_active && (
-                                                        <Badge
-                                                            variant="outline"
-                                                            className="ml-2 text-xs"
-                                                        >
-                                                            {t(
-                                                                "settings.dashboard.hidden",
-                                                            )}
-                                                        </Badge>
-                                                    )}
+                                                    {!recipient.is_active &&
+                                                        hiddenBadge}
                                                 </Label>
                                             </div>
-                                        ));
-                                    })()}
+                                        ))
+                                    )}
                                 </div>
                             </ScrollArea>
                         </SettingRow>

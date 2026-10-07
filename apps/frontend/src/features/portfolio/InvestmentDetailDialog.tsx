@@ -1,4 +1,4 @@
-import { memo, useCallback, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
     Dialog,
@@ -48,6 +48,7 @@ import type { InvestmentSummary, PortfolioTxnType } from "@/types/portfolio";
 import { getAssetClassLabel, getTxnTypeLabel } from "@/types/portfolio";
 import { cn } from "@/lib/utils";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import { useControlledOpen } from "@/hooks/useDialogFormState";
 import { TextLink } from "@/components/shared/TextLink";
 import { PortfolioOversoldBadge } from "./PortfolioOversoldBadge";
 
@@ -56,6 +57,12 @@ type TxnRow = InvestmentSummary["transactions"][number];
 interface Props {
     investment: InvestmentSummary;
     trigger?: React.ReactNode;
+    /**
+     * Controlled mode: the caller owns the open state (e.g. a holdings row
+     * menu opens the dialog), so no trigger is rendered.
+     */
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
     /** When provided, replaces the embedded AddPortfolioTxnDialog with a callback */
     onAddTransaction?: (investment: InvestmentSummary) => void;
     /** When provided, replaces the embedded EditInvestmentDialog with a callback */
@@ -383,11 +390,16 @@ function TransactionList({
 export function InvestmentDetailDialog({
     investment,
     trigger,
+    open: openProp,
+    onOpenChange,
     onAddTransaction,
     onEditInvestment,
     onEditTransaction,
 }: Props) {
-    const [open, setOpen] = useState(false);
+    const { open, setOpen, controlled } = useControlledOpen({
+        open: openProp,
+        onOpenChange,
+    });
 
     // The three nested dialogs are mounted OUTSIDE this dialog's DialogContent.
     // Radix unmounts content when the dialog closes, so a nested dialog rendered
@@ -399,6 +411,11 @@ export function InvestmentDetailDialog({
     // user never opened (usePortfolio recomputes the whole portfolio per
     // consumer, and there is one of these per holding row).
     const [nestedMounted, setNestedMounted] = useState(false);
+    // In controlled mode Radix never reports the opening through
+    // onOpenChange, so the nested dialogs are mounted from the prop instead.
+    useEffect(() => {
+        if (open) setNestedMounted(true);
+    }, [open]);
     const [addTxnOpen, setAddTxnOpen] = useState(false);
     const [editInvestmentOpen, setEditInvestmentOpen] = useState(false);
     // The row being edited is held by id, so the dialog keeps reading the live
@@ -544,7 +561,7 @@ export function InvestmentDetailDialog({
         if (!ok) return;
         await updateInvestment(investment.id, { is_active: false });
         setOpen(false);
-    }, [confirm, investment.id, investment.name, t, updateInvestment]);
+    }, [confirm, investment.id, investment.name, t, updateInvestment, setOpen]);
 
     return (
         <>
@@ -555,13 +572,20 @@ export function InvestmentDetailDialog({
                     setOpen(v);
                 }}
             >
-                <DialogTrigger asChild>
-                    {trigger ?? (
-                        <Button size="sm" variant="ghost" className="gap-1.5">
-                            <Eye className="h-4 w-4" /> {t("invDetail.trigger")}
-                        </Button>
-                    )}
-                </DialogTrigger>
+                {!controlled && (
+                    <DialogTrigger asChild>
+                        {trigger ?? (
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                className="gap-1.5"
+                            >
+                                <Eye className="h-4 w-4" />{" "}
+                                {t("invDetail.trigger")}
+                            </Button>
+                        )}
+                    </DialogTrigger>
+                )}
                 <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <div className="flex items-center gap-2">

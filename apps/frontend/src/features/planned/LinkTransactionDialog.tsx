@@ -13,6 +13,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { List } from "@/components/ui/list";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/shared/DatePicker";
 import {
@@ -206,6 +208,12 @@ export function LinkTransactionDialog({
         return true;
     });
 
+    const selectedTx = selectedTxId
+        ? candidateTxs.find((x) => x.id === selectedTxId)
+        : undefined;
+    const filterGroupClass =
+        "space-y-3 rounded-card corner-continuous bg-foreground/[0.04] p-3";
+
     return (
         <Dialog
             open={open}
@@ -220,35 +228,51 @@ export function LinkTransactionDialog({
                             name: payment?.name ?? "",
                         })}
                     </DialogTitle>
-                    {payment?.due_date && (
-                        <DialogDescription>
-                            {t("plannedPage.link.dueOn", {
-                                date: formatDateStringWithAppSettings(
-                                    payment.due_date,
-                                    appSettings.dateFormat,
-                                ),
-                            })}
-                        </DialogDescription>
-                    )}
+                    <DialogDescription>
+                        {t("plannedPage.link.intro")}
+                        {payment?.due_date && (
+                            <>
+                                {" "}
+                                {t("plannedPage.link.dueOn", {
+                                    date: formatDateStringWithAppSettings(
+                                        payment.due_date,
+                                        appSettings.dateFormat,
+                                    ),
+                                })}
+                                .
+                            </>
+                        )}
+                    </DialogDescription>
                 </DialogHeader>
 
-                <div className="grid gap-3 py-2">
-                    <Label
-                        htmlFor="link-transaction-search"
-                        className="sr-only"
-                    >
-                        {t("plannedPage.link.searchPlaceholder")}
-                    </Label>
-                    <Input
-                        id="link-transaction-search"
-                        placeholder={t("plannedPage.link.searchPlaceholder")}
-                        value={txSearchQuery}
-                        onChange={(e) => setTxSearchQuery(e.target.value)}
-                    />
+                <div className="grid gap-4">
+                    <div className="grid gap-1.5">
+                        <Label
+                            htmlFor="link-transaction-search"
+                            className="sr-only"
+                        >
+                            {t("plannedPage.link.searchPlaceholder")}
+                        </Label>
+                        <Input
+                            id="link-transaction-search"
+                            placeholder={t("plannedPage.link.searchPlaceholder")}
+                            value={txSearchQuery}
+                            onChange={(e) => setTxSearchQuery(e.target.value)}
+                        />
+                    </div>
 
-                    <div className="space-y-3 p-3 border rounded-lg bg-muted/30 mt-2">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div className="space-y-2">
+                    <section
+                        aria-labelledby="link-transaction-filters"
+                        className={filterGroupClass}
+                    >
+                        <h3
+                            id="link-transaction-filters"
+                            className="eyebrow text-label-secondary"
+                        >
+                            {t("plannedPage.link.filters")}
+                        </h3>
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <div className="grid gap-1.5">
                                 <Label htmlFor="tx-start-date">
                                     {t("importPage.startDate")}
                                 </Label>
@@ -272,7 +296,7 @@ export function LinkTransactionDialog({
                                     clearLabel={t("common.clear")}
                                 />
                             </div>
-                            <div className="space-y-2">
+                            <div className="grid gap-1.5">
                                 <Label htmlFor="tx-end-date">
                                     {t("importPage.endDate")}
                                 </Label>
@@ -298,8 +322,8 @@ export function LinkTransactionDialog({
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div className="space-y-2">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <div className="grid gap-1.5">
                                 <Label htmlFor="tx-bank-account">
                                     {t("importPage.bankAccount")}
                                 </Label>
@@ -315,7 +339,7 @@ export function LinkTransactionDialog({
                                     }
                                 />
                             </div>
-                            <div className="space-y-2">
+                            <div className="grid gap-1.5">
                                 <Label htmlFor="tx-recipient">
                                     {t("recipientsPage.col.recipient")}
                                 </Label>
@@ -332,14 +356,14 @@ export function LinkTransactionDialog({
                                     }
                                 />
                                 {txFilters.recipient_id != null && (
-                                    <p className="text-xs text-muted-foreground">
+                                    <p className="type-footnote text-label-secondary">
                                         {t("plannedPage.link.includesLinked")}
                                     </p>
                                 )}
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-4">
+                        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
                             <div className="flex items-center gap-2">
                                 <Checkbox
                                     id="tx-uncategorised"
@@ -370,7 +394,7 @@ export function LinkTransactionDialog({
                                     {t("plannedPage.link.activeOnly")}
                                 </Label>
                             </div>
-                            <div className="flex items-center gap-2 ml-4">
+                            <div className="flex items-center gap-2">
                                 <Checkbox
                                     id="tx-match-amount"
                                     checked={txFilters.matchAmount}
@@ -426,105 +450,126 @@ export function LinkTransactionDialog({
                                         "importPage.toleranceAriaLabel",
                                     )}
                                 />
-                                <span className="text-sm text-muted-foreground">
+                                <span className="type-body text-label-secondary">
                                     %
                                 </span>
                             </div>
                         </div>
-                    </div>
+                    </section>
 
-                    <div className="max-h-64 overflow-y-auto border rounded-md p-2">
+                    <div className="grid gap-2">
+                        <h3
+                            id="link-transaction-candidates"
+                            className="eyebrow text-label-secondary"
+                        >
+                            {t("plannedPage.link.candidates")}
+                        </h3>
                         {txLoading ? (
-                            <div className="text-center py-6">
+                            <p
+                                role="status"
+                                className="rounded-card corner-continuous border border-border/60 px-4 py-6 text-center type-body text-label-secondary"
+                            >
                                 {t("plannedPage.link.loading")}
-                            </div>
+                            </p>
                         ) : filteredCandidates.length === 0 ? (
-                            <div className="text-sm text-muted-foreground">
+                            <p className="rounded-card corner-continuous border border-border/60 px-4 py-6 text-center type-body text-label-secondary">
                                 {t("plannedPage.link.empty")}
-                            </div>
+                            </p>
                         ) : (
-                            filteredCandidates.map((tx) => (
-                                <label
-                                    key={tx.id}
-                                    className="flex items-center justify-between gap-3 p-2 rounded-md hover:bg-muted/50 cursor-pointer"
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <input
-                                            type="radio"
-                                            name="selectedTx"
-                                            checked={selectedTxId === tx.id}
-                                            onChange={() =>
-                                                setSelectedTxId(tx.id)
-                                            }
-                                        />
-                                        <div className="flex flex-col">
-                                            <span className="font-medium">
-                                                {tx.memo ||
-                                                    t(
-                                                        "plannedPage.link.txFallback",
-                                                        { id: tx.id },
-                                                    )}
-                                            </span>
-                                            <span className="text-xs text-muted-foreground">
-                                                {[
-                                                    tx.recipient_name,
-                                                    tx.transaction_date
-                                                        ? formatDateStringWithAppSettings(
-                                                              tx.transaction_date,
-                                                              appSettings.dateFormat,
-                                                          )
-                                                        : null,
-                                                ]
-                                                    .filter(Boolean)
-                                                    .join(" • ")}
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <div className="text-right">
-                                        <div
-                                            className={cn(
-                                                "font-semibold",
-                                                tx.amount < 0
-                                                    ? "text-loss"
-                                                    : "text-gain",
-                                            )}
-                                        >
-                                            <Money
-                                                amount={tx.amount}
-                                                currency={tx.currency}
-                                                signed
-                                            />
-                                        </div>
-                                        <div className="text-xs text-muted-foreground">
-                                            #{tx.id}
-                                        </div>
-                                    </div>
-                                </label>
-                            ))
+                            <RadioGroup
+                                aria-labelledby="link-transaction-candidates"
+                                value={
+                                    selectedTxId != null
+                                        ? String(selectedTxId)
+                                        : ""
+                                }
+                                onValueChange={(value) =>
+                                    setSelectedTxId(Number(value))
+                                }
+                                className="block"
+                            >
+                                <List className="max-h-64 overflow-y-auto">
+                                    {filteredCandidates.map((tx) => {
+                                        const inputId = `link-tx-${tx.id}`;
+                                        return (
+                                            <li key={tx.id}>
+                                                <label
+                                                    htmlFor={inputId}
+                                                    className="flex cursor-pointer items-center gap-3 px-4 py-2.5 transition-[background-color] duration-fast ease-glide hover:bg-foreground/[0.04]"
+                                                >
+                                                    <RadioGroupItem
+                                                        id={inputId}
+                                                        value={String(tx.id)}
+                                                    />
+                                                    <span className="flex min-w-0 flex-1 flex-col">
+                                                        <span className="truncate type-body font-medium text-foreground">
+                                                            {tx.memo ||
+                                                                tx.recipient_name ||
+                                                                t(
+                                                                    "plannedPage.link.txFallback",
+                                                                    {
+                                                                        id: tx.id,
+                                                                    },
+                                                                )}
+                                                        </span>
+                                                        <span className="truncate type-footnote text-label-secondary">
+                                                            {[
+                                                                tx.recipient_name,
+                                                                tx.transaction_date
+                                                                    ? formatDateStringWithAppSettings(
+                                                                          tx.transaction_date,
+                                                                          appSettings.dateFormat,
+                                                                      )
+                                                                    : null,
+                                                            ]
+                                                                .filter(Boolean)
+                                                                .join(" · ")}
+                                                        </span>
+                                                    </span>
+                                                    <span
+                                                        className={cn(
+                                                            "shrink-0 type-body font-semibold tabular-nums",
+                                                            tx.amount < 0
+                                                                ? "text-foreground"
+                                                                : "text-gain",
+                                                        )}
+                                                    >
+                                                        <Money
+                                                            amount={tx.amount}
+                                                            currency={
+                                                                tx.currency
+                                                            }
+                                                            signed
+                                                        />
+                                                    </span>
+                                                </label>
+                                            </li>
+                                        );
+                                    })}
+                                </List>
+                            </RadioGroup>
                         )}
                     </div>
 
-                    {selectedTxId && (
-                        <p className="text-xs text-muted-foreground">
+                    {selectedTx && (
+                        <p
+                            className="type-footnote text-label-secondary"
+                            aria-live="polite"
+                        >
                             {t("plannedPage.link.recordedOn", {
-                                date: (() => {
-                                    const d = candidateTxs.find(
-                                        (x) => x.id === selectedTxId,
-                                    )?.transaction_date;
-                                    return d
-                                        ? formatDateStringWithAppSettings(
-                                              d,
-                                              appSettings.dateFormat,
-                                          )
-                                        : "—";
-                                })(),
+                                date: selectedTx.transaction_date
+                                    ? formatDateStringWithAppSettings(
+                                          selectedTx.transaction_date,
+                                          appSettings.dateFormat,
+                                      )
+                                    : "—",
                             })}
                         </p>
                     )}
                 </div>
 
                 <DialogFooter>
-                    <Button variant="outline" onClick={handleClose}>
+                    <Button variant="ghost" onClick={handleClose}>
                         {t("common.cancel")}
                     </Button>
                     <Button

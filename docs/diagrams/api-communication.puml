@@ -20,7 +20,7 @@ package "Frontend (React)" {
     class TransactionsPage
     class CategoriesPage
     class RecipientsPage
-    class PortfolioOverviewPage
+    class PortfolioPage
     class ImportPage
   }
 

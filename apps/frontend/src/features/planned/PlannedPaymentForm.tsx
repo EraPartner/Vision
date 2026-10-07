@@ -15,16 +15,19 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { TrendingDown, TrendingUp } from "lucide-react";
+import {
+    SegmentedControl,
+    SegmentedControlItem,
+} from "@/components/ui/segmented-control";
+import { Loader2, TrendingDown, TrendingUp } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import {
-    Dialog,
-    DialogContent,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetHeader,
+    SheetTitle,
+} from "@/components/ui/sheet";
 import type { PlannedPayment } from "@/hooks/usePlannedPayments";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
@@ -374,22 +377,41 @@ export default function PlannedPaymentForm({
         resetErrors();
     };
 
-    return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
-                <div ref={setPortalContainer} />
-                <DialogHeader>
-                    <DialogTitle>
-                        {initial
-                            ? t("plannedForm.editTitle")
-                            : t("plannedForm.newTitle")}
-                    </DialogTitle>
-                </DialogHeader>
+    // Footer hint: names the first missing required field, like the
+    // transaction sheet; the inline errors stay the blocked-submit path.
+    const hint = (() => {
+        if (!name.trim()) return t("plannedForm.hint.name");
+        if (!isLoan && !amount) return t("plannedForm.hint.amount");
+        if (accountId == null) return t("plannedForm.hint.bank");
+        return "";
+    })();
+    const title = initial
+        ? t("plannedForm.editTitle")
+        : t("plannedForm.newTitle");
+    const groupClass = "rounded-card corner-continuous bg-foreground/[0.04] p-3";
 
-                {/* grid gap-5 mirrors DialogContent's own layout so wrapping the body
-            and footer in a real <form> (Enter-to-submit) is layout-neutral. */}
-                <form onSubmit={handleSubmit} className="grid gap-5" noValidate>
-                    <div className="grid gap-4 py-2">
+    return (
+        <Sheet open={open} onOpenChange={onOpenChange}>
+            <SheetContent
+                side="right"
+                className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-[470px]"
+            >
+                <div ref={setPortalContainer} />
+                <SheetHeader className="px-6 pt-6">
+                    <SheetTitle>{title}</SheetTitle>
+                    <SheetDescription className="sr-only">
+                        {title}
+                    </SheetDescription>
+                </SheetHeader>
+
+                {/* noValidate: `fieldErrors` above is the only validation (see
+                    useFieldErrors for the focus contract). */}
+                <form
+                    onSubmit={handleSubmit}
+                    noValidate
+                    className="flex min-h-0 flex-1 flex-col"
+                >
+                    <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
                         {/* Name */}
                         <div className="grid gap-1.5">
                             <Label htmlFor="pp-name">
@@ -467,49 +489,43 @@ export default function PlannedPaymentForm({
 
                         {/* Direction — owns the sign of the amount above (see `Direction`). */}
                         <div className="grid gap-1.5">
-                            {/* Labelled via aria-labelledby, not htmlFor: the group's children
-                  are role="radio" buttons, and a `for` association would
-                  overwrite their own accessible names with "Direction". */}
+                            {/* Labelled via aria-labelledby, not htmlFor: the segments are
+                                role="radio" buttons, and a `for` association would
+                                overwrite their own accessible names with "Direction". */}
                             <Label id="pp-direction-label">
                                 {t("plannedForm.direction")}
                             </Label>
-                            <ToggleGroup
-                                type="single"
-                                variant="outline"
+                            <SegmentedControl
                                 aria-labelledby="pp-direction-label"
                                 value={effectiveDirection}
-                                // Radix emits "" when the active item is re-pressed; ignore it so
-                                // the control can never end up with no direction selected.
-                                onValueChange={(v) => {
-                                    if (v) setDirection(v as Direction);
-                                }}
+                                onValueChange={(v) =>
+                                    setDirection(v as Direction)
+                                }
                                 disabled={isLoan}
-                                className="grid grid-cols-2 gap-2"
+                                className="w-full"
                             >
-                                <ToggleGroupItem
+                                <SegmentedControlItem
                                     id="pp-direction-expense"
                                     value="expense"
-                                    className="w-full data-[state=on]:bg-loss/10 data-[state=on]:text-loss data-[state=on]:shadow-[inset_0_0_0_1px_hsl(var(--loss)/0.35)]"
                                 >
                                     <TrendingDown
                                         className="h-4 w-4"
                                         aria-hidden="true"
                                     />
                                     {t("plannedForm.direction.expense")}
-                                </ToggleGroupItem>
-                                <ToggleGroupItem
+                                </SegmentedControlItem>
+                                <SegmentedControlItem
                                     id="pp-direction-income"
                                     value="income"
-                                    className="w-full data-[state=on]:bg-gain/10 data-[state=on]:text-gain data-[state=on]:shadow-[inset_0_0_0_1px_hsl(var(--gain)/0.35)]"
                                 >
                                     <TrendingUp
                                         className="h-4 w-4"
                                         aria-hidden="true"
                                     />
                                     {t("plannedForm.direction.income")}
-                                </ToggleGroupItem>
-                            </ToggleGroup>
-                            <p className="text-xs text-muted-foreground">
+                                </SegmentedControlItem>
+                            </SegmentedControl>
+                            <p className="type-footnote text-label-secondary">
                                 {isLoan
                                     ? t("plannedForm.directionLoanDesc")
                                     : t("plannedForm.directionDesc")}
@@ -575,7 +591,7 @@ export default function PlannedPaymentForm({
                         {/* Tags */}
                         <div className="grid gap-1.5">
                             {/* Labelled via aria-labelledby, not htmlFor: the tag control is a
-                  role="combobox" <div>, which a <label for> cannot associate with. */}
+                                role="combobox" <div>, which a <label for> cannot associate with. */}
                             <Label id="pp-tags-label">
                                 {t("txPage.field.tags")}
                             </Label>
@@ -608,16 +624,18 @@ export default function PlannedPaymentForm({
                             />
                         </div>
 
-                        {/* Recurring toggle */}
-                        <div className="flex items-center justify-between rounded-lg border p-3">
-                            <div>
+                        {/* Loan toggle */}
+                        <div
+                            className={`flex items-center justify-between gap-3 ${groupClass}`}
+                        >
+                            <div className="min-w-0">
                                 <Label
                                     htmlFor="pp-loan"
                                     className="font-medium"
                                 >
                                     {t("plannedForm.loan")}
                                 </Label>
-                                <p className="text-xs text-muted-foreground">
+                                <p className="type-footnote text-label-secondary">
                                     {t("plannedForm.loanDesc")}
                                 </p>
                             </div>
@@ -629,7 +647,7 @@ export default function PlannedPaymentForm({
                         </div>
 
                         {isLoan && (
-                            <div className="grid gap-3 rounded-lg border p-3 bg-muted/30">
+                            <div className={`grid gap-3 ${groupClass}`}>
                                 <div className="grid gap-1.5">
                                     <Label htmlFor="pp-loan-type">
                                         {t("plannedForm.loanType")}
@@ -769,15 +787,18 @@ export default function PlannedPaymentForm({
                             </div>
                         )}
 
-                        <div className="flex items-center justify-between rounded-lg border p-3">
-                            <div>
+                        {/* Recurring toggle */}
+                        <div
+                            className={`flex items-center justify-between gap-3 ${groupClass}`}
+                        >
+                            <div className="min-w-0">
                                 <Label
                                     htmlFor="pp-recurring"
                                     className="font-medium"
                                 >
                                     {t("plannedForm.recurring")}
                                 </Label>
-                                <p className="text-xs text-muted-foreground">
+                                <p className="type-footnote text-label-secondary">
                                     {t("plannedForm.recurringDesc")}
                                 </p>
                             </div>
@@ -791,7 +812,7 @@ export default function PlannedPaymentForm({
 
                         {/* Recurring options */}
                         {!isLoan && isRecurring && (
-                            <div className="grid gap-3 rounded-lg border p-3 bg-muted/30">
+                            <div className={`grid gap-3 ${groupClass}`}>
                                 <div className="grid gap-1.5">
                                     <Label htmlFor="pp-frequency">
                                         {t("plannedForm.frequency")}
@@ -877,7 +898,7 @@ export default function PlannedPaymentForm({
                                             )}
                                             allowClear
                                             clearLabel={t("common.clear")}
-                                            buttonClassName="h-9 text-xs"
+                                            buttonClassName="h-9 type-footnote"
                                             portalContainer={portalContainer}
                                         />
                                     </div>
@@ -927,35 +948,51 @@ export default function PlannedPaymentForm({
                                 value={url}
                                 onChange={(e) => setUrl(e.target.value)}
                             />
-                            <p className="text-xs text-muted-foreground">
+                            <p className="type-footnote text-label-secondary">
                                 {t("plannedForm.linkDesc")}
                             </p>
                         </div>
                     </div>
 
-                    <DialogFooter>
+                    <div className="flex items-center gap-3 border-t border-border/50 px-6 py-4">
+                        <p
+                            className="min-w-0 flex-1 truncate type-footnote text-label-secondary"
+                            aria-live="polite"
+                        >
+                            {hint ||
+                                t(
+                                    initial
+                                        ? "plannedForm.hint.readyEdit"
+                                        : "plannedForm.hint.readyAdd",
+                                )}
+                        </p>
                         <Button
                             type="button"
-                            variant="outline"
+                            variant="ghost"
                             onClick={() => {
                                 resetErrors();
                                 onOpenChange(false);
                             }}
                         >
-                            {t("plannedForm.cancel")}
+                            {t("common.cancel")}
                         </Button>
-                        {/* Only the in-flight guard disables this button. Disabling it on the
-              empty-required fields made the inline errors unreachable entirely —
-              the blocked-submit path is the form's onSubmit (button click or
-              Enter) and nothing else could ever reveal them. */}
+                        {/* Only the in-flight guard disables this button. Disabling it on
+                            empty required fields made the inline errors unreachable: the
+                            blocked-submit path is the form's onSubmit (click or Enter). */}
                         <Button type="submit" disabled={loading}>
+                            {loading && (
+                                <Loader2
+                                    className="h-4 w-4 animate-spin"
+                                    aria-hidden
+                                />
+                            )}
                             {initial
                                 ? t("plannedForm.saveChanges")
                                 : t("plannedForm.createPayment")}
                         </Button>
-                    </DialogFooter>
+                    </div>
                 </form>
-            </DialogContent>
-        </Dialog>
+            </SheetContent>
+        </Sheet>
     );
 }

@@ -12,25 +12,17 @@ import {
     useCurrencyPartsFormatter,
     usePercentFormatter,
 } from "@/hooks/useCurrencyFormatter";
-import { Card, CardContent, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
-import {
-    TrendingUp,
-    TrendingDown,
-    Wallet,
-    Landmark,
-    PiggyBank,
-    CreditCard,
-} from "lucide-react";
+import { TrendingUp, TrendingDown, Wallet, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/PageHeader";
-import { EmptyState } from "@/components/shared/EmptyState";
 import { StatCard } from "@/components/shared/StatCard";
 import { RollingNumber } from "@/components/shared/RollingNumber";
 import {
     CHART_PERIODS,
+    ChartPeriodSelector,
     filterByPeriod,
     type ChartPeriod,
 } from "@/components/charts";
@@ -42,7 +34,6 @@ import { useNetWorthTableData } from "./useNetWorthTableData";
 import { StalePricesBanner } from "@/features/portfolio/StalePricesBanner";
 import { PriceFreshnessCaption } from "@/features/portfolio/PriceFreshnessCaption";
 import { Button } from "@/components/ui/button";
-import { RefreshCw } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
@@ -55,13 +46,24 @@ import { useNetWorthSummary } from "@/features/portfolio/usePortfolioQueries";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { usePortfolioSummaryQuery } from "@/hooks/portfolio/usePortfolioSummary";
-import { NetWorthByAccountTable } from "./NetWorthByAccountTable";
+import { NetWorthByAccountList } from "./NetWorthByAccountList";
 import { buildNetWorthAccountRows } from "./netWorthByAccount";
 
 const PERIOD_CODEC = enumSearchParamCodec<ChartPeriod>(
     ["1m", "3m", "6m", "1y", "3y", "all"],
     "all",
 );
+
+/** Amounts below half a cent read as nothing to show. */
+const ZERO_EPSILON = 0.005;
+
+function changeTone(value: number) {
+    return value > ZERO_EPSILON
+        ? "text-gain"
+        : value < -ZERO_EPSILON
+          ? "text-loss"
+          : "text-label-secondary";
+}
 
 export default function NetWorthPage() {
     const formatPercent = usePercentFormatter();
@@ -186,27 +188,30 @@ export default function NetWorthPage() {
         [appSettings.dateFormat],
     );
 
+    const header = (
+        <PageHeader
+            title={t("networth.title")}
+            icon={PAGE_ICONS["/portfolio/net-worth"]}
+        />
+    );
+
     if (isLoading) {
         return (
             <PageShell {...loadingSurfaceProps} className="">
-                <PageHeader
-                    title={t("networth.title")}
-                    icon={PAGE_ICONS["/portfolio/net-worth"]}
-                />
+                {header}
                 <Card>
                     <CardContent
-                        variant="flush"
-                        className="grid lg:grid-cols-2"
+                        variant="headerless"
+                        className="grid gap-6 lg:grid-cols-5"
                     >
-                        <div className="space-y-3 p-5 sm:p-6">
+                        <div className="space-y-3 lg:col-span-3">
                             <Skeleton className="h-4 w-24" />
-                            <Skeleton className="h-10 w-48 max-w-full" />
+                            <Skeleton className="h-12 w-48 max-w-full" />
                             <Skeleton className="h-4 w-40 max-w-full" />
                         </div>
-                        <div className="space-y-3 border-t border-border/50 p-5 sm:p-6 lg:border-l lg:border-t-0">
-                            {[1, 2, 3].map((i) => (
-                                <Skeleton key={i} className="h-10 w-full" />
-                            ))}
+                        <div className="space-y-4 lg:col-span-2">
+                            <Skeleton className="h-8 w-full" />
+                            <Skeleton className="h-8 w-full" />
                         </div>
                     </CardContent>
                 </Card>
@@ -222,17 +227,16 @@ export default function NetWorthPage() {
     if (error || !data) {
         return (
             <PageShell className="">
-                <PageHeader
-                    title={t("networth.title")}
-                    icon={PAGE_ICONS["/portfolio/net-worth"]}
-                />
+                {header}
                 <Card>
-                    <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-                        <Wallet className="h-12 w-12 text-muted-foreground/40 mb-4" />
-                        <h2 className="text-lg font-semibold text-foreground mb-1">
+                    <CardContent
+                        variant="state"
+                        className="flex flex-col items-center gap-1 text-center"
+                    >
+                        <h2 className="type-headline text-foreground">
                             {t("networth.unableToLoad")}
                         </h2>
-                        <p className="text-muted-foreground text-sm">
+                        <p className="max-w-prose type-callout text-label-secondary">
                             {apiErrorToMessage(error, t)}
                         </p>
                     </CardContent>
@@ -244,48 +248,49 @@ export default function NetWorthPage() {
     if (snapshots.length === 0) {
         return (
             <PageShell className="">
-                <PageHeader
-                    title={t("networth.title")}
-                    icon={PAGE_ICONS["/portfolio/net-worth"]}
-                />
-                <EmptyState
-                    icon={PAGE_ICONS["/portfolio/net-worth"]}
-                    title={t("networth.emptyTitle")}
-                    description={t("networth.emptyDescription")}
-                    action={
-                        <div className="flex flex-col items-center gap-2">
-                            <Button
-                                onClick={refreshPrices}
-                                disabled={isRefreshingPrices || !isOnline}
-                                size="sm"
-                                title={
-                                    !isOnline
-                                        ? t("portfolio.refreshPricesOffline")
-                                        : undefined
-                                }
-                            >
-                                <RefreshCw
-                                    className={cn(
-                                        "h-3.5 w-3.5 mr-2",
-                                        isRefreshingPrices && "animate-spin",
-                                    )}
-                                />
-                                {t("portfolio.refreshPrices")}
-                            </Button>
-                            {!isOnline && (
-                                <p className="text-xs text-muted-foreground max-w-md">
-                                    {t("portfolio.refreshPricesOffline")}
-                                </p>
-                            )}
-                        </div>
-                    }
-                />
+                {header}
+                <Card>
+                    <CardContent
+                        variant="state"
+                        className="flex flex-col items-center gap-3 text-center"
+                    >
+                        <h2 className="type-headline text-foreground">
+                            {t("networth.emptyTitle")}
+                        </h2>
+                        <p className="max-w-sm type-callout text-label-secondary">
+                            {t("networth.emptyDescription")}
+                        </p>
+                        <Button
+                            onClick={refreshPrices}
+                            disabled={isRefreshingPrices || !isOnline}
+                            title={
+                                !isOnline
+                                    ? t("portfolio.refreshPricesOffline")
+                                    : undefined
+                            }
+                        >
+                            <RefreshCw
+                                aria-hidden="true"
+                                className={cn(
+                                    "mr-2 h-4 w-4",
+                                    isRefreshingPrices && "animate-spin",
+                                )}
+                            />
+                            {t("portfolio.refreshPrices")}
+                        </Button>
+                        {!isOnline && (
+                            <p className="max-w-sm type-footnote text-label-tertiary">
+                                {t("portfolio.refreshPricesOffline")}
+                            </p>
+                        )}
+                    </CardContent>
+                </Card>
             </PageShell>
         );
     }
 
     // Peak/trough/days-tracked reflect the selected period (the visible window),
-    // matching the chart below; the "all time" change badge stays on the full series.
+    // matching the chart below; the all-time change stays on the full series.
     let peak = current.netWorth;
     let trough = current.netWorth;
     for (const s of displaySnapshots) {
@@ -301,59 +306,42 @@ export default function NetWorthPage() {
     const monthlyChange = data.monthlyChange ?? 0;
     const monthlyChangePercent = data.monthlyChangePercent ?? 0;
 
-    const liquidPct = formatPercent(
-        current.netWorth > 0 ? (current.liquid / current.netWorth) * 100 : 0,
-        { digits: 0 },
-    );
-    const investmentsPct = formatPercent(
-        current.netWorth > 0
-            ? (current.investments / current.netWorth) * 100
-            : 0,
-        { digits: 0 },
-    );
-    const liabilitiesPct = formatPercent(
-        current.netWorth > 0
-            ? (current.liabilities / current.netWorth) * 100
-            : 0,
-        { digits: 0 },
-    );
-    const hasLiabilities = Math.abs(current.liabilities) > 0.005;
+    // The two bars read as a subtraction: assets minus debt is the number above.
+    const assets = current.liquid + current.investments;
+    const debt = Math.abs(current.liabilities);
+    const barScale = Math.max(assets, debt, 1);
+    const bars = [
+        {
+            key: "assets",
+            label: t("networth.assets"),
+            value: assets,
+            tone: "bg-gain",
+            detail: (
+                <>
+                    <span>
+                        {t("networth.liquid")}{" "}
+                        <Money amount={current.liquid} />
+                    </span>
+                    {" · "}
+                    <span>
+                        {t("networth.investments")}{" "}
+                        <Money amount={current.investments} />
+                    </span>
+                </>
+            ),
+        },
+        {
+            key: "debt",
+            label: t("networth.debt"),
+            value: debt,
+            tone: "bg-loss",
+            detail: null,
+        },
+    ];
 
     return (
         <PageShell className="" data-print-page="net-worth">
-            <PageHeader
-                title={t("networth.title")}
-                icon={PAGE_ICONS["/portfolio/net-worth"]}
-                actions={
-                    <span data-print-actions>
-                        <Badge
-                            variant="outline"
-                            className={cn(
-                                "max-w-full flex-wrap gap-x-2 gap-y-1 text-sm px-3 py-1",
-                                allTimeChange >= 0
-                                    ? "border-gain/30 text-gain"
-                                    : "border-loss/30 text-loss",
-                            )}
-                        >
-                            {allTimeChange >= 0 ? (
-                                <TrendingUp className="h-3.5 w-3.5 shrink-0" />
-                            ) : (
-                                <TrendingDown className="h-3.5 w-3.5 shrink-0" />
-                            )}
-                            <Money amount={allTimeChange} signed />
-                            <span>{t("networth.allTime")}</span>
-                            <span className="whitespace-nowrap">
-                                (
-                                {formatPercent(allTimePercent, {
-                                    digits: 1,
-                                    signed: true,
-                                })}
-                                )
-                            </span>
-                        </Badge>
-                    </span>
-                }
-            />
+            {header}
 
             <StalePricesBanner
                 investments={investments}
@@ -361,91 +349,114 @@ export default function NetWorthPage() {
                 isRefreshing={isRefreshingPrices}
             />
 
-            {/* One surface keeps the total and its components visually connected. */}
-            <Card>
-                <CardContent variant="flush" className="grid lg:grid-cols-2">
-                    <div className="flex min-w-0 flex-col justify-center gap-3 p-5 sm:p-6">
-                        <CardTitle variant="label">
-                            {t("networth.title")}
-                        </CardTitle>
-                        <div className="text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl">
+            <Card className="overflow-hidden">
+                <CardContent
+                    variant="headerless"
+                    className="grid gap-6 lg:grid-cols-5"
+                >
+                    <div className="space-y-3 lg:col-span-3">
+                        <p className="eyebrow">{t("networth.title")}</p>
+                        <p className="type-large-title tabular-nums text-foreground">
                             <RollingNumber parts={fmtParts(current.netWorth)} />
-                        </div>
-                        <div className="space-y-1 text-sm text-muted-foreground">
-                            <p>
+                        </p>
+                        <p className="type-callout text-label-secondary">
+                            <span
+                                className={cn(
+                                    "tabular-nums",
+                                    changeTone(monthlyChange),
+                                )}
+                            >
                                 <Money amount={monthlyChange} signed /> (
                                 {formatPercent(monthlyChangePercent, {
                                     digits: 1,
                                     signed: true,
                                 })}
-                                ) {t("networth.thisMonth")}
-                            </p>
-                            <PriceFreshnessCaption
-                                investments={investments}
-                                scope="investment"
-                            />
-                        </div>
+                                )
+                            </span>{" "}
+                            {t("networth.thisMonth")}
+                        </p>
+                        <PriceFreshnessCaption
+                            investments={investments}
+                            scope="investment"
+                            className="type-footnote text-label-tertiary"
+                        />
+                        <dl className="pt-2">
+                            <div className="min-w-0">
+                                <dt className="type-caption text-label-tertiary">
+                                    {t("networth.sinceStart")}
+                                </dt>
+                                <dd
+                                    className={cn(
+                                        "flex items-center gap-1.5 type-headline tabular-nums",
+                                        changeTone(allTimeChange),
+                                    )}
+                                >
+                                    {allTimeChange >= 0 ? (
+                                        <TrendingUp
+                                            aria-hidden="true"
+                                            className="h-4 w-4 shrink-0"
+                                        />
+                                    ) : (
+                                        <TrendingDown
+                                            aria-hidden="true"
+                                            className="h-4 w-4 shrink-0"
+                                        />
+                                    )}
+                                    <Money amount={allTimeChange} signed />
+                                    <span className="type-footnote">
+                                        (
+                                        {formatPercent(allTimePercent, {
+                                            digits: 1,
+                                            signed: true,
+                                        })}
+                                        )
+                                    </span>
+                                </dd>
+                            </div>
+                        </dl>
                     </div>
-                    <div className="min-w-0 border-t border-border/50 p-5 sm:p-6 lg:border-l lg:border-t-0">
-                        <dl className="divide-y divide-border/50">
-                            {[
-                                {
-                                    label: t("networth.liquid"),
-                                    value: current.liquid,
-                                    percentage: liquidPct,
-                                    icon: Landmark,
-                                },
-                                {
-                                    label: t("networth.investments"),
-                                    value: current.investments,
-                                    percentage: investmentsPct,
-                                    icon: PiggyBank,
-                                },
-                                ...(hasLiabilities
-                                    ? [
-                                          {
-                                              label: t("networth.liabilities"),
-                                              value: current.liabilities,
-                                              percentage: liabilitiesPct,
-                                              icon: CreditCard,
-                                          },
-                                      ]
-                                    : []),
-                            ].map(
-                                ({ label, value, percentage, icon: Icon }) => (
-                                    <div
-                                        key={label}
-                                        className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-3 first:pt-1 last:pb-1"
-                                    >
-                                        <dt className="flex items-center gap-2 text-sm text-muted-foreground">
-                                            <Icon
-                                                className="h-4 w-4 shrink-0"
-                                                aria-hidden="true"
-                                            />
-                                            {label}
+                    <dl className="space-y-4 lg:col-span-2 lg:self-center">
+                        {bars.map((bar) => {
+                            const empty = bar.value <= ZERO_EPSILON;
+                            return (
+                                <div key={bar.key} className="space-y-1.5">
+                                    <div className="flex items-baseline justify-between gap-3 type-footnote">
+                                        <dt className="text-label-secondary">
+                                            {bar.label}
                                         </dt>
-                                        <dd className="ml-auto text-right">
-                                            <div className="text-lg font-semibold tabular-nums">
-                                                <RollingNumber
-                                                    parts={fmtParts(value)}
-                                                />
-                                            </div>
-                                            <div className="text-xs text-muted-foreground">
-                                                {t("networth.ofNetWorth", {
-                                                    n: percentage,
-                                                })}
-                                            </div>
+                                        <dd className="tabular-nums text-foreground">
+                                            {empty ? (
+                                                "—"
+                                            ) : (
+                                                <Money amount={bar.value} />
+                                            )}
                                         </dd>
                                     </div>
-                                ),
-                            )}
-                        </dl>
-                        {hasLiabilities && (
-                            <p className="mt-4 max-w-prose text-xs text-muted-foreground">
-                                {t("networth.shareExplanation")}
-                            </p>
-                        )}
-                    </div>
+                                    {!empty && (
+                                        <div
+                                            aria-hidden="true"
+                                            className="h-1.5 overflow-hidden rounded-chip bg-foreground/[0.06]"
+                                        >
+                                            <div
+                                                className={cn(
+                                                    "h-full rounded-chip",
+                                                    bar.tone,
+                                                )}
+                                                style={{
+                                                    width: `${Math.min(100, (bar.value / barScale) * 100)}%`,
+                                                }}
+                                            />
+                                        </div>
+                                    )}
+                                    {!empty && bar.detail && (
+                                        <p className="type-caption tabular-nums text-label-tertiary">
+                                            {bar.detail}
+                                        </p>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </dl>
                 </CardContent>
             </Card>
 
@@ -462,35 +473,41 @@ export default function NetWorthPage() {
               currencyConverter.error ||
               !byAccountRows ? (
                 <Card>
-                    <CardContent variant="headerless">
-                        <p className="text-sm text-destructive">
+                    <CardContent variant="state" className="text-center">
+                        <p className="type-callout text-label-secondary">
                             {t("networth.byAccount.unavailable")}
                         </p>
                     </CardContent>
                 </Card>
             ) : (
-                <NetWorthByAccountTable
+                <NetWorthByAccountList
                     rows={byAccountRows}
                     currency={targetCurrency}
                     headline={current.netWorth}
-                    t={t}
                 />
             )}
 
             <NetWorthChart
                 snapshots={displaySnapshots}
-                period={period}
-                periods={CHART_PERIODS}
-                periodLabels={periodLabels}
-                onPeriodChange={setPeriod}
+                actions={
+                    <span data-print-actions>
+                        <ChartPeriodSelector
+                            periods={CHART_PERIODS}
+                            value={period}
+                            onChange={setPeriod}
+                            labels={periodLabels}
+                            size="sm"
+                            aria-label={t("networth.overTime")}
+                        />
+                    </span>
+                }
                 fmt={fmt}
                 xTickFormat={xTickFormat}
                 tooltipLabelFormatter={tooltipLabelFormatter}
                 t={t}
             />
 
-            {/* Historical extremes */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <StatCard
                     title={t("networth.peak")}
                     size="compact"

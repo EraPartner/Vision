@@ -29,8 +29,10 @@ tags:
     accessibility,
     colorblind,
     gain-loss,
+    design-system,
+    adr-183,
   ]
-description: Application settings system with JSONB storage, preload optimization, propagation across all pages, and sidebar-navigated instant-apply DashboardSettingsDialog UI (ADR-084).
+description: Application settings system with JSONB storage, preload optimization, propagation across all pages, and the instant-apply Settings window (DashboardSettingsDialog, ADR-084 and ADR-183).
 aliases: [preferences, configuration, app settings, user settings]
 related_code:
   - apps/frontend/src/stores/settingsStore.ts
@@ -60,7 +62,7 @@ related_code:
 
 The Settings system manages all application preferences, from display formatting (currency, date format, number format) to behavioral settings (exclusions, pagination defaults, widget visibility). It uses a unified Zustand store, three hydration bridges, a preload context, and a JSONB-backed storage system.
 
-The Settings dialog was reworked in June 2026 from a 5-tab Save/Cancel form into a **sidebar-navigated, instant-apply** surface. See [[docs/adr/084-settings-instant-apply-sidebar|ADR-084]] for full rationale.
+The Settings dialog was reworked in June 2026 from a 5-tab Save/Cancel form into a **sidebar-navigated, instant-apply** surface ([[docs/adr/084-settings-instant-apply-sidebar|ADR-084]]), and in October 2026 into a macOS-style **Settings window** on the design system (ADR-183).
 
 ## Architecture
 
@@ -317,16 +319,19 @@ This automatic recovery prevents startup failure while preserving the corrupted 
 > [!info] Reworked June 2026 (ADR-084)
 > The settings dialog was a 5-tab Save/Cancel form (`General`, `Appearance`, `Dashboard`, `App`, `Backup`). It is now a **sidebar-navigated, instant-apply** surface. See [[docs/adr/084-settings-instant-apply-sidebar|ADR-084]] for full rationale.
 
-The primary UI is `[[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx|DashboardSettingsDialog]]`, which acts as a **sidebar shell orchestrator**: a left rail of seven section icons/labels, and a scrollable content pane on the right. Each section component is self-contained — it reads from hooks and writes directly to the store or API, so the orchestrator no longer threads staged props.
+The primary UI is `[[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx|DashboardSettingsDialog]]`, the **Settings window**: a macOS-style preferences window drawn as a `Dialog` (the desktop shell has one BrowserWindow), `max-w-4xl` by `82vh`. A sidebar on the left lists the seven sections as `List`/`ListRow` tabs with an icon and the section name, the selected one filled with the primary color; the title bar shows the current section's name; the content pane scrolls the section's groups. The dialog's accessible name stays "Settings" (a visually hidden `DialogTitle`). There is no description paragraph, no "save automatically" hint paragraph and no footer: the sidebar ends with a one-line caption (`settings.autosaveHint`) and the window closes with its close button, Escape or browser Back. Each section component is self-contained — it reads from hooks and writes directly to the store or API, so the orchestrator threads no staged props.
 
 The section rail implements the tabs accessibility pattern: one selected tab is in the tab order,
 each tab controls the active tab panel, and Arrow keys plus Home/End move focus and selection.
+Below the `md` breakpoint the rail becomes a horizontally scrolling row above the content.
 
-**Shared layout primitives** live in `[[apps/frontend/src/features/settings/SettingsPrimitives.tsx|SettingsPrimitives.tsx]]`:
+**Shared layout primitives** live in `[[apps/frontend/src/features/settings/SettingsPrimitives.tsx|SettingsPrimitives.tsx]]` and put every setting on the design system:
 
-- `SettingsSection` — title + description header
-- `SettingsGroup` — bordered, hairline-divided card with optional label and description
-- `SettingRow` — label + hint + control; `row` layout for switches/actions and `stack` for lists. Simple `SelectSettingRow` controls align beside labels when their `SettingsGroup` container is at least 28rem wide, with a consistent 10–12rem control column. They stack in narrower containers; selects with supplemental children retain the full-width stacked layout.
+- `SettingsSection` — a `section` landmark named after the section; it renders no heading because the title bar already shows the name
+- `SettingsGroup` — a `Card` whose header is a `CardTitle variant="label"` plus an optional `type-footnote` description and an `aside` slot, and whose flush content is a borderless `List` of rows
+- `SettingRow` — an `li` row: `type-body` label and optional `type-footnote text-label-secondary` description on the left, an h-9 control on the right; `row` layout for switches, buttons and compact selects, `stack` for inputs and lists, `destructive` for the reset and restore rows, `titleHidden` for search fields. Simple `SelectSettingRow` controls align beside labels when their group is at least 28rem wide, with a 10–14rem control column, and stack in narrower containers; selects with supplemental children keep the stacked layout.
+
+Copy follows [[docs/adr/182-ui-copy-plain-words|ADR-182]]: sentence case (the section is "AI & research", the theme is "High contrast"), failure toasts read "Couldn't …", and the restore confirmation button reads Restore. The confirmations the window opens (reset all settings, restore a backup) use the shared `useConfirmDialog` alert dialog; the encrypted-restore passphrase prompt comes from `useRestoreBackup`.
 
 ### Section Taxonomy
 
@@ -336,10 +341,12 @@ each tab controls the active tab panel, and Arrow keys plus Home/End move focus 
 | Appearance    | `sections/AppearanceSection.tsx` | Theme variant, color mode + schedule, macOS system accent, visual-effects tier, auto-adapt, **Sidebar** (Labels / Icons only, [[docs/adr/180-sidebar-sections-replace-workspaces\|ADR-180]]); **Accessibility** group: gain & loss colors (colorblind-safe vs classic) |
 | Statistics    | `sections/StatisticsSection.tsx` | Exclusion scope, exclude-hidden, internal transfers toggle, excluded categories/recipients (was "Dashboard" tab)                                                     |
 | Behavior      | `sections/BehaviorSection.tsx`   | Startup section, cost-basis method, auto-clear planned, brokerage cash category mappings, reset recurring dismissals                                                 |
-| AI & Research | `sections/AiSection.tsx`         | Analysis defaults, Ollama and OpenAI default models, AgentCloak Desktop status and protection control, and research provider keys                                    |
+| AI & research | `sections/AiSection.tsx`         | Analysis defaults, Ollama and OpenAI default models, AgentCloak Desktop status and protection control, and research provider keys                                    |
 
 | Backup | `sections/BackupSection.tsx` | Directory, backup-on-quit, passphrase, run/restore (Electron only) |
-| About & Maintenance | `sections/AboutSection.tsx` | Vision mark, canonical build version, AGPL-3.0-only identity, source/documentation links, app updates (shows the shared `useUpdateStatus` result and the install action), restart onboarding, developer/admin mode, reset-all (danger zone) |
+| About & maintenance | `sections/AboutSection.tsx` | Identity card (Vision mark, canonical build version, AGPL-3.0-only license, source/documentation links), updates (the shared `useUpdateStatus` result as a row with a Release notes link, Check for updates, Install update), Setup assistant restart, Admin mode switch, Reset all settings |
+
+Admin and Monitors remain sidebar sections of their own (ADR-180) rather than Settings sections.
 
 The AgentCloak Desktop group shows a fresh availability check, effective protection state, local
 reference-key state, and whether the OpenAI route is enabled. Check Again repeats the probe.
@@ -351,7 +358,7 @@ leaves the key in place for existing token-bearing investigations. See
 
 ### Instant-Apply Model
 
-Every control writes through on change — there is no global Save/Cancel footer. The orchestrator exposes a single **Done** button that closes the dialog. Specific mechanisms:
+Every control writes through on change — there is no Save/Cancel or Done footer; the window closes with its close button, Escape or browser Back. Specific mechanisms:
 
 - **Most settings**: write through `updateAppSettings` or `updateDashboardSettings` (Zustand store actions); context providers debounce-persist to the API (500 ms).
 - **`includeTransfers`**: a server-only aggregation setting with no client reader. Its toggle persists via `apiClient.saveSetting` then `queryClient.invalidateQueries()` for an optimistic cache refresh. Lives in the Statistics section.
@@ -370,16 +377,15 @@ and `app` values are no longer mapped to `statistics` and `about`. A URL contain
 value does not open settings; internal callers that provide an unknown section fall back to
 General. Electron menus and onboarding use canonical identifiers.
 
-### i18n Keys (ADR-084)
+### i18n Keys
 
-New keys added (en + nl); no existing keys removed:
+- `settings.title` — accessible name of the window and its tablist
+- `settings.tab.{general,appearance,backup}` and `settings.section.{statistics,behavior,ai,about}` — sidebar section names, also shown in the title bar
+- `settings.autosaveHint` — the sidebar caption
+- `settings.group.{formatting,localeDisplay,sidebar,colorMode,visualEffects,accessibility}` — group card titles
+- `settings.dashboard.excludedCount.{one,other}` — count badge on the exclusion groups
 
-- `settings.done` — close button label
-- `settings.section.{general,appearance,statistics,behavior,ai,backup,about}` — sidebar nav labels
-- `settings.section.{general,appearance,...}.desc` — section description text
-- `settings.group.{formatting,localeDisplay,colorMode,visualEffects}` — group card labels
-
-The old `settings.save` / `settings.cancel` strings remain in locale files (unused).
+ADR-183 removed `settings.done`, `settings.description`, `settings.saveHint`, `settings.section.*.desc`, `settings.app.identity` and `settings.dashboard.excluded`. The old `settings.save` / `settings.cancel` strings remain in locale files (unused).
 
 #### i18n Keys — Accessibility group (2026-06-24)
 

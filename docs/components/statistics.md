@@ -2,7 +2,7 @@
 title: Statistics Components
 type: component
 status: active
-date: 2026-04-24
+date: 2026-10-06
 updated: 2026-10-06
 tags:
   [
@@ -36,8 +36,10 @@ Vision's Statistics page is composed of 11 specialized sub-components plus share
 
 The page acts as a thin orchestrator with lazy-loading and memoization:
 
-The Statistics page defaults to a rolling 24-month range; `?window=all` exposes
-full history. CategoryPivotTable mounts at most 12 period columns at once. It
+The Statistics page (titled **Insights** in the UI) defaults to a rolling 24-month range;
+`?window=all` exposes full history. The window is picked with a two-segment `SegmentedControl` in
+the page header; a ••• menu beside it opens the controlled `ExportDialog` (**Export PDF…**) and
+`WidgetVisibilityDialog` (**Customize…**). CategoryPivotTable mounts at most 12 period columns at once. It
 starts on the newest window and renders periods chronologically within that
 window. Keyboard-operable Previous and Next controls expose every period in the
 selected range. Totals and export input still cover every filtered period. The accepted scale boundary is documented in
@@ -145,6 +147,8 @@ metadata minted to complete a four-up grid.
 ```typescript
 interface MonthlyRhythmProps {
   data: StatisticsData;
+  /** The month in progress as `YYYY-MM`; defaults to today. Injectable for tests. */
+  currentPeriod?: string;
 }
 ```
 
@@ -155,10 +159,13 @@ interface MonthlyRhythmProps {
 | Headline                   | `monthlyData[i].net` for the scrubbed month (latest by default) | Compact + `RollingNumber`; `DeltaPill` vs the month before        |
 | Typical month in / out     | `averageMonthlyIncome` / `averageMonthlySpending`               | Exact (`Money`)                                                   |
 | Bar strip                  | `monthlyData[].net`, above/below a zero baseline                | Pointer hover + ←/→ · Home/End · Escape via `useChartKeyboardNav` |
-| Best / Worst month         | max / min `net` with its period label                           | Exact (`Money`)                                                   |
+| Best / Worst month         | max / min `net` over complete months, with its period label     | Exact (`Money`); the month in progress is excluded unless it is the only month |
 | Months in the black        | count of `net >= 0` over `monthlyData.length`                   | —                                                                 |
 
-Only the hero abbreviates; every detail figure renders exact.
+Only the hero abbreviates; every detail figure renders exact. Wherever the month in progress is
+named (headline line, strip edge labels, best/worst hint) its label carries the
+`statsPage.rhythm.soFar` suffix ("so far"). The card uses `CardTitle variant="label"`, the type ramp
+(`type-large-title`, `type-headline`, `type-caption`) and role tokens.
 
 **Usage:**
 

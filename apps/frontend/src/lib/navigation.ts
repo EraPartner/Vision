@@ -171,11 +171,6 @@ const WEALTH_SECTION: NavSection = {
             icon: PAGE_ICONS["/portfolio/savings"],
         },
         {
-            titleKey: "nav.performance",
-            url: "/portfolio/performance",
-            icon: PAGE_ICONS["/portfolio/performance"],
-        },
-        {
             titleKey: "nav.rebalance",
             url: "/portfolio/rebalance",
             icon: PAGE_ICONS["/portfolio/rebalance"],

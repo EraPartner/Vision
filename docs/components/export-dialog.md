@@ -482,7 +482,7 @@ toast.error(t("statsPage.report.downloadError"), { description: "..." });
 | **Statistics**         | `apps/frontend/src/pages/StatisticsPage.tsx`                  | financial   | Header actions |
 | **Tax Overview**       | `apps/frontend/src/pages/TaxOverviewPage.tsx`                 | tax         | Header actions |
 | **Stocks**             | `apps/frontend/src/pages/portfolio/StocksPage.tsx`            | portfolio   | Header actions |
-| **Portfolio Overview** | `apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx` | portfolio   | Header actions |
+| **Portfolio Overview** | `apps/frontend/src/pages/portfolio/PortfolioPage.tsx` | portfolio   | Header actions |
 
 ## Related
 

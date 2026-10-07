@@ -99,16 +99,16 @@ export function NextSevenDaysStrip({
             <CardContent variant="headerless" className="relative">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="min-w-0">
-                        <h2 className="font-sans text-sm font-medium text-muted-foreground">
+                        <h2 className="type-headline text-foreground">
                             {t("plannedPage.next7.title")}
                         </h2>
-                        <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm">
+                        <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-1 type-body">
                             <span className="font-semibold text-foreground">
                                 {tc("plannedPage.next7.dueCount", dueCount)}
                             </span>
                             {dueCount > 0 && (
                                 <>
-                                    <span className="text-muted-foreground/60">
+                                    <span className="text-label-tertiary">
                                         ·
                                     </span>
                                     {currencyRatesLoading ? (
@@ -126,7 +126,7 @@ export function NextSevenDaysStrip({
                                             className={cn(
                                                 "font-semibold tabular-nums",
                                                 windowTotal.total < 0
-                                                    ? "text-loss"
+                                                    ? "text-foreground"
                                                     : "text-gain",
                                             )}
                                         >
@@ -138,15 +138,18 @@ export function NextSevenDaysStrip({
                                     )}
                                 </>
                             )}
-                            <span className="text-muted-foreground/60">·</span>
-                            <span className="text-muted-foreground">
+                            <span className="text-label-tertiary">·</span>
+                            <span className="text-label-secondary">
                                 {rangeLabel}
                             </span>
                         </div>
                         {!currencyRatesLoading &&
                             windowTotal.unavailableCount > 0 && (
-                                <p className="mt-1 flex items-center gap-1.5 text-xs text-warning">
-                                    <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                                <p className="mt-1 flex items-center gap-1.5 type-footnote text-warning">
+                                    <AlertCircle
+                                        className="h-3.5 w-3.5 shrink-0"
+                                        aria-hidden
+                                    />
                                     {tc(
                                         "plannedPage.fxUnavailable",
                                         windowTotal.unavailableCount,
@@ -157,8 +160,8 @@ export function NextSevenDaysStrip({
 
                     {/* The one surviving aggregate — deliberately a side figure, not a tile. */}
                     <div className="max-w-full shrink-0 text-right">
-                        <p className="flex items-center justify-end gap-1.5 eyebrow">
-                            <Repeat className="h-3 w-3" />
+                        <p className="flex items-center justify-end gap-1.5 eyebrow text-label-secondary">
+                            <Repeat className="h-3 w-3" aria-hidden />
                             {t("plannedPage.estMonthly")}
                         </p>
                         {currencyRatesLoading ? (
@@ -172,9 +175,9 @@ export function NextSevenDaysStrip({
                         ) : (
                             <p
                                 className={cn(
-                                    "mt-1 text-2xl font-bold tabular-nums",
+                                    "mt-1 type-title-2 tabular-nums",
                                     estimatedMonthly < 0
-                                        ? "text-loss"
+                                        ? "text-foreground"
                                         : "text-gain",
                                 )}
                             >
@@ -183,8 +186,11 @@ export function NextSevenDaysStrip({
                         )}
                         {!currencyRatesLoading &&
                             estimatedMonthlyUnavailableCount > 0 && (
-                                <p className="mt-1 flex items-center justify-end gap-1.5 text-xs text-warning">
-                                    <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                                <p className="mt-1 flex items-center justify-end gap-1.5 type-footnote text-warning">
+                                    <AlertCircle
+                                        className="h-3.5 w-3.5 shrink-0"
+                                        aria-hidden
+                                    />
                                     {tc(
                                         "plannedPage.fxUnavailable",
                                         estimatedMonthlyUnavailableCount,
@@ -203,11 +209,11 @@ export function NextSevenDaysStrip({
                             <li
                                 key={bucket.offset}
                                 className={cn(
-                                    "flex min-h-[6.5rem] flex-col gap-1.5 rounded-[0.625rem] border p-2 transition-colors",
+                                    "flex min-h-[6.5rem] flex-col gap-1.5 rounded-card corner-continuous border p-2 transition-colors duration-fast ease-glide",
                                     isToday
                                         ? "border-primary/45 bg-primary/[0.07]"
                                         : bucket.items.length > 0
-                                          ? "border-border/70 bg-card/50"
+                                          ? "border-border/60 bg-foreground/[0.03]"
                                           : "border-border/40 bg-transparent",
                                 )}
                             >
@@ -217,7 +223,7 @@ export function NextSevenDaysStrip({
                                             "eyebrow",
                                             isToday
                                                 ? "font-semibold text-primary"
-                                                : "text-muted-foreground",
+                                                : "text-label-secondary",
                                         )}
                                     >
                                         {isToday
@@ -226,10 +232,10 @@ export function NextSevenDaysStrip({
                                     </span>
                                     <span
                                         className={cn(
-                                            "text-sm font-semibold tabular-nums",
+                                            "type-body font-semibold tabular-nums",
                                             isToday
                                                 ? "text-primary"
-                                                : "text-foreground/80",
+                                                : "text-label-secondary",
                                         )}
                                     >
                                         {bucket.date.getDate()}
@@ -239,7 +245,7 @@ export function NextSevenDaysStrip({
                                 {bucket.items.length === 0 ? (
                                     <span
                                         aria-hidden
-                                        className="mt-auto mb-1 h-1 w-1 self-center rounded-full bg-muted-foreground/25"
+                                        className="mt-auto mb-1 h-1 w-1 self-center rounded-full bg-foreground/[0.15]"
                                     />
                                 ) : (
                                     shown.map((p) => (
@@ -251,26 +257,29 @@ export function NextSevenDaysStrip({
                                                 "plannedPage.next7.itemTitle",
                                                 { name: p.name },
                                             )}
-                                            className="group/item rounded-md px-1 py-0.5 text-left transition-colors hover:bg-primary/10 focus-ring"
+                                            className="group/item rounded-chip px-1 py-0.5 text-left transition-[background-color] duration-fast ease-glide hover:bg-primary/10 focus-ring"
                                         >
                                             <span
                                                 className={cn(
-                                                    "flex items-center gap-1 truncate text-2xs",
+                                                    "flex items-center gap-1 truncate type-caption",
                                                     p.is_executed
-                                                        ? "text-muted-foreground line-through"
+                                                        ? "text-label-secondary line-through"
                                                         : "text-foreground group-hover/item:text-primary",
                                                 )}
                                             >
                                                 {p.is_executed && (
-                                                    <CheckCircle2 className="h-3 w-3 shrink-0 text-accent" />
+                                                    <CheckCircle2
+                                                        className="h-3 w-3 shrink-0 text-success"
+                                                        aria-hidden
+                                                    />
                                                 )}
                                                 {p.name}
                                             </span>
                                             <span
                                                 className={cn(
-                                                    "block text-2xs font-semibold tabular-nums",
+                                                    "block type-caption font-semibold tabular-nums",
                                                     p.amount < 0
-                                                        ? "text-loss"
+                                                        ? "text-foreground"
                                                         : "text-gain",
                                                 )}
                                             >
@@ -285,7 +294,7 @@ export function NextSevenDaysStrip({
                                 )}
 
                                 {overflow > 0 && (
-                                    <span className="px-1 text-2xs text-muted-foreground">
+                                    <span className="px-1 type-caption text-label-secondary">
                                         {t("plannedPage.next7.more", {
                                             n: overflow,
                                         })}
@@ -297,13 +306,16 @@ export function NextSevenDaysStrip({
                 </ol>
 
                 {dueCount === 0 && (
-                    <div className="mt-3 flex items-center gap-2.5 rounded-[0.625rem] border border-dashed border-border/70 px-3 py-2.5">
-                        <CalendarCheck2 className="h-4 w-4 shrink-0 text-accent" />
+                    <div className="mt-3 flex items-center gap-2.5 rounded-card corner-continuous border border-dashed border-border/70 px-3 py-2.5">
+                        <CalendarCheck2
+                            className="h-4 w-4 shrink-0 text-success"
+                            aria-hidden
+                        />
                         <div className="min-w-0">
-                            <p className="text-sm font-medium text-foreground">
+                            <p className="type-body font-medium text-foreground">
                                 {t("plannedPage.next7.emptyTitle")}
                             </p>
-                            <p className="text-xs text-muted-foreground">
+                            <p className="type-footnote text-label-secondary">
                                 {t("plannedPage.next7.emptyDesc")}
                             </p>
                         </div>

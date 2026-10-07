@@ -16,7 +16,7 @@ import StatisticsPage from "@/pages/StatisticsPage";
 import OwesPage from "@/pages/OwesPage";
 import DashboardPage from "@/pages/DashboardPage";
 import AIChatPage from "@/pages/AIChatPage";
-import PortfolioOverviewPage from "@/pages/portfolio/PortfolioOverviewPage";
+import PortfolioPage from "@/pages/portfolio/PortfolioPage";
 import AdminOverviewPage from "@/pages/admin/AdminOverviewPage";
 import DbMaintenancePage from "@/pages/DbMaintenancePage";
 import MarketLookupPage from "@/pages/research/MarketLookupPage";
@@ -49,7 +49,7 @@ describe("Language switch (integration)", () => {
     it("PlannedPaymentsPage renders English heading by default", async () => {
         renderWithApp(<PlannedPaymentsPage />);
         expect(
-            await screen.findByRole("heading", { name: /planned payments/i }),
+            await screen.findByRole("heading", { name: /^planned$/i }),
         ).toBeInTheDocument();
     });
 
@@ -58,7 +58,7 @@ describe("Language switch (integration)", () => {
         renderWithApp(<PlannedPaymentsPage />);
         expect(
             await screen.findByRole("heading", {
-                name: /geplande betalingen/i,
+                name: /^gepland$/i,
             }),
         ).toBeInTheDocument();
     });
@@ -94,17 +94,17 @@ describe("Language switch (integration)", () => {
     it("ImportPage renders English heading by default", async () => {
         renderWithApp(<ImportPage />);
         expect(
-            await screen.findByRole("heading", { name: /import & export/i }),
+            await screen.findByRole("heading", { name: /^import$/i }),
         ).toBeInTheDocument();
     });
 
     it("ImportPage renders Dutch heading when language is nl", async () => {
         useDutch();
         renderWithApp(<ImportPage />);
-        // Dutch: "Importeren & exporteren"
+        // Dutch: "Importeren"
         expect(
             await screen.findByRole("heading", {
-                name: /importeren & exporteren/i,
+                name: /^importeren$/i,
             }),
         ).toBeInTheDocument();
     });
@@ -168,16 +168,16 @@ describe("Language switch (integration)", () => {
     it("StatisticsPage renders English heading by default", async () => {
         renderWithApp(<StatisticsPage />);
         expect(
-            await screen.findByRole("heading", { name: /^statistics$/i }),
+            await screen.findByRole("heading", { name: /^insights$/i }),
         ).toBeInTheDocument();
     });
 
     it("StatisticsPage renders Dutch heading when language is nl", async () => {
         useDutch();
         renderWithApp(<StatisticsPage />);
-        // Dutch: statsPage.title = "Statistieken"
+        // Dutch: statsPage.title = "Inzichten"
         expect(
-            await screen.findByRole("heading", { name: /statistieken/i }),
+            await screen.findByRole("heading", { name: /inzichten/i }),
         ).toBeInTheDocument();
     });
 
@@ -241,18 +241,18 @@ describe("Language switch (integration)", () => {
         ).toBeInTheDocument();
     });
 
-    // ── PortfolioOverviewPage ─────────────────────────────────────────────────
-    it("PortfolioOverviewPage renders English heading by default", async () => {
-        renderWithApp(<PortfolioOverviewPage />);
+    // ── PortfolioPage ─────────────────────────────────────────────────────────
+    it("PortfolioPage renders English heading by default", async () => {
+        renderWithApp(<PortfolioPage />);
         expect(
             await screen.findByRole("heading", { name: /^portfolio$/i, level: 1 }),
         ).toBeInTheDocument();
     });
 
-    it("PortfolioOverviewPage renders Dutch heading when language is nl", async () => {
+    it("PortfolioPage renders Dutch heading when language is nl", async () => {
         useDutch();
-        renderWithApp(<PortfolioOverviewPage />);
-        // Dutch: portfolio.overviewTitle = "Portefeuilleoverzicht"
+        renderWithApp(<PortfolioPage />);
+        // Dutch: nav.portfolio = "Portefeuille"
         expect(
             await screen.findByRole("heading", {
                 name: /^portefeuille$/i,

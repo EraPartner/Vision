@@ -403,6 +403,178 @@ describe("ImportReviewPage (integration)", () => {
         ).not.toBeInTheDocument();
     }, 10_000);
 
+    it("explains every match badge in a legend with this file's counts", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/import/batches/:batchId/preview`, () =>
+                ok({
+                    batch_id: 1,
+                    groups: [],
+                    totals: {
+                        exact: 2,
+                        fuzzy: 1,
+                        pattern: 0,
+                        new: 3,
+                        unresolved: 0,
+                    },
+                }),
+            ),
+        );
+
+        renderReviewPage();
+
+        const legend = await screen.findByRole("list", {
+            name: /what the badges mean/i,
+        });
+        const rows = within(legend).getAllByRole("listitem");
+        expect(rows).toHaveLength(5);
+        expect(rows[0]).toHaveTextContent("Exact match");
+        expect(rows[0]).toHaveTextContent(
+            "The name matched an existing payee.",
+        );
+        expect(rows[0]).toHaveTextContent("2");
+        expect(rows[1]).toHaveTextContent("Suggested match");
+        expect(rows[3]).toHaveTextContent("New payee");
+        expect(rows[3]).toHaveTextContent("3");
+        expect(rows[4]).toHaveTextContent("Needs review");
+    });
+
+    it("discards the batch after confirmation and returns to the Import page", async () => {
+        const user = userEvent.setup({ delay: null });
+        let deleted = false;
+        server.use(
+            http.get(`${API_BASE}/api/import/batches/:batchId/preview`, () =>
+                ok({
+                    batch_id: 1,
+                    groups: [groupWithRecipient(1, "Amazon", 10)],
+                    totals: {
+                        exact: 1,
+                        fuzzy: 0,
+                        pattern: 0,
+                        new: 0,
+                        unresolved: 0,
+                    },
+                }),
+            ),
+            http.delete(`${API_BASE}/api/import/batches/:batchId`, () => {
+                deleted = true;
+                return ok({ deleted: 0 });
+            }),
+        );
+
+        renderWithApp(
+            <Routes>
+                <Route
+                    path="/import/:batchId/review"
+                    element={<ImportReviewPage />}
+                />
+                <Route path="/import" element={<h1>Import home</h1>} />
+            </Routes>,
+            { initialEntries: ["/import/1/review"] },
+        );
+
+        await user.click(await screen.findByRole("button", { name: "Discard" }));
+        const dialog = await screen.findByRole("alertdialog");
+        expect(dialog).toHaveTextContent(/discard this import\?/i);
+        expect(deleted).toBe(false);
+
+        await user.click(
+            within(dialog).getByRole("button", { name: /discard import/i }),
+        );
+
+        await waitFor(() => expect(deleted).toBe(true));
+        expect(
+            await screen.findByRole("heading", { name: /import home/i }),
+        ).toBeInTheDocument();
+    });
+
+    it("keeps the batch when the discard dialog is cancelled", async () => {
+        const user = userEvent.setup({ delay: null });
+        let deleted = false;
+        server.use(
+            http.delete(`${API_BASE}/api/import/batches/:batchId`, () => {
+                deleted = true;
+                return ok({ deleted: 0 });
+            }),
+        );
+
+        renderReviewPage();
+
+        await user.click(await screen.findByRole("button", { name: "Discard" }));
+        const dialog = await screen.findByRole("alertdialog");
+        await user.click(within(dialog).getByRole("button", { name: /cancel/i }));
+
+        await waitFor(() =>
+            expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument(),
+        );
+        expect(deleted).toBe(false);
+        expect(
+            screen.getByRole("button", { name: /^import \d+ rows$/i }),
+        ).toBeInTheDocument();
+    });
+
+    it("carries the staged rows' date span into the Import page receipt", async () => {
+        const user = userEvent.setup({ delay: null });
+        server.use(
+            http.get(`${API_BASE}/api/import/batches/:batchId/preview`, () =>
+                ok({
+                    batch_id: 1,
+                    groups: [
+                        {
+                            ...groupWithRecipient(1, "Amazon", 10),
+                            row_count: 2,
+                            rows: [
+                                {
+                                    ...groupWithRecipient(1, "Amazon", 10)
+                                        .rows[0],
+                                    tx_date: "2026-05-20",
+                                },
+                                {
+                                    ...groupWithRecipient(1, "Amazon", 11)
+                                        .rows[0],
+                                    tx_date: "2026-05-03",
+                                },
+                            ],
+                        },
+                    ],
+                    totals: {
+                        exact: 2,
+                        fuzzy: 0,
+                        pattern: 0,
+                        new: 0,
+                        unresolved: 0,
+                    },
+                }),
+            ),
+            http.post(`${API_BASE}/api/import/batches/:batchId/commit`, () =>
+                ok({ batch_id: 1, imported: 2, duplicates: 0, errors: 0 }),
+            ),
+        );
+
+        renderWithApp(
+            <Routes>
+                <Route
+                    path="/import/:batchId/review"
+                    element={<ImportReviewPage />}
+                />
+                <Route path="/import" element={<ImportRouteProbe />} />
+            </Routes>,
+            { initialEntries: ["/import/1/review"] },
+        );
+
+        await user.click(
+            await screen.findByRole("button", { name: /^import 2 rows$/i }),
+        );
+
+        await waitFor(() =>
+            expect(screen.getByTestId("import-route-state")).toHaveTextContent(
+                '"dateFrom":"2026-05-03"',
+            ),
+        );
+        expect(screen.getByTestId("import-route-state")).toHaveTextContent(
+            '"dateTo":"2026-05-20"',
+        );
+    });
+
     it("shows match source badges in summary area", async () => {
         server.use(
             http.get(`${API_BASE}/api/import/batches/:batchId/preview`, () =>

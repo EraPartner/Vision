@@ -1,19 +1,10 @@
 import { useState, memo } from "react";
 import { safeHref } from "@/utils/safeHref";
-import {
-    AlertCircle,
-    CheckCircle2,
-    Download,
-    ExternalLink,
-    Loader2,
-    RefreshCw,
-    RotateCcw,
-    Sparkles,
-    ShieldCheck,
-} from "lucide-react";
+import { ExternalLink, Loader2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useOnboarding } from "@/features/onboarding/useOnboarding";
@@ -173,170 +164,181 @@ export const AboutSection = memo(function AboutSection({
         toast.info(t("settings.resetToDefaults"));
     };
 
+    const releaseNotesHref = updateStatus
+        ? safeHref(updateStatus.html_url)
+        : undefined;
+
     return (
-        <SettingsSection
-            title={t("settings.section.about")}
-            description={t("settings.section.about.desc")}
-        >
-            <SettingsGroup label={t("settings.app.identity")}>
-                <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center">
-                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-accent text-primary-foreground shadow-[0_10px_28px_-14px_hsl(var(--primary)/0.7)]">
+        <SettingsSection title={t("settings.section.about")}>
+            {/* Identity */}
+            <Card>
+                <CardContent
+                    variant="headerless"
+                    className="flex flex-col gap-4 sm:flex-row sm:items-center"
+                >
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-card corner-continuous bg-primary text-primary-foreground">
                         <VisionMark className="h-8 w-8" title={APP_NAME} />
                     </div>
                     <div className="min-w-0 flex-1">
-                        <h3 className="font-display text-2xl font-semibold tracking-tight text-foreground">
+                        <h3 className="type-title-2 text-foreground">
                             {APP_NAME}
                         </h3>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="type-body text-label-secondary">
                             {t("settings.app.version", {
                                 version: APP_VERSION,
                             })}
                         </p>
-                        <p className="mt-1 text-xs text-muted-foreground">
+                        <p className="type-footnote text-label-tertiary">
                             {t("settings.app.license", {
                                 license: APP_LICENSE,
                             })}
                         </p>
                     </div>
                     <div className="flex shrink-0 flex-wrap gap-2">
-                        <Button variant="outline" size="sm" asChild>
+                        <Button variant="outline" asChild>
                             <a
                                 href={APP_REPOSITORY_URL}
                                 target="_blank"
                                 rel="noopener noreferrer"
                             >
                                 {t("settings.app.sourceCode")}
-                                <ExternalLink className="ml-1.5 h-3.5 w-3.5" />
+                                <ExternalLink
+                                    aria-hidden="true"
+                                    className="ml-1.5 h-3.5 w-3.5"
+                                />
                             </a>
                         </Button>
-                        <Button variant="outline" size="sm" asChild>
+                        <Button variant="outline" asChild>
                             <a
                                 href={APP_DOCUMENTATION_URL}
                                 target="_blank"
                                 rel="noopener noreferrer"
                             >
                                 {t("settings.app.documentation")}
-                                <ExternalLink className="ml-1.5 h-3.5 w-3.5" />
+                                <ExternalLink
+                                    aria-hidden="true"
+                                    className="ml-1.5 h-3.5 w-3.5"
+                                />
                             </a>
                         </Button>
                     </div>
-                </div>
-            </SettingsGroup>
+                </CardContent>
+            </Card>
 
             {/* Updates */}
-            <SettingsGroup label={t("settings.app.updates")}>
+            <SettingsGroup
+                label={t("settings.app.updates")}
+                description={
+                    apiClient.isElectron()
+                        ? t("settings.app.updatesHintElectron")
+                        : t("settings.app.updatesHintWeb")
+                }
+            >
+                {updateStatus && (
+                    <SettingRow
+                        title={
+                            updateStatus.up_to_date ? (
+                                <>
+                                    {t("settings.app.runningLatest")}
+                                    {updateStatus.current_version
+                                        ? ` (${updateStatus.current_version})`
+                                        : ""}
+                                    .
+                                </>
+                            ) : (
+                                <>
+                                    {t("settings.app.versionAvailable", {
+                                        version:
+                                            updateStatus.latest_version ?? "",
+                                    })}
+                                    {updateStatus.current_version
+                                        ? ` (${t("settings.app.current")} ${updateStatus.current_version})`
+                                        : ""}
+                                    .
+                                </>
+                            )
+                        }
+                        description={
+                            <>
+                                {!updateStatus.up_to_date &&
+                                    updateStatus.published_at && (
+                                        <span className="block">
+                                            {t("settings.app.released")}{" "}
+                                            {formatDateStringWithAppSettings(
+                                                updateStatus.published_at,
+                                                appSettings.dateFormat,
+                                            )}
+                                        </span>
+                                    )}
+                                {!updateStatus.up_to_date &&
+                                    updateStatus.release_notes && (
+                                        <span className="line-clamp-2 block">
+                                            {updateStatus.release_notes}
+                                        </span>
+                                    )}
+                                {updateStatus.error && (
+                                    <span className="block text-destructive">
+                                        {updateStatus.error}
+                                    </span>
+                                )}
+                            </>
+                        }
+                        className={cn(
+                            updateStatus.up_to_date
+                                ? "[&_p:first-child]:text-success"
+                                : "[&_p:first-child]:text-warning",
+                        )}
+                    >
+                        {/* Gate on the resolved href: a rejected URL used to
+                            leave this icon rendered, hoverable and tooltipped,
+                            pointing at nothing. */}
+                        {releaseNotesHref && (
+                            <Button variant="ghost" size="sm" asChild>
+                                <a
+                                    href={releaseNotesHref}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    aria-label={t("aria.openReleaseNotes")}
+                                >
+                                    {t("update.releaseNotes")}
+                                    <ExternalLink
+                                        aria-hidden="true"
+                                        className="ml-1.5 h-3.5 w-3.5"
+                                    />
+                                </a>
+                            </Button>
+                        )}
+                    </SettingRow>
+                )}
+
                 <SettingRow
                     title={t("settings.app.checkForUpdates")}
                     description={
-                        apiClient.isElectron()
-                            ? t("settings.app.updatesHintElectron")
-                            : t("settings.app.updatesHintWeb")
+                        applyingUpdate ? (
+                            <span className="flex items-center gap-2">
+                                <Loader2
+                                    aria-hidden="true"
+                                    className="h-3.5 w-3.5 animate-spin"
+                                />
+                                {applyPhase === "backing-up"
+                                    ? t("update.backingUp")
+                                    : applyPhase === "downloading"
+                                      ? t("update.downloading")
+                                      : t("settings.app.restarting")}
+                            </span>
+                        ) : undefined
                     }
-                    layout="stack"
                 >
-                    {updateStatus && (
-                        <div
-                            className={cn(
-                                "mb-3 flex items-start gap-3 rounded-lg border px-4 py-3 text-sm",
-                                updateStatus.up_to_date
-                                    ? "border-success/30 bg-success/5 text-success"
-                                    : "border-warning/30 bg-warning/5 text-warning",
-                            )}
-                        >
-                            {updateStatus.up_to_date ? (
-                                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-                            ) : (
-                                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                            )}
-                            <div className="min-w-0 flex-1">
-                                {updateStatus.up_to_date ? (
-                                    <p>
-                                        {t("settings.app.runningLatest")}
-                                        {updateStatus.current_version
-                                            ? ` (${updateStatus.current_version})`
-                                            : ""}
-                                        .
-                                    </p>
-                                ) : (
-                                    <>
-                                        <p className="font-medium">
-                                            {t(
-                                                "settings.app.versionAvailable",
-                                                {
-                                                    version:
-                                                        updateStatus.latest_version ??
-                                                        "",
-                                                },
-                                            )}
-                                            {updateStatus.current_version
-                                                ? ` (${t("settings.app.current")} ${updateStatus.current_version})`
-                                                : ""}
-                                            .
-                                        </p>
-                                        {updateStatus.published_at && (
-                                            <p className="mt-0.5 text-xs opacity-80">
-                                                {t("settings.app.released")}{" "}
-                                                {formatDateStringWithAppSettings(
-                                                    updateStatus.published_at,
-                                                    appSettings.dateFormat,
-                                                )}
-                                            </p>
-                                        )}
-                                        {updateStatus.release_notes && (
-                                            <p className="mt-1 line-clamp-2 text-xs opacity-80">
-                                                {updateStatus.release_notes}
-                                            </p>
-                                        )}
-                                    </>
-                                )}
-                                {updateStatus.error && (
-                                    <p className="mt-0.5 text-xs opacity-80">
-                                        {updateStatus.error}
-                                    </p>
-                                )}
-                            </div>
-                            {/* Gate on the resolved href: a rejected URL used to
-                                leave this icon rendered, hoverable and tooltipped,
-                                pointing at nothing. */}
-                            {safeHref(updateStatus.html_url) && (
-                                <a
-                                    href={safeHref(updateStatus.html_url)}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="shrink-0 opacity-70 transition-opacity hover:opacity-100"
-                                    title={t("update.releaseNotes")}
-                                    aria-label={t("aria.openReleaseNotes")}
-                                >
-                                    <ExternalLink className="h-3.5 w-3.5" />
-                                </a>
-                            )}
-                        </div>
-                    )}
-
-                    {applyingUpdate && (
-                        <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            {applyPhase === "backing-up"
-                                ? t("update.backingUp")
-                                : applyPhase === "downloading"
-                                  ? t("update.downloading")
-                                  : t("settings.app.restarting")}
-                        </div>
-                    )}
-
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap justify-end gap-2">
                         <Button
                             variant="outline"
-                            size="sm"
                             onClick={() => {
                                 void handleCheckForUpdates();
                             }}
                             disabled={checkingUpdate || applyingUpdate}
                         >
-                            {checkingUpdate ? (
-                                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                                <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                            {checkingUpdate && (
+                                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
                             )}
                             {t("settings.app.checkForUpdates")}
                         </Button>
@@ -344,16 +346,13 @@ export const AboutSection = memo(function AboutSection({
                             updateStatus &&
                             !updateStatus.up_to_date && (
                                 <Button
-                                    size="sm"
                                     onClick={() => {
                                         void handleApplyUpdate();
                                     }}
                                     disabled={applyingUpdate || checkingUpdate}
                                 >
-                                    {applyingUpdate ? (
-                                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                                    ) : (
-                                        <Download className="mr-1.5 h-3.5 w-3.5" />
+                                    {applyingUpdate && (
+                                        <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
                                     )}
                                     {applyPhase === "restarting"
                                         ? t("settings.app.restarting2")
@@ -366,34 +365,19 @@ export const AboutSection = memo(function AboutSection({
                 </SettingRow>
             </SettingsGroup>
 
-            {/* Setup & developer */}
+            {/* Setup and developer */}
             <SettingsGroup>
                 <SettingRow
-                    title={
-                        <span className="flex items-center gap-2">
-                            <Sparkles className="h-4 w-4 text-primary" />
-                            {t("settings.app.onboardingWizard")}
-                        </span>
-                    }
+                    title={t("settings.app.onboardingWizard")}
                     description={t("settings.app.onboardingWizardHint")}
                 >
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleRestartOnboarding}
-                    >
-                        <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                    <Button variant="outline" onClick={handleRestartOnboarding}>
                         {t("settings.app.restart")}
                     </Button>
                 </SettingRow>
 
                 <SettingRow
-                    title={
-                        <span className="flex items-center gap-2">
-                            <ShieldCheck className="h-4 w-4 text-primary" />
-                            {t("settings.app.adminMode")}
-                        </span>
-                    }
+                    title={t("settings.app.adminMode")}
                     description={t("settings.app.adminModeHint")}
                     htmlFor="admin-mode"
                 >
@@ -407,11 +391,8 @@ export const AboutSection = memo(function AboutSection({
                 </SettingRow>
             </SettingsGroup>
 
-            {/* Danger zone */}
-            <SettingsGroup
-                label={t("settings.app.reset")}
-                className="border-destructive/30"
-            >
+            {/* Reset */}
+            <SettingsGroup label={t("settings.app.reset")}>
                 <SettingRow
                     title={t("settings.app.resetAll")}
                     description={t("settings.app.resetAllHint")}
@@ -419,7 +400,6 @@ export const AboutSection = memo(function AboutSection({
                 >
                     <Button
                         variant="outline"
-                        size="sm"
                         onClick={() => void handleResetAll()}
                         className="text-destructive hover:text-destructive"
                     >

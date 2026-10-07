@@ -353,7 +353,7 @@ export function CustomChart({
         <Card>
             <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-3">
                 <div className="flex-1 min-w-0">
-                    <CardTitle level={3} className="truncate">
+                    <CardTitle variant="sm" level={3} className="truncate">
                         {savedChart.name}
                     </CardTitle>
                     <CardDescription>

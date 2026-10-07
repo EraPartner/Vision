@@ -95,7 +95,9 @@ const ListRow = React.forwardRef<HTMLLIElement, ListRowProps>(
                         className="h-4 w-4 shrink-0 text-label-tertiary"
                     />
                 )}
-                {children}
+                {/* In asChild mode the child IS the row element, so it must
+                    not be rendered a second time inside itself. */}
+                {asChild ? null : children}
             </>
         );
 

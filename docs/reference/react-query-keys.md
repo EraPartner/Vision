@@ -83,7 +83,7 @@ cache. **Invalidation:** create, edit, archive, restore, and delete mutations in
 
 | Query Key                                    | Variables                 | Used By           | Description                 |
 | -------------------------------------------- | ------------------------- | ----------------- | --------------------------- |
-| `['portfolio-performance', defaultCurrency]` | `defaultCurrency: string` | `PerformancePage` | Daily performance snapshots |
+| `['portfolio-performance', defaultCurrency]` | `defaultCurrency: string` | `PortfolioPage` | Daily performance snapshots |
 | `['net-worth', targetCurrency]`              | `targetCurrency: string`  | `NetWorthPage`    | Net worth time series       |
 
 ### Exchange Rates

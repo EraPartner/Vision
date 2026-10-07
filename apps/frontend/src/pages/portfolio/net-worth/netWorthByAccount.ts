@@ -1,12 +1,14 @@
 import { isHoldingsOnlyPortfolioType } from "@/features/accounts/groupAccounts";
 import { addAll, roundMoney, toNumber } from "@vision/shared-utils/money";
 import type { PortfolioSummaryResponse } from "@/lib/api/info";
-import type { Account } from "@/types/api";
+import type { Account, AccountType } from "@/types/api";
 
 export interface NetWorthAccountRow {
     key: string;
     accountId: number | null;
     label: string;
+    /** Account type for the row subtitle; undefined for the unassigned row. */
+    type?: AccountType;
     cash: number;
     holdings: number;
     total: number;
@@ -62,6 +64,7 @@ export function buildNetWorthAccountRows(
                         : account?.display_name ||
                           account?.name ||
                           `#${accountId}`,
+                type: account?.type,
                 cash,
                 holdings,
                 total: roundMoney(addAll([cash, holdings])),

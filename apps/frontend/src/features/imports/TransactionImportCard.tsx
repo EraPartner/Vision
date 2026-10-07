@@ -37,10 +37,7 @@ import {
     CheckCircle2,
     Landmark,
     Loader2,
-    Pencil,
     PencilLine,
-    Save,
-    Trash2,
     Upload,
     XCircle,
 } from "lucide-react";
@@ -89,6 +86,12 @@ interface TransactionImportCardProps {
     onImportSuccess: () => void;
 }
 
+/**
+ * Import from your bank: file first, then the bank, then (only for a custom or
+ * saved setup) the column mapping. The Import button unlocks once a file and a
+ * bank are chosen and, for a custom setup, the three required columns are
+ * mapped; the footer names whichever piece is still missing.
+ */
 export function TransactionImportCard({
     onImportSuccess,
 }: TransactionImportCardProps) {
@@ -197,6 +200,7 @@ export function TransactionImportCard({
             description: t("importPage.customParser.deleteConfirm", {
                 name: selectedParser.name,
             }),
+            confirmLabel: t("importPage.customParser.delete"),
             variant: "destructive",
         });
         if (!ok) return;
@@ -221,6 +225,16 @@ export function TransactionImportCard({
         if (bankSource === "custom") return customBank || "generic";
         return bankSource;
     };
+
+    // What still blocks the import, in the order the card asks for it.
+    const hint = (() => {
+        if (!file) return t("importPage.hint.file");
+        if (!bankSource) return t("importPage.hint.bank");
+        if (isCustomLike && !hasRequiredMapping)
+            return t("importPage.hint.mapping");
+        return "";
+    })();
+    const canImport = hint === "" && !loading;
 
     const handleImport = async () => {
         if (!file) {
@@ -355,21 +369,38 @@ export function TransactionImportCard({
         }
     };
 
+    const summaryRows: Array<[string, string]> = [
+        [t("importPage.dateCol"), customConfig.dateColumn],
+        [t("importPage.recipientCol"), customConfig.recipientColumn],
+        [t("importPage.amountCol"), customConfig.amountColumn],
+        [t("importPage.memoCol"), customConfig.memoColumn || "—"],
+        [t("importPage.separator"), customConfig.separator],
+        [t("importPage.dateFormat"), customConfig.dateFormat],
+        [
+            t("importPage.numberFormat.label"),
+            t(`importPage.numberFormat.${customConfig.number_format}`),
+        ],
+    ];
+
     return (
         <Card className="glass-elevated">
             <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                    <Upload className="h-5 w-5 text-primary" />
-                    {t("importPage.csvImport")}
-                </CardTitle>
+                <CardTitle>{t("importPage.csvImport")}</CardTitle>
                 <CardDescription>
                     {t("importPage.csvImportDesc")}
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-                {/* Bank selector */}
+                {/* 1. The file */}
+                <CsvDropzone
+                    file={file}
+                    onFileSelect={setFile}
+                    label={t("importPage.csvFile")}
+                />
+
+                {/* 2. The bank that wrote it */}
                 <div className="space-y-2">
-                    <Label htmlFor="bank-select" className="font-semibold">
+                    <Label htmlFor="bank-select">
                         {t("importPage.bankSource")}
                     </Label>
                     <Select value={bankSource} onValueChange={handleBankChange}>
@@ -383,7 +414,7 @@ export function TransactionImportCard({
                         <SelectContent>
                             {adaptersLoading ? (
                                 <SelectItem value="loading" disabled>
-                                    <Loader2 className="h-4 w-4 mr-2 inline" />{" "}
+                                    <Loader2 className="mr-2 inline h-4 w-4" />{" "}
                                     {t("importPage.loading")}
                                 </SelectItem>
                             ) : adapters.length > 0 ? (
@@ -393,7 +424,10 @@ export function TransactionImportCard({
                                         value={adapter.key}
                                     >
                                         <span className="inline-flex items-center gap-2">
-                                            <Landmark className="h-3.5 w-3.5 text-muted-foreground" />
+                                            <Landmark
+                                                className="h-3.5 w-3.5 text-label-secondary"
+                                                aria-hidden
+                                            />
                                             {adapter.name}
                                         </span>
                                     </SelectItem>
@@ -411,31 +445,43 @@ export function TransactionImportCard({
                                         value={`saved:${parser.id}`}
                                     >
                                         <span className="inline-flex items-center gap-2">
-                                            <Bookmark className="h-3.5 w-3.5 text-primary" />
+                                            <Bookmark
+                                                className="h-3.5 w-3.5 text-primary"
+                                                aria-hidden
+                                            />
                                             {parser.name}
                                         </span>
                                     </SelectItem>
                                 ))}
                             <SelectItem value="custom">
                                 <span className="inline-flex items-center gap-2">
-                                    <PencilLine className="h-3.5 w-3.5 text-muted-foreground" />
+                                    <PencilLine
+                                        className="h-3.5 w-3.5 text-label-secondary"
+                                        aria-hidden
+                                    />
                                     {t("importPage.customOther")}
                                 </span>
                             </SelectItem>
                         </SelectContent>
                     </Select>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="type-footnote text-label-secondary">
                         {t("importPage.bankHint")}
                     </p>
                 </div>
 
-                {/* Custom CSV configuration */}
+                {/* 3. Custom CSV setup, only when the bank needs one */}
                 {isCustomLike && (
-                    <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
+                    <section
+                        aria-labelledby="custom-setup-title"
+                        className="space-y-4 rounded-card corner-continuous bg-foreground/[0.04] p-4"
+                    >
                         <div className="flex items-center justify-between gap-2">
-                            <p className="text-sm font-semibold text-foreground">
+                            <h3
+                                id="custom-setup-title"
+                                className="type-headline text-foreground"
+                            >
                                 {t("importPage.customConfig")}
-                            </p>
+                            </h3>
                             {isSaved && !editingSaved && (
                                 <div className="flex gap-2">
                                     <Button
@@ -443,7 +489,6 @@ export function TransactionImportCard({
                                         size="sm"
                                         onClick={() => setEditingSaved(true)}
                                     >
-                                        <Pencil className="h-4 w-4 mr-1" />{" "}
                                         {t("importPage.customParser.edit")}
                                     </Button>
                                     <Button
@@ -453,7 +498,6 @@ export function TransactionImportCard({
                                         onClick={handleDeleteParser}
                                         disabled={deleteParser.isPending}
                                     >
-                                        <Trash2 className="h-4 w-4 mr-1" />{" "}
                                         {t("importPage.customParser.delete")}
                                     </Button>
                                 </div>
@@ -462,52 +506,24 @@ export function TransactionImportCard({
 
                         {/* Read-only summary for a selected saved parser */}
                         {isSaved && !editingSaved && (
-                            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                                <div>
-                                    <span className="font-medium text-foreground">
-                                        {t("importPage.dateCol")}:
-                                    </span>{" "}
-                                    {customConfig.dateColumn}
-                                </div>
-                                <div>
-                                    <span className="font-medium text-foreground">
-                                        {t("importPage.recipientCol")}:
-                                    </span>{" "}
-                                    {customConfig.recipientColumn}
-                                </div>
-                                <div>
-                                    <span className="font-medium text-foreground">
-                                        {t("importPage.amountCol")}:
-                                    </span>{" "}
-                                    {customConfig.amountColumn}
-                                </div>
-                                <div>
-                                    <span className="font-medium text-foreground">
-                                        {t("importPage.memoCol")}:
-                                    </span>{" "}
-                                    {customConfig.memoColumn || "—"}
-                                </div>
-                                <div>
-                                    <span className="font-medium text-foreground">
-                                        {t("importPage.separator")}:
-                                    </span>{" "}
-                                    {customConfig.separator}
-                                </div>
-                                <div>
-                                    <span className="font-medium text-foreground">
-                                        {t("importPage.dateFormat")}:
-                                    </span>{" "}
-                                    {customConfig.dateFormat}
-                                </div>
-                                <div>
-                                    <span className="font-medium text-foreground">
-                                        {t("importPage.numberFormat.label")}:
-                                    </span>{" "}
-                                    {t(
-                                        `importPage.numberFormat.${customConfig.number_format}`,
-                                    )}
-                                </div>
-                            </div>
+                            <dl
+                                aria-label={t("importPage.savedParserSummary")}
+                                className="grid grid-cols-1 gap-x-4 gap-y-1.5 type-footnote sm:grid-cols-2"
+                            >
+                                {summaryRows.map(([label, value]) => (
+                                    <div
+                                        key={label}
+                                        className="flex min-w-0 justify-between gap-3"
+                                    >
+                                        <dt className="text-label-secondary">
+                                            {label}
+                                        </dt>
+                                        <dd className="truncate font-medium text-foreground">
+                                            {value}
+                                        </dd>
+                                    </div>
+                                ))}
+                            </dl>
                         )}
 
                         {showConfigEditor && (
@@ -528,7 +544,7 @@ export function TransactionImportCard({
                                     />
                                 </div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                     <SeparatorSelect
                                         id="separator"
                                         value={customConfig.separator}
@@ -551,7 +567,7 @@ export function TransactionImportCard({
                                     />
                                 </div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                     <NumberFormatSelect
                                         id="number-format"
                                         value={customConfig.number_format}
@@ -614,7 +630,7 @@ export function TransactionImportCard({
                                         })
                                     }
                                 />
-                                <p className="text-xs text-muted-foreground">
+                                <p className="type-footnote text-label-secondary">
                                     {t("importPage.requiredNote")}
                                 </p>
                                 <div className="flex gap-2">
@@ -628,7 +644,6 @@ export function TransactionImportCard({
                                             !customBank.trim()
                                         }
                                     >
-                                        <Save className="h-4 w-4 mr-1" />
                                         {isSaved
                                             ? t(
                                                   "importPage.customParser.saveChanges",
@@ -637,7 +652,7 @@ export function TransactionImportCard({
                                     </Button>
                                     {isSaved && (
                                         <Button
-                                            variant="outline"
+                                            variant="ghost"
                                             size="sm"
                                             onClick={() => {
                                                 setEditingSaved(false);
@@ -658,15 +673,8 @@ export function TransactionImportCard({
                                 </div>
                             </>
                         )}
-                    </div>
+                    </section>
                 )}
-
-                {/* Drag-and-drop file picker */}
-                <CsvDropzone
-                    file={file}
-                    onFileSelect={setFile}
-                    label={t("importPage.csvFile")}
-                />
 
                 {/* Detected columns of the selected file (always shown once a file is chosen) */}
                 <FileHeadersPanel
@@ -691,9 +699,13 @@ export function TransactionImportCard({
 
                 {/* Progress indicator */}
                 {progress && loading && (
-                    <div className="space-y-3 p-4 rounded-lg border bg-muted/30">
-                        <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground font-medium capitalize">
+                    <div
+                        role="status"
+                        aria-live="polite"
+                        className="space-y-3 rounded-card corner-continuous bg-foreground/[0.04] p-4"
+                    >
+                        <div className="flex items-center justify-between type-body">
+                            <span className="font-medium text-label-secondary">
                                 {progress.phase === "counting" &&
                                     t("importPage.analyzing")}
                                 {progress.phase === "parsing" &&
@@ -703,15 +715,15 @@ export function TransactionImportCard({
                                 {progress.phase === "connecting" &&
                                     t("importPage.connecting")}
                             </span>
-                            <span className="text-foreground font-semibold">
+                            <span className="font-semibold tabular-nums text-foreground">
                                 {progress.percent}%
                             </span>
                         </div>
-                        <Progress value={progress.percent} className="h-2" />
+                        <Progress value={progress.percent} className="h-1.5" />
                         {progress.phase === "importing" &&
                             progress.total > 0 && (
-                                <div className="flex gap-4 text-xs text-muted-foreground">
-                                    <span>
+                                <div className="flex flex-wrap gap-4 type-footnote text-label-secondary">
+                                    <span className="tabular-nums">
                                         {t("importPage.rows", {
                                             current: progress.current,
                                             total: progress.total,
@@ -741,13 +753,19 @@ export function TransactionImportCard({
 
                 {/* Import complete summary */}
                 {progress && !loading && progress.phase === "complete" && (
-                    <div className="flex items-center gap-3 p-4 rounded-lg border border-success/30 bg-success/10">
-                        <CheckCircle2 className="icon-success-bounce h-5 w-5 text-success shrink-0" />
-                        <div className="text-sm">
+                    <div
+                        role="status"
+                        className="flex items-center gap-3 rounded-card corner-continuous bg-success/10 p-4"
+                    >
+                        <CheckCircle2
+                            className="icon-success-bounce h-5 w-5 shrink-0 text-success"
+                            aria-hidden
+                        />
+                        <div className="type-body">
                             <p className="font-medium text-success">
                                 {t("importPage.complete")}
                             </p>
-                            <p className="text-success">
+                            <p className="type-footnote text-success">
                                 {t("importPage.progressSummary", {
                                     imported: progress.imported,
                                     duplicates: progress.duplicates,
@@ -759,44 +777,54 @@ export function TransactionImportCard({
                 )}
 
                 {progress && !loading && progress.phase === "error" && (
-                    <div className="flex items-center gap-3 p-4 rounded-lg border border-destructive/30 bg-destructive/5">
-                        <XCircle className="h-5 w-5 text-destructive shrink-0" />
-                        <p className="text-sm font-medium text-destructive">
+                    <div
+                        role="alert"
+                        className="flex items-center gap-3 rounded-card corner-continuous bg-destructive/5 p-4"
+                    >
+                        <XCircle
+                            className="h-5 w-5 shrink-0 text-destructive"
+                            aria-hidden
+                        />
+                        <p className="type-body font-medium text-destructive">
                             {t("importPage.failed")}
                         </p>
                     </div>
                 )}
 
-                {/* Import / Cancel button */}
-                <div className="flex gap-2">
-                    <Button
-                        onClick={handleImport}
-                        disabled={!file || loading}
-                        className="flex-1 h-11"
-                        size="lg"
+                {/* Footer: what is still missing, then the action */}
+                <div className="flex flex-col gap-3 border-t border-border/50 pt-4 sm:flex-row sm:items-center">
+                    <p
+                        className="min-w-0 flex-1 type-footnote text-label-secondary"
+                        aria-live="polite"
                     >
-                        {loading ? (
-                            <>
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />{" "}
-                                {t("importPage.importingBtn")}
-                            </>
-                        ) : (
-                            <>
-                                <Upload className="h-4 w-4 mr-2" />{" "}
-                                {t("importPage.importBtn")}
-                            </>
+                        {hint || t("importPage.hint.ready")}
+                    </p>
+                    <div className="flex gap-2">
+                        {loading && (
+                            <Button
+                                variant="ghost"
+                                onClick={handleCancelImport}
+                            >
+                                {t("importPage.cancelBtn")}
+                            </Button>
                         )}
-                    </Button>
-                    {loading && (
-                        <Button
-                            variant="outline"
-                            size="lg"
-                            className="h-11"
-                            onClick={handleCancelImport}
-                        >
-                            {t("importPage.cancelBtn")}
+                        <Button onClick={handleImport} disabled={!canImport}>
+                            {loading ? (
+                                <>
+                                    <Loader2
+                                        className="h-4 w-4 animate-spin"
+                                        aria-hidden
+                                    />
+                                    {t("importPage.importingBtn")}
+                                </>
+                            ) : (
+                                <>
+                                    <Upload className="h-4 w-4" aria-hidden />
+                                    {t("importPage.importBtn")}
+                                </>
+                            )}
                         </Button>
-                    )}
+                    </div>
                 </div>
                 <ConfirmDialog />
             </CardContent>

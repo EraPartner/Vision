@@ -98,7 +98,7 @@ export function AnalysisPreferencesSettings({
                     </Button>
                 </div>
                 {benchmarkError && (
-                    <p role="alert" className="text-sm text-destructive">
+                    <p role="alert" className="mt-2 type-footnote text-destructive">
                         {t("settings.analysisPreferences.invalidBenchmark")}
                     </p>
                 )}

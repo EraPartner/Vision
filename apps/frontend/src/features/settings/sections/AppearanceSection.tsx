@@ -11,6 +11,7 @@ import { useOptionalSidebar } from '@/components/ui/sidebar';
 import { useSettingsStore, type VisualEffectsTier } from '@/stores/settingsStore';
 import { useLargeDisplay } from '@/hooks/useVisualEffectsTier';
 import { SettingsSection, SettingsGroup, SettingRow, SelectSettingRow } from '../SettingsPrimitives';
+import { cn } from '@/lib/utils';
 import { gainLossPreviewStyle } from './gainLossPreview';
 
 interface VariantMeta {
@@ -38,7 +39,7 @@ function VariantSwatch({ variant, mode }: { variant: ThemeVariant; mode: 'light'
             {SWATCH_TOKENS.map((token) => (
                 <span
                     key={token}
-                    className="h-4 w-4 rounded-full border border-border/40"
+                    className="h-4 w-4 rounded-full border border-border/50"
                     style={{ backgroundColor: `hsl(${palette[token]})` }}
                     aria-hidden
                 />
@@ -86,10 +87,7 @@ export const AppearanceSection = memo(function AppearanceSection() {
     };
 
     return (
-        <SettingsSection
-            title={t('settings.tab.appearance')}
-            description={t('settings.section.appearance.desc')}
-        >
+        <SettingsSection title={t('settings.tab.appearance')}>
             {/* Theme variant — selectable swatch cards */}
             <SettingsGroup>
                 <SettingRow
@@ -105,18 +103,18 @@ export const AppearanceSection = memo(function AppearanceSection() {
                                     key={v.value}
                                     type="button"
                                     onClick={() => setVariant(v.value)}
-                                    className={
-                                        'flex items-center justify-between rounded-lg border p-3 text-left transition-colors ' +
-                                        (active
-                                            ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
-                                            : 'border-border hover:bg-muted/60')
-                                    }
+                                    className={cn(
+                                        'flex h-auto items-center justify-between gap-4 rounded-control corner-continuous border px-4 py-2.5 text-left transition-[background-color,border-color] duration-fast ease-glide focus-ring',
+                                        active
+                                            ? 'border-primary/60 bg-primary/[0.08]'
+                                            : 'border-border/60 hover:bg-foreground/[0.04]',
+                                    )}
                                     aria-pressed={active}
                                 >
-                                    <div className="flex flex-col">
-                                        <span className="text-sm font-medium">{t(v.labelKey)}</span>
-                                        <span className="text-xs text-muted-foreground">{t(v.descKey)}</span>
-                                    </div>
+                                    <span className="flex min-w-0 flex-col">
+                                        <span className="type-body text-foreground">{t(v.labelKey)}</span>
+                                        <span className="type-footnote text-label-secondary">{t(v.descKey)}</span>
+                                    </span>
                                     <VariantSwatch variant={v.value} mode={theme} />
                                 </button>
                             );
@@ -160,7 +158,7 @@ export const AppearanceSection = memo(function AppearanceSection() {
                     <SettingRow title={t('settings.appearance.modes.schedule')} layout="stack">
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             <div className="space-y-1">
-                                <Label htmlFor="schedule-light-from" className="text-xs">{t('settings.appearance.lightFrom')}</Label>
+                                <Label htmlFor="schedule-light-from" className="type-footnote text-label-secondary">{t('settings.appearance.lightFrom')}</Label>
                                 <Input
                                     id="schedule-light-from"
                                     type="time"
@@ -169,7 +167,7 @@ export const AppearanceSection = memo(function AppearanceSection() {
                                 />
                             </div>
                             <div className="space-y-1">
-                                <Label htmlFor="schedule-dark-from" className="text-xs">{t('settings.appearance.darkFrom')}</Label>
+                                <Label htmlFor="schedule-dark-from" className="type-footnote text-label-secondary">{t('settings.appearance.darkFrom')}</Label>
                                 <Input
                                     id="schedule-dark-from"
                                     type="time"
@@ -206,10 +204,10 @@ export const AppearanceSection = memo(function AppearanceSection() {
                     ]}
                 >
                     {capped && tierInUse === 'reduced' && (
-                        <p className="mt-2 text-xs font-medium text-primary">{t('settings.appearance.visualEffectsAutoNote')}</p>
+                        <p className="mt-2 type-footnote text-primary">{t('settings.appearance.visualEffectsAutoNote')}</p>
                     )}
                     {capped && tierInUse !== 'reduced' && (
-                        <p className="mt-2 text-xs font-medium text-warning">{t('settings.appearance.visualEffectsOverrideNote')}</p>
+                        <p className="mt-2 type-footnote text-warning">{t('settings.appearance.visualEffectsOverrideNote')}</p>
                     )}
                 </SelectSettingRow>
 

@@ -2,7 +2,7 @@
 title: Chart Primitives
 type: component
 status: active
-date: 2026-09-27
+date: 2026-10-06
 updated: 2026-09-27
 tags: [components, charts, visx, d3, visualization, phase-9, phase-h, accessibility, aria-label, screen-reader, i18n, localization, premium-v3, chart-scrub, chart-sync, chart-skeleton, sweep-reveal, sparkline-scrub, keyboard-navigation, june-2026]
 description: Low-level chart primitives built on visx + d3, replacing Recharts with design-token-aware styling. 2026-05-29: chartAria.ts generators now accept t()/kindKey for fully localized chart screen-reader summaries across all 7 chart types and both supported languages. June 2026 Premium v3 (ADR-071): scrubbable prop + useChartScrub (scrub-to-compare), syncId prop + ChartSyncContext (synced crosshairs), sweep reveal on AreaChart, ChartSkeleton ghost waveform. V9: Sparkline activeIndex prop (hairline + dot indicator for stat-card scrub). 2026-08-27: keyboardNav.ts provides shared keyboard access to per-point values across all interactive visx primitives and the NetSummaryCard sparkline scrub. 2026-08-23: ChartPeriodSelector uses native toggle-button semantics with aria-pressed instead of incomplete ARIA tab semantics.
@@ -52,7 +52,7 @@ See [[docs/adr/018-visx-d3-chart-migration|ADR-018: visx/d3 Chart Migration]] fo
 | `StackedBarChart`  | Multi-series bar stacks                             | Side-by-side category comparison                                 | Statistics CustomChart                                          |
 | `PieChart`         | Basic pie distribution                              | Exported primitive; currently no direct production consumer      | —                                                               |
 | `DonutChart`       | Donut/ring distribution                             | Segmented breakdown with center label                            | Dashboard, Statistics, PortfolioOverview                        |
-| `LineChart`        | Multi-line trends + reference lines                 | Portfolio performance, rolling cashflow forecast                 | PerformancePage, WatchlistPage, CashFlowForecastChart (Phase H) |
+| `LineChart`        | Multi-line trends + reference lines                 | Portfolio performance, rolling cashflow forecast                 | PortfolioPage, WatchlistPage, CashFlowForecastChart (Phase H) |
 | `Sparkline`        | Mini inline sparkline with optional hover indicator | Micro-charts in stat cards or tables                             | StatCard, NetSummaryCard scrub surface, performance tables      |
 | `ComposedChart`    | Mixed line/area/bar/candlestick series              | Research chart builder                                           | ChartBuilderPage                                                |
 | `CandlestickChart` | Thin OHLC wrapper over ComposedChart                | Exported wrapper; keyboard behavior inherited from ComposedChart | —                                                               |
@@ -477,7 +477,7 @@ function FlowTab() {
 - The standard `ChartTooltip` is suppressed during scrubbing.
 - Pointer capture ensures the drag works even when the pointer leaves the SVG element.
 
-**Enabled on:** `CashFlowComparisonChart`, `ForecastInner`, `ForecastInnerRolling`, `BankBalancesWidget`, `PerformancePage` (×2), `NetWorthChart`.
+**Enabled on:** `CashFlowComparisonChart`, `ForecastInner`, `ForecastInnerRolling`, `BankBalancesWidget`, `PortfolioPage` (value hero and relative performance), `NetWorthChart`.
 
 ### Synced Crosshairs (`syncId` prop + `ChartSyncContext`)
 

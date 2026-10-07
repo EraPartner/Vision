@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, beforeEach, vi } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
@@ -42,7 +42,7 @@ describe("DashboardSettingsDialog", () => {
             /^appearance$/i,
             /^statistics$/i,
             /^behavior$/i,
-            /AI & Research/i,
+            /^AI & research$/i,
             /^backup$/i,
             /About & Maintenance/i,
         ]) {
@@ -78,13 +78,24 @@ describe("DashboardSettingsDialog", () => {
         );
     });
 
-    it("Done button closes the dialog", async () => {
+    it("names the window Settings and shows the section in the title bar", async () => {
+        renderDialog(true, "appearance");
+        const dialog = await screen.findByRole("dialog", { name: "Settings" });
+        expect(
+            within(dialog).getByRole("heading", { level: 2, name: "Appearance" }),
+        ).toBeInTheDocument();
+        expect(
+            within(dialog).queryByRole("button", { name: /^done$/i }),
+        ).not.toBeInTheDocument();
+    });
+
+    it("close button closes the dialog", async () => {
         const user = userEvent.setup();
         const { onOpenChange } = renderDialog(true);
         await screen.findByRole("dialog");
 
         await user.click(
-            await screen.findByRole("button", { name: /^done$/i }),
+            await screen.findByRole("button", { name: /^close$/i }),
         );
 
         await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));

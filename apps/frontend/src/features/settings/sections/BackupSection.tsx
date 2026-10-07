@@ -1,14 +1,8 @@
 import { useState, useEffect, memo } from "react";
-import {
-    AlertCircle,
-    CheckCircle2,
-    Database,
-    FolderOpen,
-    Loader2,
-    UploadCloud,
-} from "lucide-react";
+import { AlertCircle, FolderOpen, Loader2 } from "lucide-react";
 import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
@@ -266,7 +260,7 @@ export const BackupSection = memo(function BackupSection() {
             description: (
                 <>
                     {t("settings.restore.confirmDesc")}
-                    <span className="mt-2 block break-all font-mono text-xs">
+                    <span className="mt-2 block break-all font-mono type-footnote">
                         {restoreFile.split("/").pop()}
                     </span>
                 </>
@@ -281,25 +275,44 @@ export const BackupSection = memo(function BackupSection() {
 
     if (!apiClient.isElectron()) {
         return (
-            <SettingsSection
-                title={t("settings.tab.backup")}
-                description={t("settings.backup.description")}
-            >
-                <div className="flex items-start gap-3 rounded-lg border border-muted px-4 py-3 text-sm text-muted-foreground">
-                    <Database className="mt-0.5 h-4 w-4 shrink-0" />
-                    <p>{t("settings.backup.electronOnly")}</p>
-                </div>
+            <SettingsSection title={t("settings.tab.backup")}>
+                <Card>
+                    <CardContent
+                        variant="state"
+                        className="space-y-1 text-center"
+                    >
+                        <p className="type-body text-foreground">
+                            {t("settings.backup.electronOnly")}
+                        </p>
+                        <p className="type-footnote text-label-secondary">
+                            {t("settings.backup.description")}
+                        </p>
+                    </CardContent>
+                </Card>
             </SettingsSection>
         );
     }
 
+    const passphraseControlsDisabled =
+        backupLoading ||
+        savingBackupPassphrase ||
+        !encryptionStatus?.secureStorageAvailable;
+
+    const encryptionStatusText = !encryptionStatus
+        ? t("settings.backup.passphrase.statusUnknown")
+        : encryptionStatus.hasEnvPassphrase
+          ? t("settings.backup.passphrase.statusEnv")
+          : encryptionStatus.hasStoredPassphrase
+            ? t("settings.backup.passphrase.statusStored")
+            : t("settings.backup.passphrase.statusMissing");
+
     return (
         <>
-            <SettingsSection
-                title={t("settings.tab.backup")}
-                description={t("settings.backup.description")}
-            >
-                <SettingsGroup label={t("settings.backup.title")}>
+            <SettingsSection title={t("settings.tab.backup")}>
+                <SettingsGroup
+                    label={t("settings.backup.title")}
+                    description={t("settings.backup.description")}
+                >
                     <SettingRow
                         title={t("settings.backup.directory")}
                         description={t("settings.backup.directoryHint")}
@@ -310,18 +323,17 @@ export const BackupSection = memo(function BackupSection() {
                                 readOnly
                                 value={backupDir}
                                 placeholder={t("settings.backup.notConfigured")}
-                                className="flex-1 font-mono text-xs"
+                                className="flex-1 font-mono"
                             />
                             <Button
                                 variant="outline"
-                                size="sm"
                                 onClick={() => {
                                     void handleBrowseBackupDir();
                                 }}
                                 disabled={backupLoading}
                                 className="shrink-0"
                             >
-                                <FolderOpen className="mr-1.5 h-3.5 w-3.5" />
+                                <FolderOpen className="mr-1.5 h-4 w-4" />
                                 {backupDir
                                     ? t("settings.backup.change")
                                     : t("settings.backup.browse")}
@@ -348,16 +360,13 @@ export const BackupSection = memo(function BackupSection() {
                     >
                         <Button
                             variant="outline"
-                            size="sm"
                             onClick={() => {
                                 void handleBackupNow();
                             }}
                             disabled={backupRunning || !backupDir}
                         >
-                            {backupRunning ? (
-                                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                                <Database className="mr-1.5 h-3.5 w-3.5" />
+                            {backupRunning && (
+                                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
                             )}
                             {backupRunning
                                 ? t("settings.backup.running")
@@ -367,136 +376,111 @@ export const BackupSection = memo(function BackupSection() {
                 </SettingsGroup>
 
                 {/* Encryption passphrase */}
-                <SettingsGroup label={t("settings.backup.passphrase.title")}>
+                <SettingsGroup
+                    label={t("settings.backup.passphrase.title")}
+                    description={t("settings.backup.passphrase.description")}
+                >
                     <SettingRow
                         title={t("settings.backup.passphrase.label")}
-                        description={t(
-                            "settings.backup.passphrase.description",
-                        )}
+                        description={encryptionStatusText}
+                        htmlFor="backup-passphrase"
                         layout="stack"
                     >
-                        <Input
-                            type="password"
-                            value={backupPassphrase}
-                            onChange={(e) =>
-                                setBackupPassphrase(e.target.value)
-                            }
-                            placeholder={t(
-                                "settings.backup.passphrase.placeholder",
-                            )}
-                            disabled={
-                                backupLoading ||
-                                savingBackupPassphrase ||
-                                !encryptionStatus?.secureStorageAvailable
-                            }
-                        />
-                        <p className="mt-2 text-xs text-muted-foreground">
-                            {!encryptionStatus
-                                ? t("settings.backup.passphrase.statusUnknown")
-                                : encryptionStatus.hasEnvPassphrase
-                                  ? t("settings.backup.passphrase.statusEnv")
-                                  : encryptionStatus.hasStoredPassphrase
-                                    ? t(
-                                          "settings.backup.passphrase.statusStored",
-                                      )
-                                    : t(
-                                          "settings.backup.passphrase.statusMissing",
-                                      )}
-                        </p>
-                        <div className="mt-3 flex gap-2">
+                        <div className="flex flex-wrap gap-2">
+                            <Input
+                                id="backup-passphrase"
+                                type="password"
+                                value={backupPassphrase}
+                                onChange={(e) =>
+                                    setBackupPassphrase(e.target.value)
+                                }
+                                placeholder={t(
+                                    "settings.backup.passphrase.placeholder",
+                                )}
+                                disabled={passphraseControlsDisabled}
+                                className="min-w-[12rem] flex-1"
+                            />
                             <Button
                                 variant="outline"
-                                size="sm"
                                 onClick={() => {
                                     void handleSaveBackupPassphrase();
                                 }}
-                                disabled={
-                                    backupLoading ||
-                                    savingBackupPassphrase ||
-                                    !encryptionStatus?.secureStorageAvailable
-                                }
+                                disabled={passphraseControlsDisabled}
                             >
-                                {savingBackupPassphrase ? (
-                                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                                ) : (
-                                    <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+                                {savingBackupPassphrase && (
+                                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
                                 )}
                                 {t("settings.backup.passphrase.save")}
                             </Button>
                             <Button
                                 variant="ghost"
-                                size="sm"
                                 onClick={() => {
                                     void handleClearBackupPassphrase();
                                 }}
-                                disabled={
-                                    backupLoading ||
-                                    savingBackupPassphrase ||
-                                    !encryptionStatus?.secureStorageAvailable
-                                }
+                                disabled={passphraseControlsDisabled}
                             >
                                 {t("settings.backup.passphrase.clear")}
                             </Button>
                         </div>
                         {!encryptionStatus?.secureStorageAvailable && (
-                            <p className="mt-2 text-xs text-destructive">
+                            <p className="mt-2 type-footnote text-destructive">
                                 {t("settings.backup.passphrase.unavailable")}
                             </p>
                         )}
-                        {encryptionStatus &&
-                            (encryptionStatus.hasEnvPassphrase ||
-                                encryptionStatus.hasStoredPassphrase) &&
-                            !reminderDismissed && (
-                                <div className="mt-3 flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm">
-                                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
-                                    <div className="flex-1">
-                                        <div className="font-medium text-foreground">
-                                            {t(
-                                                "settings.backup.passphrase.reminderTitle",
-                                            )}
-                                        </div>
-                                        <div className="mt-1 text-xs text-muted-foreground">
-                                            {t(
-                                                "settings.backup.passphrase.reminderDesc",
-                                            )}
-                                        </div>
-                                    </div>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="ml-2 shrink-0"
-                                        onClick={() => {
-                                            try {
-                                                window.localStorage.setItem(
-                                                    REMINDER_KEY,
-                                                    "1",
-                                                );
-                                            } catch {
-                                                /* ignore */
-                                            }
-                                            setReminderDismissed(true);
-                                        }}
-                                    >
-                                        {t(
-                                            "settings.backup.passphrase.bannerDismiss",
-                                        )}
-                                    </Button>
-                                </div>
-                            )}
                     </SettingRow>
+                    {encryptionStatus &&
+                        (encryptionStatus.hasEnvPassphrase ||
+                            encryptionStatus.hasStoredPassphrase) &&
+                        !reminderDismissed && (
+                            <SettingRow
+                                title={
+                                    <span className="flex items-center gap-2">
+                                        <AlertCircle
+                                            aria-hidden="true"
+                                            className="h-4 w-4 shrink-0 text-warning"
+                                        />
+                                        {t(
+                                            "settings.backup.passphrase.reminderTitle",
+                                        )}
+                                    </span>
+                                }
+                                description={t(
+                                    "settings.backup.passphrase.reminderDesc",
+                                )}
+                            >
+                                <Button
+                                    variant="ghost"
+                                    onClick={() => {
+                                        try {
+                                            window.localStorage.setItem(
+                                                REMINDER_KEY,
+                                                "1",
+                                            );
+                                        } catch {
+                                            /* ignore */
+                                        }
+                                        setReminderDismissed(true);
+                                    }}
+                                >
+                                    {t(
+                                        "settings.backup.passphrase.bannerDismiss",
+                                    )}
+                                </Button>
+                            </SettingRow>
+                        )}
                 </SettingsGroup>
 
                 {/* Restore */}
-                <SettingsGroup label={t("settings.restore.title")}>
+                <SettingsGroup
+                    label={t("settings.restore.title")}
+                    description={t("settings.restore.description")}
+                >
                     <SettingRow
-                        title={t("settings.restore.description")}
+                        title={t("settings.restore.selectFile")}
+                        titleHidden
                         layout="stack"
                     >
-                        <div className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-xs text-destructive">
-                            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                            <p>{t("settings.restore.warning")}</p>
-                        </div>
-                        <div className="mt-3 flex gap-2">
+                        <div className="flex gap-2">
                             <Input
                                 readOnly
                                 value={
@@ -506,35 +490,36 @@ export const BackupSection = memo(function BackupSection() {
                                         : ""
                                 }
                                 placeholder={t("settings.restore.noFile")}
-                                className="flex-1 font-mono text-xs"
+                                className="flex-1 font-mono"
                                 title={restoreFile}
                             />
                             <Button
                                 variant="outline"
-                                size="sm"
                                 onClick={() => {
                                     void handleSelectRestoreFile();
                                 }}
                                 disabled={restoreRunning}
                                 className="shrink-0"
                             >
-                                <FolderOpen className="mr-1.5 h-3.5 w-3.5" />
+                                <FolderOpen className="mr-1.5 h-4 w-4" />
                                 {t("settings.restore.selectFile")}
                             </Button>
                         </div>
+                    </SettingRow>
+                    <SettingRow
+                        title={t("settings.restore.runNow")}
+                        description={t("settings.restore.warning")}
+                        destructive
+                    >
                         <Button
                             variant="destructive"
-                            size="sm"
-                            className="mt-3"
                             onClick={() => {
                                 void handleRestore();
                             }}
                             disabled={restoreRunning || !restoreFile}
                         >
-                            {restoreRunning ? (
-                                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                                <UploadCloud className="mr-1.5 h-3.5 w-3.5" />
+                            {restoreRunning && (
+                                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
                             )}
                             {restoreRunning
                                 ? t("settings.restore.running")

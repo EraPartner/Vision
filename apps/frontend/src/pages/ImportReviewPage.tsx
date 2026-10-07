@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { ArrowLeft, Loader2, RefreshCw } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { ImportStagingRow, ImportPreviewGroup } from "@/lib/api";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAccounts } from "@/hooks/useAccounts";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import {
     useImportPreview,
     useImportReviewMutations,
@@ -15,6 +16,14 @@ import { PageError } from "@/components/shared/PageError";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card";
+import { List } from "@/components/ui/list";
 import {
     Accordion,
     AccordionContent,
@@ -27,7 +36,7 @@ import {
 } from "@/components/shared/RecipientCombobox";
 import { CategoryCombobox } from "@/components/shared/CategoryCombobox";
 import { SectionLoader } from "@/components/shared/SectionLoader";
-import { formatCurrency } from "@/utils/currency";
+import { Money } from "@/components/shared/Money";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import { formatPercent } from "@/utils/currency";
@@ -36,6 +45,10 @@ import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/shared/PageShell";
 
 type MatchSource = "exact" | "fuzzy" | "pattern" | "new" | null;
+
+/** The badge legend, in the order the summary lists them. */
+const MATCH_KINDS = ["exact", "fuzzy", "pattern", "new", "unresolved"] as const;
+type MatchKind = (typeof MATCH_KINDS)[number];
 
 interface GroupState {
     recipientId: number | null;
@@ -47,61 +60,43 @@ interface GroupState {
     categorySaving: boolean;
 }
 
-function matchSourceBadge(
-    source: MatchSource,
-    t: (key: string) => string,
-    locale: string,
-    similarity?: number | null,
-) {
-    switch (source) {
+function matchKindOf(source: MatchSource): MatchKind {
+    return source ?? "unresolved";
+}
+
+function MatchBadge({
+    kind,
+    similarity,
+    locale,
+}: {
+    kind: MatchKind;
+    similarity?: number | null;
+    locale: string;
+}) {
+    const { t } = useLanguage();
+    const label = t(`importReview.match.${kind}`);
+    switch (kind) {
         case "exact":
-            return (
-                <Badge
-                    variant="outline"
-                    className="text-xs border-muted-foreground/30 text-muted-foreground"
-                >
-                    {t("importReview.match.exact")}
-                </Badge>
-            );
+            return <Badge variant="secondary">{label}</Badge>;
         case "fuzzy":
             return (
-                <Badge
-                    variant="outline"
-                    className="text-xs border-warning/60 text-warning"
-                >
-                    {t("importReview.match.fuzzy")}{" "}
+                <Badge variant="warning">
+                    {label}
                     {similarity != null
-                        ? formatPercent(similarity * 100, { digits: 0, locale })
+                        ? ` ${formatPercent(similarity * 100, { digits: 0, locale })}`
                         : ""}
                 </Badge>
             );
         case "pattern":
             return (
-                <Badge
-                    variant="outline"
-                    className="text-xs border-info/60 text-info"
-                >
-                    {t("importReview.match.pattern")}
+                <Badge variant="outline" className="border-info/50 text-info">
+                    {label}
                 </Badge>
             );
         case "new":
-            return (
-                <Badge
-                    variant="outline"
-                    className="text-xs border-success/60 text-success"
-                >
-                    {t("importReview.match.new")}
-                </Badge>
-            );
+            return <Badge variant="success">{label}</Badge>;
         default:
-            return (
-                <Badge
-                    variant="outline"
-                    className="text-xs border-destructive/50 text-destructive"
-                >
-                    {t("importReview.match.unresolved")}
-                </Badge>
-            );
+            return <Badge variant="destructive">{label}</Badge>;
     }
 }
 
@@ -140,6 +135,7 @@ export default function ImportReviewPage() {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings?.numberFormat ?? "us");
+    const { confirm, ConfirmDialog } = useConfirmDialog();
 
     const [groupOverrides, setGroupOverrides] = useState<
         Map<string, GroupState>
@@ -196,6 +192,19 @@ export default function ImportReviewPage() {
             );
     }, [preview, accountsData]);
 
+    // The imported rows' date span: the receipt on the Import page links to it.
+    const dateRange = useMemo(() => {
+        const dates = (preview?.groups ?? [])
+            .flatMap((g) => g.rows)
+            .map((r) => r.tx_date)
+            .filter((d): d is string => typeof d === "string" && d.length > 0)
+            .map((d) => d.slice(0, 10))
+            .sort();
+        return dates.length > 0
+            ? { dateFrom: dates[0], dateTo: dates[dates.length - 1] }
+            : {};
+    }, [preview]);
+
     const newAccountCount = accountDisclosure.filter((e) => e.isNew).length;
     const {
         overrideRows,
@@ -203,6 +212,8 @@ export default function ImportReviewPage() {
         persistDefaultCategory,
         commit,
         isCommitting,
+        discard,
+        isDiscarding,
     } = useImportReviewMutations(batchId, newAccountCount);
 
     const groupStateFor = (
@@ -323,351 +334,394 @@ export default function ImportReviewPage() {
     const totalRows =
         preview?.groups.reduce((sum, g) => sum + g.row_count, 0) ?? 0;
 
+    const handleDiscard = async () => {
+        const ok = await confirm({
+            title: t("importReview.discard.title"),
+            description: t("importReview.discard.desc", { n: totalRows }),
+            confirmLabel: t("importReview.discard.confirm"),
+            variant: "destructive",
+        });
+        if (!ok) return;
+        discard();
+    };
+
     if (isLoading) {
         return <SectionLoader />;
     }
 
+    const backButton = (
+        <Button variant="ghost" size="sm" onClick={() => navigate("/import")}>
+            <ArrowLeft className="h-4 w-4" aria-hidden />
+            {t("importReview.back")}
+        </Button>
+    );
+
     if (error || !preview) {
         return (
-            <div className="space-y-4 max-w-3xl mx-auto">
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => navigate("/import")}
-                >
-                    <ArrowLeft className="h-4 w-4 mr-2" />
-                    {t("importReview.back")}
-                </Button>
+            <PageShell className="max-w-3xl mx-auto">
+                <div>{backButton}</div>
                 <PageError
                     message={apiErrorToMessage(error, t)}
                     onRetry={error ? () => void refetch() : undefined}
                 />
-            </div>
+            </PageShell>
         );
     }
 
+    const busy = isCommitting || isDiscarding;
+
     return (
         <PageShell className="max-w-3xl mx-auto">
-            <div className="flex items-center gap-2">
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => navigate("/import")}
-                >
-                    <ArrowLeft className="h-4 w-4 mr-2" />
-                    {t("importReview.back")}
-                </Button>
-            </div>
+            <div>{backButton}</div>
 
             <PageHeader
                 title={t("importReview.title")}
                 subtitle={t("importReview.subtitle", { n: totalRows })}
             />
 
-            {/* Summary badges */}
-            <div className="flex flex-wrap gap-2 text-sm">
-                {preview.totals.exact > 0 && (
-                    <span className="text-muted-foreground">
-                        <Badge
-                            variant="outline"
-                            className="text-xs border-muted-foreground/30 text-muted-foreground mr-1"
-                        >
-                            {t("importReview.match.exact")}
-                        </Badge>
-                        {preview.totals.exact}
-                    </span>
-                )}
-                {preview.totals.fuzzy > 0 && (
-                    <span className="text-muted-foreground">
-                        <Badge
-                            variant="outline"
-                            className="text-xs border-warning/60 text-warning mr-1"
-                        >
-                            {t("importReview.match.fuzzy")}
-                        </Badge>
-                        {preview.totals.fuzzy}
-                    </span>
-                )}
-                {preview.totals.pattern > 0 && (
-                    <span className="text-muted-foreground">
-                        <Badge
-                            variant="outline"
-                            className="text-xs border-info/60 text-info mr-1"
-                        >
-                            {t("importReview.match.pattern")}
-                        </Badge>
-                        {preview.totals.pattern}
-                    </span>
-                )}
-                {preview.totals.new > 0 && (
-                    <span className="text-muted-foreground">
-                        <Badge
-                            variant="outline"
-                            className="text-xs border-success/60 text-success mr-1"
-                        >
-                            {t("importReview.match.new")}
-                        </Badge>
-                        {preview.totals.new}
-                    </span>
-                )}
-                {preview.totals.unresolved > 0 && (
-                    <span className="text-muted-foreground">
-                        <Badge
-                            variant="outline"
-                            className="text-xs border-destructive/50 text-destructive mr-1"
-                        >
-                            {t("importReview.match.unresolved")}
-                        </Badge>
-                        {preview.totals.unresolved}
-                    </span>
-                )}
-            </div>
+            {/* Legend: what each badge means, with this file's counts. */}
+            <Card>
+                <CardHeader>
+                    <CardTitle variant="sm">
+                        {t("importReview.legend.title")}
+                    </CardTitle>
+                </CardHeader>
+                <CardContent variant="flush">
+                    <List
+                        aria-label={t("importReview.legend.title")}
+                        className="rounded-none border-0 border-t border-border/50 bg-transparent"
+                    >
+                        {MATCH_KINDS.map((kind) => (
+                            <li
+                                key={kind}
+                                className="flex min-h-11 items-center gap-3 px-6 py-2.5"
+                            >
+                                <span className="w-40 shrink-0">
+                                    <MatchBadge kind={kind} locale={locale} />
+                                </span>
+                                <span className="min-w-0 flex-1 type-body text-label-secondary">
+                                    {t(`importReview.legend.${kind}`)}
+                                </span>
+                                <span className="shrink-0 type-body tabular-nums text-foreground">
+                                    {preview.totals[kind]}
+                                </span>
+                            </li>
+                        ))}
+                    </List>
+                </CardContent>
+            </Card>
 
             {/* WP-B6 — per-account disclosure: where will this batch land? Read-only. */}
             {accountDisclosure.length > 0 && (
-                <div className="space-y-1.5 rounded-lg border border-border/60 px-4 py-3">
-                    {accountDisclosure.map((entry) => (
-                        <div
-                            key={entry.key || "__unspecified__"}
-                            className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground"
-                        >
-                            <span>
-                                {t("importReview.accounts.line", {
-                                    n: entry.count,
-                                })}
-                            </span>
-                            <span
-                                className={cn(
-                                    entry.isUnspecified
-                                        ? "italic"
-                                        : "font-semibold text-foreground",
-                                )}
-                            >
-                                {entry.isUnspecified
-                                    ? t("importReview.accounts.unspecified")
-                                    : entry.label}
-                            </span>
-                            {entry.isNew && (
-                                <Badge
-                                    variant="outline"
-                                    className="text-xs border-success/60 text-success"
+                <Card>
+                    <CardHeader>
+                        <CardTitle variant="sm">
+                            {t("importReview.accounts.title")}
+                        </CardTitle>
+                        <CardDescription>
+                            {t("importReview.accounts.desc")}
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent variant="flush">
+                        <List className="rounded-none border-0 border-t border-border/50 bg-transparent">
+                            {accountDisclosure.map((entry) => (
+                                <li
+                                    key={entry.key || "__unspecified__"}
+                                    className="flex min-h-11 flex-wrap items-center gap-2 px-6 py-2.5 type-body text-label-secondary"
                                 >
-                                    {t("importReview.accounts.newBadge")}
-                                </Badge>
-                            )}
-                        </div>
-                    ))}
-                </div>
-            )}
-
-            {/* Groups accordion */}
-            <Accordion type="multiple" className="space-y-2">
-                {preview.groups.map((group) => {
-                    const groupKey =
-                        group.recipient_id != null
-                            ? String(group.recipient_id)
-                            : `__unresolved__:${group.recipient_name ?? ""}:${group.rows[0]?.memo ?? ""}`;
-                    const fallbackState = groupStateFor(group, groupKey);
-                    const state = groupOverrides.get(groupKey) ?? fallbackState;
-                    const effectiveName =
-                        state.recipientName ?? group.recipient_name;
-                    const effectiveRecipientId = state.recipientId;
-                    const effectiveCategoryId = state.categoryId;
-                    const dominant = dominantMatchSource(group.rows);
-                    const isNew =
-                        group.recipient_id == null || dominant === "new";
-                    const persistCheckboxId = `persist-default-${groupKey}`;
-                    const groupHeading =
-                        isNew && !effectiveName
-                            ? t("importReview.newRecipient")
-                            : (effectiveName ?? t("importReview.unresolved"));
-
-                    return (
-                        <AccordionItem
-                            key={groupKey}
-                            value={groupKey}
-                            className="border border-border/60 rounded-lg overflow-hidden"
-                        >
-                            {/* The recipient picker is a real <button>, so it rides in
-                  `trailing` — a sibling of the accordion trigger — instead of
-                  nested inside it (invalid HTML, and unreachable for AT). */}
-                            <AccordionTrigger
-                                headerClassName="px-4"
-                                className="hover:no-underline"
-                                trailing={
-                                    <div className="flex items-center gap-2 mr-2 shrink-0">
-                                        {(state.recipientSaving ||
-                                            state.categorySaving) && (
-                                            <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                                        )}
-                                        <DeferredRecipientCombobox
-                                            value={effectiveRecipientId}
-                                            label={recipientLabelFor(
-                                                effectiveRecipientId,
-                                            )}
-                                            aria-label={t(
-                                                "importReview.recipientPickerLabel",
-                                                {
-                                                    name: groupHeading,
-                                                },
-                                            )}
-                                            onSelect={(id, name) =>
-                                                handleGroupOverride(
-                                                    groupKey,
-                                                    fallbackState,
-                                                    group.rows,
-                                                    id,
-                                                    name,
-                                                )
-                                            }
-                                            className="h-7 text-xs max-w-[180px]"
-                                            disabled={state.recipientSaving}
-                                        />
-                                    </div>
-                                }
-                            >
-                                <div className="flex items-center gap-3 min-w-0 flex-1">
-                                    {matchSourceBadge(dominant, t, locale)}
-                                    <span className="font-medium text-sm truncate">
-                                        {groupHeading}
-                                    </span>
-                                    <span className="text-xs text-muted-foreground shrink-0">
-                                        {t("importReview.rowCount", {
-                                            n: group.row_count,
+                                    <span>
+                                        {t("importReview.accounts.line", {
+                                            n: entry.count,
                                         })}
                                     </span>
-                                </div>
-                            </AccordionTrigger>
-                            <AccordionContent className="px-4 pb-3">
-                                {group.matched_pattern_text && (
-                                    <p className="text-xs text-muted-foreground mb-3 font-mono truncate">
-                                        {t("importReview.pattern")}:{" "}
-                                        {group.matched_pattern_text}
-                                    </p>
-                                )}
-
-                                {/* Category controls — apply to all rows in the group. */}
-                                <div
-                                    className="flex flex-wrap items-center gap-3 mb-3 pb-3 border-b border-border/40"
-                                    onClick={(e) => e.stopPropagation()}
-                                >
-                                    <span className="text-xs text-muted-foreground shrink-0">
-                                        {t("importReview.category")}
+                                    <span
+                                        className={cn(
+                                            entry.isUnspecified
+                                                ? "italic"
+                                                : "font-medium text-foreground",
+                                        )}
+                                    >
+                                        {entry.isUnspecified
+                                            ? t(
+                                                  "importReview.accounts.unspecified",
+                                              )
+                                            : entry.label}
                                     </span>
-                                    <CategoryCombobox
-                                        value={effectiveCategoryId}
-                                        onSelect={(id, label) =>
-                                            handleCategoryOverride(
-                                                groupKey,
-                                                fallbackState,
-                                                group.rows,
-                                                id,
-                                                label,
-                                            )
-                                        }
-                                        className="h-7 text-xs max-w-[260px]"
-                                        disabled={
-                                            state.categorySaving ||
-                                            effectiveRecipientId == null
-                                        }
-                                    />
-                                    {effectiveRecipientId != null && (
-                                        <label
-                                            htmlFor={persistCheckboxId}
-                                            className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none"
-                                        >
-                                            <Checkbox
-                                                id={persistCheckboxId}
-                                                checked={state.persistAsDefault}
-                                                onCheckedChange={(checked) =>
-                                                    handlePersistDefaultToggle(
-                                                        groupKey,
-                                                        fallbackState,
-                                                        checked === true,
-                                                    )
-                                                }
-                                                disabled={state.categorySaving}
-                                            />
-                                            {t("importReview.persistDefault")}
-                                        </label>
+                                    {entry.isNew && (
+                                        <Badge variant="success">
+                                            {t("importReview.accounts.newBadge")}
+                                        </Badge>
                                     )}
-                                </div>
+                                </li>
+                            ))}
+                        </List>
+                    </CardContent>
+                </Card>
+            )}
 
-                                <div className="space-y-1">
-                                    {group.rows.map((row) => (
-                                        <div
-                                            key={row.id}
-                                            className="flex items-center gap-3 py-1.5 text-xs border-b border-border/30 last:border-0"
-                                        >
-                                            <div className="shrink-0">
-                                                {matchSourceBadge(
-                                                    row.match_source,
-                                                    t,
-                                                    locale,
-                                                    row.match_similarity,
+            {/* Payee groups */}
+            <Card>
+                <CardHeader>
+                    <CardTitle variant="sm">
+                        {t("importReview.groups.title")}
+                    </CardTitle>
+                    <CardDescription>
+                        {t("importReview.groups.desc")}
+                    </CardDescription>
+                </CardHeader>
+                <CardContent variant="flush">
+                    <Accordion
+                        type="multiple"
+                        className="divide-y divide-border/50 border-t border-border/50"
+                    >
+                        {preview.groups.map((group) => {
+                            const groupKey =
+                                group.recipient_id != null
+                                    ? String(group.recipient_id)
+                                    : `__unresolved__:${group.recipient_name ?? ""}:${group.rows[0]?.memo ?? ""}`;
+                            const fallbackState = groupStateFor(
+                                group,
+                                groupKey,
+                            );
+                            const state =
+                                groupOverrides.get(groupKey) ?? fallbackState;
+                            const effectiveName =
+                                state.recipientName ?? group.recipient_name;
+                            const effectiveRecipientId = state.recipientId;
+                            const effectiveCategoryId = state.categoryId;
+                            const dominant = dominantMatchSource(group.rows);
+                            const isNew =
+                                group.recipient_id == null ||
+                                dominant === "new";
+                            const persistCheckboxId = `persist-default-${groupKey}`;
+                            const groupHeading =
+                                isNew && !effectiveName
+                                    ? t("importReview.newRecipient")
+                                    : (effectiveName ??
+                                      t("importReview.unresolved"));
+
+                            return (
+                                <AccordionItem
+                                    key={groupKey}
+                                    value={groupKey}
+                                    className="border-b-0"
+                                >
+                                    {/* The recipient picker is a real <button>, so it rides in
+                                        `trailing` — a sibling of the accordion trigger — instead of
+                                        nested inside it (invalid HTML, and unreachable for AT). */}
+                                    <AccordionTrigger
+                                        headerClassName="px-6"
+                                        className="hover:no-underline"
+                                        trailing={
+                                            <div className="flex shrink-0 items-center gap-2">
+                                                {(state.recipientSaving ||
+                                                    state.categorySaving) && (
+                                                    <Loader2
+                                                        className="h-3.5 w-3.5 animate-spin text-label-secondary"
+                                                        aria-hidden
+                                                    />
                                                 )}
+                                                <DeferredRecipientCombobox
+                                                    value={effectiveRecipientId}
+                                                    label={recipientLabelFor(
+                                                        effectiveRecipientId,
+                                                    )}
+                                                    aria-label={t(
+                                                        "importReview.recipientPickerLabel",
+                                                        { name: groupHeading },
+                                                    )}
+                                                    onSelect={(id, name) =>
+                                                        handleGroupOverride(
+                                                            groupKey,
+                                                            fallbackState,
+                                                            group.rows,
+                                                            id,
+                                                            name,
+                                                        )
+                                                    }
+                                                    className="h-8 max-w-[200px] type-footnote"
+                                                    disabled={
+                                                        state.recipientSaving
+                                                    }
+                                                />
                                             </div>
-                                            <span className="text-muted-foreground shrink-0 tabular-nums">
-                                                {formatDateStringWithAppSettings(
-                                                    row.tx_date,
-                                                    appSettings?.dateFormat ??
-                                                        "YYYY-MM-DD",
-                                                )}
+                                        }
+                                    >
+                                        <div className="flex min-w-0 flex-1 items-center gap-3">
+                                            <MatchBadge
+                                                kind={matchKindOf(dominant)}
+                                                locale={locale}
+                                            />
+                                            <span className="truncate type-body font-medium text-foreground">
+                                                {groupHeading}
                                             </span>
-                                            <span className="truncate min-w-0 text-foreground/80">
-                                                {row.recipient_raw}
-                                            </span>
-                                            {row.memo && (
-                                                <span className="truncate min-w-0 text-muted-foreground/60 hidden sm:block">
-                                                    {row.memo}
-                                                </span>
-                                            )}
-                                            <span
-                                                className={cn(
-                                                    "ml-auto shrink-0 tabular-nums font-medium",
-                                                    Number(row.amount) < 0
-                                                        ? "text-loss"
-                                                        : "text-gain",
-                                                )}
-                                            >
-                                                {formatCurrency(
-                                                    Number(row.amount),
-                                                    row.currency ?? "EUR",
-                                                    locale,
-                                                    appSettings.showDecimalPlaces ??
-                                                        2,
-                                                )}
+                                            <span className="shrink-0 type-footnote text-label-secondary">
+                                                {t("importReview.rowCount", {
+                                                    n: group.row_count,
+                                                })}
                                             </span>
                                         </div>
-                                    ))}
-                                </div>
-                            </AccordionContent>
-                        </AccordionItem>
-                    );
-                })}
-            </Accordion>
+                                    </AccordionTrigger>
+                                    <AccordionContent className="px-6 pb-4">
+                                        {group.matched_pattern_text && (
+                                            <p className="mb-3 truncate type-footnote text-label-secondary">
+                                                {t("importReview.pattern")}:{" "}
+                                                <span className="font-mono">
+                                                    {group.matched_pattern_text}
+                                                </span>
+                                            </p>
+                                        )}
 
-            {/* Approve button */}
-            <div className="flex justify-end pt-2 pb-8">
-                <Button
-                    size="lg"
-                    className="h-11 px-8"
-                    onClick={commit}
-                    disabled={isCommitting}
-                >
-                    {isCommitting ? (
-                        <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            {t("importReview.committing")}
-                        </>
-                    ) : (
-                        <>
-                            <RefreshCw className="h-4 w-4 mr-2" />
-                            {t("importReview.approve", { n: totalRows })}
-                        </>
-                    )}
-                </Button>
+                                        {/* Category controls — apply to all rows in the group. */}
+                                        <div className="mb-3 flex flex-wrap items-center gap-3 border-b border-border/50 pb-3">
+                                            <span className="shrink-0 type-footnote text-label-secondary">
+                                                {t("importReview.category")}
+                                            </span>
+                                            <CategoryCombobox
+                                                value={effectiveCategoryId}
+                                                onSelect={(id, label) =>
+                                                    handleCategoryOverride(
+                                                        groupKey,
+                                                        fallbackState,
+                                                        group.rows,
+                                                        id,
+                                                        label,
+                                                    )
+                                                }
+                                                className="h-8 max-w-[260px] type-footnote"
+                                                disabled={
+                                                    state.categorySaving ||
+                                                    effectiveRecipientId == null
+                                                }
+                                            />
+                                            {effectiveRecipientId != null && (
+                                                <label
+                                                    htmlFor={persistCheckboxId}
+                                                    className="flex cursor-pointer select-none items-center gap-2 type-footnote text-label-secondary"
+                                                >
+                                                    <Checkbox
+                                                        id={persistCheckboxId}
+                                                        checked={
+                                                            state.persistAsDefault
+                                                        }
+                                                        onCheckedChange={(
+                                                            checked,
+                                                        ) =>
+                                                            handlePersistDefaultToggle(
+                                                                groupKey,
+                                                                fallbackState,
+                                                                checked ===
+                                                                    true,
+                                                            )
+                                                        }
+                                                        disabled={
+                                                            state.categorySaving
+                                                        }
+                                                    />
+                                                    {t(
+                                                        "importReview.persistDefault",
+                                                    )}
+                                                </label>
+                                            )}
+                                        </div>
+
+                                        <ul className="m-0 list-none divide-y divide-border/40 p-0">
+                                            {group.rows.map((row) => (
+                                                <li
+                                                    key={row.id}
+                                                    className="flex items-center gap-3 py-2 type-footnote"
+                                                >
+                                                    <div className="shrink-0">
+                                                        <MatchBadge
+                                                            kind={matchKindOf(
+                                                                row.match_source,
+                                                            )}
+                                                            similarity={
+                                                                row.match_similarity
+                                                            }
+                                                            locale={locale}
+                                                        />
+                                                    </div>
+                                                    <span className="shrink-0 tabular-nums text-label-secondary">
+                                                        {formatDateStringWithAppSettings(
+                                                            row.tx_date,
+                                                            appSettings?.dateFormat ??
+                                                                "YYYY-MM-DD",
+                                                        )}
+                                                    </span>
+                                                    <span className="min-w-0 truncate text-foreground">
+                                                        {row.recipient_raw}
+                                                    </span>
+                                                    {row.memo && (
+                                                        <span className="hidden min-w-0 truncate text-label-tertiary sm:block">
+                                                            {row.memo}
+                                                        </span>
+                                                    )}
+                                                    <span
+                                                        className={cn(
+                                                            "ml-auto shrink-0 font-medium tabular-nums",
+                                                            Number(row.amount) <
+                                                                0
+                                                                ? "text-foreground"
+                                                                : "text-gain",
+                                                        )}
+                                                    >
+                                                        <Money
+                                                            amount={Number(
+                                                                row.amount,
+                                                            )}
+                                                            currency={
+                                                                row.currency ??
+                                                                "EUR"
+                                                            }
+                                                            signed
+                                                        />
+                                                    </span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </AccordionContent>
+                                </AccordionItem>
+                            );
+                        })}
+                    </Accordion>
+                </CardContent>
+            </Card>
+
+            {/* Decide: discard the batch, or import it. */}
+            <div className="flex flex-col gap-3 pb-8 sm:flex-row sm:items-center">
+                <p className="min-w-0 flex-1 type-footnote text-label-secondary">
+                    {t("importReview.readyHint")}
+                </p>
+                <div className="flex gap-2">
+                    <Button
+                        variant="outline"
+                        onClick={() => void handleDiscard()}
+                        disabled={busy}
+                    >
+                        {isDiscarding
+                            ? t("importReview.discarding")
+                            : t("importReview.discard")}
+                    </Button>
+                    <Button
+                        onClick={() => commit(dateRange)}
+                        disabled={busy}
+                    >
+                        {isCommitting ? (
+                            <>
+                                <Loader2
+                                    className="h-4 w-4 animate-spin"
+                                    aria-hidden
+                                />
+                                {t("importReview.committing")}
+                            </>
+                        ) : (
+                            t("importReview.approve", { n: totalRows })
+                        )}
+                    </Button>
+                </div>
             </div>
+            <ConfirmDialog />
         </PageShell>
     );
 }

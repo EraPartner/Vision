@@ -311,7 +311,7 @@ describe("MarketLookupPage (integration)", () => {
         expect(historyUrls[0].searchParams.get("db_only")).toBe("false");
         expect(await screen.findByText(/125,00/)).toBeInTheDocument();
 
-        await user.click(screen.getByRole("button", { name: /^1y$/i }));
+        await user.click(screen.getByRole("radio", { name: /^1y$/i }));
         await waitFor(() =>
             expect(
                 historyUrls.some(
@@ -415,10 +415,10 @@ describe("MarketLookupPage (integration)", () => {
 
         // Range buttons: 1D, 5D, 1M, etc.
         expect(
-            await screen.findByRole("button", { name: /^1d$/i }),
+            await screen.findByRole("radio", { name: /^1d$/i }),
         ).toBeInTheDocument();
         expect(
-            await screen.findByRole("button", { name: /^1y$/i }),
+            await screen.findByRole("radio", { name: /^1y$/i }),
         ).toBeInTheDocument();
     });
 
@@ -533,14 +533,14 @@ describe("MarketLookupPage (integration)", () => {
             );
             const initial = range === "1y" ? "1y" : "1m";
             expect(
-                await screen.findByRole("button", {
+                await screen.findByRole("radio", {
                     name: initial,
                 }),
-            ).toHaveAttribute("aria-pressed", "true");
+            ).toHaveAttribute("aria-checked", "true");
             await waitFor(() =>
                 expect(requests).toContain(range === "1y" ? "1y" : "1mo"),
             );
-            await user.click(screen.getByRole("button", { name: /^5y$/i }));
+            await user.click(screen.getByRole("radio", { name: /^5y$/i }));
             await waitFor(() => expect(requests).toContain("5y"));
             let params = new URLSearchParams(
                 screen.getByTestId("location").textContent ?? "",
@@ -548,7 +548,7 @@ describe("MarketLookupPage (integration)", () => {
             expect(params.get("range")).toBe("5y");
             expect(params.get("symbol")).toBe("AAPL");
             expect(params.get("context")).toBe("retained");
-            await user.click(screen.getByRole("button", { name: /^1m$/i }));
+            await user.click(screen.getByRole("radio", { name: /^1m$/i }));
             params = new URLSearchParams(
                 screen.getByTestId("location").textContent ?? "",
             );

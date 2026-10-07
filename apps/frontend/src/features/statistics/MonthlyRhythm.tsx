@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { DeltaPill } from "@/components/shared/DeltaPill";
 import { Money } from "@/components/shared/Money";
 import { RollingNumber } from "@/components/shared/RollingNumber";
@@ -13,15 +13,13 @@ import { cn } from "@/lib/utils";
 import { CompactValueDisclosure } from "@/components/shared/TouchDisclosure";
 
 /**
- * The Statistics page's opening statement.
+ * The Insights page's opening statement: the shape of the months.
  *
- * It replaced a four-tile summary row whose first three tiles restated the
- * dashboard hero (total income / total spending / net) and whose fourth was
- * "Months tracked" — page metadata minted to fill the grid. This lede shows the
- * one thing the page is actually about: the *shape* of the months. The headline
- * is the latest month's net (scrub the strip to walk back through the series),
- * and the three facts underneath are extremes and a hit-rate that exist nowhere
- * else in the app.
+ * The headline is the latest month's net (scrub the strip to walk back through
+ * the series), and the three facts underneath are extremes and a hit-rate that
+ * exist nowhere else in the app. The month still in progress is labelled
+ * "so far" and left out of the best/worst comparison, because a half month
+ * is not a month.
  *
  * Arithmetic is read straight off `data.monthlyData` — the same rows the
  * monthly/net charts below plot; nothing is re-derived or re-signed here.
@@ -29,15 +27,23 @@ import { CompactValueDisclosure } from "@/components/shared/TouchDisclosure";
 
 interface MonthlyRhythmProps {
     data: StatisticsData;
+    /** The month in progress as `YYYY-MM`; defaults to today. Injectable for tests. */
+    currentPeriod?: string;
 }
 
-export function MonthlyRhythm({ data }: MonthlyRhythmProps) {
+function periodOfToday(): string {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
+export function MonthlyRhythm({ data, currentPeriod }: MonthlyRhythmProps) {
     const { t, language } = useLanguage();
     const { formatCompact } = useChartCurrencyFormatter();
     const monthLocale = appLanguageToLocale(language);
 
     const months = data.monthlyData;
     const lastIndex = months.length - 1;
+    const partialPeriod = currentPeriod ?? periodOfToday();
 
     // Hovering / arrowing the strip walks the headline back through the series;
     // leaving or Escape snaps it to the most recent month.
@@ -50,18 +56,29 @@ export function MonthlyRhythm({ data }: MonthlyRhythmProps) {
         onClear: () => setActiveIndex(null),
     });
 
+    const labelFor = (period: string) => {
+        const label = formatPeriodLabel(period, monthLocale);
+        return period === partialPeriod
+            ? `${label} ${t("statsPage.rhythm.soFar")}`
+            : label;
+    };
+
     const extremes = useMemo(() => {
         if (months.length === 0) return undefined;
-        let best = months[0];
-        let worst = months[0];
-        let positive = 0;
-        for (const m of months) {
+        // Best and worst compare complete months only; the month in progress
+        // can only drop out when there is at least one complete month.
+        const complete = months.filter((m) => m.period !== partialPeriod);
+        const pool = complete.length > 0 ? complete : months;
+        let best = pool[0];
+        let worst = pool[0];
+        for (const m of pool) {
             if (m.net > best.net) best = m;
             if (m.net < worst.net) worst = m;
-            if (m.net >= 0) positive += 1;
         }
+        let positive = 0;
+        for (const m of months) if (m.net >= 0) positive += 1;
         return { best, worst, positive };
-    }, [months]);
+    }, [months, partialPeriod]);
 
     if (months.length === 0 || !extremes) return null;
 
@@ -74,7 +91,7 @@ export function MonthlyRhythm({ data }: MonthlyRhythmProps) {
     const deltaCompact =
         delta !== undefined ? formatCompact(delta, true) : undefined;
 
-    const shownLabel = formatPeriodLabel(shown.period, monthLocale);
+    const shownLabel = labelFor(shown.period);
     const maxAbsNet = Math.max(...months.map((m) => Math.abs(m.net)), 1);
 
     const scrubbing = activeIndex !== null;
@@ -85,14 +102,14 @@ export function MonthlyRhythm({ data }: MonthlyRhythmProps) {
                 <div className="grid gap-6 lg:grid-cols-[minmax(0,19rem)_minmax(0,1fr)] lg:gap-10">
                     {/* ── Headline: the scrubbed month's net ───────────────────────── */}
                     <div className="flex flex-col">
-                        <h2 className="font-sans text-sm font-medium text-muted-foreground">
+                        <CardTitle variant="label">
                             {t("statsPage.rhythm.title")}
-                        </h2>
+                        </CardTitle>
 
-                        <div className="mt-3 flex items-end gap-3 flex-wrap">
+                        <div className="mt-3 flex flex-wrap items-end gap-3">
                             <CompactValueDisclosure
                                 className={cn(
-                                    "text-4xl md:text-5xl font-bold tabular-nums",
+                                    "type-large-title tabular-nums",
                                     shown.net >= 0 ? "text-gain" : "text-loss",
                                 )}
                                 display={
@@ -122,10 +139,10 @@ export function MonthlyRhythm({ data }: MonthlyRhythmProps) {
                             )}
                         </div>
 
-                        <p className="mt-1.5 text-sm text-muted-foreground">
+                        <p className="mt-1.5 type-callout text-label-secondary">
                             {t("statsPage.rhythm.netIn", { month: shownLabel })}
                             {previous && (
-                                <span className="text-muted-foreground/70">
+                                <span className="text-label-tertiary">
                                     {" · "}
                                     {t("statsPage.rhythm.vsPrevious")}
                                 </span>
@@ -138,7 +155,7 @@ export function MonthlyRhythm({ data }: MonthlyRhythmProps) {
                                 <dt className="eyebrow">
                                     {t("statsPage.rhythm.typicalIn")}
                                 </dt>
-                                <dd className="text-sm font-semibold text-gain">
+                                <dd className="type-headline tabular-nums text-gain">
                                     <Money amount={data.averageMonthlyIncome} />
                                 </dd>
                             </div>
@@ -146,7 +163,7 @@ export function MonthlyRhythm({ data }: MonthlyRhythmProps) {
                                 <dt className="eyebrow">
                                     {t("statsPage.rhythm.typicalOut")}
                                 </dt>
-                                <dd className="text-sm font-semibold text-loss">
+                                <dd className="type-headline tabular-nums text-loss">
                                     <Money
                                         amount={data.averageMonthlySpending}
                                     />
@@ -157,7 +174,7 @@ export function MonthlyRhythm({ data }: MonthlyRhythmProps) {
 
                     {/* ── The strip: one net bar per month, above/below zero ────────── */}
                     <div
-                        className="flex flex-col justify-end select-none cursor-crosshair"
+                        className="flex cursor-crosshair select-none flex-col justify-end rounded-control focus-ring"
                         role="group"
                         tabIndex={0}
                         aria-label={t("statsPage.rhythm.stripAria", {
@@ -182,7 +199,7 @@ export function MonthlyRhythm({ data }: MonthlyRhythmProps) {
                                     return (
                                         <div
                                             key={m.period}
-                                            className="relative flex-1 min-w-[3px]"
+                                            className="relative min-w-[3px] flex-1"
                                             onPointerEnter={() =>
                                                 setActiveIndex(i)
                                             }
@@ -216,31 +233,21 @@ export function MonthlyRhythm({ data }: MonthlyRhythmProps) {
                             </div>
                         </div>
 
-                        <div className="mt-2 flex items-center justify-between text-2xs text-muted-foreground tabular-nums">
-                            <span>
-                                {formatPeriodLabel(
-                                    months[0].period,
-                                    monthLocale,
-                                )}
-                            </span>
+                        <div className="mt-2 flex items-center justify-between type-caption tabular-nums text-label-tertiary">
+                            <span>{labelFor(months[0].period)}</span>
                             <span
                                 className={cn(
                                     "font-medium",
                                     scrubbing
                                         ? "text-foreground"
-                                        : "text-muted-foreground",
+                                        : "text-label-secondary",
                                 )}
                             >
                                 {scrubbing
                                     ? shownLabel
                                     : t("statsPage.rhythm.scrubHint")}
                             </span>
-                            <span>
-                                {formatPeriodLabel(
-                                    months[lastIndex].period,
-                                    monthLocale,
-                                )}
-                            </span>
+                            <span>{labelFor(months[lastIndex].period)}</span>
                         </div>
                     </div>
                 </div>
@@ -253,10 +260,7 @@ export function MonthlyRhythm({ data }: MonthlyRhythmProps) {
                         valueClassName={
                             extremes.best.net >= 0 ? "text-gain" : "text-loss"
                         }
-                        hint={formatPeriodLabel(
-                            extremes.best.period,
-                            monthLocale,
-                        )}
+                        hint={labelFor(extremes.best.period)}
                     />
                     <Fact
                         label={t("statsPage.rhythm.toughest")}
@@ -264,10 +268,7 @@ export function MonthlyRhythm({ data }: MonthlyRhythmProps) {
                         valueClassName={
                             extremes.worst.net >= 0 ? "text-gain" : "text-loss"
                         }
-                        hint={formatPeriodLabel(
-                            extremes.worst.period,
-                            monthLocale,
-                        )}
+                        hint={labelFor(extremes.worst.period)}
                     />
                     <Fact
                         label={t("statsPage.rhythm.inTheBlack")}
@@ -295,15 +296,10 @@ function Fact({
     return (
         <div>
             <p className="eyebrow">{label}</p>
-            <p
-                className={cn(
-                    "mt-0.5 text-lg font-semibold tabular-nums",
-                    valueClassName,
-                )}
-            >
+            <p className={cn("mt-0.5 type-title-3 tabular-nums", valueClassName)}>
                 {value}
             </p>
-            <p className="text-xs text-muted-foreground/80">{hint}</p>
+            <p className="type-caption text-label-tertiary">{hint}</p>
         </div>
     );
 }

@@ -104,7 +104,7 @@ export const appRouteManifest = [
     },
     {
         path: "/portfolio",
-        loader: () => import("@/pages/portfolio/PortfolioOverviewPage"),
+        loader: () => import("@/pages/portfolio/PortfolioPage"),
         admin: false,
     },
     {
@@ -130,11 +130,6 @@ export const appRouteManifest = [
     {
         path: "/portfolio/savings",
         loader: () => import("@/pages/portfolio/SavingsPage"),
-        admin: false,
-    },
-    {
-        path: "/portfolio/performance",
-        loader: () => import("@/pages/portfolio/PerformancePage"),
         admin: false,
     },
     {
@@ -208,6 +203,14 @@ export const appRouteManifest = [
         admin: false,
     },
 ] satisfies readonly AppRouteMetadata[];
+
+/**
+ * Former page paths that now live elsewhere. `App.tsx` renders each as a
+ * redirect that keeps the query string, so saved deep links keep working
+ * (`/portfolio/performance?period=1y` → `/portfolio?period=1y`).
+ */
+export const legacyRouteRedirects: ReadonlyArray<{ from: string; to: string }> =
+    [{ from: "/portfolio/performance", to: "/portfolio" }];
 
 /** Path lookup derived from the manifest for sidebar hover preloading. */
 export const routeLoaders: Record<string, RouteLoader> = Object.fromEntries(

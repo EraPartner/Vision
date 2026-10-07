@@ -32,9 +32,6 @@ describe("page icon identity", () => {
 
     it("separates previously-colliding destinations", () => {
         expect(PAGE_ICONS["/statistics"]).not.toBe(
-            PAGE_ICONS["/portfolio/performance"],
-        );
-        expect(PAGE_ICONS["/statistics"]).not.toBe(
             PAGE_ICONS["/research/market"],
         );
         expect(PAGE_ICONS["/accounts"]).not.toBe(PAGE_ICONS["/tax"]);

@@ -1,6 +1,4 @@
 // @vitest-environment jsdom
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { renderWithApp } from "@/test/renderWithApp";
@@ -79,32 +77,5 @@ describe("TotalValueCard", () => {
         expect(screen.getByText("Worst performer")).toBeInTheDocument();
         expect(screen.getByText("IWDA")).toBeInTheDocument();
         expect(screen.getByText("Bond Fund")).toBeInTheDocument();
-    });
-
-    it("keeps PerformancePage from defining a second TotalValueCard", () => {
-        const source = readFileSync(
-            join(process.cwd(), "src/pages/portfolio/PerformancePage.tsx"),
-            "utf8",
-        );
-        expect(source).not.toMatch(/function TotalValueCard\s*\(/);
-        expect(source).toContain('from "@/features/portfolio/TotalValueCard"');
-    });
-
-    it("keeps the Net Worth total centered beside its breakdown on one surface", () => {
-        const source = readFileSync(
-            join(
-                process.cwd(),
-                "src/pages/portfolio/net-worth/NetWorthPage.tsx",
-            ),
-            "utf8",
-        );
-        expect(source).not.toContain("[&>*]:h-full");
-        expect(source).not.toMatch(/lg:row-span-[23]/);
-        expect(source).toContain(
-            '<CardContent variant="flush" className="grid lg:grid-cols-2">',
-        );
-        expect(source).toContain(
-            'className="flex min-w-0 flex-col justify-center gap-3 p-5 sm:p-6"',
-        );
     });
 });

@@ -66,7 +66,9 @@ async function renderForm(initial?: PlannedPayment) {
             initial={initial}
         />,
     );
-    await screen.findByText(initial ? "Edit payment" : "New planned payment");
+    await screen.findByRole("heading", {
+        name: initial ? "Edit payment" : "New payment",
+    });
     return { onSubmit };
 }
 
@@ -76,7 +78,7 @@ function amountInput() {
 }
 
 function submitButton() {
-    return screen.getByRole("button", { name: /create payment|save changes/i });
+    return screen.getByRole("button", { name: /add payment|save changes/i });
 }
 
 /**
@@ -251,7 +253,7 @@ describe("PlannedPaymentForm — amount direction", () => {
                 onSubmit={onSubmit}
             />,
         );
-        await screen.findByText("New planned payment");
+        await screen.findByRole("heading", { name: "New payment" });
 
         await user.type(amountInput(), "150");
         await user.click(screen.getByRole("button", { name: /cancel/i }));
@@ -270,7 +272,7 @@ describe("PlannedPaymentForm — amount direction", () => {
                 loading
             />,
         );
-        await screen.findByText("New planned payment");
+        await screen.findByRole("heading", { name: "New payment" });
 
         expect(submitButton()).toBeDisabled();
     });
